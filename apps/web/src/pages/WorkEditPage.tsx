@@ -49,7 +49,7 @@ export function WorkEditPage() {
           {current.isError && <p className="error">{errorMessage(current.error)}</p>}
           {editionId === undefined && <p>この作品には言語版がありません。</p>}
           {current.data && editionId !== undefined && (
-            <SceneEditor key={current.data.id} base={current.data.content} editionId={editionId} />
+            <SceneEditor key={editionId} base={current.data.content} editionId={editionId} />
           )}
         </>
       )}

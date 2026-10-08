@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useFieldArray,
   useForm,
@@ -66,12 +66,24 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
 
-  const { register, control, handleSubmit } = useForm<DocumentFormValues>({
+  useEffect(() => {
+    if (savedAtMs === null) {
+      return;
+    }
+    const timer = setTimeout(() => setSavedAtMs(null), 4000);
+    return () => clearTimeout(timer);
+  }, [savedAtMs]);
+
+  const { register, control, handleSubmit, reset } = useForm<DocumentFormValues>({
     defaultValues: toFormValues(base),
   });
   const { fields } = useFieldArray({ control, name: "scenes" });
+
+  useEffect(() => {
+    reset(toFormValues(base));
+  }, [base, reset]);
 
   const onSubmit = handleSubmit((values) => {
     let document: ContentDocument;
@@ -94,7 +106,7 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
     save.mutate(parsed.data, {
       onSuccess: (result) => {
         setWarnings(result.warnings);
-        setSavedAt(new Date().toLocaleTimeString("ja-JP"));
+        setSavedAtMs(Date.now());
       },
     });
   });
@@ -105,7 +117,9 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
         <button type="submit" disabled={save.isPending}>
           保存
         </button>
-        {savedAt !== null && <span className="meta">保存しました（{savedAt}）</span>}
+        {savedAtMs !== null && (
+          <span className="meta">保存しました（{new Date(savedAtMs).toLocaleTimeString("ja-JP")}）</span>
+        )}
         {save.isError && <span className="error">{errorMessage(save.error)}</span>}
       </div>
 
