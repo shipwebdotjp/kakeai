@@ -54,7 +54,6 @@ function TimingFields({ control, register, sceneIndex }: TimingFieldsProps) {
           <input
             type="number"
             min={1}
-            step={100}
             {...register(`scenes.${sceneIndex}.durationMs`, { valueAsNumber: true })}
           />
         </label>
