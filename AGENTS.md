@@ -73,3 +73,13 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 
 - 文書のみの軽微な変更はレビューを省略してよい。
 - コミットメッセージは変更の意図を簡潔に書く。
+
+## ユーザーガイド
+
+- `README.md` stays as a project overview. Do not add detailed usage,
+  command references, or configuration details to it; link to the user
+  guide (https://kakeai.shipweb.jp) instead.
+- When adding a user-facing feature or changing existing user-visible
+  behavior (Web UI screens, configuration keys),
+  update `user-guide/docs/` accordingly.
+- Docusaurusのadmonitionでタイトルを付けるときは `:::note[タイトル]` と書く。`:::note タイトル` ではタイトルが反映されない。
