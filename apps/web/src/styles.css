@@ -1,5 +1,46 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-brand-50: oklch(0.99 0.03 120.76);
+  --color-brand-100: oklch(0.97 0.06 122.33);
+  --color-brand-200: oklch(0.94 0.12 124.32);
+  --color-brand-300: oklch(0.9 0.19 126.66);
+  --color-brand-400: oklch(0.84 0.23 128.85);
+  --color-brand-500: oklch(0.77 0.22 130.85);
+  --color-brand-600: oklch(0.65 0.19 131.68);
+  --color-brand-700: oklch(0.53 0.15 131.59);
+  --color-brand-800: oklch(0.45 0.12 130.93);
+  --color-brand-900: oklch(0.41 0.1 131.06);
+  --color-brand-950: oklch(0.27 0.07 132.11);
+
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+}
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --surface: oklch(1 0 0);
+  --surface-muted: oklch(0.97 0.005 130);
+  --border: oklch(0.92 0.01 130);
+  --foreground: oklch(0.21 0.02 130);
+  --muted-foreground: oklch(0.55 0.02 130);
+}
+
+.dark {
+  color-scheme: dark;
+  --surface: oklch(0.21 0.01 130);
+  --surface-muted: oklch(0.27 0.015 130);
+  --border: oklch(0.37 0.02 130);
+  --foreground: oklch(0.95 0.01 130);
+  --muted-foreground: oklch(0.72 0.02 130);
+}
+
+body {
+  background-color: var(--surface);
+  color: var(--foreground);
 }

@@ -42,7 +42,7 @@ function TimingFields({ control, register, sceneIndex }: TimingFieldsProps) {
         アクセント色
         <input
           type="color"
-          className="h-8 w-12 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
+          className="h-8 w-12 cursor-pointer rounded border border-border"
           {...register(`scenes.${sceneIndex}.accentColor`)}
         />
       </label>
@@ -119,7 +119,7 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
 
   return (
     <form onSubmit={onSubmit}>
-      <div className="sticky top-0 z-10 flex items-center gap-3 bg-white py-2.5 dark:bg-gray-950">
+      <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
         <button type="submit" className={buttonPrimaryClass} disabled={save.isPending}>
           保存
         </button>
@@ -162,12 +162,12 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
         return (
           <section
             key={field.id}
-            className="my-4 rounded-lg border border-gray-300 p-4 dark:border-gray-700"
+            className="my-4 rounded-lg border border-border p-4"
           >
             <h3 className="mt-0 mb-2 flex items-baseline gap-2 text-lg font-semibold">
               {SCENE_LABELS[scene.kind] ?? scene.kind}
               {scene.kind === "point" && ` ${sceneIndex}`}
-              <span className="text-xs font-normal text-gray-500">{scene.id}</span>
+              <span className="text-xs font-normal text-muted-foreground">{scene.id}</span>
             </h3>
 
             {scene.kind === "intro" && (

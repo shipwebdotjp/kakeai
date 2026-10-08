@@ -52,7 +52,7 @@ export function WorkListPage() {
           return (
             <li
               key={work.id}
-              className="flex items-center gap-3 border-b border-gray-200 py-2.5 dark:border-gray-700"
+              className="flex items-center gap-3 border-b border-border py-2.5"
             >
               <Link to={`/works/${work.id}`} className="flex-1 font-semibold text-inherit">
                 {work.title}

@@ -1,14 +1,16 @@
 import { Link, Route, Routes } from "react-router-dom";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { WorkEditPage } from "./pages/WorkEditPage";
 import { WorkListPage } from "./pages/WorkListPage";
 
 export function App() {
   return (
     <div className="min-h-screen">
-      <header className="border-b border-gray-200 px-5 py-3 dark:border-gray-700">
+      <header className="flex items-center justify-between border-b border-border px-5 py-3">
         <Link to="/" className="text-lg font-bold text-inherit no-underline">
           Kakeai
         </Link>
+        <ThemeToggle />
       </header>
       <main className="mx-auto max-w-3xl p-5">
         <Routes>

@@ -30,7 +30,7 @@ export function WorkEditPage() {
   return (
     <section>
       <p>
-        <Link to="/" className="text-blue-600 hover:underline dark:text-blue-400">
+        <Link to="/" className="text-brand-700 hover:underline dark:text-brand-400">
           ← 作品一覧
         </Link>
       </p>

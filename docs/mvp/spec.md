@@ -187,6 +187,12 @@ VisualCueの表示区間はフレーム番号ではなく判別union（Scene全�
 - 契約: Zod（`packages/contracts` が唯一の定義場所）。
 - レンダー: HyperFrames（プレビューに `@hyperframes/player`、出力に `@hyperframes/producer`）。
 
+## UIテーマ
+
+- Web UI はライト/ダークの両モードに対応する。既定はOS設定に従い、利用者がシステム/ライト/ダークを切り替えられる。
+- アクセントは緑系のブランドカラー `brand-50`〜`brand-950`。面・境界・文字は用途別のセマンティックトークン（`surface` / `surface-muted` / `border` / `foreground` / `muted-foreground`）で表現し、コンポーネントはブランドとセマンティックトークンだけを使う。
+- 配色は `apps/web` の Tailwind `@theme` に定義し、ライト/ダークの切替は `html` の `dark` クラスで行う。
+
 ## 実装方針
 
 - リポジトリは `apps/web`、`apps/api`、`packages/contracts`、`packages/video` に分ける。ワーカーはMVPでは `apps/api` 内のモジュールとして実装し、将来の別プロセス分離に備えてコード境界は分けておく。`packages/video` はHyperFrames Compositionのコンパイラと、信頼済みのVisualTemplateを持つ。

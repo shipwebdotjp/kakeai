@@ -1,15 +1,15 @@
 export const textFieldClass =
-  "rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900";
+  "rounded border border-border bg-surface px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground";
 
 export const buttonPrimaryClass =
-  "rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50";
+  "rounded bg-brand-600 px-3 py-1.5 text-sm text-white hover:bg-brand-700 disabled:opacity-50 dark:bg-brand-500 dark:text-brand-950 dark:hover:bg-brand-400";
 
 export const buttonNeutralClass =
-  "rounded border border-gray-300 px-2 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:hover:bg-gray-800";
+  "rounded border border-border px-2 py-1 text-sm text-foreground hover:bg-surface-muted disabled:opacity-50";
 
 export const buttonDangerClass =
   "rounded border border-red-300 px-2 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-950";
 
-export const errorTextClass = "text-sm text-red-600";
+export const errorTextClass = "text-sm text-red-600 dark:text-red-400";
 
-export const metaTextClass = "text-sm text-gray-500";
+export const metaTextClass = "text-sm text-muted-foreground";

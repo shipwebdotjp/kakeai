@@ -17,7 +17,7 @@ export function LinesEditor({ control, register, sceneIndex, sceneId }: LinesEdi
   });
 
   return (
-    <div className="mt-3 border-t border-dashed border-gray-300 pt-2 dark:border-gray-700">
+    <div className="mt-3 border-t border-dashed border-border pt-2">
       <h4 className="mb-2 font-semibold">セリフ</h4>
       {fields.map((field, lineIndex) => (
         <div key={field.id} className="my-2 grid gap-1.5">
