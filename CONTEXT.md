@@ -1,0 +1,69 @@
+# Kakeai
+
+Kakeai is a video-production context. It keeps editorial intent separate from rendered media so that a work can be revised, localized, and rendered reproducibly.
+
+## Language
+
+**Work**:
+A parent creative work that groups its language editions and derived works.
+_Avoid_: Project, video
+
+**Language Edition**:
+A version of a Work made for one locale.
+_Avoid_: Translation, locale
+
+**Script Version**:
+An immutable version of the editorial structure for one Language Edition.
+_Avoid_: Composition HTML, timeline
+
+**Narration Segment**:
+The smallest unit of spoken content, with separate caption and spoken text and an optional selected Audio Take.
+_Avoid_: Subtitle, audio file
+
+**Audio Take**:
+An immutable candidate audio recording for one Narration Segment. A segment may select one take or deliberately have no audio.
+_Avoid_: Narration segment, BGM
+
+**Scene**:
+A fixed template unit of a Script Version, with typed editorial slots, a duration, and a per-scene accent color.
+_Avoid_: Visual cue, template
+
+**Speaker**:
+The voice identity for a Narration Segment, whether or not it appears on screen.
+_Avoid_: Character, narrator
+
+**Character**:
+A visual person or avatar that may, but need not, be associated with a Speaker.
+_Avoid_: Speaker, voice
+
+**Character Appearance**:
+A particular visual form of a Character, such as a standing image with an expression and pose.
+_Avoid_: Character, asset
+
+**Asset**:
+An immutable, app-local reusable media file used by a production. Its logical identity is retained when identical original bytes restore an unavailable file.
+_Avoid_: Background, BGM, visual
+
+**Job**:
+A durable record of one asynchronous operation on a Work or its edition.
+_Avoid_: Render, task
+
+**Render**:
+The production of video output by a render Job.
+_Avoid_: Asset, Artifact
+
+**Artifact**:
+A file produced by a Job as its output. It is not an Asset and becomes reusable only through an explicit promotion.
+_Avoid_: Asset, Render
+
+**Visual Template**:
+A reusable visual expression with a defined input contract.
+_Avoid_: Visual cue, scene
+
+**Visual Cue**:
+An instruction to display one Visual Template with specific inputs over a segment of a Scene.
+_Avoid_: Asset, template
+
+**Audio Cue**:
+An instruction to place an audio Asset, such as background music, over a range of a work.
+_Avoid_: BGM asset, narration segment
