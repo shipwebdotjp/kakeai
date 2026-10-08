@@ -1,0 +1,140 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Work {
+  id            String            @id @default(cuid())
+  title         String
+  originalLocale String
+  parentWorkId  String?
+  parentWork    Work?             @relation("WorkParent", fields: [parentWorkId], references: [id], onDelete: Restrict)
+  childWorks    Work[]            @relation("WorkParent")
+  languageEditions LanguageEdition[]
+  jobs          Job[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model LanguageEdition {
+  id                     String          @id @default(cuid())
+  workId                 String
+  work                   Work            @relation(fields: [workId], references: [id], onDelete: Restrict)
+  locale                 String
+  currentScriptVersionId String?         @unique
+  currentScriptVersion   ScriptVersion?  @relation("EditionCurrent", fields: [currentScriptVersionId], references: [id], onDelete: Restrict)
+  scriptVersions         ScriptVersion[] @relation("EditionVersions")
+  jobs                   Job[]
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@unique([workId, locale])
+}
+
+model ScriptVersion {
+  id                  String          @id @default(cuid())
+  languageEditionId   String
+  languageEdition     LanguageEdition @relation("EditionVersions", fields: [languageEditionId], references: [id], onDelete: Restrict)
+  versionNumber       Int
+  contentSchemaVersion Int
+  contentJson         String
+  sourceScriptVersionId String?
+  sourceScriptVersion ScriptVersion?  @relation("ScriptSource", fields: [sourceScriptVersionId], references: [id], onDelete: Restrict)
+  derivedVersions     ScriptVersion[] @relation("ScriptSource")
+  currentForEdition   LanguageEdition? @relation("EditionCurrent")
+  jobs                Job[]
+  createdAt           DateTime        @default(now())
+
+  @@unique([languageEditionId, versionNumber])
+}
+
+model Asset {
+  id              String           @id @default(cuid())
+  kind            String
+  origin          String
+  status          String
+  storageKey      String           @unique
+  originalFilename String
+  mediaType       String
+  byteSize        BigInt
+  sha256          String           @unique
+  durationMs      Int?
+  widthPx         Int?
+  heightPx        Int?
+  provenanceJson  String?
+  generatedByJobId String?
+  generatedByJob  Job?             @relation("GeneratedAssets", fields: [generatedByJobId], references: [id], onDelete: Restrict)
+  renditions      AssetRendition[]
+  jobs            Job[]
+  createdAt       DateTime         @default(now())
+}
+
+model AssetRendition {
+  id         String   @id @default(cuid())
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  purpose    String
+  storageKey String
+  mediaType  String
+  sha256     String
+  byteSize   BigInt
+  durationMs Int?
+  widthPx    Int?
+  heightPx   Int?
+  codecJson  String?
+  createdAt  DateTime @default(now())
+
+  @@unique([assetId, purpose])
+}
+
+model Job {
+  id                    String          @id @default(cuid())
+  kind                  String
+  status                String
+  workId                String?
+  work                  Work?           @relation(fields: [workId], references: [id], onDelete: Restrict)
+  assetId               String?
+  asset                 Asset?          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  languageEditionId     String?
+  languageEdition       LanguageEdition? @relation(fields: [languageEditionId], references: [id], onDelete: Restrict)
+  scriptVersionId       String?
+  scriptVersion         ScriptVersion?  @relation(fields: [scriptVersionId], references: [id], onDelete: Restrict)
+  snapshotSchemaVersion Int
+  inputSnapshotJson     String
+  resultJson            String?
+  progressPercent       Int             @default(0)
+  errorCode             String?
+  errorMessage          String?
+  artifacts             Artifact[]
+  generatedAssets       Asset[]         @relation("GeneratedAssets")
+  createdAt             DateTime        @default(now())
+  startedAt             DateTime?
+  finishedAt            DateTime?
+
+  @@index([status, createdAt])
+  @@index([workId, createdAt])
+  @@index([assetId, createdAt])
+}
+
+model Artifact {
+  id         String   @id @default(cuid())
+  jobId      String
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  role       String
+  format     String
+  storageKey String   @unique
+  sha256     String
+  byteSize   BigInt
+  durationMs Int?
+  widthPx    Int?
+  heightPx   Int?
+  fps        Float?
+  createdAt  DateTime @default(now())
+
+  @@index([jobId])
+}

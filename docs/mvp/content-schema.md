@@ -64,6 +64,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 - `line`（`NarrationSegment`）とSceneのIDは、同一Workの版をまたいで一意かつ安定とする。編集保存のたびに作り直さない。VisualCueの `range` がラインIDで区間を指し、将来の翻訳・派生WorkはこのIDで対応付ける。
 - `selectedAudioTakeId` がnullでない場合、そのTakeは `audioTakes` に存在し、その `narrationSegmentId` が当該ラインのIDと一致しなければならない。nullのラインはAudioTakeを参照しない。
+- `line.speakerId` はnullでない場合 `speakers` に存在し、`speaker.characterId` はnullでない場合 `characters` に存在しなければならない。`character.standing` のVisualCue入力が指す `characterId` と `appearanceId` も `characters` とその `appearances` に存在しなければならない。存在しないIDを参照するライン、話者、VisualCueは拒否する。
 - `AudioTake.durationMs` は参照するreadyなAssetの `durationMs`（正規化Renditionがある場合はその値）と一致させる。尺の正本は取り込み済みAsset側とし、台本側で上書きしない。
 
 ## キャラクターと話者
