@@ -1,6 +1,7 @@
 import { useFieldArray, type Control, type UseFormRegister } from "react-hook-form";
 import type { DocumentFormValues } from "../content/form";
 import { createEmptyLine } from "../content/form";
+import { buttonNeutralClass, textFieldClass } from "../ui";
 
 interface LinesEditorProps {
   control: Control<DocumentFormValues>;
@@ -16,25 +17,27 @@ export function LinesEditor({ control, register, sceneIndex, sceneId }: LinesEdi
   });
 
   return (
-    <div className="lines">
-      <h4>セリフ</h4>
+    <div className="mt-3 border-t border-dashed border-gray-300 pt-2 dark:border-gray-700">
+      <h4 className="mb-2 font-semibold">セリフ</h4>
       {fields.map((field, lineIndex) => (
-        <div key={field.id} className="line-editor">
+        <div key={field.id} className="my-2 grid gap-1.5">
           <textarea
-            {...register(`scenes.${sceneIndex}.lines.${lineIndex}.captionText`)}
-            placeholder="字幕テキスト"
             rows={2}
+            placeholder="字幕テキスト"
+            className={`block w-full ${textFieldClass}`}
+            {...register(`scenes.${sceneIndex}.lines.${lineIndex}.captionText`)}
           />
           <input
-            {...register(`scenes.${sceneIndex}.lines.${lineIndex}.speechText`)}
             placeholder="読み上げテキスト（TTS用）"
+            className={`block w-full ${textFieldClass}`}
+            {...register(`scenes.${sceneIndex}.lines.${lineIndex}.speechText`)}
           />
-          <button type="button" onClick={() => remove(lineIndex)}>
+          <button type="button" className={buttonNeutralClass} onClick={() => remove(lineIndex)}>
             セリフを削除
           </button>
         </div>
       ))}
-      <button type="button" onClick={() => append(createEmptyLine(sceneId))}>
+      <button type="button" className={buttonNeutralClass} onClick={() => append(createEmptyLine(sceneId))}>
         セリフを追加
       </button>
     </div>

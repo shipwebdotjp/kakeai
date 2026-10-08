@@ -35,7 +35,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 - `packages/contracts`: Zodスキーマと型の唯一の定義場所。API・フォーム・復元・検証はここから導出した型だけを使う。
 - `packages/video`: Compositionコンパイラと信頼済みVisualTemplate（P4で追加）。
 - `apps/api`: Express + Prisma。workerループを内蔵し、単一プロセスで起動する（P1以降）。
-- `apps/web`: Vite + React + TypeScript（P2以降）。
+- `apps/web`: Vite + React + TypeScript + Tailwind CSS（P2以降）。
 
 ## 実装ルール
 

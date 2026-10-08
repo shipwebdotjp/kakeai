@@ -179,10 +179,18 @@ VisualCueの表示区間はフレーム番号ではなく判別union（Scene全�
 
 レンダーを開始すると、対象の `ScriptVersion`、`LanguageEdition`、素材Rendition参照、テンプレート設定を不変スナップショットとしてJobに保存する。以後の編集は、開始済み・完了済みレンダーの入力内容を変更しない。ただしツール・テンプレート更新後に同じ入力を再実行した出力の完全一致は要求しない。
 
+## 技術スタック
+
+- フロントエンド: Vite + React + TypeScript + Tailwind CSS。フォームは React Hook Form と Zod、データ取得・更新と Job 状態のポーリングは TanStack Query。
+- API: Express + TypeScript。
+- 永続化: SQLite + Prisma。
+- 契約: Zod（`packages/contracts` が唯一の定義場所）。
+- レンダー: HyperFrames（プレビューに `@hyperframes/player`、出力に `@hyperframes/producer`）。
+
 ## 実装方針
 
 - リポジトリは `apps/web`、`apps/api`、`packages/contracts`、`packages/video` に分ける。ワーカーはMVPでは `apps/api` 内のモジュールとして実装し、将来の別プロセス分離に備えてコード境界は分けておく。`packages/video` はHyperFrames Compositionのコンパイラと、信頼済みのVisualTemplateを持つ。
-- フロントエンド：Vite + React + TypeScript。フォームはReact Hook FormとZod、APIデータ取得・更新とJob状態のポーリングはTanStack Queryを使う。
+- フロントエンド：Vite + React + TypeScript + Tailwind CSS。フォームはReact Hook FormとZod、APIデータ取得・更新とJob状態のポーリングはTanStack Queryを使う。
 - API：Express + TypeScript。REST APIと素材アップロードを担当し、MP4レンダーをHTTPリクエスト処理内では実行しない。エンドポイント、DTO、エラーの契約は [api-contract.md](./api-contract.md) に従う。
 - 起動構成：通常起動ではExpressが `apps/web` のVite build成果物を同一originで配信する。開発時だけVite dev serverを起動し、`/api` と素材・Artifact content URLをExpressへループバックproxyする。proxyはHostとOriginをExpressの期待する値へ書き換え、Cookieを透過する。ブラウザからAPIポートを直接利用しない。
 - ワーカー：MVPでは `apps/api` のプロセス内で動くTypeScriptモジュール（バックグラウンドループ）とし、SQLiteからキュー済みJobを取得する。`asset_ingest` は原本を検査し、必要時にFFmpeg/画像処理でrender Renditionを作り、`render` は開始時の入力スナップショットのJSONとRenditionを一時的なHyperFramesプロジェクトへ展開して `@hyperframes/producer` でMP4を出力する。MVPでは単一ワーカーだけを起動し、将来は別プロセスへ分離できるようコード境界を分けておく。

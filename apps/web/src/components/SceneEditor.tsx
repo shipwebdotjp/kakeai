@@ -14,6 +14,7 @@ import {
 import { useSaveScriptVersion } from "../api/hooks";
 import { buildContentDocument, toFormValues, type DocumentFormValues } from "../content/form";
 import { errorMessage } from "../lib/errorMessage";
+import { buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { LinesEditor } from "./LinesEditor";
 
 interface SceneEditorProps {
@@ -36,24 +37,29 @@ interface TimingFieldsProps {
 function TimingFields({ control, register, sceneIndex }: TimingFieldsProps) {
   const mode = useWatch({ control, name: `scenes.${sceneIndex}.timingMode` });
   return (
-    <div className="row">
-      <label className="inline">
+    <div className="my-2 flex flex-wrap items-center gap-3">
+      <label className="inline-flex items-center gap-1.5">
         アクセント色
-        <input type="color" {...register(`scenes.${sceneIndex}.accentColor`)} />
+        <input
+          type="color"
+          className="h-8 w-12 cursor-pointer rounded border border-gray-300 dark:border-gray-600"
+          {...register(`scenes.${sceneIndex}.accentColor`)}
+        />
       </label>
-      <label className="inline">
+      <label className="inline-flex items-center gap-1.5">
         尺
-        <select {...register(`scenes.${sceneIndex}.timingMode`)}>
+        <select className={textFieldClass} {...register(`scenes.${sceneIndex}.timingMode`)}>
           <option value="auto">自動</option>
           <option value="fixed">固定</option>
         </select>
       </label>
       {mode === "fixed" && (
-        <label className="inline">
+        <label className="inline-flex items-center gap-1.5">
           固定尺(ms)
           <input
             type="number"
             min={1}
+            className={`w-24 ${textFieldClass}`}
             {...register(`scenes.${sceneIndex}.durationMs`, { valueAsNumber: true })}
           />
         </label>
@@ -112,19 +118,21 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
   });
 
   return (
-    <form onSubmit={onSubmit} className="scene-editor">
-      <div className="scene-editor-actions">
-        <button type="submit" disabled={save.isPending}>
+    <form onSubmit={onSubmit}>
+      <div className="sticky top-0 z-10 flex items-center gap-3 bg-white py-2.5 dark:bg-gray-950">
+        <button type="submit" className={buttonPrimaryClass} disabled={save.isPending}>
           保存
         </button>
         {savedAtMs !== null && (
-          <span className="meta">保存しました（{new Date(savedAtMs).toLocaleTimeString("ja-JP")}）</span>
+          <span className={metaTextClass}>
+            保存しました（{new Date(savedAtMs).toLocaleTimeString("ja-JP")}）
+          </span>
         )}
-        {save.isError && <span className="error">{errorMessage(save.error)}</span>}
+        {save.isError && <span className={errorTextClass}>{errorMessage(save.error)}</span>}
       </div>
 
       {warnings.length > 0 && (
-        <div className="warnings">
+        <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
           <strong>警告</strong>
           <ul>
             {warnings.map((warning, index) => (
@@ -136,7 +144,7 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
         </div>
       )}
       {issues.length > 0 && (
-        <div className="issues">
+        <div className="rounded border border-red-400 bg-red-50 p-3 text-sm dark:bg-red-950/40">
           <strong>入力エラー</strong>
           <ul>
             {issues.map((issue, index) => (
@@ -152,41 +160,60 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
           return null;
         }
         return (
-          <section key={field.id} className="scene-card">
-            <h3>
+          <section
+            key={field.id}
+            className="my-4 rounded-lg border border-gray-300 p-4 dark:border-gray-700"
+          >
+            <h3 className="mt-0 mb-2 flex items-baseline gap-2 text-lg font-semibold">
               {SCENE_LABELS[scene.kind] ?? scene.kind}
               {scene.kind === "point" && ` ${sceneIndex}`}
-              <span className="scene-id">{scene.id}</span>
+              <span className="text-xs font-normal text-gray-500">{scene.id}</span>
             </h3>
 
             {scene.kind === "intro" && (
               <>
-                <label>
+                <label className="my-2 block">
                   タイトル
-                  <input {...register(`scenes.${sceneIndex}.slots.title`)} />
+                  <input
+                    className={`mt-1 block w-full ${textFieldClass}`}
+                    {...register(`scenes.${sceneIndex}.slots.title`)}
+                  />
                 </label>
-                <label>
+                <label className="my-2 block">
                   サブタイトル
-                  <input {...register(`scenes.${sceneIndex}.slots.subtitle`)} />
+                  <input
+                    className={`mt-1 block w-full ${textFieldClass}`}
+                    {...register(`scenes.${sceneIndex}.slots.subtitle`)}
+                  />
                 </label>
               </>
             )}
             {scene.kind === "point" && (
               <>
-                <label>
+                <label className="my-2 block">
                   見出し
-                  <input {...register(`scenes.${sceneIndex}.slots.heading`)} />
+                  <input
+                    className={`mt-1 block w-full ${textFieldClass}`}
+                    {...register(`scenes.${sceneIndex}.slots.heading`)}
+                  />
                 </label>
-                <label>
+                <label className="my-2 block">
                   本文
-                  <textarea {...register(`scenes.${sceneIndex}.slots.body`)} rows={3} />
+                  <textarea
+                    rows={3}
+                    className={`mt-1 block w-full ${textFieldClass}`}
+                    {...register(`scenes.${sceneIndex}.slots.body`)}
+                  />
                 </label>
               </>
             )}
             {scene.kind === "outro" && (
-              <label>
+              <label className="my-2 block">
                 結びの文言
-                <input {...register(`scenes.${sceneIndex}.slots.closing`)} />
+                <input
+                  className={`mt-1 block w-full ${textFieldClass}`}
+                  {...register(`scenes.${sceneIndex}.slots.closing`)}
+                />
               </label>
             )}
 

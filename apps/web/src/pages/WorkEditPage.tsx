@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
 import { SceneEditor } from "../components/SceneEditor";
 import { errorMessage } from "../lib/errorMessage";
+import { buttonPrimaryClass, errorTextClass, textFieldClass } from "../ui";
 
 export function WorkEditPage() {
   const { workId } = useParams<{ workId: string }>();
@@ -29,24 +30,32 @@ export function WorkEditPage() {
   return (
     <section>
       <p>
-        <Link to="/">← 作品一覧</Link>
+        <Link to="/" className="text-blue-600 hover:underline dark:text-blue-400">
+          ← 作品一覧
+        </Link>
       </p>
 
       {work.isLoading && <p>読み込み中…</p>}
-      {work.isError && <p className="error">{errorMessage(work.error)}</p>}
+      {work.isError && <p className={errorTextClass}>{errorMessage(work.error)}</p>}
 
       {work.data && (
         <>
-          <form className="row" onSubmit={onRename}>
-            <input value={title} onChange={(event) => setTitleDraft(event.target.value)} />
-            <button type="submit" disabled={updateWork.isPending}>
+          <form onSubmit={onRename} className="my-3 flex flex-wrap items-center gap-2">
+            <input
+              value={title}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              className={`min-w-[200px] flex-1 ${textFieldClass}`}
+            />
+            <button type="submit" className={buttonPrimaryClass} disabled={updateWork.isPending}>
               作品名を保存
             </button>
           </form>
-          {updateWork.isError && <p className="error">{errorMessage(updateWork.error)}</p>}
+          {updateWork.isError && (
+            <p className={errorTextClass}>{errorMessage(updateWork.error)}</p>
+          )}
 
           {current.isLoading && <p>台本を読み込み中…</p>}
-          {current.isError && <p className="error">{errorMessage(current.error)}</p>}
+          {current.isError && <p className={errorTextClass}>{errorMessage(current.error)}</p>}
           {editionId === undefined && <p>この作品には言語版がありません。</p>}
           {current.data && editionId !== undefined && (
             <SceneEditor key={editionId} base={current.data.content} editionId={editionId} />
