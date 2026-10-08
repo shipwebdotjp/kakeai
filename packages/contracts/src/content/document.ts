@@ -38,10 +38,10 @@ function checkUnique(
 }
 
 export const contentDocumentSchema = z
-  .object({
+  .strictObject({
     schemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
     locale: localeSchema,
-    template: z.object({
+    template: z.strictObject({
       id: z.literal(TEMPLATE_ID),
       version: z.literal(TEMPLATE_VERSION),
     }),

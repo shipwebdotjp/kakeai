@@ -12,27 +12,27 @@ const sceneBaseShape = {
   visualCues: z.array(visualCueSchema),
 };
 
-export const introSceneSchema = z.object({
+export const introSceneSchema = z.strictObject({
   kind: z.literal("intro"),
-  slots: z.object({
+  slots: z.strictObject({
     title: z.string(),
     subtitle: z.string(),
   }),
   ...sceneBaseShape,
 });
 
-export const pointSceneSchema = z.object({
+export const pointSceneSchema = z.strictObject({
   kind: z.literal("point"),
-  slots: z.object({
+  slots: z.strictObject({
     heading: z.string(),
     body: z.string(),
   }),
   ...sceneBaseShape,
 });
 
-export const outroSceneSchema = z.object({
+export const outroSceneSchema = z.strictObject({
   kind: z.literal("outro"),
-  slots: z.object({
+  slots: z.strictObject({
     closing: z.string(),
   }),
   ...sceneBaseShape,

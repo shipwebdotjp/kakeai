@@ -4,11 +4,11 @@ import { idSchema } from "./primitives";
 export const audioCueRoleSchema = z.enum(["bgm", "sfx"]);
 
 export const audioCueRangeSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("work") }),
-  z.object({ kind: z.literal("scene"), sceneId: idSchema }),
+  z.strictObject({ kind: z.literal("work") }),
+  z.strictObject({ kind: z.literal("scene"), sceneId: idSchema }),
 ]);
 
-export const audioCueSchema = z.object({
+export const audioCueSchema = z.strictObject({
   id: idSchema,
   role: audioCueRoleSchema,
   assetId: idSchema,

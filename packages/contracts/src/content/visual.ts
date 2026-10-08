@@ -3,26 +3,26 @@ import { idSchema, nonNegativeInt, positiveInt } from "./primitives";
 import { getVisualTemplate } from "../templates";
 
 export const visualCueRangeSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("scene") }),
-  z.object({
+  z.strictObject({ kind: z.literal("scene") }),
+  z.strictObject({
     kind: z.literal("lines"),
     startLineId: idSchema,
     endLineId: idSchema,
   }),
-  z.object({
+  z.strictObject({
     kind: z.literal("offset"),
     startMs: nonNegativeInt,
     endMs: nonNegativeInt,
   }),
 ]);
 
-export const templateRefSchema = z.object({
+export const templateRefSchema = z.strictObject({
   id: idSchema,
   version: positiveInt,
 });
 
 export const visualCueSchema = z
-  .object({
+  .strictObject({
     id: idSchema,
     template: templateRefSchema,
     range: visualCueRangeSchema,

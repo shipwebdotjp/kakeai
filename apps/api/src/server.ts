@@ -1,9 +1,13 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import type { StorageStatus, WorkerStatus } from "@kakeai/contracts";
+import type { PrismaClient } from "./generated/prisma/client.ts";
 import type { AppConfig } from "./config.ts";
 import { sendError } from "./http/envelope.ts";
 import { ApiError } from "./http/errors.ts";
 import { createHealthRouter } from "./http/health.ts";
+import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
+import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
+import { createWorksRouter } from "./http/routes/works.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
 import { API_BASE_PATH, jsonAccessGuard } from "./http/security.ts";
 import { logger } from "./logger.ts";
@@ -12,6 +16,7 @@ const JSON_BODY_LIMIT = "8mb";
 
 export interface AppDependencies {
   config: AppConfig;
+  prisma: PrismaClient;
   getWorkerStatus: () => WorkerStatus;
   getStorageStatus?: () => StorageStatus;
 }
@@ -88,6 +93,9 @@ export function createApp(dependencies: AppDependencies): Express {
       getStorageStatus: dependencies.getStorageStatus ?? (() => "ok"),
     }),
   );
+  api.use(createWorksRouter(dependencies.prisma));
+  api.use(createLanguageEditionsRouter(dependencies.prisma));
+  api.use(createScriptVersionsRouter(dependencies.prisma));
 
   app.use(API_BASE_PATH, api);
   app.use(API_BASE_PATH, (_req, res) => {

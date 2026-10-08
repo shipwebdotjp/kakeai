@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { idSchema } from "./primitives";
 
-export const characterAppearanceSchema = z.object({
+export const characterAppearanceSchema = z.strictObject({
   id: idSchema,
   assetId: idSchema,
   expression: z.string(),
   pose: z.string(),
 });
 
-export const characterSchema = z.object({
+export const characterSchema = z.strictObject({
   id: idSchema,
   name: z.string(),
   appearances: z.array(characterAppearanceSchema),

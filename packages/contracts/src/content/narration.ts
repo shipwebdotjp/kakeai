@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idSchema, positiveInt } from "./primitives";
 
-export const narrationSegmentSchema = z.object({
+export const narrationSegmentSchema = z.strictObject({
   id: idSchema,
   speakerId: idSchema.nullable(),
   captionText: z.string(),
@@ -11,7 +11,7 @@ export const narrationSegmentSchema = z.object({
 
 export const audioTakeSourceSchema = z.enum(["manual", "tts"]);
 
-export const audioTakeSchema = z.object({
+export const audioTakeSchema = z.strictObject({
   id: idSchema,
   narrationSegmentId: idSchema,
   source: audioTakeSourceSchema,

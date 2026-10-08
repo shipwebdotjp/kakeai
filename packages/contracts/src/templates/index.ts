@@ -6,7 +6,7 @@ export const textAnchorSchema = z.enum(["left", "center", "right"]);
 export const textTitleV1 = {
   id: "text.title",
   version: 1,
-  inputSchema: z.object({
+  inputSchema: z.strictObject({
     title: z.string(),
     subtitle: z.string(),
     anchor: textAnchorSchema.optional(),
@@ -16,7 +16,7 @@ export const textTitleV1 = {
 export const textBodyV1 = {
   id: "text.body",
   version: 1,
-  inputSchema: z.object({
+  inputSchema: z.strictObject({
     heading: z.string(),
     body: z.string(),
   }),
@@ -24,7 +24,7 @@ export const textBodyV1 = {
 
 export const fitSchema = z.enum(["cover", "contain"]);
 
-export const focalPointSchema = z.object({
+export const focalPointSchema = z.strictObject({
   x: z.number().min(0).max(1),
   y: z.number().min(0).max(1),
 });
@@ -32,7 +32,7 @@ export const focalPointSchema = z.object({
 export const mediaFullBleedV1 = {
   id: "media.full-bleed",
   version: 1,
-  inputSchema: z.object({
+  inputSchema: z.strictObject({
     assetId: idSchema,
     fit: fitSchema,
     focalPoint: focalPointSchema.optional(),
@@ -42,7 +42,7 @@ export const mediaFullBleedV1 = {
 export const mediaCardV1 = {
   id: "media.card",
   version: 1,
-  inputSchema: z.object({
+  inputSchema: z.strictObject({
     assetId: idSchema,
     heading: z.string(),
     caption: z.string().optional(),
@@ -53,7 +53,7 @@ export const mediaCardV1 = {
 export const characterStandingV1 = {
   id: "character.standing",
   version: 1,
-  inputSchema: z.object({
+  inputSchema: z.strictObject({
     characterId: idSchema,
     appearanceId: idSchema,
     x: z.number().min(0).max(1),
@@ -69,6 +69,11 @@ export const visualTemplateDefinitions = [
   mediaCardV1,
   characterStandingV1,
 ] as const;
+
+export const assetBearingTemplateKeys: ReadonlySet<string> = new Set([
+  `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`,
+  `${mediaCardV1.id}@${mediaCardV1.version}`,
+]);
 
 export interface VisualTemplateDefinition {
   id: string;

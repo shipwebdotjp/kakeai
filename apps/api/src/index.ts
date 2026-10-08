@@ -24,6 +24,7 @@ async function main(): Promise<void> {
 
   const app = createApp({
     config,
+    prisma,
     getWorkerStatus: worker.status,
   });
 

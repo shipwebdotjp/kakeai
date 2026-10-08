@@ -193,6 +193,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `slots.subtitle` | 2 | 全角24文字 | 32px |
 | `slots.heading` | 2 | 全角16文字 | 40px |
 | `slots.body` | 6 | 全角28文字 | 28px |
+| `slots.closing` | 2 | 全角20文字 | 28px |
 | `captionText` | 2 | 全角20文字 | 28px |
 
 `1行の目安` は自動改行の基準であり、`最小フォントサイズ` を下回らない範囲で収める。収まらない入力は保存を拒否せず、警告（`meta.warnings`）として該当フィールドのJSON Pointerと理由を返す。利用者はプレビューで実際のはみ出しを確認して修正する。描画時に黙って縮小・切り詰めしない。
