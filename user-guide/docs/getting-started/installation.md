@@ -8,7 +8,7 @@ title: インストールと初期設定
 Kakeai は、macOS 上でローカルに起動する動画制作アプリです。このページでは、Kakeai のインストール、初期設定、起動方法を説明します。
 
 :::note[現在の状態]
-Kakeai は開発中です。現在はバックエンド（API）までを実装しており、Web UI は今後の更新で追加されます。
+Kakeai は開発中です。作品の作成と台本の編集までを実装しています。素材の取り込み・プレビュー・MP4 出力は今後の更新で追加されます。
 :::
 
 ## 動作環境
@@ -65,23 +65,34 @@ npm install
 
 ## 起動
 
-### 開発時
-
-```bash
-npm run dev -w @kakeai/api
-```
-
-ファイルの変更を検知して自動で再起動します。
-
 ### 通常起動
 
+Web UI をビルドしてから API を起動します。API が Web UI も同じアドレスで配信します。
+
 ```bash
+npm run build -w @kakeai/web
 npm run start -w @kakeai/api
 ```
 
-`http://127.0.0.1:4317` で待ち受けます。停止するには `Ctrl+C` を押します。
+ブラウザで `http://127.0.0.1:4317` を開きます。停止するには `Ctrl+C` を押します。
+
+### 開発時
+
+API と Web UI の開発サーバーを別々に起動します。ターミナルを2つ使います。
+
+```bash
+# ターミナル1（API）
+npm run dev -w @kakeai/api
+
+# ターミナル2（Web UI）
+npm run dev -w @kakeai/web
+```
+
+ブラウザで `http://localhost:5173` を開きます。Web UI の変更は自動で反映され、`/api` へのリクエストは API へ中継されます。
 
 ### 動作確認
+
+API だけを確認する場合:
 
 ```bash
 curl http://127.0.0.1:4317/api/v1/health

@@ -24,13 +24,13 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 - [x] Expressシェル: `/api/v1/health`、`{data}`/`{error}` envelope、requestId、厳密な `Host`/`Origin` 検証、メディアセッションCookie発行ヘルパとcontent配信ガード
 - 完了条件: `/health` が応答し、DBがmigrateでき、保護が効く。
 
-### [ ] P2 作品と言語版と台本版
+### [x] P2 作品と言語版と台本版
 
-- [ ] POST /works（Work + ja-JP Edition + 初期v1 ScriptVersionを1トランザクションで作成）
-- [ ] 作品一覧・取得・名称変更・削除（子Workガード、カスケード）
-- [ ] 現在台本・版履歴・保存（last-write-wins、テキストあふれは `meta.warnings`）・特定版取得
-- [ ] DTO変換でPrismaの `BigInt`（byteSize）を安全整数チェック付き `Number` へ変換する
-- [ ] Web UI: 作品一覧、新規作成、固定5シーンの編集フォーム、明示保存
+- [x] POST /works（Work + ja-JP Edition + 初期v1 ScriptVersionを1トランザクションで作成）
+- [x] 作品一覧・取得・名称変更・削除（子Workガード、カスケード）
+- [x] 現在台本・版履歴・保存（last-write-wins、テキストあふれは `meta.warnings`）・特定版取得
+- [x] DTO変換でPrismaの `BigInt`（byteSize）を安全整数チェック付き `Number` へ変換する
+- [x] Web UI: 作品一覧、新規作成、固定5シーンの編集フォーム、明示保存
 - 完了条件: 作成→保存→再起動→再編集できる。
 
 ### [ ] P3 素材ライブラリと取り込み

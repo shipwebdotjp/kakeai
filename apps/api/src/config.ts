@@ -1,4 +1,6 @@
 import { homedir } from "node:os";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   type DataDirectories,
   dataDirectories,
@@ -21,6 +23,7 @@ export interface AppConfig {
   dataRoot: string;
   directories: DataDirectories;
   databaseUrl: string;
+  webDistDir: string;
   allowedOrigins: ReadonlySet<string>;
   limits: LimitsConfig;
 }
@@ -29,6 +32,9 @@ const GIB = 1024 ** 3;
 
 export const LOOPBACK_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
+
+const API_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const DEFAULT_WEB_DIST_DIR = resolve(API_ROOT, "..", "web", "dist");
 
 export const DEFAULT_LIMITS: LimitsConfig = {
   maxUploadBytes: 4 * GIB,
@@ -65,12 +71,17 @@ export function loadConfig(
   const port = parsePort(env.KAKEAI_PORT);
   const dataRoot = resolveDataRoot(env, platform, home);
   const directories = dataDirectories(dataRoot);
+  const webDistOverride = env.KAKEAI_WEB_DIST;
   return {
     host: LOOPBACK_HOST,
     port,
     dataRoot,
     directories,
     databaseUrl: toSqliteUrl(databaseFilePath(directories)),
+    webDistDir:
+      webDistOverride !== undefined && webDistOverride.trim().length > 0
+        ? resolve(webDistOverride.trim())
+        : DEFAULT_WEB_DIST_DIR,
     allowedOrigins: allowedOriginsForPort(port),
     limits: { ...DEFAULT_LIMITS },
   };

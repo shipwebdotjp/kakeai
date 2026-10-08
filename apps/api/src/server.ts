@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import type { StorageStatus, WorkerStatus } from "@kakeai/contracts";
 import type { PrismaClient } from "./generated/prisma/client.ts";
@@ -9,7 +11,7 @@ import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
-import { API_BASE_PATH, jsonAccessGuard } from "./http/security.ts";
+import { API_BASE_PATH, jsonAccessGuard, setMediaSessionCookie } from "./http/security.ts";
 import { logger } from "./logger.ts";
 
 const JSON_BODY_LIMIT = "8mb";
@@ -17,6 +19,7 @@ const JSON_BODY_LIMIT = "8mb";
 export interface AppDependencies {
   config: AppConfig;
   prisma: PrismaClient;
+  mediaSessionToken: string;
   getWorkerStatus: () => WorkerStatus;
   getStorageStatus?: () => StorageStatus;
 }
@@ -101,6 +104,31 @@ export function createApp(dependencies: AppDependencies): Express {
   app.use(API_BASE_PATH, (_req, res) => {
     sendError(res, 404, "RESOURCE_NOT_FOUND", "指定されたリソースが見つかりません。", getRequestId(res));
   });
+
+  if (existsSync(dependencies.config.webDistDir)) {
+    const webDistDir = dependencies.config.webDistDir;
+    logger.info("serving_web_dist", { webDistDir });
+    app.use((req, res, next) => {
+      const isApiPath = req.path === API_BASE_PATH || req.path.startsWith(`${API_BASE_PATH}/`);
+      if (req.method === "GET" && !isApiPath && req.accepts("html")) {
+        setMediaSessionCookie(res, dependencies.mediaSessionToken);
+      }
+      next();
+    });
+    app.use(express.static(webDistDir));
+    app.get(/.*/, (req, res, next) => {
+      if (!req.accepts("html")) {
+        next();
+        return;
+      }
+      res.sendFile(join(webDistDir, "index.html"), (error) => {
+        if (error) {
+          next();
+        }
+      });
+    });
+  }
+
   app.use((_req, res) => {
     sendError(res, 404, "RESOURCE_NOT_FOUND", "指定されたリソースが見つかりません。", getRequestId(res));
   });

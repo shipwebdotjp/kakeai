@@ -2,6 +2,7 @@ import { loadConfig } from "./config.ts";
 import { createPrismaClient } from "./db/client.ts";
 import { runMigrations } from "./db/migrate.ts";
 import { applySqlitePragmas } from "./db/pragmas.ts";
+import { generateMediaSessionToken } from "./http/security.ts";
 import { logger } from "./logger.ts";
 import { createApp } from "./server.ts";
 import { ensureDataDirectories } from "./storage/paths.ts";
@@ -25,6 +26,7 @@ async function main(): Promise<void> {
   const app = createApp({
     config,
     prisma,
+    mediaSessionToken: generateMediaSessionToken(),
     getWorkerStatus: worker.status,
   });
 
