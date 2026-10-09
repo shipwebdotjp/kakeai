@@ -40,6 +40,41 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "P2002";
 }
 
+const MAX_FILENAME_PART = 40;
+
+function cleanFilenamePart(input: string): string {
+  const cleaned = input
+    .normalize("NFC")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^[_\-.]+|[_\-.]+$/g, "");
+  return Array.from(cleaned).slice(0, MAX_FILENAME_PART).join("");
+}
+
+function sanitizeFilenamePart(value: string, fallback: string): string {
+  const cleaned = cleanFilenamePart(value);
+  if (cleaned.length > 0) {
+    return cleaned;
+  }
+  const fallbackCleaned = cleanFilenamePart(fallback);
+  return fallbackCleaned.length > 0 ? fallbackCleaned : "item";
+}
+
+export function buildTtsFilename(snapshot: TtsJobSnapshot): string {
+  const parts = [
+    "tts",
+    sanitizeFilenamePart(snapshot.adapterId, "adapter"),
+    sanitizeFilenamePart(snapshot.speakerName ?? "", snapshot.speakerId),
+    sanitizeFilenamePart(snapshot.styleName ?? "", `style${snapshot.voice.styleId}`),
+  ];
+  if (snapshot.speedScale !== 1) {
+    parts.push(`${String(snapshot.speedScale)}x`);
+  }
+  parts.push(sanitizeFilenamePart(snapshot.narrationSegmentId, "segment"));
+  return `${parts.join("-")}.wav`;
+}
+
 function parseSnapshot(job: Job): TtsJobSnapshot {
   try {
     return ttsJobSnapshotSchema.parse(JSON.parse(job.inputSnapshotJson));
@@ -94,6 +129,8 @@ export async function processTtsJob(
       adapterId: snapshot.adapterId,
       voiceId: snapshot.voice.voiceId,
       styleId: snapshot.voice.styleId,
+      speakerName: snapshot.speakerName ?? null,
+      styleName: snapshot.styleName ?? null,
       speedScale: snapshot.speedScale,
       engineVersion: snapshot.engineVersion,
       voiceProfileId: snapshot.voiceProfileId,
@@ -138,7 +175,7 @@ export async function processTtsJob(
             origin: "generated",
             status: "ready",
             storageKey,
-            originalFilename: `tts-${snapshot.narrationSegmentId}.wav`,
+            originalFilename: buildTtsFilename(snapshot),
             mediaType: "audio/wav",
             byteSize: BigInt(digest.byteSize),
             sha256: digest.sha256,

@@ -3,6 +3,7 @@ import type { Asset } from "@kakeai/contracts";
 import { renderContentUrl } from "../api/client";
 import { useAssets, useDeleteAsset, useUploadAssets, type UploadAssetsResult } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
+import { KIND_LABEL, formatBytes, formatDuration } from "../lib/assets";
 import { FileDropZone, filesFromInput } from "../components/FileDropZone";
 import {
   buttonDangerClass,
@@ -12,40 +13,11 @@ import {
   metaTextClass,
 } from "../ui";
 
-const KIND_LABEL: Record<Asset["kind"], string> = {
-  image: "画像",
-  video: "動画",
-  audio: "音声",
-};
-
 const STATUS_LABEL: Record<Asset["status"], string> = {
   processing: "取り込み中",
   ready: "準備完了",
   failed: "失敗",
 };
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  if (bytes < 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-function formatDuration(durationMs: number | null): string | null {
-  if (durationMs === null) {
-    return null;
-  }
-  const totalSeconds = Math.round(durationMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
 
 function AssetPreview({ asset }: { asset: Asset }) {
   if (asset.status !== "ready") {

@@ -5,7 +5,11 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { createInitialContentDocument, type VoiceProfile } from "@kakeai/contracts";
+import {
+  createInitialContentDocument,
+  type TtsJobSnapshot,
+  type VoiceProfile,
+} from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
@@ -13,6 +17,7 @@ import { runMigrations } from "../db/migrate.ts";
 import { applySqlitePragmas } from "../db/pragmas.ts";
 import { ensureDataDirectories } from "../storage/paths.ts";
 import { createWorker } from "../worker/index.ts";
+import { buildTtsFilename } from "../worker/tts.ts";
 import * as jobs from "./jobs.ts";
 import * as scriptVersions from "./script-versions.ts";
 import * as ttsJobs from "./tts-jobs.ts";
@@ -369,12 +374,19 @@ describe("tts job", () => {
       adapterId: "voicevox",
       voiceId: "uuid-metantan",
       styleId: 0,
+      speakerName: "ナレーター",
+      styleName: "あまあま",
       speedScale: 0.75,
       engineVersion: "0.19.0",
       scriptVersionId,
       narrationSegmentId: "line-tts",
     });
+    expect(asset.originalFilename).toBe(
+      "tts-voicevox-ナレーター-あまあま-0.75x-line-tts.wav",
+    );
   });
+
+
 
   it("synthesizes through the aivisspeech engine and only overrides speed", async () => {
     if (!ffmpegReady) {
@@ -408,11 +420,16 @@ describe("tts job", () => {
       adapterId: "aivisspeech",
       voiceId: "uuid-aivis",
       styleId: -1,
+      speakerName: "ナレーター",
+      styleName: "ノーマル",
       speedScale: 1.25,
       engineVersion: "1.0.0",
       scriptVersionId,
       narrationSegmentId: "line-tts",
     });
+    expect(asset.originalFilename).toBe(
+      "tts-aivisspeech-ナレーター-ノーマル-1.25x-line-tts.wav",
+    );
   });
 
   it("reuses an existing asset for identical bytes", async () => {
@@ -557,5 +574,44 @@ describe("tts job", () => {
     });
     const cancelled = await jobs.cancelJob(prisma, job.id);
     expect(cancelled.status).toBe("cancelled");
+  });
+});
+
+describe("buildTtsFilename", () => {
+  const snapshot: TtsJobSnapshot = {
+    snapshotSchemaVersion: 1,
+    kind: "tts",
+    scriptVersionId: "scr_1",
+    narrationSegmentId: "line-1",
+    languageEditionId: "led_1",
+    workId: "wrk_1",
+    speakerId: "speaker-1",
+    speakerName: "四国めたん",
+    voiceProfileId: "vp_1",
+    adapterId: "aivisspeech",
+    voice: { voiceId: "uuid-1", styleId: -1 },
+    styleName: "ノーマル",
+    speedScale: 1,
+    speechText: "こんにちは",
+    engineVersion: "1.0.0",
+  };
+
+  it("omits the speed suffix at 1.0x", () => {
+    expect(buildTtsFilename(snapshot)).toBe("tts-aivisspeech-四国めたん-ノーマル-line-1.wav");
+  });
+
+  it("includes the speed suffix when it is not 1.0x", () => {
+    expect(buildTtsFilename({ ...snapshot, speedScale: 1.25 })).toBe(
+      "tts-aivisspeech-四国めたん-ノーマル-1.25x-line-1.wav",
+    );
+  });
+
+  it("sanitizes name parts and falls back to ids", () => {
+    expect(buildTtsFilename({ ...snapshot, speakerName: "四国/めたん" })).toBe(
+      "tts-aivisspeech-四国_めたん-ノーマル-line-1.wav",
+    );
+    expect(
+      buildTtsFilename({ ...snapshot, speakerName: "", styleName: undefined }),
+    ).toBe("tts-aivisspeech-speaker-1-style-1-line-1.wav");
   });
 });

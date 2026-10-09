@@ -41,6 +41,22 @@ function findVoice(voices: TtsVoice[], voiceId: string): TtsVoice | undefined {
   return voices.find((voice) => voice.voiceId === voiceId);
 }
 
+const MAX_SNAPSHOT_NAME_LENGTH = 200;
+
+function truncateName(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  let truncated = trimmed.slice(0, MAX_SNAPSHOT_NAME_LENGTH);
+  const lastCode = truncated.charCodeAt(truncated.length - 1);
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
+    truncated = truncated.slice(0, -1);
+  }
+  truncated = truncated.trimEnd();
+  return truncated.length === 0 ? undefined : truncated;
+}
+
 export async function createTtsJob(
   prisma: PrismaClient,
   config: AppConfig,
@@ -131,7 +147,8 @@ export async function createTtsJob(
       "選択した話者が現在のエンジンに見つかりません。声プロファイルを見直してください。",
     );
   }
-  if (!voice.styles.some((style) => style.styleId === styleId)) {
+  const selectedStyle = voice.styles.find((style) => style.styleId === styleId);
+  if (selectedStyle === undefined) {
     throw ttsInputIssue(["styleId"], "この話者で使えないスタイルです。");
   }
 
@@ -143,9 +160,11 @@ export async function createTtsJob(
     languageEditionId: row.languageEdition.id,
     workId: row.languageEdition.workId,
     speakerId: speaker.id,
+    speakerName: truncateName(speaker.name),
     voiceProfileId: speaker.voiceProfileId,
     adapterId: adapterId.data,
     voice: { voiceId: voice.voiceId, styleId },
+    styleName: truncateName(selectedStyle.name),
     speedScale: input.speedScale,
     speechText,
     engineVersion,

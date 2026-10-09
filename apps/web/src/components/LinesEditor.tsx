@@ -287,6 +287,7 @@ function LineEditor({
           label="音声を追加"
           kinds={["audio"]}
           selectedAssetId={null}
+          variant="add"
           onSelect={(assetId) => {
             if (assetId !== null) {
               addManualTake(assetId);
