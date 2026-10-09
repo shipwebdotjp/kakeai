@@ -9,6 +9,7 @@ import {
   buildContentDocument,
   countAppearanceReferences,
   countCharacterReferences,
+  createEmptySpeaker,
   createPointSceneFormValue,
   toFormValues,
 } from "./form";
@@ -476,7 +477,7 @@ describe("buildContentDocument", () => {
         ],
       },
     ];
-    base.speakers = [{ id: "speaker-narrator", name: "ナレーター", characterId: "character-rin" }];
+    base.speakers = [{ id: "speaker-narrator", name: "ナレーター", characterId: "character-rin", voiceProfileId: null }];
     base.scenes[0]!.visualCues = [
       {
         id: "vc-standing",
@@ -536,6 +537,37 @@ describe("buildContentDocument", () => {
     expect(() => buildContentDocument(base, values)).toThrow();
   });
 
+  it("round-trips speakers and their voice profile", () => {
+    const base = createInitialContentDocument();
+    base.speakers = [
+      {
+        id: "speaker-narrator",
+        name: "ナレーター",
+        characterId: null,
+        voiceProfileId: "vp-1",
+      },
+    ];
+    const values = toFormValues(base);
+    expect(values.speakers).toEqual([
+      { id: "speaker-narrator", name: "ナレーター", characterId: null, voiceProfileId: "vp-1" },
+    ]);
+
+    values.speakers[0]!.voiceProfileId = "vp-2";
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.speakers[0]!.voiceProfileId).toBe("vp-2");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("adds a speaker with an unset voice profile", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.speakers.push(createEmptySpeaker());
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.speakers[0]!.voiceProfileId).toBeNull();
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
   it("counts character and appearance references for the deletion dialog", () => {
     const base = createInitialContentDocument();
     base.characters = [
@@ -547,7 +579,7 @@ describe("buildContentDocument", () => {
         ],
       },
     ];
-    base.speakers = [{ id: "speaker-narrator", name: "ナレーター", characterId: "character-rin" }];
+    base.speakers = [{ id: "speaker-narrator", name: "ナレーター", characterId: "character-rin", voiceProfileId: null }];
     const standingCue = (id: string) => ({
       id,
       template: { id: "character.standing", version: 1 },

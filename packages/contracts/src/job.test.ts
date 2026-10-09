@@ -41,8 +41,27 @@ describe("jobInputSnapshotSchema", () => {
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
 
+  it("accepts a tts snapshot", () => {
+    const snapshot = {
+      snapshotSchemaVersion: 1,
+      kind: "tts",
+      scriptVersionId: "scr_001",
+      narrationSegmentId: "line-p1-1",
+      languageEditionId: "led_ja",
+      workId: "wrk_1",
+      speakerId: "speaker-narrator",
+      voiceProfileId: "vp_1",
+      adapterId: "voicevox",
+      voice: { voiceId: "uuid-1", styleId: 3 },
+      speedScale: 1,
+      speechText: "こんにちは",
+      engineVersion: "0.19.0",
+    };
+    expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
   it("rejects an unknown job kind", () => {
-    const snapshot = { snapshotSchemaVersion: 1, kind: "tts" };
+    const snapshot = { snapshotSchemaVersion: 1, kind: "translate" };
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(false);
   });
 });

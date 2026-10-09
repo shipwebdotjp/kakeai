@@ -9,12 +9,17 @@ import {
   jobKindSchema,
   jobStatusSchema,
   localeSchema,
+  ttsJobResultSchema,
+  voiceAdapterIdSchema,
+  voiceProfileSettingsSchema,
   type Artifact,
   type Asset,
   type Job,
   type LanguageEditionSummary,
   type ScriptVersion,
   type ScriptVersionSummary,
+  type TtsJobResult,
+  type VoiceProfile,
   type Work,
   type WorkSummary,
 } from "@kakeai/contracts";
@@ -24,6 +29,7 @@ import type {
   Job as JobRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
+  VoiceProfile as VoiceProfileRow,
   Work as WorkRow,
 } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
@@ -208,10 +214,49 @@ export function toJob(row: JobWithArtifacts): Job {
       errorCode === null
         ? null
         : { code: errorCode, message: row.errorMessage ?? "" },
+    ttsResult: parseTtsResult(row),
     artifacts: row.artifacts.map(toArtifact),
   };
 }
 
+function parseTtsResult(row: JobRow): TtsJobResult | null {
+  if (row.kind !== "tts" || row.resultJson === null) {
+    return null;
+  }
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(row.resultJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "Job.ttsResult の値を解釈できません。");
+  }
+  const parsed = ttsJobResultSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", "Job.ttsResult の値が不正です。");
+  }
+  return parsed.data;
+}
+
 export function renderContentUrl(assetId: string): string {
   return `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/render-content`;
+}
+
+export function toVoiceProfile(row: VoiceProfileRow): VoiceProfile {
+  let settings: unknown;
+  try {
+    settings = JSON.parse(row.settingsJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定を解釈できません。");
+  }
+  const parsedSettings = voiceProfileSettingsSchema.safeParse(settings);
+  if (!parsedSettings.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定が不正です。");
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    adapterId: parseEnum(voiceAdapterIdSchema, row.adapterId, "VoiceProfile.adapterId"),
+    settings: parsedSettings.data,
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
 }

@@ -8,6 +8,7 @@ import {
   type Character,
   type ContentDocument,
   type Scene,
+  type Speaker,
   type VisualCue,
 } from "@kakeai/contracts";
 
@@ -45,6 +46,13 @@ export interface CharacterFormValue {
   id: string;
   name: string;
   appearances: AppearanceFormValue[];
+}
+
+export interface SpeakerFormValue {
+  id: string;
+  name: string;
+  characterId: string | null;
+  voiceProfileId: string | null;
 }
 
 export interface StandingFormValue {
@@ -87,6 +95,7 @@ export interface DocumentFormValues {
   scenes: SceneFormValue[];
   bgm: BgmFormValue;
   characters: CharacterFormValue[];
+  speakers: SpeakerFormValue[];
 }
 
 const FALLBACK_DURATION_MS = 4000;
@@ -170,6 +179,15 @@ function readCharacters(content: ContentDocument): CharacterFormValue[] {
   }));
 }
 
+function readSpeakers(content: ContentDocument): SpeakerFormValue[] {
+  return content.speakers.map((speaker) => ({
+    id: speaker.id,
+    name: speaker.name,
+    characterId: speaker.characterId,
+    voiceProfileId: speaker.voiceProfileId,
+  }));
+}
+
 export function toFormValues(content: ContentDocument): DocumentFormValues {
   const takesByLine = new Map<string, TakeFormValue[]>();
   for (const take of content.audioTakes) {
@@ -228,6 +246,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
       loop: bgmCue?.loop ?? DEFAULT_BGM_LOOP,
     },
     characters: readCharacters(content),
+    speakers: readSpeakers(content),
   };
 }
 
@@ -235,7 +254,7 @@ function isValidTake(take: TakeFormValue): boolean {
   return Number.isInteger(take.durationMs) && take.durationMs > 0 && take.assetId.length > 0;
 }
 
-function buildLines(sceneValue: SceneFormValue): Scene["lines"] {
+function buildLines(sceneValue: SceneFormValue, speakerIds: ReadonlySet<string>): Scene["lines"] {
   return sceneValue.lines.map((line) => {
     const selected =
       line.selectedAudioTakeId !== null &&
@@ -244,7 +263,8 @@ function buildLines(sceneValue: SceneFormValue): Scene["lines"] {
         : null;
     return {
       id: line.id,
-      speakerId: line.speakerId,
+      speakerId:
+        line.speakerId !== null && speakerIds.has(line.speakerId) ? line.speakerId : null,
       captionText: line.captionText,
       speechText: line.speechText,
       selectedAudioTakeId: selected,
@@ -391,6 +411,24 @@ function buildVisualCues(
   return cues;
 }
 
+function buildSpeakers(
+  values: SpeakerFormValue[],
+  characterIds: ReadonlySet<string>,
+): Speaker[] {
+  return values.map((speaker) => ({
+    id: speaker.id,
+    name: speaker.name,
+    characterId:
+      speaker.characterId !== null && characterIds.has(speaker.characterId)
+        ? speaker.characterId
+        : null,
+    voiceProfileId:
+      speaker.voiceProfileId !== null && speaker.voiceProfileId.length > 0
+        ? speaker.voiceProfileId
+        : null,
+  }));
+}
+
 export function buildContentDocument(
   base: ContentDocument,
   values: DocumentFormValues,
@@ -403,6 +441,8 @@ export function buildContentDocument(
       new Set(character.appearances.map((appearance) => appearance.id)),
     ]),
   );
+  const speakers = buildSpeakers(values.speakers, characterIds);
+  const speakerIds = new Set(speakers.map((speaker) => speaker.id));
   const baseById = new Map(base.scenes.map((scene) => [scene.id, scene]));
   const scenes: Scene[] = values.scenes.map((sceneValue) => {
     const baseScene = baseById.get(sceneValue.id);
@@ -422,7 +462,7 @@ export function buildContentDocument(
       id: sceneValue.id,
       accentColor: (sceneValue.accentColor || DEFAULT_POINT_ACCENT_COLOR).toUpperCase(),
       timing,
-      lines: buildLines(sceneValue),
+      lines: buildLines(sceneValue, speakerIds),
       visualCues: buildVisualCues(
         baseScene,
         sceneValue,
@@ -468,11 +508,6 @@ export function buildContentDocument(
       loop: values.bgm.loop,
     });
   }
-  const speakers = base.speakers.map((speaker) =>
-    speaker.characterId !== null && !characterIds.has(speaker.characterId)
-      ? { ...speaker, characterId: null }
-      : speaker,
-  );
   return {
     ...base,
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
@@ -548,6 +583,14 @@ export function createPointSceneFormValue(): SceneFormValue {
 
 export function newCharacterId(): string {
   return `character-${randomId()}`;
+}
+
+export function newSpeakerId(): string {
+  return `speaker-${randomId()}`;
+}
+
+export function createEmptySpeaker(): SpeakerFormValue {
+  return { id: newSpeakerId(), name: "", characterId: null, voiceProfileId: null };
 }
 
 export function newAppearanceId(): string {

@@ -4,6 +4,7 @@ import type { Job, PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
 import { processAssetIngest } from "./asset-ingest.ts";
 import { RenderJobError, processRenderJob } from "./render.ts";
+import { TtsJobError, processTtsJob } from "./tts.ts";
 
 export interface Worker {
   status: () => WorkerStatus;
@@ -30,7 +31,7 @@ export function createWorker(dependencies: WorkerDependencies): Worker {
   async function claimNextJob(): Promise<Job | null> {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const candidate = await prisma.job.findFirst({
-        where: { kind: { in: ["asset_ingest", "render"] }, status: "queued" },
+        where: { kind: { in: ["asset_ingest", "render", "tts"] }, status: "queued" },
         orderBy: { createdAt: "asc" },
       });
       if (candidate === null) {
@@ -52,8 +53,12 @@ export function createWorker(dependencies: WorkerDependencies): Worker {
     let errorCode: string;
     if (error instanceof RenderJobError) {
       errorCode = error.code;
+    } else if (error instanceof TtsJobError) {
+      errorCode = error.code;
     } else if (job.kind === "render") {
       errorCode = "RENDER_FAILED";
+    } else if (job.kind === "tts") {
+      errorCode = "TTS_SYNTHESIS_FAILED";
     } else {
       errorCode = "ASSET_INGEST_FAILED";
     }
@@ -94,6 +99,8 @@ export function createWorker(dependencies: WorkerDependencies): Worker {
         await processRenderJob(prisma, config, job);
       } else if (job.kind === "asset_ingest") {
         await processAssetIngest(prisma, config, job);
+      } else if (job.kind === "tts") {
+        await processTtsJob(prisma, config, job);
       } else {
         throw new Error(`未対応のJob種別です: ${job.kind}`);
       }

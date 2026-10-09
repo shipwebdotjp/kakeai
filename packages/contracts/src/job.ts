@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { voiceAdapterIdSchema } from "./voice-profile";
+import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 
 export const SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
@@ -54,11 +56,32 @@ export const assetIngestJobSnapshotSchema = z.object({
   storageKey: z.string().min(1),
 });
 
+export const ttsJobSnapshotSchema = z.object({
+  snapshotSchemaVersion: z.literal(SNAPSHOT_SCHEMA_VERSION),
+  kind: z.literal("tts"),
+  scriptVersionId: idSchema,
+  narrationSegmentId: idSchema,
+  languageEditionId: idSchema,
+  workId: idSchema,
+  speakerId: idSchema,
+  voiceProfileId: idSchema,
+  adapterId: voiceAdapterIdSchema,
+  voice: z.object({
+    voiceId: z.string().min(1),
+    styleId: z.number().int().nonnegative(),
+  }),
+  speedScale: z.number().finite().min(MIN_TTS_SPEED_SCALE).max(MAX_TTS_SPEED_SCALE),
+  speechText: z.string().min(1),
+  engineVersion: z.string().nullable(),
+});
+
 export const jobInputSnapshotSchema = z.discriminatedUnion("kind", [
   renderJobSnapshotSchema,
   assetIngestJobSnapshotSchema,
+  ttsJobSnapshotSchema,
 ]);
 
 export type RenderJobSnapshot = z.infer<typeof renderJobSnapshotSchema>;
 export type AssetIngestJobSnapshot = z.infer<typeof assetIngestJobSnapshotSchema>;
+export type TtsJobSnapshot = z.infer<typeof ttsJobSnapshotSchema>;
 export type JobInputSnapshot = z.infer<typeof jobInputSnapshotSchema>;

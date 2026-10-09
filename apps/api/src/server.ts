@@ -12,6 +12,7 @@ import { createAssetsRouter } from "./http/routes/assets.ts";
 import { createJobsRouter } from "./http/routes/jobs.ts";
 import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
+import { createVoiceProfilesRouter } from "./http/routes/voice-profiles.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
 import {
@@ -118,7 +119,19 @@ export function createApp(dependencies: AppDependencies): Express {
   );
   api.use(createWorksRouter(dependencies.prisma));
   api.use(createLanguageEditionsRouter(dependencies.prisma));
-  api.use(createScriptVersionsRouter({ prisma: dependencies.prisma, directories: dependencies.config.directories }));
+  api.use(
+    createScriptVersionsRouter({
+      prisma: dependencies.prisma,
+      directories: dependencies.config.directories,
+      config: dependencies.config,
+    }),
+  );
+  api.use(
+    createVoiceProfilesRouter({
+      prisma: dependencies.prisma,
+      config: dependencies.config,
+    }),
+  );
   api.use(createJobsRouter(dependencies.prisma));
   api.use(
     createArtifactsRouter({

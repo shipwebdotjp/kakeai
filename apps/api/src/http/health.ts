@@ -4,6 +4,7 @@ import {
   assetKindSchema,
   healthResponseSchema,
   jobKindSchema,
+  voiceAdapterIdSchema,
   type HealthResponse,
   type StorageStatus,
   type WorkerStatus,
@@ -23,6 +24,7 @@ export function buildHealthResponse(
       locales: [...SUPPORTED_LOCALES],
       jobKinds: [...jobKindSchema.options],
       assetKinds: [...assetKindSchema.options],
+      voiceAdapters: [...voiceAdapterIdSchema.options],
     },
     storage: {
       warningThresholdBytes: limits.storageWarningBytes,

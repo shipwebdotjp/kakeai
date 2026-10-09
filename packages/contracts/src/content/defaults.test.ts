@@ -9,7 +9,7 @@ import {
 } from "./defaults";
 
 describe("createInitialContentDocument", () => {
-  it("produces a valid v1 document", () => {
+  it("produces a valid v2 document", () => {
     const document = createInitialContentDocument();
     expect(contentDocumentSchema.safeParse(document).success).toBe(true);
   });

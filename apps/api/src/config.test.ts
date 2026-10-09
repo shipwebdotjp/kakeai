@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PORT, allowedOriginsForPort, loadConfig } from "./config.ts";
+import {
+  DEFAULT_PORT,
+  DEFAULT_VOICEVOX_BASE_URL,
+  allowedOriginsForPort,
+  loadConfig,
+  parseVoicevoxBaseUrl,
+} from "./config.ts";
 
 describe("allowedOriginsForPort", () => {
   it("accepts the loopback hostnames on the configured port", () => {
@@ -30,5 +36,28 @@ describe("loadConfig", () => {
   it("rejects an invalid KAKEAI_PORT", () => {
     expect(() => loadConfig({ KAKEAI_PORT: "not-a-port" }, "darwin", "/Users/me")).toThrow();
     expect(() => loadConfig({ KAKEAI_PORT: "70000" }, "darwin", "/Users/me")).toThrow();
+  });
+
+  it("defaults the voicevox base url to loopback", () => {
+    const config = loadConfig({ KAKEAI_DATA_DIR: "/tmp/kakeai" }, "darwin", "/Users/me");
+    expect(config.voicevoxBaseUrl).toBe(DEFAULT_VOICEVOX_BASE_URL);
+  });
+});
+
+describe("parseVoicevoxBaseUrl", () => {
+  it("accepts loopback http urls and normalizes to an origin", () => {
+    expect(parseVoicevoxBaseUrl(undefined)).toBe(DEFAULT_VOICEVOX_BASE_URL);
+    expect(parseVoicevoxBaseUrl("http://localhost:50021/")).toBe("http://localhost:50021");
+    expect(parseVoicevoxBaseUrl("http://[::1]:50021")).toBe("http://[::1]:50021");
+    expect(parseVoicevoxBaseUrl("http://127.0.0.5:50021")).toBe("http://127.0.0.5:50021");
+  });
+
+  it("rejects non-loopback, credentialed, and prefixed urls", () => {
+    expect(() => parseVoicevoxBaseUrl("http://192.168.0.1:50021")).toThrow();
+    expect(() => parseVoicevoxBaseUrl("https://127.0.0.1:50021")).toThrow();
+    expect(() => parseVoicevoxBaseUrl("http://user:pass@127.0.0.1:50021")).toThrow();
+    expect(() => parseVoicevoxBaseUrl("http://127.0.0.1:50021/api")).toThrow();
+    expect(() => parseVoicevoxBaseUrl("http://127.0.0.1:50021?a=1")).toThrow();
+    expect(() => parseVoicevoxBaseUrl("not-a-url")).toThrow();
   });
 });

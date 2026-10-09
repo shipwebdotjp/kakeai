@@ -7,7 +7,7 @@ export function validContentDocument(): ContentDocument {
     schemaVersion: CONTENT_SCHEMA_VERSION,
     locale: SUPPORTED_LOCALES[0],
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
-    speakers: [{ id: "speaker-narrator", name: "ナレーター", characterId: null }],
+    speakers: [{ id: "speaker-narrator", name: "ナレーター", characterId: null, voiceProfileId: null }],
     characters: [],
     audioTakes: [
       {

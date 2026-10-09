@@ -88,6 +88,7 @@ export function WorkEditPage() {
                 base={current.data.content}
                 editionId={editionId}
                 workId={workId}
+                scriptVersionId={previewVersionId ?? current.data.id}
                 onSaved={onSaved}
               />
               <div ref={previewRef}>

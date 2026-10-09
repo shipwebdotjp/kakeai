@@ -1,4 +1,4 @@
-import { contentDocumentSchema, type ContentDocument } from "@kakeai/contracts";
+import { contentDocumentSchema, parseContentDocument, type ContentDocument } from "@kakeai/contracts";
 
 function sortKeysDeep(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -18,5 +18,5 @@ export function serializeContent(content: ContentDocument): string {
 }
 
 export function deserializeContent(contentJson: string): ContentDocument {
-  return contentDocumentSchema.parse(JSON.parse(contentJson));
+  return parseContentDocument(JSON.parse(contentJson));
 }

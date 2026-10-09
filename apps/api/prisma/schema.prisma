@@ -92,6 +92,17 @@ model AssetRendition {
   @@unique([assetId, purpose])
 }
 
+model VoiceProfile {
+  id           String   @id @default(cuid())
+  name         String
+  adapterId    String
+  settingsJson String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([adapterId])
+}
+
 model Job {
   id                    String          @id @default(cuid())
   kind                  String

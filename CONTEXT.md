@@ -32,6 +32,10 @@ _Avoid_: Visual cue, template
 The voice identity for a Narration Segment, whether or not it appears on screen.
 _Avoid_: Character, narrator
 
+**Voice Profile**:
+An app-wide voice setting that maps a Speaker to a TTS adapter and its adapter-specific voice.
+_Avoid_: Speaker, TTS engine
+
 **Character**:
 A visual person or avatar that may, but need not, be associated with a Speaker.
 _Avoid_: Speaker, voice

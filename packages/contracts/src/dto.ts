@@ -2,7 +2,7 @@ import { z } from "zod";
 import { idSchema, localeSchema, nonNegativeInt, positiveInt, timestampSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 
-export const jobKindSchema = z.enum(["asset_ingest", "render"]);
+export const jobKindSchema = z.enum(["asset_ingest", "render", "tts"]);
 export const jobStatusSchema = z.enum([
   "queued",
   "running",
@@ -22,6 +22,9 @@ export const jobErrorCodeSchema = z.enum([
   "ASSET_UNAVAILABLE",
   "RENDER_FAILED",
   "WORKER_INTERRUPTED",
+  "TTS_ENGINE_UNAVAILABLE",
+  "TTS_INPUT_REJECTED",
+  "TTS_SYNTHESIS_FAILED",
 ]);
 
 export const scriptVersionRefSchema = z.object({
@@ -105,6 +108,15 @@ export const jobErrorSchema = z.object({
   message: z.string(),
 });
 
+export const ttsJobResultSchema = z.object({
+  narrationSegmentId: idSchema,
+  assetId: idSchema,
+  durationMs: nonNegativeInt,
+  source: z.literal("tts"),
+});
+
+export type TtsJobResult = z.infer<typeof ttsJobResultSchema>;
+
 export const jobSchema = z
   .object({
     id: idSchema,
@@ -119,10 +131,28 @@ export const jobSchema = z
     startedAt: timestampSchema.nullable(),
     finishedAt: timestampSchema.nullable(),
     error: jobErrorSchema.nullable(),
+    ttsResult: ttsJobResultSchema.nullable(),
     artifacts: z.array(artifactSchema),
   })
   .superRefine((job, ctx) => {
-    if (job.kind === "render") {
+    if (job.kind === "tts") {
+      for (const field of ["workId", "languageEditionId", "scriptVersionId"] as const) {
+        if (job[field] === null) {
+          ctx.addIssue({
+            code: "custom",
+            message: `tts Job は ${field} を必須とします`,
+            path: [field],
+          });
+        }
+      }
+      if (job.assetId !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "tts Job は assetId を持ちません",
+          path: ["assetId"],
+        });
+      }
+    } else if (job.kind === "render") {
       for (const field of ["workId", "languageEditionId", "scriptVersionId"] as const) {
         if (job[field] === null) {
           ctx.addIssue({
@@ -145,6 +175,29 @@ export const jobSchema = z
         message: "asset_ingest Job は assetId を必須とします",
         path: ["assetId"],
       });
+    }
+    if (job.kind !== "tts" && job.ttsResult !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "ttsResult は tts Job だけが持ちます",
+        path: ["ttsResult"],
+      });
+    }
+    if (job.kind === "tts") {
+      if (job.status === "succeeded" && job.ttsResult === null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "succeeded な tts Job は ttsResult を必須とします",
+          path: ["ttsResult"],
+        });
+      }
+      if (job.status !== "succeeded" && job.ttsResult !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "ttsResult は succeeded な tts Job だけが持ちます",
+          path: ["ttsResult"],
+        });
+      }
     }
   });
 

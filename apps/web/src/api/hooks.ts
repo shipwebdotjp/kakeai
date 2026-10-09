@@ -3,9 +3,15 @@ import { warningsMetaSchema } from "@kakeai/contracts";
 import type {
   Asset,
   ContentDocument,
+  CreateVoiceProfileRequest,
   Job,
   ScriptVersion,
   ScriptVersionPreview,
+  TtsJobResult,
+  UpdateVoiceProfileRequest,
+  VoiceAdapterId,
+  VoiceList,
+  VoiceProfile,
   Warning,
   Work,
   WorkSummary,
@@ -229,5 +235,126 @@ export function useCancelJob(workId: string | undefined) {
         queryClient.invalidateQueries({ queryKey: ["work-jobs", targetWorkId] });
       }
     },
+  });
+}
+
+export function useVoiceProfiles() {
+  return useQuery({
+    queryKey: ["voice-profiles"],
+    queryFn: async () => (await apiRequest<VoiceProfile[]>("/voice-profiles")).data,
+  });
+}
+
+export function useCreateVoiceProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateVoiceProfileRequest) =>
+      (await apiRequest<VoiceProfile>("/voice-profiles", { method: "POST", body: input })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voice-profiles"] }),
+  });
+}
+
+export function useUpdateVoiceProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateVoiceProfileRequest }) =>
+      (
+        await apiRequest<VoiceProfile>(`/voice-profiles/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: input,
+        })
+      ).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voice-profiles"] }),
+  });
+}
+
+export function useDeleteVoiceProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/voice-profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["voice-profiles"] }),
+  });
+}
+
+export function useAdapterVoices(adapterId: VoiceAdapterId | undefined) {
+  return useQuery({
+    queryKey: ["adapter-voices", adapterId],
+    enabled: adapterId !== undefined,
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async () =>
+      (
+        await apiRequest<VoiceList>(
+          `/voice-profiles/voices?adapterId=${encodeURIComponent(adapterId ?? "")}`,
+        )
+      ).data,
+  });
+}
+
+const TTS_POLL_INTERVAL_MS = 1000;
+const TTS_POLL_MAX_ATTEMPTS = 120;
+
+const TTS_JOB_ERROR_MESSAGES: Record<string, string> = {
+  TTS_ENGINE_UNAVAILABLE: "音声エンジンに接続できません。起動を確認してください。",
+  TTS_INPUT_REJECTED: "音声エンジンが入力を拒否しました。読み上げテキストやスタイルを確認してください。",
+  TTS_SYNTHESIS_FAILED: "音声の合成に失敗しました。",
+  WORKER_INTERRUPTED: "音声生成が中断されました。再試行してください。",
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface GenerateTtsInput {
+  narrationSegmentId: string;
+  styleId: number;
+  speedScale: number;
+}
+
+export function useGenerateTtsTake(scriptVersionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: GenerateTtsInput): Promise<TtsJobResult> => {
+      if (scriptVersionId === undefined || scriptVersionId.length === 0) {
+        throw new Error("scriptVersionId がありません");
+      }
+      const created = (
+        await apiRequest<Job>(
+          `/script-versions/${encodeURIComponent(scriptVersionId)}/narration-segments/${encodeURIComponent(
+            input.narrationSegmentId,
+          )}/tts-jobs`,
+          {
+            method: "POST",
+            body: { styleId: input.styleId, speedScale: input.speedScale },
+          },
+        )
+      ).data;
+      for (let attempt = 0; attempt < TTS_POLL_MAX_ATTEMPTS; attempt += 1) {
+        await sleep(TTS_POLL_INTERVAL_MS);
+        let job: Job;
+        try {
+          job = (await apiRequest<Job>(`/jobs/${encodeURIComponent(created.id)}`)).data;
+        } catch {
+          continue;
+        }
+        if (job.status === "succeeded") {
+          if (job.ttsResult === null) {
+            throw new Error("音声生成に失敗しました。");
+          }
+          return job.ttsResult;
+        }
+        if (job.status === "failed" || job.status === "cancelled") {
+          const code = job.error?.code ?? "TTS_SYNTHESIS_FAILED";
+          throw new Error(TTS_JOB_ERROR_MESSAGES[code] ?? "音声生成に失敗しました。");
+        }
+      }
+      await apiRequest(`/jobs/${encodeURIComponent(created.id)}/cancel`, { method: "POST" }).catch(
+        () => undefined,
+      );
+      throw new Error("音声生成がタイムアウトしました。");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
   });
 }

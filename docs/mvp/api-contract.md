@@ -63,8 +63,10 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。MVPでは1 Workにつき1つのja-JP Editionだけを作る。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt | contentはContentDocumentそのもの。保存後に更新しない。 |
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
-| Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。MVPのkindは `asset_ingest` / `render`。 |
+| Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
+| VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は初期は `voicevox`、`settings` はアダプター専用（VOICEVOXは `speakerUuid` と `defaultStyleId`）。詳細は [../tts/spec.md](../tts/spec.md)。 |
+| TtsVoice | voiceId, name, styles | 接続中エンジンの話者。`styles` は `styleId` と表示名の配列。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。
 
@@ -96,6 +98,12 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /artifacts/:artifactId | 200 | Artifactのメタデータを取得 |
 | GET | /artifacts/:artifactId/content | 200 / 206 | Artifactファイルを配信 |
 | DELETE | /artifacts/:artifactId | 204 | 生成済み出力を明示削除 |
+| GET | /voice-profiles | 200 | アプリ共通のVoice Profile一覧を取得 |
+| POST | /voice-profiles | 201 | Voice Profileを作成 |
+| PATCH | /voice-profiles/:voiceProfileId | 200 | Voice Profileの表示名と設定を更新 |
+| DELETE | /voice-profiles/:voiceProfileId | 204 | 未参照のVoice Profileを削除 |
+| GET | /voice-profiles/voices?adapterId=voicevox | 200 | 接続中エンジンの話者とスタイルを取得（[../tts/spec.md](../tts/spec.md)） |
+| POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
 
 この一覧のパスはすべて /api/v1 を先頭に持つ。たとえば作品一覧は GET /api/v1/works である。
 
@@ -560,6 +568,8 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 422 | MEDIA_LIMIT_EXCEEDED | 長さまたは寸法がサーバー設定の上限を超える | measured, limits |
 | 422 | PREVIEW_INPUT_INVALID | 保存済み台本をCompositionへ変換できない | issues |
 | 422 | RENDER_INPUT_INVALID | レンダー投入時の音声尺超過など | issues |
+| 422 | TTS_INPUT_INVALID | TTS生成要求の空本文・Speaker/Profile未設定・無効スタイル・不正な話速 | issues |
+| 503 | TTS_ENGINE_UNAVAILABLE | TTSエンジン未起動または接続失敗 | 任意 |
 | 500 | INTERNAL_ERROR | 予期しないAPI内部エラー | requestIdのみ |
 | 503 | DATABASE_BUSY | busy timeoutを超えるSQLite競合 | 任意のretryAfterMs |
 

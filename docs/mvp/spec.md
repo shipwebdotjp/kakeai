@@ -79,6 +79,8 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 
 `Job` は種別、状態（`queued` / `running` / `succeeded` / `failed` / `cancelled`）、入力スナップショット、成果物参照、エラー、開始・完了時刻を持つ。MVPの `asset_ingest` はアップロード原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけRenditionを作り、`render` はMP4を作る。将来のTTS、画像生成、調査、台本下書きも同じ枠組みに追加する。
 
+> 先行実装として、別途起動したローカル VOICEVOX ENGINE へ接続する `tts` Job と、アプリ共通の `VoiceProfile`、ContentDocument v2 を [../tts/spec.md](../tts/spec.md) で定義する。この文書の MVP 記述のうち TTS に関わる部分は同仕様を正とする。
+
 ## MVPのDBスキーマ
 
 ### 永続化の境界

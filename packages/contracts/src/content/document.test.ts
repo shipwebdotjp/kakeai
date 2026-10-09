@@ -1,11 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { contentDocumentSchema } from "./document";
+import {
+  contentDocumentInputSchema,
+  contentDocumentSchema,
+  contentDocumentV1ToV2Schema,
+} from "./document";
 import { validContentDocument } from "../testing/fixtures";
 
 describe("contentDocumentSchema", () => {
-  it("accepts a valid v1 document", () => {
+  it("accepts a valid v2 document", () => {
     const result = contentDocumentSchema.safeParse(validContentDocument());
     expect(result.success).toBe(true);
+  });
+
+  it("requires voiceProfileId on speakers", () => {
+    const doc = validContentDocument();
+    delete (doc.speakers[0] as { voiceProfileId?: unknown }).voiceProfileId;
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("upgrades a v1 document to v2 with null voice profiles", () => {
+    const v1 = {
+      ...validContentDocument(),
+      schemaVersion: 1 as const,
+      speakers: [{ id: "speaker-narrator", name: "ナレーター", characterId: null }],
+    };
+    const upgraded = contentDocumentV1ToV2Schema.parse(v1);
+    expect(upgraded.schemaVersion).toBe(2);
+    expect(upgraded.speakers[0]!.voiceProfileId).toBeNull();
+    expect(contentDocumentInputSchema.safeParse(v1).success).toBe(true);
   });
 
   it("rejects an unknown template id or version", () => {

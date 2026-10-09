@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { localeSchema, nonNegativeInt } from "./content/primitives";
 import { assetKindSchema, jobKindSchema } from "./dto";
+import { voiceAdapterIdSchema } from "./voice-profile";
 
 export const workerStatusSchema = z.enum(["ready", "notReady"]);
 export const storageStatusSchema = z.enum(["ok", "warning"]);
@@ -14,6 +15,7 @@ export const healthResponseSchema = z.object({
     locales: z.array(localeSchema),
     jobKinds: z.array(jobKindSchema),
     assetKinds: z.array(assetKindSchema),
+    voiceAdapters: z.array(voiceAdapterIdSchema),
   }),
   storage: z.object({
     warningThresholdBytes: nonNegativeInt,

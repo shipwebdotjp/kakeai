@@ -7,22 +7,28 @@ import {
   type UseFormRegister,
 } from "react-hook-form";
 import {
+  DEFAULT_VOICE_ADAPTER_ID,
   contentDocumentSchema,
   type ContentDocument,
   type ScriptVersion,
   type Warning,
 } from "@kakeai/contracts";
 import { resolveTimeline } from "@kakeai/video/timeline";
-import { useSaveScriptVersion } from "../api/hooks";
+import {
+  useAdapterVoices,
+  useSaveScriptVersion,
+  useVoiceProfiles,
+} from "../api/hooks";
 import {
   buildContentDocument,
+  createEmptySpeaker,
   createPointSceneFormValue,
   toFormValues,
   DEFAULT_BGM_GAIN_DB,
   type DocumentFormValues,
 } from "../content/form";
 import { errorMessage } from "../lib/errorMessage";
-import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { buttonDangerClass, buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
 import { StandingFields } from "./StandingFields";
@@ -31,6 +37,7 @@ interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
   workId: string;
+  scriptVersionId: string;
   onSaved?: (scriptVersion: ScriptVersion, options: { focusPreview: boolean }) => void;
 }
 
@@ -135,8 +142,10 @@ function CueFields({
   );
 }
 
-export function SceneEditor({ base, editionId, workId, onSaved }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
+  const voiceProfiles = useVoiceProfiles();
+  const adapterVoices = useAdapterVoices(DEFAULT_VOICE_ADAPTER_ID);
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
@@ -150,13 +159,19 @@ export function SceneEditor({ base, editionId, workId, onSaved }: SceneEditorPro
     return () => clearTimeout(timer);
   }, [savedAtMs]);
 
-  const { register, control, handleSubmit, reset, getValues, setValue } =
+  const { register, control, handleSubmit, reset, getValues, setValue, formState } =
     useForm<DocumentFormValues>({
       defaultValues: toFormValues(base),
     });
   const { fields, insert, remove, move } = useFieldArray({ control, name: "scenes" });
+  const {
+    fields: speakerFields,
+    append: appendSpeaker,
+    remove: removeSpeaker,
+  } = useFieldArray({ control, name: "speakers" });
   const watchedScenes = useWatch({ control, name: "scenes" }) ?? [];
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
+  const watchedSpeakers = useWatch({ control, name: "speakers" }) ?? [];
 
   useEffect(() => {
     reset(toFormValues(base));
@@ -334,6 +349,95 @@ export function SceneEditor({ base, editionId, workId, onSaved }: SceneEditorPro
         )}
       </section>
 
+      <section className="my-4 rounded-lg border border-border p-4">
+        <h3 className="mt-0 mb-2 text-lg font-semibold">話者</h3>
+        <p className={metaTextClass}>
+          セリフの話者を登録し、声プロファイルを割り当てます。声プロファイルは「音声」画面で作成します。
+        </p>
+        {voiceProfiles.isError && (
+          <p className={errorTextClass}>声プロファイルを読み込めませんでした。</p>
+        )}
+        {speakerFields.map((field, speakerIndex) => (
+          <div key={field.id} className="my-2 rounded border border-border p-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                placeholder="話者名"
+                className={`min-w-[160px] flex-1 ${textFieldClass}`}
+                {...register(`speakers.${speakerIndex}.name`)}
+              />
+              <button
+                type="button"
+                className={buttonDangerClass}
+                onClick={() => {
+                  const speakerId = getValues(`speakers.${speakerIndex}.id`);
+                  removeSpeaker(speakerIndex);
+                  if (typeof speakerId !== "string") {
+                    return;
+                  }
+                  getValues("scenes").forEach((scene, sceneIndex) => {
+                    scene?.lines.forEach((line, lineIndex) => {
+                      if (line?.speakerId === speakerId) {
+                        setValue(`scenes.${sceneIndex}.lines.${lineIndex}.speakerId`, null, {
+                          shouldDirty: true,
+                        });
+                      }
+                    });
+                  });
+                }}
+              >
+                削除
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-1.5">
+                キャラクター
+                <select
+                  className={textFieldClass}
+                  {...register(`speakers.${speakerIndex}.characterId`, {
+                    setValueAs: (value) => (value === "" ? null : value),
+                  })}
+                >
+                  <option value="">なし</option>
+                  {watchedCharacters.map((character) => (
+                    <option key={character.id} value={character.id}>
+                      {character.name || character.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                声プロファイル
+                <select
+                  className={textFieldClass}
+                  {...register(`speakers.${speakerIndex}.voiceProfileId`, {
+                    setValueAs: (value) => (value === "" ? null : value),
+                  })}
+                >
+                  <option value="">未設定</option>
+                  {(voiceProfiles.data ?? []).map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name || profile.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          className={buttonNeutralClass}
+          onClick={() => appendSpeaker(createEmptySpeaker())}
+        >
+          話者を追加
+        </button>
+        {speakerFields.length === 0 && (
+          <p className={metaTextClass}>
+            話者がありません。セリフに声を割り当てるには話者を追加してください。
+          </p>
+        )}
+      </section>
+
       {fields.map((field, sceneIndex) => {
         const scene = watchedScenes[sceneIndex];
         if (scene === undefined) {
@@ -489,6 +593,12 @@ export function SceneEditor({ base, editionId, workId, onSaved }: SceneEditorPro
                   setValue={setValue}
                   sceneIndex={sceneIndex}
                   sceneId={scene.id}
+                  scriptVersionId={scriptVersionId}
+                  speakers={watchedSpeakers}
+                  voiceProfiles={voiceProfiles.data ?? []}
+                  voices={adapterVoices.data?.voices}
+                  voicesLoading={adapterVoices.isLoading}
+                  formDirty={formState.isDirty}
                 />
             )}
           </section>

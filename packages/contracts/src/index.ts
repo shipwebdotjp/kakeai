@@ -11,6 +11,8 @@ export * from "./content/defaults";
 export * from "./content/warnings";
 export * from "./content/asset-refs";
 export * from "./templates";
+export * from "./voice-profile";
+export * from "./tts";
 export * from "./dto";
 export * from "./error";
 export * from "./job";
