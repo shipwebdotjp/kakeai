@@ -218,7 +218,7 @@ export async function processRenderJob(
     }
 
     const digest = await hashFile(outputTempPath);
-    const storageKey = `artifacts/${digest.sha256}.mp4`;
+    const storageKey = `artifacts/${job.id}-${digest.sha256}.mp4`;
     await commitFile(outputTempPath, storageKey, config.directories);
     const outputPath = resolveStoragePath(config.directories, storageKey);
     const probe = await probeMedia(outputPath, "video", "video/mp4").catch(() => null);
