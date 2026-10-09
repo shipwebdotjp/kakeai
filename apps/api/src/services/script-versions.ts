@@ -61,14 +61,14 @@ function isVersionNumberConflict(error: unknown): boolean {
   return target === undefined;
 }
 
-type AssetWithRenditions = Prisma.AssetGetPayload<{ include: { renditions: true } }>;
+export type AssetWithRenditions = Prisma.AssetGetPayload<{ include: { renditions: true } }>;
 
-interface LoadedAssetReferences {
+export interface LoadedAssetReferences {
   references: AssetReference[];
   assetById: Map<string, AssetWithRenditions>;
 }
 
-async function loadAssetReferences(
+export async function loadAssetReferences(
   client: PrismaClient | Prisma.TransactionClient,
   content: ContentDocument,
 ): Promise<LoadedAssetReferences> {
@@ -84,7 +84,7 @@ async function loadAssetReferences(
   return { references, assetById: new Map(assets.map((asset) => [asset.id, asset])) };
 }
 
-function assertAssetsAvailable(
+export function assertAssetsAvailable(
   references: AssetReference[],
   assetById: Map<string, AssetWithRenditions>,
 ): void {
@@ -124,7 +124,7 @@ function assertAssetsAvailable(
   }
 }
 
-function assertTakeDurations(
+export function assertTakeDurations(
   content: ContentDocument,
   assetById: Map<string, AssetWithRenditions>,
 ): void {

@@ -7,7 +7,9 @@ import type { AppConfig } from "./config.ts";
 import { sendError } from "./http/envelope.ts";
 import { ApiError } from "./http/errors.ts";
 import { createHealthRouter } from "./http/health.ts";
+import { createArtifactsRouter } from "./http/routes/artifacts.ts";
 import { createAssetsRouter } from "./http/routes/assets.ts";
+import { createJobsRouter } from "./http/routes/jobs.ts";
 import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
@@ -117,6 +119,14 @@ export function createApp(dependencies: AppDependencies): Express {
   api.use(createWorksRouter(dependencies.prisma));
   api.use(createLanguageEditionsRouter(dependencies.prisma));
   api.use(createScriptVersionsRouter({ prisma: dependencies.prisma, directories: dependencies.config.directories }));
+  api.use(createJobsRouter(dependencies.prisma));
+  api.use(
+    createArtifactsRouter({
+      prisma: dependencies.prisma,
+      directories: dependencies.config.directories,
+      mediaGuard,
+    }),
+  );
   api.use(
     createAssetsRouter({
       prisma: dependencies.prisma,

@@ -1,11 +1,17 @@
 import { z } from "zod";
 import {
+  artifactFormatSchema,
+  artifactRoleSchema,
   assetKindSchema,
   assetOriginSchema,
   assetStatusSchema,
+  jobErrorCodeSchema,
+  jobKindSchema,
   jobStatusSchema,
   localeSchema,
+  type Artifact,
   type Asset,
+  type Job,
   type LanguageEditionSummary,
   type ScriptVersion,
   type ScriptVersionSummary,
@@ -13,7 +19,9 @@ import {
   type WorkSummary,
 } from "@kakeai/contracts";
 import type {
+  Artifact as ArtifactRow,
   Asset as AssetRow,
+  Job as JobRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
   Work as WorkRow,
@@ -32,12 +40,16 @@ export function bigIntToSafeNumber(value: bigint): number {
   return Number(value);
 }
 
-function parseAssetEnum<T>(schema: z.ZodType<T>, value: unknown, field: string): T {
+function parseEnum<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw new ApiError(500, "INTERNAL_ERROR", `Asset.${field} の値が不正です。`);
+    throw new ApiError(500, "INTERNAL_ERROR", `${label} の値が不正です。`);
   }
   return result.data;
+}
+
+function parseAssetEnum<T>(schema: z.ZodType<T>, value: unknown, field: string): T {
+  return parseEnum(schema, value, `Asset.${field}`);
 }
 
 export function toAsset(row: AssetRow): Asset {
@@ -153,4 +165,53 @@ export function toScriptVersion(
     ...toScriptVersionSummary(row),
     content,
   };
+}
+
+function parseJobEnum<T>(schema: z.ZodType<T>, value: unknown, field: string): T {
+  return parseEnum(schema, value, `Job.${field}`);
+}
+
+export type JobWithArtifacts = JobRow & { artifacts: ArtifactRow[] };
+
+export function toArtifact(row: ArtifactRow): Artifact {
+  return {
+    id: row.id,
+    jobId: row.jobId,
+    role: parseEnum(artifactRoleSchema, row.role, "Artifact.role"),
+    format: parseEnum(artifactFormatSchema, row.format, "Artifact.format"),
+    byteSize: bigIntToSafeNumber(row.byteSize),
+    durationMs: row.durationMs,
+    widthPx: row.widthPx,
+    heightPx: row.heightPx,
+    fps: row.fps,
+    createdAt: toIso(row.createdAt),
+    contentUrl: `${API_BASE_PATH}/artifacts/${encodeURIComponent(row.id)}/content`,
+  };
+}
+
+export function toJob(row: JobWithArtifacts): Job {
+  const errorCode =
+    row.errorCode === null ? null : parseJobEnum(jobErrorCodeSchema, row.errorCode, "errorCode");
+  return {
+    id: row.id,
+    kind: parseJobEnum(jobKindSchema, row.kind, "kind"),
+    status: parseJobEnum(jobStatusSchema, row.status, "status"),
+    workId: row.workId,
+    assetId: row.assetId,
+    languageEditionId: row.languageEditionId,
+    scriptVersionId: row.scriptVersionId,
+    progressPercent: row.progressPercent,
+    createdAt: toIso(row.createdAt),
+    startedAt: row.startedAt === null ? null : toIso(row.startedAt),
+    finishedAt: row.finishedAt === null ? null : toIso(row.finishedAt),
+    error:
+      errorCode === null
+        ? null
+        : { code: errorCode, message: row.errorMessage ?? "" },
+    artifacts: row.artifacts.map(toArtifact),
+  };
+}
+
+export function renderContentUrl(assetId: string): string {
+  return `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/render-content`;
 }

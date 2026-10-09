@@ -13,6 +13,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@hyperframes/producer": "^0.8.143",
     "@kakeai/contracts": "*",
     "@kakeai/video": "*",
     "@prisma/adapter-better-sqlite3": "7.10.0",

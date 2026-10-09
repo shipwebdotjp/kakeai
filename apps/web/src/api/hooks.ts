@@ -3,6 +3,7 @@ import { warningsMetaSchema } from "@kakeai/contracts";
 import type {
   Asset,
   ContentDocument,
+  Job,
   ScriptVersion,
   ScriptVersionPreview,
   Warning,
@@ -114,8 +115,7 @@ export function useCurrentScriptVersion(editionId: string | undefined) {
   });
 }
 
-export function useScriptVersionPreview(scriptVersionId: string | undefined) {
-  return useQuery({
+export function useScriptVersionPreview(scriptVersionId: string | undefined) {  return useQuery({
     queryKey: ["script-version-preview", scriptVersionId],
     enabled: scriptVersionId !== undefined && scriptVersionId.length > 0,
     staleTime: 30_000,
@@ -151,6 +151,61 @@ export function useSaveScriptVersion(editionId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["works"] });
       queryClient.invalidateQueries({ queryKey: ["current-script-version", editionId] });
+    },
+  });
+}
+
+export function useCreateRenderJob(scriptVersionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<Job> => {
+      if (scriptVersionId === undefined || scriptVersionId.length === 0) {
+        throw new Error("scriptVersionId がありません");
+      }
+      return (
+        await apiRequest<Job>(`/script-versions/${encodeURIComponent(scriptVersionId)}/render-jobs`, {
+          method: "POST",
+          body: {},
+        })
+      ).data;
+    },
+    onSuccess: (job) => {
+      queryClient.invalidateQueries({ queryKey: ["works"] });
+      if (job.workId !== null) {
+        queryClient.invalidateQueries({ queryKey: ["work-jobs", job.workId] });
+      }
+    },
+  });
+}
+
+export function useWorkJobs(workId: string | undefined) {
+  return useQuery({
+    queryKey: ["work-jobs", workId],
+    enabled: workId !== undefined && workId.length > 0,
+    queryFn: async () =>
+      (await apiRequest<Job[]>(`/works/${encodeURIComponent(workId ?? "")}/jobs`)).data,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return Array.isArray(data) &&
+        data.some((job) => job.status === "queued" || job.status === "running")
+        ? 2000
+        : false;
+    },
+  });
+}
+
+export function useCancelJob(workId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobId: string) =>
+      (await apiRequest<Job>(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }))
+        .data,
+    onSuccess: (job) => {
+      queryClient.invalidateQueries({ queryKey: ["works"] });
+      const targetWorkId = job.workId ?? workId;
+      if (targetWorkId !== undefined && targetWorkId !== null) {
+        queryClient.invalidateQueries({ queryKey: ["work-jobs", targetWorkId] });
+      }
     },
   });
 }
