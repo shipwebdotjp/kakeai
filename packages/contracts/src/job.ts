@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
-import { voiceAdapterIdSchema } from "./voice-profile";
+import { styleIdSchema, voiceAdapterIdSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 
 export const SNAPSHOT_SCHEMA_VERSION = 1 as const;
@@ -68,7 +68,7 @@ export const ttsJobSnapshotSchema = z.object({
   adapterId: voiceAdapterIdSchema,
   voice: z.object({
     voiceId: z.string().min(1),
-    styleId: z.number().int().nonnegative(),
+    styleId: styleIdSchema,
   }),
   speedScale: z.number().finite().min(MIN_TTS_SPEED_SCALE).max(MAX_TTS_SPEED_SCALE),
   speechText: z.string().min(1),

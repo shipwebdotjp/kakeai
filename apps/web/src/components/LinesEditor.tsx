@@ -11,7 +11,7 @@ import {
   MAX_TTS_SPEECH_TEXT_LENGTH,
   MAX_TTS_SPEED_SCALE,
   MIN_TTS_SPEED_SCALE,
-  type TtsVoice,
+  type VoiceAdapterId,
   type VoiceProfile,
 } from "@kakeai/contracts";
 import type {
@@ -23,6 +23,7 @@ import type {
 } from "../content/form";
 import { createEmptyLine, newSpeakerId, newTakeId } from "../content/form";
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
+import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
 import {
   buttonNeutralClass,
   buttonPrimaryClass,
@@ -44,8 +45,7 @@ interface LinesEditorProps {
   speakers: SpeakerFormValue[];
   characters: CharacterFormValue[];
   voiceProfiles: VoiceProfile[];
-  voices: TtsVoice[] | undefined;
-  voicesLoading: boolean;
+  adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
 }
 
@@ -75,8 +75,7 @@ function LineEditor({
   speakers,
   characters,
   voiceProfiles,
-  voices,
-  voicesLoading,
+  adapterVoices,
   savedVoiceByLineId,
   scriptVersionId,
 }: LineEditorProps) {
@@ -90,7 +89,11 @@ function LineEditor({
   const character = characters.find((entry) => entry.id === characterId);
   const profileId = character?.voiceProfileId ?? speaker?.voiceProfileId ?? null;
   const profile = voiceProfiles.find((entry) => entry.id === profileId);
-  const voice = voices?.find((entry) => entry.voiceId === profile?.settings.speakerUuid);
+  const adapterState = profile === undefined ? undefined : adapterVoices[profile.adapterId];
+  const adapterName = profile === undefined ? "" : adapterLabel(profile.adapterId);
+  const voice = adapterState?.voices?.find(
+    (entry) => entry.voiceId === profile?.settings.speakerUuid,
+  );
   const styles = voice?.styles;
 
   useEffect(() => {
@@ -302,11 +305,15 @@ function LineEditor({
           <p className={metaTextClass}>
             この話者に声プロファイルが設定されていません。
           </p>
-        ) : voicesLoading ? (
+        ) : adapterState?.loading ? (
           <p className={metaTextClass}>音声一覧を読み込み中…</p>
+        ) : adapterState === undefined || adapterState.failed ? (
+          <p className={errorTextClass}>
+            {adapterName} ENGINE に接続できません。起動しているか確認してください。
+          </p>
         ) : voice === undefined ? (
           <p className={errorTextClass}>
-            声プロファイルの話者が VOICEVOX ENGINE に見つかりません。
+            声プロファイルの話者が {adapterName} ENGINE に見つかりません。
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
@@ -396,8 +403,7 @@ export function LinesEditor({
   speakers,
   characters,
   voiceProfiles,
-  voices,
-  voicesLoading,
+  adapterVoices,
   savedVoiceByLineId,
 }: LinesEditorProps) {
   const { fields, append, remove } = useFieldArray({
@@ -428,8 +434,7 @@ export function LinesEditor({
             speakers={speakers}
             characters={characters}
             voiceProfiles={voiceProfiles}
-            voices={voices}
-            voicesLoading={voicesLoading}
+            adapterVoices={adapterVoices}
             savedVoiceByLineId={savedVoiceByLineId}
           />
         );

@@ -60,6 +60,25 @@ describe("jobInputSnapshotSchema", () => {
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
 
+  it("accepts an aivisspeech snapshot with a negative style id", () => {
+    const snapshot = {
+      snapshotSchemaVersion: 1,
+      kind: "tts",
+      scriptVersionId: "scr_001",
+      narrationSegmentId: "line-p1-1",
+      languageEditionId: "led_ja",
+      workId: "wrk_1",
+      speakerId: "speaker-narrator",
+      voiceProfileId: "vp_1",
+      adapterId: "aivisspeech",
+      voice: { voiceId: "uuid-aivis", styleId: -1 },
+      speedScale: 1,
+      speechText: "こんにちは",
+      engineVersion: "1.0.0",
+    };
+    expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
   it("rejects an unknown job kind", () => {
     const snapshot = { snapshotSchemaVersion: 1, kind: "translate" };
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(false);

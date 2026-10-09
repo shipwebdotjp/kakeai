@@ -11,7 +11,7 @@ import {
   localeSchema,
   ttsJobResultSchema,
   voiceAdapterIdSchema,
-  voiceProfileSettingsSchema,
+  voiceProfileSettingsSchemaFor,
   type Artifact,
   type Asset,
   type CharacterLibraryEntry,
@@ -244,20 +244,21 @@ export function renderContentUrl(assetId: string): string {
 }
 
 export function toVoiceProfile(row: VoiceProfileRow): VoiceProfile {
+  const adapterId = parseEnum(voiceAdapterIdSchema, row.adapterId, "VoiceProfile.adapterId");
   let settings: unknown;
   try {
     settings = JSON.parse(row.settingsJson);
   } catch {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定を解釈できません。");
   }
-  const parsedSettings = voiceProfileSettingsSchema.safeParse(settings);
+  const parsedSettings = voiceProfileSettingsSchemaFor(adapterId).safeParse(settings);
   if (!parsedSettings.success) {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定が不正です。");
   }
   return {
     id: row.id,
     name: row.name,
-    adapterId: parseEnum(voiceAdapterIdSchema, row.adapterId, "VoiceProfile.adapterId"),
+    adapterId,
     settings: parsedSettings.data,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),

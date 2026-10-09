@@ -14,7 +14,7 @@ describe("buildHealthResponse", () => {
     expect(response.capabilities.locales).toEqual(["ja-JP"]);
     expect(response.capabilities.jobKinds).toEqual(["asset_ingest", "render", "tts"]);
     expect(response.capabilities.assetKinds).toEqual(["image", "video", "audio"]);
-    expect(response.capabilities.voiceAdapters).toEqual(["voicevox"]);
+    expect(response.capabilities.voiceAdapters).toEqual(["voicevox", "aivisspeech"]);
   });
 
   it("reports a warning storage status", () => {

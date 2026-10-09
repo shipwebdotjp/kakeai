@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { warningsMetaSchema } from "@kakeai/contracts";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { voiceAdapterIdSchema, warningsMetaSchema } from "@kakeai/contracts";
 import type {
   Asset,
   CharacterLibraryEntry,
@@ -19,6 +19,7 @@ import type {
   Work,
   WorkSummary,
 } from "@kakeai/contracts";
+import { type AdapterVoicesState } from "../lib/voiceAdapters";
 import { apiRequest, apiUpload, type Envelope } from "./client";
 
 export function useWorks() {
@@ -294,6 +295,32 @@ export function useAdapterVoices(adapterId: VoiceAdapterId | undefined) {
         )
       ).data,
   });
+}
+
+export function useAdapterVoicesMap(): Record<VoiceAdapterId, AdapterVoicesState> {
+  const results = useQueries({
+    queries: voiceAdapterIdSchema.options.map((adapterId) => ({
+      queryKey: ["adapter-voices", adapterId],
+      retry: false,
+      staleTime: 60_000,
+      queryFn: async () =>
+        (
+          await apiRequest<VoiceList>(
+            `/voice-profiles/voices?adapterId=${encodeURIComponent(adapterId)}`,
+          )
+        ).data,
+    })),
+  });
+  const map = {} as Record<VoiceAdapterId, AdapterVoicesState>;
+  voiceAdapterIdSchema.options.forEach((adapterId, index) => {
+    const result = results[index];
+    map[adapterId] = {
+      voices: result?.data?.voices,
+      loading: result?.isLoading ?? false,
+      failed: result?.isError ?? false,
+    };
+  });
+  return map;
 }
 
 const TTS_POLL_INTERVAL_MS = 1000;

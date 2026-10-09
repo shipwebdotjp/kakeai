@@ -7,7 +7,6 @@ import {
   type UseFormRegister,
 } from "react-hook-form";
 import {
-  DEFAULT_VOICE_ADAPTER_ID,
   contentDocumentSchema,
   type CharacterLibraryEntry,
   type ContentDocument,
@@ -16,7 +15,7 @@ import {
 } from "@kakeai/contracts";
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
-  useAdapterVoices,
+  useAdapterVoicesMap,
   useCharacters,
   useSaveScriptVersion,
   useVoiceProfiles,
@@ -151,7 +150,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
-  const adapterVoices = useAdapterVoices(DEFAULT_VOICE_ADAPTER_ID);
+  const adapterVoices = useAdapterVoicesMap();
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
@@ -687,8 +686,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
                   speakers={watchedSpeakers}
                   characters={watchedCharacters}
                   voiceProfiles={voiceProfiles.data ?? []}
-                  voices={adapterVoices.data?.voices}
-                  voicesLoading={adapterVoices.isLoading}
+                  adapterVoices={adapterVoices}
                   savedVoiceByLineId={savedVoiceByLineId}
                 />
             )}

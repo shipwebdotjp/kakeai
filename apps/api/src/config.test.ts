@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_AIVISSPEECH_BASE_URL,
   DEFAULT_PORT,
   DEFAULT_VOICEVOX_BASE_URL,
   allowedOriginsForPort,
   loadConfig,
+  parseAivisspeechBaseUrl,
   parseVoicevoxBaseUrl,
 } from "./config.ts";
 
@@ -38,9 +40,24 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ KAKEAI_PORT: "70000" }, "darwin", "/Users/me")).toThrow();
   });
 
-  it("defaults the voicevox base url to loopback", () => {
+  it("defaults the adapter base urls to loopback", () => {
     const config = loadConfig({ KAKEAI_DATA_DIR: "/tmp/kakeai" }, "darwin", "/Users/me");
-    expect(config.voicevoxBaseUrl).toBe(DEFAULT_VOICEVOX_BASE_URL);
+    expect(config.voiceBaseUrls.voicevox).toBe(DEFAULT_VOICEVOX_BASE_URL);
+    expect(config.voiceBaseUrls.aivisspeech).toBe(DEFAULT_AIVISSPEECH_BASE_URL);
+  });
+
+  it("overrides each adapter base url from its environment variable", () => {
+    const config = loadConfig(
+      {
+        KAKEAI_DATA_DIR: "/tmp/kakeai",
+        KAKEAI_VOICEVOX_BASE_URL: "http://127.0.0.1:60000",
+        KAKEAI_AIVISSPEECH_BASE_URL: "http://127.0.0.1:60001",
+      },
+      "darwin",
+      "/Users/me",
+    );
+    expect(config.voiceBaseUrls.voicevox).toBe("http://127.0.0.1:60000");
+    expect(config.voiceBaseUrls.aivisspeech).toBe("http://127.0.0.1:60001");
   });
 });
 
@@ -59,5 +76,22 @@ describe("parseVoicevoxBaseUrl", () => {
     expect(() => parseVoicevoxBaseUrl("http://127.0.0.1:50021/api")).toThrow();
     expect(() => parseVoicevoxBaseUrl("http://127.0.0.1:50021?a=1")).toThrow();
     expect(() => parseVoicevoxBaseUrl("not-a-url")).toThrow();
+  });
+});
+
+describe("parseAivisspeechBaseUrl", () => {
+  it("accepts loopback http urls and normalizes to an origin", () => {
+    expect(parseAivisspeechBaseUrl(undefined)).toBe(DEFAULT_AIVISSPEECH_BASE_URL);
+    expect(parseAivisspeechBaseUrl("http://localhost:10101/")).toBe("http://localhost:10101");
+    expect(parseAivisspeechBaseUrl("http://[::1]:10101")).toBe("http://[::1]:10101");
+  });
+
+  it("rejects non-loopback, credentialed, and prefixed urls", () => {
+    expect(() => parseAivisspeechBaseUrl("http://192.168.0.1:10101")).toThrow();
+    expect(() => parseAivisspeechBaseUrl("https://127.0.0.1:10101")).toThrow();
+    expect(() => parseAivisspeechBaseUrl("http://user:pass@127.0.0.1:10101")).toThrow();
+    expect(() => parseAivisspeechBaseUrl("http://127.0.0.1:10101/api")).toThrow();
+    expect(() => parseAivisspeechBaseUrl("http://127.0.0.1:10101?a=1")).toThrow();
+    expect(() => parseAivisspeechBaseUrl("not-a-url")).toThrow();
   });
 });

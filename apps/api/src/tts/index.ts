@@ -1,8 +1,10 @@
 import type { TtsAdapter, VoiceAdapterId } from "@kakeai/contracts";
+import { aivisspeechAdapter } from "./aivisspeech.ts";
 import { voicevoxAdapter } from "./voicevox.ts";
 
 const ADAPTERS: Record<VoiceAdapterId, TtsAdapter> = {
   voicevox: voicevoxAdapter,
+  aivisspeech: aivisspeechAdapter,
 };
 
 export function getTtsAdapter(id: VoiceAdapterId): TtsAdapter {

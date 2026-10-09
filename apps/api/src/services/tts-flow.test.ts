@@ -28,10 +28,15 @@ let config: AppConfig;
 let prisma: ReturnType<typeof createPrismaClient>;
 let worker: ReturnType<typeof createWorker>;
 let server: Server;
+let aivisServer: Server;
 let wavBuffer: Buffer;
+let aivisWavBuffer: Buffer;
 let synthesisMode: "ok" | "fail" | "reject" = "ok";
 let recordedSynthesisBody: Record<string, unknown> | null = null;
 let recordedSpeakerParam: string | null = null;
+let aivisSynthesisMode: "ok" | "fail" | "reject" = "ok";
+let recordedAivisSynthesisBody: Record<string, unknown> | null = null;
+let recordedAivisSpeakerParam: string | null = null;
 let ffmpegReady = false;
 
 const SPEAKERS = [
@@ -44,6 +49,66 @@ const SPEAKERS = [
     ],
   },
 ];
+
+const AIVIS_SPEAKERS = [
+  {
+    name: "Aivis話者",
+    speaker_uuid: "uuid-aivis",
+    styles: [
+      { name: "ノーマル", id: -1 },
+      { name: "喜び", id: 0 },
+    ],
+  },
+];
+
+function handleAivisMock(req: IncomingMessage, res: ServerResponse): void {
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  if (req.method === "GET" && url.pathname === "/speakers") {
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(AIVIS_SPEAKERS));
+    return;
+  }
+  if (req.method === "GET" && url.pathname === "/version") {
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify("1.0.0"));
+    return;
+  }
+  if (req.method === "POST" && url.pathname === "/audio_query") {
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ speedScale: 1, intonationScale: 2, tempoDynamicsScale: 1.5 }));
+    return;
+  }
+  if (req.method === "POST" && url.pathname === "/synthesis") {
+    recordedAivisSpeakerParam = url.searchParams.get("speaker");
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      try {
+        recordedAivisSynthesisBody = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<
+          string,
+          unknown
+        >;
+      } catch {
+        recordedAivisSynthesisBody = null;
+      }
+      if (aivisSynthesisMode === "fail") {
+        res.statusCode = 500;
+        res.end("engine failure");
+        return;
+      }
+      if (aivisSynthesisMode === "reject") {
+        res.statusCode = 422;
+        res.end("invalid input");
+        return;
+      }
+      res.setHeader("Content-Type", "audio/wav");
+      res.end(aivisWavBuffer);
+    });
+    return;
+  }
+  res.statusCode = 404;
+  res.end();
+}
 
 function handleMock(req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -108,6 +173,14 @@ async function createProfile(): Promise<VoiceProfile> {
   });
 }
 
+async function createAivisProfile(): Promise<VoiceProfile> {
+  return voiceProfiles.createVoiceProfile(prisma, {
+    name: "Aivis",
+    adapterId: "aivisspeech",
+    settings: { speakerUuid: "uuid-aivis", defaultStyleId: -1 },
+  });
+}
+
 async function createLineVersion(voiceProfileId: string): Promise<string> {
   const work = await works.createWork(prisma, `TTS作品-${Date.now()}-${Math.random()}`, "ja-JP");
   const edition = work.languageEditions[0]!;
@@ -163,7 +236,19 @@ beforeAll(async () => {
       "pcm_s16le",
       join(fixturesDir, "audio.wav"),
     ]);
+    await execFileAsync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=550:duration=2",
+      "-c:a",
+      "pcm_s16le",
+      join(fixturesDir, "aivis.wav"),
+    ]);
     wavBuffer = await readFile(join(fixturesDir, "audio.wav"));
+    aivisWavBuffer = await readFile(join(fixturesDir, "aivis.wav"));
     ffmpegReady = true;
   } catch {
     ffmpegReady = false;
@@ -175,11 +260,20 @@ beforeAll(async () => {
   if (address === null || typeof address === "string") {
     throw new Error("mock server did not bind");
   }
-  config.voicevoxBaseUrl = `http://127.0.0.1:${address.port}`;
+  config.voiceBaseUrls.voicevox = `http://127.0.0.1:${address.port}`;
+
+  aivisServer = createServer(handleAivisMock);
+  await new Promise<void>((resolve) => aivisServer.listen(0, "127.0.0.1", resolve));
+  const aivisAddress = aivisServer.address();
+  if (aivisAddress === null || typeof aivisAddress === "string") {
+    throw new Error("aivis mock server did not bind");
+  }
+  config.voiceBaseUrls.aivisspeech = `http://127.0.0.1:${aivisAddress.port}`;
 }, 60000);
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await new Promise<void>((resolve) => aivisServer.close(() => resolve()));
   await prisma.$disconnect();
   delete process.env.KAKEAI_DATA_DIR;
   await rm(dataDir, { recursive: true, force: true });
@@ -201,6 +295,20 @@ describe("voice profiles", () => {
     ]);
   });
 
+  it("lists aivisspeech voices including negative style ids", async () => {
+    const listing = await voiceProfiles.listAdapterVoices(config, "aivisspeech");
+    expect(listing.voices).toEqual([
+      {
+        voiceId: "uuid-aivis",
+        name: "Aivis話者",
+        styles: [
+          { styleId: -1, name: "ノーマル" },
+          { styleId: 0, name: "喜び" },
+        ],
+      },
+    ]);
+  });
+
   it("rejects deletion of a referenced profile", async () => {
     const profile = await createProfile();
     await createLineVersion(profile.id);
@@ -210,14 +318,14 @@ describe("voice profiles", () => {
   });
 
   it("reports an unavailable engine", async () => {
-    const previous = config.voicevoxBaseUrl;
-    config.voicevoxBaseUrl = "http://127.0.0.1:1";
+    const previous = config.voiceBaseUrls.voicevox;
+    config.voiceBaseUrls.voicevox = "http://127.0.0.1:1";
     try {
       await expect(
         voiceProfiles.listAdapterVoices(config, "voicevox"),
       ).rejects.toMatchObject({ code: "TTS_ENGINE_UNAVAILABLE" });
     } finally {
-      config.voicevoxBaseUrl = previous;
+      config.voiceBaseUrls.voicevox = previous;
     }
   });
 });
@@ -263,6 +371,45 @@ describe("tts job", () => {
       styleId: 0,
       speedScale: 0.75,
       engineVersion: "0.19.0",
+      scriptVersionId,
+      narrationSegmentId: "line-tts",
+    });
+  });
+
+  it("synthesizes through the aivisspeech engine and only overrides speed", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    aivisSynthesisMode = "ok";
+    recordedAivisSynthesisBody = null;
+    recordedAivisSpeakerParam = null;
+    const profile = await createAivisProfile();
+    const scriptVersionId = await createLineVersion(profile.id);
+
+    const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
+      styleId: -1,
+      speedScale: 1.25,
+    });
+    await drainWorker();
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+
+    expect(recordedAivisSpeakerParam).toBe("-1");
+    const body = recordedAivisSynthesisBody as Record<string, unknown> | null;
+    expect(body?.speedScale).toBe(1.25);
+    expect(body?.intonationScale).toBe(2);
+    expect(body?.tempoDynamicsScale).toBe(1.5);
+
+    const asset = await prisma.asset.findUniqueOrThrow({
+      where: { id: finished.ttsResult!.assetId },
+    });
+    const provenance = JSON.parse(asset.provenanceJson ?? "{}") as Record<string, unknown>;
+    expect(provenance).toMatchObject({
+      adapterId: "aivisspeech",
+      voiceId: "uuid-aivis",
+      styleId: -1,
+      speedScale: 1.25,
+      engineVersion: "1.0.0",
       scriptVersionId,
       narrationSegmentId: "line-tts",
     });
@@ -345,8 +492,8 @@ describe("tts job", () => {
   it("reports an unavailable engine at enqueue", async () => {
     const profile = await createProfile();
     const scriptVersionId = await createLineVersion(profile.id);
-    const previous = config.voicevoxBaseUrl;
-    config.voicevoxBaseUrl = "http://127.0.0.1:1";
+    const previous = config.voiceBaseUrls.voicevox;
+    config.voiceBaseUrls.voicevox = "http://127.0.0.1:1";
     try {
       await expect(
         ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
@@ -354,7 +501,7 @@ describe("tts job", () => {
         }),
       ).rejects.toMatchObject({ code: "TTS_ENGINE_UNAVAILABLE" });
     } finally {
-      config.voicevoxBaseUrl = previous;
+      config.voiceBaseUrls.voicevox = previous;
     }
   });
 

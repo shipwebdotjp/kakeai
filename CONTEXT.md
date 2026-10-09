@@ -36,6 +36,10 @@ _Avoid_: Character, narrator
 An app-wide voice setting that maps a Speaker to a TTS adapter and its adapter-specific voice.
 _Avoid_: Speaker, TTS engine
 
+**TTS Adapter**:
+A registered local text-to-speech engine boundary, keyed by an immutable adapter id, that lists voices and synthesizes audio for a Voice Profile.
+_Avoid_: TTS engine, voice profile
+
 **Character**:
 A person or avatar that may, but need not, have standing appearances, and may, but need not, be associated with a Speaker.
 _Avoid_: Speaker, voice

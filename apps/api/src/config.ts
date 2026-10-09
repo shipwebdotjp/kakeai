@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { VoiceAdapterId } from "@kakeai/contracts";
 import {
   type DataDirectories,
   dataDirectories,
@@ -25,7 +26,7 @@ export interface AppConfig {
   databaseUrl: string;
   webDistDir: string;
   allowedOrigins: ReadonlySet<string>;
-  voicevoxBaseUrl: string;
+  voiceBaseUrls: Record<VoiceAdapterId, string>;
   limits: LimitsConfig;
 }
 
@@ -34,6 +35,7 @@ const GIB = 1024 ** 3;
 export const LOOPBACK_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
 export const DEFAULT_VOICEVOX_BASE_URL = "http://127.0.0.1:50021";
+export const DEFAULT_AIVISSPEECH_BASE_URL = "http://127.0.0.1:10101";
 
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
 
@@ -85,30 +87,43 @@ function normalizeHostname(hostname: string): string {
   return hostname;
 }
 
-export function parseVoicevoxBaseUrl(value: string | undefined): string {
-  const raw =
-    value === undefined || value.trim().length === 0
-      ? DEFAULT_VOICEVOX_BASE_URL
-      : value.trim();
+export function parseVoiceBaseUrl(
+  envName: string,
+  value: string | undefined,
+  defaultUrl: string,
+): string {
+  const raw = value === undefined || value.trim().length === 0 ? defaultUrl : value.trim();
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    throw new Error(`KAKEAI_VOICEVOX_BASE_URL が不正です: ${raw}`);
+    throw new Error(`${envName} が不正です: ${raw}`);
   }
   if (url.protocol !== "http:") {
-    throw new Error(`KAKEAI_VOICEVOX_BASE_URL は http のみ許可されます: ${raw}`);
+    throw new Error(`${envName} は http のみ許可されます: ${raw}`);
   }
   if (url.username.length > 0 || url.password.length > 0) {
-    throw new Error(`KAKEAI_VOICEVOX_BASE_URL に認証情報は指定できません: ${raw}`);
+    throw new Error(`${envName} に認証情報は指定できません: ${raw}`);
   }
   if (!isLoopbackHostname(normalizeHostname(url.hostname))) {
-    throw new Error(`KAKEAI_VOICEVOX_BASE_URL はループバックのみ許可されます: ${raw}`);
+    throw new Error(`${envName} はループバックのみ許可されます: ${raw}`);
   }
   if ((url.pathname !== "/" && url.pathname !== "") || url.search.length > 0 || url.hash.length > 0) {
-    throw new Error(`KAKEAI_VOICEVOX_BASE_URL にパス・クエリ・フラグメントは指定できません: ${raw}`);
+    throw new Error(`${envName} にパス・クエリ・フラグメントは指定できません: ${raw}`);
   }
   return url.origin;
+}
+
+export function parseVoicevoxBaseUrl(value: string | undefined): string {
+  return parseVoiceBaseUrl("KAKEAI_VOICEVOX_BASE_URL", value, DEFAULT_VOICEVOX_BASE_URL);
+}
+
+export function parseAivisspeechBaseUrl(value: string | undefined): string {
+  return parseVoiceBaseUrl("KAKEAI_AIVISSPEECH_BASE_URL", value, DEFAULT_AIVISSPEECH_BASE_URL);
+}
+
+export function resolveVoiceBaseUrl(config: AppConfig, adapterId: VoiceAdapterId): string {
+  return config.voiceBaseUrls[adapterId];
 }
 
 export function loadConfig(
@@ -131,7 +146,10 @@ export function loadConfig(
         ? resolve(webDistOverride.trim())
         : DEFAULT_WEB_DIST_DIR,
     allowedOrigins: allowedOriginsForPort(port),
-    voicevoxBaseUrl: parseVoicevoxBaseUrl(env.KAKEAI_VOICEVOX_BASE_URL),
+    voiceBaseUrls: {
+      voicevox: parseVoicevoxBaseUrl(env.KAKEAI_VOICEVOX_BASE_URL),
+      aivisspeech: parseAivisspeechBaseUrl(env.KAKEAI_AIVISSPEECH_BASE_URL),
+    },
     limits: { ...DEFAULT_LIMITS },
   };
 }

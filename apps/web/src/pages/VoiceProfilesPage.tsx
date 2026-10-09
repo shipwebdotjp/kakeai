@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   DEFAULT_VOICE_ADAPTER_ID,
+  voiceAdapterIdSchema,
   type TtsVoice,
+  type VoiceAdapterId,
   type VoiceProfile,
 } from "@kakeai/contracts";
 import {
@@ -12,6 +14,7 @@ import {
   useVoiceProfiles,
 } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
+import { VOICE_ADAPTER_LABELS, adapterLabel } from "../lib/voiceAdapters";
 import {
   buttonDangerClass,
   buttonPrimaryClass,
@@ -20,7 +23,7 @@ import {
   textFieldClass,
 } from "../ui";
 
-const ADAPTER_ID = DEFAULT_VOICE_ADAPTER_ID;
+const ADAPTER_IDS = voiceAdapterIdSchema.options;
 
 function findVoice(voices: TtsVoice[], voiceId: string): TtsVoice | undefined {
   return voices.find((voice) => voice.voiceId === voiceId);
@@ -28,16 +31,31 @@ function findVoice(voices: TtsVoice[], voiceId: string): TtsVoice | undefined {
 
 interface ProfileFormProps {
   profile?: VoiceProfile;
-  voices: TtsVoice[];
 }
 
-function ProfileForm({ profile, voices }: ProfileFormProps) {
+function ProfileForm({ profile }: ProfileFormProps) {
   const create = useCreateVoiceProfile();
   const update = useUpdateVoiceProfile();
   const remove = useDeleteVoiceProfile();
+  const [adapterId, setAdapterId] = useState<VoiceAdapterId>(
+    profile?.adapterId ?? DEFAULT_VOICE_ADAPTER_ID,
+  );
   const [name, setName] = useState(profile?.name ?? "");
   const [voiceId, setVoiceId] = useState(profile?.settings.speakerUuid ?? "");
   const [styleId, setStyleId] = useState<number | null>(profile?.settings.defaultStyleId ?? null);
+
+  const activeAdapterId = profile?.adapterId ?? adapterId;
+  const voicesQuery = useAdapterVoices(activeAdapterId);
+  const voices = voicesQuery.data?.voices ?? [];
+  const adapterName = adapterLabel(activeAdapterId);
+
+  useEffect(() => {
+    if (profile !== undefined) {
+      return;
+    }
+    setVoiceId("");
+    setStyleId(null);
+  }, [adapterId, profile]);
 
   useEffect(() => {
     if (profile === undefined && voiceId.length === 0 && voices.length > 0) {
@@ -72,7 +90,7 @@ function ProfileForm({ profile, voices }: ProfileFormProps) {
     const settings = { speakerUuid: voiceId, defaultStyleId: styleId };
     if (profile === undefined) {
       create.mutate(
-        { name: trimmed, adapterId: ADAPTER_ID, settings },
+        { name: trimmed, adapterId, settings },
         { onSuccess: () => setName("") },
       );
     } else {
@@ -111,6 +129,29 @@ function ProfileForm({ profile, voices }: ProfileFormProps) {
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3">
+        <label className="inline-flex items-center gap-1.5">
+          ENGINE
+          {profile === undefined ? (
+            <select
+              className={textFieldClass}
+              value={adapterId}
+              onChange={(event) => {
+                const parsed = voiceAdapterIdSchema.safeParse(event.target.value);
+                if (parsed.success) {
+                  setAdapterId(parsed.data);
+                }
+              }}
+            >
+              {ADAPTER_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {VOICE_ADAPTER_LABELS[id]}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className={metaTextClass}>{adapterName}</span>
+          )}
+        </label>
         <label className="inline-flex items-center gap-1.5">
           話者
           <select
@@ -163,14 +204,27 @@ function ProfileForm({ profile, voices }: ProfileFormProps) {
         </button>
       </div>
       {profile !== undefined && <p className={metaTextClass}>{profile.id}</p>}
+      {voicesQuery.isError && (
+        <p className={errorTextClass}>
+          {adapterName} ENGINE に接続できません。起動しているか確認してください。
+        </p>
+      )}
+      {voicesQuery.isLoading && (
+        <p className={metaTextClass}>{adapterName} ENGINE から話者一覧を読み込み中…</p>
+      )}
+      {voicesQuery.isSuccess && voices.length === 0 && (
+        <p className={errorTextClass}>
+          {adapterName} ENGINE に利用できる話者がありません。音声モデルを確認してください。
+        </p>
+      )}
       {staleVoice && (
         <p className={errorTextClass}>
-          保存された話者が現在のエンジンに見つかりません。話者を選び直してください。
+          保存された話者が現在の {adapterName} ENGINE に見つかりません。話者を選び直してください。
         </p>
       )}
       {staleStyle && (
         <p className={errorTextClass}>
-          保存されたスタイルが現在のエンジンに見つかりません。スタイルを選び直してください。
+          保存されたスタイルが現在の {adapterName} ENGINE に見つかりません。スタイルを選び直してください。
         </p>
       )}
       {mutation.isError && <p className={errorTextClass}>{errorMessage(mutation.error)}</p>}
@@ -181,14 +235,13 @@ function ProfileForm({ profile, voices }: ProfileFormProps) {
 
 export function VoiceProfilesPage() {
   const profiles = useVoiceProfiles();
-  const voices = useAdapterVoices(ADAPTER_ID);
-  const availableVoices = voices.data?.voices ?? [];
 
   return (
     <section>
       <h1 className="my-3 text-2xl font-bold">音声プロファイル</h1>
       <p className={metaTextClass}>
-        別途起動した VOICEVOX ENGINE に接続し、台本の話者へ割り当てる声（話者と既定スタイル）を登録します。
+        別途起動した <strong>VOICEVOX ENGINE</strong> または <strong>AivisSpeech Engine</strong>
+        に接続し、台本の話者へ割り当てる声（話者と既定スタイル）を登録します。
         <a
           href="https://voicevox.hiroshiba.jp/term/"
           target="_blank"
@@ -197,31 +250,20 @@ export function VoiceProfilesPage() {
         >
           VOICEVOX 利用規約
         </a>
-        と各音声ライブラリの規約を確認してください。
+        と、使用する各音声モデルの規約を確認してください。
       </p>
 
       {profiles.isLoading && <p>読み込み中…</p>}
       {profiles.isError && <p className={errorTextClass}>{errorMessage(profiles.error)}</p>}
-      {voices.isError && (
-        <p className={errorTextClass}>
-          VOICEVOX ENGINE に接続できません。起動しているか確認してください。
-        </p>
-      )}
-      {voices.isLoading && (
-        <p className={metaTextClass}>VOICEVOX ENGINE から話者一覧を読み込み中…</p>
-      )}
-      {voices.isSuccess && availableVoices.length === 0 && (
-        <p className={errorTextClass}>利用できる話者がありません。ENGINE の音声ライブラリを確認してください。</p>
-      )}
 
       {profiles.data?.map((profile) => (
-        <ProfileForm key={profile.id} profile={profile} voices={availableVoices} />
+        <ProfileForm key={profile.id} profile={profile} />
       ))}
       {profiles.data !== undefined && profiles.data.length === 0 && (
         <p className={metaTextClass}>プロファイルがありません。下のフォームから追加してください。</p>
       )}
 
-      <ProfileForm voices={availableVoices} />
+      <ProfileForm />
     </section>
   );
 }

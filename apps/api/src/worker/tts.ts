@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ttsJobSnapshotSchema, type TtsJobResult, type TtsJobSnapshot } from "@kakeai/contracts";
-import type { AppConfig } from "../config.ts";
+import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
 import { bigIntToSafeNumber } from "../dto/mappers.ts";
 import type { Job, PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
@@ -62,7 +62,7 @@ export async function processTtsJob(
     let audio: Uint8Array;
     try {
       audio = (
-        await adapter.synthesize(config.voicevoxBaseUrl, {
+        await adapter.synthesize(resolveVoiceBaseUrl(config, snapshot.adapterId), {
           text: snapshot.speechText,
           styleId: snapshot.voice.styleId,
           speedScale: snapshot.speedScale,

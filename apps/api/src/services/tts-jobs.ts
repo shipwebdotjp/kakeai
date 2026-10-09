@@ -3,14 +3,14 @@ import {
   SNAPSHOT_SCHEMA_VERSION,
   ttsJobSnapshotSchema,
   voiceAdapterIdSchema,
-  voiceProfileSettingsSchema,
+  voiceProfileSettingsSchemaFor,
   type ContentDocument,
   type CreateTtsJobRequest,
   type Job as JobDto,
   type NarrationSegment,
   type TtsVoice,
 } from "@kakeai/contracts";
-import type { AppConfig } from "../config.ts";
+import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
 import { deserializeContent } from "../domain/content-json.ts";
 import { toJob } from "../dto/mappers.ts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
@@ -102,7 +102,7 @@ export async function createTtsJob(
   } catch {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定を解釈できません。");
   }
-  const parsedSettings = voiceProfileSettingsSchema.safeParse(rawSettings);
+  const parsedSettings = voiceProfileSettingsSchemaFor(adapterId.data).safeParse(rawSettings);
   if (!parsedSettings.success) {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定が不正です。");
   }
@@ -114,7 +114,7 @@ export async function createTtsJob(
   let voices: TtsVoice[];
   let engineVersion: string | null;
   try {
-    const listing = await adapter.listVoices(config.voicevoxBaseUrl);
+    const listing = await adapter.listVoices(resolveVoiceBaseUrl(config, adapterId.data));
     voices = listing.voices;
     engineVersion = listing.engineVersion;
   } catch (error) {

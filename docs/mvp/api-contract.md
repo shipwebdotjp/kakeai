@@ -65,8 +65,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
-| VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は初期は `voicevox`、`settings` はアダプター専用（VOICEVOXは `speakerUuid` と `defaultStyleId`）。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| TtsVoice | voiceId, name, styles | 接続中エンジンの話者。`styles` は `styleId` と表示名の配列。 |
+| VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は `voicevox` または `aivisspeech`（作成後は不変）、`settings` はアダプター専用で両者とも `speakerUuid` と `defaultStyleId`。詳細は [../tts/spec.md](../tts/spec.md)。 |
+| TtsVoice | voiceId, name, styles | 接続中エンジンの話者。`styles` は `styleId` と表示名の配列。`styleId` は 32bit 符号付き整数。 |
 | CharacterLibraryEntry | id, name, voiceProfileId, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。
@@ -103,7 +103,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /voice-profiles | 201 | Voice Profileを作成 |
 | PATCH | /voice-profiles/:voiceProfileId | 200 | Voice Profileの表示名と設定を更新 |
 | DELETE | /voice-profiles/:voiceProfileId | 204 | 未参照のVoice Profileを削除 |
-| GET | /voice-profiles/voices?adapterId=voicevox | 200 | 接続中エンジンの話者とスタイルを取得（[../tts/spec.md](../tts/spec.md)） |
+| GET | /voice-profiles/voices?adapterId=voicevox\|aivisspeech | 200 | 接続中エンジンの話者とスタイルを取得（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
 | GET | /characters | 200 | キャラクターライブラリの一覧を取得（[../character-library/spec.md](../character-library/spec.md)） |
 | POST | /characters | 201 | キャラクターを作成 |

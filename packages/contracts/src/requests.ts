@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentInputSchema } from "./content/document";
+import { styleIdSchema } from "./voice-profile";
 
 export const createWorkRequestSchema = z.strictObject({
   title: z.string().trim().min(1),
@@ -24,7 +25,7 @@ export const MAX_TTS_SPEED_SCALE = 2;
 export const MAX_TTS_SPEECH_TEXT_LENGTH = 1000;
 
 export const createTtsJobRequestSchema = z.strictObject({
-  styleId: z.number().int().nonnegative().optional(),
+  styleId: styleIdSchema.optional(),
   speechText: z.string().max(MAX_TTS_SPEECH_TEXT_LENGTH).optional(),
   speedScale: z
     .number()

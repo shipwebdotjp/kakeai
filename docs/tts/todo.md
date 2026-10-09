@@ -31,3 +31,14 @@
 ### [x] T4 レビューとコミット
 
 - [x] `npm run typecheck`、`npm test`、最大3回の OCR レビューと妥当な指摘の修正
+
+### [x] T5 AivisSpeech アダプター
+
+- [x] `voiceAdapterId` を `voicevox | aivisspeech` へ拡張し、アダプター別の判別スキーマへ変更
+- [x] `styleId` の契約を 32bit 符号付き整数へ変更（Profile・話者一覧・生成リクエスト・Job スナップショット）
+- [x] `AppConfig` を adapterId→接続先の対応へ整理し、`KAKEAI_AIVISSPEECH_BASE_URL`（既定 `http://127.0.0.1:10101`）を追加
+- [x] VOICEVOX 互換 HTTP 実装を共通化し、`voicevox`／`aivisspeech` を別アダプターとして登録
+- [x] Job・Profile 一覧・worker・来歴が `adapterId` から接続先を解決
+- [x] Web UI に ENGINE 選択を追加し、既存 Profile はアダプター表示専用、エラーにアダプター名を含める
+- [x] ユーザーガイドを AivisSpeech の起動前提・環境変数・既定ポート・モデルライセンスへ更新
+- 完了条件: 契約・設定・モックエンジンのテストが通り、実 ENGINE で Profile 作成→生成→保存→プレビュー／レンダーを確認できる。
