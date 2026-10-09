@@ -1,0 +1,2 @@
+# Kakeai
+Kakeaiは、Hyperframesを使用してコードから動画制作するためのアプリです。
