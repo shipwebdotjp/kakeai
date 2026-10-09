@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useCreateWork, useDeleteWork, useWorks } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
+import { workRoute } from "../lib/routes";
 import {
   buttonDangerClass,
   buttonPrimaryClass,
@@ -54,7 +55,7 @@ export function WorkListPage() {
               key={work.id}
               className="flex items-center gap-3 border-b border-border py-2.5"
             >
-              <Link to={`/works/${work.id}`} className="flex-1 font-semibold text-inherit">
+              <Link to={workRoute(work.id)} className="flex-1 font-semibold text-inherit">
                 {work.title}
               </Link>
               <span className={metaTextClass}>

@@ -152,14 +152,22 @@ function templateKey(cue: VisualCue): string {
   return `${cue.template.id}@${cue.template.version}`;
 }
 
+const LAYER_FULL_BLEED = 0;
+const LAYER_CARD = 1;
+const LAYER_STANDING = 2;
+const LAYER_OTHER = 3;
+
 function cueLayerRank(cue: VisualCue): number {
   if (cue.template.id === mediaFullBleedV1.id) {
-    return 0;
+    return LAYER_FULL_BLEED;
   }
   if (cue.template.id === mediaCardV1.id) {
-    return 1;
+    return LAYER_CARD;
   }
-  return 2;
+  if (cue.template.id === characterStandingV1.id) {
+    return LAYER_STANDING;
+  }
+  return LAYER_OTHER;
 }
 
 const FADE_START_EPSILON_SEC = 0.001;

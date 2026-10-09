@@ -132,6 +132,55 @@ describe("script version preview", () => {
     expect(preview.renderer.compilerVersion).toBe("app-1");
   });
 
+  it("includes a standing appearance image in the preview", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const image = await readyImage();
+    const work = await works.createWork(prisma, "立ち絵プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+        ],
+      },
+    ];
+    const intro = content.scenes[0]!;
+    intro.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 1 },
+      range: { kind: "scene" },
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        x: 0.85,
+        y: 0.85,
+        scale: 1,
+      },
+    });
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+
+    expect(preview.compositionHtml).toContain('class="kakeai-standing"');
+    expect(preview.compositionHtml).toContain("left:85%;top:85%;width:480px;");
+    expect(preview.compositionHtml).toContain(
+      `/api/v1/assets/${encodeURIComponent(image.id)}/render-content`,
+    );
+    expect(preview.assets.map((asset) => asset.assetId)).toEqual([image.id]);
+  });
+
   it("includes narration and BGM audio in the preview assets", async () => {
     if (!ffmpegReady) {
       return;

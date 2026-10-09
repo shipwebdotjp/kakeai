@@ -24,10 +24,12 @@ import { errorMessage } from "../lib/errorMessage";
 import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
+import { StandingFields } from "./StandingFields";
 
 interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
+  workId: string;
 }
 
 const SCENE_LABELS: Record<string, string> = {
@@ -131,7 +133,7 @@ function CueFields({
   );
 }
 
-export function SceneEditor({ base, editionId }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, workId }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
@@ -151,6 +153,7 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
     });
   const { fields, insert, remove, move } = useFieldArray({ control, name: "scenes" });
   const watchedScenes = useWatch({ control, name: "scenes" }) ?? [];
+  const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
 
   useEffect(() => {
     reset(toFormValues(base));
@@ -439,6 +442,15 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
                   setValue(`scenes.${sceneIndex}.cardCaption`, "", { shouldDirty: true });
                 }
               }}
+            />
+
+            <StandingFields
+              control={control}
+              register={register}
+              setValue={setValue}
+              sceneIndex={sceneIndex}
+              characters={watchedCharacters}
+              workId={workId}
             />
 
             {scene.kind === "point" && (

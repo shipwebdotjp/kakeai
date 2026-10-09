@@ -161,6 +161,52 @@ describe("render job creation", () => {
     await jobs.cancelJob(prisma, job.id);
   });
 
+  it("freezes a standing appearance in the input snapshot", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const image = await readyImage();
+    const work = await works.createWork(prisma, "立ち絵スナップショット", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+        ],
+      },
+    ];
+    content.scenes[0]!.visualCues = [
+      {
+        id: "vc-standing",
+        template: { id: "character.standing", version: 1 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          x: 0.85,
+          y: 0.85,
+          scale: 1,
+        },
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
+    expect(snapshot.assets.map((asset) => asset.assetId)).toEqual([image.id]);
+    expect(snapshot.content.characters[0]!.id).toBe("character-rin");
+    expect(snapshot.content.characters[0]!.appearances[0]!.assetId).toBe(image.id);
+
+    await jobs.cancelJob(prisma, job.id);
+  });
+
   it("returns 404 for an unknown script version", async () => {
     try {
       await renderJobs.createRenderJob(prisma, "scr_missing");
@@ -330,6 +376,67 @@ describe("render worker", () => {
     await expect(artifacts.getArtifact(prisma, artifact.id)).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
     });
+  }, 300000);
+
+  it("renders a standing appearance into the mp4", async () => {
+    if (!ffmpegReady || !renderEnabled) {
+      return;
+    }
+    const image = await readyImage();
+    const work = await works.createWork(prisma, "立ち絵レンダー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+        ],
+      },
+    ];
+    content.scenes[0]!.visualCues = [
+      {
+        id: "vc-standing",
+        template: { id: "character.standing", version: 1 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          x: 0.85,
+          y: 0.85,
+          scale: 1,
+        },
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    await drainWorker();
+
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    const artifact = finished.artifacts[0]!;
+    const location = await artifacts.resolveArtifactContent(
+      prisma,
+      config.directories,
+      artifact.id,
+    );
+    const probe = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v",
+      "-show_entries",
+      "stream=codec_type",
+      "-of",
+      "csv=p=0",
+      location.path,
+    ]);
+    expect(probe.stdout.trim()).toBe("video");
+    await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
   }, 300000);
 
   it("renders narration and looping BGM into the mp4", async () => {
