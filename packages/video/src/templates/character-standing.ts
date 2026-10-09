@@ -25,7 +25,7 @@ export function renderCharacterStanding(
       { path, code: "unknown_appearance", message: "立ち絵の参照を解決できません。" },
     ]);
   }
-  const media = resolveCueMedia(appearance.assetId, assetResolver);
+  const media = resolveCueMedia(appearance.assetId, assetResolver, path);
   if (media.kind !== "image") {
     throw new CompositionCompileError([
       { path, code: "invalid_asset_kind", message: "立ち絵には画像素材を指定してください。" },

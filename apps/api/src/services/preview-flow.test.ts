@@ -132,6 +132,59 @@ describe("script version preview", () => {
     expect(preview.renderer.compilerVersion).toBe("app-1");
   });
 
+  it("includes narration and BGM audio in the preview assets", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const audioAsset = await upload("audio.wav", join(fixturesDir, "audio.wav"));
+    await drainWorker();
+    const readyAudio = await assets.getAsset(prisma, audioAsset.asset.id);
+    expect(readyAudio.status).toBe("ready");
+    if (readyAudio.durationMs === null) {
+      throw new Error("expected audio duration");
+    }
+    const work = await works.createWork(prisma, "音声プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-audio",
+        speakerId: null,
+        captionText: "音声つき",
+        speechText: "おんせいつき",
+        selectedAudioTakeId: "take-audio",
+      },
+    ];
+    content.audioTakes = [
+      {
+        id: "take-audio",
+        narrationSegmentId: "line-audio",
+        source: "manual",
+        assetId: readyAudio.id,
+        durationMs: readyAudio.durationMs,
+      },
+    ];
+    content.audioCues = [
+      { id: "bgm", role: "bgm", assetId: readyAudio.id, range: { kind: "work" }, gainDb: -18, loop: true },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+    expect(preview.compositionHtml).toContain('id="kakeai-audio-take-line-audio"');
+    expect(preview.compositionHtml).toContain("kakeai-audio-cue-bgm-");
+    expect(preview.assets.map((asset) => asset.assetId)).toEqual([readyAudio.id]);
+  });
+
   it("returns 404 for an unknown script version", async () => {
     try {
       await scriptVersions.getScriptVersionPreview(prisma, config.directories, "scr_missing");

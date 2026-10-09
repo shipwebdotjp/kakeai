@@ -1,4 +1,5 @@
 import type { AssetResolver } from "../resolver";
+import { CompositionCompileError } from "../compile-error";
 
 export interface RenderedMedia {
   html: string;
@@ -13,8 +14,15 @@ export interface ResolvedMedia {
 export function resolveCueMedia(
   assetId: string,
   assetResolver: AssetResolver,
+  path: (string | number)[],
 ): ResolvedMedia {
-  return assetResolver(assetId);
+  const resolved = assetResolver(assetId);
+  if (resolved.kind === "audio") {
+    throw new CompositionCompileError([
+      { path, code: "invalid_asset_kind", message: "画像または動画を指定してください。" },
+    ]);
+  }
+  return { url: resolved.url, kind: resolved.kind };
 }
 
 export function focalPointStyle(focalPoint: { x: number; y: number } | undefined): string {

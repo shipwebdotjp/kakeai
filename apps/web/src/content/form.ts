@@ -9,12 +9,27 @@ import {
   type VisualCue,
 } from "@kakeai/contracts";
 
+export interface TakeFormValue {
+  id: string;
+  assetId: string;
+  durationMs: number;
+  source: "manual" | "tts";
+}
+
 export interface LineFormValue {
   id: string;
   speakerId: string | null;
   captionText: string;
   speechText: string;
   selectedAudioTakeId: string | null;
+  takes: TakeFormValue[];
+}
+
+export interface BgmFormValue {
+  cueId: string | null;
+  assetId: string | null;
+  gainDb: number;
+  loop: boolean;
 }
 
 export interface SceneFormValue {
@@ -41,9 +56,12 @@ export interface SceneFormValue {
 
 export interface DocumentFormValues {
   scenes: SceneFormValue[];
+  bgm: BgmFormValue;
 }
 
 const FALLBACK_DURATION_MS = 4000;
+export const DEFAULT_BGM_GAIN_DB = -18;
+export const DEFAULT_BGM_LOOP = true;
 
 const FULL_BLEED_KEY = `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`;
 const CARD_KEY = `${mediaCardV1.id}@${mediaCardV1.version}`;
@@ -76,6 +94,15 @@ function readString(cue: VisualCue | undefined, field: string): string {
 }
 
 export function toFormValues(content: ContentDocument): DocumentFormValues {
+  const takesByLine = new Map<string, TakeFormValue[]>();
+  for (const take of content.audioTakes) {
+    const list = takesByLine.get(take.narrationSegmentId) ?? [];
+    list.push({ id: take.id, assetId: take.assetId, durationMs: take.durationMs, source: take.source });
+    takesByLine.set(take.narrationSegmentId, list);
+  }
+  const bgmCue = content.audioCues.find(
+    (cue) => cue.role === "bgm" && cue.range.kind === "work",
+  );
   return {
     scenes: content.scenes.map((scene) => {
       const background = findManagedCue(scene, FULL_BLEED_KEY);
@@ -99,6 +126,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
           captionText: line.captionText,
           speechText: line.speechText,
           selectedAudioTakeId: line.selectedAudioTakeId,
+          takes: takesByLine.get(line.id) ?? [],
         })),
         backgroundAssetId: readAssetId(background),
         backgroundCueId: background?.id ?? null,
@@ -108,17 +136,48 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
         cardCaption: readString(card, "caption"),
       };
     }),
+    bgm: {
+      cueId: bgmCue?.id ?? null,
+      assetId: bgmCue?.assetId ?? null,
+      gainDb: bgmCue?.gainDb ?? DEFAULT_BGM_GAIN_DB,
+      loop: bgmCue?.loop ?? DEFAULT_BGM_LOOP,
+    },
   };
 }
 
+function isValidTake(take: TakeFormValue): boolean {
+  return Number.isInteger(take.durationMs) && take.durationMs > 0 && take.assetId.length > 0;
+}
+
 function buildLines(sceneValue: SceneFormValue): Scene["lines"] {
-  return sceneValue.lines.map((line) => ({
-    id: line.id,
-    speakerId: line.speakerId,
-    captionText: line.captionText,
-    speechText: line.speechText,
-    selectedAudioTakeId: line.selectedAudioTakeId,
-  }));
+  return sceneValue.lines.map((line) => {
+    const selected =
+      line.selectedAudioTakeId !== null &&
+      line.takes.some((take) => take.id === line.selectedAudioTakeId && isValidTake(take))
+        ? line.selectedAudioTakeId
+        : null;
+    return {
+      id: line.id,
+      speakerId: line.speakerId,
+      captionText: line.captionText,
+      speechText: line.speechText,
+      selectedAudioTakeId: selected,
+    };
+  });
+}
+
+function buildAudioTakes(values: DocumentFormValues): ContentDocument["audioTakes"] {
+  return values.scenes.flatMap((scene) =>
+    scene.lines.flatMap((line) =>
+      line.takes.filter(isValidTake).map((take) => ({
+        id: take.id,
+        narrationSegmentId: line.id,
+        source: take.source,
+        assetId: take.assetId,
+        durationMs: take.durationMs,
+      })),
+    ),
+  );
 }
 
 function readInputObject(cue: VisualCue | undefined): Record<string, unknown> {
@@ -219,11 +278,23 @@ export function buildContentDocument(
     };
   });
   const sceneIds = new Set(scenes.map((scene) => scene.id));
-  const lineIds = new Set(scenes.flatMap((scene) => scene.lines.map((line) => line.id)));
-  const audioTakes = base.audioTakes.filter((take) => lineIds.has(take.narrationSegmentId));
+  const audioTakes = buildAudioTakes(values);
+  const managedBgmId = values.bgm.cueId;
   const audioCues = base.audioCues.filter(
-    (cue) => cue.range.kind !== "scene" || sceneIds.has(cue.range.sceneId),
+    (cue) =>
+      cue.id !== managedBgmId &&
+      (cue.range.kind !== "scene" || sceneIds.has(cue.range.sceneId)),
   );
+  if (values.bgm.assetId !== null) {
+    audioCues.push({
+      id: managedBgmId ?? `audio-bgm-${randomId()}`,
+      role: "bgm",
+      assetId: values.bgm.assetId,
+      range: { kind: "work" },
+      gainDb: values.bgm.gainDb,
+      loop: values.bgm.loop,
+    });
+  }
   return {
     ...base,
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
@@ -247,7 +318,12 @@ export function createEmptyLine(sceneId: string): LineFormValue {
     captionText: "",
     speechText: "",
     selectedAudioTakeId: null,
+    takes: [],
   };
+}
+
+export function newTakeId(lineId: string): string {
+  return `take-${lineId}-${randomId()}`;
 }
 
 export function newSceneId(): string {

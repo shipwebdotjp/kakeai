@@ -7,6 +7,7 @@ import {
 } from "@kakeai/contracts";
 import type { ContentDocument, Scene, VisualCue } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
+import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver } from "./resolver";
@@ -162,9 +163,72 @@ function cueLayerRank(cue: VisualCue): number {
 }
 
 const FADE_START_EPSILON_SEC = 0.001;
+const MAX_LOOP_COPIES = 1000;
 
 function fadeAtSec(startMs: number): number {
   return startMs / 1000 + FADE_START_EPSILON_SEC;
+}
+
+function gainToVolume(gainDb: number | undefined): string {
+  const db = gainDb ?? 0;
+  const volume = Math.min(3.98, Math.max(0, Math.pow(10, db / 20)));
+  return String(Math.round(volume * 1000) / 1000);
+}
+
+function audioElement(options: {
+  id: string;
+  url: string;
+  startMs: number;
+  durationMs: number;
+  volume: string;
+}): string {
+  return `<audio id="${escapeHtmlAttribute(options.id)}" src="${escapeHtmlAttribute(options.url)}" data-start="${toSecondsText(options.startMs)}" data-duration="${toSecondsText(options.durationMs)}" data-volume="${escapeHtmlAttribute(options.volume)}"></audio>`;
+}
+
+function buildLoopAudios(options: {
+  idPrefix: string;
+  url: string;
+  spanStartMs: number;
+  spanEndMs: number;
+  volume: string;
+  loop: boolean;
+  sourceDurationMs: number | null | undefined;
+  path: (string | number)[];
+}): string[] {
+  const { idPrefix, url, spanStartMs, spanEndMs, volume } = options;
+  const spanMs = spanEndMs - spanStartMs;
+  if (spanMs <= 0) {
+    return [];
+  }
+  const sourceMs = options.sourceDurationMs ?? null;
+  if (!options.loop || sourceMs === null || sourceMs <= 0) {
+    const durationMs = sourceMs !== null ? Math.min(sourceMs, spanMs) : spanMs;
+    return [
+      audioElement({ id: `${idPrefix}-0`, url, startMs: spanStartMs, durationMs, volume }),
+    ];
+  }
+  const copies = Math.ceil(spanMs / sourceMs);
+  if (copies > MAX_LOOP_COPIES) {
+    throw new CompositionCompileError([
+      {
+        path: options.path,
+        code: "loop_span_too_long",
+        message: "ループ音声の繰り返しが多すぎるため、音声を短く設定できません。",
+      },
+    ]);
+  }
+  const elements: string[] = [];
+  for (let index = 0; index < copies; index += 1) {
+    const startMs = spanStartMs + index * sourceMs;
+    const durationMs = Math.min(sourceMs, spanEndMs - startMs);
+    if (durationMs <= 0) {
+      break;
+    }
+    elements.push(
+      audioElement({ id: `${idPrefix}-${index}`, url, startMs, durationMs, volume }),
+    );
+  }
+  return elements;
 }
 
 const STYLES = [
@@ -187,6 +251,8 @@ const STYLES = [
   ".kakeai-cardheading{margin:0;font-size:56px;font-weight:700;line-height:1.4;}",
   ".kakeai-cardcaption{margin:12px 0 0;font-size:34px;line-height:1.7;}",
   ".kakeai-standing{position:absolute;transform:translate(-50%,-50%);height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
+  ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
+  ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:rgba(0,0,0,.55);border-radius:12px;padding:12px 36px;text-shadow:0 2px 12px rgba(0,0,0,.6);}",
 ].join("\n");
 
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
@@ -197,6 +263,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
   const assetIds: string[] = [];
   const seenAssetIds = new Set<string>();
   const clips: string[] = [];
+  const audios: string[] = [];
   const fades: FadeUnit[] = [];
 
   const trackAsset = (id: string): void => {
@@ -204,6 +271,22 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       seenAssetIds.add(id);
       assetIds.push(id);
     }
+  };
+
+  const takeById = new Map(document.audioTakes.map((take) => [take.id, take]));
+
+  const resolveAudio = (
+    assetId: string,
+    path: (string | number)[],
+  ): { url: string; durationMs: number | null } => {
+    const resolved = assetResolver(assetId);
+    if (resolved.kind !== "audio") {
+      throw new CompositionCompileError([
+        { path, code: "invalid_asset_kind", message: "音声素材を指定してください。" },
+      ]);
+    }
+    trackAsset(assetId);
+    return { url: resolved.url, durationMs: resolved.durationMs ?? null };
   };
 
   for (const placement of timeline.scenes) {
@@ -258,7 +341,88 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       atSec: fadeAtSec(placement.startMs),
       durationSec: fadeDurationSec(placement.durationMs / 1000),
     });
+
+    const lineById = new Map(scene.lines.map((line) => [line.id, line]));
+    placement.lines.forEach((linePlacement, lineIndex) => {
+      const line = lineById.get(linePlacement.lineId);
+      if (line === undefined) {
+        throw new CompositionCompileError([
+          {
+            path: ["scenes", placement.sceneIndex, "lines", lineIndex],
+            code: "unknown_line",
+            message: "ラインを解決できません。",
+          },
+        ]);
+      }
+      const captionText = line.captionText.trim();
+      if (captionText.length > 0) {
+        clips.push(
+          `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="kakeai-caption"><p class="kakeai-captiontext">${escapeHtmlText(captionText)}</p></div></div>`,
+        );
+      }
+      if (line.selectedAudioTakeId === null) {
+        return;
+      }
+      const take = takeById.get(line.selectedAudioTakeId);
+      if (take === undefined) {
+        throw new CompositionCompileError([
+          {
+            path: ["scenes", placement.sceneIndex, "lines", lineIndex],
+            code: "unknown_take",
+            message: "音声テイクを解決できません。",
+          },
+        ]);
+      }
+      const audio = resolveAudio(take.assetId, [
+        "audioTakes",
+        document.audioTakes.indexOf(take),
+        "assetId",
+      ]);
+      audios.push(
+        audioElement({
+          id: `kakeai-audio-take-${line.id}`,
+          url: audio.url,
+          startMs: linePlacement.startMs,
+          durationMs: Math.min(
+            audio.durationMs ?? linePlacement.durationMs,
+            linePlacement.durationMs,
+          ),
+          volume: gainToVolume(0),
+        }),
+      );
+    });
   }
+
+  const placementBySceneId = new Map(
+    timeline.scenes.map((placement) => [placement.sceneId, placement]),
+  );
+  document.audioCues.forEach((cue, cueIndex) => {
+    const cuePath: (string | number)[] = ["audioCues", cueIndex];
+    const span =
+      cue.range.kind === "work"
+        ? { startMs: 0, endMs: timeline.totalDurationMs }
+        : (() => {
+            const placement = placementBySceneId.get(cue.range.sceneId);
+            if (placement === undefined) {
+              throw new CompositionCompileError([
+                { path: cuePath, code: "unknown_scene", message: "シーンを解決できません。" },
+              ]);
+            }
+            return { startMs: placement.startMs, endMs: placement.endMs };
+          })();
+    const audio = resolveAudio(cue.assetId, [...cuePath, "assetId"]);
+    const elements = buildLoopAudios({
+      idPrefix: `kakeai-audio-cue-${cue.id}`,
+      url: audio.url,
+      spanStartMs: span.startMs,
+      spanEndMs: span.endMs,
+      volume: gainToVolume(cue.gainDb),
+      loop: cue.loop === true,
+      sourceDurationMs: audio.durationMs,
+      path: cuePath,
+    });
+    audios.push(...elements);
+  });
 
   const tweenLines = fades.map(
     (fade) =>
@@ -277,6 +441,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     "<body>",
     `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}">`,
     ...clips,
+    ...audios,
     "</div>",
     `<script>${getGsapBundleSource()}</script>`,
     "<script>",

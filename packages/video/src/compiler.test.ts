@@ -4,16 +4,18 @@ import type { AssetResolver } from "./resolver";
 import { CompositionCompileError } from "./compile-error";
 import { compileDocument } from "./compiler";
 
-const resolver: AssetResolver = (assetId) => ({
-  url: `/preview/${assetId}`,
-  kind: assetId.includes("video") ? "video" : "image",
-});
+const resolver: AssetResolver = (assetId) => {
+  if (assetId.includes("audio") || assetId.includes("bgm")) {
+    return { url: `/preview/${assetId}`, kind: "audio", durationMs: 3000 };
+  }
+  return { url: `/preview/${assetId}`, kind: assetId.includes("video") ? "video" : "image" };
+};
 
 describe("compileDocument", () => {
   it("renders five scenes back to back with resolved asset urls", () => {
     const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
     expect(compiled.durationMs).toBe(14000);
-    expect(compiled.assetIds).toEqual(["asset-bg"]);
+    expect(compiled.assetIds).toEqual(["asset-bg", "asset-audio-1", "asset-bgm"]);
     expect(compiled.html).toContain('data-composition-id="kakeai-main"');
     expect(compiled.html).toContain('data-width="1920"');
     expect(compiled.html).toContain('data-height="1080"');
@@ -24,6 +26,59 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('data-start="10" data-duration="4"');
     expect(compiled.html).toContain('src="/preview/asset-bg"');
     expect(compiled.html).toContain('window.__timelines["kakeai-main"]');
+  });
+
+  it("places narration audio and burned-in captions on the line interval", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain('id="kakeai-audio-take-line-p1-1"');
+    expect(compiled.html).toContain('src="/preview/asset-audio-1"');
+    expect(compiled.html).toContain('class="kakeai-captiontext">最初の要点です。');
+    expect(compiled.html).toContain('data-start="4.5" data-duration="3"');
+  });
+
+  it("schedules looping background music across the composition", () => {
+    const document = validContentDocument();
+    document.audioCues = [
+      {
+        id: "bgm-main",
+        role: "bgm",
+        assetId: "asset-bgm",
+        range: { kind: "work" },
+        gainDb: -18,
+        loop: true,
+      },
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const copies = compiled.html.match(/id="kakeai-audio-cue-bgm-main-\d+"/g) ?? [];
+    expect(copies.length).toBe(5);
+    expect(compiled.html).toContain('src="/preview/asset-bgm"');
+    expect(compiled.html).toContain('data-volume="0.126"');
+  });
+
+  it("rejects a loop whose copy count exceeds the cap", () => {
+    const document = validContentDocument();
+    document.audioCues = [
+      {
+        id: "bgm-tiny",
+        role: "bgm",
+        assetId: "asset-bgm",
+        range: { kind: "work" },
+        loop: true,
+      },
+    ];
+    const tinyResolver: AssetResolver = (assetId) => ({
+      url: `/preview/${assetId}`,
+      kind: assetId.includes("audio") || assetId.includes("bgm") ? "audio" : "image",
+      durationMs: 1,
+    });
+    try {
+      compileDocument({ document, assetResolver: tinyResolver });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe("loop_span_too_long");
+      expect((error as CompositionCompileError).issues[0]?.path).toEqual(["audioCues", 0]);
+    }
   });
 
   it("resolves line ranges to absolute clip times", () => {
@@ -39,7 +94,7 @@ describe("compileDocument", () => {
       input: { assetId: "asset-video-1", heading: "カード見出し" },
     });
     const compiled = compileDocument({ document, assetResolver: resolver });
-    expect(compiled.assetIds).toEqual(["asset-bg", "asset-video-1"]);
+    expect(compiled.assetIds).toEqual(["asset-bg", "asset-video-1", "asset-audio-1", "asset-bgm"]);
     expect(compiled.html).toContain('data-start="4.5" data-duration="3"');
     expect(compiled.html).toContain("<video");
     expect(compiled.html).toContain("カード見出し");

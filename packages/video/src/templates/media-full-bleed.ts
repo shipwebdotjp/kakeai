@@ -17,7 +17,7 @@ export function renderMediaFullBleed(
     ]);
   }
   const { assetId, fit, focalPoint } = parsed.data;
-  const media = resolveCueMedia(assetId, assetResolver);
+  const media = resolveCueMedia(assetId, assetResolver, path);
   const src = escapeHtmlAttribute(media.url);
   const style = `object-fit:${fit};${focalPointStyle(focalPoint)}`;
   if (media.kind === "video") {

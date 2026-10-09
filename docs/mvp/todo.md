@@ -68,15 +68,15 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 - [x] UI未対応の複数Cue、`lines`／`offset`範囲、他のVisualTemplateを非破壊で保持する
 - 完了条件: 要点数を変え、背景・カードを選択して保存、プレビュー、レンダーできる。未対応Cueを含むContentDocumentを保存しても値を失わない。
 
-### [ ] P6b 時間・字幕・音声
+### [x] P6b 時間・字幕・音声
 
-- [ ] auto/fixed のScene尺計算、字幕区間の解決、先頭/末尾パディングと末尾無音
-- [ ] 焼き込み字幕、セリフ音声の登録順配置、Audio Take候補の追加・選択・解除・削除
-- [ ] Web UI: セリフ音声とBGMの素材ピッカーおよびピッカー内アップロード。新規Takeは `source=manual` とAssetの確定尺を使う
-- [ ] Web UI: 作品全体のBGMを1曲指定し、`loop` と `gainDb` を編集する。既定値は `loop=true`、`gainDb=-18`
-- [ ] 固定尺で音声合計超過時は `RENDER_INPUT_INVALID`
-- [ ] Web UI: 算出後の尺と各ライン区間の表示、固定尺への切替
-- [ ] UI未対応のScene別・複数BGM・SFXを非破壊で保持する
+- [x] auto/fixed のScene尺計算、字幕区間の解決、先頭/末尾パディングと末尾無音
+- [x] 焼き込み字幕、セリフ音声の登録順配置、Audio Take候補の追加・選択・解除・削除
+- [x] Web UI: セリフ音声とBGMの素材ピッカーおよびピッカー内アップロード。新規Takeは `source=manual` とAssetの確定尺を使う
+- [x] Web UI: 作品全体のBGMを1曲指定し、`loop` と `gainDb` を編集する。既定値は `loop=true`、`gainDb=-18`
+- [x] 固定尺で音声合計超過時は `RENDER_INPUT_INVALID`
+- [x] Web UI: 算出後の尺と各ライン区間の表示、固定尺への切替
+- [x] UI未対応のScene別・複数BGM・SFXを非破壊で保持する
 - 完了条件: 自動尺・固定尺・字幕区間・音声候補・作品全体BGMの受け入れ条件を満たす。
 
 ### [ ] P6c 立ち絵

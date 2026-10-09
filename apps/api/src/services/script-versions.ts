@@ -202,6 +202,11 @@ export async function getScriptVersion(
   return toScriptVersion(row, deserializeContent(row.contentJson));
 }
 
+export function renderSourceDurationMs(asset: AssetWithRenditions): number | null {
+  const rendition = asset.renditions.find((entry) => entry.purpose === RENDITION_PURPOSE);
+  return rendition?.durationMs ?? asset.durationMs;
+}
+
 export async function getScriptVersionPreview(
   prisma: PrismaClient,
   directories: DataDirectories,
@@ -231,7 +236,10 @@ export async function getScriptVersionPreview(
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);
         const kind = asset?.kind;
-        if (kind !== "image" && kind !== "video") {
+        if (
+          asset === undefined ||
+          (kind !== "image" && kind !== "video" && kind !== "audio")
+        ) {
           throw new CompositionCompileError([
             {
               path: ["assets", assetId],
@@ -240,7 +248,11 @@ export async function getScriptVersionPreview(
             },
           ]);
         }
-        return { url: renderContentUrl(assetId), kind: kind as ResolvedAssetKind };
+        return {
+          url: renderContentUrl(assetId),
+          kind: kind as ResolvedAssetKind,
+          durationMs: kind === "audio" ? renderSourceDurationMs(asset) : null,
+        };
       },
     });
   } catch (error) {

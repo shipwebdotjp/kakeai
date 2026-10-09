@@ -77,6 +77,7 @@ interface ResolvedSnapshotAsset {
   kind: string;
   filePath: string;
   fileName: string;
+  durationMs: number | null;
 }
 
 async function resolveSnapshotAssets(
@@ -135,6 +136,7 @@ async function resolveSnapshotAssets(
       kind: row.kind,
       filePath,
       fileName: `${asset.assetId}.${extensionForMediaType(asset.mediaType)}`,
+      durationMs: asset.durationMs,
     });
   }
   return resolved;
@@ -169,12 +171,16 @@ export async function processRenderJob(
           if (
             fileName === undefined ||
             asset === undefined ||
-            (asset.kind !== "image" && asset.kind !== "video")
+            (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")
           ) {
             throw new RenderJobError("RENDER_FAILED", "レンダー入力を解決できません。");
           }
           const kind = asset.kind as ResolvedAssetKind;
-          return { url: `assets/${fileName}`, kind };
+          return {
+            url: `assets/${fileName}`,
+            kind,
+            durationMs: kind === "audio" ? asset.durationMs : null,
+          };
         },
       });
     } catch (error) {
