@@ -13,7 +13,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
   "schemaVersion": 1,
   "locale": "ja-JP",
   "template": {
-    "id": "explanation-5-scenes",
+    "id": "explanation-scenes",
     "version": 1
   },
   "speakers": [],
@@ -26,7 +26,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 - `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。MVPが新規作成・保存するDocumentは `1` とする。
 - `locale` はBCP 47形式で保存する。MVPの有効値は `ja-JP` のみ。
-- `template` は構造と既定表現を決める。MVPでは `explanation-5-scenes@1` のみ。
+- `template` は構造と既定表現を決める。MVPでは `explanation-scenes@1` のみ。
 
 `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。
 
@@ -90,13 +90,13 @@ MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、�
 
 ## シーンとVisualCue
 
-Sceneはテンプレート上のまとまりで、`kind` によって型付きスロットを持つ。MVPのSceneは `intro`、`point`、`outro` の固定5件とする。
+Sceneはテンプレート上のまとまりで、`kind` によって型付きスロットを持つ。`explanation-scenes@1` は `intro`、0件以上の `point`、`outro` をこの順に持つ。新規作品は導入、要点3件、結びで開始する。
 
 - `intro`: `slots.title`、`slots.subtitle`
 - `point`: `slots.heading`、`slots.body`
 - `outro`: `slots.closing`
 
-すべてのSceneは必須の `accentColor` を持つ。値は大文字に正規化した `#RRGGBB` 形式に限定し、透過色・CSS関数・任意文字列は受け入れない。これはSceneベーステンプレートの表示設定であり、VisualCueではない。新規作品の固定5シーンには `explanation-5-scenes@1` が定める既定色を入れる。
+すべてのSceneは必須の `accentColor` を持つ。値は大文字に正規化した `#RRGGBB` 形式に限定し、透過色・CSS関数・任意文字列は受け入れない。これはSceneベーステンプレートの表示設定であり、VisualCueではない。新規作品の導入、要点3件、結びには `explanation-scenes@1` が定める既定色を入れる。
 
 スロットはデータであり、Sceneの基本表現はSceneベーステンプレートが既定で描画する。テンプレートは `accentColor` をCSS変数などの安全な表示値として使う。追加のテキストはtext系VisualTemplateをVisualCueとして重ねられる。背景素材はSceneではなくVisualCueで指定する。
 
@@ -153,11 +153,13 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
 
 - `{ "kind": "scene" }`: Scene全体。ラインを持たない導入・結びの背景やタイトルに使う。
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
-- `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。将来用。
+- `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
+
+MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`{ "kind": "scene" }` で編集する。背景は最背面、カードはその上に表示する。画像・動画のみを選べ、背景・カードを両方指定できる。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
-- `{ "mode": "auto" }`: 音声主導の既定値である。`selectedAudioTakeId` があるラインには参照AudioTakeの `durationMs` を、音声なしラインにはテンプレート既定の `silentCaptionDurationMs = 2500` を順に割り当てる。Scene尺は先頭パディング `500ms` + 全ラインの割当尺 + 末尾パディング `500ms` とする。これらの既定値は `explanation-5-scenes@1` の契約であり、各SceneのJSONには重複保存しない。
+- `{ "mode": "auto" }`: 音声主導の既定値である。`selectedAudioTakeId` があるラインには参照AudioTakeの `durationMs` を、音声なしラインにはテンプレート既定の `silentCaptionDurationMs = 2500` を順に割り当てる。Scene尺は先頭パディング `500ms` + 全ラインの割当尺 + 末尾パディング `500ms` とする。これらの既定値は `explanation-scenes@1` の契約であり、各SceneのJSONには重複保存しない。
 - `{ "mode": "fixed", "durationMs": D }`: 利用者が明示的に尺を指定する例外である。音声ありラインは参照AudioTakeの尺を順に使用する。選択済み音声の合計を `A`、音声なしライン数を `N` とし、`A > D` は保存・レンダー前に `RENDER_INPUT_INVALID` とする。`N > 0` の場合は残りの `D - A` を音声なしラインへ均等配分し、割り切れないミリ秒は登録順に1msずつ配る。`N = 0` かつ `A < D` の余りはScene末尾の無音区間とする。
 
 両モードともラインは配列の登録順に連続配置する。編集画面は、算出後のScene尺、各ラインの開始・終了、先頭・末尾パディングまたは余りを表示する。利用者は自由な字幕タイミング編集はできない。ラインを持たないSceneの区間は `kind: "scene"` で指定する。
@@ -172,7 +174,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `text.body@1` | `heading`, `body` | 対応（要点のスロット描画） |
 | `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?` | 対応 |
 | `media.card@1` | `assetId`, 見出し、補足文, `focalPoint?` | 対応 |
-| `character.standing@1` | `characterId`, `appearanceId`, 正規化座標、倍率 | 対応 |
+| `character.standing@1` | `characterId`, `appearanceId`, 正規化座標、倍率 | レンダー対応。編集UIはMVP後 |
 | `chart.bar@1` | タイトル、系列、数値、単位 | 将来 |
 | `table.simple@1` | 列定義、行、強調セル | 将来 |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |
@@ -181,11 +183,11 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 `VisualTemplate` の版は不変とする。`id@version` の意味とレイアウト規約を変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは原則削除せず、保存済み作品が参照する版を描画し続けられるようにする。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい。
 
-`fit: cover` を使うテンプレートは、任意の正規化 `focalPoint: { x, y }` を受け取る。未指定時は中央 `{ "x": 0.5, "y": 0.5 }` とし、クロップ位置は出力ピクセルではなく正規化座標で指定する。
+`fit: cover` を使うテンプレートは、任意の正規化 `focalPoint: { x, y }` を受け取る。未指定時は中央 `{ "x": 0.5, "y": 0.5 }` とし、クロップ位置は出力ピクセルではなく正規化座標で指定する。MVPの編集画面は `focalPoint` を指定せず中央クロップを使い、既存の指定値は保持する。
 
 ### テキストの制約
 
-テキスト系テンプレートと字幕は、テンプレートごとに最大行数・最小フォントサイズ・自動改行規則を持つ。次は `explanation-5-scenes@1` の初期値であり、テンプレート契約の一部として不変に保つ。上限を変える場合は新しいテンプレート版を追加する。
+テキスト系テンプレートと字幕は、テンプレートごとに最大行数・最小フォントサイズ・自動改行規則を持つ。次は `explanation-scenes@1` の初期値であり、テンプレート契約の一部として不変に保つ。上限を変える場合は新しいテンプレート版を追加する。
 
 | 対象 | 最大行数 | 1行の目安 | 最小フォントサイズ |
 | --- | --- | --- | --- |
@@ -213,7 +215,7 @@ Characterなど位置を持つテンプレートは、出力ピクセルでは�
 
 これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
 
-BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset自体を「BGM型」に固定せず、同じ音声素材をナレーション以外の用途にも利用可能にする。`AudioCue.range` も `kind` による判別union（`work` / `scene`）とする。
+BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset自体を「BGM型」に固定せず、同じ音声素材をナレーション以外の用途にも利用可能にする。`AudioCue.range` も `kind` による判別union（`work` / `scene`）とする。MVPの編集画面は `role: "bgm"` と `{ "kind": "work" }` のAudioCueを1件だけ編集し、既定値は `gainDb: -18`、`loop: true` とする。Scene別・複数BGM・SFXの編集はMVP後とし、既存のAudioCue値は保持する。
 
 ```json
 {

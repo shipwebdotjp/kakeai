@@ -164,7 +164,7 @@ latestRenderJobはRender Jobがまだないときはnullとする。失敗した
 
 ### 作品作成と名称変更
 
-POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 1` の固定5シーンを持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。各Sceneにはテンプレート既定の `accentColor` を入れ、3つの要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
+POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 1` の `explanation-scenes@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点3件、結びとし、各Sceneにはテンプレート既定の `accentColor` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
 
 ~~~http
 POST /api/v1/works
@@ -258,21 +258,21 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
     "schemaVersion": 1,
     "locale": "ja-JP",
     "template": {
-      "id": "explanation-5-scenes",
+      "id": "explanation-scenes",
       "version": 1
     },
     "speakers": [],
     "characters": [],
     "audioTakes": [],
     "scenes": [
-      // 固定の導入、要点1〜3、結びをこの順で全て含める
+      // 導入、0件以上の要点、結びをこの順で全て含める
     ],
     "audioCues": []
   }
 }
 ~~~
 
-上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、固定テンプレート、すべてのreadyなAsset参照、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
+上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
 
 成功時は201 Createdと、新しい完全なScriptVersion DTOを返す。
 
@@ -287,7 +287,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
       "schemaVersion": 1,
       "locale": "ja-JP",
       "template": {
-        "id": "explanation-5-scenes",
+        "id": "explanation-scenes",
         "version": 1
       },
       "speakers": [],
@@ -301,7 +301,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
 }
 ~~~
 
-この成功例のcontentは長さを省略した形である。実際には固定5シーンを保持した、リクエストと同じ検証済みのContentDocumentを返す。
+この成功例のcontentは長さを省略した形である。実際には導入、0件以上の要点、結びをこの順で保持した、リクエストと同じ検証済みのContentDocumentを返す。
 
 テキストがテンプレートの目安を超えた場合も201 Createdを返し、警告を `meta.warnings` に含める。保存されたContentDocumentには入力がそのまま残る。
 
@@ -467,7 +467,7 @@ Content-Type: application/json
 }
 ~~~
 
-固定尺の選択音声合計超過など、レンダー入力を組み立てる時点で判定する問題は422 RENDER_INPUT_INVALIDとする。Asset参照の欠落や素材種別と用途の不一致、固定5シーンの規則は台本保存の段階で422 VALIDATION_ERRORまたはASSET_NOT_FOUNDとして拒否する。Assetがまだprocessingなら409 `ASSET_PROCESSING` とし、failedなAssetは422 `ASSET_UNAVAILABLE` とする。短時間に同じ版を複数回レンダーすることは許可し、その都度異なるJobを作る。UIは送信中にボタンを無効化して、二重クリックによる意図しない重複だけを防ぐ。
+固定尺の選択音声合計超過など、レンダー入力を組み立てる時点で判定する問題は422 RENDER_INPUT_INVALIDとする。Asset参照の欠落や素材種別と用途の不一致、`explanation-scenes@1` のScene構成は台本保存の段階で422 VALIDATION_ERRORまたはASSET_NOT_FOUNDとして拒否する。Assetがまだprocessingなら409 `ASSET_PROCESSING` とし、failedなAssetは422 `ASSET_UNAVAILABLE` とする。短時間に同じ版を複数回レンダーすることは許可し、その都度異なるJobを作る。UIは送信中にボタンを無効化して、二重クリックによる意図しない重複だけを防ぐ。
 
 ### Jobのポーリングと履歴
 
@@ -553,7 +553,7 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 409 | JOB_NOT_CANCELLABLE | queued以外のJobをキャンセルしようとした | jobId, status |
 | 413 | FILE_TOO_LARGE | アップロードが設定済み上限を超過 | maxBytes |
 | 415 | UNSUPPORTED_MEDIA_TYPE | 許可されない画像、動画、音声形式 | receivedMediaType, allowedMediaTypes |
-| 422 | VALIDATION_ERROR | Zod検証、未対応locale、固定5シーン規則などに違反 | issues |
+| 422 | VALIDATION_ERROR | Zod検証、未対応locale、Scene構成規則などに違反 | issues |
 | 422 | ASSET_NOT_FOUND | ContentDocumentが存在しないAsset IDを参照 | assetIds |
 | 422 | ASSET_UNAVAILABLE | Asset行はあるが実体ファイルが欠損・改変されている。元のバイト列の再アップロードで復旧できる | assetIds |
 | 422 | MEDIA_INSPECTION_FAILED | アップロード後にメディア情報を安全に取得できない | 任意 |
