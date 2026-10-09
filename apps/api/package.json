@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@kakeai/contracts": "*",
+    "@kakeai/video": "*",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/client": "7.10.0",
     "busboy": "^1.6.0",

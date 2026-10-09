@@ -4,6 +4,7 @@ import type {
   Asset,
   ContentDocument,
   ScriptVersion,
+  ScriptVersionPreview,
   Warning,
   Work,
   WorkSummary,
@@ -108,6 +109,20 @@ export function useCurrentScriptVersion(editionId: string | undefined) {
       (
         await apiRequest<ScriptVersion>(
           `/language-editions/${encodeURIComponent(editionId ?? "")}/current-script-version`,
+        )
+      ).data,
+  });
+}
+
+export function useScriptVersionPreview(scriptVersionId: string | undefined) {
+  return useQuery({
+    queryKey: ["script-version-preview", scriptVersionId],
+    enabled: scriptVersionId !== undefined && scriptVersionId.length > 0,
+    staleTime: 30_000,
+    queryFn: async () =>
+      (
+        await apiRequest<ScriptVersionPreview>(
+          `/script-versions/${encodeURIComponent(scriptVersionId ?? "")}/preview`,
         )
       ).data,
   });

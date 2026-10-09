@@ -42,11 +42,11 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 - [x] Web UI: 素材一覧とアップロード、状態表示
 - 完了条件: 画像/動画/音声を投入→ready→`<video>` Range再生、未参照削除。
 
-### [ ] P4 プレビュー
+### [x] P4 プレビュー
 
-- [ ] `packages/video`: ContentDocument→Composition HTMLコンパイラと4 VisualTemplate、`assetResolver` 注入
-- [ ] GET /script-versions/:id/preview
-- [ ] Web UI: HyperFrames Playerで保存済み台本を表示
+- [x] `packages/video`: ContentDocument→Composition HTMLコンパイラと5 VisualTemplate、`assetResolver` 注入
+- [x] GET /script-versions/:id/preview
+- [x] Web UI: HyperFrames Playerで保存済み台本を表示
 - 完了条件: 保存済み台本が実素材でPlayer表示される（縦切りの前半）。
 
 ### [ ] P5 レンダー

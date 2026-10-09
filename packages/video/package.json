@@ -1,19 +1,20 @@
 {
-  "name": "@kakeai/contracts",
+  "name": "@kakeai/video",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./testing/fixtures": "./src/testing/fixtures.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "zod": "^4.1.12"
+    "@kakeai/contracts": "*",
+    "gsap": "^3.14.2"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
     "typescript": "^5.9.2"
   }
 }
