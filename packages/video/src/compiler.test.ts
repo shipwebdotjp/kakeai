@@ -184,4 +184,104 @@ describe("compileDocument", () => {
     expect(bgPosition).toBeGreaterThan(-1);
     expect(bgPosition).toBeLessThan(cardPosition);
   });
+
+  it("renders a standing appearance with normalized position and scale", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        {
+          id: "appearance-smile",
+          assetId: "asset-rin",
+          expression: "smile",
+          pose: "front",
+        },
+      ],
+    });
+    const scene = document.scenes[1];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 1 },
+      range: { kind: "scene" },
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        x: 0.85,
+        y: 0.85,
+        scale: 1.5,
+      },
+    });
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.assetIds).toContain("asset-rin");
+    expect(compiled.html).toContain('class="kakeai-standing"');
+    expect(compiled.html).toContain('src="/preview/asset-rin"');
+    expect(compiled.html).toContain("left:85%;top:85%;width:720px;");
+  });
+
+  it("fixes the cue layer order as background, card, standing, other", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        {
+          id: "appearance-smile",
+          assetId: "asset-rin",
+          expression: "smile",
+          pose: "front",
+        },
+      ],
+    });
+    const scene = document.scenes[1];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.visualCues = [
+      {
+        id: "vc-text",
+        template: { id: "text.body", version: 1 },
+        range: { kind: "scene" },
+        input: { heading: "見出し", body: "本文" },
+      },
+      {
+        id: "vc-standing",
+        template: { id: "character.standing", version: 1 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          x: 0.5,
+          y: 0.5,
+          scale: 1,
+        },
+      },
+      {
+        id: "vc-card",
+        template: { id: "media.card", version: 1 },
+        range: { kind: "scene" },
+        input: { assetId: "asset-card", heading: "カード" },
+      },
+      {
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        range: { kind: "scene" },
+        input: { assetId: "asset-bg", fit: "cover" },
+      },
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const textPosition = compiled.html.indexOf('id="kakeai-cue-1-0"');
+    const standingPosition = compiled.html.indexOf('id="kakeai-cue-1-1"');
+    const cardPosition = compiled.html.indexOf('id="kakeai-cue-1-2"');
+    const bgPosition = compiled.html.indexOf('id="kakeai-cue-1-3"');
+    expect(bgPosition).toBeGreaterThan(-1);
+    expect(cardPosition).toBeGreaterThan(bgPosition);
+    expect(standingPosition).toBeGreaterThan(cardPosition);
+    expect(textPosition).toBeGreaterThan(standingPosition);
+    const slotPosition = compiled.html.indexOf('id="kakeai-scene-1-slot"');
+    expect(slotPosition).toBeGreaterThan(textPosition);
+  });
 });

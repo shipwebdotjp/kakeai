@@ -79,13 +79,13 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 - [x] UI未対応のScene別・複数BGM・SFXを非破壊で保持する
 - 完了条件: 自動尺・固定尺・字幕区間・音声候補・作品全体BGMの受け入れ条件を満たす。
 
-### [ ] P6c 立ち絵
+### [x] P6c 立ち絵
 
-- [ ] Characterと画像のCharacter Appearanceを手動で登録・編集する。SpeakerとCharacterの対応は任意とし、表示を音声選択へ暗黙連動させない
-- [ ] Web UI: 各Sceneに `character.standing@1` を最大1件、`{ "kind": "scene" }` で選択・解除する。立ち絵は位置と倍率を編集できる
-- [ ] 立ち絵はreadyな画像素材だけを使い、背景→カード→立ち絵→Scene本文・字幕の順で描画する
-- [ ] UI未対応の複数立ち絵、`lines`／`offset`範囲、他のVisualTemplateを非破壊で保持する
-- [ ] 表情自動切替・口パクは追加しない
+- [x] Characterと画像のCharacter Appearanceを手動で登録・編集する。SpeakerとCharacterの対応は任意とし、表示を音声選択へ暗黙連動させない
+- [x] Web UI: 各Sceneに `character.standing@1` を最大1件、`{ "kind": "scene" }` で選択・解除する。立ち絵は位置と倍率を編集できる
+- [x] 立ち絵はreadyな画像素材だけを使い、背景→カード→立ち絵→Scene本文・字幕の順で描画する
+- [x] UI未対応の複数立ち絵、`lines`／`offset`範囲、他のVisualTemplateを非破壊で保持する
+- [x] 表情自動切替・口パクは追加しない
 - 完了条件: 手動で登録した立ち絵をSceneごとに選択し、保存、プレビュー、レンダーできる。
 
 ### [ ] P7 ライフサイクルと堅牢性

@@ -1,6 +1,8 @@
 import { Link, Route, Routes } from "react-router-dom";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { AssetsPage } from "./pages/AssetsPage";
+import { CHARACTERS_ROUTE_PATH } from "./lib/routes";
+import { CharactersPage } from "./pages/CharactersPage";
 import { WorkEditPage } from "./pages/WorkEditPage";
 import { WorkListPage } from "./pages/WorkListPage";
 
@@ -28,6 +30,7 @@ export function App() {
           <Route path="/" element={<WorkListPage />} />
           <Route path="/assets" element={<AssetsPage />} />
           <Route path="/works/:workId" element={<WorkEditPage />} />
+          <Route path={CHARACTERS_ROUTE_PATH} element={<CharactersPage />} />
           <Route
             path="*"
             element={

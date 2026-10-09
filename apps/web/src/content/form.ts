@@ -2,8 +2,10 @@ import {
   DEFAULT_POINT_ACCENT_COLOR,
   TEMPLATE_ID,
   TEMPLATE_VERSION,
+  characterStandingV1,
   mediaCardV1,
   mediaFullBleedV1,
+  type Character,
   type ContentDocument,
   type Scene,
   type VisualCue,
@@ -32,6 +34,27 @@ export interface BgmFormValue {
   loop: boolean;
 }
 
+export interface AppearanceFormValue {
+  id: string;
+  assetId: string | null;
+  expression: string;
+  pose: string;
+}
+
+export interface CharacterFormValue {
+  id: string;
+  name: string;
+  appearances: AppearanceFormValue[];
+}
+
+export interface StandingFormValue {
+  characterId: string | null;
+  appearanceId: string | null;
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface SceneFormValue {
   id: string;
   kind: "intro" | "point" | "outro";
@@ -52,19 +75,35 @@ export interface SceneFormValue {
   cardCueId: string | null;
   cardHeading: string;
   cardCaption: string;
+  standingCueId: string | null;
+  standingCharacterId: string | null;
+  standingAppearanceId: string | null;
+  standingX: number;
+  standingY: number;
+  standingScale: number;
 }
 
 export interface DocumentFormValues {
   scenes: SceneFormValue[];
   bgm: BgmFormValue;
+  characters: CharacterFormValue[];
 }
 
 const FALLBACK_DURATION_MS = 4000;
 export const DEFAULT_BGM_GAIN_DB = -18;
 export const DEFAULT_BGM_LOOP = true;
+export const DEFAULT_STANDING_X = 0.85;
+export const DEFAULT_STANDING_Y = 0.85;
+export const DEFAULT_STANDING_SCALE = 1;
+export const MIN_STANDING_SCALE = 0.1;
+export const MAX_STANDING_SCALE = 3;
+export const STANDING_SCALE_STEP = 0.05;
+export const DEFAULT_APPEARANCE_EXPRESSION = "normal";
+export const DEFAULT_APPEARANCE_POSE = "front";
 
 const FULL_BLEED_KEY = `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`;
 const CARD_KEY = `${mediaCardV1.id}@${mediaCardV1.version}`;
+const STANDING_KEY = `${characterStandingV1.id}@${characterStandingV1.version}`;
 
 function cueKey(cue: VisualCue): string {
   return `${cue.template.id}@${cue.template.version}`;
@@ -93,6 +132,44 @@ function readString(cue: VisualCue | undefined, field: string): string {
   return typeof value === "string" ? value : "";
 }
 
+export interface StandingCueInput {
+  characterId: string;
+  appearanceId: string;
+  x: number;
+  y: number;
+  scale: number;
+}
+
+function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
+  if (cue === undefined) {
+    return null;
+  }
+  const parsed = characterStandingV1.inputSchema.safeParse(cue.input);
+  if (!parsed.success) {
+    return null;
+  }
+  return {
+    characterId: parsed.data.characterId,
+    appearanceId: parsed.data.appearanceId,
+    x: parsed.data.x,
+    y: parsed.data.y,
+    scale: parsed.data.scale,
+  };
+}
+
+function readCharacters(content: ContentDocument): CharacterFormValue[] {
+  return content.characters.map((character) => ({
+    id: character.id,
+    name: character.name,
+    appearances: character.appearances.map((appearance) => ({
+      id: appearance.id,
+      assetId: appearance.assetId,
+      expression: appearance.expression,
+      pose: appearance.pose,
+    })),
+  }));
+}
+
 export function toFormValues(content: ContentDocument): DocumentFormValues {
   const takesByLine = new Map<string, TakeFormValue[]>();
   for (const take of content.audioTakes) {
@@ -107,6 +184,8 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
     scenes: content.scenes.map((scene) => {
       const background = findManagedCue(scene, FULL_BLEED_KEY);
       const card = findManagedCue(scene, CARD_KEY);
+      const standingCue = findManagedCue(scene, STANDING_KEY);
+      const standing = readStanding(standingCue);
       return {
         id: scene.id,
         kind: scene.kind,
@@ -134,6 +213,12 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
         cardCueId: card?.id ?? null,
         cardHeading: readString(card, "heading"),
         cardCaption: readString(card, "caption"),
+        standingCueId: standingCue?.id ?? null,
+        standingCharacterId: standing?.characterId ?? null,
+        standingAppearanceId: standing?.appearanceId ?? null,
+        standingX: standing?.x ?? DEFAULT_STANDING_X,
+        standingY: standing?.y ?? DEFAULT_STANDING_Y,
+        standingScale: standing?.scale ?? DEFAULT_STANDING_SCALE,
       };
     }),
     bgm: {
@@ -142,6 +227,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
       gainDb: bgmCue?.gainDb ?? DEFAULT_BGM_GAIN_DB,
       loop: bgmCue?.loop ?? DEFAULT_BGM_LOOP,
     },
+    characters: readCharacters(content),
   };
 }
 
@@ -187,14 +273,69 @@ function readInputObject(cue: VisualCue | undefined): Record<string, unknown> {
   return { ...(cue.input as Record<string, unknown>) };
 }
 
-function buildVisualCues(baseScene: Scene | undefined, sceneValue: SceneFormValue): VisualCue[] {
+function standingReferencesMissing(
+  cue: VisualCue,
+  characterIds: ReadonlySet<string>,
+  appearanceIdsByCharacter: ReadonlyMap<string, ReadonlySet<string>>,
+): boolean {
+  if (cueKey(cue) !== STANDING_KEY) {
+    return false;
+  }
+  const standing = readStanding(cue);
+  if (standing === null) {
+    return false;
+  }
+  const appearanceIds = appearanceIdsByCharacter.get(standing.characterId);
+  if (!characterIds.has(standing.characterId) || appearanceIds === undefined) {
+    return true;
+  }
+  return !appearanceIds.has(standing.appearanceId);
+}
+
+function buildCharacters(values: CharacterFormValue[]): Character[] {
+  return values.map((character) => ({
+    id: character.id,
+    name: character.name,
+    appearances: character.appearances.map((appearance, appearanceIndex) => {
+      if (appearance.assetId === null || appearance.assetId.length === 0) {
+        const name = character.name.trim() || character.id;
+        throw new Error(
+          `キャラクター「${name}」の外観 ${appearanceIndex + 1} の画像が選択されていません`,
+        );
+      }
+      return {
+        id: appearance.id,
+        assetId: appearance.assetId,
+        expression: appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION,
+        pose: appearance.pose.trim() || DEFAULT_APPEARANCE_POSE,
+      };
+    }),
+  }));
+}
+
+function normalizeUnit(value: number, fallback: number): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+}
+
+function normalizeScale(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function buildVisualCues(
+  baseScene: Scene | undefined,
+  sceneValue: SceneFormValue,
+  characterIds: ReadonlySet<string>,
+  appearanceIdsByCharacter: ReadonlyMap<string, ReadonlySet<string>>,
+): VisualCue[] {
   const managedIds = new Set(
-    [sceneValue.backgroundCueId, sceneValue.cardCueId].filter(
+    [sceneValue.backgroundCueId, sceneValue.cardCueId, sceneValue.standingCueId].filter(
       (id): id is string => id !== null,
     ),
   );
   const kept = (baseScene?.visualCues ?? []).filter(
-    (cue) => !managedIds.has(cue.id),
+    (cue) =>
+      !managedIds.has(cue.id) &&
+      !standingReferencesMissing(cue, characterIds, appearanceIdsByCharacter),
   );
   const cues: VisualCue[] = [...kept];
   if (sceneValue.backgroundAssetId !== null) {
@@ -228,6 +369,25 @@ function buildVisualCues(baseScene: Scene | undefined, sceneValue: SceneFormValu
       input,
     });
   }
+  if (sceneValue.standingCharacterId !== null && sceneValue.standingAppearanceId !== null) {
+    const appearanceIds = appearanceIdsByCharacter.get(sceneValue.standingCharacterId);
+    if (appearanceIds === undefined || !appearanceIds.has(sceneValue.standingAppearanceId)) {
+      return cues;
+    }
+    const baseCue = baseScene?.visualCues.find((cue) => cue.id === sceneValue.standingCueId);
+    const input = readInputObject(baseCue);
+    input.characterId = sceneValue.standingCharacterId;
+    input.appearanceId = sceneValue.standingAppearanceId;
+    input.x = normalizeUnit(sceneValue.standingX, DEFAULT_STANDING_X);
+    input.y = normalizeUnit(sceneValue.standingY, DEFAULT_STANDING_Y);
+    input.scale = normalizeScale(sceneValue.standingScale, DEFAULT_STANDING_SCALE);
+    cues.push({
+      id: sceneValue.standingCueId ?? newVisualCueId(sceneValue.id, "standing"),
+      template: { id: characterStandingV1.id, version: characterStandingV1.version },
+      range: { kind: "scene" },
+      input,
+    });
+  }
   return cues;
 }
 
@@ -235,6 +395,14 @@ export function buildContentDocument(
   base: ContentDocument,
   values: DocumentFormValues,
 ): ContentDocument {
+  const characters = buildCharacters(values.characters);
+  const characterIds = new Set(characters.map((character) => character.id));
+  const appearanceIdsByCharacter = new Map(
+    characters.map((character) => [
+      character.id,
+      new Set(character.appearances.map((appearance) => appearance.id)),
+    ]),
+  );
   const baseById = new Map(base.scenes.map((scene) => [scene.id, scene]));
   const scenes: Scene[] = values.scenes.map((sceneValue) => {
     const baseScene = baseById.get(sceneValue.id);
@@ -255,7 +423,12 @@ export function buildContentDocument(
       accentColor: (sceneValue.accentColor || DEFAULT_POINT_ACCENT_COLOR).toUpperCase(),
       timing,
       lines: buildLines(sceneValue),
-      visualCues: buildVisualCues(baseScene, sceneValue),
+      visualCues: buildVisualCues(
+        baseScene,
+        sceneValue,
+        characterIds,
+        appearanceIdsByCharacter,
+      ),
     };
     if (sceneValue.kind === "intro") {
       return {
@@ -295,9 +468,16 @@ export function buildContentDocument(
       loop: values.bgm.loop,
     });
   }
+  const speakers = base.speakers.map((speaker) =>
+    speaker.characterId !== null && !characterIds.has(speaker.characterId)
+      ? { ...speaker, characterId: null }
+      : speaker,
+  );
   return {
     ...base,
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
+    speakers,
+    characters,
     scenes,
     audioTakes,
     audioCues,
@@ -357,5 +537,92 @@ export function createPointSceneFormValue(): SceneFormValue {
     cardCueId: null,
     cardHeading: "",
     cardCaption: "",
+    standingCueId: null,
+    standingCharacterId: null,
+    standingAppearanceId: null,
+    standingX: DEFAULT_STANDING_X,
+    standingY: DEFAULT_STANDING_Y,
+    standingScale: DEFAULT_STANDING_SCALE,
   };
+}
+
+export function newCharacterId(): string {
+  return `character-${randomId()}`;
+}
+
+export function newAppearanceId(): string {
+  return `appearance-${randomId()}`;
+}
+
+export function createEmptyCharacter(): CharacterFormValue {
+  return { id: newCharacterId(), name: "", appearances: [] };
+}
+
+export function createEmptyAppearance(): AppearanceFormValue {
+  return {
+    id: newAppearanceId(),
+    assetId: null,
+    expression: DEFAULT_APPEARANCE_EXPRESSION,
+    pose: DEFAULT_APPEARANCE_POSE,
+  };
+}
+
+export interface ReferenceUsage {
+  scenes: number;
+  cues: number;
+  speakers: number;
+}
+
+export function countCharacterReferences(
+  content: ContentDocument,
+  characterId: string,
+): ReferenceUsage {
+  return countStandingReferences(content, (standing) => standing.characterId === characterId, {
+    countSpeakers: true,
+    speakerCharacterId: characterId,
+  });
+}
+
+export function countAppearanceReferences(
+  content: ContentDocument,
+  characterId: string,
+  appearanceId: string,
+): ReferenceUsage {
+  return countStandingReferences(
+    content,
+    (standing) =>
+      standing.characterId === characterId && standing.appearanceId === appearanceId,
+    { countSpeakers: false, speakerCharacterId: null },
+  );
+}
+
+function countStandingReferences(
+  content: ContentDocument,
+  matches: (standing: StandingCueInput) => boolean,
+  options: { countSpeakers: boolean; speakerCharacterId: string | null },
+): ReferenceUsage {
+  let cues = 0;
+  let speakers = 0;
+  const sceneIds = new Set<string>();
+  for (const scene of content.scenes) {
+    for (const cue of scene.visualCues) {
+      if (cueKey(cue) !== STANDING_KEY) {
+        continue;
+      }
+      const standing = readStanding(cue);
+      if (standing === null || !matches(standing)) {
+        continue;
+      }
+      cues += 1;
+      sceneIds.add(scene.id);
+    }
+  }
+  if (options.countSpeakers && options.speakerCharacterId !== null) {
+    for (const speaker of content.speakers) {
+      if (speaker.characterId === options.speakerCharacterId) {
+        speakers += 1;
+      }
+    }
+  }
+  return { scenes: sceneIds.size, cues, speakers };
 }
