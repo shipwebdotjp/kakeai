@@ -2,7 +2,7 @@
 
 ## 目的と境界
 
-この文書は、作品を編集するための正本JSONの契約を定める。HyperFrames Composition HTML、開始・終了フレーム、MP4は正本ではなく、このJSONと選択済み素材から導出する。
+この文書は、作品を編集するための正本JSONの契約を定める。HyperFrames Composition HTML、開始・終了フレーム、アプリが出力するMP4は正本ではなく、このJSONと選択済み素材から導出する。外部で作成したMP4はvideo Assetとして参照できるが、編集可能な表現の正本にはしない。
 
 JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照する必要がある間は維持する。素材ファイルのパスはJSONへ埋め込まず、必ず `Asset.id` を参照する。
 
@@ -86,7 +86,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
-MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。表情を自動切替する機能は後続フェーズで追加する。
+MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに1体を選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。表情の自動切替と口パクは後続フェーズで追加する。
 
 ## シーンとVisualCue
 
@@ -155,7 +155,7 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
 - `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
 
-MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`{ "kind": "scene" }` で編集する。背景は最背面、カードはその上に表示する。画像・動画のみを選べ、背景・カードを両方指定できる。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。
+MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`character.standing@1` を最大1件、いずれも `{ "kind": "scene" }` で編集する。背景とカードは画像・動画から、立ち絵は画像から選ぶ。描画順は背景、カード、立ち絵、Scene本文・字幕とし、立ち絵は正規化座標と倍率を編集する。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
@@ -174,12 +174,12 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `text.body@1` | `heading`, `body` | 対応（要点のスロット描画） |
 | `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?` | 対応 |
 | `media.card@1` | `assetId`, 見出し、補足文, `focalPoint?` | 対応 |
-| `character.standing@1` | `characterId`, `appearanceId`, 正規化座標、倍率 | レンダー対応。編集UIはMVP後 |
+| `character.standing@1` | `characterId`, `appearanceId`, 正規化座標、倍率 | 対応。MVPではScene全体に最大1件を編集する |
 | `chart.bar@1` | タイトル、系列、数値、単位 | 将来 |
-| `table.simple@1` | 列定義、行、強調セル | 将来 |
+| `table.simple@1` | 列定義、行、強調セル | Phase 1で最初に追加 |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |
 
-スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
+スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
 
 `VisualTemplate` の版は不変とする。`id@version` の意味とレイアウト規約を変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは原則削除せず、保存済み作品が参照する版を描画し続けられるようにする。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい。
 

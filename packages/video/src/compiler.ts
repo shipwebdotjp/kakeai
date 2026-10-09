@@ -1,3 +1,10 @@
+import {
+  characterStandingV1,
+  mediaCardV1,
+  mediaFullBleedV1,
+  textBodyV1,
+  textTitleV1,
+} from "@kakeai/contracts";
 import type { ContentDocument, Scene, VisualCue } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import { getGsapBundleSource } from "./gsap-bundle";
@@ -74,18 +81,18 @@ function renderCueInner(
   assetResolver: AssetResolver,
   mediaElementId: string,
 ): { html: string; assetIds: string[] } {
-  const key = `${cue.template.id}@${cue.template.version}`;
+  const key = templateKey(cue);
   const inputPath = [...cuePath, "input"];
   switch (key) {
-    case "text.title@1":
+    case `${textTitleV1.id}@${textTitleV1.version}`:
       return { html: renderTextTitle(cue.input, inputPath), assetIds: [] };
-    case "text.body@1":
+    case `${textBodyV1.id}@${textBodyV1.version}`:
       return { html: renderTextBody(cue.input, inputPath), assetIds: [] };
-    case "media.full-bleed@1":
+    case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
       return renderMediaFullBleed(cue.input, inputPath, assetResolver, mediaElementId);
-    case "media.card@1":
+    case `${mediaCardV1.id}@${mediaCardV1.version}`:
       return renderMediaCard(cue.input, inputPath, assetResolver, mediaElementId);
-    case "character.standing@1":
+    case `${characterStandingV1.id}@${characterStandingV1.version}`:
       return renderCharacterStanding(cue.input, inputPath, document, assetResolver, mediaElementId);
     default:
       throw new CompositionCompileError([
@@ -138,6 +145,20 @@ function resolveCueWindow(
 
 function fadeDurationSec(windowSec: number): number {
   return Math.min(0.35, windowSec / 2);
+}
+
+function templateKey(cue: VisualCue): string {
+  return `${cue.template.id}@${cue.template.version}`;
+}
+
+function cueLayerRank(cue: VisualCue): number {
+  if (cue.template.id === mediaFullBleedV1.id) {
+    return 0;
+  }
+  if (cue.template.id === mediaCardV1.id) {
+    return 1;
+  }
+  return 2;
 }
 
 const FADE_START_EPSILON_SEC = 0.001;
@@ -201,11 +222,14 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       `<section id="${bgId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${bgId}-body" class="kakeai-scenebg" style="background:${background}"></div></section>`,
     );
 
-    scene.visualCues.forEach((cue, cueIndex) => {
+    const orderedCues = scene.visualCues
+      .map((cue, cueIndex) => ({ cue, cueIndex }))
+      .sort((a, b) => cueLayerRank(a.cue) - cueLayerRank(b.cue) || a.cueIndex - b.cueIndex);
+    for (const { cue, cueIndex } of orderedCues) {
       const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
       const window = resolveCueWindow(placement, cue, cuePath);
       if (window === null) {
-        return;
+        continue;
       }
       const absoluteStartMs = placement.startMs + window.startMs;
       const cueDurationMs = window.endMs - window.startMs;
@@ -223,7 +247,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         atSec: fadeAtSec(absoluteStartMs),
         durationSec: fadeDurationSec(cueDurationMs / 1000),
       });
-    });
+    }
 
     const slotHtml = renderSceneSlot(scene, placement.sceneIndex);
     clips.push(

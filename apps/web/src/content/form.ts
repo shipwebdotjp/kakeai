@@ -1,4 +1,11 @@
-import { type ContentDocument, type Scene } from "@kakeai/contracts";
+import {
+  DEFAULT_POINT_ACCENT_COLOR,
+  mediaCardV1,
+  mediaFullBleedV1,
+  type ContentDocument,
+  type Scene,
+  type VisualCue,
+} from "@kakeai/contracts";
 
 export interface LineFormValue {
   id: string;
@@ -22,6 +29,12 @@ export interface SceneFormValue {
     closing: string;
   };
   lines: LineFormValue[];
+  backgroundAssetId: string | null;
+  backgroundCueId: string | null;
+  cardAssetId: string | null;
+  cardCueId: string | null;
+  cardHeading: string;
+  cardCaption: string;
 }
 
 export interface DocumentFormValues {
@@ -30,29 +43,69 @@ export interface DocumentFormValues {
 
 const FALLBACK_DURATION_MS = 4000;
 
+const FULL_BLEED_KEY = `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`;
+const CARD_KEY = `${mediaCardV1.id}@${mediaCardV1.version}`;
+
+function cueKey(cue: VisualCue): string {
+  return `${cue.template.id}@${cue.template.version}`;
+}
+
+function findManagedCue(
+  scene: Scene | undefined,
+  key: string,
+): VisualCue | undefined {
+  return scene?.visualCues.find((cue) => cueKey(cue) === key && cue.range.kind === "scene");
+}
+
+function readAssetId(cue: VisualCue | undefined): string | null {
+  if (cue === undefined || typeof cue.input !== "object" || cue.input === null) {
+    return null;
+  }
+  const assetId = (cue.input as { assetId?: unknown }).assetId;
+  return typeof assetId === "string" ? assetId : null;
+}
+
+function readString(cue: VisualCue | undefined, field: string): string {
+  if (cue === undefined || typeof cue.input !== "object" || cue.input === null) {
+    return "";
+  }
+  const value = (cue.input as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
+}
+
 export function toFormValues(content: ContentDocument): DocumentFormValues {
   return {
-    scenes: content.scenes.map((scene) => ({
-      id: scene.id,
-      kind: scene.kind,
-      accentColor: scene.accentColor,
-      timingMode: scene.kind === "point" ? scene.timing.mode : "fixed",
-      durationMs: scene.timing.mode === "fixed" ? scene.timing.durationMs : FALLBACK_DURATION_MS,
-      slots: {
-        title: scene.kind === "intro" ? scene.slots.title : "",
-        subtitle: scene.kind === "intro" ? scene.slots.subtitle : "",
-        heading: scene.kind === "point" ? scene.slots.heading : "",
-        body: scene.kind === "point" ? scene.slots.body : "",
-        closing: scene.kind === "outro" ? scene.slots.closing : "",
-      },
-      lines: scene.lines.map((line) => ({
-        id: line.id,
-        speakerId: line.speakerId,
-        captionText: line.captionText,
-        speechText: line.speechText,
-        selectedAudioTakeId: line.selectedAudioTakeId,
-      })),
-    })),
+    scenes: content.scenes.map((scene) => {
+      const background = findManagedCue(scene, FULL_BLEED_KEY);
+      const card = findManagedCue(scene, CARD_KEY);
+      return {
+        id: scene.id,
+        kind: scene.kind,
+        accentColor: scene.accentColor,
+        timingMode: scene.kind === "point" ? scene.timing.mode : "fixed",
+        durationMs: scene.timing.mode === "fixed" ? scene.timing.durationMs : FALLBACK_DURATION_MS,
+        slots: {
+          title: scene.kind === "intro" ? scene.slots.title : "",
+          subtitle: scene.kind === "intro" ? scene.slots.subtitle : "",
+          heading: scene.kind === "point" ? scene.slots.heading : "",
+          body: scene.kind === "point" ? scene.slots.body : "",
+          closing: scene.kind === "outro" ? scene.slots.closing : "",
+        },
+        lines: scene.lines.map((line) => ({
+          id: line.id,
+          speakerId: line.speakerId,
+          captionText: line.captionText,
+          speechText: line.speechText,
+          selectedAudioTakeId: line.selectedAudioTakeId,
+        })),
+        backgroundAssetId: readAssetId(background),
+        backgroundCueId: background?.id ?? null,
+        cardAssetId: readAssetId(card),
+        cardCueId: card?.id ?? null,
+        cardHeading: readString(card, "heading"),
+        cardCaption: readString(card, "caption"),
+      };
+    }),
   };
 }
 
@@ -66,14 +119,66 @@ function buildLines(sceneValue: SceneFormValue): Scene["lines"] {
   }));
 }
 
+function readInputObject(cue: VisualCue | undefined): Record<string, unknown> {
+  if (cue === undefined || typeof cue.input !== "object" || cue.input === null) {
+    return {};
+  }
+  return { ...(cue.input as Record<string, unknown>) };
+}
+
+function buildVisualCues(baseScene: Scene | undefined, sceneValue: SceneFormValue): VisualCue[] {
+  const managedIds = new Set(
+    [sceneValue.backgroundCueId, sceneValue.cardCueId].filter(
+      (id): id is string => id !== null,
+    ),
+  );
+  const kept = (baseScene?.visualCues ?? []).filter(
+    (cue) => !managedIds.has(cue.id),
+  );
+  const cues: VisualCue[] = [...kept];
+  if (sceneValue.backgroundAssetId !== null) {
+    const baseCue = baseScene?.visualCues.find((cue) => cue.id === sceneValue.backgroundCueId);
+    const input = readInputObject(baseCue);
+    input.assetId = sceneValue.backgroundAssetId;
+    if (baseCue === undefined) {
+      input.fit = "cover";
+    }
+    cues.push({
+      id: sceneValue.backgroundCueId ?? newVisualCueId(sceneValue.id, "bg"),
+      template: { id: mediaFullBleedV1.id, version: mediaFullBleedV1.version },
+      range: { kind: "scene" },
+      input,
+    });
+  }
+  if (sceneValue.cardAssetId !== null) {
+    const baseCue = baseScene?.visualCues.find((cue) => cue.id === sceneValue.cardCueId);
+    const input = readInputObject(baseCue);
+    input.assetId = sceneValue.cardAssetId;
+    input.heading = sceneValue.cardHeading;
+    if (sceneValue.cardCaption.length > 0) {
+      input.caption = sceneValue.cardCaption;
+    } else {
+      delete input.caption;
+    }
+    cues.push({
+      id: sceneValue.cardCueId ?? newVisualCueId(sceneValue.id, "card"),
+      template: { id: mediaCardV1.id, version: mediaCardV1.version },
+      range: { kind: "scene" },
+      input,
+    });
+  }
+  return cues;
+}
+
 export function buildContentDocument(
   base: ContentDocument,
   values: DocumentFormValues,
 ): ContentDocument {
-  const scenes: Scene[] = values.scenes.map((sceneValue, index) => {
-    const baseScene = base.scenes[index];
-    if (baseScene === undefined) {
-      throw new Error(`Scene ${index} の元データがありません`);
+  const baseById = new Map(base.scenes.map((scene) => [scene.id, scene]));
+  const scenes: Scene[] = values.scenes.map((sceneValue) => {
+    const baseScene = baseById.get(sceneValue.id);
+    if (baseScene !== undefined && baseScene.kind !== sceneValue.kind) {
+      throw new Error(`Scene ${sceneValue.id} の種別が元データと一致しません`);
     }
     const flooredDurationMs = Math.floor(sceneValue.durationMs);
     const fixedDurationMs =
@@ -81,24 +186,24 @@ export function buildContentDocument(
         ? flooredDurationMs
         : FALLBACK_DURATION_MS;
     const timing: Scene["timing"] =
-      baseScene.kind === "point" && sceneValue.timingMode !== "fixed"
+      sceneValue.kind === "point" && sceneValue.timingMode !== "fixed"
         ? { mode: "auto" }
         : { mode: "fixed", durationMs: fixedDurationMs };
     const common = {
-      id: baseScene.id,
-      accentColor: sceneValue.accentColor.toUpperCase(),
+      id: sceneValue.id,
+      accentColor: (sceneValue.accentColor || DEFAULT_POINT_ACCENT_COLOR).toUpperCase(),
       timing,
       lines: buildLines(sceneValue),
-      visualCues: baseScene.visualCues,
+      visualCues: buildVisualCues(baseScene, sceneValue),
     };
-    if (baseScene.kind === "intro") {
+    if (sceneValue.kind === "intro") {
       return {
         ...common,
         kind: "intro",
         slots: { title: sceneValue.slots.title, subtitle: sceneValue.slots.subtitle },
       };
     }
-    if (baseScene.kind === "point") {
+    if (sceneValue.kind === "point") {
       return {
         ...common,
         kind: "point",
@@ -111,7 +216,13 @@ export function buildContentDocument(
       slots: { closing: sceneValue.slots.closing },
     };
   });
-  return { ...base, scenes };
+  const sceneIds = new Set(scenes.map((scene) => scene.id));
+  const lineIds = new Set(scenes.flatMap((scene) => scene.lines.map((line) => line.id)));
+  const audioTakes = base.audioTakes.filter((take) => lineIds.has(take.narrationSegmentId));
+  const audioCues = base.audioCues.filter(
+    (cue) => cue.range.kind !== "scene" || sceneIds.has(cue.range.sceneId),
+  );
+  return { ...base, scenes, audioTakes, audioCues };
 }
 
 let lineCounter = 0;
@@ -128,5 +239,39 @@ export function createEmptyLine(sceneId: string): LineFormValue {
     captionText: "",
     speechText: "",
     selectedAudioTakeId: null,
+  };
+}
+
+export function newSceneId(): string {
+  return `scene-point-${randomId()}`;
+}
+
+function randomId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function newVisualCueId(sceneId: string, suffix: string): string {
+  return `visual-${sceneId}-${suffix}`;
+}
+
+export function createPointSceneFormValue(): SceneFormValue {
+  const id = newSceneId();
+  return {
+    id,
+    kind: "point",
+    accentColor: DEFAULT_POINT_ACCENT_COLOR,
+    timingMode: "auto",
+    durationMs: FALLBACK_DURATION_MS,
+    slots: { title: "", subtitle: "", heading: "", body: "", closing: "" },
+    lines: [],
+    backgroundAssetId: null,
+    backgroundCueId: null,
+    cardAssetId: null,
+    cardCueId: null,
+    cardHeading: "",
+    cardCaption: "",
   };
 }

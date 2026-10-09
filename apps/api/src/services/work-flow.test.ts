@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInitialContentDocument } from "@kakeai/contracts";
+import { createInitialContentDocument, createPointScene } from "@kakeai/contracts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
@@ -37,7 +37,40 @@ describe("work and script version flow", () => {
     const edition = work.languageEditions[0]!;
     const current = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
     expect(current.versionNumber).toBe(1);
-    expect(current.content.scenes).toHaveLength(5);
+    expect(current.content.template).toEqual({ id: "explanation-scenes", version: 1 });
+    expect(current.content.scenes.map((scene) => scene.kind)).toEqual([
+      "intro",
+      "point",
+      "point",
+      "point",
+      "outro",
+    ]);
+  });
+
+  it("saves documents with zero or many point scenes", async () => {
+    const work = await works.createWork(prisma, "可変シーン", "ja-JP");
+    const edition = work.languageEditions[0]!;
+
+    const zeroPoints = createInitialContentDocument();
+    zeroPoints.scenes = zeroPoints.scenes.filter((scene) => scene.kind !== "point");
+    const savedZero = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content: zeroPoints,
+    });
+    expect(savedZero.scriptVersion.content.scenes.map((scene) => scene.kind)).toEqual([
+      "intro",
+      "outro",
+    ]);
+
+    const manyPoints = createInitialContentDocument();
+    for (const id of ["scene-point-9", "scene-point-10"]) {
+      manyPoints.scenes.splice(manyPoints.scenes.length - 1, 0, createPointScene(id));
+    }
+    const savedMany = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content: manyPoints,
+    });
+    expect(savedMany.scriptVersion.content.scenes.filter((scene) => scene.kind === "point")).toHaveLength(5);
   });
 
   it("saves a new immutable version and advances current", async () => {

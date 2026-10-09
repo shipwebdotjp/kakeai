@@ -10,8 +10,8 @@
 
 詳細は [spec.md](./spec.md) を参照。
 
-- 横型解説動画の可変Sceneテンプレート、手動素材、セリフ単位の手動音声候補、作品全体BGM、プレビュー、MP4出力を提供する。
-- 新規作品は導入、要点3件、結びで開始し、要点Sceneを追加・削除・並べ替えできる。背景とカードは各Sceneに各1件ずつ指定できる。
+- 横型解説動画の可変Sceneテンプレート、手動素材、手動立ち絵、セリフ単位の手動音声候補、作品全体BGM、プレビュー、MP4出力を提供する。
+- 新規作品は導入、要点3件、結びで開始し、要点Sceneを追加・削除・並べ替えできる。背景とカードは各Sceneに各1件、立ち絵は各Sceneに1体指定できる。
 - `Work`、`LanguageEdition`、`ScriptVersion`、`Asset`、`Job`、`Artifact` をテーブルとして確立する。`NarrationSegment` は独立したテーブルではなく `ScriptVersion.contentJson` 内の構造として持つ。
 - `ja-JP` だけを有効化し、単一Mac上でSQLite、ローカル保存、ローカルワーカーを動かす。
 
@@ -22,8 +22,8 @@
 - 背景とカードの正規化した焦点位置を編集する。
 - 1 Scene内の複数VisualCue、表示順、セリフ区間・offset区間を編集する。
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。
-- Speaker、Character、Character Appearance、立ち絵の選択・配置・編集UIを追加する。
-- chart、table、flow系VisualTemplateと、それらの構造化入力を編集できるようにする。
+- 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、表情自動切替、口パクを追加する。
+- `table.simple@1` と、その列定義、行、強調セルの構造化入力を最初に編集可能にする。続けてchart、flow系VisualTemplateを追加する。
 
 完了条件：固定のフォーム範囲を超える視覚・音声表現を、正本JSONを壊さずに編集、プレビュー、レンダーできる。
 
