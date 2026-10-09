@@ -129,8 +129,7 @@ describe("buildContentDocument", () => {
     expect((cue.input as { focalPoint?: unknown }).focalPoint).toEqual({ x: 0.2, y: 0.8 });
   });
 
-  it("prunes orphaned takes and scene audio cues when a scene is deleted", () => {
-    const base = createInitialContentDocument();
+  it("prunes orphaned takes and scene audio cues when a scene is deleted", () => {    const base = createInitialContentDocument();
     const point = pointScenes(base)[0]!;
     point.lines = [
       {
@@ -161,6 +160,15 @@ describe("buildContentDocument", () => {
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.audioTakes).toEqual([]);
     expect(rebuilt.audioCues.map((cue) => cue.id)).toEqual(["cue-work"]);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("stamps the current template when saving a legacy document", () => {
+    const base = createInitialContentDocument();
+    base.template = { id: "explanation-5-scenes", version: 1 };
+
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.template).toEqual({ id: "explanation-scenes", version: 1 });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });

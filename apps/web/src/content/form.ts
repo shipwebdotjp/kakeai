@@ -1,5 +1,7 @@
 import {
   DEFAULT_POINT_ACCENT_COLOR,
+  TEMPLATE_ID,
+  TEMPLATE_VERSION,
   mediaCardV1,
   mediaFullBleedV1,
   type ContentDocument,
@@ -222,7 +224,13 @@ export function buildContentDocument(
   const audioCues = base.audioCues.filter(
     (cue) => cue.range.kind !== "scene" || sceneIds.has(cue.range.sceneId),
   );
-  return { ...base, scenes, audioTakes, audioCues };
+  return {
+    ...base,
+    template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
+    scenes,
+    audioTakes,
+    audioCues,
+  };
 }
 
 let lineCounter = 0;
