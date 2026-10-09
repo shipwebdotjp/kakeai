@@ -1,4 +1,6 @@
-import { rm, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { dirname } from "node:path";
 import {
   RENDITION_PURPOSE,
   SNAPSHOT_SCHEMA_VERSION,
@@ -278,7 +280,48 @@ export async function deleteAsset(
     await transaction.asset.delete({ where: { id: assetId } });
   });
 
-  await removeStorageFile(directories, asset.storageKey).catch(() => undefined);
+  const originalPath = resolveStoragePath(directories, asset.storageKey);
+  const quarantinePath = resolveStoragePath(directories, `tmp/asset-trash-${randomUUID()}`);
+  await mkdir(dirname(quarantinePath), { recursive: true }).catch(() => undefined);
+  const quarantineResult = await rename(originalPath, quarantinePath)
+    .then(() => "moved" as const)
+    .catch(async (error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        return "failed" as const;
+      }
+      const original = await stat(originalPath).catch(() => null);
+      if (original === null) {
+        return "missing" as const;
+      }
+      const live = await prisma.asset
+        .findUnique({ where: { storageKey: asset.storageKey }, select: { id: true } })
+        .catch(() => null);
+      return live === null ? ("failed" as const) : ("recreated" as const);
+    });
+  if (quarantineResult === "failed") {
+    const live = await prisma.asset
+      .findUnique({ where: { storageKey: asset.storageKey }, select: { id: true } })
+      .catch(() => null);
+    if (live === null) {
+      await removeStorageFile(directories, asset.storageKey).catch(() => undefined);
+    }
+  }
+  const quarantined = quarantineResult === "moved";
+  if (quarantined) {
+    const live = await prisma.asset
+      .findUnique({ where: { storageKey: asset.storageKey }, select: { id: true } })
+      .catch(() => null);
+    if (live !== null) {
+      const recreated = await stat(originalPath).catch(() => null);
+      if (recreated === null) {
+        await rename(quarantinePath, originalPath).catch(() => undefined);
+      } else {
+        await rm(quarantinePath, { force: true }).catch(() => undefined);
+      }
+    } else {
+      await rm(quarantinePath, { force: true }).catch(() => undefined);
+    }
+  }
   for (const rendition of asset.renditions) {
     const stillReferenced = await prisma.assetRendition.count({
       where: { storageKey: rendition.storageKey, assetId: { not: assetId } },

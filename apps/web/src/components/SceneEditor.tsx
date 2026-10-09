@@ -32,10 +32,12 @@ interface TimingFieldsProps {
   control: Control<DocumentFormValues>;
   register: UseFormRegister<DocumentFormValues>;
   sceneIndex: number;
+  sceneKind: "intro" | "point" | "outro";
 }
 
-function TimingFields({ control, register, sceneIndex }: TimingFieldsProps) {
+function TimingFields({ control, register, sceneIndex, sceneKind }: TimingFieldsProps) {
   const mode = useWatch({ control, name: `scenes.${sceneIndex}.timingMode` });
+  const fixedOnly = sceneKind !== "point";
   return (
     <div className="my-2 flex flex-wrap items-center gap-3">
       <label className="inline-flex items-center gap-1.5">
@@ -49,7 +51,7 @@ function TimingFields({ control, register, sceneIndex }: TimingFieldsProps) {
       <label className="inline-flex items-center gap-1.5">
         尺
         <select className={textFieldClass} {...register(`scenes.${sceneIndex}.timingMode`)}>
-          <option value="auto">自動</option>
+          {!fixedOnly && <option value="auto">自動</option>}
           <option value="fixed">固定</option>
         </select>
       </label>
@@ -217,7 +219,12 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
               </label>
             )}
 
-            <TimingFields control={control} register={register} sceneIndex={sceneIndex} />
+            <TimingFields
+              control={control}
+              register={register}
+              sceneIndex={sceneIndex}
+              sceneKind={scene.kind}
+            />
 
             {scene.kind === "point" && (
               <LinesEditor

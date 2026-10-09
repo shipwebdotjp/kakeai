@@ -1,13 +1,10 @@
-export interface ApiErrorBody {
-  code: string;
-  message: string;
-  requestId: string;
-  details?: unknown;
-}
+import { errorEnvelopeSchema, type ErrorEnvelope } from "@kakeai/contracts";
+
+export type ApiErrorBody = ErrorEnvelope["error"];
 
 export class ApiError extends Error {
   readonly status: number;
-  readonly code: string;
+  readonly code: ApiErrorBody["code"];
   readonly requestId: string;
   readonly details: unknown;
 
@@ -47,13 +44,16 @@ async function parseEnvelope<T>(response: Response): Promise<Envelope<T>> {
     | undefined;
 
   if (!response.ok) {
+    const parsedError = errorEnvelopeSchema.safeParse(body);
     throw new ApiError(
       response.status,
-      body?.error ?? {
-        code: "INTERNAL_ERROR",
-        message: "サーバーと通信できませんでした。",
-        requestId: "",
-      },
+      parsedError.success
+        ? parsedError.data.error
+        : {
+            code: "INTERNAL_ERROR",
+            message: "サーバーと通信できませんでした。",
+            requestId: "",
+          },
     );
   }
 

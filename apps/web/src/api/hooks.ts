@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { warningsMetaSchema } from "@kakeai/contracts";
 import type {
   Asset,
   ContentDocument,
@@ -128,7 +129,8 @@ export function useSaveScriptVersion(editionId: string | undefined) {
         `/language-editions/${encodeURIComponent(editionId)}/script-versions`,
         { method: "POST", body: { sourceScriptVersionId: null, content } },
       );
-      const warnings = (response.meta as { warnings?: Warning[] } | undefined)?.warnings ?? [];
+      const parsedMeta = warningsMetaSchema.safeParse(response.meta);
+      const warnings = parsedMeta.success ? parsedMeta.data.warnings : [];
       return { scriptVersion: response.data, warnings };
     },
     onSuccess: () => {

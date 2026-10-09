@@ -105,7 +105,14 @@ export const contentDocumentSchema = z
       ]),
     );
 
-    for (const scene of doc.scenes) {
+    for (const [index, scene] of doc.scenes.entries()) {
+      if ((scene.kind === "intro" || scene.kind === "outro") && scene.timing.mode !== "fixed") {
+        ctx.addIssue({
+          code: "custom",
+          message: `${scene.kind} はテンプレート既定の固定尺を使います`,
+          path: ["scenes", index, "timing"],
+        });
+      }
       const localLineIds = scene.lines.map((line) => line.id);
       for (const line of scene.lines) {
         if (line.speakerId !== null && !speakerIds.has(line.speakerId)) {

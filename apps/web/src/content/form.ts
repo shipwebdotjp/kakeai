@@ -36,7 +36,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
       id: scene.id,
       kind: scene.kind,
       accentColor: scene.accentColor,
-      timingMode: scene.timing.mode,
+      timingMode: scene.kind === "point" ? scene.timing.mode : "fixed",
       durationMs: scene.timing.mode === "fixed" ? scene.timing.durationMs : FALLBACK_DURATION_MS,
       slots: {
         title: scene.kind === "intro" ? scene.slots.title : "",
@@ -75,10 +75,15 @@ export function buildContentDocument(
     if (baseScene === undefined) {
       throw new Error(`Scene ${index} の元データがありません`);
     }
+    const flooredDurationMs = Math.floor(sceneValue.durationMs);
+    const fixedDurationMs =
+      Number.isFinite(sceneValue.durationMs) && flooredDurationMs > 0
+        ? flooredDurationMs
+        : FALLBACK_DURATION_MS;
     const timing: Scene["timing"] =
-      sceneValue.timingMode === "fixed"
-        ? { mode: "fixed", durationMs: sceneValue.durationMs }
-        : { mode: "auto" };
+      baseScene.kind === "point" && sceneValue.timingMode !== "fixed"
+        ? { mode: "auto" }
+        : { mode: "fixed", durationMs: fixedDurationMs };
     const common = {
       id: baseScene.id,
       accentColor: sceneValue.accentColor.toUpperCase(),

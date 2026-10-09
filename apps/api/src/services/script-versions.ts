@@ -1,4 +1,5 @@
 import {
+  RENDITION_PURPOSE,
   collectAssetReferences,
   computeContentWarnings,
   type AssetKindName,
@@ -8,7 +9,7 @@ import {
   type ScriptVersionSummary,
   type Warning,
 } from "@kakeai/contracts";
-import type { PrismaClient } from "../generated/prisma/client.ts";
+import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent, serializeContent } from "../domain/content-json.ts";
 import { toScriptVersion, toScriptVersionSummary } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
@@ -27,16 +28,40 @@ async function requireEdition(prisma: PrismaClient, editionId: string) {
   return edition;
 }
 
+function isVersionNumberConflict(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const candidate = error as { code?: unknown; meta?: unknown };
+  if (candidate.code !== "P2002") {
+    return false;
+  }
+  const target = (candidate.meta as { target?: unknown } | undefined)?.target;
+  if (Array.isArray(target)) {
+    return target.includes("versionNumber");
+  }
+  if (typeof target === "string") {
+    return target.includes("versionNumber");
+  }
+  return target === undefined;
+}
+
 async function validateAssetReferences(
-  prisma: PrismaClient,
+  client: PrismaClient | Prisma.TransactionClient,
   content: ContentDocument,
 ): Promise<void> {
   const references = collectAssetReferences(content);
-  if (references.length === 0) {
+  if (references.length === 0 && content.audioTakes.length === 0) {
     return;
   }
   const ids = [...new Set(references.map((reference) => reference.assetId))];
-  const assets = await prisma.asset.findMany({ where: { id: { in: ids } } });
+  const assets =
+    ids.length === 0
+      ? []
+      : await client.asset.findMany({
+          where: { id: { in: ids } },
+          include: { renditions: true },
+        });
   const assetById = new Map(assets.map((asset) => [asset.id, asset]));
 
   const missing = ids.filter((id) => !assetById.has(id));
@@ -70,6 +95,26 @@ async function validateAssetReferences(
   }
   if (kindIssues.length > 0) {
     throw validationError(kindIssues);
+  }
+
+  const durationIssues: ValidationIssue[] = [];
+  content.audioTakes.forEach((take, index) => {
+    const asset = assetById.get(take.assetId);
+    if (asset === undefined || asset.status !== "ready") {
+      return;
+    }
+    const rendition = asset.renditions.find((row) => row.purpose === RENDITION_PURPOSE);
+    const expectedMs = rendition?.durationMs ?? asset.durationMs;
+    if (expectedMs !== null && take.durationMs !== expectedMs) {
+      durationIssues.push({
+        path: ["audioTakes", index, "durationMs"],
+        code: "invalid_value",
+        message: `音声 ${take.id} の尺が素材と一致しません。`,
+      });
+    }
+  });
+  if (durationIssues.length > 0) {
+    throw validationError(durationIssues);
   }
 }
 
@@ -148,33 +193,41 @@ export async function saveScriptVersion(
     }
   }
 
-  await validateAssetReferences(prisma, content);
-
   const warnings = computeContentWarnings(content);
   const contentJson = serializeContent(content);
 
-  const created = await prisma.$transaction(async (tx) => {
-    const aggregate = await tx.scriptVersion.aggregate({
-      where: { languageEditionId: editionId },
-      _max: { versionNumber: true },
-    });
-    const versionNumber = (aggregate._max.versionNumber ?? 0) + 1;
-    const row = await tx.scriptVersion.create({
-      data: {
-        languageEditionId: editionId,
-        versionNumber,
-        contentSchemaVersion: content.schemaVersion,
-        contentJson,
-        sourceScriptVersionId,
-      },
-    });
-    await tx.languageEdition.update({
-      where: { id: editionId },
-      data: { currentScriptVersionId: row.id },
-    });
-    await tx.work.update({ where: { id: edition.workId }, data: { updatedAt: new Date() } });
-    return row;
-  });
-
-  return { scriptVersion: toScriptVersion(created, deserializeContent(contentJson)), warnings };
+  const maxAttempts = 5;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const created = await prisma.$transaction(async (tx) => {
+        await validateAssetReferences(tx, content);
+        const aggregate = await tx.scriptVersion.aggregate({
+          where: { languageEditionId: editionId },
+          _max: { versionNumber: true },
+        });
+        const versionNumber = (aggregate._max.versionNumber ?? 0) + 1;
+        const row = await tx.scriptVersion.create({
+          data: {
+            languageEditionId: editionId,
+            versionNumber,
+            contentSchemaVersion: content.schemaVersion,
+            contentJson,
+            sourceScriptVersionId,
+          },
+        });
+        await tx.languageEdition.update({
+          where: { id: editionId },
+          data: { currentScriptVersionId: row.id },
+        });
+        await tx.work.update({ where: { id: edition.workId }, data: { updatedAt: new Date() } });
+        return row;
+      });
+      return { scriptVersion: toScriptVersion(created, deserializeContent(contentJson)), warnings };
+    } catch (error) {
+      if (attempt < maxAttempts && isVersionNumberConflict(error)) {
+        continue;
+      }
+      throw error;
+    }
+  }
 }
