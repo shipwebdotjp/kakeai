@@ -9,10 +9,42 @@ import { characterStandingV1 } from "../templates";
 
 export const CONTENT_SCHEMA_VERSION = 1 as const;
 
-export const TEMPLATE_ID = "explanation-5-scenes" as const;
+export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;
 
-const expectedSceneKinds = ["intro", "point", "point", "point", "outro"] as const;
+export const LEGACY_TEMPLATE_ID = "explanation-5-scenes" as const;
+
+function checkSceneComposition(
+  templateId: string,
+  kinds: readonly string[],
+  ctx: z.RefinementCtx,
+): void {
+  if (templateId === LEGACY_TEMPLATE_ID) {
+    const expected = ["intro", "point", "point", "point", "outro"];
+    const matches =
+      kinds.length === expected.length && kinds.every((kind, index) => kind === expected[index]);
+    if (!matches) {
+      ctx.addIssue({
+        code: "custom",
+        message: `${LEGACY_TEMPLATE_ID}@${TEMPLATE_VERSION} は 導入→要点×3→結び の固定5シーンをこの順で要求します`,
+        path: ["scenes"],
+      });
+    }
+    return;
+  }
+  const ordered =
+    kinds.length >= 2 &&
+    kinds[0] === "intro" &&
+    kinds[kinds.length - 1] === "outro" &&
+    kinds.slice(1, -1).every((kind) => kind === "point");
+  if (!ordered) {
+    ctx.addIssue({
+      code: "custom",
+      message: `${TEMPLATE_ID}@${TEMPLATE_VERSION} は 導入→要点0件以上→結び の順でシーンを要求します`,
+      path: ["scenes"],
+    });
+  }
+}
 
 function checkUnique(
   ids: readonly string[],
@@ -42,7 +74,7 @@ export const contentDocumentSchema = z
     schemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
     locale: localeSchema,
     template: z.strictObject({
-      id: z.literal(TEMPLATE_ID),
+      id: z.union([z.literal(TEMPLATE_ID), z.literal(LEGACY_TEMPLATE_ID)]),
       version: z.literal(TEMPLATE_VERSION),
     }),
     speakers: z.array(speakerSchema),
@@ -74,16 +106,7 @@ export const contentDocumentSchema = z
     checkUnique(doc.audioCues.map((cue) => cue.id), ctx, ["audioCues"]);
 
     const kinds = doc.scenes.map((scene) => scene.kind);
-    const compositionMatches =
-      kinds.length === expectedSceneKinds.length &&
-      kinds.every((kind, index) => kind === expectedSceneKinds[index]);
-    if (!compositionMatches) {
-      ctx.addIssue({
-        code: "custom",
-        message: `${TEMPLATE_ID}@${TEMPLATE_VERSION} は 導入→要点×3→結び の固定5シーンをこの順で要求します`,
-        path: ["scenes"],
-      });
-    }
+    checkSceneComposition(doc.template.id, kinds, ctx);
 
     const takeById = new Map(doc.audioTakes.map((take) => [take.id, take]));
     for (const take of doc.audioTakes) {

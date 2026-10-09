@@ -22,7 +22,7 @@ describe("jobInputSnapshotSchema", () => {
           heightPx: null,
         },
       ],
-      template: { id: "explanation-5-scenes", version: 1 },
+      template: { id: "explanation-scenes", version: 1 },
       output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
     };
     expect(renderJobSnapshotSchema.safeParse(snapshot).success).toBe(true);

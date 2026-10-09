@@ -103,4 +103,30 @@ describe("compileDocument", () => {
       expect((error as CompositionCompileError).issues[0]?.code).toBe("invalid_asset_kind");
     }
   });
+
+  it("renders full-bleed below card regardless of document order", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[0];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.visualCues.push({
+      id: "vc-card-first",
+      template: { id: "media.card", version: 1 },
+      range: { kind: "scene" },
+      input: { assetId: "asset-card", heading: "カード" },
+    });
+    scene.visualCues.push({
+      id: "vc-bg-second",
+      template: { id: "media.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      input: { assetId: "asset-bg2", fit: "cover" },
+    });
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const cardPosition = compiled.html.indexOf('id="kakeai-cue-0-1"');
+    const bgPosition = compiled.html.indexOf('id="kakeai-cue-0-2"');
+    expect(cardPosition).toBeGreaterThan(-1);
+    expect(bgPosition).toBeGreaterThan(-1);
+    expect(bgPosition).toBeLessThan(cardPosition);
+  });
 });

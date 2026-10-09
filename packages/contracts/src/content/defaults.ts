@@ -1,5 +1,6 @@
 import { CONTENT_SCHEMA_VERSION, TEMPLATE_ID, TEMPLATE_VERSION, type ContentDocument } from "./document";
 import { SUPPORTED_LOCALES } from "./primitives";
+import type { PointScene } from "./scene";
 
 export const DEFAULT_SCENE_IDS = {
   intro: "scene-intro",
@@ -21,6 +22,20 @@ export const INTRO_FIXED_DURATION_MS = 4000;
 export const OUTRO_FIXED_DURATION_MS = 4000;
 export const SCENE_PADDING_MS = 500;
 export const SILENT_CAPTION_DURATION_MS = 2500;
+
+export const DEFAULT_POINT_ACCENT_COLOR = DEFAULT_ACCENT_COLORS.point1;
+
+export function createPointScene(sceneId: string): PointScene {
+  return {
+    id: sceneId,
+    kind: "point",
+    accentColor: DEFAULT_POINT_ACCENT_COLOR,
+    timing: { mode: "auto" },
+    slots: { heading: "", body: "" },
+    lines: [],
+    visualCues: [],
+  };
+}
 
 export function createInitialContentDocument(): ContentDocument {
   return {

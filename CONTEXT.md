@@ -25,7 +25,7 @@ An immutable candidate audio recording for one Narration Segment. A segment may 
 _Avoid_: Narration segment, BGM
 
 **Scene**:
-A fixed template unit of a Script Version, with typed editorial slots, a duration, and a per-scene accent color.
+A template-defined editorial unit of a Script Version, with typed editorial slots, a duration, and a per-scene accent color.
 _Avoid_: Visual cue, template
 
 **Speaker**:
@@ -57,7 +57,7 @@ A file produced by a Job as its output. It is not an Asset and becomes reusable 
 _Avoid_: Asset, Render
 
 **Visual Template**:
-A reusable visual expression with a defined input contract.
+A trusted reusable visual expression with a defined input contract.
 _Avoid_: Visual cue, scene
 
 **Visual Cue**:

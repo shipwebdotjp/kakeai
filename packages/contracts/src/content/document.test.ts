@@ -67,4 +67,38 @@ describe("contentDocumentSchema", () => {
     const result = contentDocumentSchema.safeParse(doc);
     expect(result.success).toBe(false);
   });
+
+  it("accepts zero point scenes", () => {
+    const doc = validContentDocument();
+    doc.scenes = doc.scenes.filter((scene) => scene.kind !== "point");
+    doc.audioTakes = [];
+    expect(doc.scenes.map((scene) => scene.kind)).toEqual(["intro", "outro"]);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("accepts more than three point scenes", () => {
+    const doc = validContentDocument();
+    const extra = { ...doc.scenes[1]!, id: "scene-point-9", lines: [] };
+    doc.scenes.splice(3, 0, extra);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects an outro before the end", () => {
+    const doc = validContentDocument();
+    doc.scenes.reverse();
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("still reads a legacy five-scene document", () => {
+    const doc = validContentDocument();
+    doc.template = { id: "explanation-5-scenes", version: 1 };
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects a legacy document with a changed composition", () => {
+    const doc = validContentDocument();
+    doc.template = { id: "explanation-5-scenes", version: 1 };
+    doc.scenes = doc.scenes.filter((scene) => scene.kind !== "point");
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
 });

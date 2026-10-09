@@ -154,7 +154,7 @@ describe("render job creation", () => {
     const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
     const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
     expect(snapshot.scriptVersionId).toBe(saved.scriptVersion.id);
-    expect(snapshot.template).toEqual({ id: "explanation-5-scenes", version: 1 });
+    expect(snapshot.template).toEqual({ id: "explanation-scenes", version: 1 });
     expect(snapshot.output).toEqual({ width: 1920, height: 1080, fps: 30, format: "mp4" });
     expect(snapshot.assets.map((asset) => asset.assetId)).toEqual([image.id]);
 

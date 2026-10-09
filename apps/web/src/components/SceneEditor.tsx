@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useFieldArray,
   useForm,
@@ -12,10 +12,16 @@ import {
   type Warning,
 } from "@kakeai/contracts";
 import { useSaveScriptVersion } from "../api/hooks";
-import { buildContentDocument, toFormValues, type DocumentFormValues } from "../content/form";
+import {
+  buildContentDocument,
+  createPointSceneFormValue,
+  toFormValues,
+  type DocumentFormValues,
+} from "../content/form";
 import { errorMessage } from "../lib/errorMessage";
-import { buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { LinesEditor } from "./LinesEditor";
+import { MediaPicker } from "./MediaPicker";
 
 interface SceneEditorProps {
   base: ContentDocument;
@@ -70,6 +76,59 @@ function TimingFields({ control, register, sceneIndex, sceneKind }: TimingFields
   );
 }
 
+interface CueFieldsProps {
+  register: UseFormRegister<DocumentFormValues>;
+  sceneIndex: number;
+  backgroundAssetId: string | null;
+  cardAssetId: string | null;
+  onBackground: (assetId: string | null) => void;
+  onCard: (assetId: string | null) => void;
+}
+
+function CueFields({
+  register,
+  sceneIndex,
+  backgroundAssetId,
+  cardAssetId,
+  onBackground,
+  onCard,
+}: CueFieldsProps) {
+  return (
+    <div className="mt-3 border-t border-dashed border-border pt-2">
+      <MediaPicker
+        label="背景"
+        kinds={["image", "video"]}
+        selectedAssetId={backgroundAssetId}
+        onSelect={onBackground}
+      />
+      <MediaPicker
+        label="カード"
+        kinds={["image", "video"]}
+        selectedAssetId={cardAssetId}
+        onSelect={onCard}
+      />
+      {cardAssetId !== null && (
+        <>
+          <label className="my-2 block">
+            カード見出し
+            <input
+              className={`mt-1 block w-full ${textFieldClass}`}
+              {...register(`scenes.${sceneIndex}.cardHeading`)}
+            />
+          </label>
+          <label className="my-2 block">
+            カード補足文
+            <input
+              className={`mt-1 block w-full ${textFieldClass}`}
+              {...register(`scenes.${sceneIndex}.cardCaption`)}
+            />
+          </label>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function SceneEditor({ base, editionId }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const [issues, setIssues] = useState<string[]>([]);
@@ -84,10 +143,12 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
     return () => clearTimeout(timer);
   }, [savedAtMs]);
 
-  const { register, control, handleSubmit, reset } = useForm<DocumentFormValues>({
-    defaultValues: toFormValues(base),
-  });
-  const { fields } = useFieldArray({ control, name: "scenes" });
+  const { register, control, handleSubmit, reset, getValues, setValue } =
+    useForm<DocumentFormValues>({
+      defaultValues: toFormValues(base),
+    });
+  const { fields, insert, remove, move } = useFieldArray({ control, name: "scenes" });
+  const watchedScenes = useWatch({ control, name: "scenes" }) ?? [];
 
   useEffect(() => {
     reset(toFormValues(base));
@@ -118,6 +179,33 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
       },
     });
   });
+
+  const onAddPoint = () => {
+    const outroIndex = getValues("scenes").findIndex((scene) => scene.kind === "outro");
+    insert(outroIndex === -1 ? fields.length : outroIndex, createPointSceneFormValue());
+  };
+
+  const onMove = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    const scenes = getValues("scenes");
+    if (scenes[index]?.kind !== "point" || scenes[target]?.kind !== "point") {
+      return;
+    }
+    move(index, target);
+  };
+
+  const pointOrdinals = useMemo(() => {
+    let count = 0;
+    return watchedScenes.map((scene) => {
+      if (scene?.kind !== "point") {
+        return 0;
+      }
+      count += 1;
+      return count;
+    });
+  }, [watchedScenes]);
+
+  const pointCount = pointOrdinals.filter((ordinal) => ordinal > 0).length;
 
   return (
     <form onSubmit={onSubmit}>
@@ -157,7 +245,7 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
       )}
 
       {fields.map((field, sceneIndex) => {
-        const scene = base.scenes[sceneIndex];
+        const scene = watchedScenes[sceneIndex];
         if (scene === undefined) {
           return null;
         }
@@ -166,11 +254,40 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
             key={field.id}
             className="my-4 rounded-lg border border-border p-4"
           >
-            <h3 className="mt-0 mb-2 flex items-baseline gap-2 text-lg font-semibold">
-              {SCENE_LABELS[scene.kind] ?? scene.kind}
-              {scene.kind === "point" && ` ${sceneIndex}`}
+            <div className="mt-0 mb-2 flex flex-wrap items-center gap-2">
+              <h3 className="m-0 flex items-baseline gap-2 text-lg font-semibold">
+                {SCENE_LABELS[scene.kind] ?? scene.kind}
+                {scene.kind === "point" && ` ${pointOrdinals[sceneIndex]}`}
+              </h3>
               <span className="text-xs font-normal text-muted-foreground">{scene.id}</span>
-            </h3>
+              {scene.kind === "point" && (
+                <span className="ml-auto flex gap-1">
+                  <button
+                    type="button"
+                    className={buttonNeutralClass}
+                    disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
+                    onClick={() => onMove(sceneIndex, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonNeutralClass}
+                    disabled={watchedScenes[sceneIndex + 1]?.kind !== "point"}
+                    onClick={() => onMove(sceneIndex, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonNeutralClass}
+                    onClick={() => remove(sceneIndex)}
+                  >
+                    削除
+                  </button>
+                </span>
+              )}
+            </div>
 
             {scene.kind === "intro" && (
               <>
@@ -226,6 +343,23 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
               sceneKind={scene.kind}
             />
 
+            <CueFields
+              register={register}
+              sceneIndex={sceneIndex}
+              backgroundAssetId={scene.backgroundAssetId}
+              cardAssetId={scene.cardAssetId}
+              onBackground={(assetId) =>
+                setValue(`scenes.${sceneIndex}.backgroundAssetId`, assetId, { shouldDirty: true })
+              }
+              onCard={(assetId) => {
+                setValue(`scenes.${sceneIndex}.cardAssetId`, assetId, { shouldDirty: true });
+                if (assetId === null) {
+                  setValue(`scenes.${sceneIndex}.cardHeading`, "", { shouldDirty: true });
+                  setValue(`scenes.${sceneIndex}.cardCaption`, "", { shouldDirty: true });
+                }
+              }}
+            />
+
             {scene.kind === "point" && (
               <LinesEditor
                 control={control}
@@ -237,6 +371,13 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
           </section>
         );
       })}
+
+      <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
+        要点を追加
+      </button>
+      {pointCount === 0 && (
+        <p className={metaTextClass}>要点Sceneがありません。追加してください。</p>
+      )}
     </form>
   );
 }
