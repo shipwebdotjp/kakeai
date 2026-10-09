@@ -16,6 +16,9 @@ export const saveScriptVersionRequestSchema = z.strictObject({
   content: contentDocumentSchema,
 });
 
+export const createRenderJobRequestSchema = z.strictObject({});
+
 export type CreateWorkRequest = z.infer<typeof createWorkRequestSchema>;
 export type UpdateWorkRequest = z.infer<typeof updateWorkRequestSchema>;
 export type SaveScriptVersionRequest = z.infer<typeof saveScriptVersionRequestSchema>;
+export type CreateRenderJobRequest = z.infer<typeof createRenderJobRequestSchema>;

@@ -49,12 +49,12 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 - [x] Web UI: HyperFrames Playerで保存済み台本を表示
 - 完了条件: 保存済み台本が実素材でPlayer表示される（縦切りの前半）。
 
-### [ ] P5 レンダー
+### [x] P5 レンダー
 
-- [ ] POST /script-versions/:id/render-jobs（入力スナップショットを固定）
-- [ ] worker render: スナップショット展開→`@hyperframes/producer` でMP4生成→Artifact確定
-- [ ] GET /jobs/:id ポーリング、GET /works/:id/jobs 履歴、POST /jobs/:id/cancel（queuedのみ）
-- [ ] Artifact配信（Range）、Web UIのレンダー履歴とMP4再生
+- [x] POST /script-versions/:id/render-jobs（入力スナップショットを固定）
+- [x] worker render: スナップショット展開→`@hyperframes/producer` でMP4生成→Artifact確定
+- [x] GET /jobs/:id ポーリング、GET /works/:id/jobs 履歴、POST /jobs/:id/cancel（queuedのみ）
+- [x] Artifact配信（Range）、Web UIのレンダー履歴とMP4再生
 - 完了条件: 作成→保存→プレビュー→レンダー→`<video>`再生・シークをオフラインで完了（縦切り完了）。
 
 ### [ ] P6 時間・字幕・音声

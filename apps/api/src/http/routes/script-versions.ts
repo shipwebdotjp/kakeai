@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { createRenderJobRequestSchema } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
-import { pathParam } from "../validation.ts";
+import { parseBody, pathParam } from "../validation.ts";
+import * as renderJobs from "../../services/render-jobs.ts";
 import * as scriptVersions from "../../services/script-versions.ts";
 
 export interface ScriptVersionsRouterDependencies {
@@ -32,6 +34,18 @@ export function createScriptVersionsRouter(dependencies: ScriptVersionsRouterDep
           directories,
           pathParam(req, "scriptVersionId"),
         ),
+      );
+    }),
+  );
+
+  router.post(
+    "/script-versions/:scriptVersionId/render-jobs",
+    asyncHandler(async (req, res) => {
+      parseBody(createRenderJobRequestSchema, req.body);
+      sendData(
+        res,
+        202,
+        await renderJobs.createRenderJob(prisma, pathParam(req, "scriptVersionId")),
       );
     }),
   );

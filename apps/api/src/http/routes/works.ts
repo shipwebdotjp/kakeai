@@ -3,6 +3,7 @@ import { createWorkRequestSchema, updateWorkRequestSchema } from "@kakeai/contra
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
 import { parseBody, pathParam } from "../validation.ts";
+import * as jobs from "../../services/jobs.ts";
 import * as works from "../../services/works.ts";
 
 export function createWorksRouter(prisma: PrismaClient): Router {
@@ -43,6 +44,13 @@ export function createWorksRouter(prisma: PrismaClient): Router {
     asyncHandler(async (req, res) => {
       await works.deleteWork(prisma, pathParam(req, "workId"));
       res.status(204).end();
+    }),
+  );
+
+  router.get(
+    "/works/:workId/jobs",
+    asyncHandler(async (req, res) => {
+      sendData(res, 200, await jobs.listWorkJobs(prisma, pathParam(req, "workId")));
     }),
   );
 
