@@ -1,5 +1,6 @@
 import {
   characterStandingV1,
+  characterStandingV2,
   mediaCardV1,
   mediaFullBleedV1,
   textBodyV1,
@@ -16,7 +17,10 @@ import { renderTextTitle } from "./templates/text-title";
 import { renderTextBody } from "./templates/text-body";
 import { renderMediaFullBleed } from "./templates/media-full-bleed";
 import { renderMediaCard } from "./templates/media-card";
-import { renderCharacterStanding } from "./templates/character-standing";
+import {
+  renderCharacterStandingV1,
+  renderCharacterStandingV2,
+} from "./templates/character-standing";
 
 export const COMPOSITION_ID = "kakeai-main";
 
@@ -48,6 +52,57 @@ export function toSecondsText(ms: number): string {
     return String(seconds);
   }
   return String(Math.round(seconds * 1000) / 1000);
+}
+
+function secondsText(seconds: number): string {
+  return toSecondsText(seconds * 1000);
+}
+
+const BOUNCE_AMPLITUDE_PX = 20;
+const BOUNCE_PERIOD_SEC = 1.6;
+const BOUNCE_MIN_INTERVAL_SEC = 0.12;
+
+interface SpeakingInterval {
+  startMs: number;
+  endMs: number;
+}
+
+interface BounceUnit {
+  elementId: string;
+  startMs: number;
+  endMs: number;
+}
+
+function mergeIntervals(intervals: SpeakingInterval[]): SpeakingInterval[] {
+  const sorted = [...intervals].sort((a, b) => a.startMs - b.startMs);
+  const merged: SpeakingInterval[] = [];
+  for (const interval of sorted) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && interval.startMs <= last.endMs) {
+      last.endMs = Math.max(last.endMs, interval.endMs);
+    } else {
+      merged.push({ ...interval });
+    }
+  }
+  return merged;
+}
+
+function bounceTweenLines(unit: BounceUnit): string[] {
+  const totalSec = (unit.endMs - unit.startMs) / 1000;
+  if (totalSec < BOUNCE_MIN_INTERVAL_SEC) {
+    return [];
+  }
+  const target = `document.getElementById("${unit.elementId}")`;
+  let tween: string;
+  if (totalSec >= BOUNCE_PERIOD_SEC) {
+    const cycles = Math.floor(totalSec / BOUNCE_PERIOD_SEC);
+    const halfSec = BOUNCE_PERIOD_SEC / 2;
+    tween = `tl.to(${target},{y:-${BOUNCE_AMPLITUDE_PX},duration:${secondsText(halfSec)},ease:"sine.inOut",yoyo:true,repeat:${cycles * 2 - 1},immediateRender:false},${toSecondsText(unit.startMs)});`;
+  } else {
+    tween = `tl.to(${target},{y:-${BOUNCE_AMPLITUDE_PX},duration:${secondsText(totalSec / 2)},ease:"sine.inOut",yoyo:true,repeat:1,immediateRender:false},${toSecondsText(unit.startMs)});`;
+  }
+  const reset = `tl.set(${target},{y:0},${toSecondsText(unit.endMs)});`;
+  return [tween, reset];
 }
 
 function shade(hex: string, factor: number): string {
@@ -94,7 +149,9 @@ function renderCueInner(
     case `${mediaCardV1.id}@${mediaCardV1.version}`:
       return renderMediaCard(cue.input, inputPath, assetResolver, mediaElementId);
     case `${characterStandingV1.id}@${characterStandingV1.version}`:
-      return renderCharacterStanding(cue.input, inputPath, document, assetResolver, mediaElementId);
+      return renderCharacterStandingV1(cue.input, inputPath, document, assetResolver, mediaElementId);
+    case `${characterStandingV2.id}@${characterStandingV2.version}`:
+      return renderCharacterStandingV2(cue.input, inputPath, document, assetResolver, mediaElementId);
     default:
       throw new CompositionCompileError([
         {
@@ -259,6 +316,8 @@ const STYLES = [
   ".kakeai-cardheading{margin:0;font-size:56px;font-weight:700;line-height:1.4;}",
   ".kakeai-cardcaption{margin:12px 0 0;font-size:34px;line-height:1.7;}",
   ".kakeai-standing{position:absolute;transform:translate(-50%,-50%);height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
+  ".kakeai-standingv2{position:absolute;transform:translate(-50%,-50%);}",
+  ".kakeai-standingimg{display:block;height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
   ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
   ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:rgba(0,0,0,.55);border-radius:12px;padding:12px 36px;text-shadow:0 2px 12px rgba(0,0,0,.6);}",
 ].join("\n");
@@ -282,6 +341,10 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
   };
 
   const takeById = new Map(document.audioTakes.map((take) => [take.id, take]));
+  const characterIdBySpeakerId = new Map(
+    document.speakers.map((speaker) => [speaker.id, speaker.characterId]),
+  );
+  const bounces: BounceUnit[] = [];
 
   const resolveAudio = (
     assetId: string,
@@ -313,6 +376,22 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       `<section id="${bgId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${bgId}-body" class="kakeai-scenebg" style="background:${background}"></div></section>`,
     );
 
+    const lineById = new Map(scene.lines.map((line) => [line.id, line]));
+    const speakingIntervalsByCharacter = new Map<string, SpeakingInterval[]>();
+    for (const linePlacement of placement.lines) {
+      const line = lineById.get(linePlacement.lineId);
+      if (line === undefined || line.speakerId === null) {
+        continue;
+      }
+      const characterId = characterIdBySpeakerId.get(line.speakerId);
+      if (characterId === null || characterId === undefined) {
+        continue;
+      }
+      const intervals = speakingIntervalsByCharacter.get(characterId) ?? [];
+      intervals.push({ startMs: linePlacement.startMs, endMs: linePlacement.endMs });
+      speakingIntervalsByCharacter.set(characterId, intervals);
+    }
+
     const orderedCues = scene.visualCues
       .map((cue, cueIndex) => ({ cue, cueIndex }))
       .sort((a, b) => cueLayerRank(a.cue) - cueLayerRank(b.cue) || a.cueIndex - b.cueIndex);
@@ -338,6 +417,27 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         atSec: fadeAtSec(absoluteStartMs),
         durationSec: fadeDurationSec(cueDurationMs / 1000),
       });
+
+      if (
+        cue.template.id === characterStandingV2.id &&
+        cue.template.version === characterStandingV2.version
+      ) {
+        const parsed = characterStandingV2.inputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          const intervals = speakingIntervalsByCharacter.get(parsed.data.characterId);
+          if (intervals !== undefined) {
+            const cueStartMs = absoluteStartMs;
+            const cueEndMs = absoluteStartMs + cueDurationMs;
+            for (const interval of mergeIntervals(intervals)) {
+              const startMs = Math.max(interval.startMs, cueStartMs);
+              const endMs = Math.min(interval.endMs, cueEndMs);
+              if (endMs > startMs) {
+                bounces.push({ elementId: mediaId, startMs, endMs });
+              }
+            }
+          }
+        }
+      }
     }
 
     const slotHtml = renderSceneSlot(scene, placement.sceneIndex);
@@ -350,7 +450,6 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       durationSec: fadeDurationSec(placement.durationMs / 1000),
     });
 
-    const lineById = new Map(scene.lines.map((line) => [line.id, line]));
     placement.lines.forEach((linePlacement, lineIndex) => {
       const line = lineById.get(linePlacement.lineId);
       if (line === undefined) {
@@ -436,6 +535,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     (fade) =>
       `tl.from(document.getElementById("${fade.bodyId}"),{opacity:0,duration:${fade.durationSec},ease:"power1.out",immediateRender:false},${fade.atSec});`,
   );
+  const bounceLines = bounces.flatMap(bounceTweenLines);
 
   const html = [
     "<!doctype html>",
@@ -455,6 +555,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     "<script>",
     "const tl = gsap.timeline({ paused: true });",
     ...tweenLines,
+    ...bounceLines,
     `window.__timelines["${COMPOSITION_ID}"] = tl;`,
     "</script>",
     "</body>",

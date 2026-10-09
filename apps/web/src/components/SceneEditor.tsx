@@ -308,10 +308,17 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
           });
         }
       });
-      if (scene?.standingCharacterId === character.id) {
-        setValue(`scenes.${sceneIndex}.standingCharacterId`, null, { shouldDirty: true });
-        setValue(`scenes.${sceneIndex}.standingAppearanceId`, null, { shouldDirty: true });
-      }
+      (scene?.standings ?? []).forEach((standing, standingIndex) => {
+        if (standing?.characterId !== character.id) {
+          return;
+        }
+        setValue(`scenes.${sceneIndex}.standings.${standingIndex}.characterId`, null, {
+          shouldDirty: true,
+        });
+        setValue(`scenes.${sceneIndex}.standings.${standingIndex}.appearanceId`, null, {
+          shouldDirty: true,
+        });
+      });
     });
   };
 

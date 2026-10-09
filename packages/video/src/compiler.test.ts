@@ -284,4 +284,148 @@ describe("compileDocument", () => {
     const slotPosition = compiled.html.indexOf('id="kakeai-scene-1-slot"');
     expect(slotPosition).toBeGreaterThan(textPosition);
   });
+
+  it("renders character.standing@2 at the selected side", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+      ],
+    });
+    const scene = document.scenes[1];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.visualCues.push({
+      id: "vc-standing-right",
+      template: { id: "character.standing", version: 2 },
+      range: { kind: "scene" },
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        side: "right",
+        scale: 1.5,
+      },
+    });
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.assetIds).toContain("asset-rin");
+    expect(compiled.html).toContain('class="kakeai-standingv2"');
+    expect(compiled.html).toContain('class="kakeai-standingimg"');
+    expect(compiled.html).toContain("left:73%;top:86%;");
+    expect(compiled.html).toContain("width:720px;");
+  });
+
+  it("bounces only the standing of the speaking character", () => {
+    const document = validContentDocument();
+    document.characters.push(
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-rin", assetId: "asset-rin", expression: "normal", pose: "front" },
+        ],
+      },
+      {
+        id: "character-mika",
+        name: "ミカ",
+        appearances: [
+          { id: "appearance-mika", assetId: "asset-mika", expression: "normal", pose: "front" },
+        ],
+      },
+    );
+    document.speakers.push(
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: null },
+      { id: "speaker-mika", name: "ミカ", characterId: "character-mika", voiceProfileId: null },
+    );
+    const scene = document.scenes[1];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.lines = [
+      {
+        id: "line-rin",
+        speakerId: "speaker-rin",
+        captionText: "リンです。",
+        speechText: "りんです。",
+        selectedAudioTakeId: null,
+      },
+    ];
+    scene.visualCues = [
+      {
+        id: "vc-left",
+        template: { id: "character.standing", version: 2 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-mika",
+          appearanceId: "appearance-mika",
+          side: "left",
+          scale: 1,
+        },
+      },
+      {
+        id: "vc-right",
+        template: { id: "character.standing", version: 2 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-rin",
+          side: "right",
+          scale: 1,
+        },
+      },
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain('document.getElementById("kakeai-cue-1-1-media")');
+    expect(compiled.html).toContain("y:-20");
+    expect(compiled.html).not.toContain('document.getElementById("kakeai-cue-1-0-media")');
+  });
+
+  it("does not schedule a bounce for character.standing@1", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+      ],
+    });
+    document.speakers.push({
+      id: "speaker-rin",
+      name: "リン",
+      characterId: "character-rin",
+      voiceProfileId: null,
+    });
+    const scene = document.scenes[1];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.lines = [
+      {
+        id: "line-rin",
+        speakerId: "speaker-rin",
+        captionText: "リンです。",
+        speechText: "りんです。",
+        selectedAudioTakeId: null,
+      },
+    ];
+    scene.visualCues = [
+      {
+        id: "vc-standing",
+        template: { id: "character.standing", version: 1 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          x: 0.85,
+          y: 0.85,
+          scale: 1,
+        },
+      },
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain('class="kakeai-standing"');
+    expect(compiled.html).not.toContain("y:-20");
+  });
 });

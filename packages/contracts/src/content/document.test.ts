@@ -30,6 +30,56 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentInputSchema.safeParse(v1).success).toBe(true);
   });
 
+  it("accepts a character.standing@2 cue that references an existing appearance", () => {
+    const doc = validContentDocument();
+    doc.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+      ],
+    });
+    doc.scenes[1]!.visualCues = [
+      {
+        id: "vc-standing-left",
+        template: { id: "character.standing", version: 2 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          side: "left",
+          scale: 1,
+        },
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects a character.standing@2 cue that references a missing appearance", () => {
+    const doc = validContentDocument();
+    doc.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+      ],
+    });
+    doc.scenes[1]!.visualCues = [
+      {
+        id: "vc-standing-left",
+        template: { id: "character.standing", version: 2 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-missing",
+          side: "left",
+          scale: 1,
+        },
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
   it("rejects an unknown template id or version", () => {
     const doc = validContentDocument();
     doc.scenes[1]!.visualCues = [

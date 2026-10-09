@@ -86,7 +86,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
-MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに1体を選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。表情の自動切替と口パクは後続フェーズで追加する。
+MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに `character.standing@2` を左右1体ずつ最大2体選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。ただし描画時は、立ち絵の `characterId` に対応する話者が話すセリフ区間だけ、その立ち絵がゆっくり上下にバウンドする。シーン内での立ち絵切替、表情の自動切替、口パクは後続フェーズで追加する。
 
 ## シーンとVisualCue
 
@@ -155,7 +155,7 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
 - `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
 
-MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`character.standing@1` を最大1件、いずれも `{ "kind": "scene" }` で編集する。背景とカードは画像・動画から、立ち絵は画像から選ぶ。描画順は背景、カード、立ち絵、Scene本文・字幕とし、立ち絵は正規化座標と倍率を編集する。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。
+MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`character.standing@2` を左右1体ずつ最大2件、いずれも `{ "kind": "scene" }` で編集する。背景とカードは画像・動画から、立ち絵は画像から選ぶ。立ち絵は左右 `side` と倍率を編集し、位置はテンプレートが `side` から正規化座標へ写像する。描画順は背景、カード、立ち絵、Scene本文・字幕とする。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。`@1` の保存済み版は `@1` のまま描画され、見た目を変えない。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
@@ -174,7 +174,8 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `text.body@1` | `heading`, `body` | 対応（要点のスロット描画） |
 | `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?` | 対応 |
 | `media.card@1` | `assetId`, 見出し、補足文, `focalPoint?` | 対応 |
-| `character.standing@1` | `characterId`, `appearanceId`, 正規化座標、倍率 | 対応。MVPではScene全体に最大1件を編集する |
+| `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
+| `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
 | `chart.bar@1` | タイトル、系列、数値、単位 | 将来 |
 | `table.simple@1` | 列定義、行、強調セル | Phase 1で最初に追加 |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |
@@ -213,7 +214,7 @@ Characterなど位置を持つテンプレートは、出力ピクセルでは�
 }
 ```
 
-これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
+これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。`character.standing@2` は `side` を正規化座標へ写像する（左 `x=0.27` / 右 `x=0.73` / `y=0.86`）。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
 
 BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset自体を「BGM型」に固定せず、同じ音声素材をナレーション以外の用途にも利用可能にする。`AudioCue.range` も `kind` による判別union（`work` / `scene`）とする。MVPの編集画面は `role: "bgm"` と `{ "kind": "work" }` のAudioCueを1件だけ編集し、既定値は `gainDb: -18`、`loop: true` とする。Scene別・複数BGM・SFXの編集はMVP後とし、既存のAudioCue値は保持する。
 

@@ -62,12 +62,26 @@ export const characterStandingV1 = {
   }),
 };
 
+export const standingSideSchema = z.enum(["left", "right"]);
+
+export const characterStandingV2 = {
+  id: "character.standing",
+  version: 2,
+  inputSchema: z.strictObject({
+    characterId: idSchema,
+    appearanceId: idSchema,
+    side: standingSideSchema,
+    scale: z.number().positive(),
+  }),
+};
+
 export const visualTemplateDefinitions = [
   textTitleV1,
   textBodyV1,
   mediaFullBleedV1,
   mediaCardV1,
   characterStandingV1,
+  characterStandingV2,
 ] as const;
 
 export const assetBearingTemplateKeys: ReadonlySet<string> = new Set([

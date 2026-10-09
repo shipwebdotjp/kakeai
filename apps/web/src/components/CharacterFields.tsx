@@ -68,10 +68,15 @@ export function CharacterFields({
     const characterId = getValues(`characters.${characterIndex}.id`);
     remove(index);
     getValues("scenes").forEach((scene, sceneIndex) => {
-      if (scene?.standingCharacterId === characterId && scene?.standingAppearanceId === id) {
-        setValue(`scenes.${sceneIndex}.standingCharacterId`, null, { shouldDirty: true });
-        setValue(`scenes.${sceneIndex}.standingAppearanceId`, null, { shouldDirty: true });
-      }
+      (scene?.standings ?? []).forEach((standing, standingIndex) => {
+        if (standing?.characterId === characterId && standing?.appearanceId === id) {
+          setValue(
+            `scenes.${sceneIndex}.standings.${standingIndex}.appearanceId`,
+            null,
+            { shouldDirty: true },
+          );
+        }
+      });
     });
   };
 

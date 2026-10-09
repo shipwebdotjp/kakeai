@@ -20,15 +20,13 @@ function pointScenes(document: ContentDocument): PointScene[] {
 function standingInput(cue: { input: unknown }): {
   characterId: string;
   appearanceId: string;
-  x: number;
-  y: number;
+  side: "left" | "right";
   scale: number;
 } {
   return cue.input as {
     characterId: string;
     appearanceId: string;
-    x: number;
-    y: number;
+    side: "left" | "right";
     scale: number;
   };
 }
@@ -312,20 +310,26 @@ describe("buildContentDocument", () => {
       },
     ]);
     const target = values.scenes.find((scene) => scene.id === point.id)!;
-    expect(target.standingCueId).toBe("vc-standing");
-    expect(target.standingCharacterId).toBe("character-rin");
-    expect(target.standingAppearanceId).toBe("appearance-smile");
+    expect(target.standings).toEqual([
+      {
+        cueId: "vc-standing",
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        side: "right",
+        scale: 1,
+      },
+    ]);
 
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.characters[0]!.id).toBe("character-rin");
     expect(rebuilt.characters[0]!.appearances[0]!.id).toBe("appearance-smile");
     const cue = rebuilt.scenes.find((scene) => scene.id === point.id)!.visualCues[0]!;
     expect(cue.id).toBe("vc-standing");
+    expect(cue.template).toEqual({ id: "character.standing", version: 2 });
     expect(standingInput(cue)).toEqual({
       characterId: "character-rin",
       appearanceId: "appearance-smile",
-      x: 0.85,
-      y: 0.85,
+      side: "right",
       scale: 1,
     });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
@@ -345,21 +349,67 @@ describe("buildContentDocument", () => {
 
     const values = toFormValues(base);
     const intro = values.scenes[0]!;
-    intro.standingCharacterId = "character-rin";
-    intro.standingAppearanceId = "appearance-smile";
+    intro.standings = [
+      {
+        cueId: null,
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        side: "left",
+        scale: 1,
+      },
+    ];
 
     const rebuilt = buildContentDocument(base, values);
     const cue = rebuilt.scenes[0]!.visualCues.find(
       (entry) => entry.template.id === "character.standing",
     )!;
-    expect(cue.id).toBe("visual-scene-intro-standing");
+    expect(cue.id).toBe("visual-scene-intro-standing-left");
     expect(standingInput(cue)).toEqual({
       characterId: "character-rin",
       appearanceId: "appearance-smile",
-      x: 0.85,
-      y: 0.85,
+      side: "left",
       scale: 1,
     });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("emits two character.standing@2 cues for the left and right slots", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        ],
+      },
+    ];
+
+    const values = toFormValues(base);
+    values.scenes[0]!.standings = [
+      {
+        cueId: null,
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        side: "left",
+        scale: 1,
+      },
+      {
+        cueId: null,
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        side: "right",
+        scale: 0.8,
+      },
+    ];
+
+    const rebuilt = buildContentDocument(base, values);
+    const cues = rebuilt.scenes[0]!.visualCues.filter(
+      (cue) => cue.template.id === "character.standing",
+    );
+    expect(cues.map((cue) => cue.template.version)).toEqual([2, 2]);
+    expect(cues.map((cue) => standingInput(cue).side)).toEqual(["left", "right"]);
+    expect(cues.map((cue) => standingInput(cue).scale)).toEqual([1, 0.8]);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
@@ -390,8 +440,7 @@ describe("buildContentDocument", () => {
     ];
 
     const values = toFormValues(base);
-    values.scenes[0]!.standingCharacterId = null;
-    values.scenes[0]!.standingAppearanceId = null;
+    values.scenes[0]!.standings = [];
 
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.scenes[0]!.visualCues).toEqual([]);
@@ -460,15 +509,35 @@ describe("buildContentDocument", () => {
 
     const values = toFormValues(base);
     const target = values.scenes.find((scene) => scene.id === point.id)!;
-    expect(target.standingCueId).toBe("vc-standing");
-    target.standingScale = 1.5;
+    expect(target.standings.map((standing) => standing.cueId)).toEqual([
+      "vc-standing",
+      "vc-standing-extra",
+    ]);
+    expect(target.standings.map((standing) => standing.side)).toEqual(["right", "left"]);
+    target.standings[0]!.scale = 1.5;
 
     const rebuilt = buildContentDocument(base, values);
     const rebuiltPoint = pointScenes(rebuilt)[0]!;
     const byId = new Map(rebuiltPoint.visualCues.map((cue) => [cue.id, cue]));
-    expect(standingInput(byId.get("vc-lines-standing")!).scale).toBe(0.5);
-    expect(standingInput(byId.get("vc-standing")!).scale).toBe(1.5);
-    expect(standingInput(byId.get("vc-standing-extra")!).scale).toBe(0.75);
+    const lineCue = byId.get("vc-lines-standing")!;
+    expect(lineCue.template).toEqual({ id: "character.standing", version: 1 });
+    expect(standingInput(lineCue).scale).toBe(0.5);
+    const mainCue = byId.get("vc-standing")!;
+    expect(mainCue.template).toEqual({ id: "character.standing", version: 2 });
+    expect(standingInput(mainCue)).toEqual({
+      characterId: "character-rin",
+      appearanceId: "appearance-smile",
+      side: "right",
+      scale: 1.5,
+    });
+    const extraCue = byId.get("vc-standing-extra")!;
+    expect(extraCue.template).toEqual({ id: "character.standing", version: 2 });
+    expect(standingInput(extraCue)).toEqual({
+      characterId: "character-rin",
+      appearanceId: "appearance-smile",
+      side: "left",
+      scale: 0.75,
+    });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 

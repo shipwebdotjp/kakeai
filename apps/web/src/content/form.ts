@@ -3,6 +3,7 @@ import {
   TEMPLATE_ID,
   TEMPLATE_VERSION,
   characterStandingV1,
+  characterStandingV2,
   mediaCardV1,
   mediaFullBleedV1,
   type Character,
@@ -57,11 +58,13 @@ export interface SpeakerFormValue {
   voiceProfileId: string | null;
 }
 
+export type StandingSide = "left" | "right";
+
 export interface StandingFormValue {
+  cueId: string | null;
   characterId: string | null;
   appearanceId: string | null;
-  x: number;
-  y: number;
+  side: StandingSide;
   scale: number;
 }
 
@@ -85,12 +88,7 @@ export interface SceneFormValue {
   cardCueId: string | null;
   cardHeading: string;
   cardCaption: string;
-  standingCueId: string | null;
-  standingCharacterId: string | null;
-  standingAppearanceId: string | null;
-  standingX: number;
-  standingY: number;
-  standingScale: number;
+  standings: StandingFormValue[];
 }
 
 export interface DocumentFormValues {
@@ -103,18 +101,17 @@ export interface DocumentFormValues {
 const FALLBACK_DURATION_MS = 4000;
 export const DEFAULT_BGM_GAIN_DB = -18;
 export const DEFAULT_BGM_LOOP = true;
-export const DEFAULT_STANDING_X = 0.85;
-export const DEFAULT_STANDING_Y = 0.85;
 export const DEFAULT_STANDING_SCALE = 1;
 export const MIN_STANDING_SCALE = 0.1;
 export const MAX_STANDING_SCALE = 3;
 export const STANDING_SCALE_STEP = 0.05;
+export const STANDING_SIDES: readonly StandingSide[] = ["left", "right"];
 export const DEFAULT_APPEARANCE_EXPRESSION = "normal";
 export const DEFAULT_APPEARANCE_POSE = "front";
 
 const FULL_BLEED_KEY = `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`;
 const CARD_KEY = `${mediaCardV1.id}@${mediaCardV1.version}`;
-const STANDING_KEY = `${characterStandingV1.id}@${characterStandingV1.version}`;
+const STANDING_TEMPLATE_ID = characterStandingV1.id;
 
 function cueKey(cue: VisualCue): string {
   return `${cue.template.id}@${cue.template.version}`;
@@ -146,13 +143,33 @@ function readString(cue: VisualCue | undefined, field: string): string {
 export interface StandingCueInput {
   characterId: string;
   appearanceId: string;
-  x: number;
-  y: number;
+  side: StandingSide;
   scale: number;
 }
 
 function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
   if (cue === undefined) {
+    return null;
+  }
+  if (
+    cue.template.id === characterStandingV2.id &&
+    cue.template.version === characterStandingV2.version
+  ) {
+    const parsed = characterStandingV2.inputSchema.safeParse(cue.input);
+    if (!parsed.success) {
+      return null;
+    }
+    return {
+      characterId: parsed.data.characterId,
+      appearanceId: parsed.data.appearanceId,
+      side: parsed.data.side,
+      scale: parsed.data.scale,
+    };
+  }
+  if (
+    cue.template.id !== characterStandingV1.id ||
+    cue.template.version !== characterStandingV1.version
+  ) {
     return null;
   }
   const parsed = characterStandingV1.inputSchema.safeParse(cue.input);
@@ -162,10 +179,42 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
   return {
     characterId: parsed.data.characterId,
     appearanceId: parsed.data.appearanceId,
-    x: parsed.data.x,
-    y: parsed.data.y,
+    side: parsed.data.x < 0.5 ? "left" : "right",
     scale: parsed.data.scale,
   };
+}
+
+interface SelectedStandingCue {
+  cue: VisualCue;
+  standing: StandingCueInput;
+}
+
+function selectManagedStandingCues(scene: Scene): SelectedStandingCue[] {
+  const parsed = scene.visualCues
+    .filter((cue) => cue.template.id === STANDING_TEMPLATE_ID && cue.range.kind === "scene")
+    .map((cue) => ({ cue, standing: readStanding(cue) }))
+    .filter((entry): entry is SelectedStandingCue => entry.standing !== null)
+    .sort((a, b) => b.cue.template.version - a.cue.template.version);
+  const seenSides = new Set<StandingSide>();
+  const selected: SelectedStandingCue[] = [];
+  for (const entry of parsed) {
+    if (!STANDING_SIDES.includes(entry.standing.side) || seenSides.has(entry.standing.side)) {
+      continue;
+    }
+    seenSides.add(entry.standing.side);
+    selected.push(entry);
+  }
+  return selected;
+}
+
+function readStandings(scene: Scene): StandingFormValue[] {
+  return selectManagedStandingCues(scene).map(({ cue, standing }) => ({
+    cueId: cue.id,
+    characterId: standing.characterId,
+    appearanceId: standing.appearanceId,
+    side: standing.side,
+    scale: standing.scale,
+  }));
 }
 
 function readCharacters(content: ContentDocument): CharacterFormValue[] {
@@ -209,8 +258,6 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
     scenes: content.scenes.map((scene) => {
       const background = findManagedCue(scene, FULL_BLEED_KEY);
       const card = findManagedCue(scene, CARD_KEY);
-      const standingCue = findManagedCue(scene, STANDING_KEY);
-      const standing = readStanding(standingCue);
       return {
         id: scene.id,
         kind: scene.kind,
@@ -238,12 +285,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
         cardCueId: card?.id ?? null,
         cardHeading: readString(card, "heading"),
         cardCaption: readString(card, "caption"),
-        standingCueId: standingCue?.id ?? null,
-        standingCharacterId: standing?.characterId ?? null,
-        standingAppearanceId: standing?.appearanceId ?? null,
-        standingX: standing?.x ?? DEFAULT_STANDING_X,
-        standingY: standing?.y ?? DEFAULT_STANDING_Y,
-        standingScale: standing?.scale ?? DEFAULT_STANDING_SCALE,
+        standings: readStandings(scene),
       };
     }),
     bgm: {
@@ -305,7 +347,7 @@ function standingReferencesMissing(
   characterIds: ReadonlySet<string>,
   appearanceIdsByCharacter: ReadonlyMap<string, ReadonlySet<string>>,
 ): boolean {
-  if (cueKey(cue) !== STANDING_KEY) {
+  if (cue.template.id !== STANDING_TEMPLATE_ID) {
     return false;
   }
   const standing = readStanding(cue);
@@ -341,10 +383,6 @@ function buildCharacters(values: CharacterFormValue[]): Character[] {
   }));
 }
 
-function normalizeUnit(value: number, fallback: number): number {
-  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
-}
-
 function normalizeScale(value: number, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
@@ -355,10 +393,16 @@ function buildVisualCues(
   characterIds: ReadonlySet<string>,
   appearanceIdsByCharacter: ReadonlyMap<string, ReadonlySet<string>>,
 ): VisualCue[] {
+  const managedStandingIds = (
+    baseScene === undefined ? [] : selectManagedStandingCues(baseScene)
+  ).map((entry) => entry.cue.id);
   const managedIds = new Set(
-    [sceneValue.backgroundCueId, sceneValue.cardCueId, sceneValue.standingCueId].filter(
-      (id): id is string => id !== null,
-    ),
+    [
+      sceneValue.backgroundCueId,
+      sceneValue.cardCueId,
+      ...managedStandingIds,
+      ...sceneValue.standings.map((standing) => standing.cueId),
+    ].filter((id): id is string => id !== null),
   );
   const kept = (baseScene?.visualCues ?? []).filter(
     (cue) =>
@@ -397,23 +441,29 @@ function buildVisualCues(
       input,
     });
   }
-  if (sceneValue.standingCharacterId !== null && sceneValue.standingAppearanceId !== null) {
-    const appearanceIds = appearanceIdsByCharacter.get(sceneValue.standingCharacterId);
-    if (appearanceIds === undefined || !appearanceIds.has(sceneValue.standingAppearanceId)) {
-      return cues;
+  const emittedSides = new Set<StandingSide>();
+  for (const standing of sceneValue.standings) {
+    if (standing.characterId === null || standing.appearanceId === null) {
+      continue;
     }
-    const baseCue = baseScene?.visualCues.find((cue) => cue.id === sceneValue.standingCueId);
-    const input = readInputObject(baseCue);
-    input.characterId = sceneValue.standingCharacterId;
-    input.appearanceId = sceneValue.standingAppearanceId;
-    input.x = normalizeUnit(sceneValue.standingX, DEFAULT_STANDING_X);
-    input.y = normalizeUnit(sceneValue.standingY, DEFAULT_STANDING_Y);
-    input.scale = normalizeScale(sceneValue.standingScale, DEFAULT_STANDING_SCALE);
+    if (!STANDING_SIDES.includes(standing.side) || emittedSides.has(standing.side)) {
+      continue;
+    }
+    const appearanceIds = appearanceIdsByCharacter.get(standing.characterId);
+    if (appearanceIds === undefined || !appearanceIds.has(standing.appearanceId)) {
+      continue;
+    }
+    emittedSides.add(standing.side);
     cues.push({
-      id: sceneValue.standingCueId ?? newVisualCueId(sceneValue.id, "standing"),
-      template: { id: characterStandingV1.id, version: characterStandingV1.version },
+      id: standing.cueId ?? newVisualCueId(sceneValue.id, `standing-${standing.side}`),
+      template: { id: characterStandingV2.id, version: characterStandingV2.version },
       range: { kind: "scene" },
-      input,
+      input: {
+        characterId: standing.characterId,
+        appearanceId: standing.appearanceId,
+        side: standing.side,
+        scale: normalizeScale(standing.scale, DEFAULT_STANDING_SCALE),
+      },
     });
   }
   return cues;
@@ -616,12 +666,7 @@ export function createPointSceneFormValue(): SceneFormValue {
     cardCueId: null,
     cardHeading: "",
     cardCaption: "",
-    standingCueId: null,
-    standingCharacterId: null,
-    standingAppearanceId: null,
-    standingX: DEFAULT_STANDING_X,
-    standingY: DEFAULT_STANDING_Y,
-    standingScale: DEFAULT_STANDING_SCALE,
+    standings: [],
   };
 }
 
@@ -682,9 +727,11 @@ export function countCharacterFormUsage(
   let standing = 0;
   let lines = 0;
   for (const scene of values.scenes) {
-    if (scene.standingCharacterId === characterId) {
-      standing += 1;
-      sceneIds.add(scene.id);
+    for (const entry of scene.standings) {
+      if (entry.characterId === characterId) {
+        standing += 1;
+        sceneIds.add(scene.id);
+      }
     }
     for (const line of scene.lines) {
       if (line.speakerId !== null && speakerIds.has(line.speakerId)) {
@@ -734,7 +781,7 @@ function countStandingReferences(
   const sceneIds = new Set<string>();
   for (const scene of content.scenes) {
     for (const cue of scene.visualCues) {
-      if (cueKey(cue) !== STANDING_KEY) {
+      if (cue.template.id !== STANDING_TEMPLATE_ID) {
         continue;
       }
       const standing = readStanding(cue);

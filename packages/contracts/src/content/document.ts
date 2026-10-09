@@ -5,7 +5,7 @@ import { characterSchema } from "./character";
 import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
-import { characterStandingV1 } from "../templates";
+import { characterStandingV1, characterStandingV2 } from "../templates";
 
 export const CONTENT_SCHEMA_VERSION = 2 as const;
 export const LEGACY_CONTENT_SCHEMA_VERSION = 1 as const;
@@ -196,23 +196,32 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
         });
       }
 
-      if (
-        cue.template.id === characterStandingV1.id &&
-        cue.template.version === characterStandingV1.version
-      ) {
-        const parsed = characterStandingV1.inputSchema.safeParse(cue.input);
-        if (parsed.success) {
-          const appearanceIds = appearanceIdsByCharacter.get(parsed.data.characterId);
+      if (cue.template.id === characterStandingV1.id) {
+        let standingDefinition: typeof characterStandingV1 | typeof characterStandingV2 | undefined;
+        if (cue.template.version === characterStandingV1.version) {
+          standingDefinition = characterStandingV1;
+        } else if (cue.template.version === characterStandingV2.version) {
+          standingDefinition = characterStandingV2;
+        } else {
+          standingDefinition = undefined;
+        }
+        const parsed =
+          standingDefinition === undefined
+            ? undefined
+            : standingDefinition.inputSchema.safeParse(cue.input);
+        if (parsed !== undefined && parsed.success) {
+          const { characterId, appearanceId } = parsed.data;
+          const appearanceIds = appearanceIdsByCharacter.get(characterId);
           if (appearanceIds === undefined) {
             ctx.addIssue({
               code: "custom",
-              message: `VisualCue ${cue.id} の characterId が存在しません: ${parsed.data.characterId}`,
+              message: `VisualCue ${cue.id} の characterId が存在しません: ${characterId}`,
               path: ["scenes"],
             });
-          } else if (!appearanceIds.has(parsed.data.appearanceId)) {
+          } else if (!appearanceIds.has(appearanceId)) {
             ctx.addIssue({
               code: "custom",
-              message: `VisualCue ${cue.id} の appearanceId が存在しません: ${parsed.data.appearanceId}`,
+              message: `VisualCue ${cue.id} の appearanceId が存在しません: ${appearanceId}`,
               path: ["scenes"],
             });
           }
