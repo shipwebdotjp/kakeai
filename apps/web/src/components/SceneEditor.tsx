@@ -11,11 +11,13 @@ import {
   type ContentDocument,
   type Warning,
 } from "@kakeai/contracts";
+import { resolveTimeline } from "@kakeai/video/timeline";
 import { useSaveScriptVersion } from "../api/hooks";
 import {
   buildContentDocument,
   createPointSceneFormValue,
   toFormValues,
+  DEFAULT_BGM_GAIN_DB,
   type DocumentFormValues,
 } from "../content/form";
 import { errorMessage } from "../lib/errorMessage";
@@ -207,6 +209,26 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
 
   const pointCount = pointOrdinals.filter((ordinal) => ordinal > 0).length;
 
+  const allValues = useWatch({ control }) as DocumentFormValues | undefined;
+  const timing = useMemo(() => {
+    if (allValues === undefined || allValues.scenes === undefined) {
+      return { placements: [] as ReturnType<typeof resolveTimeline>["scenes"], error: null };
+    }
+    try {
+      const document = buildContentDocument(base, allValues);
+      return { placements: resolveTimeline(document).scenes, error: null };
+    } catch (error) {
+      return { placements: [], error: errorMessage(error) };
+    }
+  }, [allValues, base]);
+
+  const placementBySceneId = useMemo(
+    () => new Map(timing.placements.map((placement) => [placement.sceneId, placement])),
+    [timing.placements],
+  );
+
+  const watchedBgm = allValues?.bgm;
+
   return (
     <form onSubmit={onSubmit}>
       <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
@@ -243,6 +265,44 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
           </ul>
         </div>
       )}
+
+      {timing.error !== null && (
+        <p className={errorTextClass}>尺の計算: {timing.error}</p>
+      )}
+
+      <section className="my-4 rounded-lg border border-border p-4">
+        <h3 className="mt-0 mb-2 text-lg font-semibold">BGM（作品全体）</h3>
+        <MediaPicker
+          label="BGM"
+          kinds={["audio"]}
+          selectedAssetId={watchedBgm?.assetId ?? null}
+          onSelect={(assetId) => setValue("bgm.assetId", assetId, { shouldDirty: true })}
+        />
+        {watchedBgm?.assetId !== null && watchedBgm?.assetId !== undefined && (
+          <div className="mt-2 flex flex-wrap items-center gap-4">
+            <label className="inline-flex items-center gap-1.5">
+              <input type="checkbox" {...register("bgm.loop")} />
+              ループ
+            </label>
+            <label className="inline-flex items-center gap-1.5">
+              音量
+              <input
+                type="number"
+                step="1"
+                className={`w-24 ${textFieldClass}`}
+                {...register("bgm.gainDb", {
+                  valueAsNumber: true,
+                  setValueAs: (value) =>
+                    value === "" || Number.isNaN(Number(value))
+                      ? DEFAULT_BGM_GAIN_DB
+                      : Number(value),
+                })}
+              />
+              dB
+            </label>
+          </div>
+        )}
+      </section>
 
       {fields.map((field, sceneIndex) => {
         const scene = watchedScenes[sceneIndex];
@@ -343,6 +403,28 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
               sceneKind={scene.kind}
             />
 
+            {(() => {
+              const placement = placementBySceneId.get(scene.id);
+              if (placement === undefined) {
+                return null;
+              }
+              return (
+                <div className={`mt-1 text-xs ${metaTextClass}`}>
+                  <p>シーン尺: {(placement.durationMs / 1000).toFixed(1)}秒</p>
+                  {placement.lines.length > 0 && (
+                    <ol className="my-1 ml-4 list-decimal p-0">
+                      {placement.lines.map((line) => (
+                        <li key={line.lineId}>
+                          {(line.startMs / 1000).toFixed(2)}s 〜{" "}
+                          {(line.endMs / 1000).toFixed(2)}s（{(line.durationMs / 1000).toFixed(2)}秒）
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              );
+            })()}
+
             <CueFields
               register={register}
               sceneIndex={sceneIndex}
@@ -361,12 +443,14 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
             />
 
             {scene.kind === "point" && (
-              <LinesEditor
-                control={control}
-                register={register}
-                sceneIndex={sceneIndex}
-                sceneId={scene.id}
-              />
+                <LinesEditor
+                  control={control}
+                  register={register}
+                  getValues={getValues}
+                  setValue={setValue}
+                  sceneIndex={sceneIndex}
+                  sceneId={scene.id}
+                />
             )}
           </section>
         );

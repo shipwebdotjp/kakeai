@@ -16,7 +16,7 @@ const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   optimizeDeps: {
-    exclude: ["@kakeai/contracts"],
+    exclude: ["@kakeai/contracts", "@kakeai/video"],
   },
   server: {
     port: 5173,

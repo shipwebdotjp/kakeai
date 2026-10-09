@@ -17,7 +17,7 @@ export function renderMediaCard(
     ]);
   }
   const { assetId, heading, caption, focalPoint } = parsed.data;
-  const media = resolveCueMedia(assetId, assetResolver);
+  const media = resolveCueMedia(assetId, assetResolver, path);
   const src = escapeHtmlAttribute(media.url);
   const style = focalPointStyle(focalPoint);
   const mediaHtml =

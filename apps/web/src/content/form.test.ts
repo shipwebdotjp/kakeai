@@ -171,4 +171,81 @@ describe("buildContentDocument", () => {
     expect(rebuilt.template).toEqual({ id: "explanation-scenes", version: 1 });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
+
+  it("round-trips audio takes and their selection", () => {
+    const base = createInitialContentDocument();
+    const point = pointScenes(base)[0]!;
+    point.lines = [
+      {
+        id: "l1",
+        speakerId: null,
+        captionText: "せるふ",
+        speechText: "せるふ",
+        selectedAudioTakeId: "take-1",
+      },
+    ];
+    base.audioTakes = [
+      { id: "take-1", narrationSegmentId: "l1", source: "manual", assetId: "asset-a", durationMs: 1200 },
+      { id: "take-2", narrationSegmentId: "l1", source: "manual", assetId: "asset-b", durationMs: 900 },
+    ];
+
+    const values = toFormValues(base);
+    expect(values.scenes.find((scene) => scene.id === point.id)?.lines[0]?.takes).toHaveLength(2);
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.audioTakes.map((take) => take.id)).toEqual(["take-1", "take-2"]);
+    expect(pointScenes(rebuilt)[0]!.lines[0]!.selectedAudioTakeId).toBe("take-1");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("clears a dangling take selection when the take is removed", () => {
+    const base = createInitialContentDocument();
+    const point = pointScenes(base)[0]!;
+    point.lines = [
+      {
+        id: "l1",
+        speakerId: null,
+        captionText: "",
+        speechText: "",
+        selectedAudioTakeId: "take-1",
+      },
+    ];
+    base.audioTakes = [
+      { id: "take-1", narrationSegmentId: "l1", source: "tts", assetId: "asset-a", durationMs: 1000 },
+    ];
+
+    const values = toFormValues(base);
+    const line = values.scenes.find((scene) => scene.id === point.id)!.lines[0]!;
+    expect(line.takes[0]?.source).toBe("tts");
+    line.takes = [];
+    line.selectedAudioTakeId = "take-1";
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.audioTakes).toEqual([]);
+    expect(pointScenes(rebuilt)[0]!.lines[0]!.selectedAudioTakeId).toBeNull();
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("manages a single work BGM and keeps other audio cues", () => {    const base = createInitialContentDocument();
+    base.audioCues = [
+      { id: "cue-work", role: "bgm", assetId: "asset-bgm", range: { kind: "work" }, gainDb: -18, loop: true },
+      { id: "cue-scene", role: "sfx", assetId: "asset-sfx", range: { kind: "work" } },
+    ];
+
+    const values = toFormValues(base);
+    expect(values.bgm).toMatchObject({ cueId: "cue-work", assetId: "asset-bgm", gainDb: -18, loop: true });
+    values.bgm.gainDb = -12;
+    values.bgm.loop = false;
+
+    const rebuilt = buildContentDocument(base, values);
+    const workBgm = rebuilt.audioCues.filter((cue) => cue.id === "cue-work");
+    expect(workBgm).toHaveLength(1);
+    expect(workBgm[0]).toMatchObject({ gainDb: -12, loop: false, range: { kind: "work" } });
+    expect(rebuilt.audioCues.some((cue) => cue.id === "cue-scene")).toBe(true);
+
+    values.bgm.assetId = null;
+    const cleared = buildContentDocument(base, values);
+    expect(cleared.audioCues.some((cue) => cue.id === "cue-work")).toBe(false);
+    expect(cleared.audioCues.some((cue) => cue.id === "cue-scene")).toBe(true);
+  });
 });

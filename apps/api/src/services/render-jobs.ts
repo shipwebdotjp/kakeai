@@ -5,6 +5,7 @@ import {
   COMPOSITION_ENGINE,
   compileDocument,
   CompositionCompileError,
+  type ResolvedAssetKind,
 } from "@kakeai/video";
 import {
   RENDITION_PURPOSE,
@@ -23,6 +24,7 @@ import {
   assertAssetsAvailable,
   assertTakeDurations,
   loadAssetReferences,
+  renderSourceDurationMs,
 } from "./script-versions.ts";
 
 const require = createRequire(import.meta.url);
@@ -73,8 +75,12 @@ export async function createRenderJob(
     compileDocument({
       document: content,
       assetResolver: (assetId) => {
-        const kind = assetById.get(assetId)?.kind;
-        if (kind !== "image" && kind !== "video") {
+        const asset = assetById.get(assetId);
+        const kind = asset?.kind;
+        if (
+          asset === undefined ||
+          (kind !== "image" && kind !== "video" && kind !== "audio")
+        ) {
           throw new CompositionCompileError([
             {
               path: ["assets", assetId],
@@ -83,7 +89,11 @@ export async function createRenderJob(
             },
           ]);
         }
-        return { url: "", kind };
+        return {
+          url: "",
+          kind: kind as ResolvedAssetKind,
+          durationMs: kind === "audio" ? renderSourceDurationMs(asset) : null,
+        };
       },
     });
   } catch (error) {
@@ -108,7 +118,7 @@ export async function createRenderJob(
       sha256: source.sha256,
       mediaType: source.mediaType,
       byteSize: bigIntToSafeNumber(source.byteSize),
-      durationMs: source.durationMs,
+      durationMs: renderSourceDurationMs(asset),
       widthPx: source.widthPx,
       heightPx: source.heightPx,
     };

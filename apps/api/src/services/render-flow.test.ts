@@ -331,4 +331,73 @@ describe("render worker", () => {
       code: "RESOURCE_NOT_FOUND",
     });
   }, 300000);
+
+  it("renders narration and looping BGM into the mp4", async () => {
+    if (!ffmpegReady || !renderEnabled) {
+      return;
+    }
+    const audioOutcome = await upload("audio.wav", join(fixturesDir, "audio.wav"));
+    await drainIngest();
+    const audio = await assets.getAsset(prisma, audioOutcome.asset.id);
+    expect(audio.status).toBe("ready");
+    if (audio.durationMs === null) {
+      throw new Error("expected audio duration");
+    }
+    const work = await works.createWork(prisma, "音声レンダー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-audio",
+        speakerId: null,
+        captionText: "音声つき",
+        speechText: "おんせいつき",
+        selectedAudioTakeId: "take-audio",
+      },
+    ];
+    content.audioTakes = [
+      {
+        id: "take-audio",
+        narrationSegmentId: "line-audio",
+        source: "manual",
+        assetId: audio.id,
+        durationMs: audio.durationMs,
+      },
+    ];
+    content.audioCues = [
+      { id: "bgm", role: "bgm", assetId: audio.id, range: { kind: "work" }, gainDb: -18, loop: true },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    await drainWorker();
+
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    const artifact = finished.artifacts[0]!;
+    const location = await artifacts.resolveArtifactContent(
+      prisma,
+      config.directories,
+      artifact.id,
+    );
+    const probe = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "a",
+      "-show_entries",
+      "stream=codec_type",
+      "-of",
+      "csv=p=0",
+      location.path,
+    ]);
+    expect(probe.stdout.trim()).toBe("audio");
+    await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
+  }, 300000);
 });
