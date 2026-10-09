@@ -193,6 +193,7 @@ function buildLoopAudios(options: {
   volume: string;
   loop: boolean;
   sourceDurationMs: number | null | undefined;
+  path: (string | number)[];
 }): string[] {
   const { idPrefix, url, spanStartMs, spanEndMs, volume } = options;
   const spanMs = spanEndMs - spanStartMs;
@@ -206,8 +207,17 @@ function buildLoopAudios(options: {
       audioElement({ id: `${idPrefix}-0`, url, startMs: spanStartMs, durationMs, volume }),
     ];
   }
+  const copies = Math.ceil(spanMs / sourceMs);
+  if (copies > MAX_LOOP_COPIES) {
+    throw new CompositionCompileError([
+      {
+        path: options.path,
+        code: "loop_span_too_long",
+        message: "ループ音声の繰り返しが多すぎるため、音声を短く設定できません。",
+      },
+    ]);
+  }
   const elements: string[] = [];
-  const copies = Math.min(Math.ceil(spanMs / sourceMs), MAX_LOOP_COPIES);
   for (let index = 0; index < copies; index += 1) {
     const startMs = spanStartMs + index * sourceMs;
     const durationMs = Math.min(sourceMs, spanEndMs - startMs);
@@ -409,6 +419,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       volume: gainToVolume(cue.gainDb),
       loop: cue.loop === true,
       sourceDurationMs: audio.durationMs,
+      path: cuePath,
     });
     audios.push(...elements);
   });

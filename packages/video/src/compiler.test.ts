@@ -55,6 +55,32 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('data-volume="0.126"');
   });
 
+  it("rejects a loop whose copy count exceeds the cap", () => {
+    const document = validContentDocument();
+    document.audioCues = [
+      {
+        id: "bgm-tiny",
+        role: "bgm",
+        assetId: "asset-bgm",
+        range: { kind: "work" },
+        loop: true,
+      },
+    ];
+    const tinyResolver: AssetResolver = (assetId) => ({
+      url: `/preview/${assetId}`,
+      kind: assetId.includes("audio") || assetId.includes("bgm") ? "audio" : "image",
+      durationMs: 1,
+    });
+    try {
+      compileDocument({ document, assetResolver: tinyResolver });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe("loop_span_too_long");
+      expect((error as CompositionCompileError).issues[0]?.path).toEqual(["audioCues", 0]);
+    }
+  });
+
   it("resolves line ranges to absolute clip times", () => {
     const document = validContentDocument();
     const scene = document.scenes[1];

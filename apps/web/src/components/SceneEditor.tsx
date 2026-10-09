@@ -291,7 +291,6 @@ export function SceneEditor({ base, editionId }: SceneEditorProps) {
                 step="1"
                 className={`w-24 ${textFieldClass}`}
                 {...register("bgm.gainDb", {
-                  valueAsNumber: true,
                   setValueAs: (value) =>
                     value === "" || Number.isNaN(Number(value))
                       ? DEFAULT_BGM_GAIN_DB
