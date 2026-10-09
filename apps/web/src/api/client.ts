@@ -31,16 +31,13 @@ export interface RequestOptions {
   body?: unknown;
 }
 
-export async function apiRequest<T>(
-  path: string,
-  options: RequestOptions = {},
-): Promise<Envelope<T>> {
-  const response = await fetch(`/api/v1${path}`, {
-    method: options.method ?? "GET",
-    headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+const API_BASE_PATH = "/api/v1";
 
+function buildApiUrl(path: string): string {
+  return `${API_BASE_PATH}${path}`;
+}
+
+async function parseEnvelope<T>(response: Response): Promise<Envelope<T>> {
   if (response.status === 204) {
     return { data: undefined as T };
   }
@@ -69,4 +66,27 @@ export async function apiRequest<T>(
   }
 
   return body;
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<Envelope<T>> {
+  const response = await fetch(buildApiUrl(path), {
+    method: options.method ?? "GET",
+    headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+  return parseEnvelope<T>(response);
+}
+
+export async function apiUpload<T>(path: string, file: File): Promise<Envelope<T>> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const response = await fetch(buildApiUrl(path), { method: "POST", body: form });
+  return parseEnvelope<T>(response);
+}
+
+export function renderContentUrl(assetId: string): string {
+  return buildApiUrl(`/assets/${encodeURIComponent(assetId)}/render-content`);
 }

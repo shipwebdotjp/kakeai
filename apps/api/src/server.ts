@@ -7,11 +7,17 @@ import type { AppConfig } from "./config.ts";
 import { sendError } from "./http/envelope.ts";
 import { ApiError } from "./http/errors.ts";
 import { createHealthRouter } from "./http/health.ts";
+import { createAssetsRouter } from "./http/routes/assets.ts";
 import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
-import { API_BASE_PATH, jsonAccessGuard, setMediaSessionCookie } from "./http/security.ts";
+import {
+  API_BASE_PATH,
+  jsonAccessGuard,
+  mediaAccessGuard,
+  setMediaSessionCookie,
+} from "./http/security.ts";
 import { logger } from "./logger.ts";
 
 const JSON_BODY_LIMIT = "8mb";
@@ -80,12 +86,24 @@ export function createApp(dependencies: AppDependencies): Express {
   app.disable("x-powered-by");
   app.use(requestIdMiddleware);
 
+  app.use((req, res, next) => {
+    const rawSite = req.headers["sec-fetch-site"];
+    const site = Array.isArray(rawSite) ? rawSite[0] : rawSite;
+    const sameOrigin = site === undefined || site === "same-origin" || site === "none";
+    if ((req.method === "GET" || req.method === "HEAD") && sameOrigin) {
+      setMediaSessionCookie(res, dependencies.mediaSessionToken);
+    }
+    next();
+  });
+
   const policy = {
     port: dependencies.config.port,
     allowedOrigins: dependencies.config.allowedOrigins,
   };
 
   app.use(jsonAccessGuard(policy));
+
+  const mediaGuard = mediaAccessGuard(policy, dependencies.mediaSessionToken);
 
   const api = express.Router();
   api.use(express.json({ limit: JSON_BODY_LIMIT }));
@@ -99,6 +117,14 @@ export function createApp(dependencies: AppDependencies): Express {
   api.use(createWorksRouter(dependencies.prisma));
   api.use(createLanguageEditionsRouter(dependencies.prisma));
   api.use(createScriptVersionsRouter(dependencies.prisma));
+  api.use(
+    createAssetsRouter({
+      prisma: dependencies.prisma,
+      directories: dependencies.config.directories,
+      limits: dependencies.config.limits,
+      mediaGuard,
+    }),
+  );
 
   app.use(API_BASE_PATH, api);
   app.use(API_BASE_PATH, (_req, res) => {
@@ -108,13 +134,6 @@ export function createApp(dependencies: AppDependencies): Express {
   if (existsSync(dependencies.config.webDistDir)) {
     const webDistDir = dependencies.config.webDistDir;
     logger.info("serving_web_dist", { webDistDir });
-    app.use((req, res, next) => {
-      const isApiPath = req.path === API_BASE_PATH || req.path.startsWith(`${API_BASE_PATH}/`);
-      if (req.method === "GET" && !isApiPath && req.accepts("html")) {
-        setMediaSessionCookie(res, dependencies.mediaSessionToken);
-      }
-      next();
-    });
     app.use(express.static(webDistDir));
     app.get(/.*/, (req, res, next) => {
       if (!req.accepts("html")) {

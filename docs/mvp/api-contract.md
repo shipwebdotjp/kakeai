@@ -16,7 +16,7 @@
 - リクエストの未定義フィールドは拒否する。API入力、ContentDocument、VisualTemplate入力はZodで検証する。
 - APIは絶対ローカルパス、storageKey、Job入力スナップショット、Composition生成の内部設定を返さない。素材やMP4はcontent URL経由で参照する。
 - 認証は行わないが、通常起動時のWeb UI、API、素材・Artifactのcontent URLは同じループバックoriginで提供し、ネットワークインターフェースへ公開しない。開発時のVite dev serverは信頼済みループバックproxyとして同じパスを中継し、ブラウザからAPIポートを直接呼ばせない。JSON APIとmultipartアップロードは、厳密な `Host` と `Origin` の検証を要求する。DNSリバインディングは `Host` 検証で、CSRFは `Origin` 検証で防ぐ。独自ヘッダや起動時トークンは用いない。
-- `GET /assets/:assetId/content` と `GET /artifacts/:artifactId/content` は、ブラウザが独自ヘッダを付けられないsubresource・Range requestとして利用できなければならない。UIシェルの応答で、プロセスごとにランダムなホスト専用・非永続の `Kakeai-Media-Session` Cookieを `HttpOnly; SameSite=Strict; Path=/api/v1/` で発行する。content配信はこのCookieと厳密なHost検証で認可し、`Origin` がある場合は同一originだけを受け入れる。`Sec-Fetch-Site` がある場合も `same-origin` でなければならない。JSON APIはこのCookieだけでは認可しない。将来UIをHTTPSで提供するときはCookieに `Secure` を追加する。
+- `GET /assets/:assetId/content` と `GET /artifacts/:artifactId/content` は、ブラウザが独自ヘッダを付けられないsubresource・Range requestとして利用できなければならない。同一originのUIシェルの応答、および開発時にシェルをVite dev serverが配信する場合に備えて同一originのAPIのGET応答で、プロセスごとにランダムなホスト専用・非永続の `Kakeai-Media-Session` Cookieを `HttpOnly; SameSite=Strict; Path=/api/v1/` で発行する。`Sec-Fetch-Site` が `cross-site` の要求では発行しない。content配信はこのCookieと厳密なHost検証で認可し、`Origin` がある場合は同一originだけを受け入れる。`Sec-Fetch-Site` がある場合も `same-origin` でなければならない。JSON APIはこのCookieだけでは認可しない。将来UIをHTTPSで提供するときはCookieに `Secure` を追加する。
 - content配信は上記メディアセッションCookieで認可する。`contentUrl` は資格情報をクエリへ埋め込まない同一originの相対URLとし、HyperFrames Playerは不透明originになるsandboxで実行しない。
 
 ### 成功・失敗の共通形式
@@ -584,7 +584,7 @@ RENDER_INPUT_INVALIDはキュー投入前の422であり、Job error codeでは�
 
 - packages/contractsに、各request、response、error envelope、ContentDocument、VisualTemplate入力、Jobのkind別inputSnapshotの判別unionのZodスキーマを置く。Express route、React Hook Form、TanStack Query、ワーカーはそこから導出した型だけを使う。contentJsonはキー順を安定させたJSON文字列として保存する（JCS正規化やcontentHashは持たない）。
 - MVPではAPIとレンダーワーカーを単一プロセスで起動し、ワーカーはAPIプロセス内のバックグラウンドループとしてキューを処理する。将来の分離に備えてコード境界は分けておく。
-- APIはJSON APIとmultipartアップロードで厳密な `Host` と `Origin` を検証する（独自ヘッダ・起動時トークンは用いない）。UIシェルはプロセスごとにランダムな `HttpOnly; SameSite=Strict; Path=/api/v1/` のメディアセッションCookieを発行する。素材・Artifactのcontent配信は、そのCookieとHost（および存在する場合のOrigin／Fetch Site）を検証して、通常のブラウザsubresource・Range requestを許可する。JSON APIはCookieだけを資格情報として受け入れない。
+- APIはJSON APIとmultipartアップロードで厳密な `Host` と `Origin` を検証する（独自ヘッダ・起動時トークンは用いない）。同一originのUIシェルおよびAPIのGET応答はプロセスごとにランダムな `HttpOnly; SameSite=Strict; Path=/api/v1/` のメディアセッションCookieを発行する。素材・Artifactのcontent配信は、そのCookieとHost（および存在する場合のOrigin／Fetch Site）を検証して、通常のブラウザsubresource・Range requestを許可する。JSON APIはCookieだけを資格情報として受け入れない。
 - 素材とArtifactのstorageKeyは内容ハッシュ由来のパスとし、`originalFilename` をパス生成に使わない。
 - アプリ管理データのルートはOS提供のアプリデータディレクトリ（macOSではApplication Support配下）とし、特定OSの絶対パスをコードへ埋め込まない。開発時は環境変数 `KAKEAI_DATA_DIR` で差し替える。`db/`、`assets/`、`artifacts/`、`tmp/` を分け、`storageKey` はルート相対で解決する。
 - APIがScriptVersionを返すときはDBのcontentJsonを、そのschemaVersionに対応するZodスキーマで復元・検証してcontentとして返す。MVPの保存済み版は `schemaVersion: 1` のみで、旧版の読出し解釈は持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。

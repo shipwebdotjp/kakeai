@@ -13,6 +13,8 @@ export const jobStatusSchema = z.enum([
 export const assetKindSchema = z.enum(["image", "video", "audio"]);
 export const assetOriginSchema = z.enum(["uploaded", "generated"]);
 export const assetStatusSchema = z.enum(["processing", "ready", "failed"]);
+export const RENDITION_PURPOSE = "render" as const;
+
 export const artifactRoleSchema = z.enum(["render", "thumbnail", "caption"]);
 export const artifactFormatSchema = z.enum(["mp4", "png", "jpeg", "vtt"]);
 export const jobErrorCodeSchema = z.enum([

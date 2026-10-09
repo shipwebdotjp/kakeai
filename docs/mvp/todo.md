@@ -33,13 +33,13 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 - [x] Web UI: 作品一覧、新規作成、固定5シーンの編集フォーム、明示保存
 - 完了条件: 作成→保存→再起動→再編集できる。
 
-### [ ] P3 素材ライブラリと取り込み
+### [x] P3 素材ライブラリと取り込み
 
-- [ ] POST /assets（multipart、SHA-256重複排除、原本確定、asset_ingest Job投入）
-- [ ] APIプロセス内workerループの骨格（queued取得は `updateMany` のbest-effort）
-- [ ] asset_ingest: 形式・長さ・寸法の検査とメタデータ記録、原本を直接使えない場合のみ正規化Rendition作成
-- [ ] content / render-content 配信（Range対応、メディアCookie認可）、一覧・削除（ASSET_IN_USE）
-- [ ] Web UI: 素材一覧とアップロード、状態表示
+- [x] POST /assets（multipart、SHA-256重複排除、原本確定、asset_ingest Job投入）
+- [x] APIプロセス内workerループの骨格（queued取得は `updateMany` のbest-effort）
+- [x] asset_ingest: 形式・長さ・寸法の検査とメタデータ記録、原本を直接使えない場合のみ正規化Rendition作成
+- [x] content / render-content 配信（Range対応、メディアCookie認可）、一覧・削除（ASSET_IN_USE）
+- [x] Web UI: 素材一覧とアップロード、状態表示
 - 完了条件: 画像/動画/音声を投入→ready→`<video>` Range再生、未参照削除。
 
 ### [ ] P4 プレビュー

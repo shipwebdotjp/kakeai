@@ -1,6 +1,11 @@
+import { z } from "zod";
 import {
+  assetKindSchema,
+  assetOriginSchema,
+  assetStatusSchema,
   jobStatusSchema,
   localeSchema,
+  type Asset,
   type LanguageEditionSummary,
   type ScriptVersion,
   type ScriptVersionSummary,
@@ -8,14 +13,49 @@ import {
   type WorkSummary,
 } from "@kakeai/contracts";
 import type {
+  Asset as AssetRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
   Work as WorkRow,
 } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
+import { API_BASE_PATH } from "../http/security.ts";
 
 export function toIso(value: Date): string {
   return value.toISOString();
+}
+
+export function bigIntToSafeNumber(value: bigint): number {
+  if (value < BigInt(0) || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new ApiError(500, "INTERNAL_ERROR", "値が安全な整数の範囲を超えています。");
+  }
+  return Number(value);
+}
+
+function parseAssetEnum<T>(schema: z.ZodType<T>, value: unknown, field: string): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", `Asset.${field} の値が不正です。`);
+  }
+  return result.data;
+}
+
+export function toAsset(row: AssetRow): Asset {
+  return {
+    id: row.id,
+    kind: parseAssetEnum(assetKindSchema, row.kind, "kind"),
+    origin: parseAssetEnum(assetOriginSchema, row.origin, "origin"),
+    status: parseAssetEnum(assetStatusSchema, row.status, "status"),
+    originalFilename: row.originalFilename,
+    mediaType: row.mediaType,
+    byteSize: bigIntToSafeNumber(row.byteSize),
+    sha256: row.sha256,
+    durationMs: row.durationMs,
+    widthPx: row.widthPx,
+    heightPx: row.heightPx,
+    createdAt: toIso(row.createdAt),
+    contentUrl: `${API_BASE_PATH}/assets/${encodeURIComponent(row.id)}/content`,
+  };
 }
 
 export interface RenderJobRefRow {

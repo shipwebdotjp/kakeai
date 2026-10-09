@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   await runMigrations();
 
   const prisma = createPrismaClient(config.databaseUrl);
-  const worker = createWorker();
+  const worker = createWorker({ prisma, config });
   try {
     await applySqlitePragmas(prisma);
     await worker.start();

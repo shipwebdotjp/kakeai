@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ContentDocument, ScriptVersion, Warning, Work, WorkSummary } from "@kakeai/contracts";
-import { apiRequest, type Envelope } from "./client";
+import type {
+  Asset,
+  ContentDocument,
+  ScriptVersion,
+  Warning,
+  Work,
+  WorkSummary,
+} from "@kakeai/contracts";
+import { apiRequest, apiUpload, type Envelope } from "./client";
 
 export function useWorks() {
   return useQuery({
@@ -58,6 +65,37 @@ export function useDeleteWork() {
       queryClient.invalidateQueries({ queryKey: ["works"] });
       queryClient.removeQueries({ queryKey: ["work", workId] });
     },
+  });
+}
+
+export function useAssets() {
+  return useQuery({
+    queryKey: ["assets"],
+    queryFn: async () => (await apiRequest<Asset[]>("/assets")).data,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return Array.isArray(data) && data.some((asset) => asset.status === "processing")
+        ? 1500
+        : false;
+    },
+  });
+}
+
+export function useUploadAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => (await apiUpload<Asset>("/assets", file)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
+  });
+}
+
+export function useDeleteAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (assetId: string) => {
+      await apiRequest(`/assets/${encodeURIComponent(assetId)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
   });
 }
 
