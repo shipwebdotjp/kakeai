@@ -73,4 +73,34 @@ describe("compileDocument", () => {
       CompositionCompileError,
     );
   });
+
+  it("rejects non-image assets for character.standing", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [{ id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" }],
+    });
+    const scene = document.scenes[1];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 1 },
+      range: { kind: "scene" },
+      input: { characterId: "character-rin", appearanceId: "appearance-smile", x: 0.8, y: 0.8, scale: 1 },
+    });
+    const videoResolver: AssetResolver = (assetId) => ({
+      url: `/preview/${assetId}`,
+      kind: "video",
+    });
+    try {
+      compileDocument({ document, assetResolver: videoResolver });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe("invalid_asset_kind");
+    }
+  });
 });

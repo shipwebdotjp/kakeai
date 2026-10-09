@@ -133,9 +133,6 @@ describe("script version preview", () => {
   });
 
   it("returns 404 for an unknown script version", async () => {
-    if (!ffmpegReady) {
-      return;
-    }
     try {
       await scriptVersions.getScriptVersionPreview(prisma, config.directories, "scr_missing");
       expect.unreachable();

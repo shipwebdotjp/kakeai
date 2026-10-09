@@ -26,6 +26,11 @@ export function renderCharacterStanding(
     ]);
   }
   const media = resolveCueMedia(appearance.assetId, assetResolver);
+  if (media.kind !== "image") {
+    throw new CompositionCompileError([
+      { path, code: "invalid_asset_kind", message: "立ち絵には画像素材を指定してください。" },
+    ]);
+  }
   const src = escapeHtmlAttribute(media.url);
   const widthPx = Math.round(480 * scale);
   return {
