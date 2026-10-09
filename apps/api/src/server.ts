@@ -116,7 +116,7 @@ export function createApp(dependencies: AppDependencies): Express {
   );
   api.use(createWorksRouter(dependencies.prisma));
   api.use(createLanguageEditionsRouter(dependencies.prisma));
-  api.use(createScriptVersionsRouter(dependencies.prisma));
+  api.use(createScriptVersionsRouter({ prisma: dependencies.prisma, directories: dependencies.config.directories }));
   api.use(
     createAssetsRouter({
       prisma: dependencies.prisma,

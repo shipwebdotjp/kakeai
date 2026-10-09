@@ -1,5 +1,7 @@
 # CompositionコンパイラはAsset解決方法を知らない（assetResolver注入）
 
+Amended by [ADR-0023](./0023-preview-composition-contract.md): `assetResolver` は `{ url, kind }` を返す。
+
 Composition コンパイラは Asset の解決方法（HTTP URL かローカルパスか）を知らず、Asset ID を表示参照へ変換する `assetResolver` を入力として受け取る。プレビューは HTTP content URL を、レンダーはローカルファイルパスを注入する。
 
 理由は、プレビューとレンダーで同一のコンパイラと信頼済み VisualTemplate を使いつつ、解決方式の違いを呼び出し側に閉じ込めるため。コンパイラ内に `if (preview)` の分岐を入れると、テンプレート変更が二重管理になり必ずドリフトする。

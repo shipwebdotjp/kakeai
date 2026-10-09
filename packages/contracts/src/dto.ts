@@ -148,6 +148,25 @@ export const jobSchema = z
     }
   });
 
+export const previewAssetSchema = z.object({
+  assetId: idSchema,
+  contentUrl: z.string().min(1),
+  sha256: z.string().min(1),
+});
+
+export const previewRendererSchema = z.object({
+  engine: z.literal("hyperframes"),
+  compilerVersion: z.string().min(1),
+  playerVersion: z.string().min(1),
+});
+
+export const scriptVersionPreviewSchema = z.object({
+  scriptVersionId: idSchema,
+  compositionHtml: z.string().min(1),
+  assets: z.array(previewAssetSchema),
+  renderer: previewRendererSchema,
+});
+
 export type WorkSummary = z.infer<typeof workSummarySchema>;
 export type Work = z.infer<typeof workSchema>;
 export type LanguageEditionSummary = z.infer<typeof languageEditionSummarySchema>;
@@ -156,3 +175,6 @@ export type ScriptVersion = z.infer<typeof scriptVersionSchema>;
 export type Asset = z.infer<typeof assetSchema>;
 export type Artifact = z.infer<typeof artifactSchema>;
 export type Job = z.infer<typeof jobSchema>;
+export type PreviewAsset = z.infer<typeof previewAssetSchema>;
+export type PreviewRenderer = z.infer<typeof previewRendererSchema>;
+export type ScriptVersionPreview = z.infer<typeof scriptVersionPreviewSchema>;

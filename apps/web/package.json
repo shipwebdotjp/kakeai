@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@hyperframes/player": "0.8.143",
     "@kakeai/contracts": "*",
     "@tanstack/react-query": "^5.104.1",
     "react": "^19.3.0",
@@ -19,10 +20,10 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/node": "^26.6.4",
-    "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.2",

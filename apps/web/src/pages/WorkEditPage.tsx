@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
+import { PreviewSection } from "../components/PreviewSection";
 import { SceneEditor } from "../components/SceneEditor";
 import { errorMessage } from "../lib/errorMessage";
 import { buttonPrimaryClass, errorTextClass, textFieldClass } from "../ui";
@@ -58,7 +59,10 @@ export function WorkEditPage() {
           {current.isError && <p className={errorTextClass}>{errorMessage(current.error)}</p>}
           {editionId === undefined && <p>この作品には言語版がありません。</p>}
           {current.data && editionId !== undefined && (
-            <SceneEditor key={editionId} base={current.data.content} editionId={editionId} />
+            <>
+              <SceneEditor key={editionId} base={current.data.content} editionId={editionId} />
+              <PreviewSection scriptVersionId={current.data.id} />
+            </>
           )}
         </>
       )}
