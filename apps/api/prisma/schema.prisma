@@ -103,6 +103,32 @@ model VoiceProfile {
   @@index([adapterId])
 }
 
+model Character {
+  id             String                @id @default(cuid())
+  name           String
+  voiceProfileId String?
+  appearances    CharacterAppearance[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([voiceProfileId])
+}
+
+model CharacterAppearance {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  assetId     String
+  expression  String
+  pose        String
+  label       String?
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([characterId])
+  @@index([assetId])
+}
+
 model Job {
   id                    String          @id @default(cuid())
   kind                  String

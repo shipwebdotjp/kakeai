@@ -9,7 +9,6 @@ import {
   buildContentDocument,
   countAppearanceReferences,
   countCharacterReferences,
-  createEmptySpeaker,
   createPointSceneFormValue,
   toFormValues,
 } from "./form";
@@ -300,8 +299,15 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        voiceProfileId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          {
+            id: "appearance-smile",
+            assetId: "asset-rin",
+            expression: "smile",
+            pose: "front",
+            label: "",
+          },
         ],
       },
     ]);
@@ -498,7 +504,7 @@ describe("buildContentDocument", () => {
 
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.characters).toEqual([]);
-    expect(rebuilt.speakers[0]!.characterId).toBeNull();
+    expect(rebuilt.speakers).toEqual([]);
     expect(rebuilt.scenes[0]!.visualCues).toEqual([]);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
@@ -510,7 +516,10 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
-        appearances: [{ id: "appearance-1", assetId: "asset-rin", expression: "  ", pose: "" }],
+        voiceProfileId: null,
+        appearances: [
+          { id: "appearance-1", assetId: "asset-rin", expression: "  ", pose: "", label: "" },
+        ],
       },
     ];
 
@@ -530,41 +539,72 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
-        appearances: [{ id: "appearance-1", assetId: null, expression: "", pose: "" }],
+        voiceProfileId: null,
+        appearances: [
+          { id: "appearance-1", assetId: null, expression: "", pose: "", label: "" },
+        ],
       },
     ];
 
     expect(() => buildContentDocument(base, values)).toThrow();
   });
 
-  it("round-trips speakers and their voice profile", () => {
+  it("round-trips a character voice profile through its speaker", () => {
     const base = createInitialContentDocument();
+    base.characters = [{ id: "character-rin", name: "リン", appearances: [] }];
     base.speakers = [
-      {
-        id: "speaker-narrator",
-        name: "ナレーター",
-        characterId: null,
-        voiceProfileId: "vp-1",
-      },
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: "vp-1" },
     ];
     const values = toFormValues(base);
-    expect(values.speakers).toEqual([
-      { id: "speaker-narrator", name: "ナレーター", characterId: null, voiceProfileId: "vp-1" },
-    ]);
+    expect(values.characters[0]!.voiceProfileId).toBe("vp-1");
 
-    values.speakers[0]!.voiceProfileId = "vp-2";
+    values.characters[0]!.voiceProfileId = "vp-2";
     const rebuilt = buildContentDocument(base, values);
-    expect(rebuilt.speakers[0]!.voiceProfileId).toBe("vp-2");
+    const speaker = rebuilt.speakers.find((entry) => entry.characterId === "character-rin")!;
+    expect(speaker.id).toBe("speaker-rin");
+    expect(speaker.voiceProfileId).toBe("vp-2");
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
-  it("adds a speaker with an unset voice profile", () => {
+  it("creates a speaker for a voice-only character with no profile", () => {
     const base = createInitialContentDocument();
     const values = toFormValues(base);
-    values.speakers.push(createEmptySpeaker());
+    values.characters.push({
+      id: "character-narrator",
+      name: "ナレーター",
+      voiceProfileId: null,
+      appearances: [],
+    });
 
     const rebuilt = buildContentDocument(base, values);
-    expect(rebuilt.speakers[0]!.voiceProfileId).toBeNull();
+    const speaker = rebuilt.speakers.find(
+      (entry) => entry.characterId === "character-narrator",
+    )!;
+    expect(speaker.voiceProfileId).toBeNull();
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("preserves a referenced narrator speaker and prunes unreferenced ones", () => {
+    const base = createInitialContentDocument();
+    base.speakers = [
+      { id: "speaker-narrator", name: "ナレーター", characterId: null, voiceProfileId: "vp-1" },
+      { id: "speaker-unused", name: "未使用", characterId: null, voiceProfileId: null },
+    ];
+    const point = base.scenes[1]!;
+    point.lines = [
+      {
+        id: "line-narrator",
+        speakerId: "speaker-narrator",
+        captionText: "ナレーション",
+        speechText: "なれーしょん",
+        selectedAudioTakeId: null,
+      },
+    ];
+
+    const values = toFormValues(base);
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.speakers.map((speaker) => speaker.id)).toEqual(["speaker-narrator"]);
+    expect(rebuilt.speakers[0]!.voiceProfileId).toBe("vp-1");
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 

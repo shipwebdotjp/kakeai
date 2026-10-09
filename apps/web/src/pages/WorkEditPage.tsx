@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
-import { charactersRoute } from "../lib/routes";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
@@ -49,14 +48,6 @@ export function WorkEditPage() {
         <Link to="/" className="text-brand-700 hover:underline dark:text-brand-400">
           ← 作品一覧
         </Link>
-        {workId !== undefined && (
-          <Link
-            to={charactersRoute(workId)}
-            className="text-brand-700 hover:underline dark:text-brand-400"
-          >
-            キャラクター管理
-          </Link>
-        )}
       </p>
 
       {work.isLoading && <p>読み込み中…</p>}
@@ -87,7 +78,6 @@ export function WorkEditPage() {
                 key={editionId}
                 base={current.data.content}
                 editionId={editionId}
-                workId={workId}
                 scriptVersionId={previewVersionId ?? current.data.id}
                 onSaved={onSaved}
               />

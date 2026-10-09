@@ -215,7 +215,7 @@ export async function getAsset(prisma: PrismaClient, assetId: string): Promise<A
 }
 
 interface AssetReference {
-  type: "script_version" | "render_job";
+  type: "script_version" | "render_job" | "character";
   id: string;
 }
 
@@ -224,6 +224,14 @@ async function findAssetReferences(
   assetId: string,
 ): Promise<AssetReference[]> {
   const references: AssetReference[] = [];
+
+  const characters = await client.characterAppearance.findMany({
+    where: { assetId },
+    select: { characterId: true },
+  });
+  for (const appearance of characters) {
+    references.push({ type: "character", id: appearance.characterId });
+  }
 
   const versions = await client.scriptVersion.findMany({
     select: { id: true, contentJson: true },

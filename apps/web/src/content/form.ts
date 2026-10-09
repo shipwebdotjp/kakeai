@@ -40,11 +40,13 @@ export interface AppearanceFormValue {
   assetId: string | null;
   expression: string;
   pose: string;
+  label: string;
 }
 
 export interface CharacterFormValue {
   id: string;
   name: string;
+  voiceProfileId: string | null;
   appearances: AppearanceFormValue[];
 }
 
@@ -167,16 +169,21 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
 }
 
 function readCharacters(content: ContentDocument): CharacterFormValue[] {
-  return content.characters.map((character) => ({
-    id: character.id,
-    name: character.name,
-    appearances: character.appearances.map((appearance) => ({
-      id: appearance.id,
-      assetId: appearance.assetId,
-      expression: appearance.expression,
-      pose: appearance.pose,
-    })),
-  }));
+  return content.characters.map((character) => {
+    const speaker = content.speakers.find((entry) => entry.characterId === character.id);
+    return {
+      id: character.id,
+      name: character.name,
+      voiceProfileId: speaker?.voiceProfileId ?? null,
+      appearances: character.appearances.map((appearance) => ({
+        id: appearance.id,
+        assetId: appearance.assetId,
+        expression: appearance.expression,
+        pose: appearance.pose,
+        label: appearance.label ?? "",
+      })),
+    };
+  });
 }
 
 function readSpeakers(content: ContentDocument): SpeakerFormValue[] {
@@ -328,6 +335,7 @@ function buildCharacters(values: CharacterFormValue[]): Character[] {
         assetId: appearance.assetId,
         expression: appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION,
         pose: appearance.pose.trim() || DEFAULT_APPEARANCE_POSE,
+        ...(appearance.label.trim().length === 0 ? {} : { label: appearance.label.trim() }),
       };
     }),
   }));
@@ -411,22 +419,53 @@ function buildVisualCues(
   return cues;
 }
 
+function normalizeProfileId(value: string | null): string | null {
+  return value !== null && value.length > 0 ? value : null;
+}
+
 function buildSpeakers(
-  values: SpeakerFormValue[],
-  characterIds: ReadonlySet<string>,
+  characters: CharacterFormValue[],
+  existingSpeakers: SpeakerFormValue[],
+  referencedSpeakerIds: ReadonlySet<string>,
 ): Speaker[] {
-  return values.map((speaker) => ({
-    id: speaker.id,
-    name: speaker.name,
-    characterId:
-      speaker.characterId !== null && characterIds.has(speaker.characterId)
-        ? speaker.characterId
-        : null,
-    voiceProfileId:
-      speaker.voiceProfileId !== null && speaker.voiceProfileId.length > 0
-        ? speaker.voiceProfileId
-        : null,
-  }));
+  const characterIds = new Set(characters.map((character) => character.id));
+  const narratorSpeakers = existingSpeakers
+    .filter((speaker) => speaker.characterId === null && referencedSpeakerIds.has(speaker.id))
+    .map((speaker) => ({
+      id: speaker.id,
+      name: speaker.name,
+      characterId: null,
+      voiceProfileId: normalizeProfileId(speaker.voiceProfileId),
+    }));
+  const producedIds = new Set(narratorSpeakers.map((speaker) => speaker.id));
+  const characterSpeakers = characters.map((character) => {
+    const existing = existingSpeakers.find((speaker) => speaker.characterId === character.id);
+    const speaker = {
+      id: existing?.id ?? `speaker-${character.id}`,
+      name: character.name,
+      characterId: character.id,
+      voiceProfileId: normalizeProfileId(character.voiceProfileId),
+    };
+    producedIds.add(speaker.id);
+    return speaker;
+  });
+  const extraReferenced = existingSpeakers
+    .filter(
+      (speaker) =>
+        referencedSpeakerIds.has(speaker.id) &&
+        !producedIds.has(speaker.id) &&
+        (speaker.characterId === null || characterIds.has(speaker.characterId)),
+    )
+    .map((speaker) => ({
+      id: speaker.id,
+      name: speaker.name,
+      characterId:
+        speaker.characterId !== null && characterIds.has(speaker.characterId)
+          ? speaker.characterId
+          : null,
+      voiceProfileId: normalizeProfileId(speaker.voiceProfileId),
+    }));
+  return [...narratorSpeakers, ...characterSpeakers, ...extraReferenced];
 }
 
 export function buildContentDocument(
@@ -441,7 +480,12 @@ export function buildContentDocument(
       new Set(character.appearances.map((appearance) => appearance.id)),
     ]),
   );
-  const speakers = buildSpeakers(values.speakers, characterIds);
+  const referencedSpeakerIds = new Set(
+    values.scenes
+      .flatMap((scene) => scene.lines.map((line) => line.speakerId))
+      .filter((id): id is string => id !== null),
+  );
+  const speakers = buildSpeakers(values.characters, values.speakers, referencedSpeakerIds);
   const speakerIds = new Set(speakers.map((speaker) => speaker.id));
   const baseById = new Map(base.scenes.map((scene) => [scene.id, scene]));
   const scenes: Scene[] = values.scenes.map((sceneValue) => {
@@ -589,16 +633,12 @@ export function newSpeakerId(): string {
   return `speaker-${randomId()}`;
 }
 
-export function createEmptySpeaker(): SpeakerFormValue {
-  return { id: newSpeakerId(), name: "", characterId: null, voiceProfileId: null };
-}
-
 export function newAppearanceId(): string {
   return `appearance-${randomId()}`;
 }
 
 export function createEmptyCharacter(): CharacterFormValue {
-  return { id: newCharacterId(), name: "", appearances: [] };
+  return { id: newCharacterId(), name: "", voiceProfileId: null, appearances: [] };
 }
 
 export function createEmptyAppearance(): AppearanceFormValue {
@@ -607,7 +647,40 @@ export function createEmptyAppearance(): AppearanceFormValue {
     assetId: null,
     expression: DEFAULT_APPEARANCE_EXPRESSION,
     pose: DEFAULT_APPEARANCE_POSE,
+    label: "",
   };
+}
+
+export interface CharacterFormUsage {
+  scenes: number;
+  standing: number;
+  lines: number;
+}
+
+export function countCharacterFormUsage(
+  values: DocumentFormValues,
+  characterId: string,
+): CharacterFormUsage {
+  const speakerIds = new Set(
+    values.speakers
+      .filter((speaker) => speaker.characterId === characterId)
+      .map((speaker) => speaker.id),
+  );
+  const sceneIds = new Set<string>();
+  let standing = 0;
+  let lines = 0;
+  for (const scene of values.scenes) {
+    if (scene.standingCharacterId === characterId) {
+      standing += 1;
+      sceneIds.add(scene.id);
+    }
+    for (const line of scene.lines) {
+      if (line.speakerId !== null && speakerIds.has(line.speakerId)) {
+        lines += 1;
+      }
+    }
+  }
+  return { scenes: sceneIds.size, standing, lines };
 }
 
 export interface ReferenceUsage {

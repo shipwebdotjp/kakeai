@@ -14,6 +14,7 @@ import {
   voiceProfileSettingsSchema,
   type Artifact,
   type Asset,
+  type CharacterLibraryEntry,
   type Job,
   type LanguageEditionSummary,
   type ScriptVersion,
@@ -26,6 +27,8 @@ import {
 import type {
   Artifact as ArtifactRow,
   Asset as AssetRow,
+  Character as CharacterRow,
+  CharacterAppearance as CharacterAppearanceRow,
   Job as JobRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
@@ -256,6 +259,25 @@ export function toVoiceProfile(row: VoiceProfileRow): VoiceProfile {
     name: row.name,
     adapterId: parseEnum(voiceAdapterIdSchema, row.adapterId, "VoiceProfile.adapterId"),
     settings: parsedSettings.data,
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export type CharacterWithAppearances = CharacterRow & { appearances: CharacterAppearanceRow[] };
+
+export function toCharacterLibraryEntry(row: CharacterWithAppearances): CharacterLibraryEntry {
+  return {
+    id: row.id,
+    name: row.name,
+    voiceProfileId: row.voiceProfileId,
+    appearances: row.appearances.map((appearance) => ({
+      id: appearance.id,
+      assetId: appearance.assetId,
+      expression: appearance.expression,
+      pose: appearance.pose,
+      ...(appearance.label === null ? {} : { label: appearance.label }),
+    })),
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };

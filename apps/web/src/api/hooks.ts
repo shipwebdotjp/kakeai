@@ -2,12 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { warningsMetaSchema } from "@kakeai/contracts";
 import type {
   Asset,
+  CharacterLibraryEntry,
   ContentDocument,
+  CreateCharacterRequest,
   CreateVoiceProfileRequest,
   Job,
   ScriptVersion,
   ScriptVersionPreview,
   TtsJobResult,
+  UpdateCharacterRequest,
   UpdateVoiceProfileRequest,
   VoiceAdapterId,
   VoiceList,
@@ -311,6 +314,7 @@ export interface GenerateTtsInput {
   narrationSegmentId: string;
   styleId: number;
   speedScale: number;
+  speechText?: string;
 }
 
 export function useGenerateTtsTake(scriptVersionId: string | undefined) {
@@ -327,7 +331,13 @@ export function useGenerateTtsTake(scriptVersionId: string | undefined) {
           )}/tts-jobs`,
           {
             method: "POST",
-            body: { styleId: input.styleId, speedScale: input.speedScale },
+            body: {
+              styleId: input.styleId,
+              speedScale: input.speedScale,
+              ...(input.speechText === undefined || input.speechText.trim().length === 0
+                ? {}
+                : { speechText: input.speechText }),
+            },
           },
         )
       ).data;
@@ -356,5 +366,45 @@ export function useGenerateTtsTake(scriptVersionId: string | undefined) {
       throw new Error("音声生成がタイムアウトしました。");
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
+  });
+}
+
+export function useCharacters() {
+  return useQuery({
+    queryKey: ["characters"],
+    queryFn: async () => (await apiRequest<CharacterLibraryEntry[]>("/characters")).data,
+  });
+}
+
+export function useCreateCharacter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateCharacterRequest) =>
+      (await apiRequest<CharacterLibraryEntry>("/characters", { method: "POST", body: input })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["characters"] }),
+  });
+}
+
+export function useUpdateCharacter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateCharacterRequest }) =>
+      (
+        await apiRequest<CharacterLibraryEntry>(`/characters/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: input,
+        })
+      ).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["characters"] }),
+  });
+}
+
+export function useDeleteCharacter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["characters"] }),
   });
 }

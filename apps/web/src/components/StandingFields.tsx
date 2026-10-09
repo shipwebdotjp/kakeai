@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import {
   useWatch,
   type Control,
@@ -6,7 +5,6 @@ import {
   type UseFormSetValue,
 } from "react-hook-form";
 import { useAssets } from "../api/hooks";
-import { charactersRoute } from "../lib/routes";
 import {
   DEFAULT_APPEARANCE_EXPRESSION,
   DEFAULT_APPEARANCE_POSE,
@@ -27,7 +25,6 @@ interface StandingFieldsProps {
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
   characters: CharacterFormValue[];
-  workId: string;
 }
 
 export function StandingFields({
@@ -36,7 +33,6 @@ export function StandingFields({
   setValue,
   sceneIndex,
   characters,
-  workId,
 }: StandingFieldsProps) {
   const characterId = useWatch({
     control,
@@ -97,14 +93,7 @@ export function StandingFields({
 
       {characters.length === 0 ? (
         <p className={metaTextClass}>
-          キャラクターが登録されていません。
-          <Link
-            to={charactersRoute(workId)}
-            className="text-brand-700 hover:underline dark:text-brand-400"
-          >
-            キャラクター管理
-          </Link>
-          で登録してください。
+          この作品にキャラクターがありません。上の「キャラクター」から追加してください。
         </p>
       ) : (
         <>
@@ -166,14 +155,7 @@ export function StandingFields({
 
           {character !== undefined && appearances.length === 0 && (
             <p className={metaTextClass}>
-              このキャラクターには外観がありません。
-              <Link
-                to={charactersRoute(workId)}
-                className="text-brand-700 hover:underline dark:text-brand-400"
-              >
-                キャラクター管理
-              </Link>
-              で追加してください。
+              このキャラクターには外観がありません。ライブラリで外観を追加してください。
             </p>
           )}
 

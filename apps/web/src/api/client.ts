@@ -90,3 +90,7 @@ export async function apiUpload<T>(path: string, file: File): Promise<Envelope<T
 export function renderContentUrl(assetId: string): string {
   return buildApiUrl(`/assets/${encodeURIComponent(assetId)}/render-content`);
 }
+
+export function assetContentUrl(assetId: string): string {
+  return buildApiUrl(`/assets/${encodeURIComponent(assetId)}/content`);
+}

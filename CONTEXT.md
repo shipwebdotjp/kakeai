@@ -37,11 +37,15 @@ An app-wide voice setting that maps a Speaker to a TTS adapter and its adapter-s
 _Avoid_: Speaker, TTS engine
 
 **Character**:
-A visual person or avatar that may, but need not, be associated with a Speaker.
+A person or avatar that may, but need not, have standing appearances, and may, but need not, be associated with a Speaker.
 _Avoid_: Speaker, voice
 
 **Character Appearance**:
 A particular visual form of a Character, such as a standing image with an expression and pose.
+_Avoid_: Character, asset
+
+**Character Library**:
+The app-wide set of reusable Character definitions that are copied into a Script Version when used.
 _Avoid_: Character, asset
 
 **Asset**:

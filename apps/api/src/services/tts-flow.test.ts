@@ -378,6 +378,30 @@ describe("tts job", () => {
     }
   });
 
+  it("uses a request speech text override", async () => {
+    const profile = await createProfile();
+    const scriptVersionId = await createLineVersion(profile.id);
+    const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
+      speechText: "べつのことば",
+      speedScale: SPEED,
+    });
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = JSON.parse(row.inputSnapshotJson) as { speechText?: string };
+    expect(snapshot.speechText).toBe("べつのことば");
+    await jobs.cancelJob(prisma, job.id);
+  });
+
+  it("rejects an empty request speech text", async () => {
+    const profile = await createProfile();
+    const scriptVersionId = await createLineVersion(profile.id);
+    await expect(
+      ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
+        speechText: "   ",
+        speedScale: SPEED,
+      }),
+    ).rejects.toMatchObject({ code: "TTS_INPUT_INVALID" });
+  });
+
   it("cancels a queued tts job", async () => {
     const profile = await createProfile();
     const scriptVersionId = await createLineVersion(profile.id);

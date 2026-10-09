@@ -8,18 +8,20 @@ import {
   type UseFormSetValue,
 } from "react-hook-form";
 import {
+  MAX_TTS_SPEECH_TEXT_LENGTH,
   MAX_TTS_SPEED_SCALE,
   MIN_TTS_SPEED_SCALE,
   type TtsVoice,
   type VoiceProfile,
 } from "@kakeai/contracts";
 import type {
+  CharacterFormValue,
   DocumentFormValues,
   LineFormValue,
   SpeakerFormValue,
   TakeFormValue,
 } from "../content/form";
-import { createEmptyLine, newTakeId } from "../content/form";
+import { createEmptyLine, newSpeakerId, newTakeId } from "../content/form";
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import {
   buttonNeutralClass,
@@ -29,6 +31,7 @@ import {
   textFieldClass,
 } from "../ui";
 import { MediaPicker } from "./MediaPicker";
+import { TakeAudioPlayer } from "./TakeAudioPlayer";
 
 interface LinesEditorProps {
   control: Control<DocumentFormValues>;
@@ -39,10 +42,11 @@ interface LinesEditorProps {
   sceneId: string;
   scriptVersionId: string;
   speakers: SpeakerFormValue[];
+  characters: CharacterFormValue[];
   voiceProfiles: VoiceProfile[];
   voices: TtsVoice[] | undefined;
   voicesLoading: boolean;
-  formDirty: boolean;
+  savedVoiceByLineId: ReadonlyMap<string, string | null>;
 }
 
 function formatDuration(durationMs: number): string {
@@ -69,10 +73,11 @@ function LineEditor({
   line,
   onRemove,
   speakers,
+  characters,
   voiceProfiles,
   voices,
   voicesLoading,
-  formDirty,
+  savedVoiceByLineId,
   scriptVersionId,
 }: LineEditorProps) {
   const assets = useAssets();
@@ -81,7 +86,10 @@ function LineEditor({
   const [speedScale, setSpeedScale] = useState(1);
 
   const speaker = speakers.find((entry) => entry.id === line.speakerId);
-  const profile = voiceProfiles.find((entry) => entry.id === speaker?.voiceProfileId);
+  const characterId = speaker?.characterId ?? null;
+  const character = characters.find((entry) => entry.id === characterId);
+  const profileId = character?.voiceProfileId ?? speaker?.voiceProfileId ?? null;
+  const profile = voiceProfiles.find((entry) => entry.id === profileId);
   const voice = voices?.find((entry) => entry.voiceId === profile?.settings.speakerUuid);
   const styles = voice?.styles;
 
@@ -153,12 +161,40 @@ function LineEditor({
     }
   };
 
+  const onChangeCharacter = (nextId: string) => {
+    if (nextId === "") {
+      setValue(`${path}.speakerId`, null, { shouldDirty: true });
+      return;
+    }
+    const existing = speakers.find((entry) => entry.characterId === nextId);
+    if (existing !== undefined) {
+      setValue(`${path}.speakerId`, existing.id, { shouldDirty: true });
+      return;
+    }
+    const selected = characters.find((entry) => entry.id === nextId);
+    const speakerId = newSpeakerId();
+    setValue(
+      "speakers",
+      [
+        ...getValues("speakers"),
+        {
+          id: speakerId,
+          name: selected?.name ?? "",
+          characterId: nextId,
+          voiceProfileId: selected?.voiceProfileId ?? null,
+        },
+      ],
+      { shouldDirty: true },
+    );
+    setValue(`${path}.speakerId`, speakerId, { shouldDirty: true });
+  };
+
   const onGenerate = () => {
     if (styleId === null) {
       return;
     }
     generate.mutate(
-      { narrationSegmentId: line.id, styleId, speedScale },
+      { narrationSegmentId: line.id, styleId, speedScale, speechText: line.speechText },
       {
         onSuccess: (result) => {
           addTake(result.assetId, result.durationMs, "tts");
@@ -168,6 +204,12 @@ function LineEditor({
   };
 
   const takes = line.takes;
+  const saved = savedVoiceByLineId.has(line.id);
+  const savedVoice = savedVoiceByLineId.get(line.id) ?? null;
+  const voiceMatches = saved && profileId === savedVoice;
+  const speechLength = line.speechText.trim().length;
+  const speechReady = speechLength > 0 && speechLength <= MAX_TTS_SPEECH_TEXT_LENGTH;
+  const ttsDisabled = generate.isPending || styleId === null || !voiceMatches || !speechReady;
 
   return (
     <div className="my-2 grid gap-1.5 rounded border border-border p-2">
@@ -183,18 +225,14 @@ function LineEditor({
         {...register(`scenes.${sceneIndex}.lines.${lineIndex}.speechText`)}
       />
       <label className="inline-flex items-center gap-1.5 text-sm">
-        話者
+        キャラクター
         <select
           className={textFieldClass}
-          value={line.speakerId ?? ""}
-          onChange={(event) =>
-            setValue(`${path}.speakerId`, event.target.value === "" ? null : event.target.value, {
-              shouldDirty: true,
-            })
-          }
+          value={characterId ?? ""}
+          onChange={(event) => onChangeCharacter(event.target.value)}
         >
           <option value="">なし</option>
-          {speakers.map((entry) => (
+          {characters.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.name || entry.id}
             </option>
@@ -208,7 +246,7 @@ function LineEditor({
         ) : (
           <ul className="m-0 list-none p-0">
             {takes.map((take) => (
-              <li key={take.id} className="flex items-center gap-2 py-0.5">
+              <li key={take.id} className="flex flex-wrap items-center gap-2 py-0.5">
                 <label className="inline-flex items-center gap-1.5 text-sm">
                   <input
                     type="radio"
@@ -221,6 +259,7 @@ function LineEditor({
                   {take.source === "tts" ? "TTS: " : ""}
                   {fileName(take.assetId)}（{formatDuration(take.durationMs)}）
                 </label>
+                <TakeAudioPlayer assetId={take.assetId} />
                 <button
                   type="button"
                   className={buttonNeutralClass}
@@ -254,16 +293,14 @@ function LineEditor({
       </div>
 
       <div className="mt-1 border-t border-dashed border-border pt-2">
-        {formDirty ? (
-          <p className={errorTextClass}>
-            未保存の変更があります。TTSは保存済みの読み上げテキストを使うため、先に保存してください。
-          </p>
-        ) : (
-          <p className={metaTextClass}>TTS生成（保存済みの読み上げテキストを使います）</p>
-        )}
-        {profile === undefined ? (
+        <p className={metaTextClass}>TTS生成</p>
+        {profileId === null ? (
           <p className={metaTextClass}>
-            話者に声プロファイルを設定すると TTS を生成できます。
+            キャラクターを選び、声プロファイルを設定すると TTS を生成できます。
+          </p>
+        ) : profile === undefined ? (
+          <p className={metaTextClass}>
+            この話者に声プロファイルが設定されていません。
           </p>
         ) : voicesLoading ? (
           <p className={metaTextClass}>音声一覧を読み込み中…</p>
@@ -319,12 +356,24 @@ function LineEditor({
             <button
               type="button"
               className={buttonPrimaryClass}
-              disabled={generate.isPending || styleId === null || formDirty}
+              disabled={ttsDisabled}
               onClick={onGenerate}
             >
               {generate.isPending ? "生成中…" : "TTS生成"}
             </button>
           </div>
+        )}
+        {!saved && (
+          <p className={metaTextClass}>新しいセリフは一度保存してから生成できます。</p>
+        )}
+        {saved && !voiceMatches && profileId !== null && (
+          <p className={metaTextClass}>声の変更は保存後に生成できます。</p>
+        )}
+        {saved && voiceMatches && speechLength === 0 && profileId !== null && (
+          <p className={metaTextClass}>読み上げテキストを入力してください。</p>
+        )}
+        {saved && voiceMatches && speechLength > MAX_TTS_SPEECH_TEXT_LENGTH && (
+          <p className={metaTextClass}>読み上げテキストが長すぎます。</p>
         )}
         {generate.isError && <p className={errorTextClass}>{generate.error.message}</p>}
       </div>
@@ -345,10 +394,11 @@ export function LinesEditor({
   sceneId,
   scriptVersionId,
   speakers,
+  characters,
   voiceProfiles,
   voices,
   voicesLoading,
-  formDirty,
+  savedVoiceByLineId,
 }: LinesEditorProps) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -376,10 +426,11 @@ export function LinesEditor({
             onRemove={() => remove(lineIndex)}
             scriptVersionId={scriptVersionId}
             speakers={speakers}
+            characters={characters}
             voiceProfiles={voiceProfiles}
             voices={voices}
             voicesLoading={voicesLoading}
-            formDirty={formDirty}
+            savedVoiceByLineId={savedVoiceByLineId}
           />
         );
       })}

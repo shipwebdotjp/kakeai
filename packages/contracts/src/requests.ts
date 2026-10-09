@@ -25,6 +25,7 @@ export const MAX_TTS_SPEECH_TEXT_LENGTH = 1000;
 
 export const createTtsJobRequestSchema = z.strictObject({
   styleId: z.number().int().nonnegative().optional(),
+  speechText: z.string().max(MAX_TTS_SPEECH_TEXT_LENGTH).optional(),
   speedScale: z
     .number()
     .finite()

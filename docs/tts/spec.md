@@ -41,7 +41,7 @@ Voice Profile はアプリ共通の声の設定であり、作品台本（`Speak
 
 1 Narration Segment につき 1 つの `tts` Job を実行する。
 
-- Job は台本版、Segment ID、凍結した `speechText`、Voice Profile から解決した `voice`（`voiceId` と `styleId`）、話速、エンジン版を入力スナップショットへ保持する。台本版の ID と Work・LanguageEdition を Job の対象として持つ。
+- Job は台本版、Segment ID、凍結した `speechText`、Voice Profile から解決した `voice`（`voiceId` と `styleId`）、話速、エンジン版を入力スナップショットへ保持する。`speechText` は生成要求で直接渡せる（省略時は保存済みセグメントの値）。これにより未保存の編集内容でも生成でき、生成後に明示保存すると1つの版にまとまる。空文字・長すぎるテキストは 422 `TTS_INPUT_INVALID` とする。台本版の ID と Work・LanguageEdition を Job の対象として持つ。
 - 生成成功時は WAV を `origin: "generated"` の `ready` な Audio Asset として確定する。SHA-256 が一致する既存 Asset があればその Asset を再利用し、新しい行・ファイルを作らない。
 - 来歴にはアダプター、`voiceId`、`styleId`、話速、エンジン版、元 ScriptVersion と Segment を保存する。
 - Job 結果は生成済み Audio Take 候補（`narrationSegmentId`、`assetId`、`durationMs`、`source: "tts"`）を返す。UI はこれを編集フォームへ Take として追加し、自動選択して未保存状態にする。
@@ -69,7 +69,7 @@ Job 実行中の失敗（`GET /jobs/:jobId` の `status: failed`）:
 - `GET /voice-profiles`、`POST /voice-profiles`、`PATCH /voice-profiles/:id`、`DELETE /voice-profiles/:id`
 - `GET /voice-profiles/voices?adapterId=voicevox` で接続中エンジンの話者とスタイルを取得する
 - `POST /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs`
-  - 任意の `styleId` と `speedScale`（既定 1.0）を受け付ける
+  - 任意の `speechText`、`styleId`、`speedScale`（既定 1.0）を受け付ける。`speechText` を省略すると保存済みセグメントの値を使う
 - `GET /health` の `capabilities.jobKinds` に `tts`、`capabilities.voiceAdapters` に設定済みアダプターを含める
 
 Job 種別は `asset_ingest` / `render` / `tts` の 3 つとなる。単一 worker、`queued → running → succeeded|failed`・`queued → cancelled` の状態遷移、リースなし、起動時 `WORKER_INTERRUPTED` 掃除は [ADR 0020](../adr/0020-no-job-lease-startup-reap.md) と [../mvp/spec.md](../mvp/spec.md) の規則をそのまま適用する。

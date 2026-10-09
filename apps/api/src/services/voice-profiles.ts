@@ -106,10 +106,15 @@ export async function deleteVoiceProfile(
       throw resourceNotFound("voice_profile", voiceProfileId);
     }
     const references = await findVoiceProfileReferences(transaction, voiceProfileId);
-    if (references.length > 0) {
+    const characters = await transaction.character.findMany({
+      where: { voiceProfileId },
+      select: { id: true },
+    });
+    if (references.length > 0 || characters.length > 0) {
       throw new ApiError(409, "VOICE_PROFILE_IN_USE", undefined, {
         voiceProfileId,
         scriptVersionIds: references,
+        characterIds: characters.map((character) => character.id),
       });
     }
     await transaction.voiceProfile.delete({ where: { id: voiceProfileId } });

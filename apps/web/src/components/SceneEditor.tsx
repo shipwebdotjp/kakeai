@@ -9,6 +9,7 @@ import {
 import {
   DEFAULT_VOICE_ADAPTER_ID,
   contentDocumentSchema,
+  type CharacterLibraryEntry,
   type ContentDocument,
   type ScriptVersion,
   type Warning,
@@ -16,15 +17,20 @@ import {
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
   useAdapterVoices,
+  useCharacters,
   useSaveScriptVersion,
   useVoiceProfiles,
 } from "../api/hooks";
 import {
   buildContentDocument,
-  createEmptySpeaker,
+  countCharacterFormUsage,
   createPointSceneFormValue,
+  newAppearanceId,
+  newCharacterId,
+  newSpeakerId,
   toFormValues,
   DEFAULT_BGM_GAIN_DB,
+  type CharacterFormValue,
   type DocumentFormValues,
 } from "../content/form";
 import { errorMessage } from "../lib/errorMessage";
@@ -36,7 +42,6 @@ import { StandingFields } from "./StandingFields";
 interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
-  workId: string;
   scriptVersionId: string;
   onSaved?: (scriptVersion: ScriptVersion, options: { focusPreview: boolean }) => void;
 }
@@ -142,9 +147,10 @@ function CueFields({
   );
 }
 
-export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
+  const characterLibrary = useCharacters();
   const adapterVoices = useAdapterVoices(DEFAULT_VOICE_ADAPTER_ID);
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
@@ -159,19 +165,30 @@ export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved 
     return () => clearTimeout(timer);
   }, [savedAtMs]);
 
-  const { register, control, handleSubmit, reset, getValues, setValue, formState } =
+  const { register, control, handleSubmit, reset, getValues, setValue } =
     useForm<DocumentFormValues>({
       defaultValues: toFormValues(base),
     });
   const { fields, insert, remove, move } = useFieldArray({ control, name: "scenes" });
   const {
-    fields: speakerFields,
-    append: appendSpeaker,
-    remove: removeSpeaker,
-  } = useFieldArray({ control, name: "speakers" });
+    fields: characterFields,
+    append: appendCharacter,
+    remove: removeCharacter,
+  } = useFieldArray({ control, name: "characters" });
   const watchedScenes = useWatch({ control, name: "scenes" }) ?? [];
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
   const watchedSpeakers = useWatch({ control, name: "speakers" }) ?? [];
+  const savedVoiceByLineId = useMemo(() => {
+    const speakerById = new Map(base.speakers.map((speaker) => [speaker.id, speaker]));
+    const map = new Map<string, string | null>();
+    for (const scene of base.scenes) {
+      for (const line of scene.lines) {
+        const speaker = line.speakerId === null ? undefined : speakerById.get(line.speakerId);
+        map.set(line.id, speaker?.voiceProfileId ?? null);
+      }
+    }
+    return map;
+  }, [base]);
 
   useEffect(() => {
     reset(toFormValues(base));
@@ -223,6 +240,79 @@ export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved 
       return;
     }
     move(index, target);
+  };
+
+  const addSpeakerFor = (characterId: string, name: string, voiceProfileId: string | null) => {
+    const speakers = getValues("speakers");
+    setValue(
+      "speakers",
+      [...speakers, { id: newSpeakerId(), name, characterId, voiceProfileId }],
+      { shouldDirty: true },
+    );
+  };
+
+  const addCharacterFromLibrary = (entry: CharacterLibraryEntry) => {
+    const characterId = newCharacterId();
+    const character: CharacterFormValue = {
+      id: characterId,
+      name: entry.name,
+      voiceProfileId: entry.voiceProfileId,
+      appearances: entry.appearances.map((appearance) => ({
+        id: newAppearanceId(),
+        assetId: appearance.assetId,
+        expression: appearance.expression,
+        pose: appearance.pose,
+        label: appearance.label ?? "",
+      })),
+    };
+    appendCharacter(character);
+    addSpeakerFor(characterId, entry.name, entry.voiceProfileId);
+  };
+
+  const addVoiceOnlySpeaker = () => {
+    const characterId = newCharacterId();
+    appendCharacter({ id: characterId, name: "ナレーター", voiceProfileId: null, appearances: [] });
+    addSpeakerFor(characterId, "ナレーター", null);
+  };
+
+  const deleteCharacter = (index: number, character: CharacterFormValue) => {
+    const usage = countCharacterFormUsage(getValues(), character.id);
+    const details: string[] = [];
+    if (usage.lines > 0) {
+      details.push(`セリフ ${usage.lines} 件`);
+    }
+    if (usage.standing > 0) {
+      details.push(`立ち絵 ${usage.standing} 件（${usage.scenes} シーン）`);
+    }
+    const usageText =
+      details.length === 0 ? "" : `\n使用中: ${details.join("、")}。保存するとこれらの参照を解除します。`;
+    if (!window.confirm(`「${character.name || character.id}」を削除しますか？${usageText}`)) {
+      return;
+    }
+    const speakerIds = new Set(
+      getValues("speakers")
+        .filter((speaker) => speaker.characterId === character.id)
+        .map((speaker) => speaker.id),
+    );
+    removeCharacter(index);
+    setValue(
+      "speakers",
+      getValues("speakers").filter((speaker) => speaker.characterId !== character.id),
+      { shouldDirty: true },
+    );
+    getValues("scenes").forEach((scene, sceneIndex) => {
+      scene?.lines.forEach((line, lineIndex) => {
+        if (line?.speakerId !== null && line?.speakerId !== undefined && speakerIds.has(line.speakerId)) {
+          setValue(`scenes.${sceneIndex}.lines.${lineIndex}.speakerId`, null, {
+            shouldDirty: true,
+          });
+        }
+      });
+      if (scene?.standingCharacterId === character.id) {
+        setValue(`scenes.${sceneIndex}.standingCharacterId`, null, { shouldDirty: true });
+        setValue(`scenes.${sceneIndex}.standingAppearanceId`, null, { shouldDirty: true });
+      }
+    });
   };
 
   const pointOrdinals = useMemo(() => {
@@ -350,39 +440,32 @@ export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved 
       </section>
 
       <section className="my-4 rounded-lg border border-border p-4">
-        <h3 className="mt-0 mb-2 text-lg font-semibold">話者</h3>
+        <h3 className="mt-0 mb-2 text-lg font-semibold">キャラクター</h3>
         <p className={metaTextClass}>
-          セリフの話者を登録し、声プロファイルを割り当てます。声プロファイルは「音声」画面で作成します。
+          この作品で使うキャラクターです。声プロファイルを割り当てると、そのキャラクターのセリフをTTSで生成できます。外観は「キャラクターライブラリ」で登録します。
         </p>
         {voiceProfiles.isError && (
           <p className={errorTextClass}>声プロファイルを読み込めませんでした。</p>
         )}
-        {speakerFields.map((field, speakerIndex) => (
+        {characterLibrary.isError && (
+          <p className={errorTextClass}>キャラクターライブラリを読み込めませんでした。</p>
+        )}
+        {characterFields.map((field, characterIndex) => (
           <div key={field.id} className="my-2 rounded border border-border p-2">
             <div className="flex flex-wrap items-center gap-2">
               <input
-                placeholder="話者名"
+                placeholder="キャラクター名"
                 className={`min-w-[160px] flex-1 ${textFieldClass}`}
-                {...register(`speakers.${speakerIndex}.name`)}
+                {...register(`characters.${characterIndex}.name`)}
               />
               <button
                 type="button"
                 className={buttonDangerClass}
                 onClick={() => {
-                  const speakerId = getValues(`speakers.${speakerIndex}.id`);
-                  removeSpeaker(speakerIndex);
-                  if (typeof speakerId !== "string") {
-                    return;
+                  const character = getValues(`characters.${characterIndex}`);
+                  if (character !== undefined) {
+                    deleteCharacter(characterIndex, character);
                   }
-                  getValues("scenes").forEach((scene, sceneIndex) => {
-                    scene?.lines.forEach((line, lineIndex) => {
-                      if (line?.speakerId === speakerId) {
-                        setValue(`scenes.${sceneIndex}.lines.${lineIndex}.speakerId`, null, {
-                          shouldDirty: true,
-                        });
-                      }
-                    });
-                  });
                 }}
               >
                 削除
@@ -390,26 +473,10 @@ export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved 
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <label className="inline-flex items-center gap-1.5">
-                キャラクター
-                <select
-                  className={textFieldClass}
-                  {...register(`speakers.${speakerIndex}.characterId`, {
-                    setValueAs: (value) => (value === "" ? null : value),
-                  })}
-                >
-                  <option value="">なし</option>
-                  {watchedCharacters.map((character) => (
-                    <option key={character.id} value={character.id}>
-                      {character.name || character.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="inline-flex items-center gap-1.5">
                 声プロファイル
                 <select
                   className={textFieldClass}
-                  {...register(`speakers.${speakerIndex}.voiceProfileId`, {
+                  {...register(`characters.${characterIndex}.voiceProfileId`, {
                     setValueAs: (value) => (value === "" ? null : value),
                   })}
                 >
@@ -421,19 +488,43 @@ export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved 
                   ))}
                 </select>
               </label>
+              <span className={metaTextClass}>
+                外観 {watchedCharacters[characterIndex]?.appearances.length ?? 0} 件
+              </span>
             </div>
           </div>
         ))}
-        <button
-          type="button"
-          className={buttonNeutralClass}
-          onClick={() => appendSpeaker(createEmptySpeaker())}
-        >
-          話者を追加
-        </button>
-        {speakerFields.length === 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-1.5">
+            ライブラリから追加
+            <select
+              className={textFieldClass}
+              value=""
+              disabled={characterLibrary.isLoading}
+              onChange={(event) => {
+                const entry = characterLibrary.data?.find(
+                  (candidate) => candidate.id === event.target.value,
+                );
+                if (entry !== undefined) {
+                  addCharacterFromLibrary(entry);
+                }
+              }}
+            >
+              <option value="">選択してください</option>
+              {(characterLibrary.data ?? []).map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name || entry.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className={buttonNeutralClass} onClick={addVoiceOnlySpeaker}>
+            声だけの話者を追加
+          </button>
+        </div>
+        {characterFields.length === 0 && (
           <p className={metaTextClass}>
-            話者がありません。セリフに声を割り当てるには話者を追加してください。
+            キャラクターがありません。「ライブラリから追加」で追加してください。
           </p>
         )}
       </section>
@@ -582,7 +673,6 @@ export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved 
               setValue={setValue}
               sceneIndex={sceneIndex}
               characters={watchedCharacters}
-              workId={workId}
             />
 
             {scene.kind === "point" && (
@@ -595,10 +685,11 @@ export function SceneEditor({ base, editionId, workId, scriptVersionId, onSaved 
                   sceneId={scene.id}
                   scriptVersionId={scriptVersionId}
                   speakers={watchedSpeakers}
+                  characters={watchedCharacters}
                   voiceProfiles={voiceProfiles.data ?? []}
                   voices={adapterVoices.data?.voices}
                   voicesLoading={adapterVoices.isLoading}
-                  formDirty={formState.isDirty}
+                  savedVoiceByLineId={savedVoiceByLineId}
                 />
             )}
           </section>

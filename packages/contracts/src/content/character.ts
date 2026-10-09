@@ -6,6 +6,7 @@ export const characterAppearanceSchema = z.strictObject({
   assetId: idSchema,
   expression: z.string(),
   pose: z.string(),
+  label: z.string().trim().min(1).optional(),
 });
 
 export const characterSchema = z.strictObject({

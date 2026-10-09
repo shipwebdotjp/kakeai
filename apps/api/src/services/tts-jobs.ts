@@ -67,7 +67,7 @@ export async function createTtsJob(
   if (segment === undefined) {
     throw resourceNotFound("narration_segment", narrationSegmentId);
   }
-  const speechText = segment.speechText.trim();
+  const speechText = (input.speechText ?? segment.speechText).trim();
   if (speechText.length === 0) {
     throw ttsInputIssue(["speechText"], "読み上げテキストが空です。");
   }
