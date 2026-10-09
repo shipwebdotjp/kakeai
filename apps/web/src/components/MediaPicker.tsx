@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { Asset, AssetKindName } from "@kakeai/contracts";
 import { renderContentUrl } from "../api/client";
-import { useAssets, useUploadAsset } from "../api/hooks";
+import { useAssets, useUploadAssets, type UploadAssetsResult } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
+import { FileDropZone, filesFromInput } from "./FileDropZone";
 import { buttonNeutralClass, errorTextClass, metaTextClass } from "../ui";
 
 interface MediaPickerProps {
@@ -51,14 +52,26 @@ function Thumbnail({ asset }: { asset: Asset }) {
 
 export function MediaPicker({ label, kinds, selectedAssetId, onSelect }: MediaPickerProps) {
   const assets = useAssets();
-  const upload = useUploadAsset();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const upload = useUploadAssets();
   const [open, setOpen] = useState(false);
+  const [failures, setFailures] = useState<UploadAssetsResult["failed"]>([]);
 
   const selectable = (assets.data ?? []).filter(
     (asset) => asset.status === "ready" && kinds.includes(asset.kind),
   );
   const accept = kinds.map((kind) => `${kind}/*`).join(",");
+
+  const onFiles = (files: File[]) => {
+    if (files.length === 0 || upload.isPending) {
+      return;
+    }
+    setFailures([]);
+    upload.mutate(files, {
+      onSuccess: (result) => {
+        setFailures(result.failed);
+      },
+    });
+  };
 
   return (
     <div className="my-2">
@@ -77,30 +90,35 @@ export function MediaPicker({ label, kinds, selectedAssetId, onSelect }: MediaPi
       </div>
 
       {open && (
-        <div className="mt-2 rounded border border-border p-2">
+        <FileDropZone onFiles={onFiles} disabled={upload.isPending} className="mt-2">
           <div className="flex flex-wrap items-center gap-2">
             <input
-              ref={inputRef}
               type="file"
+              multiple
               accept={accept}
               disabled={upload.isPending}
               className="text-sm"
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file !== undefined) {
-                  upload.mutate(file, {
-                    onSuccess: () => {
-                      if (inputRef.current !== null) {
-                        inputRef.current.value = "";
-                      }
-                    },
-                  });
-                }
+                const files = filesFromInput(event.target);
+                event.target.value = "";
+                onFiles(files);
               }}
             />
             {upload.isPending && <span className={metaTextClass}>アップロード中…</span>}
           </div>
+          <p className={metaTextClass}>ここにファイルをドラッグ&amp;ドロップでも追加できます。</p>
           {upload.isError && <p className={errorTextClass}>{errorMessage(upload.error)}</p>}
+          {failures.length > 0 && (
+            <div className="rounded border border-red-400 bg-red-50 p-2 text-sm dark:bg-red-950/40">
+              <ul>
+                {failures.map((entry, index) => (
+                  <li key={`${entry.file.name}-${index}`}>
+                    {entry.file.name}: {errorMessage(entry.error)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {assets.isLoading && <p className={metaTextClass}>読み込み中…</p>}
           {assets.isError && <p className={errorTextClass}>{errorMessage(assets.error)}</p>}
@@ -125,7 +143,7 @@ export function MediaPicker({ label, kinds, selectedAssetId, onSelect }: MediaPi
               </li>
             ))}
           </ul>
-        </div>
+        </FileDropZone>
       )}
     </div>
   );

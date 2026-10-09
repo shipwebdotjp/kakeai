@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import type { ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
 import { charactersRoute } from "../lib/routes";
 import { PreviewSection } from "../components/PreviewSection";
@@ -15,10 +16,22 @@ export function WorkEditPage() {
   const current = useCurrentScriptVersion(editionId);
   const updateWork = useUpdateWork(workId);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setTitleDraft(null);
-  }, [workId]);
+    setPreviewVersionId(null);
+  }, [workId, editionId]);
+
+  const onSaved = (scriptVersion: ScriptVersion, options: { focusPreview: boolean }) => {
+    setPreviewVersionId(scriptVersion.id);
+    if (options.focusPreview) {
+      requestAnimationFrame(() => {
+        previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  };
 
   const title = titleDraft ?? work.data?.title ?? "";
 
@@ -75,9 +88,15 @@ export function WorkEditPage() {
                 base={current.data.content}
                 editionId={editionId}
                 workId={workId}
+                onSaved={onSaved}
               />
-              <PreviewSection scriptVersionId={current.data.id} />
-              <RenderSection workId={workId} scriptVersionId={current.data.id} />
+              <div ref={previewRef}>
+                <PreviewSection scriptVersionId={previewVersionId ?? current.data.id} />
+              </div>
+              <RenderSection
+                workId={workId}
+                scriptVersionId={previewVersionId ?? current.data.id}
+              />
             </>
           )}
         </>

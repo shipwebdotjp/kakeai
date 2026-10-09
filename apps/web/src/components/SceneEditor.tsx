@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useFieldArray,
   useForm,
@@ -9,6 +9,7 @@ import {
 import {
   contentDocumentSchema,
   type ContentDocument,
+  type ScriptVersion,
   type Warning,
 } from "@kakeai/contracts";
 import { resolveTimeline } from "@kakeai/video/timeline";
@@ -30,6 +31,7 @@ interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
   workId: string;
+  onSaved?: (scriptVersion: ScriptVersion, options: { focusPreview: boolean }) => void;
 }
 
 const SCENE_LABELS: Record<string, string> = {
@@ -133,11 +135,12 @@ function CueFields({
   );
 }
 
-export function SceneEditor({ base, editionId, workId }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, workId, onSaved }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
+  const focusPreviewRef = useRef(false);
 
   useEffect(() => {
     if (savedAtMs === null) {
@@ -159,31 +162,39 @@ export function SceneEditor({ base, editionId, workId }: SceneEditorProps) {
     reset(toFormValues(base));
   }, [base, reset]);
 
-  const onSubmit = handleSubmit((values) => {
-    let document: ContentDocument;
-    try {
-      document = buildContentDocument(base, values);
-    } catch (error) {
-      setIssues([errorMessage(error)]);
-      setWarnings([]);
-      return;
-    }
-    const parsed = contentDocumentSchema.safeParse(document);
-    if (!parsed.success) {
-      setIssues(
-        parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
-      );
-      setWarnings([]);
-      return;
-    }
-    setIssues([]);
-    save.mutate(parsed.data, {
-      onSuccess: (result) => {
-        setWarnings(result.warnings);
-        setSavedAtMs(Date.now());
-      },
-    });
-  });
+  const onSubmit = handleSubmit(
+    (values) => {
+      const focusPreview = focusPreviewRef.current;
+      focusPreviewRef.current = false;
+      let document: ContentDocument;
+      try {
+        document = buildContentDocument(base, values);
+      } catch (error) {
+        setIssues([errorMessage(error)]);
+        setWarnings([]);
+        return;
+      }
+      const parsed = contentDocumentSchema.safeParse(document);
+      if (!parsed.success) {
+        setIssues(
+          parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
+        );
+        setWarnings([]);
+        return;
+      }
+      setIssues([]);
+      save.mutate(parsed.data, {
+        onSuccess: (result) => {
+          setWarnings(result.warnings);
+          setSavedAtMs(Date.now());
+          onSaved?.(result.scriptVersion, { focusPreview });
+        },
+      });
+    },
+    () => {
+      focusPreviewRef.current = false;
+    },
+  );
 
   const onAddPoint = () => {
     const outroIndex = getValues("scenes").findIndex((scene) => scene.kind === "outro");
@@ -235,8 +246,25 @@ export function SceneEditor({ base, editionId, workId }: SceneEditorProps) {
   return (
     <form onSubmit={onSubmit}>
       <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
-        <button type="submit" className={buttonPrimaryClass} disabled={save.isPending}>
+        <button
+          type="submit"
+          className={buttonPrimaryClass}
+          disabled={save.isPending}
+          onClick={() => {
+            focusPreviewRef.current = false;
+          }}
+        >
           保存
+        </button>
+        <button
+          type="submit"
+          className={buttonNeutralClass}
+          disabled={save.isPending}
+          onClick={() => {
+            focusPreviewRef.current = true;
+          }}
+        >
+          保存してプレビュー
         </button>
         {savedAtMs !== null && (
           <span className={metaTextClass}>

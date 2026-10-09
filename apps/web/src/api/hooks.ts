@@ -84,11 +84,31 @@ export function useAssets() {
   });
 }
 
-export function useUploadAsset() {
+export interface UploadAssetsResult {
+  uploaded: Asset[];
+  failed: { file: File; error: unknown }[];
+}
+
+export function useUploadAssets() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => (await apiUpload<Asset>("/assets", file)).data,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
+    mutationFn: async (files: File[]): Promise<UploadAssetsResult> => {
+      const uploaded: Asset[] = [];
+      const failed: { file: File; error: unknown }[] = [];
+      for (const file of files) {
+        try {
+          uploaded.push((await apiUpload<Asset>("/assets", file)).data);
+        } catch (error) {
+          failed.push({ file, error });
+        }
+      }
+      return { uploaded, failed };
+    },
+    onSuccess: (result) => {
+      if (result.uploaded.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["assets"] });
+      }
+    },
   });
 }
 
@@ -115,10 +135,12 @@ export function useCurrentScriptVersion(editionId: string | undefined) {
   });
 }
 
-export function useScriptVersionPreview(scriptVersionId: string | undefined) {  return useQuery({
+export function useScriptVersionPreview(scriptVersionId: string | undefined) {
+  return useQuery({
     queryKey: ["script-version-preview", scriptVersionId],
     enabled: scriptVersionId !== undefined && scriptVersionId.length > 0,
     staleTime: 30_000,
+    placeholderData: (previousData) => previousData,
     queryFn: async () =>
       (
         await apiRequest<ScriptVersionPreview>(

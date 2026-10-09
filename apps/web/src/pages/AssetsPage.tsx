@@ -1,10 +1,12 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useState } from "react";
 import type { Asset } from "@kakeai/contracts";
 import { renderContentUrl } from "../api/client";
-import { useAssets, useDeleteAsset, useUploadAsset } from "../api/hooks";
+import { useAssets, useDeleteAsset, useUploadAssets, type UploadAssetsResult } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
+import { FileDropZone, filesFromInput } from "../components/FileDropZone";
 import {
   buttonDangerClass,
+  buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
   metaTextClass,
@@ -74,22 +76,32 @@ function AssetPreview({ asset }: { asset: Asset }) {
 
 export function AssetsPage() {
   const assets = useAssets();
-  const uploadAsset = useUploadAsset();
+  const uploadAssets = useUploadAssets();
   const deleteAsset = useDeleteAsset();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [selected, setSelected] = useState<File | null>(null);
+  const [pending, setPending] = useState<File[]>([]);
+  const [failures, setFailures] = useState<UploadAssetsResult["failed"]>([]);
 
-  const onUpload = (event: FormEvent) => {
-    event.preventDefault();
-    if (selected === null) {
+  const addFiles = (files: File[]) => {
+    if (files.length === 0 || uploadAssets.isPending) {
       return;
     }
-    uploadAsset.mutate(selected, {
-      onSuccess: () => {
-        setSelected(null);
-        if (inputRef.current !== null) {
-          inputRef.current.value = "";
-        }
+    setFailures([]);
+    setPending((previous) => [...previous, ...files]);
+  };
+
+  const removePending = (index: number) => {
+    setPending((previous) => previous.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const onUpload = () => {
+    if (pending.length === 0) {
+      return;
+    }
+    const files = pending;
+    uploadAssets.mutate(files, {
+      onSuccess: (result) => {
+        setFailures(result.failed);
+        setPending(result.failed.map((entry) => entry.file));
       },
     });
   };
@@ -98,19 +110,77 @@ export function AssetsPage() {
     <section>
       <h1 className="mb-4 text-2xl font-bold">素材ライブラリ</h1>
 
-      <form onSubmit={onUpload} className="my-3 flex flex-wrap items-center gap-2">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*,video/*,audio/*"
-          onChange={(event) => setSelected(event.target.files?.[0] ?? null)}
-          className="text-sm"
-        />
-        <button type="submit" className={buttonPrimaryClass} disabled={selected === null || uploadAsset.isPending}>
-          アップロード
+      <FileDropZone
+        onFiles={addFiles}
+        disabled={uploadAssets.isPending}
+        className="my-3"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={metaTextClass}>ここにファイルをドラッグ&amp;ドロップ</span>
+          <input
+            type="file"
+            multiple
+            accept="image/*,video/*,audio/*"
+            disabled={uploadAssets.isPending}
+            onChange={(event) => {
+              addFiles(filesFromInput(event.target));
+              event.target.value = "";
+            }}
+            className="text-sm"
+          />
+        </div>
+
+        {pending.length > 0 && (
+          <ul className="mt-2 list-none p-0">
+            {pending.map((file, index) => (
+              <li
+                key={`${file.name}-${file.lastModified}-${index}`}
+                className="flex items-center gap-2 border-t border-border py-1 text-sm first:border-t-0"
+              >
+                <span className="flex-1 truncate">{file.name}</span>
+                <span className={metaTextClass}>{formatBytes(file.size)}</span>
+                <button
+                  type="button"
+                  className={buttonNeutralClass}
+                  disabled={uploadAssets.isPending}
+                  onClick={() => removePending(index)}
+                >
+                  外す
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button
+          type="button"
+          className={`mt-2 ${buttonPrimaryClass}`}
+          disabled={pending.length === 0 || uploadAssets.isPending}
+          onClick={onUpload}
+        >
+          {uploadAssets.isPending
+            ? "アップロード中…"
+            : pending.length > 0
+              ? `${pending.length}件をアップロード`
+              : "アップロード"}
         </button>
-      </form>
-      {uploadAsset.isError && <p className={errorTextClass}>{errorMessage(uploadAsset.error)}</p>}
+      </FileDropZone>
+
+      {uploadAssets.isError && (
+        <p className={errorTextClass}>{errorMessage(uploadAssets.error)}</p>
+      )}
+      {failures.length > 0 && (
+        <div className="rounded border border-red-400 bg-red-50 p-3 text-sm dark:bg-red-950/40">
+          <strong>{failures.length}件のアップロードに失敗しました</strong>
+          <ul>
+            {failures.map((entry, index) => (
+              <li key={`${entry.file.name}-${index}`}>
+                {entry.file.name}: {errorMessage(entry.error)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {deleteAsset.isError && <p className={errorTextClass}>{errorMessage(deleteAsset.error)}</p>}
 
       {assets.isLoading && <p>読み込み中…</p>}
