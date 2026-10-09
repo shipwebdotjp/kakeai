@@ -651,6 +651,18 @@ export function createEmptyAppearance(): AppearanceFormValue {
   };
 }
 
+export function appearanceDisplayName(appearance: {
+  label: string;
+  expression: string;
+  pose: string;
+}): string {
+  const expression = appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION;
+  const pose = appearance.pose.trim() || DEFAULT_APPEARANCE_POSE;
+  const tags = `${expression} / ${pose}`;
+  const label = appearance.label.trim();
+  return label.length > 0 ? `${label}（${tags}）` : tags;
+}
+
 export interface CharacterFormUsage {
   scenes: number;
   standing: number;

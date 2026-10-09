@@ -4,16 +4,14 @@ import {
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
-import { useAssets } from "../api/hooks";
 import {
-  DEFAULT_APPEARANCE_EXPRESSION,
-  DEFAULT_APPEARANCE_POSE,
   DEFAULT_STANDING_SCALE,
   DEFAULT_STANDING_X,
   DEFAULT_STANDING_Y,
   MAX_STANDING_SCALE,
   MIN_STANDING_SCALE,
   STANDING_SCALE_STEP,
+  appearanceDisplayName,
   type CharacterFormValue,
   type DocumentFormValues,
 } from "../content/form";
@@ -42,19 +40,11 @@ export function StandingFields({
     control,
     name: `scenes.${sceneIndex}.standingAppearanceId`,
   });
-  const assets = useAssets();
 
   const character = characters.find((entry) => entry.id === characterId);
   const appearances = character?.appearances ?? [];
   const selectedAppearance = appearances.find((entry) => entry.id === appearanceId);
   const selected = characterId !== null && selectedAppearance !== undefined;
-
-  const fileName = (assetId: string | null): string | null => {
-    if (assetId === null) {
-      return null;
-    }
-    return assets.data?.find((asset) => asset.id === assetId)?.originalFilename ?? assetId;
-  };
 
   const onCharacterChange = (nextId: string) => {
     const next = characters.find((entry) => entry.id === nextId);
@@ -136,18 +126,11 @@ export function StandingFields({
                   }}
                 >
                   <option value="">未指定</option>
-                  {appearances.map((appearance) => {
-                    const expression =
-                      appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION;
-                    const pose = appearance.pose.trim() || DEFAULT_APPEARANCE_POSE;
-                    const file = fileName(appearance.assetId);
-                    return (
-                      <option key={appearance.id} value={appearance.id}>
-                        {expression} / {pose}
-                        {file !== null ? `（${file}）` : ""}
-                      </option>
-                    );
-                  })}
+                  {appearances.map((appearance) => (
+                    <option key={appearance.id} value={appearance.id}>
+                      {appearanceDisplayName(appearance)}
+                    </option>
+                  ))}
                 </select>
               </label>
             )}

@@ -33,7 +33,8 @@ import {
   type DocumentFormValues,
 } from "../content/form";
 import { errorMessage } from "../lib/errorMessage";
-import { buttonDangerClass, buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { CharacterFields } from "./CharacterFields";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
 import { StandingFields } from "./StandingFields";
@@ -441,7 +442,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
       <section className="my-4 rounded-lg border border-border p-4">
         <h3 className="mt-0 mb-2 text-lg font-semibold">キャラクター</h3>
         <p className={metaTextClass}>
-          この作品で使うキャラクターです。声プロファイルを割り当てると、そのキャラクターのセリフをTTSで生成できます。外観は「キャラクターライブラリ」で登録します。
+          この作品で使うキャラクターです。声プロファイルを割り当てると、そのキャラクターのセリフをTTSで生成できます。外観はライブラリから取り込んだ後に、この作品内で追加・編集できます。
         </p>
         {voiceProfiles.isError && (
           <p className={errorTextClass}>声プロファイルを読み込めませんでした。</p>
@@ -450,48 +451,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
           <p className={errorTextClass}>キャラクターライブラリを読み込めませんでした。</p>
         )}
         {characterFields.map((field, characterIndex) => (
-          <div key={field.id} className="my-2 rounded border border-border p-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                placeholder="キャラクター名"
-                className={`min-w-[160px] flex-1 ${textFieldClass}`}
-                {...register(`characters.${characterIndex}.name`)}
-              />
-              <button
-                type="button"
-                className={buttonDangerClass}
-                onClick={() => {
-                  const character = getValues(`characters.${characterIndex}`);
-                  if (character !== undefined) {
-                    deleteCharacter(characterIndex, character);
-                  }
-                }}
-              >
-                削除
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-1.5">
-                声プロファイル
-                <select
-                  className={textFieldClass}
-                  {...register(`characters.${characterIndex}.voiceProfileId`, {
-                    setValueAs: (value) => (value === "" ? null : value),
-                  })}
-                >
-                  <option value="">未設定</option>
-                  {(voiceProfiles.data ?? []).map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name || profile.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className={metaTextClass}>
-                外観 {watchedCharacters[characterIndex]?.appearances.length ?? 0} 件
-              </span>
-            </div>
-          </div>
+          <CharacterFields
+            key={`${field.id}-${characterIndex}`}
+            control={control}
+            register={register}
+            getValues={getValues}
+            setValue={setValue}
+            characterIndex={characterIndex}
+            voiceProfiles={voiceProfiles.data ?? []}
+            onDelete={deleteCharacter}
+          />
         ))}
         <div className="flex flex-wrap items-center gap-3">
           <label className="inline-flex items-center gap-1.5">

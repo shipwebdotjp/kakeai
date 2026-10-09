@@ -7,25 +7,18 @@ import {
   useUpdateCharacter,
   useVoiceProfiles,
 } from "../api/hooks";
-import { createEmptyAppearance, DEFAULT_APPEARANCE_EXPRESSION, DEFAULT_APPEARANCE_POSE } from "../content/form";
+import { createEmptyAppearance, DEFAULT_APPEARANCE_EXPRESSION, DEFAULT_APPEARANCE_POSE, type AppearanceFormValue } from "../content/form";
 import { errorMessage } from "../lib/errorMessage";
-import { MediaPicker } from "../components/MediaPicker";
+import { AppearanceFields } from "../components/AppearanceFields";
 import {
   buttonDangerClass,
-  buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
   metaTextClass,
   textFieldClass,
 } from "../ui";
 
-interface AppearanceDraft {
-  id: string;
-  assetId: string | null;
-  expression: string;
-  pose: string;
-  label: string;
-}
+type AppearanceDraft = AppearanceFormValue;
 
 interface CharacterDraft {
   name: string;
@@ -170,60 +163,12 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
         </select>
       </label>
 
-      <div className="mt-3 border-t border-dashed border-border pt-2">
-        <p className="mb-1 text-sm font-medium">外観</p>
-        {draft.appearances.map((appearance, index) => (
-          <div key={appearance.id} className="my-2 rounded border border-border p-2">
-            <MediaPicker
-              label={`外観 ${index + 1} の画像`}
-              kinds={["image"]}
-              selectedAssetId={appearance.assetId}
-              onSelect={(assetId) => updateAppearance(appearance.id, { assetId })}
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-1.5">
-                名前
-                <input
-                  value={appearance.label}
-                  placeholder="例: 夏服"
-                  className={textFieldClass}
-                  onChange={(event) => updateAppearance(appearance.id, { label: event.target.value })}
-                />
-              </label>
-              <label className="inline-flex items-center gap-1.5">
-                表情
-                <input
-                  value={appearance.expression}
-                  placeholder={DEFAULT_APPEARANCE_EXPRESSION}
-                  className={textFieldClass}
-                  onChange={(event) =>
-                    updateAppearance(appearance.id, { expression: event.target.value })
-                  }
-                />
-              </label>
-              <label className="inline-flex items-center gap-1.5">
-                ポーズ
-                <input
-                  value={appearance.pose}
-                  placeholder={DEFAULT_APPEARANCE_POSE}
-                  className={textFieldClass}
-                  onChange={(event) => updateAppearance(appearance.id, { pose: event.target.value })}
-                />
-              </label>
-              <button
-                type="button"
-                className={buttonDangerClass}
-                onClick={() => removeAppearance(appearance.id)}
-              >
-                外観を削除
-              </button>
-            </div>
-          </div>
-        ))}
-        <button type="button" className={buttonNeutralClass} onClick={addAppearance}>
-          外観を追加
-        </button>
-      </div>
+      <AppearanceFields
+        appearances={draft.appearances}
+        onAdd={addAppearance}
+        onPatch={updateAppearance}
+        onRemove={removeAppearance}
+      />
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
@@ -252,7 +197,7 @@ export function CharacterLibraryPage() {
     <section>
       <h1 className="my-3 text-2xl font-bold">キャラクターライブラリ</h1>
       <p className={metaTextClass}>
-        作品をまたいで使うキャラクターを登録します。台本には「ライブラリから追加」でコピーされ、作品ごとに名前や声を調整できます。外観は「夏服」「冬服」のように複数登録できます。
+        作品をまたいで使うキャラクターを登録します。台本には「ライブラリから追加」でコピーされ、作品ごとに名前・声・外観を調整できます。外観は「夏服」「冬服」のように複数登録できます。
       </p>
 
       {characters.isLoading && <p>読み込み中…</p>}
