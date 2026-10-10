@@ -136,6 +136,15 @@ describe("script version preview", () => {
     ]);
     expect(preview.renderer.engine).toBe("hyperframes");
     expect(preview.renderer.compilerVersion).toBe("app-1");
+    expect(preview.timeline.fps).toBe(30);
+    expect(preview.timeline.totalDurationMs).toBe(11000);
+    expect(preview.timeline.scenes.map((scene) => scene.sceneId)).toEqual([
+      "scene-intro",
+      "scene-point-1",
+      "scene-point-2",
+      "scene-point-3",
+      "scene-outro",
+    ]);
   });
 
   it("includes a standing appearance image in the preview", async () => {

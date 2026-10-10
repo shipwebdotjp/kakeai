@@ -5,6 +5,8 @@ import {
   compileDocument,
   CompositionCompileError,
   collectTimelineIssues,
+  resolveTimeline,
+  OUTPUT_FPS,
   type CompiledComposition,
   type ResolvedAssetKind,
 } from "@kakeai/video";
@@ -208,6 +210,24 @@ export function renderSourceDurationMs(asset: AssetWithRenditions): number | nul
   return rendition?.durationMs ?? asset.durationMs;
 }
 
+function buildPreviewTimeline(content: ContentDocument) {
+  const timeline = resolveTimeline(content);
+  return {
+    totalDurationMs: timeline.totalDurationMs,
+    fps: OUTPUT_FPS,
+    scenes: timeline.scenes.map((placement) => ({
+      sceneId: placement.sceneId,
+      startMs: placement.startMs,
+      durationMs: placement.durationMs,
+      lines: placement.lines.map((line) => ({
+        lineId: line.lineId,
+        startMs: line.startMs,
+        durationMs: line.durationMs,
+      })),
+    })),
+  };
+}
+
 export async function getScriptVersionPreview(
   prisma: PrismaClient,
   directories: DataDirectories,
@@ -279,6 +299,7 @@ export async function getScriptVersionPreview(
       compilerVersion: COMPILER_VERSION,
       playerVersion: HYPERFRAMES_PLAYER_VERSION,
     },
+    timeline: buildPreviewTimeline(content),
   };
   const parsed = scriptVersionPreviewSchema.safeParse(preview);
   if (!parsed.success) {

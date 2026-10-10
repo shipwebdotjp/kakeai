@@ -9,12 +9,8 @@ import { SceneEditor } from "../components/SceneEditor";
 import { errorMessage } from "../lib/errorMessage";
 import type { CueFormValue, SceneFormValue } from "../content/form";
 import { SCENE_LABELS, TEXT_ROLE_LABELS } from "../content/labels";
+import { asSeekablePlayer, seekTo } from "../lib/player";
 import { buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
-
-interface SeekablePlayer extends HTMLElement {
-  seek?: (timeInSeconds: number) => void;
-  duration?: number;
-}
 
 function clampWidth(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -192,10 +188,10 @@ export function WorkEditPage() {
     if (seekMs === null) {
       return;
     }
-    const player = playerRef.current as SeekablePlayer | null;
+    const player = asSeekablePlayer(playerRef.current);
     const duration = player?.duration;
-    if (player?.seek !== undefined && typeof duration === "number" && duration > 0) {
-      player.seek(seekMs / 1000);
+    if (typeof duration === "number" && duration > 0) {
+      seekTo(player, seekMs / 1000);
     }
   }, []);
 
@@ -209,6 +205,15 @@ export function WorkEditPage() {
       return count;
     });
   }, [formScenes]);
+
+  const sceneLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    (formScenes ?? []).forEach((scene, index) => {
+      const ordinal = scene.kind === "point" ? ` ${pointOrdinals[index]}` : "";
+      map.set(scene.id, `${SCENE_LABELS[scene.kind] ?? scene.kind}${ordinal}`);
+    });
+    return map;
+  }, [formScenes, pointOrdinals]);
 
   const title = titleDraft ?? work.data?.title ?? "";
 
@@ -340,6 +345,7 @@ export function WorkEditPage() {
               <PreviewSection
                 scriptVersionId={previewVersionId ?? current.data.id}
                 playerRef={playerRef}
+                sceneLabels={sceneLabels}
               />
               <RenderSection
                 workId={workId}

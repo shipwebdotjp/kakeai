@@ -213,11 +213,31 @@ export const previewRendererSchema = z.object({
   playerVersion: z.string().min(1),
 });
 
+export const previewLineTimingSchema = z.object({
+  lineId: idSchema,
+  startMs: nonNegativeInt,
+  durationMs: nonNegativeInt,
+});
+
+export const previewSceneTimingSchema = z.object({
+  sceneId: idSchema,
+  startMs: nonNegativeInt,
+  durationMs: nonNegativeInt,
+  lines: z.array(previewLineTimingSchema),
+});
+
+export const previewTimelineSchema = z.object({
+  totalDurationMs: nonNegativeInt,
+  fps: positiveInt,
+  scenes: z.array(previewSceneTimingSchema),
+});
+
 export const scriptVersionPreviewSchema = z.object({
   scriptVersionId: idSchema,
   compositionHtml: z.string().min(1),
   assets: z.array(previewAssetSchema),
   renderer: previewRendererSchema,
+  timeline: previewTimelineSchema,
 });
 
 export type WorkSummary = z.infer<typeof workSummarySchema>;
@@ -230,4 +250,7 @@ export type Artifact = z.infer<typeof artifactSchema>;
 export type Job = z.infer<typeof jobSchema>;
 export type PreviewAsset = z.infer<typeof previewAssetSchema>;
 export type PreviewRenderer = z.infer<typeof previewRendererSchema>;
+export type PreviewLineTiming = z.infer<typeof previewLineTimingSchema>;
+export type PreviewSceneTiming = z.infer<typeof previewSceneTimingSchema>;
+export type PreviewTimeline = z.infer<typeof previewTimelineSchema>;
 export type ScriptVersionPreview = z.infer<typeof scriptVersionPreviewSchema>;
