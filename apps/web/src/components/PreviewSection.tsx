@@ -123,6 +123,7 @@ export const PreviewSection = memo(function PreviewSection({
               key={preview.data.scriptVersionId}
               ref={playerRef}
               srcdoc={preview.data.compositionHtml}
+              controls
               className="h-full w-full"
             />
           </div>

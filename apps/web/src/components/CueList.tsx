@@ -331,19 +331,38 @@ function CueField({ field, values, setField, animationPresets }: CueFieldProps) 
           </select>
         </label>
       );
-    case "color":
+    case "color": {
+      const hasColor = value.length > 0;
+      const isHexColor = /^#[0-9A-Fa-f]{6}$/.test(value);
+      const fallback = isHexColor ? value : "#FFFFFF";
       return (
         <label className="my-2 inline-flex items-center gap-1.5">
           {field.label}
           <input
-            type="text"
-            placeholder="#RRGGBB"
-            className={`w-32 ${textFieldClass}`}
-            value={value}
+            type="color"
+            className="h-8 w-12 cursor-pointer rounded border border-border"
+            value={fallback}
             onChange={(event) => setField(field.key, event.target.value)}
           />
+          {hasColor ? (
+            <>
+              <span className="text-xs">{value}</span>
+              {field.optional && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setField(field.key, "")}
+                >
+                  既定
+                </button>
+              )}
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">既定</span>
+          )}
         </label>
       );
+    }
     case "number":
       return (
         <label className="my-2 inline-flex items-center gap-1.5">
@@ -359,21 +378,34 @@ function CueField({ field, values, setField, animationPresets }: CueFieldProps) 
           />
         </label>
       );
-    case "boolean":
+    case "boolean": {
+      const options = [
+        { value: "", label: "既定" },
+        { value: "true", label: "オン" },
+        { value: "false", label: "オフ" },
+      ];
       return (
-        <label className="my-2 inline-flex items-center gap-1.5">
-          {field.label}
-          <select
-            className={textFieldClass}
-            value={value}
-            onChange={(event) => setField(field.key, event.target.value)}
-          >
-            <option value="">未指定</option>
-            <option value="true">オン</option>
-            <option value="false">オフ</option>
-          </select>
-        </label>
+        <div className="my-2 flex items-center gap-1.5">
+          <span>{field.label}</span>
+          <div className="inline-flex overflow-hidden rounded border border-border">
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`px-2 py-0.5 text-xs ${
+                  value === option.value
+                    ? "bg-brand-500 text-white"
+                    : "bg-surface hover:bg-surface-muted"
+                }`}
+                onClick={() => setField(field.key, option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
       );
+    }
     case "animation":
       return (
         <div className="my-2 flex flex-wrap items-center gap-3">

@@ -5,6 +5,7 @@ import {
   assetKindSchema,
   assetOriginSchema,
   assetStatusSchema,
+  assetTagsSchema,
   jobErrorCodeSchema,
   jobKindSchema,
   jobStatusSchema,
@@ -61,6 +62,18 @@ function parseAssetEnum<T>(schema: z.ZodType<T>, value: unknown, field: string):
   return parseEnum(schema, value, `Asset.${field}`);
 }
 
+function parseAssetTags(value: string | null): string[] {
+  if (value === null) {
+    return [];
+  }
+  try {
+    const parsed = assetTagsSchema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+
 export function toAsset(row: AssetRow): Asset {
   return {
     id: row.id,
@@ -74,6 +87,7 @@ export function toAsset(row: AssetRow): Asset {
     durationMs: row.durationMs,
     widthPx: row.widthPx,
     heightPx: row.heightPx,
+    tags: parseAssetTags(row.tagsJson),
     createdAt: toIso(row.createdAt),
     contentUrl: `${API_BASE_PATH}/assets/${encodeURIComponent(row.id)}/content`,
   };

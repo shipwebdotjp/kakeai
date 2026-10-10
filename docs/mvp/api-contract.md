@@ -339,7 +339,7 @@ Assetは全Workで再利用できる。アップロードされた原本は不�
 
 ### 一覧とメタデータ
 
-GET /assets は作成日時の降順でAsset配列を返す。任意の kind=image、kind=video、kind=audio クエリで絞り込みできる。存在しないkindは422 VALIDATION_ERRORとする。
+GET /assets は作成日時の降順でAsset配列を返す。任意の kind=image、kind=video、kind=audio クエリで絞り込みできる。存在しないkindは422 VALIDATION_ERRORとする。各Assetは利用者が編集できる `tags` を含む。タグによる絞り込みはサーバーでは行わず、取得済み配列をクライアント側で絞り込む。
 
 ~~~json
 {
@@ -356,6 +356,7 @@ GET /assets は作成日時の降順でAsset配列を返す。任意の kind=ima
       "durationMs": null,
       "widthPx": 1920,
       "heightPx": 1080,
+      "tags": ["背景", "夏"],
       "createdAt": "2026-10-08T03:10:00.000Z",
       "contentUrl": "/api/v1/assets/ast_image_001/content"
     }
@@ -364,6 +365,17 @@ GET /assets は作成日時の降順でAsset配列を返す。任意の kind=ima
 ~~~
 
 GET /assets/:assetId は同じ1件のAsset DTOを返す。GET /assets/:assetId/content は原本を検出済みのMIME typeで返し、動画・音声の確認に必要なHTTP Range requestをサポートする。GET /assets/:assetId/render-content は、正規化Renditionがあればそれを、無ければ原本を返す。正常な部分応答は206 Partial Contentとする。両エンドポイントはメディアセッションCookieで認可されるため、`<img>`、`<audio>`、`<video>` の通常の読み込みとシークで利用できる。Compositionで使うURLは後者であり、原本をそのまま使える場合も同じURLから原本が返る。
+
+### タグの更新
+
+PATCH /assets/:assetId は `{ "tags": [string, ...] }` を受け取り、タグ配列を丸ごと置き換えて更新後のAsset DTOを返す。タグは各要素の前後空白を除去し、空文字を除き、重複を1つにまとめる。1素材あたり最大30個、1タグ最大40文字。空配列はタグ無し（`tagsJson` はNULL）として保存する。存在しない素材は404 `RESOURCE_NOT_FOUND`、契約違反は422 `VALIDATION_ERROR` とする。タグは原本の同一性（`sha256`・`storageKey`・`kind`・寸法・長さ）に影響しない。
+
+~~~http
+PATCH /api/v1/assets/ast_image_001
+Content-Type: application/json
+
+{ "tags": ["背景", "夏"] }
+~~~
 
 ### アップロード
 
@@ -401,6 +413,7 @@ Content-Type: image/png
     "durationMs": null,
     "widthPx": 1920,
     "heightPx": 1080,
+    "tags": [],
     "createdAt": "2026-10-08T03:10:00.000Z",
     "contentUrl": "/api/v1/assets/ast_image_001/content"
   },

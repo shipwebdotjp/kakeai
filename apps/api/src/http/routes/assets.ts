@@ -5,14 +5,14 @@ import { join } from "node:path";
 import type { Readable } from "node:stream";
 import Busboy from "busboy";
 import { Router, type Request, type RequestHandler } from "express";
-import { assetKindSchema, type AssetKindName } from "@kakeai/contracts";
+import { assetKindSchema, updateAssetRequestSchema, type AssetKindName } from "@kakeai/contracts";
 import type { LimitsConfig } from "../../config.ts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
 import { ApiError } from "../errors.ts";
 import { sendContent } from "../content.ts";
-import { pathParam, validationError } from "../validation.ts";
+import { parseBody, pathParam, validationError } from "../validation.ts";
 import * as assets from "../../services/assets.ts";
 import type { UploadInput } from "../../services/assets.ts";
 
@@ -33,6 +33,7 @@ function receiveUpload(
     try {
       busboy = Busboy({
         headers: req.headers,
+        defParamCharset: "utf8",
         limits: { files: 1, fileSize: maxBytes, fields: 10, parts: 2, fieldSize: 1024 },
       });
     } catch {
@@ -173,6 +174,18 @@ export function createAssetsRouter(dependencies: AssetsRouterDependencies): Rout
     "/assets/:assetId",
     asyncHandler(async (req, res) => {
       sendData(res, 200, await assets.getAsset(prisma, pathParam(req, "assetId")));
+    }),
+  );
+
+  router.patch(
+    "/assets/:assetId",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(updateAssetRequestSchema, req.body);
+      sendData(
+        res,
+        200,
+        await assets.updateAssetTags(prisma, pathParam(req, "assetId"), input.tags),
+      );
     }),
   );
 

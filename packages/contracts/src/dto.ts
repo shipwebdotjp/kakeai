@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, localeSchema, nonNegativeInt, positiveInt, timestampSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { assetTagsSchema } from "./asset";
 
 export const jobKindSchema = z.enum(["asset_ingest", "render", "tts"]);
 export const jobStatusSchema = z.enum([
@@ -85,6 +86,7 @@ export const assetSchema = z.object({
   durationMs: nonNegativeInt.nullable(),
   widthPx: positiveInt.nullable(),
   heightPx: positiveInt.nullable(),
+  tags: assetTagsSchema,
   createdAt: timestampSchema,
   contentUrl: z.string().min(1),
 });

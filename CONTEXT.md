@@ -53,8 +53,12 @@ The app-wide set of reusable Character definitions that are copied into a Script
 _Avoid_: Character, asset
 
 **Asset**:
-An immutable, app-local reusable media file used by a production. Its logical identity is retained when identical original bytes restore an unavailable file.
+An immutable, app-local reusable media file used by a production. Its logical identity is retained when identical original bytes restore an unavailable file. User-assigned tags are the only metadata editable after ingest.
 _Avoid_: Background, BGM, visual
+
+**Asset Tag**:
+A user-assigned flat label on an Asset, used to classify and filter the asset library. It does not affect the asset's original bytes or identity.
+_Avoid_: Character appearance tag, category
 
 **Job**:
 A durable record of one asynchronous operation on a Work or its edition.

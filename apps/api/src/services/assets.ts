@@ -5,6 +5,7 @@ import {
   RENDITION_PURPOSE,
   SNAPSHOT_SCHEMA_VERSION,
   assetIngestJobSnapshotSchema,
+  assetTagsSchema,
   collectAssetReferences,
   renderJobSnapshotSchema,
   type Asset,
@@ -49,8 +50,8 @@ export interface ContentLocation {
 
 type Transaction = Prisma.TransactionClient;
 
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "P2002";
+function isPrismaCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
 }
 
 function limitViolation(
@@ -182,7 +183,7 @@ export async function ingestUpload(
     });
     return { asset: toAsset(created), deduplicated: false, httpStatus: 202 };
   } catch (error) {
-    if (isUniqueViolation(error)) {
+    if (isPrismaCode(error, "P2002")) {
       const raced = await prisma.asset.findUnique({ where: { sha256: input.sha256 } });
       if (raced !== null) {
         return requeueExisting(prisma, raced);
@@ -212,6 +213,26 @@ export async function getAsset(prisma: PrismaClient, assetId: string): Promise<A
     throw resourceNotFound("asset", assetId);
   }
   return toAsset(row);
+}
+
+export async function updateAssetTags(
+  prisma: PrismaClient,
+  assetId: string,
+  tags: readonly string[],
+): Promise<Asset> {
+  const normalized = assetTagsSchema.parse([...tags]);
+  try {
+    const row = await prisma.asset.update({
+      where: { id: assetId },
+      data: { tagsJson: normalized.length === 0 ? null : JSON.stringify(normalized) },
+    });
+    return toAsset(row);
+  } catch (error) {
+    if (isPrismaCode(error, "P2025")) {
+      throw resourceNotFound("asset", assetId);
+    }
+    throw error;
+  }
 }
 
 interface AssetReference {

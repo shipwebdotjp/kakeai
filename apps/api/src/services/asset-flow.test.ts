@@ -179,4 +179,34 @@ describe("asset ingest flow", () => {
       code: "ASSET_IN_USE",
     });
   });
+
+  it("updates and clears asset tags", async () => {
+    const created = await prisma.asset.create({
+      data: {
+        kind: "image",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: `assets/test-${randomUUID()}`,
+        originalFilename: "tag.png",
+        mediaType: "image/png",
+        byteSize: BigInt(10),
+        sha256: `sha-${randomUUID()}`,
+      },
+    });
+    expect(created.tagsJson).toBeNull();
+
+    const updated = await assets.updateAssetTags(prisma, created.id, ["背景", "夏"]);
+    expect(updated.tags).toEqual(["背景", "夏"]);
+    expect((await prisma.asset.findUnique({ where: { id: created.id } }))?.tagsJson).toBe(
+      JSON.stringify(["背景", "夏"]),
+    );
+
+    const cleared = await assets.updateAssetTags(prisma, created.id, []);
+    expect(cleared.tags).toEqual([]);
+    expect((await prisma.asset.findUnique({ where: { id: created.id } }))?.tagsJson).toBeNull();
+
+    await expect(assets.updateAssetTags(prisma, "missing", [])).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
+    });
+  });
 });

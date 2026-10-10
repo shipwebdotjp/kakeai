@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AssetKindName } from "@kakeai/contracts";
 import { useAssets, useUploadAssets, type UploadAssetsResult } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
 import { AssetThumbnail, assetLabel } from "../lib/assets";
+import { useAssetTagFilter } from "../lib/useAssetTagFilter";
 import { errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { FileDropZone, filesFromInput } from "./FileDropZone";
 import { Modal } from "./Modal";
+import { TagFilter } from "./AssetTags";
 
 interface MediaLibraryModalProps {
   open: boolean;
@@ -27,20 +29,24 @@ export function MediaLibraryModal({
   const [query, setQuery] = useState("");
   const [failures, setFailures] = useState<UploadAssetsResult["failed"]>([]);
 
+  const candidates = useMemo(
+    () => (assets.data ?? []).filter((asset) => asset.status === "ready" && kinds.includes(asset.kind)),
+    [assets.data, kinds],
+  );
+  const { allTags, matches, selectedTags, toggleTag, clearTags } = useAssetTagFilter(candidates);
+
   useEffect(() => {
     if (open) {
       setQuery("");
+      clearTags();
       setFailures([]);
     }
-  }, [open]);
+  }, [open, clearTags]);
 
   const accept = kinds.map((kind) => `${kind}/*`).join(",");
   const keyword = query.trim().toLowerCase();
-  const selectable = (assets.data ?? []).filter(
-    (asset) =>
-      asset.status === "ready" &&
-      kinds.includes(asset.kind) &&
-      (keyword.length === 0 || asset.originalFilename.toLowerCase().includes(keyword)),
+  const selectable = matches.filter(
+    (asset) => keyword.length === 0 || asset.originalFilename.toLowerCase().includes(keyword),
   );
 
   const onFiles = (files: File[]) => {
@@ -84,6 +90,17 @@ export function MediaLibraryModal({
         <p className={metaTextClass}>ここにファイルをドラッグ&amp;ドロップでも追加できます。</p>
       </FileDropZone>
 
+      {allTags.length > 0 && (
+        <div className="mt-2">
+          <TagFilter
+            allTags={allTags}
+            selected={selectedTags}
+            onToggle={toggleTag}
+            onClear={clearTags}
+          />
+        </div>
+      )}
+
       {upload.isError && <p className={errorTextClass}>{errorMessage(upload.error)}</p>}
       {failures.length > 0 && (
         <div className="mt-2 rounded border border-red-400 bg-red-50 p-2 text-sm dark:bg-red-950/40">
@@ -101,7 +118,7 @@ export function MediaLibraryModal({
       {assets.isError && <p className={errorTextClass}>{errorMessage(assets.error)}</p>}
       {!assets.isLoading && !assets.isError && selectable.length === 0 && (
         <p className={metaTextClass}>
-          {keyword.length > 0
+          {keyword.length > 0 || selectedTags.length > 0
             ? "一致する素材がありません。"
             : "選択できる素材がありません。アップロードしてください。"}
         </p>

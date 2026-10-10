@@ -5,12 +5,15 @@ import {
   useAssets,
   useCleanupAssets,
   useDeleteAsset,
+  useUpdateAssetTags,
   useUploadAssets,
   type CleanupAssetsResult,
   type UploadAssetsResult,
 } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
 import { KIND_LABEL, formatBytes, formatDuration } from "../lib/assets";
+import { useAssetTagFilter } from "../lib/useAssetTagFilter";
+import { AssetTagEditor, TagFilter } from "../components/AssetTags";
 import { FileDropZone, filesFromInput } from "../components/FileDropZone";
 import {
   buttonDangerClass,
@@ -57,10 +60,14 @@ export function AssetsPage() {
   const assets = useAssets();
   const uploadAssets = useUploadAssets();
   const deleteAsset = useDeleteAsset();
+  const updateTags = useUpdateAssetTags();
   const cleanupAssets = useCleanupAssets();
   const [pending, setPending] = useState<File[]>([]);
   const [failures, setFailures] = useState<UploadAssetsResult["failed"]>([]);
   const [cleanupResult, setCleanupResult] = useState<CleanupAssetsResult | null>(null);
+  const { allTags, matches: visibleAssets, selectedTags, toggleTag, clearTags } = useAssetTagFilter(
+    assets.data,
+  );
 
   const addFiles = (files: File[]) => {
     if (files.length === 0 || uploadAssets.isPending) {
@@ -85,6 +92,10 @@ export function AssetsPage() {
         setPending(result.failed.map((entry) => entry.file));
       },
     });
+  };
+
+  const saveTags = (assetId: string, tags: string[]) => {
+    updateTags.mutate({ assetId, tags });
   };
 
   return (
@@ -187,12 +198,24 @@ export function AssetsPage() {
         </div>
       )}
       {deleteAsset.isError && <p className={errorTextClass}>{errorMessage(deleteAsset.error)}</p>}
+      {updateTags.isError && <p className={errorTextClass}>{errorMessage(updateTags.error)}</p>}
 
       {assets.isLoading && <p>読み込み中…</p>}
       {assets.isError && <p className={errorTextClass}>{errorMessage(assets.error)}</p>}
 
+      {allTags.length > 0 && (
+        <div className="my-3">
+          <TagFilter
+            allTags={allTags}
+            selected={selectedTags}
+            onToggle={toggleTag}
+            onClear={clearTags}
+          />
+        </div>
+      )}
+
       <ul className="list-none p-0">
-        {assets.data?.map((asset) => {
+        {visibleAssets.map((asset) => {
           const duration = formatDuration(asset.durationMs);
           const dimensions =
             asset.widthPx !== null && asset.heightPx !== null
@@ -208,6 +231,12 @@ export function AssetsPage() {
                   {dimensions !== null ? ` ・ ${dimensions}` : ""}
                   {duration !== null ? ` ・ ${duration}` : ""}
                 </p>
+                <AssetTagEditor
+                  tags={asset.tags}
+                  disabled={updateTags.pendingIds.includes(asset.id)}
+                  onAdd={(tag) => saveTags(asset.id, [...asset.tags, tag])}
+                  onRemove={(tag) => saveTags(asset.id, asset.tags.filter((value) => value !== tag))}
+                />
               </div>
               <span
                 className={
@@ -233,6 +262,9 @@ export function AssetsPage() {
         })}
       </ul>
       {assets.data?.length === 0 && <p>素材がありません。上のフォームからアップロードしてください。</p>}
+      {assets.data !== undefined &&
+        assets.data.length > 0 &&
+        visibleAssets.length === 0 && <p>絞り込みに一致する素材がありません。</p>}
     </section>
   );
 }

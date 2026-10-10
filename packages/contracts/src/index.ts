@@ -18,6 +18,7 @@ export * from "./templates";
 export * from "./voice-profile";
 export * from "./character-library";
 export * from "./tts";
+export * from "./asset";
 export * from "./dto";
 export * from "./error";
 export * from "./job";

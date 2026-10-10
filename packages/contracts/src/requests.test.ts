@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createWorkRequestSchema, saveScriptVersionRequestSchema } from "./requests";
+import {
+  createWorkRequestSchema,
+  saveScriptVersionRequestSchema,
+  updateAssetRequestSchema,
+} from "./requests";
+import { assetTagsSchema, MAX_ASSET_TAG_LENGTH, MAX_ASSET_TAGS } from "./asset";
 import { validContentDocument } from "./testing/fixtures";
 
 describe("createWorkRequestSchema", () => {
@@ -34,5 +39,34 @@ describe("saveScriptVersionRequestSchema", () => {
       extra: true,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("assetTagsSchema", () => {
+  it("trims and de-duplicates tags", () => {
+    expect(assetTagsSchema.parse([" 夏 ", "背景", "夏", ""])).toEqual(["夏", "背景"]);
+  });
+
+  it("rejects a tag longer than the limit", () => {
+    expect(assetTagsSchema.safeParse(["あ".repeat(MAX_ASSET_TAG_LENGTH + 1)]).success).toBe(false);
+  });
+
+  it("rejects more tags than the limit", () => {
+    const tags = Array.from({ length: MAX_ASSET_TAGS + 1 }, (_, index) => `tag-${index}`);
+    expect(assetTagsSchema.safeParse(tags).success).toBe(false);
+  });
+});
+
+describe("updateAssetRequestSchema", () => {
+  it("accepts a tag list", () => {
+    expect(updateAssetRequestSchema.parse({ tags: ["背景"] })).toEqual({ tags: ["背景"] });
+  });
+
+  it("rejects unknown fields", () => {
+    expect(updateAssetRequestSchema.safeParse({ tags: [], extra: 1 }).success).toBe(false);
+  });
+
+  it("rejects a missing tags field", () => {
+    expect(updateAssetRequestSchema.safeParse({}).success).toBe(false);
   });
 });

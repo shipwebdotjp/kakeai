@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { voiceAdapterIdSchema, warningsMetaSchema } from "@kakeai/contracts";
 import type {
@@ -130,6 +131,44 @@ export function useDeleteAsset() {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
   });
+}
+
+export function useUpdateAssetTags() {
+  const queryClient = useQueryClient();
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const mutation = useMutation({
+    mutationFn: async ({ assetId, tags }: { assetId: string; tags: string[] }) =>
+      (
+        await apiRequest<Asset>(`/assets/${encodeURIComponent(assetId)}`, {
+          method: "PATCH",
+          body: { tags },
+        })
+      ).data,
+    onMutate: async ({ assetId, tags }) => {
+      await queryClient.cancelQueries({ queryKey: ["assets"] });
+      setPendingIds((previous) => [...previous, assetId]);
+      const previous = queryClient.getQueryData<Asset[]>(["assets"]);
+      queryClient.setQueryData<Asset[]>(["assets"], (current) =>
+        current?.map((asset) => (asset.id === assetId ? { ...asset, tags } : asset)),
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(["assets"], context.previous);
+      }
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Asset[]>(["assets"], (current) =>
+        current?.map((asset) => (asset.id === updated.id ? updated : asset)),
+      );
+    },
+    onSettled: (_data, _error, variables) => {
+      setPendingIds((previous) => previous.filter((id) => id !== variables.assetId));
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+  return { ...mutation, pendingIds };
 }
 
 export interface CleanupAssetsResult {

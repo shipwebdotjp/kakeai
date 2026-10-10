@@ -66,6 +66,7 @@ model Asset {
   durationMs      Int?
   widthPx         Int?
   heightPx        Int?
+  tagsJson        String?
   provenanceJson  String?
   generatedByJobId String?
   generatedByJob  Job?             @relation("GeneratedAssets", fields: [generatedByJobId], references: [id], onDelete: Restrict)

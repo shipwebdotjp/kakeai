@@ -2,6 +2,7 @@ import { z } from "zod";
 import { idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { styleIdSchema } from "./voice-profile";
+import { assetTagsSchema } from "./asset";
 
 export const createWorkRequestSchema = z.strictObject({
   title: z.string().trim().min(1),
@@ -18,6 +19,10 @@ export const saveScriptVersionRequestSchema = z.strictObject({
 });
 
 export const createRenderJobRequestSchema = z.strictObject({});
+
+export const updateAssetRequestSchema = z.strictObject({
+  tags: assetTagsSchema,
+});
 
 export const DEFAULT_TTS_SPEED_SCALE = 1;
 export const MIN_TTS_SPEED_SCALE = 0.5;
@@ -40,3 +45,4 @@ export type UpdateWorkRequest = z.infer<typeof updateWorkRequestSchema>;
 export type SaveScriptVersionRequest = z.infer<typeof saveScriptVersionRequestSchema>;
 export type CreateRenderJobRequest = z.infer<typeof createRenderJobRequestSchema>;
 export type CreateTtsJobRequest = z.infer<typeof createTtsJobRequestSchema>;
+export type UpdateAssetRequest = z.infer<typeof updateAssetRequestSchema>;
