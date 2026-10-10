@@ -2,6 +2,8 @@
 
 MVPの実装フェーズ。各フェーズは独立して検証できる粒度で切り、上から順に進める。詳細な仕様は [spec.md](./spec.md)、台本の契約は [content-schema.md](./content-schema.md)、HTTP契約は [api-contract.md](./api-contract.md) を正とする。
 
+> P0〜P7 は実装完了。既知の未達は `health.storage.status` の容量警告（80GiB閾値）だけで、下の「MVP後」に記載する。
+
 ## 進め方
 
 - 契約を先に固める。`packages/contracts` がZodスキーマと型の唯一の定義場所。
@@ -99,3 +101,4 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 
 - [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 背景・カードの焦点位置、複数VisualCue、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、table/chart/flow系VisualTemplate。うち複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で実装済み
 - [ロードマップ Phase 5](./roadmap.md#phase-5-派生コンテンツと制作運用): progressPercentに依存した詳細進捗表示、実行中Jobのキャンセル、複数worker、自動再試行、contentHash/JCS、Jobリース、楽観ロック、同一SHA復旧の厳密化
+- `health.storage.status` の容量警告: 管理領域の使用量から80GiB閾値で `warning` を返し、UIとhealthに表示する（[spec.md](./spec.md) のリソース上限）。現状は常に `ok`。
