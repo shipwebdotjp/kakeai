@@ -546,7 +546,11 @@ function buildCueInput(
             baseValue !== null &&
             (baseValue as { kind?: unknown }).kind === "media";
           if (baseValue === undefined || baseIsMedia) {
-            hasMedia = false;
+            if (field.optional) {
+              delete input[field.key];
+            } else {
+              hasMedia = false;
+            }
           }
         } else {
           const fit = cue.fields[`${field.key}__fit`] === "contain" ? "contain" : "cover";
@@ -901,7 +905,7 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
   for (const field of getTemplateInputFields(templateId, templateVersion) ?? []) {
     switch (field.kind) {
       case "select":
-        fields[field.key] = field.options[0]?.value ?? "";
+        fields[field.key] = field.optional ? "" : (field.options[0]?.value ?? "");
         break;
       case "nestedMedia":
         fields[field.key] = "";

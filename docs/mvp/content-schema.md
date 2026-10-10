@@ -184,6 +184,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
 | `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `backgroundColor?` | 対応。端末枠内に画像・動画を表示する複合ビジュアル。背景・カードに置ける |
 | `scene.device-frame@2` | `@1` ＋ `animation?`（preset, durationMs） | 対応。画面要素の登場アニメーションを追加 |
+| `scene.site-mockup@1` | `variant`, `screen`(`NestedVisual`), `theme?`, `name?`/`handle?`/`url?`/`caption?`, `logo?`, `animation?` | 対応。有名サイト・ブラウザのガワに画像・動画を収める。card/overlay |
 | `chart.bar@1` | タイトル、系列、数値、単位 | 将来 |
 | `table.simple@1` | 列定義、行、強調セル | Phase 1で最初に追加 |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |

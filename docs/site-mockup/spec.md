@@ -71,7 +71,7 @@
 - [composite-visuals/spec.md](../composite-visuals/spec.md) の分離規約に従う。Cue IDを符号化したscope配下に、ガワの各要素（ヘッダ、ハンドル、メディア枠など）のDOM IDを割り当て、複数配置・入れ子でも衝突しない。
 - rendererはHTML断片・素材参照・`AnimationPlan`（`screen` への登場アニメーション）だけを返し、GSAPタイムラインとComposition HTMLはトップレベルコンパイラだけが生成する。
 - `collectAssetRefs` は `screen` と `logo` の素材参照を返す。
-- device-frame と共通の「枠内に画面を収める」レンダラを抽出し、両者で共有する（重複回避）。
+- 画面の描画は共通の `NestedVisual` レンダラ（`renderNested`）を再利用する。
 
 ## 編集UI
 
