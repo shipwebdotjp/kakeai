@@ -6,6 +6,9 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { serializeContent } from "../domain/content-json.ts";
+import { logger } from "../logger.ts";
+import { removeStorageFile } from "../storage/asset-store.ts";
+import type { DataDirectories } from "../storage/paths.ts";
 import {
   toWork,
   toWorkSummary,
@@ -109,7 +112,11 @@ export async function updateWork(
   return getWork(prisma, workId);
 }
 
-export async function deleteWork(prisma: PrismaClient, workId: string): Promise<void> {
+export async function deleteWork(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  workId: string,
+): Promise<void> {
   const work = await prisma.work.findUnique({ where: { id: workId }, select: { id: true } });
   if (work === null) {
     throw resourceNotFound("work", workId);
@@ -125,7 +132,7 @@ export async function deleteWork(prisma: PrismaClient, workId: string): Promise<
     });
   }
 
-  await prisma.$transaction(async (tx) => {
+  const artifactKeys = await prisma.$transaction(async (tx) => {
     const editions = await tx.languageEdition.findMany({
       where: { workId },
       select: { id: true },
@@ -149,7 +156,13 @@ export async function deleteWork(prisma: PrismaClient, workId: string): Promise<
       select: { id: true },
     });
     const jobIds = jobs.map((job) => job.id);
+    let removedArtifactKeys: string[] = [];
     if (jobIds.length > 0) {
+      const artifactRows = await tx.artifact.findMany({
+        where: { jobId: { in: jobIds } },
+        select: { storageKey: true },
+      });
+      removedArtifactKeys = artifactRows.map((artifact) => artifact.storageKey);
       await tx.artifact.deleteMany({ where: { jobId: { in: jobIds } } });
       await tx.asset.updateMany({
         where: { generatedByJobId: { in: jobIds } },
@@ -169,5 +182,17 @@ export async function deleteWork(prisma: PrismaClient, workId: string): Promise<
     await tx.scriptVersion.deleteMany({ where: { languageEditionId: { in: editionIds } } });
     await tx.languageEdition.deleteMany({ where: { workId } });
     await tx.work.delete({ where: { id: workId } });
+    return removedArtifactKeys;
   });
+
+  await Promise.allSettled(
+    artifactKeys.map((storageKey) =>
+      removeStorageFile(directories, storageKey).catch((error: unknown) => {
+        logger.warn("artifact_file_cleanup_failed", {
+          storageKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }),
+    ),
+  );
 }

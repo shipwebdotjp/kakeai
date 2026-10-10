@@ -20,7 +20,7 @@ import type {
   WorkSummary,
 } from "@kakeai/contracts";
 import { type AdapterVoicesState } from "../lib/voiceAdapters";
-import { apiRequest, apiUpload, type Envelope } from "./client";
+import { ApiError, apiRequest, apiUpload, type Envelope } from "./client";
 
 export function useWorks() {
   return useQuery({
@@ -129,6 +129,52 @@ export function useDeleteAsset() {
       await apiRequest(`/assets/${encodeURIComponent(assetId)}`, { method: "DELETE" });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
+  });
+}
+
+export interface CleanupAssetsResult {
+  deleted: number;
+  retained: number;
+  failed: number;
+}
+
+const CLEANUP_CONCURRENCY = 5;
+
+export function useCleanupAssets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<CleanupAssetsResult> => {
+      const assets = (await apiRequest<Asset[]>("/assets")).data.filter(
+        (asset) => asset.status !== "processing",
+      );
+      let deleted = 0;
+      let retained = 0;
+      let failed = 0;
+      for (let index = 0; index < assets.length; index += CLEANUP_CONCURRENCY) {
+        const chunk = assets.slice(index, index + CLEANUP_CONCURRENCY);
+        const results = await Promise.allSettled(
+          chunk.map((asset) =>
+            apiRequest(`/assets/${encodeURIComponent(asset.id)}`, { method: "DELETE" }),
+          ),
+        );
+        for (const result of results) {
+          if (result.status === "fulfilled") {
+            deleted += 1;
+          } else if (result.reason instanceof ApiError && result.reason.code === "ASSET_IN_USE") {
+            retained += 1;
+          } else if (
+            result.reason instanceof ApiError &&
+            result.reason.code === "RESOURCE_NOT_FOUND"
+          ) {
+            deleted += 1;
+          } else {
+            failed += 1;
+          }
+        }
+      }
+      return { deleted, retained, failed };
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
   });
 }
 

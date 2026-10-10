@@ -5,6 +5,7 @@ import { applySqlitePragmas } from "./db/pragmas.ts";
 import { generateMediaSessionToken } from "./http/security.ts";
 import { logger } from "./logger.ts";
 import { createApp } from "./server.ts";
+import { runStartupMaintenance } from "./services/lifecycle.ts";
 import { ensureDataDirectories } from "./storage/paths.ts";
 import { createWorker } from "./worker/index.ts";
 
@@ -17,6 +18,7 @@ async function main(): Promise<void> {
   const worker = createWorker({ prisma, config });
   try {
     await applySqlitePragmas(prisma);
+    await runStartupMaintenance(prisma, config.directories);
     await worker.start();
   } catch (error) {
     await prisma.$disconnect().catch(() => undefined);

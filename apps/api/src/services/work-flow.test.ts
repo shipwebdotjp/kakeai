@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInitialContentDocument, createPointScene } from "@kakeai/contracts";
@@ -7,17 +7,19 @@ import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
 import { applySqlitePragmas } from "../db/pragmas.ts";
-import { ensureDataDirectories } from "../storage/paths.ts";
+import { ensureDataDirectories, type DataDirectories } from "../storage/paths.ts";
 import * as scriptVersions from "./script-versions.ts";
 import * as works from "./works.ts";
 
 let dataDir: string;
+let directories: DataDirectories;
 let prisma: ReturnType<typeof createPrismaClient>;
 
 beforeAll(async () => {
   dataDir = await mkdtemp(join(tmpdir(), "kakeai-work-"));
   process.env.KAKEAI_DATA_DIR = dataDir;
   const config = loadConfig();
+  directories = config.directories;
   await ensureDataDirectories(config.directories);
   await runMigrations();
   prisma = createPrismaClient(config.databaseUrl);
@@ -134,11 +136,43 @@ describe("work and script version flow", () => {
     ).rejects.toMatchObject({ code: "ASSET_NOT_FOUND" });
   });
 
-  it("deletes a work and its versions", async () => {
+  it("deletes a work and removes its artifact files", async () => {
     const work = await works.createWork(prisma, "削除テスト", "ja-JP");
-    await works.deleteWork(prisma, work.id);
+    const edition = work.languageEditions[0]!;
+    const current = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+    const job = await prisma.job.create({
+      data: {
+        kind: "render",
+        status: "succeeded",
+        workId: work.id,
+        languageEditionId: edition.id,
+        scriptVersionId: current.id,
+        snapshotSchemaVersion: 1,
+        inputSnapshotJson: "{}",
+        progressPercent: 100,
+        finishedAt: new Date(),
+      },
+    });
+    const storageKey = `artifacts/${job.id}-deadbeef.mp4`;
+    const artifactPath = join(dataDir, storageKey);
+    await writeFile(artifactPath, "fake-mp4");
+    const artifact = await prisma.artifact.create({
+      data: {
+        jobId: job.id,
+        role: "render",
+        format: "mp4",
+        storageKey,
+        sha256: "deadbeef",
+        byteSize: BigInt(8),
+      },
+    });
+
+    await works.deleteWork(prisma, directories, work.id);
+
     await expect(works.getWork(prisma, work.id)).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
     });
+    await expect(stat(artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(prisma.artifact.findUnique({ where: { id: artifact.id } })).resolves.toBeNull();
   });
 });

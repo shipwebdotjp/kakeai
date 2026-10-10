@@ -1,7 +1,14 @@
 import { useState } from "react";
 import type { Asset } from "@kakeai/contracts";
 import { renderContentUrl } from "../api/client";
-import { useAssets, useDeleteAsset, useUploadAssets, type UploadAssetsResult } from "../api/hooks";
+import {
+  useAssets,
+  useCleanupAssets,
+  useDeleteAsset,
+  useUploadAssets,
+  type CleanupAssetsResult,
+  type UploadAssetsResult,
+} from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
 import { KIND_LABEL, formatBytes, formatDuration } from "../lib/assets";
 import { FileDropZone, filesFromInput } from "../components/FileDropZone";
@@ -50,8 +57,10 @@ export function AssetsPage() {
   const assets = useAssets();
   const uploadAssets = useUploadAssets();
   const deleteAsset = useDeleteAsset();
+  const cleanupAssets = useCleanupAssets();
   const [pending, setPending] = useState<File[]>([]);
   const [failures, setFailures] = useState<UploadAssetsResult["failed"]>([]);
+  const [cleanupResult, setCleanupResult] = useState<CleanupAssetsResult | null>(null);
 
   const addFiles = (files: File[]) => {
     if (files.length === 0 || uploadAssets.isPending) {
@@ -80,7 +89,31 @@ export function AssetsPage() {
 
   return (
     <section>
-      <h1 className="mb-4 text-2xl font-bold">素材ライブラリ</h1>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-bold">素材ライブラリ</h1>
+        <button
+          type="button"
+          className={buttonNeutralClass}
+          disabled={cleanupAssets.isPending || deleteAsset.isPending}
+          onClick={() => {
+            if (window.confirm("どの台本からも参照されていない素材を削除しますか？")) {
+              setCleanupResult(null);
+              cleanupAssets.mutate(undefined, { onSuccess: setCleanupResult });
+            }
+          }}
+        >
+          {cleanupAssets.isPending ? "清掃中…" : "未参照素材を清掃"}
+        </button>
+      </div>
+      {cleanupResult !== null && (
+        <p className={metaTextClass}>
+          {cleanupResult.deleted}件を削除しました（参照中の{cleanupResult.retained}件は残しました）。
+          {cleanupResult.failed > 0 ? ` ${cleanupResult.failed}件は失敗しました。` : ""}
+        </p>
+      )}
+      {cleanupAssets.isError && (
+        <p className={errorTextClass}>{errorMessage(cleanupAssets.error)}</p>
+      )}
 
       <FileDropZone
         onFiles={addFiles}
@@ -186,7 +219,7 @@ export function AssetsPage() {
               <button
                 type="button"
                 className={buttonDangerClass}
-                disabled={deleteAsset.isPending}
+                disabled={deleteAsset.isPending || cleanupAssets.isPending}
                 onClick={() => {
                   if (window.confirm(`「${asset.originalFilename}」を削除しますか？`)) {
                     deleteAsset.mutate(asset.id);

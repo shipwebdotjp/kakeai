@@ -118,7 +118,12 @@ export function createApp(dependencies: AppDependencies): Express {
       getStorageStatus: dependencies.getStorageStatus ?? (() => "ok"),
     }),
   );
-  api.use(createWorksRouter(dependencies.prisma));
+  api.use(
+    createWorksRouter({
+      prisma: dependencies.prisma,
+      directories: dependencies.config.directories,
+    }),
+  );
   api.use(createLanguageEditionsRouter(dependencies.prisma));
   api.use(
     createScriptVersionsRouter({

@@ -1,12 +1,19 @@
 import { Router } from "express";
 import { createWorkRequestSchema, updateWorkRequestSchema } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
+import type { DataDirectories } from "../../storage/paths.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
 import { parseBody, pathParam } from "../validation.ts";
 import * as jobs from "../../services/jobs.ts";
 import * as works from "../../services/works.ts";
 
-export function createWorksRouter(prisma: PrismaClient): Router {
+export interface WorksRouterDependencies {
+  prisma: PrismaClient;
+  directories: DataDirectories;
+}
+
+export function createWorksRouter(dependencies: WorksRouterDependencies): Router {
+  const { prisma, directories } = dependencies;
   const router = Router();
 
   router.get(
@@ -42,7 +49,7 @@ export function createWorksRouter(prisma: PrismaClient): Router {
   router.delete(
     "/works/:workId",
     asyncHandler(async (req, res) => {
-      await works.deleteWork(prisma, pathParam(req, "workId"));
+      await works.deleteWork(prisma, directories, pathParam(req, "workId"));
       res.status(204).end();
     }),
   );
