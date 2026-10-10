@@ -497,53 +497,6 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
               )}
             </div>
 
-            {scene.kind === "intro" && (
-              <>
-                <label className="my-2 block">
-                  タイトル
-                  <input
-                    className={`mt-1 block w-full ${textFieldClass}`}
-                    {...register(`scenes.${sceneIndex}.slots.title`)}
-                  />
-                </label>
-                <label className="my-2 block">
-                  サブタイトル
-                  <input
-                    className={`mt-1 block w-full ${textFieldClass}`}
-                    {...register(`scenes.${sceneIndex}.slots.subtitle`)}
-                  />
-                </label>
-              </>
-            )}
-            {scene.kind === "point" && (
-              <>
-                <label className="my-2 block">
-                  見出し
-                  <input
-                    className={`mt-1 block w-full ${textFieldClass}`}
-                    {...register(`scenes.${sceneIndex}.slots.heading`)}
-                  />
-                </label>
-                <label className="my-2 block">
-                  本文
-                  <textarea
-                    rows={3}
-                    className={`mt-1 block w-full ${textFieldClass}`}
-                    {...register(`scenes.${sceneIndex}.slots.body`)}
-                  />
-                </label>
-              </>
-            )}
-            {scene.kind === "outro" && (
-              <label className="my-2 block">
-                結びの文言
-                <input
-                  className={`mt-1 block w-full ${textFieldClass}`}
-                  {...register(`scenes.${sceneIndex}.slots.closing`)}
-                />
-              </label>
-            )}
-
             <TimingFields
               control={control}
               register={register}

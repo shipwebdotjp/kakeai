@@ -7,7 +7,7 @@ import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
 import { characterStandingV1, characterStandingV2 } from "../templates";
 
-export const CONTENT_SCHEMA_VERSION = 3 as const;
+export const CONTENT_SCHEMA_VERSION = 4 as const;
 
 export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;

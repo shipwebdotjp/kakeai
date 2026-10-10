@@ -34,7 +34,9 @@ export type TemplateFieldSpec =
   | { kind: "text"; key: string; label: string }
   | { kind: "optionalText"; key: string; label: string }
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
-  | { kind: "color"; key: string; label: string }
+  | { kind: "color"; key: string; label: string; optional?: boolean }
+  | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
+  | { kind: "boolean"; key: string; label: string }
   | { kind: "animation"; key: string; label: string };
 
 export interface VisualTemplateDefinition {
@@ -67,44 +69,76 @@ const DEVICE_FRAME_OPTIONS = [
   { value: "phone", label: "スマートフォン" },
 ] as const;
 
-export const textTitleInputSchema = z.strictObject({
-  title: z.string(),
-  subtitle: z.string(),
+export const textRoleSchema = z.enum(["title", "subtitle", "heading", "body", "closing"]);
+export type TextRole = z.infer<typeof textRoleSchema>;
+
+export const textVerticalAlignSchema = z.enum(["top", "middle", "bottom"]);
+export const textFontSchema = z.enum(["sans", "serif", "mono"]);
+
+export const textBlockInputSchema = z.strictObject({
+  text: z.string(),
+  role: textRoleSchema,
   anchor: textAnchorSchema.optional(),
+  verticalAlign: textVerticalAlignSchema.optional(),
+  font: textFontSchema.optional(),
+  fontSize: z.number().int().min(8).max(240).optional(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  decoration: z
+    .strictObject({
+      bold: z.boolean().optional(),
+      italic: z.boolean().optional(),
+      outline: z.boolean().optional(),
+      shadow: z.boolean().optional(),
+    })
+    .optional(),
 });
 
-const textTitleV1: VisualTemplateDefinition = {
-  id: "text.title",
+const TEXT_ROLE_OPTIONS = [
+  { value: "body", label: "本文" },
+  { value: "heading", label: "見出し" },
+  { value: "title", label: "タイトル" },
+  { value: "subtitle", label: "サブタイトル" },
+  { value: "closing", label: "結びの文言" },
+] as const;
+
+const VERTICAL_ALIGN_OPTIONS = [
+  { value: "top", label: "上" },
+  { value: "middle", label: "中央" },
+  { value: "bottom", label: "下" },
+] as const;
+
+const FONT_OPTIONS = [
+  { value: "sans", label: "ゴシック" },
+  { value: "serif", label: "明朝" },
+  { value: "mono", label: "等幅" },
+] as const;
+
+const textBlockV1: VisualTemplateDefinition = {
+  id: "text.block",
   version: 1,
-  inputSchema: textTitleInputSchema,
+  inputSchema: textBlockInputSchema,
   layers: ["overlay"],
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "タイトル", description: "見出しとサブタイトル", category: "text" },
+  display: { label: "テキスト", description: "見出し・本文などのテキスト", category: "text" },
   inputFields: [
-    { kind: "text", key: "title", label: "タイトル" },
-    { kind: "text", key: "subtitle", label: "サブタイトル" },
-    { kind: "select", key: "anchor", label: "配置", options: ANCHOR_OPTIONS, optional: true },
-  ],
-  collectAssetRefs: () => [],
-};
-
-export const textBodyInputSchema = z.strictObject({
-  heading: z.string(),
-  body: z.string(),
-});
-
-const textBodyV1: VisualTemplateDefinition = {
-  id: "text.body",
-  version: 1,
-  inputSchema: textBodyInputSchema,
-  layers: ["overlay"],
-  transitionPolicy: DEFAULT_TRANSITION_POLICY,
-  animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "本文", description: "見出しと本文", category: "text" },
-  inputFields: [
-    { kind: "text", key: "heading", label: "見出し" },
-    { kind: "text", key: "body", label: "本文" },
+    { kind: "text", key: "text", label: "テキスト" },
+    { kind: "select", key: "role", label: "役割", options: TEXT_ROLE_OPTIONS },
+    { kind: "select", key: "anchor", label: "左右位置", options: ANCHOR_OPTIONS, optional: true },
+    {
+      kind: "select",
+      key: "verticalAlign",
+      label: "上下位置",
+      options: VERTICAL_ALIGN_OPTIONS,
+      optional: true,
+    },
+    { kind: "select", key: "font", label: "フォント", options: FONT_OPTIONS, optional: true },
+    { kind: "number", key: "fontSize", label: "フォントサイズ(px)", min: 8, max: 240, step: 1, optional: true },
+    { kind: "color", key: "color", label: "色", optional: true },
+    { kind: "boolean", key: "decoration.bold", label: "太字" },
+    { kind: "boolean", key: "decoration.italic", label: "斜体" },
+    { kind: "boolean", key: "decoration.outline", label: "縁取り" },
+    { kind: "boolean", key: "decoration.shadow", label: "影" },
   ],
   collectAssetRefs: () => [],
 };
@@ -370,8 +404,7 @@ const sceneSiteMockupV1: VisualTemplateDefinition = {
 };
 
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
-  textTitleV1,
-  textBodyV1,
+  textBlockV1,
   mediaFullBleedV1,
   mediaCardV1,
   characterStandingV1,
@@ -381,7 +414,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   sceneSiteMockupV1,
 ];
 
-export { textTitleV1, textBodyV1, mediaFullBleedV1, mediaCardV1 };
+export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
 export { characterStandingV1, characterStandingV2, sceneDeviceFrameV1, sceneDeviceFrameV2 };
 export { sceneSiteMockupV1 };
 

@@ -161,13 +161,42 @@ describe("compileDocument", () => {
   it("escapes slot text", () => {
     const document = validContentDocument();
     const scene = document.scenes[0];
-    if (scene === undefined || scene.kind !== "intro") {
+    if (scene === undefined) {
       throw new Error("fixture changed");
     }
-    scene.slots.title = "<b>危険</b>&引用";
+    const titleCue = scene.visualCues.find(
+      (candidate) => (candidate.input as { role?: string }).role === "title",
+    );
+    if (titleCue === undefined) {
+      throw new Error("fixture changed");
+    }
+    (titleCue.input as { text: string }).text = "<b>危険</b>&引用";
     const compiled = compileDocument({ document, assetResolver: resolver });
     expect(compiled.html).toContain("&lt;b&gt;危険&lt;/b&gt;&amp;引用");
     expect(compiled.html).not.toContain("<b>危険</b>");
+  });
+
+  it("omits clip markup for an empty text cue", () => {
+    const document = validContentDocument();
+    for (const scene of document.scenes) {
+      scene.visualCues = [];
+    }
+    document.scenes[1]!.visualCues = [
+      {
+        id: "vc-empty-text",
+        template: { id: "text.block", version: 1 },
+        range: { kind: "scene" },
+        layer: "overlay",
+        order: 0,
+        transition: {
+          enter: { preset: "fade", durationMs: 350 },
+          exit: { preset: "none", durationMs: 0 },
+        },
+        input: { text: "   ", role: "body" },
+      },
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).not.toContain("kakeai-textblock");
   });
 
   it("rejects unknown template versions", () => {
@@ -616,8 +645,8 @@ describe("compileDocument", () => {
           variant: "x",
           screen: {
             kind: "template",
-            template: { id: "text.body", version: 1 },
-            input: { heading: "h", body: "b" },
+            template: { id: "text.block", version: 1 },
+            input: { text: "b", role: "body" },
           },
         },
       }),

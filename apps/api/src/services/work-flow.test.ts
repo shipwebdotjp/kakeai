@@ -80,10 +80,10 @@ describe("work and script version flow", () => {
     const edition = work.languageEditions[0]!;
     const content = createInitialContentDocument();
     const point = content.scenes[1]!;
-    if (point.kind !== "point") {
-      throw new Error("expected a point scene");
-    }
-    point.slots.heading = "見出し";
+    const headingCue = point.visualCues.find(
+      (cue) => (cue.input as { role?: string }).role === "heading",
+    )!;
+    (headingCue.input as { text: string }).text = "見出し";
 
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
       sourceScriptVersionId: null,
@@ -103,17 +103,22 @@ describe("work and script version flow", () => {
     const edition = work.languageEditions[0]!;
     const content = createInitialContentDocument();
     const point = content.scenes[1]!;
-    if (point.kind !== "point") {
-      throw new Error("expected a point scene");
-    }
-    point.slots.body = "あ".repeat(200);
+    const bodyCue = point.visualCues.find(
+      (cue) => (cue.input as { role?: string }).role === "body",
+    )!;
+    const bodyText = "あ".repeat(200);
+    (bodyCue.input as { text: string }).text = bodyText;
 
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
       sourceScriptVersionId: null,
       content,
     });
     expect(saved.warnings).toHaveLength(1);
-    expect(saved.scriptVersion.content.scenes[1]).toMatchObject({ slots: { body: point.slots.body } });
+    expect(saved.scriptVersion.content.scenes[1]).toMatchObject({
+      visualCues: expect.arrayContaining([
+        expect.objectContaining({ input: expect.objectContaining({ text: bodyText, role: "body" }) }),
+      ]),
+    });
   });
 
   it("rejects a document that references a missing asset", async () => {

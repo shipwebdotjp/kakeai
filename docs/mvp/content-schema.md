@@ -10,7 +10,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "locale": "ja-JP",
   "template": {
     "id": "explanation-scenes",
@@ -24,13 +24,13 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
-- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。保存済み `ScriptVersion` が無い前提のため v3 から始め、新規作成・保存するDocumentは `3` とする。
+- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。Sceneスロット廃止とシーン間トランジション追加（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)/[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)）で `4` とする。開発段階のため v3 以前の保存版は持ちず、新規作成・保存するDocumentは `4` とする。
 - `locale` はBCP 47形式で保存する。MVPの有効値は `ja-JP` のみ。
 - `template` は構造と既定表現を決める。MVPでは `explanation-scenes@1` のみ。
 
 `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。
 
-`schemaVersion` は `3` から始める。保存済み `ScriptVersion` が存在しないため、v1/v2 の読出し解釈や移行関数は持たない。スキーマを破壊的に変えるときに初めて `schemaVersion` を上げ、その時点で保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
+`schemaVersion` は `4` とする。Sceneスロットを廃止しテキストをVisualCueへ統一した時点（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)）で `3` → `4` に上げた。開発段階では破壊的変更で移行関数を持たない（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。開発環境に残る v4 未満の保存版は削除し、読み出し解釈や移行関数を先回りして持たない。正式リリース後は、スキーマを破壊的に変えるときに保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。編集画面・テキストモデル・シーン間トランジションの詳細は [../editor/spec.md](../editor/spec.md) を正とする。
 
 ## セリフと音声
 
@@ -90,24 +90,19 @@ MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、�
 
 ## シーンとVisualCue
 
-Sceneはテンプレート上のまとまりで、`kind` によって型付きスロットを持つ。`explanation-scenes@1` は `intro`、0件以上の `point`、`outro` をこの順に持つ。新規作品は導入、要点3件、結びで開始する。
+Sceneはテンプレート上のまとまりで、`kind` によって並び順と新規生成の意味を持つ。`explanation-scenes@1` は `intro`、0件以上の `point`、`outro` をこの順に持つ。新規作品は導入、要点3件、結びで開始する。Sceneは**型付きスロットを持たない**。タイトル・サブタイトル・見出し・本文・結びは、統合テキストテンプレート `text.block@1` のVisualCueとして表現する（[../editor/spec.md](../editor/spec.md)、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)）。
 
-- `intro`: `slots.title`、`slots.subtitle`
-- `point`: `slots.heading`、`slots.body`
-- `outro`: `slots.closing`
+すべてのSceneは必須の `accentColor` を持つ。値は大文字に正規化した `#RRGGBB` 形式に限定し、透過色・CSS関数・任意文字列は受け入れない。これはSceneの表示設定であり、VisualCueではない。新規作品の導入、要点3件、結びには `explanation-scenes@1` が定める既定色を入れる。
 
-すべてのSceneは必須の `accentColor` を持つ。値は大文字に正規化した `#RRGGBB` 形式に限定し、透過色・CSS関数・任意文字列は受け入れない。これはSceneベーステンプレートの表示設定であり、VisualCueではない。新規作品の導入、要点3件、結びには `explanation-scenes@1` が定める既定色を入れる。
-
-スロットはデータであり、Sceneの基本表現はSceneベーステンプレートが既定で描画する。テンプレートは `accentColor` をCSS変数などの安全な表示値として使う。追加のテキストはtext系VisualTemplateをVisualCueとして重ねられる。背景素材はSceneではなくVisualCueで指定する。
+Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`）で持つ。カット／フェード／クロスフェードを有限presetで表し、総尺は変えない（[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)、[../editor/spec.md](../editor/spec.md)）。テキストは `text.block@1` のVisualCueとして置き、`role` で意味付けする。背景素材はSceneではなくVisualCueで指定する。
 
 ```json
 {
   "id": "scene-point-1",
   "kind": "point",
   "accentColor": "#2563EB",
-  "slots": {
-    "heading": "テンプレート化の要点",
-    "body": "共通構造を固定すると、素材とセリフの差し替えだけで量産できます。"
+  "transition": {
+    "enter": { "preset": "fade", "durationMs": 300 }
   },
   "timing": {
     "mode": "auto"
@@ -129,6 +124,27 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
     }
   ],
   "visualCues": [
+    {
+      "id": "text-point-1-heading",
+      "template": { "id": "text.block", "version": 1 },
+      "range": { "kind": "scene" },
+      "layer": "overlay",
+      "order": 0,
+      "transition": {
+        "enter": { "preset": "fade", "durationMs": 350 },
+        "exit": { "preset": "none", "durationMs": 0 }
+      },
+      "input": {
+        "text": "テンプレート化の要点",
+        "role": "heading",
+        "anchor": "center",
+        "verticalAlign": "middle",
+        "font": "sans",
+        "fontSize": 72,
+        "color": "#FFFFFF",
+        "decoration": { "bold": true, "italic": false, "outline": false, "shadow": true }
+      }
+    },
     {
       "id": "visual-point-1-bg",
       "template": {
@@ -161,7 +177,7 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
 - `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
 
-MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。立ち絵は一覧内の「左」「右」固定2行で `character.standing@2` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → Scene本文 → caption → overlay` で固定する。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
+MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。立ち絵は一覧内の「左」「右」固定2行で `character.standing@2` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → caption → overlay` で固定する（Scene本文の固定層は廃止し、テキストは `overlay` のCueとして描画する）。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
@@ -176,8 +192,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 | VisualTemplate | 入力 | 初期対応 |
 | --- | --- | --- |
-| `text.title@1` | `title`, `subtitle`, 配置`anchor` | 対応（導入・結びのスロット描画） |
-| `text.body@1` | `heading`, `body` | 対応（要点のスロット描画） |
+| `text.block@1` | `text`, `role`(title/subtitle/heading/body/closing), 配置`anchor`/`verticalAlign`, `font`, `fontSize`, `color`, `decoration` | 対応。Sceneのテキストを表現する（[../editor/spec.md](../editor/spec.md)） |
 | `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?` | 対応 |
 | `media.card@1` | `assetId`, 見出し、補足文, `focalPoint?` | 対応 |
 | `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
@@ -193,21 +208,21 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
 
-`VisualTemplate` の版は不変とする。`id@version` の意味とレイアウト規約を変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは原則削除せず、保存済み作品が参照する版を描画し続けられるようにする。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい。
+`VisualTemplate` の版は、正式リリース後は不変とする。`id@version` の意味とレイアウト規約を変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは原則削除せず、保存済み作品が参照する版を描画し続けられるようにする。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい。正式リリース（`1.0.0`）前の開発段階では、版を追加せず既存版を書き換えてよい（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
 
 `fit: cover` を使うテンプレートは、任意の正規化 `focalPoint: { x, y }` を受け取る。未指定時は中央 `{ "x": 0.5, "y": 0.5 }` とし、クロップ位置は出力ピクセルではなく正規化座標で指定する。MVPの編集画面は `focalPoint` を指定せず中央クロップを使い、既存の指定値は保持する。
 
 ### テキストの制約
 
-テキスト系テンプレートと字幕は、テンプレートごとに最大行数・最小フォントサイズ・自動改行規則を持つ。次は `explanation-scenes@1` の初期値であり、テンプレート契約の一部として不変に保つ。上限を変える場合は新しいテンプレート版を追加する。
+テキスト系テンプレートと字幕は、テンプレートごとに最大行数・最小フォントサイズ・自動改行規則を持つ。次は `text.block@1` の `role` 別初期値であり、テンプレート契約の一部として不変に保つ。上限を変える場合は新しいテンプレート版を追加する。
 
 | 対象 | 最大行数 | 1行の目安 | 最小フォントサイズ |
 | --- | --- | --- | --- |
-| `slots.title` | 2 | 全角18文字 | 48px |
-| `slots.subtitle` | 2 | 全角24文字 | 32px |
-| `slots.heading` | 2 | 全角16文字 | 40px |
-| `slots.body` | 6 | 全角28文字 | 28px |
-| `slots.closing` | 2 | 全角20文字 | 28px |
+| `role: title` | 2 | 全角18文字 | 48px |
+| `role: subtitle` | 2 | 全角24文字 | 32px |
+| `role: heading` | 2 | 全角16文字 | 40px |
+| `role: body` | 6 | 全角28文字 | 28px |
+| `role: closing` | 2 | 全角20文字 | 28px |
 | `captionText` | 2 | 全角20文字 | 28px |
 
 `1行の目安` は自動改行の基準であり、`最小フォントサイズ` を下回らない範囲で収める。収まらない入力は保存を拒否せず、警告（`meta.warnings`）として該当フィールドのJSON Pointerと理由を返す。利用者はプレビューで実際のはみ出しを確認して修正する。描画時に黙って縮小・切り詰めしない。
@@ -242,9 +257,9 @@ BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset
 
 ## 実装上のルール
 
-- `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `accentColor: z.string().regex(/^#[0-9A-F]{6}$/)` と `timing: z.discriminatedUnion("mode", ...)` を持ち、NarrationSegmentの `selectedAudioTakeId` は必須の `z.string().nullable()` とする。Sceneの型付きスロットと `VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
+- `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `accentColor: z.string().regex(/^#[0-9A-F]{6}$/)`、`timing: z.discriminatedUnion("mode", ...)`、任意の `transition` を持ち、NarrationSegmentの `selectedAudioTakeId` は必須の `z.string().nullable()` とする。Sceneは型付きスロットを持たず、`VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
 - 正本JSONにはローカルパス、フレーム番号、HyperFrames固有のDOM属性やHTMLを保存しない。
-- 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・Sceneのアクセント色・シーン種別ごとのスロットの不変条件を検証する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。テキスト量の目安超過は拒否せず警告として返す。
+- 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・Sceneのアクセント色・`scene.transition` の尺（`D <= min(先行Scene尺, 入場Scene尺)`）を検証する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。テキスト量の目安超過は拒否せず警告として返す。
 - Render Jobには、検証済みの正本JSON、選択AudioTake、使用するレンダー入力（Renditionまたは原本）の参照情報、テンプレート版、出力設定を保存する。ワーカーはスナップショットJSONを実行時の信頼済みコンパイラでHTMLへ変換する。ツール更新後の同一MP4再現は要件にしない。
 - Composition HTMLは、アプリが管理するVisualTemplateと検証済み入力からだけ生成する。利用者入力やAI出力をHTML/JavaScriptとして直接実行しない。Asset IDの表示参照への変換はコンパイラに注入する `assetResolver` が担う。
 - `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。移行関数は実際に版を上げる時点で `packages/contracts` に追加し、先回りして持たない。

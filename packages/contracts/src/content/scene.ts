@@ -14,27 +14,16 @@ const sceneBaseShape = {
 
 export const introSceneSchema = z.strictObject({
   kind: z.literal("intro"),
-  slots: z.strictObject({
-    title: z.string(),
-    subtitle: z.string(),
-  }),
   ...sceneBaseShape,
 });
 
 export const pointSceneSchema = z.strictObject({
   kind: z.literal("point"),
-  slots: z.strictObject({
-    heading: z.string(),
-    body: z.string(),
-  }),
   ...sceneBaseShape,
 });
 
 export const outroSceneSchema = z.strictObject({
   kind: z.literal("outro"),
-  slots: z.strictObject({
-    closing: z.string(),
-  }),
   ...sceneBaseShape,
 });
 

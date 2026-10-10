@@ -10,6 +10,7 @@ import {
   getVisualTemplate,
   mediaCardV1,
   mediaFullBleedV1,
+  pointSceneTextCues,
   sceneDeviceFrameV1,
   type AnimationPreset,
   type Character,
@@ -105,13 +106,6 @@ export interface SceneFormValue {
   accentColor: string;
   timingMode: "auto" | "fixed";
   durationMs: number;
-  slots: {
-    title: string;
-    subtitle: string;
-    heading: string;
-    body: string;
-    closing: string;
-  };
   lines: LineFormValue[];
   cues: CueFormValue[];
   standings: StandingFormValue[];
@@ -145,6 +139,50 @@ function readInputObject(cue: VisualCue | null): Record<string, unknown> {
     return {};
   }
   return { ...(cue.input as Record<string, unknown>) };
+}
+
+function getAtPath(source: Record<string, unknown>, path: string): unknown {
+  let current: unknown = source;
+  for (const part of path.split(".")) {
+    if (typeof current !== "object" || current === null || Array.isArray(current)) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+function setAtPath(target: Record<string, unknown>, path: string, value: unknown): void {
+  const parts = path.split(".");
+  let current = target;
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const key = parts[index]!;
+    const next = current[key];
+    const cloned =
+      typeof next === "object" && next !== null && !Array.isArray(next)
+        ? { ...(next as Record<string, unknown>) }
+        : {};
+    current[key] = cloned;
+    current = cloned;
+  }
+  current[parts[parts.length - 1]!] = value;
+}
+
+function deleteAtPath(target: Record<string, unknown>, path: string): void {
+  const parts = path.split(".");
+  let current: Record<string, unknown> | undefined = target;
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const next: unknown = current?.[parts[index]!];
+    if (typeof next !== "object" || next === null || Array.isArray(next)) {
+      return;
+    }
+    const cloned: Record<string, unknown> = { ...(next as Record<string, unknown>) };
+    current![parts[index]!] = cloned;
+    current = cloned;
+  }
+  if (current !== undefined) {
+    delete current[parts[parts.length - 1]!];
+  }
 }
 
 export interface StandingCueInput {
@@ -293,6 +331,16 @@ function readCueFields(
       case "color":
         result[field.key] = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
         break;
+      case "number": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = typeof value === "number" ? String(value) : "";
+        break;
+      }
+      case "boolean": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = typeof value === "boolean" ? String(value) : "";
+        break;
+      }
       case "select": {
         const value = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
         const allowed = field.options.map((option) => option.value);
@@ -370,13 +418,6 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
         accentColor: scene.accentColor,
         timingMode: scene.kind === "point" ? scene.timing.mode : "fixed",
         durationMs: scene.timing.mode === "fixed" ? scene.timing.durationMs : FALLBACK_DURATION_MS,
-        slots: {
-          title: scene.kind === "intro" ? scene.slots.title : "",
-          subtitle: scene.kind === "intro" ? scene.slots.subtitle : "",
-          heading: scene.kind === "point" ? scene.slots.heading : "",
-          body: scene.kind === "point" ? scene.slots.body : "",
-          closing: scene.kind === "outro" ? scene.slots.closing : "",
-        },
         lines: scene.lines.map((line) => ({
           id: line.id,
           speakerId: line.speakerId,
@@ -585,9 +626,38 @@ function buildCueInput(
           if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
             throw new Error("背景色は #RRGGBB 形式で入力してください");
           }
-          input[field.key] = color.toUpperCase();
+          setAtPath(input, field.key, color.toUpperCase());
         } else {
-          delete input[field.key];
+          deleteAtPath(input, field.key);
+        }
+        break;
+      }
+      case "number": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          deleteAtPath(input, field.key);
+        } else {
+          const value = Number(trimmed);
+          if (!Number.isInteger(value)) {
+            throw new Error(`${field.label}は整数で入力してください`);
+          }
+          if (
+            (field.min !== undefined && value < field.min) ||
+            (field.max !== undefined && value > field.max)
+          ) {
+            throw new Error(
+              `${field.label}は ${field.min ?? ""}〜${field.max ?? ""} の範囲で入力してください`,
+            );
+          }
+          setAtPath(input, field.key, value);
+        }
+        break;
+      }
+      case "boolean": {
+        if (raw === "") {
+          deleteAtPath(input, field.key);
+        } else {
+          setAtPath(input, field.key, raw === "true");
         }
         break;
       }
@@ -815,24 +885,12 @@ export function buildContentDocument(
       visualCues,
     };
     if (sceneValue.kind === "intro") {
-      return {
-        ...common,
-        kind: "intro",
-        slots: { title: sceneValue.slots.title, subtitle: sceneValue.slots.subtitle },
-      };
+      return { ...common, kind: "intro" };
     }
     if (sceneValue.kind === "point") {
-      return {
-        ...common,
-        kind: "point",
-        slots: { heading: sceneValue.slots.heading, body: sceneValue.slots.body },
-      };
+      return { ...common, kind: "point" };
     }
-    return {
-      ...common,
-      kind: "outro",
-      slots: { closing: sceneValue.slots.closing },
-    };
+    return { ...common, kind: "outro" };
   });
   const sceneIds = new Set(scenes.map((scene) => scene.id));
   const audioTakes = buildAudioTakes(values);
@@ -915,6 +973,9 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         fields[field.key] = "none";
         fields[`${field.key}__duration`] = String(DEFAULT_ANIMATION_POLICY.defaultDurationMs);
         break;
+      case "boolean":
+        fields[field.key] = "";
+        break;
       default:
         fields[field.key] = "";
     }
@@ -958,9 +1019,8 @@ export function createPointSceneFormValue(): SceneFormValue {
     accentColor: DEFAULT_POINT_ACCENT_COLOR,
     timingMode: "auto",
     durationMs: FALLBACK_DURATION_MS,
-    slots: { title: "", subtitle: "", heading: "", body: "", closing: "" },
     lines: [],
-    cues: [],
+    cues: pointSceneTextCues(id).map(toCueFormValue),
     standings: emptyStandingSlots(),
   };
 }

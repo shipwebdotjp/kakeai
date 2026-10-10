@@ -9,13 +9,11 @@ import {
   sceneSiteMockupV1,
   deviceFrameInputSchema,
   deviceFrameV2InputSchema,
-  textBodyV1,
-  textTitleV1,
+  textBlockV1,
   type AnimationPreset,
   type ContentDocument,
   type CueLayer,
   type NestedVisual,
-  type Scene,
   type VisualCue,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
@@ -25,9 +23,8 @@ import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import type { RenderedCue, RenderContext } from "./render-context";
-import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline, type ScenePlacement } from "./timeline";
-import { renderTextTitle } from "./templates/text-title";
-import { renderTextBody } from "./templates/text-body";
+import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline } from "./timeline";
+import { renderTextBlock } from "./templates/text-block";
 import { renderMediaFullBleed } from "./templates/media-full-bleed";
 import { renderMediaCard } from "./templates/media-card";
 import {
@@ -123,25 +120,6 @@ function shade(hex: string, factor: number): string {
   return `rgb(${channel(1)},${channel(3)},${channel(5)})`;
 }
 
-function renderSceneSlot(scene: Scene, sceneIndex: number): string {
-  const path: (string | number)[] = ["scenes", sceneIndex, "slots"];
-  switch (scene.kind) {
-    case "intro":
-      return renderTextTitle(
-        { title: scene.slots.title, subtitle: scene.slots.subtitle, anchor: "center" },
-        path,
-      );
-    case "point":
-      return renderTextBody({ heading: scene.slots.heading, body: scene.slots.body }, path);
-    case "outro":
-      return renderTextTitle({ title: scene.slots.closing, subtitle: "" }, path);
-    default:
-      throw new CompositionCompileError([
-        { path, code: "unknown_scene_kind", message: "未対応のSceneです。" },
-      ]);
-  }
-}
-
 function renderNestedMedia(node: NestedVisual & { kind: "media" }, context: RenderContext): RenderedCue {
   const media = resolveCueMedia(node.assetId, context.assetResolver, context.path);
   const id = context.scope.id("media");
@@ -167,10 +145,8 @@ function dispatchTemplate(
   context: RenderContext,
 ): RenderedCue {
   switch (key) {
-    case `${textTitleV1.id}@${textTitleV1.version}`:
-      return { html: renderTextTitle(input, context.path), assetIds: [], animation: [] };
-    case `${textBodyV1.id}@${textBodyV1.version}`:
-      return { html: renderTextBody(input, context.path), assetIds: [], animation: [] };
+    case `${textBlockV1.id}@${textBlockV1.version}`:
+      return { html: renderTextBlock(input, context.path), assetIds: [], animation: [] };
     case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
       return renderMediaFullBleed(input, context);
     case `${mediaCardV1.id}@${mediaCardV1.version}`:
@@ -225,13 +201,6 @@ const STYLES = [
   "#kakeai-root{position:relative;width:100%;height:100%;overflow:hidden;background:#000;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;color:#fff;}",
   ".clip{position:absolute;inset:0;}",
   ".kakeai-scenebg{position:absolute;inset:0;}",
-  ".kakeai-slotframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:120px 140px;box-sizing:border-box;}",
-  ".kakeai-titlewrap{max-width:1500px;}",
-  ".kakeai-title{margin:0;font-size:96px;font-weight:700;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 4px 24px rgba(0,0,0,.55);}",
-  ".kakeai-subtitle{margin:24px 0 0;font-size:48px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 2px 16px rgba(0,0,0,.55);}",
-  ".kakeai-bodywrap{max-width:1500px;}",
-  ".kakeai-heading{margin:0 0 32px;font-size:72px;font-weight:700;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 4px 24px rgba(0,0,0,.55);}",
-  ".kakeai-body{margin:0;font-size:42px;line-height:1.8;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 2px 16px rgba(0,0,0,.55);}",
   ".kakeai-cuebody{position:absolute;inset:0;transform-origin:center center;}",
   ".kakeai-fullbleed{position:absolute;inset:0;width:100%;height:100%;}",
   ".kakeai-card{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:90px 160px;box-sizing:border-box;}",
@@ -425,7 +394,6 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     const startSec = toSecondsText(placement.startMs);
     const durationSec = toSecondsText(placement.durationMs);
     const bgId = `kakeai-scene-${placement.sceneIndex}-bg`;
-    const slotId = `kakeai-scene-${placement.sceneIndex}-slot`;
     const background = `linear-gradient(135deg, ${shade(scene.accentColor, 0.55)} 0%, ${shade(scene.accentColor, 0.22)} 100%)`;
     clips.push(
       `<section id="${bgId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${bgId}-body" class="kakeai-scenebg" style="background:${background}"></div></section>`,
@@ -474,6 +442,9 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       );
       for (const assetId of rendered.assetIds) {
         trackAsset(assetId);
+      }
+      if (rendered.html.length === 0) {
+        return;
       }
       const clipId = scope.id("clip");
       const bodyId = scope.id("body");
@@ -547,15 +518,6 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         emitCue(cue, cueIndex);
       }
     }
-
-    const slotHtml = renderSceneSlot(scene, placement.sceneIndex);
-    clips.push(
-      `<section id="${slotId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${slotId}-body" class="kakeai-slotframe">${slotHtml}</div></section>`,
-    );
-    const slotFadeSec = Math.min(0.35, placement.durationMs / 2000);
-    tweenLines.push(
-      `tl.from(document.getElementById("${slotId}-body"),{opacity:0,duration:${slotFadeSec},ease:"power1.out",immediateRender:false},${toSecondsText(placement.startMs + FADE_START_EPSILON_MS)});`,
-    );
 
     placement.lines.forEach((linePlacement, lineIndex) => {
       const line = lineById.get(linePlacement.lineId);

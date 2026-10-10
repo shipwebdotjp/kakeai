@@ -25,7 +25,7 @@ An immutable candidate audio recording for one Narration Segment. A segment may 
 _Avoid_: Narration segment, BGM
 
 **Scene**:
-A template-defined editorial unit of a Script Version, with typed editorial slots, a duration, and a per-scene accent color.
+A template-defined editorial unit of a Script Version, identified by a kind, with a duration, a per-scene accent color, narration lines, and visual cues. Text is expressed as visual cues, not typed slots.
 _Avoid_: Visual cue, template
 
 **Speaker**:
@@ -95,6 +95,10 @@ _Avoid_: fake post, screenshot
 **Cue Transition**:
 The enter/exit presentation of a Visual Cue, expressed only as a registered preset and a duration, bounded within the cue's range.
 _Avoid_: animation, keyframe
+
+**Scene Transition**:
+The cut, fade, or crossfade presentation at a Scene boundary, expressed only as a registered preset and a duration and bounded by the adjacent Scenes' durations. It is separate from a cue transition.
+_Avoid_: animation, cue transition
 
 **Animation Plan**:
 The bounded, local-time animation a template renderer returns for its own elements (target, preset, start, duration). Only the top-level compiler turns it into a timeline.

@@ -163,7 +163,7 @@ Jobの状態遷移は `queued → running → succeeded | failed` と `queued �
 
 `Asset` は実体ファイルだけを表す。画像、スクリーンショット、動画、生成済みのモーショングラフィックス、音声はいずれもAssetであり、BGMや背景はAssetの種類ではなく配置時の役割である。
 
-`VisualCue` は実体ファイルを直接描く、または `VisualTemplate` に入力を渡して描く。たとえばスクリーンショットや背景画像は画像Assetを参照し、表・グラフ・フローチャートは行・列やノード・辺などの構造化データをテンプレートへ渡す。MVPで実装するテンプレートは、Sceneのスロットを描画するテキスト系、背景メディア、画像／動画カード、立ち絵に限定する。Sceneは `kind` ごとの型付きスロット（`intro`: title/subtitle、`point`: heading/body、`outro`: closing）と必須の `accentColor` を持ち、Sceneベーステンプレートが既定で描画する。
+`VisualCue` は実体ファイルを直接描く、または `VisualTemplate` に入力を渡して描く。たとえばスクリーンショットや背景画像は画像Assetを参照し、表・グラフ・フローチャートは行・列やノード・辺などの構造化データをテンプレートへ渡す。MVPで実装するテンプレートは、統合テキスト（`text.block@1`）、背景メディア、画像／動画カード、立ち絵に限定する。Sceneは `kind` と必須の `accentColor`、任意の `transition` を持ち、型付きスロットは持たない。テキストは `text.block@1` のVisualCueとして表現する（[../editor/spec.md](../editor/spec.md)）。
 
 VisualCueの表示区間はフレーム番号ではなく判別union（Scene全体、セリフ区間、Scene先頭からのオフセット）で指定する。レンダー時に選択音声の尺から実時間とフレームを解決するため、将来TTSで音声尺が変わっても視覚演出がセリフに追従する。
 

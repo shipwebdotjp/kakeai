@@ -436,10 +436,25 @@ APIはContentDocumentと参照Assetを検証し、すべてがreadyであるこ�
       "engine": "hyperframes",
       "compilerVersion": "app-1",
       "playerVersion": "0.8.141"
+    },
+    "timeline": {
+      "totalDurationMs": 18340,
+      "scenes": [
+        {
+          "sceneId": "scene-point-1",
+          "startMs": 0,
+          "durationMs": 6120,
+          "lines": [
+            { "lineId": "line-point-1-1", "startMs": 500, "durationMs": 3200 }
+          ]
+        }
+      ]
     }
   }
 }
 ~~~
+
+`timeline` は解決済みのScene区間・line区間・総尺であり、プレビューの再生コントロール（Scene／セリフ移動、±x秒、コマ送り）がUIで再計算しないための非永続の派生データである。出力fpsは `output.fps`（30）を用いる。解決ロジックはコンパイラと同じタイムライン解決器を使う。詳細は [../editor/spec.md](../editor/spec.md) を正とする。
 
 この結果は永続化しないプレビュー用の派生データである。Assetがprocessingなら409 `ASSET_PROCESSING`、failed・欠損・破損・削除済みなら422 `ASSET_UNAVAILABLE` を返す。Composition HTMLが生成できない場合は422 PREVIEW_INPUT_INVALIDとし、原因となったContentDocumentまたはVisualTemplateの位置をJSON Pointerとしてdetails.issuesに含める。ファイルシステムパスは返さない。
 

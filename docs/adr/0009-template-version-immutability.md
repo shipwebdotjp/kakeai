@@ -1,6 +1,6 @@
 # テンプレート版の意味とレイアウト規約は不変にし、変更は新バージョンで行う
 
-Status: amended by ADR-0018
+Status: amended by ADR-0018, ADR-0034
 
 `template.id@version`（例 `explanation-5-scenes@1`）の意味とレイアウト規約は不変に保つ。見た目やレイアウトを変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは削除しない。
 

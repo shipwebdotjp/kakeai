@@ -3,7 +3,6 @@ import {
   useFieldArray,
   useWatch,
   type Control,
-  type FieldPath,
   type UseFormGetValues,
   type UseFormRegister,
   type UseFormSetValue,
@@ -84,6 +83,7 @@ interface CueListProps {
 interface CueRowProps {
   register: UseFormRegister<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
+  getValues: UseFormGetValues<DocumentFormValues>;
   sceneIndex: number;
   cueIndex: number;
   cue: CueFormValue;
@@ -94,6 +94,7 @@ interface CueRowProps {
 function CueRow({
   register,
   setValue,
+  getValues,
   sceneIndex,
   cueIndex,
   cue,
@@ -104,9 +105,10 @@ function CueRow({
   const definition = getVisualTemplate(cue.templateId, cue.templateVersion);
   const layerOptions = definition?.layers ?? ["background"];
   const fields = definition?.inputFields;
+  const fieldsPath = `${base}.fields` as const;
   const setField = (key: string, value: string) => {
-    const path = `scenes.${sceneIndex}.cues.${cueIndex}.fields.${key}` as FieldPath<DocumentFormValues>;
-    setValue(path, value, { shouldDirty: true });
+    const current = getValues(fieldsPath) ?? {};
+    setValue(fieldsPath, { ...current, [key]: value }, { shouldDirty: true });
   };
 
   return (
@@ -342,6 +344,36 @@ function CueField({ field, values, setField, animationPresets }: CueFieldProps) 
           />
         </label>
       );
+    case "number":
+      return (
+        <label className="my-2 inline-flex items-center gap-1.5">
+          {field.label}
+          <input
+            type="number"
+            min={field.min}
+            max={field.max}
+            step={field.step}
+            className={`w-24 ${textFieldClass}`}
+            value={value}
+            onChange={(event) => setField(field.key, event.target.value)}
+          />
+        </label>
+      );
+    case "boolean":
+      return (
+        <label className="my-2 inline-flex items-center gap-1.5">
+          {field.label}
+          <select
+            className={textFieldClass}
+            value={value}
+            onChange={(event) => setField(field.key, event.target.value)}
+          >
+            <option value="">未指定</option>
+            <option value="true">オン</option>
+            <option value="false">オフ</option>
+          </select>
+        </label>
+      );
     case "animation":
       return (
         <div className="my-2 flex flex-wrap items-center gap-3">
@@ -427,6 +459,7 @@ export function CueList({
             key={field.id}
             register={register}
             setValue={setValue}
+            getValues={getValues}
             sceneIndex={sceneIndex}
             cueIndex={cueIndex}
             cue={cue}

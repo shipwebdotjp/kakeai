@@ -1,6 +1,23 @@
 import type { ContentDocument } from "../content/document";
 import { CONTENT_SCHEMA_VERSION, TEMPLATE_ID, TEMPLATE_VERSION } from "../content/document";
 import { SUPPORTED_LOCALES } from "../content/primitives";
+import type { VisualCue } from "../content/visual";
+import { textBlockV1, type TextRole } from "../templates";
+
+function textCue(id: string, role: TextRole, text: string, order: number): VisualCue {
+  return {
+    id,
+    template: { id: textBlockV1.id, version: textBlockV1.version },
+    range: { kind: "scene" },
+    layer: "overlay",
+    order,
+    transition: {
+      enter: { preset: "fade", durationMs: 350 },
+      exit: { preset: "none", durationMs: 0 },
+    },
+    input: { text, role },
+  };
+}
 
 export function validContentDocument(): ContentDocument {
   return {
@@ -24,7 +41,6 @@ export function validContentDocument(): ContentDocument {
         kind: "intro",
         accentColor: "#2563EB",
         timing: { mode: "fixed", durationMs: 4000 },
-        slots: { title: "タイトル", subtitle: "サブタイトル" },
         lines: [],
         visualCues: [
           {
@@ -39,6 +55,8 @@ export function validContentDocument(): ContentDocument {
             },
             input: { assetId: "asset-bg", fit: "cover" },
           },
+          textCue("vc-intro-title", "title", "タイトル", 0),
+          textCue("vc-intro-subtitle", "subtitle", "サブタイトル", 1),
         ],
       },
       {
@@ -46,7 +64,6 @@ export function validContentDocument(): ContentDocument {
         kind: "point",
         accentColor: "#2563EB",
         timing: { mode: "auto" },
-        slots: { heading: "見出し1", body: "本文1" },
         lines: [
           {
             id: "line-p1-1",
@@ -56,34 +73,40 @@ export function validContentDocument(): ContentDocument {
             selectedAudioTakeId: "take-line-p1-1",
           },
         ],
-        visualCues: [],
+        visualCues: [
+          textCue("vc-p1-heading", "heading", "見出し1", 0),
+          textCue("vc-p1-body", "body", "本文1", 1),
+        ],
       },
       {
         id: "scene-point-2",
         kind: "point",
         accentColor: "#16A34A",
         timing: { mode: "auto" },
-        slots: { heading: "見出し2", body: "本文2" },
         lines: [],
-        visualCues: [],
+        visualCues: [
+          textCue("vc-p2-heading", "heading", "見出し2", 0),
+          textCue("vc-p2-body", "body", "本文2", 1),
+        ],
       },
       {
         id: "scene-point-3",
         kind: "point",
         accentColor: "#DC2626",
         timing: { mode: "auto" },
-        slots: { heading: "見出し3", body: "本文3" },
         lines: [],
-        visualCues: [],
+        visualCues: [
+          textCue("vc-p3-heading", "heading", "見出し3", 0),
+          textCue("vc-p3-body", "body", "本文3", 1),
+        ],
       },
       {
         id: "scene-outro",
         kind: "outro",
         accentColor: "#2563EB",
         timing: { mode: "fixed", durationMs: 4000 },
-        slots: { closing: "結びの文言" },
         lines: [],
-        visualCues: [],
+        visualCues: [textCue("vc-outro-closing", "closing", "結びの文言", 0)],
       },
     ],
     audioCues: [

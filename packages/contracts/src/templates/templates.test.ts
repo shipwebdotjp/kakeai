@@ -18,9 +18,11 @@ describe("visual template metadata", () => {
     expect(fields?.some((field) => field.kind === "animation")).toBe(false);
   });
 
-  it("marks text templates as editable via generic fields", () => {
-    expect(isEditableTemplate("text.title", 1)).toBe(true);
-    expect(isEditableTemplate("text.body", 1)).toBe(true);
+  it("marks the unified text template as editable via generic fields", () => {
+    expect(isEditableTemplate("text.block", 1)).toBe(true);
+    const fields = getTemplateInputFields("text.block", 1);
+    expect(fields?.some((field) => field.kind === "number")).toBe(true);
+    expect(fields?.some((field) => field.kind === "boolean")).toBe(true);
   });
 
   it("registers scene.site-mockup@1 as an editable card/overlay template", () => {

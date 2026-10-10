@@ -239,7 +239,7 @@ describe("contentDocumentSchema", () => {
 
   it("accepts more than three point scenes", () => {
     const doc = validContentDocument();
-    const extra = { ...doc.scenes[1]!, id: "scene-point-9", lines: [] };
+    const extra = { ...doc.scenes[1]!, id: "scene-point-9", lines: [], visualCues: [] };
     doc.scenes.splice(3, 0, extra);
     expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
   });

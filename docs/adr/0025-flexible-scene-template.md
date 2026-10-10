@@ -1,5 +1,7 @@
 # 可変Sceneテンプレート `explanation-scenes@1` を導入し、固定5シーン版を読み取り専用で残す
 
+> amended by [ADR-0035](./0035-remove-scene-slots-unify-text-cues.md): `explanation-scenes` はスロットでなく既定のVisualCueを生成する。Sceneスロットは廃止する。
+
 シーン構成を可変にする `explanation-scenes@1` を導入し、新規作成・保存はこれを使う。
 構成は「導入 → 要点0件以上 → 結び」の順で、新規作品は要点3件で開始する。
 `contentDocumentSchema` は `template.id` で構成規則を切り替える判別unionとし、

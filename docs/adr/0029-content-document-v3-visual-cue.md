@@ -1,5 +1,7 @@
 # ContentDocument v3: VisualCueのlayer・order・transition必須化
 
+> amended by [ADR-0034](./0034-destructive-changes-before-1-0.md): 正式リリース前は `schemaVersion` の破壊的変更を許容し、移行関数を持たない。`1.0.0` 以降は本ADRの移行規律へ戻る。ADR-0035で `schemaVersion` は `4` になる。
+
 `VisualCue` に `layer`（`background`/`card`/`standing`/`overlay`）、`order`（同一Scene・同一layer内で一意な非負整数）、`transition`（`enter`/`exit` のpresetと尺）を必須として追加し、ContentDocument の `schemaVersion` を `3` にする。`range` は解決後、半開区間 `[start, end)` として扱う。
 
 保存済み `ScriptVersion` が存在しないことを着手前に確認したうえで、v1/v2 の読出し・移行コードと、置換済みの `explanation-5-scenes` レガシーテンプレートを削除する。旧版を残さない。

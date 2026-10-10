@@ -16,7 +16,7 @@ describe("collectAssetReferences", () => {
     document.scenes[1]!.visualCues = [
       {
         id: "vc-text",
-        template: { id: "text.body", version: 1 },
+        template: { id: "text.block", version: 1 },
         range: { kind: "scene" },
         layer: "overlay",
         order: 0,
@@ -24,7 +24,7 @@ describe("collectAssetReferences", () => {
           enter: { preset: "fade", durationMs: 350 },
           exit: { preset: "none", durationMs: 0 },
         },
-        input: { heading: "見出し", body: "本文" },
+        input: { text: "本文", role: "body" },
       },
     ];
     const references = collectAssetReferences(document);

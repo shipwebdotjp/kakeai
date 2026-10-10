@@ -34,6 +34,22 @@ function pointScenes(document: ContentDocument): PointScene[] {
   return document.scenes.filter((scene): scene is PointScene => scene.kind === "point");
 }
 
+function sceneTextCue(scene: { visualCues: VisualCue[] }, role: string): VisualCue | undefined {
+  return scene.visualCues.find((cue) => (cue.input as { role?: string }).role === role);
+}
+
+function setSceneText(scene: { visualCues: VisualCue[] }, role: string, text: string): void {
+  const cue = sceneTextCue(scene, role);
+  if (cue !== undefined) {
+    (cue.input as { text: string }).text = text;
+  }
+}
+
+function readSceneText(scene: { visualCues: VisualCue[] }, role: string): string {
+  const input = sceneTextCue(scene, role)?.input as { text?: string } | undefined;
+  return input?.text ?? "";
+}
+
 function standingInput(cue: { input: unknown }): {
   characterId: string;
   appearanceId: string;
@@ -67,8 +83,8 @@ describe("buildContentDocument", () => {
   it("maps scene values to base scenes by id, not position", () => {
     const base = createInitialContentDocument();
     const points = pointScenes(base);
-    points[0]!.slots.heading = "見出し1";
-    points[1]!.slots.heading = "見出し2";
+    setSceneText(points[0]!, "heading", "見出し1");
+    setSceneText(points[1]!, "heading", "見出し2");
 
     const values = toFormValues(base);
     const [intro, first, second, third, outro] = values.scenes;
@@ -76,7 +92,7 @@ describe("buildContentDocument", () => {
 
     const rebuilt = buildContentDocument(base, values);
     const rebuiltPoints = pointScenes(rebuilt);
-    expect(rebuiltPoints.map((scene) => scene.slots.heading)).toEqual([
+    expect(rebuiltPoints.map((scene) => readSceneText(scene, "heading"))).toEqual([
       "見出し2",
       "見出し1",
       "",
@@ -96,9 +112,9 @@ describe("buildContentDocument", () => {
       }),
       vc({
         id: "vc-text",
-        template: { id: "text.body", version: 1 },
+        template: { id: "text.block", version: 1 },
         layer: "overlay",
-        input: { heading: "見出し", body: "本文" },
+        input: { text: "本文", role: "body" },
       }),
     ];
 
@@ -111,7 +127,7 @@ describe("buildContentDocument", () => {
     const cues = rebuilt.scenes[0]!.visualCues;
     const byId = new Map(cues.map((cue) => [cue.id, cue]));
     expect((byId.get("vc-bg")!.input as { assetId: string }).assetId).toBe("asset-new");
-    expect(byId.get("vc-text")!.template).toEqual({ id: "text.body", version: 1 });
+    expect(byId.get("vc-text")!.template).toEqual({ id: "text.block", version: 1 });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
@@ -177,8 +193,8 @@ describe("buildContentDocument", () => {
           frame: "laptop",
           screen: {
             kind: "template",
-            template: { id: "text.body", version: 1 },
-            input: { heading: "見出し", body: "本文" },
+            template: { id: "text.block", version: 1 },
+            input: { text: "本文", role: "body" },
           },
         },
       }),
@@ -773,26 +789,33 @@ describe("buildContentDocument", () => {
     const base = createInitialContentDocument();
     base.scenes[0]!.visualCues = [
       vc({
-        id: "vc-title",
-        template: { id: "text.title", version: 1 },
+        id: "vc-text",
+        template: { id: "text.block", version: 1 },
         layer: "overlay",
-        input: { title: "タイトル", subtitle: "サブ", anchor: "center" },
+        input: { text: "タイトル", role: "title", anchor: "center" },
       }),
     ];
     const values = toFormValues(base);
     const cue = values.scenes[0]!.cues[0]!;
-    expect(cue.fields.title).toBe("タイトル");
+    expect(cue.fields.text).toBe("タイトル");
+    expect(cue.fields.role).toBe("title");
     expect(cue.fields.anchor).toBe("center");
-    cue.fields.title = "新しいタイトル";
+    cue.fields.text = "新しいタイトル";
+    cue.fields.fontSize = "72";
+    cue.fields["decoration.bold"] = "true";
 
     const rebuilt = buildContentDocument(base, values);
     const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
-      title: string;
-      subtitle: string;
-      anchor: string;
+      text: string;
+      role: string;
+      anchor?: string;
+      fontSize?: number;
+      decoration?: { bold?: boolean };
     };
-    expect(input.title).toBe("新しいタイトル");
+    expect(input.text).toBe("新しいタイトル");
     expect(input.anchor).toBe("center");
+    expect(input.fontSize).toBe(72);
+    expect(input.decoration?.bold).toBe(true);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
@@ -800,10 +823,10 @@ describe("buildContentDocument", () => {
     const base = createInitialContentDocument();
     base.scenes[0]!.visualCues = [
       vc({
-        id: "vc-title",
-        template: { id: "text.title", version: 1 },
+        id: "vc-text",
+        template: { id: "text.block", version: 1 },
         layer: "overlay",
-        input: { title: "タイトル", subtitle: "" },
+        input: { text: "タイトル", role: "title" },
       }),
     ];
     const values = toFormValues(base);
@@ -813,6 +836,7 @@ describe("buildContentDocument", () => {
     const rebuilt = buildContentDocument(base, values);
     const input = rebuilt.scenes[0]!.visualCues[0]!.input as Record<string, unknown>;
     expect("anchor" in input).toBe(false);
+    expect("decoration" in input).toBe(false);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 

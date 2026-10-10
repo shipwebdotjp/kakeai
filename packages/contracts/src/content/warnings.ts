@@ -1,19 +1,29 @@
 import type { Warning } from "../error";
 import type { ContentDocument } from "./document";
+import { textBlockInputSchema, textBlockV1, type TextRole } from "../templates";
 
 export interface TextConstraint {
   maxLines: number;
   charsPerLine: number;
 }
 
-export const TEXT_CONSTRAINTS = {
+export const TEXT_CONSTRAINTS: Record<TextRole, TextConstraint> = {
   title: { maxLines: 2, charsPerLine: 18 },
   subtitle: { maxLines: 2, charsPerLine: 24 },
   heading: { maxLines: 2, charsPerLine: 16 },
   body: { maxLines: 6, charsPerLine: 28 },
   closing: { maxLines: 2, charsPerLine: 20 },
-  captionText: { maxLines: 2, charsPerLine: 20 },
-} as const satisfies Record<string, TextConstraint>;
+};
+
+export const CAPTION_CONSTRAINT: TextConstraint = { maxLines: 2, charsPerLine: 20 };
+
+const ROLE_LABELS: Record<TextRole, string> = {
+  title: "タイトル",
+  subtitle: "サブタイトル",
+  heading: "見出し",
+  body: "本文",
+  closing: "結びの文言",
+};
 
 function estimateLineCount(text: string, charsPerLine: number): number {
   if (text.length === 0) {
@@ -45,62 +55,32 @@ function overflowWarning(
 export function computeContentWarnings(document: ContentDocument): Warning[] {
   const warnings: Warning[] = [];
   document.scenes.forEach((scene, sceneIndex) => {
-    if (scene.kind === "intro") {
-      const title = overflowWarning(
-        ["scenes", sceneIndex, "slots", "title"],
-        "タイトル",
-        scene.slots.title,
-        TEXT_CONSTRAINTS.title,
-      );
-      if (title) {
-        warnings.push(title);
+    scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.template.id !== textBlockV1.id || cue.template.version !== textBlockV1.version) {
+        return;
       }
-      const subtitle = overflowWarning(
-        ["scenes", sceneIndex, "slots", "subtitle"],
-        "サブタイトル",
-        scene.slots.subtitle,
-        TEXT_CONSTRAINTS.subtitle,
-      );
-      if (subtitle) {
-        warnings.push(subtitle);
+      const parsed = textBlockInputSchema.safeParse(cue.input);
+      if (!parsed.success) {
+        return;
       }
-    } else if (scene.kind === "point") {
-      const heading = overflowWarning(
-        ["scenes", sceneIndex, "slots", "heading"],
-        "見出し",
-        scene.slots.heading,
-        TEXT_CONSTRAINTS.heading,
+      const { role, text } = parsed.data;
+      const warning = overflowWarning(
+        ["scenes", sceneIndex, "visualCues", cueIndex, "input", "text"],
+        ROLE_LABELS[role],
+        text,
+        TEXT_CONSTRAINTS[role],
       );
-      if (heading) {
-        warnings.push(heading);
+      if (warning) {
+        warnings.push(warning);
       }
-      const body = overflowWarning(
-        ["scenes", sceneIndex, "slots", "body"],
-        "本文",
-        scene.slots.body,
-        TEXT_CONSTRAINTS.body,
-      );
-      if (body) {
-        warnings.push(body);
-      }
-    } else if (scene.kind === "outro") {
-      const closing = overflowWarning(
-        ["scenes", sceneIndex, "slots", "closing"],
-        "結びの文言",
-        scene.slots.closing,
-        TEXT_CONSTRAINTS.closing,
-      );
-      if (closing) {
-        warnings.push(closing);
-      }
-    }
+    });
 
     scene.lines.forEach((line, lineIndex) => {
       const caption = overflowWarning(
         ["scenes", sceneIndex, "lines", lineIndex, "captionText"],
         "字幕",
         line.captionText,
-        TEXT_CONSTRAINTS.captionText,
+        CAPTION_CONSTRAINT,
       );
       if (caption) {
         warnings.push(caption);
