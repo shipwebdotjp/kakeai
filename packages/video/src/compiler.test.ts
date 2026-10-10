@@ -499,4 +499,53 @@ describe("compileDocument", () => {
       expect(compiled.html).toContain(`id="${nestedId}"`);
     }
   });
+
+  it("applies non-fade cue transition presets", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues[0]!.transition = {
+      enter: { preset: "slide-up", durationMs: 300 },
+      exit: { preset: "none", durationMs: 0 },
+    };
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("y:60");
+  });
+
+  it("animates the device-frame screen for scene.device-frame@2", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device2",
+        template: { id: "scene.device-frame", version: 2 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
+          animation: { preset: "scale-in", durationMs: 400 },
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const screenId = cueScope("vc-device2").id("screen");
+    expect(compiled.html).toContain(`document.getElementById("${screenId}")`);
+    expect(compiled.html).toContain("scale:0.9");
+  });
+
+  it("rejects an animation field on scene.device-frame@1", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device1",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
+          animation: { preset: "fade", durationMs: 300 },
+        },
+      }),
+    ];
+    expect(() => compileDocument({ document, assetResolver: resolver })).toThrow(
+      CompositionCompileError,
+    );
+  });
 });

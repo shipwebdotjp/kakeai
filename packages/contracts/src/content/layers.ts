@@ -5,7 +5,15 @@ export const cueLayerSchema = z.enum(["background", "card", "standing", "overlay
 export type CueLayer = z.infer<typeof cueLayerSchema>;
 export const CUE_LAYERS = cueLayerSchema.options;
 
-export const transitionPresetSchema = z.enum(["none", "fade"]);
+export const transitionPresetSchema = z.enum([
+  "none",
+  "fade",
+  "slide-up",
+  "slide-down",
+  "slide-left",
+  "slide-right",
+  "scale-in",
+]);
 export type TransitionPreset = z.infer<typeof transitionPresetSchema>;
 
 export const transitionEdgeSchema = z
@@ -39,7 +47,7 @@ export interface TransitionPolicy {
 }
 
 export const DEFAULT_TRANSITION_POLICY: TransitionPolicy = {
-  presets: ["none", "fade"],
+  presets: [...transitionPresetSchema.options],
   defaultEnter: { preset: "fade", durationMs: 350 },
   defaultExit: { preset: "none", durationMs: 0 },
   maxDurationMs: 1000,

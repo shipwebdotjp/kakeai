@@ -105,7 +105,7 @@ describe("buildContentDocument", () => {
     const values = toFormValues(base);
     const target = values.scenes[0]!;
     const bg = target.cues.find((cue) => cue.id === "vc-bg")!;
-    bg.assetId = "asset-new";
+    bg.fields.assetId = "asset-new";
 
     const rebuilt = buildContentDocument(base, values);
     const cues = rebuilt.scenes[0]!.visualCues;
@@ -126,7 +126,7 @@ describe("buildContentDocument", () => {
     ];
 
     const values = toFormValues(base);
-    values.scenes[0]!.cues[0]!.assetId = null;
+    values.scenes[0]!.cues[0]!.fields.assetId = "";
 
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.scenes[0]!.visualCues).toEqual([]);
@@ -149,9 +149,9 @@ describe("buildContentDocument", () => {
 
     const values = toFormValues(base);
     const cue = values.scenes[0]!.cues[0]!;
-    expect(cue.assetId).toBe("asset-screen");
-    expect(cue.frame).toBe("phone");
-    cue.assetId = "asset-screen-2";
+    expect(cue.fields.screen).toBe("asset-screen");
+    expect(cue.fields.frame).toBe("phone");
+    cue.fields.screen = "asset-screen-2";
 
     const rebuilt = buildContentDocument(base, values);
     const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
@@ -186,8 +186,8 @@ describe("buildContentDocument", () => {
 
     const values = toFormValues(base);
     const cue = values.scenes[0]!.cues[0]!;
-    expect(cue.assetId).toBeNull();
-    cue.frame = "phone";
+    expect(cue.fields.screen).toBe("");
+    cue.fields.frame = "phone";
 
     const rebuilt = buildContentDocument(base, values);
     const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
@@ -767,5 +767,111 @@ describe("buildContentDocument", () => {
       cues: 2,
       speakers: 0,
     });
+  });
+
+  it("edits a text overlay cue through generic fields", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-title",
+        template: { id: "text.title", version: 1 },
+        layer: "overlay",
+        input: { title: "タイトル", subtitle: "サブ", anchor: "center" },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.fields.title).toBe("タイトル");
+    expect(cue.fields.anchor).toBe("center");
+    cue.fields.title = "新しいタイトル";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
+      title: string;
+      subtitle: string;
+      anchor: string;
+    };
+    expect(input.title).toBe("新しいタイトル");
+    expect(input.anchor).toBe("center");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("keeps an unset optional select absent on round-trip", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-title",
+        template: { id: "text.title", version: 1 },
+        layer: "overlay",
+        input: { title: "タイトル", subtitle: "" },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.fields.anchor).toBe("");
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as Record<string, unknown>;
+    expect("anchor" in input).toBe(false);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("initializes device-frame@2 fields with animation defaults", () => {
+    const cueValue = createCueFormValue({
+      sceneId: "scene-intro",
+      templateId: "scene.device-frame",
+      templateVersion: 2,
+      layer: "background",
+      order: 0,
+    });
+    expect(cueValue.fields.screen).toBe("");
+    expect(cueValue.fields.frame).toBe("laptop");
+    expect(cueValue.fields.animation).toBe("none");
+    expect(cueValue.fields["animation__duration"]).toBe("400");
+  });
+
+  it("clamps device-frame animation duration to the policy maximum", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-device",
+        template: { id: "scene.device-frame", version: 2 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
+          animation: { preset: "fade", durationMs: 100 },
+        },
+      }),
+    ];
+    const values = toFormValues(base);
+    values.scenes[0]!.cues[0]!.fields["animation__duration"] = "999999";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
+      animation: { durationMs: number };
+    };
+    expect(input.animation.durationMs).toBe(2000);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("omits the animation input when the preset is none", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.scenes[0]!.cues = [
+      createCueFormValue({
+        sceneId: values.scenes[0]!.id,
+        templateId: "scene.device-frame",
+        templateVersion: 2,
+        layer: "background",
+        order: 0,
+      }),
+    ];
+    values.scenes[0]!.cues[0]!.fields.screen = "asset-screen";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as Record<string, unknown>;
+    expect("animation" in input).toBe(false);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });

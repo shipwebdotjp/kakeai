@@ -3,18 +3,23 @@ import {
   useFieldArray,
   useWatch,
   type Control,
+  type FieldPath,
   type UseFormGetValues,
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
 import {
+  ANIMATION_PRESETS,
+  DEFAULT_ANIMATION_POLICY,
   getVisualTemplate,
   listVisualTemplateCatalog,
+  type AnimationPreset,
   type CueLayer,
+  type TemplateFieldSpec,
 } from "@kakeai/contracts";
 import {
+  STANDING_TEMPLATE_ID,
   createCueFormValue,
-  isEditableTemplate,
   type CueFormValue,
   type DocumentFormValues,
   type LineFormValue,
@@ -29,7 +34,42 @@ const LAYER_LABELS: Record<CueLayer, string> = {
   overlay: "オーバーレイ",
 };
 
-const ADDABLE_TEMPLATE_IDS = ["media.full-bleed", "media.card", "scene.device-frame"] as const;
+const PRESET_LABELS: Record<string, string> = {
+  none: "なし",
+  fade: "フェード",
+  "slide-up": "上へスライド",
+  "slide-down": "下へスライド",
+  "slide-left": "左へスライド",
+  "slide-right": "右へスライド",
+  "scale-in": "拡大",
+  pulse: "パルス",
+};
+
+interface AddableTemplate {
+  id: string;
+  version: number;
+  label: string;
+  layers: readonly CueLayer[];
+}
+
+function addableTemplates(): AddableTemplate[] {
+  const byId = new Map<string, AddableTemplate>();
+  for (const entry of listVisualTemplateCatalog()) {
+    if (!entry.editable || entry.id === STANDING_TEMPLATE_ID) {
+      continue;
+    }
+    const existing = byId.get(entry.id);
+    if (existing === undefined || entry.version > existing.version) {
+      byId.set(entry.id, {
+        id: entry.id,
+        version: entry.version,
+        label: entry.label,
+        layers: entry.layers,
+      });
+    }
+  }
+  return [...byId.values()];
+}
 
 interface CueListProps {
   control: Control<DocumentFormValues>;
@@ -39,10 +79,6 @@ interface CueListProps {
   sceneIndex: number;
   sceneId: string;
   lines: LineFormValue[];
-}
-
-function allowedLayersFor(templateId: string, version: number): readonly CueLayer[] {
-  return getVisualTemplate(templateId, version)?.layers ?? ["background"];
 }
 
 interface CueRowProps {
@@ -65,9 +101,14 @@ function CueRow({
   onRemove,
 }: CueRowProps) {
   const base = `scenes.${sceneIndex}.cues.${cueIndex}` as const;
-  const layerOptions = allowedLayersFor(cue.templateId, cue.templateVersion);
   const definition = getVisualTemplate(cue.templateId, cue.templateVersion);
-  const editable = isEditableTemplate(cue.templateId);
+  const layerOptions = definition?.layers ?? ["background"];
+  const fields = definition?.inputFields;
+  const setField = (key: string, value: string) => {
+    const path = `scenes.${sceneIndex}.cues.${cueIndex}.fields.${key}` as FieldPath<DocumentFormValues>;
+    setValue(path, value, { shouldDirty: true });
+  };
+
   return (
     <div className="mt-2 rounded border border-border p-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -161,11 +202,14 @@ function CueRow({
         <label className="inline-flex items-center gap-1.5">
           入場
           <select className={textFieldClass} {...register(`${base}.enterPreset`)}>
-            <option value="none">なし</option>
-            <option value="fade">フェード</option>
+            {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
+              <option key={preset} value={preset}>
+                {PRESET_LABELS[preset] ?? preset}
+              </option>
+            ))}
           </select>
         </label>
-        {cue.enterPreset === "fade" && (
+        {cue.enterPreset !== "none" && (
           <label className="inline-flex items-center gap-1.5">
             尺(ms)
             <input
@@ -179,11 +223,14 @@ function CueRow({
         <label className="inline-flex items-center gap-1.5">
           退場
           <select className={textFieldClass} {...register(`${base}.exitPreset`)}>
-            <option value="none">なし</option>
-            <option value="fade">フェード</option>
+            {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
+              <option key={preset} value={preset}>
+                {PRESET_LABELS[preset] ?? preset}
+              </option>
+            ))}
           </select>
         </label>
-        {cue.exitPreset === "fade" && (
+        {cue.exitPreset !== "none" && (
           <label className="inline-flex items-center gap-1.5">
             尺(ms)
             <input
@@ -196,62 +243,139 @@ function CueRow({
         )}
       </div>
 
-      {!editable && (
+      {fields === undefined || fields.length === 0 ? (
         <p className={metaTextClass}>
           このテンプレートはUI未対応のため、内容は非破壊で保持されます。
         </p>
-      )}
-      {editable && (
+      ) : (
         <div className="mt-2 border-t border-dashed border-border pt-2">
-          <MediaPicker
-            label={cue.templateId === "scene.device-frame" ? "画面" : "素材"}
-            kinds={["image", "video"]}
-            selectedAssetId={cue.assetId}
-            onSelect={(assetId) => setValue(`${base}.assetId`, assetId, { shouldDirty: true })}
-          />
-          <label className="my-2 inline-flex items-center gap-1.5">
-            fit
-            <select className={textFieldClass} {...register(`${base}.fit`)}>
-              <option value="cover">cover</option>
-              <option value="contain">contain</option>
-            </select>
-          </label>
-          {cue.templateId === "media.card" && (
-            <>
-              <label className="my-2 block">
-                カード見出し
-                <input className={`mt-1 block w-full ${textFieldClass}`} {...register(`${base}.heading`)} />
-              </label>
-              <label className="my-2 block">
-                カード補足文
-                <input className={`mt-1 block w-full ${textFieldClass}`} {...register(`${base}.caption`)} />
-              </label>
-            </>
-          )}
-          {cue.templateId === "scene.device-frame" && (
-            <div className="my-2 flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-1.5">
-                フレーム
-                <select className={textFieldClass} {...register(`${base}.frame`)}>
-                  <option value="laptop">ラップトップ</option>
-                  <option value="phone">スマートフォン</option>
-                </select>
-              </label>
-              <label className="inline-flex items-center gap-1.5">
-                背景色
-                <input
-                  type="text"
-                  placeholder="#F1F5F9"
-                  className={`w-32 ${textFieldClass}`}
-                  {...register(`${base}.backgroundColor`)}
-                />
-              </label>
-            </div>
-          )}
+          {fields.map((field) => (
+            <CueField
+              key={field.key}
+              field={field}
+              values={cue.fields}
+              setField={setField}
+              animationPresets={definition?.animationPolicy.presets ?? ANIMATION_PRESETS}
+            />
+          ))}
         </div>
       )}
     </div>
   );
+}
+
+interface CueFieldProps {
+  field: TemplateFieldSpec;
+  values: Record<string, string>;
+  setField: (key: string, value: string) => void;
+  animationPresets: readonly AnimationPreset[];
+}
+
+function CueField({ field, values, setField, animationPresets }: CueFieldProps) {
+  const value = values[field.key] ?? "";
+  switch (field.kind) {
+    case "media":
+    case "nestedMedia":
+      return (
+        <div>
+          <MediaPicker
+            label={field.label}
+            kinds={field.assetKinds}
+            selectedAssetId={value.length > 0 ? value : null}
+            onSelect={(assetId) => setField(field.key, assetId ?? "")}
+          />
+          {field.kind === "nestedMedia" && (
+            <label className="my-2 inline-flex items-center gap-1.5">
+              fit
+              <select
+                className={textFieldClass}
+                value={values[`${field.key}__fit`] ?? "cover"}
+                onChange={(event) => setField(`${field.key}__fit`, event.target.value)}
+              >
+                <option value="cover">cover</option>
+                <option value="contain">contain</option>
+              </select>
+            </label>
+          )}
+        </div>
+      );
+    case "text":
+    case "optionalText":
+      return (
+        <label className="my-2 block">
+          {field.label}
+          <input
+            className={`mt-1 block w-full ${textFieldClass}`}
+            value={value}
+            onChange={(event) => setField(field.key, event.target.value)}
+          />
+        </label>
+      );
+    case "select":
+      return (
+        <label className="my-2 inline-flex items-center gap-1.5">
+          {field.label}
+          <select
+            className={textFieldClass}
+            value={value}
+            onChange={(event) => setField(field.key, event.target.value)}
+          >
+            {field.optional && <option value="">未指定</option>}
+            {field.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    case "color":
+      return (
+        <label className="my-2 inline-flex items-center gap-1.5">
+          {field.label}
+          <input
+            type="text"
+            placeholder="#RRGGBB"
+            className={`w-32 ${textFieldClass}`}
+            value={value}
+            onChange={(event) => setField(field.key, event.target.value)}
+          />
+        </label>
+      );
+    case "animation":
+      return (
+        <div className="my-2 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-1.5">
+            {field.label}
+            <select
+              className={textFieldClass}
+              value={value.length > 0 ? value : "none"}
+              onChange={(event) => setField(field.key, event.target.value)}
+            >
+              {animationPresets.map((preset) => (
+                <option key={preset} value={preset}>
+                  {PRESET_LABELS[preset] ?? preset}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(value.length > 0 ? value : "none") !== "none" && (
+            <label className="inline-flex items-center gap-1.5">
+              尺(ms)
+              <input
+                type="number"
+                min={0}
+                className={`w-20 ${textFieldClass}`}
+                value={values[`${field.key}__duration`] ?? String(DEFAULT_ANIMATION_POLICY.defaultDurationMs)}
+                onChange={(event) => setField(`${field.key}__duration`, event.target.value)}
+              />
+            </label>
+          )}
+        </div>
+      );
+    default:
+      return null;
+  }
 }
 
 export function CueList({
@@ -265,15 +389,11 @@ export function CueList({
 }: CueListProps) {
   const { fields, append, remove } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.cues` }) ?? [];
-  const [addTemplate, setAddTemplate] = useState<string>(ADDABLE_TEMPLATE_IDS[0]);
-
-  const catalog = listVisualTemplateCatalog().filter((entry) =>
-    (ADDABLE_TEMPLATE_IDS as readonly string[]).includes(entry.id),
-  );
+  const templates = addableTemplates();
+  const [addTemplate, setAddTemplate] = useState<string>(templates[0]?.id ?? "");
 
   const handleAdd = () => {
-    const entry =
-      catalog.find((candidate) => candidate.id === addTemplate) ?? catalog[0];
+    const entry = templates.find((candidate) => candidate.id === addTemplate) ?? templates[0];
     if (entry === undefined) {
       return;
     }
@@ -321,7 +441,7 @@ export function CueList({
           value={addTemplate}
           onChange={(event) => setAddTemplate(event.target.value)}
         >
-          {catalog.map((entry) => (
+          {templates.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.label}
             </option>

@@ -61,6 +61,12 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
+  it("accepts the expanded transition presets", () => {
+    const doc = validContentDocument();
+    doc.scenes[0]!.visualCues[0]!.transition.enter = { preset: "slide-up", durationMs: 300 };
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
   it("rejects preset none with a non-zero duration", () => {
     const doc = validContentDocument();
     doc.scenes[0]!.visualCues[0]!.transition.exit = { preset: "none", durationMs: 100 };

@@ -21,12 +21,13 @@
 
 ## Phase 1: 編集表現の拡張
 
-- 背景・カードに画像・動画・アプリ管理の複合ビジュアル（Composite Visual Template）を置く基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) で実装済み（VisualCue v3 の `layer`/`order`/`transition`、`NestedVisual` 再帰、`scene.device-frame@1`、Cue一覧UI）。
+- 背景・カードに画像・動画・アプリ管理の複合ビジュアル（Composite Visual Template）を置く基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) で実装済み（VisualCue v3 の `layer`/`order`/`transition`、`NestedVisual` 再帰、`scene.device-frame@1`/`@2`、Cue一覧UI、テンプレート `inputFields` による汎用エディタ、有限presetの `AnimationPlan`）。
 - 背景とカードの正規化した焦点位置を編集する。
 - 1 Scene内の複数VisualCue、表示順、セリフ区間・offset区間を編集する。
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。
 - 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、表情自動切替、口パクを追加する。
-- `table.simple@1` と、その列定義、行、強調セルの構造化入力を最初に編集可能にする。続けてchart、flow系VisualTemplateを追加する。
+- 有名な投稿サイト・技術サイト・ブラウザのガワに画像・動画を収めるサイトモックアップ（フレーム型）は [../site-mockup/spec.md](../site-mockup/spec.md) で仕様化（`scene.site-mockup@1`、variantの加算的追加を許容、汎用スタイル＋利用者ロゴ）。
+- `table.simple@1` と、その列定義、行、強調セルの構造化入力を編集可能にする。続けてchart、flow系VisualTemplateを追加する。サイトモックアップの後に着手する。
 
 完了条件：固定のフォーム範囲を超える視覚・音声表現を、正本JSONを壊さずに編集、プレビュー、レンダーできる。
 
