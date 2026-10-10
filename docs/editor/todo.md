@@ -43,9 +43,10 @@
 - [x] フレーム送りは出力fps（30）で1/30秒単位とする
 - 完了条件: 保存済み台本でコマ送り・セリフ／Scene移動・±x秒が動き、正本が変わらず、previewレスポンスのタイムラインと総尺が一致する。
 
-## E5 立ち絵の前Sceneコピー
+## E5 シーンの複製（前のSceneのまるごと複製）
 
-- [ ] Scene編集に「前のSceneから立ち絵をコピー」ボタンを追加する
-- [ ] 直前Sceneの `character.standing` 入力（`characterId`・`appearanceId`・`side`・倍率）を新Cue IDで複製する（既定は置き換え、追加も選択可）
-- [ ] 前Scene不在・立ち絵Cue不在でボタンを無効化し、参照先が消えている場合は複製せず理由を表示する
-- 完了条件: 1操作で前Sceneの立ち絵を複製でき、不存在時は複製されない。
+- [x] `form.ts` に `cloneSceneFormValue` を追加（Scene/VisualCueの新ID発行、`lines: []`、遷移・色・尺・立ち絵を複製）（[ADR-0038](../adr/0038-scene-clone-visuals-only.md)）
+- [x] 各 point Scene の見出しコントロール群の最左に「前のシーンを複製」ボタンを追加し、複製元の直後に新Sceneを挿入する
+- [x] 直前Sceneがpointでない場合はボタンを無効化し、複製先は常にpointとする
+- [x] セリフ・音声は複製しない
+- 完了条件: 1操作で前Sceneの視覚要素と遷移が複製され、セリフ・音声は複製されず、IDが一意で検証を満たす。

@@ -1047,6 +1047,36 @@ export function createPointSceneFormValue(): SceneFormValue {
   };
 }
 
+export function cloneSceneFormValue(
+  source: SceneFormValue & { kind: "point" },
+  newId: string,
+): SceneFormValue {
+  return {
+    id: newId,
+    kind: "point",
+    accentColor: source.accentColor,
+    timingMode: source.timingMode,
+    durationMs: source.durationMs,
+    transitionPreset: source.transitionPreset,
+    transitionDurationMs: source.transitionDurationMs,
+    lines: [],
+    cues: source.cues.map((cue) => {
+      const id = newVisualCueId(newId, cue.templateId.replace(/\W/g, "-"));
+      const isLineRange = cue.rangeKind === "lines";
+      return {
+        ...cue,
+        id,
+        fields: { ...cue.fields },
+        rangeKind: isLineRange ? "scene" : cue.rangeKind,
+        startLineId: isLineRange ? "" : cue.startLineId,
+        endLineId: isLineRange ? "" : cue.endLineId,
+        baseCue: cue.baseCue === null ? null : { ...structuredClone(cue.baseCue), id },
+      };
+    }),
+    standings: source.standings.map((standing) => ({ ...standing, cueId: null })),
+  };
+}
+
 export function newCharacterId(): string {
   return `character-${randomId()}`;
 }

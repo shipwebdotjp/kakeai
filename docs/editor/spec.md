@@ -8,7 +8,7 @@
 2. 編集画面の3ペイン化とジャンプメニュー。
 3. プレビューの再生コントロールとScene・セリフ間ナビゲーション。
 4. シーン間トランジション（カット／フェード／クロスフェード）。
-5. 立ち絵設定の前Sceneからのワンクリック複製。
+5. 前のSceneのまるごと複製（視覚要素と遷移。セリフ・音声は含めない）。
 
 決定は [ADR-0034](../adr/0034-destructive-changes-before-1-0.md)（開発段階の破壊的変更）、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)（スロット廃止・Cue統一）、[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)（シーン間トランジション）、[ADR-0037](../adr/0037-unified-text-template-input-contract.md)（統合テキストテンプレートの入力契約）を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md)、複合ビジュアル基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
@@ -88,13 +88,15 @@ Scene の境界に、カット／フェードイン・フェードアウト／�
 
 本仕様確定に合わせて `schemaVersion` を `4` に上げる（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md) と同一の破壊的変更にまとめる）。開発環境に残る v3 の保存版は削除し、移行関数は持たない（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
 
-## 立ち絵の前Sceneコピー
+## シーンの複製（前のSceneのまるごと複製）
 
-Scene編集に「前のSceneから立ち絵をコピー」ボタンを置く。直前Sceneの立ち絵Cue（`character.standing`）の入力（`characterId`・`appearanceId`・`side`・倍率）を現在Sceneへ複製する。
+各 point Scene の見出しコントロール群の最左に「前のシーンを複製」ボタンを置く。直前Scene（pointに限る）の視覚要素を新IDで複製し、複製元の直後に新しい point Scene として挿入する（[ADR-0038](../adr/0038-scene-clone-visuals-only.md)）。
 
-- 複製時は新しいCue IDを発行し、既存の立ち絵Cueを置き換えるか追加するかをUIで選ばせる（既定は置き換え）。
-- 複製内容は素材の再選択を要求しない。`characterId`/`appearanceId` が現存しない場合は複製せず、理由を表示する。
-- 前Sceneが存在しない、または立ち絵Cueを持たない場合はボタンを無効化する。
+複製するもの: `accentColor`・`timing`・`scene.transition`（遷移）・全VisualCue（テキスト・背景・カード・端末枠・サイト枠など）・立ち絵。**複製しないもの**: セリフ（`lines`）と `AudioTake`。素材・話者・キャラクター・外観はdocument-levelのため共有し、複製しない。
+
+- IDは複製対象ごとに新規発行する（Scene・VisualCue）。立ち絵Cueの `cueId` は新規にする。`lines`・`AudioTake` は複製しないため生成しない。
+- 複製元がpointでない場合（直前が導入など）はボタンを無効化する。複製先は常にpointとし、`intro → point* → outro` の順序を保つ。
+- 複製は複製元の直後（現在のSceneの直前）に挿入する。
 
 ## 受け入れ条件
 
@@ -103,7 +105,7 @@ Scene編集に「前のSceneから立ち絵をコピー」ボタンを置く。�
 - 編集画面が3ペインで動作し、左のジャンプで中央とプレビューが該当位置へ移動する。
 - プレビューのコマ送り・セリフ／Scene移動・±x秒が保存済み台本で動く。正本は変わらない。previewレスポンスの解決タイムラインを基準にする。
 - シーン間トランジション（カット／フェード／クロスフェード）が保存され、プレビューとMP4で一致し、隣接尺をはみ出さず、総尺が変わらない。
-- 前Sceneからの立ち絵コピーが1操作ででき、不存在の立ち絵は複製されない。
+- 前Sceneのまるごと複製が1操作ででき、視覚要素と遷移が複製され、セリフ・音声は複製されない。
 
 ## 非ゴール
 

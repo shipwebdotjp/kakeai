@@ -22,10 +22,12 @@ import {
 } from "../api/hooks";
 import {
   buildContentDocument,
+  cloneSceneFormValue,
   countCharacterFormUsage,
   createPointSceneFormValue,
   newAppearanceId,
   newCharacterId,
+  newSceneId,
   newSpeakerId,
   toFormValues,
   DEFAULT_BGM_GAIN_DB,
@@ -204,6 +206,15 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const onAddPoint = () => {
     const outroIndex = getValues("scenes").findIndex((scene) => scene.kind === "outro");
     insert(outroIndex === -1 ? fields.length : outroIndex, createPointSceneFormValue());
+  };
+
+  const onClonePrevious = (index: number) => {
+    const scenes = getValues("scenes");
+    const previous = scenes[index - 1];
+    if (previous === undefined || previous.kind !== "point") {
+      return;
+    }
+    insert(index, cloneSceneFormValue(previous as SceneFormValue & { kind: "point" }, newSceneId()));
   };
 
   const onMove = (index: number, direction: -1 | 1) => {
@@ -480,6 +491,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               <span className="text-xs font-normal text-muted-foreground">{scene.id}</span>
               {scene.kind === "point" && (
                 <span className="ml-auto flex gap-1">
+                  <button
+                    type="button"
+                    className={buttonNeutralClass}
+                    disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
+                    onClick={() => onClonePrevious(sceneIndex)}
+                  >
+                    前のシーンを複製
+                  </button>
                   <button
                     type="button"
                     className={buttonNeutralClass}

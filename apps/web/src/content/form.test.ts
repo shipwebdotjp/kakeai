@@ -8,11 +8,15 @@ import {
 } from "@kakeai/contracts";
 import {
   buildContentDocument,
+  cloneSceneFormValue,
   countAppearanceReferences,
   countCharacterReferences,
   createCueFormValue,
+  createEmptyLine,
   createPointSceneFormValue,
+  newSceneId,
   toFormValues,
+  type SceneFormValue,
 } from "./form";
 
 const transition = {
@@ -982,6 +986,52 @@ describe("buildContentDocument", () => {
       enter: { preset: "crossfade", durationMs: 300 },
     });
     expect(rebuilt.scenes[2]!.transition).toBeUndefined();
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("clones a previous point scene's visuals without lines or audio", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const source = values.scenes[1]!;
+    if (source.kind !== "point") {
+      throw new Error("fixture changed");
+    }
+    source.accentColor = "#123456";
+    source.transitionPreset = "fade";
+    source.transitionDurationMs = 250;
+    const sourceLine = createEmptyLine(source.id);
+    sourceLine.captionText = "元のセリフ";
+    source.lines = [sourceLine];
+    source.cues[0]!.rangeKind = "lines";
+    source.cues[0]!.startLineId = sourceLine.id;
+    source.cues[0]!.endLineId = sourceLine.id;
+
+    const copy = cloneSceneFormValue(source as SceneFormValue & { kind: "point" }, newSceneId());
+    expect(copy.kind).toBe("point");
+    expect(copy.lines).toEqual([]);
+    expect(copy.accentColor).toBe("#123456");
+    expect(copy.transitionPreset).toBe("fade");
+    expect(copy.transitionDurationMs).toBe(250);
+    expect(copy.cues).toHaveLength(source.cues.length);
+    expect(copy.cues.some((cue) => source.cues.some((original) => original.id === cue.id))).toBe(
+      false,
+    );
+    expect(copy.cues[0]!.rangeKind).toBe("scene");
+    expect(copy.cues[0]!.startLineId).toBe("");
+
+    copy.cues[0]!.fields.text = "複製側の変更";
+    expect(source.cues[0]!.fields.text).not.toBe("複製側の変更");
+
+    values.scenes = [values.scenes[0]!, copy, ...values.scenes.slice(1)];
+    const rebuilt = buildContentDocument(base, values);
+    const cloned = rebuilt.scenes[1]!;
+    expect(cloned.kind).toBe("point");
+    expect(cloned.accentColor).toBe("#123456");
+    expect(cloned.lines).toEqual([]);
+    expect(cloned.visualCues).toHaveLength(source.cues.length);
+    expect(cloned.transition).toEqual({ enter: { preset: "fade", durationMs: 250 } });
+    const cueIds = rebuilt.scenes.flatMap((scene) => scene.visualCues.map((cue) => cue.id));
+    expect(new Set(cueIds).size).toBe(cueIds.length);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });
