@@ -509,12 +509,20 @@ function buildCueInput(cue: CueFormValue): Record<string, unknown> | null {
     return input;
   }
   if (cue.templateId === DEVICE_FRAME_ID) {
-    if (cue.assetId === null) {
+    const baseScreen = base.screen;
+    const baseScreenIsMedia =
+      typeof baseScreen === "object" &&
+      baseScreen !== null &&
+      (baseScreen as { kind?: unknown }).kind === "media";
+    if (cue.assetId === null && (baseScreen === undefined || baseScreenIsMedia)) {
       return null;
     }
     const input: Record<string, unknown> = {
       ...base,
-      screen: { kind: "media", assetId: cue.assetId, fit: cue.fit },
+      screen:
+        cue.assetId === null
+          ? baseScreen
+          : { kind: "media", assetId: cue.assetId, fit: cue.fit },
       frame: cue.frame,
     };
     if (cue.backgroundColor.trim().length > 0) {
@@ -544,6 +552,9 @@ function buildVisualCues(
     if (isEditableTemplate(cue.templateId)) {
       const input = buildCueInput(cue);
       if (input === null) {
+        if (cue.baseCue === null) {
+          throw new Error("追加したCueの素材を選択してください");
+        }
         continue;
       }
       const allowedLayers = getVisualTemplate(cue.templateId, cue.templateVersion)?.layers;

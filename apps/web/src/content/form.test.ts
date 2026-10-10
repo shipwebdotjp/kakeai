@@ -10,6 +10,7 @@ import {
   buildContentDocument,
   countAppearanceReferences,
   countCharacterReferences,
+  createCueFormValue,
   createPointSceneFormValue,
   toFormValues,
 } from "./form";
@@ -163,6 +164,54 @@ describe("buildContentDocument", () => {
     expect(input.frame).toBe("phone");
     expect(input.backgroundColor).toBe("#112233");
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("preserves a nested-template screen when a device-frame is re-saved", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-device",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: {
+            kind: "template",
+            template: { id: "text.body", version: 1 },
+            input: { heading: "見出し", body: "本文" },
+          },
+        },
+      }),
+    ];
+
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.assetId).toBeNull();
+    cue.frame = "phone";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
+      frame: string;
+      screen: { kind: string };
+    };
+    expect(input.frame).toBe("phone");
+    expect(input.screen.kind).toBe("template");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("rejects a newly added cue with no selected media", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.scenes[0]!.cues = [
+      createCueFormValue({
+        sceneId: values.scenes[0]!.id,
+        templateId: "media.full-bleed",
+        templateVersion: 1,
+        layer: "background",
+        order: 0,
+      }),
+    ];
+    expect(() => buildContentDocument(base, values)).toThrow();
   });
 
   it("builds a valid document when a new point scene is added", () => {

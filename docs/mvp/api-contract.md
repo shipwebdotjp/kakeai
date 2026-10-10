@@ -246,14 +246,14 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
       "id": "scr_002",
       "languageEditionId": "led_ja_123",
       "versionNumber": 2,
-      "contentSchemaVersion": 1,
+      "contentSchemaVersion": 3,
       "createdAt": "2026-10-08T03:20:00.000Z"
     },
     {
       "id": "scr_001",
       "languageEditionId": "led_ja_123",
       "versionNumber": 1,
-      "contentSchemaVersion": 1,
+      "contentSchemaVersion": 3,
       "createdAt": "2026-10-08T03:00:00.000Z"
     }
   ]
@@ -295,7 +295,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
     "id": "scr_003",
     "languageEditionId": "led_ja_123",
     "versionNumber": 3,
-    "contentSchemaVersion": 1,
+    "contentSchemaVersion": 3,
     "content": {
       "schemaVersion": 3,
       "locale": "ja-JP",
