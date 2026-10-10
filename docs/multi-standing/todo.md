@@ -25,3 +25,9 @@
 - [x] `packages/contracts` / `packages/video` / `apps/web` のテストを追加・更新する
 - [x] `docs/mvp/content-schema.md`、`docs/mvp/todo.md`、ADR、ユーザーガイドを更新する
 - 完了条件: `npm run typecheck` と `npm test` が通り、文書が実装と一致する。
+
+### [x] M4 表示位置の拡大と固定スロット
+
+- [x] 各Sceneの立ち絵を「左（上）」「右（下）」の固定2枠にし、追加・削除・位置セレクトを廃止する。解除はキャラクター「未指定」
+- [x] 位置を外端アンカー方式（半幅 `0.125×scale`、左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale`）へ変更する（[ADR-0028](../adr/0028-standing-edge-anchored-layout.md)）
+- 完了条件: 立ち絵が左右端いっぱいに表示され、`@1` は従来どおり描画される。

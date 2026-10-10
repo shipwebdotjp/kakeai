@@ -207,14 +207,28 @@ function selectManagedStandingCues(scene: Scene): SelectedStandingCue[] {
   return selected;
 }
 
-function readStandings(scene: Scene): StandingFormValue[] {
-  return selectManagedStandingCues(scene).map(({ cue, standing }) => ({
-    cueId: cue.id,
-    characterId: standing.characterId,
-    appearanceId: standing.appearanceId,
-    side: standing.side,
-    scale: standing.scale,
+export function emptyStandingSlots(): StandingFormValue[] {
+  return STANDING_SIDES.map((side) => ({
+    cueId: null,
+    characterId: null,
+    appearanceId: null,
+    side,
+    scale: DEFAULT_STANDING_SCALE,
   }));
+}
+
+function readStandings(scene: Scene): StandingFormValue[] {
+  const bySide = new Map<StandingSide, StandingFormValue>();
+  for (const { cue, standing } of selectManagedStandingCues(scene)) {
+    bySide.set(standing.side, {
+      cueId: cue.id,
+      characterId: standing.characterId,
+      appearanceId: standing.appearanceId,
+      side: standing.side,
+      scale: standing.scale,
+    });
+  }
+  return emptyStandingSlots().map((slot) => bySide.get(slot.side) ?? slot);
 }
 
 function readCharacters(content: ContentDocument): CharacterFormValue[] {
@@ -666,7 +680,7 @@ export function createPointSceneFormValue(): SceneFormValue {
     cardCueId: null,
     cardHeading: "",
     cardCaption: "",
-    standings: [],
+    standings: emptyStandingSlots(),
   };
 }
 

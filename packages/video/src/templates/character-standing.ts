@@ -6,14 +6,24 @@ import {
 import type { AssetResolver } from "../resolver";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
+import { OUTPUT_WIDTH } from "../meta";
 import { resolveCueMedia, type RenderedMedia } from "./shared";
 
-export const STANDING_LAYOUT = {
-  left: { x: 0.27, y: 0.86 },
-  right: { x: 0.73, y: 0.86 },
-} as const;
-
 const STANDING_BASE_WIDTH_PX = 480;
+const STANDING_EDGE_MARGIN = 0.03;
+const STANDING_Y = 0.86;
+
+export function standingPosition(
+  side: "left" | "right",
+  scale: number,
+): { x: number; y: number } {
+  const halfWidth = (STANDING_BASE_WIDTH_PX * scale) / 2 / OUTPUT_WIDTH;
+  const x =
+    side === "left"
+      ? STANDING_EDGE_MARGIN + halfWidth
+      : 1 - STANDING_EDGE_MARGIN - halfWidth;
+  return { x, y: STANDING_Y };
+}
 
 function resolveStandingAppearance(
   characterId: string,
@@ -87,10 +97,12 @@ export function renderCharacterStandingV2(
     path,
     assetResolver,
   );
-  const layout = STANDING_LAYOUT[side];
+  const layout = standingPosition(side, scale);
   const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale);
+  const leftPercent = Math.round(layout.x * 10000) / 100;
+  const topPercent = Math.round(layout.y * 10000) / 100;
   return {
-    html: `<div class="kakeai-standingv2" style="left:${layout.x * 100}%;top:${layout.y * 100}%;"><img id="${mediaElementId}" class="kakeai-standingimg" src="${src}" style="width:${widthPx}px;" alt=""></div>`,
+    html: `<div class="kakeai-standingv2" style="left:${leftPercent}%;top:${topPercent}%;"><img id="${mediaElementId}" class="kakeai-standingimg" src="${src}" style="width:${widthPx}px;" alt=""></div>`,
     assetIds: [assetId],
   };
 }

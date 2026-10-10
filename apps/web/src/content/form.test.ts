@@ -311,6 +311,7 @@ describe("buildContentDocument", () => {
     ]);
     const target = values.scenes.find((scene) => scene.id === point.id)!;
     expect(target.standings).toEqual([
+      { cueId: null, characterId: null, appearanceId: null, side: "left", scale: 1 },
       {
         cueId: "vc-standing",
         characterId: "character-rin",
@@ -333,6 +334,22 @@ describe("buildContentDocument", () => {
       scale: 1,
     });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("always exposes left and right standing slots", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    for (const scene of values.scenes) {
+      expect(scene.standings.map((standing) => standing.side)).toEqual(["left", "right"]);
+      expect(
+        scene.standings.every(
+          (standing) =>
+            standing.cueId === null &&
+            standing.characterId === null &&
+            standing.appearanceId === null,
+        ),
+      ).toBe(true);
+    }
   });
 
   it("adds a standing cue with the default position and scale", () => {
@@ -447,6 +464,58 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("removes standing cues when both fixed slots are cleared", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        ],
+      },
+    ];
+    base.scenes[0]!.visualCues = [
+      {
+        id: "vc-left",
+        template: { id: "character.standing", version: 1 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          x: 0.2,
+          y: 0.5,
+          scale: 1,
+        },
+      },
+      {
+        id: "vc-right",
+        template: { id: "character.standing", version: 1 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          x: 0.85,
+          y: 0.5,
+          scale: 1,
+        },
+      },
+    ];
+
+    const values = toFormValues(base);
+    const target = values.scenes[0]!;
+    expect(target.standings.map((standing) => standing.cueId)).toEqual(["vc-left", "vc-right"]);
+    target.standings = target.standings.map((standing) => ({
+      ...standing,
+      characterId: null,
+      appearanceId: null,
+    }));
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[0]!.visualCues).toEqual([]);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
   it("keeps unmanaged standing cues and updates only the managed one", () => {
     const base = createInitialContentDocument();
     base.characters = [
@@ -510,11 +579,11 @@ describe("buildContentDocument", () => {
     const values = toFormValues(base);
     const target = values.scenes.find((scene) => scene.id === point.id)!;
     expect(target.standings.map((standing) => standing.cueId)).toEqual([
-      "vc-standing",
       "vc-standing-extra",
+      "vc-standing",
     ]);
-    expect(target.standings.map((standing) => standing.side)).toEqual(["right", "left"]);
-    target.standings[0]!.scale = 1.5;
+    expect(target.standings.map((standing) => standing.side)).toEqual(["left", "right"]);
+    target.standings[1]!.scale = 1.5;
 
     const rebuilt = buildContentDocument(base, values);
     const rebuiltPoint = pointScenes(rebuilt)[0]!;

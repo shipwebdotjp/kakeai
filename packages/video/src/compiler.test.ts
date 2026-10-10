@@ -313,8 +313,50 @@ describe("compileDocument", () => {
     expect(compiled.assetIds).toContain("asset-rin");
     expect(compiled.html).toContain('class="kakeai-standingv2"');
     expect(compiled.html).toContain('class="kakeai-standingimg"');
-    expect(compiled.html).toContain("left:73%;top:86%;");
+    expect(compiled.html).toContain("left:78.25%;top:86%;");
     expect(compiled.html).toContain("width:720px;");
+  });
+
+  it("anchors the standing's outer edge to the frame at any scale", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+      ],
+    });
+    const scene = document.scenes[1];
+    if (scene === undefined) {
+      throw new Error("fixture changed");
+    }
+    scene.visualCues.push(
+      {
+        id: "vc-standing-left",
+        template: { id: "character.standing", version: 2 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          side: "left",
+          scale: 1,
+        },
+      },
+      {
+        id: "vc-standing-right",
+        template: { id: "character.standing", version: 2 },
+        range: { kind: "scene" },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          side: "right",
+          scale: 2,
+        },
+      },
+    );
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("left:15.5%;top:86%;");
+    expect(compiled.html).toContain("left:72%;top:86%;");
   });
 
   it("bounces only the standing of the speaking character", () => {

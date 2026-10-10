@@ -155,7 +155,7 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
 - `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
 
-MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`character.standing@2` を左右1体ずつ最大2件、いずれも `{ "kind": "scene" }` で編集する。背景とカードは画像・動画から、立ち絵は画像から選ぶ。立ち絵は左右 `side` と倍率を編集し、位置はテンプレートが `side` から正規化座標へ写像する。描画順は背景、カード、立ち絵、Scene本文・字幕とする。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。`@1` の保存済み版は `@1` のまま描画され、見た目を変えない。
+MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`character.standing@2` を左右1体ずつ最大2件、いずれも `{ "kind": "scene" }` で編集する。背景とカードは画像・動画から、立ち絵は画像から選ぶ。立ち絵は「左（上）」「右（下）」の固定2枠を常に表示し、各枠でキャラクター・外観・倍率を編集する。位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は背景、カード、立ち絵、Scene本文・字幕とする。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。`@1` の保存済み版は `@1` のまま描画され、見た目を変えない。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
@@ -214,7 +214,7 @@ Characterなど位置を持つテンプレートは、出力ピクセルでは�
 }
 ```
 
-これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。`character.standing@2` は `side` を正規化座標へ写像する（左 `x=0.27` / 右 `x=0.73` / `y=0.86`）。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
+これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。`character.standing@2` は `side` と倍率を正規化座標へ写像する。半幅 `0.125×scale` を用い、左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86` とする（外端の余白を一定に保つ）。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
 
 BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset自体を「BGM型」に固定せず、同じ音声素材をナレーション以外の用途にも利用可能にする。`AudioCue.range` も `kind` による判別union（`work` / `scene`）とする。MVPの編集画面は `role: "bgm"` と `{ "kind": "work" }` のAudioCueを1件だけ編集し、既定値は `gainDb: -18`、`loop: true` とする。Scene別・複数BGM・SFXの編集はMVP後とし、既存のAudioCue値は保持する。
 
