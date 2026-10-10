@@ -4,12 +4,16 @@ import {
   TEMPLATE_VERSION,
   characterStandingV1,
   characterStandingV2,
+  getVisualTemplate,
   mediaCardV1,
   mediaFullBleedV1,
+  sceneDeviceFrameV1,
   type Character,
   type ContentDocument,
+  type CueLayer,
   type Scene,
   type Speaker,
+  type TransitionPreset,
   type VisualCue,
 } from "@kakeai/contracts";
 
@@ -59,6 +63,8 @@ export interface SpeakerFormValue {
 }
 
 export type StandingSide = "left" | "right";
+export type CueRangeKind = "scene" | "lines" | "offset";
+export type Fit = "cover" | "contain";
 
 export interface StandingFormValue {
   cueId: string | null;
@@ -66,6 +72,30 @@ export interface StandingFormValue {
   appearanceId: string | null;
   side: StandingSide;
   scale: number;
+}
+
+export interface CueFormValue {
+  id: string;
+  baseCue: VisualCue | null;
+  templateId: string;
+  templateVersion: number;
+  layer: CueLayer;
+  order: number;
+  rangeKind: CueRangeKind;
+  startLineId: string;
+  endLineId: string;
+  startMs: number;
+  endMs: number;
+  enterPreset: TransitionPreset;
+  enterDurationMs: number;
+  exitPreset: TransitionPreset;
+  exitDurationMs: number;
+  assetId: string | null;
+  fit: Fit;
+  heading: string;
+  caption: string;
+  frame: "laptop" | "phone";
+  backgroundColor: string;
 }
 
 export interface SceneFormValue {
@@ -82,12 +112,7 @@ export interface SceneFormValue {
     closing: string;
   };
   lines: LineFormValue[];
-  backgroundAssetId: string | null;
-  backgroundCueId: string | null;
-  cardAssetId: string | null;
-  cardCueId: string | null;
-  cardHeading: string;
-  cardCaption: string;
+  cues: CueFormValue[];
   standings: StandingFormValue[];
 }
 
@@ -109,35 +134,36 @@ export const STANDING_SIDES: readonly StandingSide[] = ["left", "right"];
 export const DEFAULT_APPEARANCE_EXPRESSION = "normal";
 export const DEFAULT_APPEARANCE_POSE = "front";
 
-const FULL_BLEED_KEY = `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`;
-const CARD_KEY = `${mediaCardV1.id}@${mediaCardV1.version}`;
-const STANDING_TEMPLATE_ID = characterStandingV1.id;
+export const MEDIA_FULL_BLEED_ID = mediaFullBleedV1.id;
+export const MEDIA_CARD_ID = mediaCardV1.id;
+export const DEVICE_FRAME_ID = sceneDeviceFrameV1.id;
+export const STANDING_TEMPLATE_ID = characterStandingV1.id;
 
-function cueKey(cue: VisualCue): string {
-  return `${cue.template.id}@${cue.template.version}`;
+const EDITABLE_TEMPLATE_IDS = new Set([MEDIA_FULL_BLEED_ID, MEDIA_CARD_ID, DEVICE_FRAME_ID]);
+
+export function isEditableTemplate(templateId: string): boolean {
+  return EDITABLE_TEMPLATE_IDS.has(templateId);
 }
 
-function findManagedCue(
-  scene: Scene | undefined,
-  key: string,
-): VisualCue | undefined {
-  return scene?.visualCues.find((cue) => cueKey(cue) === key && cue.range.kind === "scene");
-}
-
-function readAssetId(cue: VisualCue | undefined): string | null {
-  if (cue === undefined || typeof cue.input !== "object" || cue.input === null) {
-    return null;
+function readInputObject(cue: VisualCue | null): Record<string, unknown> {
+  if (cue === null || typeof cue.input !== "object" || cue.input === null) {
+    return {};
   }
-  const assetId = (cue.input as { assetId?: unknown }).assetId;
-  return typeof assetId === "string" ? assetId : null;
+  return { ...(cue.input as Record<string, unknown>) };
 }
 
-function readString(cue: VisualCue | undefined, field: string): string {
-  if (cue === undefined || typeof cue.input !== "object" || cue.input === null) {
-    return "";
-  }
-  const value = (cue.input as Record<string, unknown>)[field];
+function readString(source: Record<string, unknown>, field: string): string {
+  const value = source[field];
   return typeof value === "string" ? value : "";
+}
+
+function readAssetId(source: Record<string, unknown>): string | null {
+  const value = source.assetId;
+  return typeof value === "string" ? value : null;
+}
+
+function readFit(source: Record<string, unknown>): Fit {
+  return source.fit === "contain" ? "contain" : "cover";
 }
 
 export interface StandingCueInput {
@@ -159,11 +185,12 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
     if (!parsed.success) {
       return null;
     }
+    const data = parsed.data as StandingCueInput;
     return {
-      characterId: parsed.data.characterId,
-      appearanceId: parsed.data.appearanceId,
-      side: parsed.data.side,
-      scale: parsed.data.scale,
+      characterId: data.characterId,
+      appearanceId: data.appearanceId,
+      side: data.side,
+      scale: data.scale,
     };
   }
   if (
@@ -176,11 +203,12 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
   if (!parsed.success) {
     return null;
   }
+  const data = parsed.data as { characterId: string; appearanceId: string; x: number; scale: number };
   return {
-    characterId: parsed.data.characterId,
-    appearanceId: parsed.data.appearanceId,
-    side: parsed.data.x < 0.5 ? "left" : "right",
-    scale: parsed.data.scale,
+    characterId: data.characterId,
+    appearanceId: data.appearanceId,
+    side: data.x < 0.5 ? "left" : "right",
+    scale: data.scale,
   };
 }
 
@@ -207,14 +235,28 @@ function selectManagedStandingCues(scene: Scene): SelectedStandingCue[] {
   return selected;
 }
 
-function readStandings(scene: Scene): StandingFormValue[] {
-  return selectManagedStandingCues(scene).map(({ cue, standing }) => ({
-    cueId: cue.id,
-    characterId: standing.characterId,
-    appearanceId: standing.appearanceId,
-    side: standing.side,
-    scale: standing.scale,
+export function emptyStandingSlots(): StandingFormValue[] {
+  return STANDING_SIDES.map((side) => ({
+    cueId: null,
+    characterId: null,
+    appearanceId: null,
+    side,
+    scale: DEFAULT_STANDING_SCALE,
   }));
+}
+
+function readStandings(scene: Scene): StandingFormValue[] {
+  const bySide = new Map<StandingSide, StandingFormValue>();
+  for (const { cue, standing } of selectManagedStandingCues(scene)) {
+    bySide.set(standing.side, {
+      cueId: cue.id,
+      characterId: standing.characterId,
+      appearanceId: standing.appearanceId,
+      side: standing.side,
+      scale: standing.scale,
+    });
+  }
+  return emptyStandingSlots().map((slot) => bySide.get(slot.side) ?? slot);
 }
 
 function readCharacters(content: ContentDocument): CharacterFormValue[] {
@@ -244,6 +286,43 @@ function readSpeakers(content: ContentDocument): SpeakerFormValue[] {
   }));
 }
 
+function toCueFormValue(cue: VisualCue): CueFormValue {
+  const input = readInputObject(cue);
+  const screen =
+    cue.template.id === DEVICE_FRAME_ID &&
+    typeof input.screen === "object" &&
+    input.screen !== null &&
+    (input.screen as { kind?: unknown }).kind === "media"
+      ? (input.screen as Record<string, unknown>)
+      : null;
+  const assetId = screen === null ? readAssetId(input) : readAssetId(screen);
+  const fit = screen === null ? readFit(input) : readFit(screen);
+  const range = cue.range;
+  return {
+    id: cue.id,
+    baseCue: cue,
+    templateId: cue.template.id,
+    templateVersion: cue.template.version,
+    layer: cue.layer,
+    order: cue.order,
+    rangeKind: range.kind,
+    startLineId: range.kind === "lines" ? range.startLineId : "",
+    endLineId: range.kind === "lines" ? range.endLineId : "",
+    startMs: range.kind === "offset" ? range.startMs : 0,
+    endMs: range.kind === "offset" ? range.endMs : 0,
+    enterPreset: cue.transition.enter.preset,
+    enterDurationMs: cue.transition.enter.durationMs,
+    exitPreset: cue.transition.exit.preset,
+    exitDurationMs: cue.transition.exit.durationMs,
+    assetId,
+    fit,
+    heading: readString(input, "heading"),
+    caption: readString(input, "caption"),
+    frame: input.frame === "phone" ? "phone" : "laptop",
+    backgroundColor: readString(input, "backgroundColor"),
+  };
+}
+
 export function toFormValues(content: ContentDocument): DocumentFormValues {
   const takesByLine = new Map<string, TakeFormValue[]>();
   for (const take of content.audioTakes) {
@@ -256,8 +335,9 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
   );
   return {
     scenes: content.scenes.map((scene) => {
-      const background = findManagedCue(scene, FULL_BLEED_KEY);
-      const card = findManagedCue(scene, CARD_KEY);
+      const cues = scene.visualCues
+        .filter((cue) => cue.template.id !== STANDING_TEMPLATE_ID)
+        .map(toCueFormValue);
       return {
         id: scene.id,
         kind: scene.kind,
@@ -279,12 +359,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
           selectedAudioTakeId: line.selectedAudioTakeId,
           takes: takesByLine.get(line.id) ?? [],
         })),
-        backgroundAssetId: readAssetId(background),
-        backgroundCueId: background?.id ?? null,
-        cardAssetId: readAssetId(card),
-        cardCueId: card?.id ?? null,
-        cardHeading: readString(card, "heading"),
-        cardCaption: readString(card, "caption"),
+        cues,
         standings: readStandings(scene),
       };
     }),
@@ -335,13 +410,6 @@ function buildAudioTakes(values: DocumentFormValues): ContentDocument["audioTake
   );
 }
 
-function readInputObject(cue: VisualCue | undefined): Record<string, unknown> {
-  if (cue === undefined || typeof cue.input !== "object" || cue.input === null) {
-    return {};
-  }
-  return { ...(cue.input as Record<string, unknown>) };
-}
-
 function standingReferencesMissing(
   cue: VisualCue,
   characterIds: ReadonlySet<string>,
@@ -387,61 +455,164 @@ function normalizeScale(value: number, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function intOrZero(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function buildTransition(cue: CueFormValue): VisualCue["transition"] {
+  return {
+    enter: {
+      preset: cue.enterPreset,
+      durationMs: cue.enterPreset === "none" ? 0 : intOrZero(cue.enterDurationMs),
+    },
+    exit: {
+      preset: cue.exitPreset,
+      durationMs: cue.exitPreset === "none" ? 0 : intOrZero(cue.exitDurationMs),
+    },
+  };
+}
+
+function buildRange(cue: CueFormValue): VisualCue["range"] {
+  if (cue.rangeKind === "offset") {
+    if (intOrZero(cue.startMs) > intOrZero(cue.endMs)) {
+      throw new Error("表示区間のオフセットは開始 <= 終了にしてください");
+    }
+    return { kind: "offset", startMs: intOrZero(cue.startMs), endMs: intOrZero(cue.endMs) };
+  }
+  if (cue.rangeKind === "lines") {
+    if (cue.startLineId.length === 0 || cue.endLineId.length === 0) {
+      throw new Error("表示区間のセリフ（開始・終了）を選択してください");
+    }
+    return { kind: "lines", startLineId: cue.startLineId, endLineId: cue.endLineId };
+  }
+  return { kind: "scene" };
+}
+
+function buildCueInput(cue: CueFormValue): Record<string, unknown> | null {
+  const base = readInputObject(cue.baseCue);
+  if (cue.templateId === MEDIA_FULL_BLEED_ID) {
+    if (cue.assetId === null) {
+      return null;
+    }
+    return { ...base, assetId: cue.assetId, fit: cue.fit };
+  }
+  if (cue.templateId === MEDIA_CARD_ID) {
+    if (cue.assetId === null) {
+      return null;
+    }
+    const input: Record<string, unknown> = { ...base, assetId: cue.assetId, heading: cue.heading };
+    if (cue.caption.length > 0) {
+      input.caption = cue.caption;
+    } else {
+      delete input.caption;
+    }
+    return input;
+  }
+  if (cue.templateId === DEVICE_FRAME_ID) {
+    const baseScreen = base.screen;
+    const baseScreenIsMedia =
+      typeof baseScreen === "object" &&
+      baseScreen !== null &&
+      (baseScreen as { kind?: unknown }).kind === "media";
+    if (cue.assetId === null && (baseScreen === undefined || baseScreenIsMedia)) {
+      return null;
+    }
+    const input: Record<string, unknown> = {
+      ...base,
+      screen:
+        cue.assetId === null
+          ? baseScreen
+          : { kind: "media", assetId: cue.assetId, fit: cue.fit },
+      frame: cue.frame,
+    };
+    if (cue.backgroundColor.trim().length > 0) {
+      const backgroundColor = cue.backgroundColor.trim();
+      if (!/^#[0-9A-Fa-f]{6}$/.test(backgroundColor)) {
+        throw new Error("背景色は #RRGGBB 形式で入力してください");
+      }
+      input.backgroundColor = backgroundColor.toUpperCase();
+    } else {
+      delete input.backgroundColor;
+    }
+    return input;
+  }
+  return null;
+}
+
 function buildVisualCues(
+  baseScene: Scene | undefined,
+  sceneValue: SceneFormValue,
+): VisualCue[] {
+  const managedStandingIds = (
+    baseScene === undefined ? [] : selectManagedStandingCues(baseScene)
+  ).map((entry) => entry.cue.id);
+  const managedIds = new Set<string>(managedStandingIds);
+  const cues: VisualCue[] = [];
+  for (const cue of sceneValue.cues) {
+    if (isEditableTemplate(cue.templateId)) {
+      const input = buildCueInput(cue);
+      if (input === null) {
+        if (cue.baseCue === null) {
+          throw new Error("追加したCueの素材を選択してください");
+        }
+        continue;
+      }
+      const allowedLayers = getVisualTemplate(cue.templateId, cue.templateVersion)?.layers;
+      const layer =
+        allowedLayers !== undefined && allowedLayers.includes(cue.layer)
+          ? cue.layer
+          : (allowedLayers?.[0] ?? "background");
+      cues.push({
+        id: cue.id,
+        template: { id: cue.templateId, version: cue.templateVersion },
+        range: buildRange(cue),
+        layer,
+        order: intOrZero(cue.order),
+        transition: buildTransition(cue),
+        input,
+      });
+      continue;
+    }
+    if (cue.baseCue !== null && !managedIds.has(cue.baseCue.id)) {
+      const allowedBaseLayers = getVisualTemplate(
+        cue.baseCue.template.id,
+        cue.baseCue.template.version,
+      )?.layers;
+      cues.push({
+        ...cue.baseCue,
+        range: buildRange(cue),
+        layer:
+          allowedBaseLayers !== undefined && allowedBaseLayers.includes(cue.layer)
+            ? cue.layer
+            : cue.baseCue.layer,
+        order: intOrZero(cue.order),
+        transition: buildTransition(cue),
+      });
+    }
+  }
+  return cues;
+}
+
+function buildStandingCues(
   baseScene: Scene | undefined,
   sceneValue: SceneFormValue,
   characterIds: ReadonlySet<string>,
   appearanceIdsByCharacter: ReadonlyMap<string, ReadonlySet<string>>,
 ): VisualCue[] {
-  const managedStandingIds = (
-    baseScene === undefined ? [] : selectManagedStandingCues(baseScene)
-  ).map((entry) => entry.cue.id);
   const managedIds = new Set(
-    [
-      sceneValue.backgroundCueId,
-      sceneValue.cardCueId,
-      ...managedStandingIds,
-      ...sceneValue.standings.map((standing) => standing.cueId),
-    ].filter((id): id is string => id !== null),
+    (baseScene === undefined ? [] : selectManagedStandingCues(baseScene)).map(
+      (entry) => entry.cue.id,
+    ),
   );
   const kept = (baseScene?.visualCues ?? []).filter(
     (cue) =>
+      cue.template.id === STANDING_TEMPLATE_ID &&
       !managedIds.has(cue.id) &&
       !standingReferencesMissing(cue, characterIds, appearanceIdsByCharacter),
   );
   const cues: VisualCue[] = [...kept];
-  if (sceneValue.backgroundAssetId !== null) {
-    const baseCue = baseScene?.visualCues.find((cue) => cue.id === sceneValue.backgroundCueId);
-    const input = readInputObject(baseCue);
-    input.assetId = sceneValue.backgroundAssetId;
-    if (baseCue === undefined) {
-      input.fit = "cover";
-    }
-    cues.push({
-      id: sceneValue.backgroundCueId ?? newVisualCueId(sceneValue.id, "bg"),
-      template: { id: mediaFullBleedV1.id, version: mediaFullBleedV1.version },
-      range: { kind: "scene" },
-      input,
-    });
-  }
-  if (sceneValue.cardAssetId !== null) {
-    const baseCue = baseScene?.visualCues.find((cue) => cue.id === sceneValue.cardCueId);
-    const input = readInputObject(baseCue);
-    input.assetId = sceneValue.cardAssetId;
-    input.heading = sceneValue.cardHeading;
-    if (sceneValue.cardCaption.length > 0) {
-      input.caption = sceneValue.cardCaption;
-    } else {
-      delete input.caption;
-    }
-    cues.push({
-      id: sceneValue.cardCueId ?? newVisualCueId(sceneValue.id, "card"),
-      template: { id: mediaCardV1.id, version: mediaCardV1.version },
-      range: { kind: "scene" },
-      input,
-    });
-  }
   const emittedSides = new Set<StandingSide>();
+  let order = kept.reduce((max, cue) => Math.max(max, cue.order), -1) + 1;
   for (const standing of sceneValue.standings) {
     if (standing.characterId === null || standing.appearanceId === null) {
       continue;
@@ -458,6 +629,12 @@ function buildVisualCues(
       id: standing.cueId ?? newVisualCueId(sceneValue.id, `standing-${standing.side}`),
       template: { id: characterStandingV2.id, version: characterStandingV2.version },
       range: { kind: "scene" },
+      layer: "standing",
+      order,
+      transition: {
+        enter: { preset: "fade", durationMs: 350 },
+        exit: { preset: "none", durationMs: 0 },
+      },
       input: {
         characterId: standing.characterId,
         appearanceId: standing.appearanceId,
@@ -465,6 +642,7 @@ function buildVisualCues(
         scale: normalizeScale(standing.scale, DEFAULT_STANDING_SCALE),
       },
     });
+    order += 1;
   }
   return cues;
 }
@@ -552,17 +730,16 @@ export function buildContentDocument(
       sceneValue.kind === "point" && sceneValue.timingMode !== "fixed"
         ? { mode: "auto" }
         : { mode: "fixed", durationMs: fixedDurationMs };
+    const visualCues = [
+      ...buildVisualCues(baseScene, sceneValue),
+      ...buildStandingCues(baseScene, sceneValue, characterIds, appearanceIdsByCharacter),
+    ];
     const common = {
       id: sceneValue.id,
       accentColor: (sceneValue.accentColor || DEFAULT_POINT_ACCENT_COLOR).toUpperCase(),
       timing,
       lines: buildLines(sceneValue, speakerIds),
-      visualCues: buildVisualCues(
-        baseScene,
-        sceneValue,
-        characterIds,
-        appearanceIdsByCharacter,
-      ),
+      visualCues,
     };
     if (sceneValue.kind === "intro") {
       return {
@@ -647,7 +824,39 @@ function randomId(): string {
 }
 
 export function newVisualCueId(sceneId: string, suffix: string): string {
-  return `visual-${sceneId}-${suffix}`;
+  return `visual-${sceneId}-${suffix}-${randomId()}`;
+}
+
+export function createCueFormValue(options: {
+  sceneId: string;
+  templateId: string;
+  templateVersion: number;
+  layer: CueLayer;
+  order: number;
+}): CueFormValue {
+  return {
+    id: newVisualCueId(options.sceneId, options.templateId.replace(/\W/g, "-")),
+    baseCue: null,
+    templateId: options.templateId,
+    templateVersion: options.templateVersion,
+    layer: options.layer,
+    order: options.order,
+    rangeKind: "scene",
+    startLineId: "",
+    endLineId: "",
+    startMs: 0,
+    endMs: 0,
+    enterPreset: "fade",
+    enterDurationMs: 350,
+    exitPreset: "none",
+    exitDurationMs: 0,
+    assetId: null,
+    fit: "cover",
+    heading: "",
+    caption: "",
+    frame: "laptop",
+    backgroundColor: "",
+  };
 }
 
 export function createPointSceneFormValue(): SceneFormValue {
@@ -660,13 +869,8 @@ export function createPointSceneFormValue(): SceneFormValue {
     durationMs: FALLBACK_DURATION_MS,
     slots: { title: "", subtitle: "", heading: "", body: "", closing: "" },
     lines: [],
-    backgroundAssetId: null,
-    backgroundCueId: null,
-    cardAssetId: null,
-    cardCueId: null,
-    cardHeading: "",
-    cardCaption: "",
-    standings: [],
+    cues: [],
+    standings: emptyStandingSlots(),
   };
 }
 

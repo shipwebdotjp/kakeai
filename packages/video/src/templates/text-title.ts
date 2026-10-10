@@ -1,9 +1,9 @@
-import { textTitleV1 } from "@kakeai/contracts";
+import { textTitleInputSchema } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 
 export function renderTextTitle(input: unknown, path: (string | number)[]): string {
-  const parsed = textTitleV1.inputSchema.safeParse(input);
+  const parsed = textTitleInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
       { path, code: "invalid_input", message: "text.title の入力が不正です。" },

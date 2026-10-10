@@ -1,33 +1,31 @@
-import { mediaFullBleedV1 } from "@kakeai/contracts";
-import type { AssetResolver } from "../resolver";
+import { mediaFullBleedInputSchema } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
-import { focalPointStyle, resolveCueMedia, type RenderedMedia } from "./shared";
+import type { RenderedCue, RenderContext } from "../render-context";
+import { focalPointStyle, resolveCueMedia } from "./shared";
 
-export function renderMediaFullBleed(
-  input: unknown,
-  path: (string | number)[],
-  assetResolver: AssetResolver,
-  mediaElementId: string,
-): RenderedMedia {
-  const parsed = mediaFullBleedV1.inputSchema.safeParse(input);
+export function renderMediaFullBleed(input: unknown, context: RenderContext): RenderedCue {
+  const parsed = mediaFullBleedInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
-      { path, code: "invalid_input", message: "media.full-bleed の入力が不正です。" },
+      { path: context.path, code: "invalid_input", message: "media.full-bleed の入力が不正です。" },
     ]);
   }
   const { assetId, fit, focalPoint } = parsed.data;
-  const media = resolveCueMedia(assetId, assetResolver, path);
+  const media = resolveCueMedia(assetId, context.assetResolver, context.path);
   const src = escapeHtmlAttribute(media.url);
+  const id = context.scope.id("media");
   const style = `object-fit:${fit};${focalPointStyle(focalPoint)}`;
   if (media.kind === "video") {
     return {
-      html: `<video id="${mediaElementId}" class="kakeai-fullbleed" src="${src}" style="${style}" muted playsinline preload="auto" data-media-start="0"></video>`,
+      html: `<video id="${id}" class="kakeai-fullbleed" src="${src}" style="${style}" muted playsinline preload="auto" data-media-start="0"></video>`,
       assetIds: [assetId],
+      animation: [],
     };
   }
   return {
-    html: `<img id="${mediaElementId}" class="kakeai-fullbleed" src="${src}" style="${style}" alt="">`,
+    html: `<img id="${id}" class="kakeai-fullbleed" src="${src}" style="${style}" alt="">`,
     assetIds: [assetId],
+    animation: [],
   };
 }

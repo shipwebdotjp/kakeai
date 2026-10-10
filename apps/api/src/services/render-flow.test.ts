@@ -100,6 +100,12 @@ async function versionWithBackground(imageId: string) {
     id: "vc-intro-bg",
     template: { id: "media.full-bleed", version: 1 },
     range: { kind: "scene" },
+    layer: "background",
+    order: 0,
+    transition: {
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
+    },
     input: { assetId: imageId, fit: "cover" },
   });
   const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
@@ -183,6 +189,12 @@ describe("render job creation", () => {
         id: "vc-standing",
         template: { id: "character.standing", version: 1 },
         range: { kind: "scene" },
+        layer: "standing",
+        order: 0,
+        transition: {
+          enter: { preset: "none", durationMs: 0 },
+          exit: { preset: "none", durationMs: 0 },
+        },
         input: {
           characterId: "character-rin",
           appearanceId: "appearance-smile",
@@ -400,6 +412,12 @@ describe("render worker", () => {
         id: "vc-standing",
         template: { id: "character.standing", version: 1 },
         range: { kind: "scene" },
+        layer: "standing",
+        order: 0,
+        transition: {
+          enter: { preset: "none", durationMs: 0 },
+          exit: { preset: "none", durationMs: 0 },
+        },
         input: {
           characterId: "character-rin",
           appearanceId: "appearance-smile",

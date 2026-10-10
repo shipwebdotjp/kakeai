@@ -18,6 +18,12 @@ describe("collectAssetReferences", () => {
         id: "vc-text",
         template: { id: "text.body", version: 1 },
         range: { kind: "scene" },
+        layer: "overlay",
+        order: 0,
+        transition: {
+          enter: { preset: "fade", durationMs: 350 },
+          exit: { preset: "none", durationMs: 0 },
+        },
         input: { heading: "見出し", body: "本文" },
       },
     ];

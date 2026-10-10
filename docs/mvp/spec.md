@@ -79,7 +79,7 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 
 `Job` は種別、状態（`queued` / `running` / `succeeded` / `failed` / `cancelled`）、入力スナップショット、成果物参照、エラー、開始・完了時刻を持つ。MVPの `asset_ingest` はアップロード原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけRenditionを作り、`render` はMP4を作る。将来のTTS、画像生成、調査、台本下書きも同じ枠組みに追加する。
 
-> 先行実装として、別途起動したローカル VOICEVOX ENGINE へ接続する `tts` Job と、アプリ共通の `VoiceProfile`、ContentDocument v2 を [../tts/spec.md](../tts/spec.md) で定義する。この文書の MVP 記述のうち TTS に関わる部分は同仕様を正とする。
+> 先行実装として、別途起動したローカル VOICEVOX ENGINE へ接続する `tts` Job と、アプリ共通の `VoiceProfile`、ContentDocument v3 を [../tts/spec.md](../tts/spec.md) で定義する。この文書の MVP 記述のうち TTS に関わる部分は同仕様を正とする。
 
 ## MVPのDBスキーマ
 
@@ -95,7 +95,7 @@ SQLiteでリレーションとして管理するのは、作品の一覧・版�
 
 `contentJson`、`provenanceJson`、`inputSnapshotJson`、`resultJson` は、SQLiteではJSON型ではなくJSON文字列として保存する。保存前と読出時に `packages/contracts` のZodスキーマで検証する。`contentSchemaVersion` は `contentJson.schemaVersion` と同じ値を重複して保持し、移行対象をJSON解析なしで特定できるようにする。
 
-`contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化と `contentHash` は持たない。同一内容の検出や変更追跡は版IDと `sourceScriptVersionId` で行う。同一MP4バイト列を将来も再生成することはMVPの要件にしない。`ScriptVersion` は不変であり、`contentSchemaVersion` の移行は保存済みの版を書き換えずに新しい `ScriptVersion` を作って行う。MVPの保存済み版は `schemaVersion: 1` のみで、旧版の解釈コードは持たない。
+`contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化と `contentHash` は持たない。同一内容の検出や変更追跡は版IDと `sourceScriptVersionId` で行う。同一MP4バイト列を将来も再生成することはMVPの要件にしない。`ScriptVersion` は不変であり、`contentSchemaVersion` の移行は保存済みの版を書き換えずに新しい `ScriptVersion` を作って行う。MVPの保存済み版は `schemaVersion: 3` のみで、旧版の解釈コードは持たない。
 
 Assetは作品に所属させず、ローカルアプリ全体で再利用できる素材ライブラリとする。ScriptVersionのJSONはAssetのIDだけを参照する。Assetの論理的なID・原本メタデータ・バイト列は取り込み後に不変とし、`status` とreadyなRendition由来の表示メタデータだけは取り込み処理により更新される。実体ファイルが欠損・改変された場合は、同じSHA-256の再アップロードで内容ハッシュ由来の同じパスへ上書きして取り込み直す。原本とは別に、レンダー入力として使う不変の `AssetRendition` を持てる。
 
@@ -150,7 +150,7 @@ Render Jobを作る時点で、次を `inputSnapshotJson` に不変の値とし�
 
 ### 書込みとJob状態遷移
 
-1. **作品作成**：1つのWork、`ja-JP`のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accentColor` を設定した導入、要点3件、結びを持つ、`schemaVersion: 1` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
+1. **作品作成**：1つのWork、`ja-JP`のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accentColor` を設定した導入、要点3件、結びを持つ、`schemaVersion: 3` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
 2. **台本保存**：利用者は明示的に保存する（自動保存はしない）。フォーム値をZodで検証し、`ready` のAsset参照を確認して、新しいScriptVersionを追加する。過去の版は更新しない。テキスト量の目安を超える入力は保存を拒否せず、警告を返す。保存はlast-write-winsとし、クライアントは版番号を送らない。同一トランザクションで新しい版をcurrentへ進める。過去版の復元は、その内容を新しい版として保存し、復元元を `sourceScriptVersionId` に記録する。
 3. **素材取り込み**：アップロードで原本Assetを作成し、`asset_ingest` Jobをキューへ追加する。Jobは形式・長さ・寸法を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってAssetを `ready` にする。失敗時は `failed` にし、台本保存・プレビュー・レンダーでそのAssetを使わせない。
 4. **レンダー投入**：特定のScriptVersionとreadyなRenditionから、入力スナップショットを持つ `queued` Jobを追加する。MVPでは「現在版をレンダー」がUIの入口だが、Job自体は必ず版IDと素材Renditionを固定する。

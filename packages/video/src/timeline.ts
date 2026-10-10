@@ -3,6 +3,7 @@ import {
   SILENT_CAPTION_DURATION_MS,
   type ContentDocument,
   type Scene,
+  type VisualCue,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 
@@ -158,4 +159,78 @@ export function resolveTimeline(document: ContentDocument): ResolvedTimeline {
     cursor += durationMs;
   }
   return { scenes, totalDurationMs: cursor };
+}
+
+export interface CueWindow {
+  startMs: number;
+  endMs: number;
+}
+
+export function resolveCueWindow(
+  placement: ScenePlacement,
+  cue: VisualCue,
+  cuePath: (string | number)[],
+): CueWindow | null {
+  switch (cue.range.kind) {
+    case "scene":
+      return { startMs: 0, endMs: placement.durationMs };
+    case "offset": {
+      const startMs = Math.max(0, cue.range.startMs);
+      const endMs = Math.min(placement.durationMs, cue.range.endMs);
+      return startMs < endMs ? { startMs, endMs } : null;
+    }
+    case "lines": {
+      const byId = new Map(placement.lines.map((line) => [line.lineId, line]));
+      const start = byId.get(cue.range.startLineId);
+      const end = byId.get(cue.range.endLineId);
+      if (start === undefined || end === undefined) {
+        throw new CompositionCompileError([
+          { path: cuePath, code: "unresolvable_range", message: "表示区間を解決できません。" },
+        ]);
+      }
+      const startMs = start.startMs - placement.startMs;
+      const endMs = end.endMs - placement.startMs;
+      if (endMs <= startMs) {
+        throw new CompositionCompileError([
+          { path: cuePath, code: "unresolvable_range", message: "表示区間を解決できません。" },
+        ]);
+      }
+      return { startMs, endMs };
+    }
+    default:
+      throw new CompositionCompileError([
+        { path: cuePath, code: "unresolvable_range", message: "表示区間を解決できません。" },
+      ]);
+  }
+}
+
+export function cueTransitionTotalMs(cue: VisualCue): number {
+  return cue.transition.enter.durationMs + cue.transition.exit.durationMs;
+}
+
+export function collectCueTransitionIssues(document: ContentDocument): TimelineIssue[] {
+  const timeline = resolveTimeline(document);
+  const issues: TimelineIssue[] = [];
+  for (const placement of timeline.scenes) {
+    const scene = document.scenes[placement.sceneIndex];
+    if (scene === undefined) {
+      continue;
+    }
+    scene.visualCues.forEach((cue, cueIndex) => {
+      const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
+      const window = resolveCueWindow(placement, cue, cuePath);
+      if (window === null) {
+        return;
+      }
+      const span = window.endMs - window.startMs;
+      if (cueTransitionTotalMs(cue) > span) {
+        issues.push({
+          path: cuePath,
+          code: "transition_range_overflow",
+          message: `transition の合計尺がCue範囲（${span}ms）を超えています。`,
+        });
+      }
+    });
+  }
+  return issues;
 }

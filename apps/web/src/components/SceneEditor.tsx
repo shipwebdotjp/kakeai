@@ -35,6 +35,7 @@ import {
 import { errorMessage } from "../lib/errorMessage";
 import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { CharacterFields } from "./CharacterFields";
+import { CueList } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
 import { StandingFields } from "./StandingFields";
@@ -89,59 +90,6 @@ function TimingFields({ control, register, sceneIndex, sceneKind }: TimingFields
             {...register(`scenes.${sceneIndex}.durationMs`, { valueAsNumber: true })}
           />
         </label>
-      )}
-    </div>
-  );
-}
-
-interface CueFieldsProps {
-  register: UseFormRegister<DocumentFormValues>;
-  sceneIndex: number;
-  backgroundAssetId: string | null;
-  cardAssetId: string | null;
-  onBackground: (assetId: string | null) => void;
-  onCard: (assetId: string | null) => void;
-}
-
-function CueFields({
-  register,
-  sceneIndex,
-  backgroundAssetId,
-  cardAssetId,
-  onBackground,
-  onCard,
-}: CueFieldsProps) {
-  return (
-    <div className="mt-3 border-t border-dashed border-border pt-2">
-      <MediaPicker
-        label="背景"
-        kinds={["image", "video"]}
-        selectedAssetId={backgroundAssetId}
-        onSelect={onBackground}
-      />
-      <MediaPicker
-        label="カード"
-        kinds={["image", "video"]}
-        selectedAssetId={cardAssetId}
-        onSelect={onCard}
-      />
-      {cardAssetId !== null && (
-        <>
-          <label className="my-2 block">
-            カード見出し
-            <input
-              className={`mt-1 block w-full ${textFieldClass}`}
-              {...register(`scenes.${sceneIndex}.cardHeading`)}
-            />
-          </label>
-          <label className="my-2 block">
-            カード補足文
-            <input
-              className={`mt-1 block w-full ${textFieldClass}`}
-              {...register(`scenes.${sceneIndex}.cardCaption`)}
-            />
-          </label>
-        </>
       )}
     </div>
   );
@@ -625,21 +573,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
               );
             })()}
 
-            <CueFields
+            <CueList
+              control={control}
               register={register}
+              setValue={setValue}
+              getValues={getValues}
               sceneIndex={sceneIndex}
-              backgroundAssetId={scene.backgroundAssetId}
-              cardAssetId={scene.cardAssetId}
-              onBackground={(assetId) =>
-                setValue(`scenes.${sceneIndex}.backgroundAssetId`, assetId, { shouldDirty: true })
-              }
-              onCard={(assetId) => {
-                setValue(`scenes.${sceneIndex}.cardAssetId`, assetId, { shouldDirty: true });
-                if (assetId === null) {
-                  setValue(`scenes.${sceneIndex}.cardHeading`, "", { shouldDirty: true });
-                  setValue(`scenes.${sceneIndex}.cardCaption`, "", { shouldDirty: true });
-                }
-              }}
+              sceneId={scene.id}
+              lines={scene.lines}
             />
 
             <StandingFields

@@ -9,14 +9,12 @@
 - TTS は利用者の明示的な生成操作だけで実行する。自動生成・自動保存・既存 ScriptVersion の書換えは行わない。生成した音声は通常の手動音声と同じ Audio Take 候補として編集フォームへ追加し、明示保存でだけ ScriptVersion へ入る。
 - エンジン本体の利用表記と、選択した音声モデル／ライブラリの個別規約の確認は利用者の責任とし、UI とユーザーガイドで案内する。AivisSpeech 本体のクレジット表記は必須ではないが、音声モデルごとにライセンス確認が必要である。
 
-## ContentDocument v2
+## ContentDocument v3
 
-`Speaker` に必須の `voiceProfileId: string | null` を追加し、ContentDocument の `schemaVersion` を `2` にする。
+`Speaker` は必須の `voiceProfileId: string | null` を持ち、ContentDocument の `schemaVersion` は `3` である。`voiceProfileId` はアプリ共通の Voice Profile を参照し、`null` は TTS に使う声が未設定であることを表す。JSON ではこのキーを省略しない。
 
-- `voiceProfileId` はアプリ共通の Voice Profile を参照する。`null` は TTS に使う声が未設定であることを表す。旧版同様、JSON ではこのキーを省略しない。
 - アダプター固有の値（VOICEVOX のキャラクター UUID やスタイル ID）は Voice Profile 側にだけ保持し、ContentDocument へ持ち込まない。
-- 保存済みの v1 は読み取り・プレビュー・レンダーを維持する。読出し時はメモリ上で全 Speaker の `voiceProfileId` を `null` にした v2 へ正規化し、内部・コンパイラ・レンダーは v2 だけを扱う。保存は常に v2 の新しい ScriptVersion を作る。保存済み JSON は書き換えない。
-- v1 の読出し解釈は [ADR 0013](../adr/0013-content-schema-version-starts-at-1.md) の「破壊的変更時に版を上げて移行する」に従い、実際に版を上げるこの変更で追加する。
+- v3 は [ContentDocument v3](../mvp/content-schema.md) と [複合ビジュアル](../composite-visuals/spec.md) を正とする。保存済み `ScriptVersion` が無い前提のため、v1/v2 の読出し正規化や移行コードは持たない。
 
 ## Voice Profile
 

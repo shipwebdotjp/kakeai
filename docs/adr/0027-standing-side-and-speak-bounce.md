@@ -1,5 +1,7 @@
 # 立ち絵の左右配置と発話中バウンド
 
+> amended by [ADR-0028](./0028-standing-edge-anchored-layout.md): 位置の写像を外端アンカー方式へ変更した。
+
 `character.standing@2` を追加し、入力を `{ characterId, appearanceId, side: "left"|"right", scale }` とする。`side` は離散値で、位置は左 `x=0.27` / 右 `x=0.73`、いずれも `y=0.86` に写像する。自由な `x`/`y` は持たない。
 
 `@1`（自由な `x`/`y`/`scale`）は意味も描画も不変のまま残し、検証・描画を続ける。編集UIは保存時に `@2` を書き出す。`@1` の既存ScriptVersionは `@1` のまま描画され、見た目は変わらない。

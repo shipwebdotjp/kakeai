@@ -102,6 +102,12 @@ describe("script version preview", () => {
       id: "vc-intro-bg",
       template: { id: "media.full-bleed", version: 1 },
       range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
       input: { assetId: image.id, fit: "cover" },
     });
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
@@ -154,6 +160,12 @@ describe("script version preview", () => {
       id: "vc-standing",
       template: { id: "character.standing", version: 1 },
       range: { kind: "scene" },
+      layer: "standing",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
       input: {
         characterId: "character-rin",
         appearanceId: "appearance-smile",
@@ -260,6 +272,12 @@ describe("script version preview", () => {
       id: "vc-intro-bg",
       template: { id: "media.full-bleed", version: 1 },
       range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
       input: { assetId: image.id, fit: "cover" },
     });
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {

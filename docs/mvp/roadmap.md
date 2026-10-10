@@ -6,9 +6,9 @@
 
 優先順位は「手作業でも再現可能な動画制作」から「編集表現の拡張」、「制作の一部自動化」、「複数言語・派生コンテンツの量産」へ進める。
 
-## Phase 0: MVP — ローカル日本語動画制作
+## Phase 0: MVP — ローカル日本語動画制作（実装完了）
 
-詳細は [spec.md](./spec.md) を参照。
+詳細は [spec.md](./spec.md) を参照。実装フェーズと完了状況は [todo.md](./todo.md) を正とする。
 
 - 横型解説動画の可変Sceneテンプレート、手動素材、手動立ち絵、セリフ単位の手動音声候補、作品全体BGM、プレビュー、MP4出力を提供する。
 - 新規作品は導入、要点3件、結びで開始し、要点Sceneを追加・削除・並べ替えできる。背景とカードは各Sceneに各1件、立ち絵は各Sceneに1体指定できる。
@@ -17,8 +17,11 @@
 
 完了条件：外部サービスなしに、保存済みの日本語作品を繰り返し編集、プレビュー、レンダーできる。
 
+既知の未達：`health.storage.status` の容量警告（80GiB閾値）のみ。詳細は [todo.md](./todo.md) の「MVP後」を参照。
+
 ## Phase 1: 編集表現の拡張
 
+- 背景・カードに画像・動画・アプリ管理の複合ビジュアル（Composite Visual Template）を置く基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) で実装済み（VisualCue v3 の `layer`/`order`/`transition`、`NestedVisual` 再帰、`scene.device-frame@1`、Cue一覧UI）。
 - 背景とカードの正規化した焦点位置を編集する。
 - 1 Scene内の複数VisualCue、表示順、セリフ区間・offset区間を編集する。
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。

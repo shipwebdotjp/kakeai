@@ -161,6 +161,12 @@ describe("asset ingest flow", () => {
         id: "vc-1",
         template: { id: "media.full-bleed", version: 1 },
         range: { kind: "scene" },
+        layer: "background",
+        order: 0,
+        transition: {
+          enter: { preset: "none", durationMs: 0 },
+          exit: { preset: "none", durationMs: 0 },
+        },
         input: { assetId: ready.id, fit: "cover" },
       },
     ];

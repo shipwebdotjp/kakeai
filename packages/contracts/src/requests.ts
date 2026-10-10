@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { idSchema, localeSchema } from "./content/primitives";
-import { contentDocumentInputSchema } from "./content/document";
+import { contentDocumentSchema } from "./content/document";
 import { styleIdSchema } from "./voice-profile";
 
 export const createWorkRequestSchema = z.strictObject({
@@ -14,7 +14,7 @@ export const updateWorkRequestSchema = z.strictObject({
 
 export const saveScriptVersionRequestSchema = z.strictObject({
   sourceScriptVersionId: idSchema.nullable().default(null),
-  content: contentDocumentInputSchema,
+  content: contentDocumentSchema,
 });
 
 export const createRenderJobRequestSchema = z.strictObject({});
