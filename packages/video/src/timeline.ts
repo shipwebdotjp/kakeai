@@ -3,6 +3,7 @@ import {
   SILENT_CAPTION_DURATION_MS,
   type ContentDocument,
   type Scene,
+  type SceneTransitionPreset,
   type VisualCue,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
@@ -208,8 +209,76 @@ export function cueTransitionTotalMs(cue: VisualCue): number {
   return cue.transition.enter.durationMs + cue.transition.exit.durationMs;
 }
 
-export function collectCueTransitionIssues(document: ContentDocument): TimelineIssue[] {
-  const timeline = resolveTimeline(document);
+export interface ResolvedSceneTransition {
+  preset: SceneTransitionPreset;
+  durationMs: number;
+}
+
+export function sceneTransitionOf(scene: Scene): ResolvedSceneTransition {
+  const edge = scene.transition?.enter;
+  if (edge === undefined || edge.durationMs === 0) {
+    return { preset: "cut", durationMs: 0 };
+  }
+  return { preset: edge.preset, durationMs: edge.durationMs };
+}
+
+export function sceneTransitionOverflowIssue(
+  index: number,
+  previousDurationMs: number,
+  currentDurationMs: number,
+  durationMs: number,
+): TimelineIssue | undefined {
+  const maxMs = Math.min(previousDurationMs, currentDurationMs);
+  if (durationMs <= maxMs) {
+    return undefined;
+  }
+  return {
+    path: ["scenes", index, "transition", "enter", "durationMs"],
+    code: "scene_transition_overflow",
+    message: `シーン間トランジションの尺が隣接シーン（最小${maxMs}ms）を超えています。`,
+  };
+}
+
+function sceneTransitionIssues(
+  document: ContentDocument,
+  timeline: ResolvedTimeline,
+): TimelineIssue[] {
+  const issues: TimelineIssue[] = [];
+  for (let index = 1; index < timeline.scenes.length; index += 1) {
+    const current = timeline.scenes[index];
+    const previous = timeline.scenes[index - 1];
+    const scene = current === undefined ? undefined : document.scenes[current.sceneIndex];
+    if (scene === undefined || current === undefined || previous === undefined) {
+      continue;
+    }
+    const { preset, durationMs } = sceneTransitionOf(scene);
+    if (preset === "cut" || durationMs === 0) {
+      continue;
+    }
+    const issue = sceneTransitionOverflowIssue(
+      current.sceneIndex,
+      previous.durationMs,
+      current.durationMs,
+      durationMs,
+    );
+    if (issue !== undefined) {
+      issues.push(issue);
+    }
+  }
+  return issues;
+}
+
+export function collectSceneTransitionIssues(
+  document: ContentDocument,
+  timeline: ResolvedTimeline = resolveTimeline(document),
+): TimelineIssue[] {
+  return sceneTransitionIssues(document, timeline);
+}
+
+function cueTransitionIssues(
+  document: ContentDocument,
+  timeline: ResolvedTimeline,
+): TimelineIssue[] {
   const issues: TimelineIssue[] = [];
   for (const placement of timeline.scenes) {
     const scene = document.scenes[placement.sceneIndex];
@@ -233,4 +302,19 @@ export function collectCueTransitionIssues(document: ContentDocument): TimelineI
     });
   }
   return issues;
+}
+
+export function collectCueTransitionIssues(
+  document: ContentDocument,
+  timeline: ResolvedTimeline = resolveTimeline(document),
+): TimelineIssue[] {
+  return cueTransitionIssues(document, timeline);
+}
+
+export function collectTimelineIssues(document: ContentDocument): TimelineIssue[] {
+  const timeline = resolveTimeline(document);
+  return [
+    ...cueTransitionIssues(document, timeline),
+    ...sceneTransitionIssues(document, timeline),
+  ];
 }

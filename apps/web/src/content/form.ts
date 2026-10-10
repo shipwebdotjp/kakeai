@@ -17,6 +17,7 @@ import {
   type ContentDocument,
   type CueLayer,
   type Scene,
+  type SceneTransitionPreset,
   type Speaker,
   type TemplateFieldSpec,
   type TransitionPolicy,
@@ -106,6 +107,8 @@ export interface SceneFormValue {
   accentColor: string;
   timingMode: "auto" | "fixed";
   durationMs: number;
+  transitionPreset: SceneTransitionPreset;
+  transitionDurationMs: number;
   lines: LineFormValue[];
   cues: CueFormValue[];
   standings: StandingFormValue[];
@@ -418,6 +421,8 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
         accentColor: scene.accentColor,
         timingMode: scene.kind === "point" ? scene.timing.mode : "fixed",
         durationMs: scene.timing.mode === "fixed" ? scene.timing.durationMs : FALLBACK_DURATION_MS,
+        transitionPreset: scene.transition?.enter.preset ?? "cut",
+        transitionDurationMs: scene.transition?.enter.durationMs ?? 0,
         lines: scene.lines.map((line) => ({
           id: line.id,
           speakerId: line.speakerId,
@@ -859,7 +864,7 @@ export function buildContentDocument(
   const speakers = buildSpeakers(values.characters, values.speakers, referencedSpeakerIds);
   const speakerIds = new Set(speakers.map((speaker) => speaker.id));
   const baseById = new Map(base.scenes.map((scene) => [scene.id, scene]));
-  const scenes: Scene[] = values.scenes.map((sceneValue) => {
+  const scenes: Scene[] = values.scenes.map((sceneValue, sceneIndex) => {
     const baseScene = baseById.get(sceneValue.id);
     if (baseScene !== undefined && baseScene.kind !== sceneValue.kind) {
       throw new Error(`Scene ${sceneValue.id} の種別が元データと一致しません`);
@@ -877,10 +882,25 @@ export function buildContentDocument(
       ...buildVisualCues(baseScene, sceneValue),
       ...buildStandingCues(baseScene, sceneValue, characterIds, appearanceIdsByCharacter),
     ];
+    const transitionPreset = sceneValue.transitionPreset;
+    const transitionPresetIsValid =
+      transitionPreset === "fade" || transitionPreset === "crossfade";
+    const transition =
+      sceneIndex === 0 ||
+      !transitionPresetIsValid ||
+      intOrZero(sceneValue.transitionDurationMs) === 0
+        ? undefined
+        : {
+            enter: {
+              preset: transitionPreset,
+              durationMs: intOrZero(sceneValue.transitionDurationMs),
+            },
+          };
     const common = {
       id: sceneValue.id,
       accentColor: (sceneValue.accentColor || DEFAULT_POINT_ACCENT_COLOR).toUpperCase(),
       timing,
+      ...(transition === undefined ? {} : { transition }),
       lines: buildLines(sceneValue, speakerIds),
       visualCues,
     };
@@ -1019,6 +1039,8 @@ export function createPointSceneFormValue(): SceneFormValue {
     accentColor: DEFAULT_POINT_ACCENT_COLOR,
     timingMode: "auto",
     durationMs: FALLBACK_DURATION_MS,
+    transitionPreset: "cut",
+    transitionDurationMs: 0,
     lines: [],
     cues: pointSceneTextCues(id).map(toCueFormValue),
     standings: emptyStandingSlots(),

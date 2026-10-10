@@ -16,12 +16,12 @@
 
 ## E2 シーン間トランジション
 
-- [ ] 入場Scene側の `scene.transition.enter`（`preset`・`durationMs`）として追加する。先行Sceneはデータを持たない（[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)）
-- [ ] カット／フェードイン・フェードアウト／クロスフェードを同じ機構で表し、既定はカット（尺0）。先頭Sceneの `enter` は無視する
-- [ ] 入場Sceneの最初 `D` ms で `opacity 0 → 1`、その間だけ先行Sceneのclipを `D` ms 延長保持する。**Scene尺の合計と総尺は不変**
-- [ ] 共通タイムライン解決器へ解決を寄せ、描画時導出の規則をテストで固定し、プレビューとレンダーで同一にする
-- [ ] `D <= min(先行Scene尺, 入場Scene尺)` を検証し、はみ出す入力を保存・レンダー前に `RENDER_INPUT_INVALID` として拒否する
-- [ ] 同期箇所: `packages/contracts`（`content/scene.ts`・`content/layers.ts`）、`packages/video`（`timeline.ts`・`compiler.ts`）、`apps/web`（`components/SceneEditor.tsx`）
+- [x] 入場Scene側の `scene.transition.enter`（`preset`・`durationMs`）として追加する。先行Sceneはデータを持たない（[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)）
+- [x] カット／フェードイン・フェードアウト／クロスフェードを同じ機構で表し、既定はカット（尺0）。先頭Sceneの `enter` は無視する
+- [x] 入場Sceneの最初 `D` ms で `opacity 0 → 1`、その間だけ先行Sceneのclipを `D` ms 延長保持する。**Scene尺の合計と総尺は不変**
+- [x] 共通タイムライン解決器へ解決を寄せ、描画時導出の規則をテストで固定し、プレビューとレンダーで同一にする
+- [x] `D <= min(先行Scene尺, 入場Scene尺)` を検証し、はみ出す入力を保存・レンダー前に `RENDER_INPUT_INVALID` として拒否する
+- [x] 同期箇所: `packages/contracts`（`content/scene.ts`・`content/layers.ts`）、`packages/video`（`timeline.ts`・`compiler.ts`）、`apps/web`（`components/SceneEditor.tsx`）
 - 完了条件: シーン間トランジションを設定して保存・プレビュー・レンダーでき、はみ出しが拒否され、総尺が変わらない。
 
 ## E3 編集レイアウト3ペイン化

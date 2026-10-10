@@ -969,4 +969,19 @@ describe("buildContentDocument", () => {
     expect("animation" in input).toBe(false);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
+
+  it("round-trips a scene transition and omits it for cut", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    expect(values.scenes[1]!.transitionPreset).toBe("cut");
+    values.scenes[1]!.transitionPreset = "crossfade";
+    values.scenes[1]!.transitionDurationMs = 300;
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.transition).toEqual({
+      enter: { preset: "crossfade", durationMs: 300 },
+    });
+    expect(rebuilt.scenes[2]!.transition).toBeUndefined();
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
 });

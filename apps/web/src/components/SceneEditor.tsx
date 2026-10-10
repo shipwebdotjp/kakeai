@@ -62,6 +62,7 @@ interface TimingFieldsProps {
 
 function TimingFields({ control, register, sceneIndex, sceneKind }: TimingFieldsProps) {
   const mode = useWatch({ control, name: `scenes.${sceneIndex}.timingMode` });
+  const transitionPreset = useWatch({ control, name: `scenes.${sceneIndex}.transitionPreset` });
   const fixedOnly = sceneKind !== "point";
   return (
     <div className="my-2 flex flex-wrap items-center gap-3">
@@ -90,6 +91,32 @@ function TimingFields({ control, register, sceneIndex, sceneKind }: TimingFields
             {...register(`scenes.${sceneIndex}.durationMs`, { valueAsNumber: true })}
           />
         </label>
+      )}
+      {sceneIndex > 0 && (
+        <>
+          <label className="inline-flex items-center gap-1.5">
+            シーン切替
+            <select
+              className={textFieldClass}
+              {...register(`scenes.${sceneIndex}.transitionPreset`)}
+            >
+              <option value="cut">カット</option>
+              <option value="fade">フェード</option>
+              <option value="crossfade">クロスフェード</option>
+            </select>
+          </label>
+          {transitionPreset !== "cut" && (
+            <label className="inline-flex items-center gap-1.5">
+              切替尺(ms)
+              <input
+                type="number"
+                min={1}
+                className={`w-24 ${textFieldClass}`}
+                {...register(`scenes.${sceneIndex}.transitionDurationMs`, { valueAsNumber: true, min: 1 })}
+              />
+            </label>
+          )}
+        </>
       )}
     </div>
   );

@@ -23,7 +23,7 @@ import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import type { RenderedCue, RenderContext } from "./render-context";
-import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline } from "./timeline";
+import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type ResolvedTimeline } from "./timeline";
 import { renderTextBlock } from "./templates/text-block";
 import { renderMediaFullBleed } from "./templates/media-full-bleed";
 import { renderMediaCard } from "./templates/media-card";
@@ -201,6 +201,7 @@ const STYLES = [
   "#kakeai-root{position:relative;width:100%;height:100%;overflow:hidden;background:#000;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;color:#fff;}",
   ".clip{position:absolute;inset:0;}",
   ".kakeai-scenebg{position:absolute;inset:0;}",
+  ".kakeai-sceneclip{position:absolute;inset:0;}",
   ".kakeai-cuebody{position:absolute;inset:0;transform-origin:center center;}",
   ".kakeai-fullbleed{position:absolute;inset:0;width:100%;height:100%;}",
   ".kakeai-card{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:90px 160px;box-sizing:border-box;}",
@@ -346,6 +347,82 @@ function buildLoopAudios(options: {
   return elements;
 }
 
+function addClipDurationMs(html: string, extraMs: number): string {
+  return html.replace(/data-duration="([0-9.]+)"/, (_match, value: string) => {
+    const totalMs = Math.round(Number(value) * 1000) + extraMs;
+    return `data-duration="${toSecondsText(totalMs)}"`;
+  });
+}
+
+function clipEndsAtSceneEnd(html: string, sceneEndMs: number): boolean {
+  const start = html.match(/data-start="([0-9.]+)"/);
+  const duration = html.match(/data-duration="([0-9.]+)"/);
+  if (start === null || duration === null) {
+    return false;
+  }
+  const endMs = Math.round(Number(start[1]) * 1000) + Math.round(Number(duration[1]) * 1000);
+  return endMs >= sceneEndMs;
+}
+
+function applySceneTransitions(
+  document: ContentDocument,
+  timeline: ResolvedTimeline,
+  groups: readonly string[][],
+  tweenLines: string[],
+): string[] {
+  const extendedGroups = groups.map((group) => group.slice());
+  for (let index = 1; index < timeline.scenes.length; index += 1) {
+    const placement = timeline.scenes[index];
+    const previous = timeline.scenes[index - 1];
+    const scene = placement === undefined ? undefined : document.scenes[placement.sceneIndex];
+    if (scene === undefined || placement === undefined || previous === undefined) {
+      continue;
+    }
+    const { preset, durationMs } = sceneTransitionOf(scene);
+    if (preset === "cut" || durationMs === 0) {
+      continue;
+    }
+    const overflow = sceneTransitionOverflowIssue(
+      index,
+      previous.durationMs,
+      placement.durationMs,
+      durationMs,
+    );
+    if (overflow !== undefined) {
+      throw new CompositionCompileError([overflow]);
+    }
+    const wrapId = `kakeai-scene-${placement.sceneIndex}`;
+    if (preset === "crossfade") {
+      const previousEndMs = previous.startMs + previous.durationMs;
+      extendedGroups[index - 1] = extendedGroups[index - 1]!.map((clip) =>
+        !clip.includes("kakeai-caption") && clipEndsAtSceneEnd(clip, previousEndMs)
+          ? addClipDurationMs(clip, durationMs)
+          : clip,
+      );
+      tweenLines.push(
+        `tl.from(document.getElementById("${wrapId}"),{opacity:0,duration:${secondsText(durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(placement.startMs)});`,
+      );
+    } else {
+      const fadeOutMs = Math.ceil(durationMs / 2);
+      const fadeInMs = durationMs - fadeOutMs;
+      if (fadeOutMs > 0) {
+        tweenLines.push(
+          `tl.to(document.getElementById("kakeai-scene-${previous.sceneIndex}"),{opacity:0,duration:${secondsText(fadeOutMs / 1000)},ease:"power1.in",immediateRender:false},${toSecondsText(placement.startMs - fadeOutMs)});`,
+        );
+      }
+      if (fadeInMs > 0) {
+        tweenLines.push(
+          `tl.from(document.getElementById("${wrapId}"),{opacity:0,duration:${secondsText(fadeInMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(placement.startMs)});`,
+        );
+      }
+    }
+  }
+  return extendedGroups.map((group, index) => {
+    const sceneIndex = timeline.scenes[index]?.sceneIndex ?? index;
+    return `<div id="kakeai-scene-${sceneIndex}" class="kakeai-sceneclip">${group.join("")}</div>`;
+  });
+}
+
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
   const { document, assetResolver } = options;
   const timeline = resolveTimeline(document);
@@ -353,7 +430,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
 
   const assetIds: string[] = [];
   const seenAssetIds = new Set<string>();
-  const clips: string[] = [];
+  const sceneClipGroups: string[][] = [];
   const audios: string[] = [];
   const tweenLines: string[] = [];
 
@@ -393,9 +470,10 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     }
     const startSec = toSecondsText(placement.startMs);
     const durationSec = toSecondsText(placement.durationMs);
+    const sceneClips: string[] = [];
     const bgId = `kakeai-scene-${placement.sceneIndex}-bg`;
     const background = `linear-gradient(135deg, ${shade(scene.accentColor, 0.55)} 0%, ${shade(scene.accentColor, 0.22)} 100%)`;
-    clips.push(
+    sceneClips.push(
       `<section id="${bgId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${bgId}-body" class="kakeai-scenebg" style="background:${background}"></div></section>`,
     );
 
@@ -448,7 +526,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       }
       const clipId = scope.id("clip");
       const bodyId = scope.id("body");
-      clips.push(
+      sceneClips.push(
         `<div id="${clipId}" class="clip" data-start="${toSecondsText(absStartMs)}" data-duration="${toSecondsText(span)}"><div id="${bodyId}" class="kakeai-cuebody">${rendered.html}</div></div>`,
       );
 
@@ -532,7 +610,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       }
       const captionText = line.captionText.trim();
       if (captionText.length > 0) {
-        clips.push(
+        sceneClips.push(
           `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="kakeai-caption"><p class="kakeai-captiontext">${escapeHtmlText(captionText)}</p></div></div>`,
         );
       }
@@ -573,7 +651,11 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         emitCue(cue, cueIndex);
       }
     }
+
+    sceneClipGroups.push(sceneClips);
   }
+
+  const clips = applySceneTransitions(document, timeline, sceneClipGroups, tweenLines);
 
   const placementBySceneId = new Map(
     timeline.scenes.map((placement) => [placement.sceneId, placement]),

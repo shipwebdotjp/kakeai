@@ -94,7 +94,7 @@ Sceneはテンプレート上のまとまりで、`kind` によって並び順�
 
 すべてのSceneは必須の `accentColor` を持つ。値は大文字に正規化した `#RRGGBB` 形式に限定し、透過色・CSS関数・任意文字列は受け入れない。これはSceneの表示設定であり、VisualCueではない。新規作品の導入、要点3件、結びには `explanation-scenes@1` が定める既定色を入れる。
 
-Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`）で持つ。カット／フェード／クロスフェードを有限presetで表し、総尺は変えない（[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)、[../editor/spec.md](../editor/spec.md)）。テキストは `text.block@1` のVisualCueとして置き、`role` で意味付けする。背景素材はSceneではなくVisualCueで指定する。
+Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`）で持つ。preset は `cut`（既定・尺0）／`fade`（暗転を挟む）／`crossfade` の有限enumで、尺は `durationMs`。総尺は変えない（[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)、[../editor/spec.md](../editor/spec.md)）。`D <= min(先行Scene尺, 入場Scene尺)` を保存・レンダー投入前に検証する。テキストは `text.block@1` のVisualCueとして置き、`role` で意味付けする。背景素材はSceneではなくVisualCueで指定する。
 
 ```json
 {

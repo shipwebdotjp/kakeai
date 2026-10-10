@@ -4,7 +4,7 @@ import {
   HYPERFRAMES_PLAYER_VERSION,
   compileDocument,
   CompositionCompileError,
-  collectCueTransitionIssues,
+  collectTimelineIssues,
   type CompiledComposition,
   type ResolvedAssetKind,
 } from "@kakeai/video";
@@ -305,9 +305,9 @@ export async function saveScriptVersion(
     ]);
   }
 
-  let transitionIssues: ReturnType<typeof collectCueTransitionIssues> = [];
+  let transitionIssues: ReturnType<typeof collectTimelineIssues> = [];
   try {
-    transitionIssues = collectCueTransitionIssues(content);
+    transitionIssues = collectTimelineIssues(content);
   } catch (error) {
     if (!(error instanceof CompositionCompileError)) {
       throw error;

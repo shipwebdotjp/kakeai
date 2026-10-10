@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import { CompositionCompileError } from "./compile-error";
-import { resolveTimeline } from "./timeline";
+import { collectSceneTransitionIssues, resolveTimeline, sceneTransitionOf } from "./timeline";
 
 describe("resolveTimeline", () => {
   it("resolves scene starts and total duration for the default document", () => {
@@ -92,5 +92,33 @@ describe("resolveTimeline", () => {
       expect(error).toBeInstanceOf(CompositionCompileError);
       expect((error as CompositionCompileError).issues[0]?.code).toBe("unknown_take");
     }
+  });
+});
+
+describe("scene transitions", () => {
+  it("defaults to cut when a scene has no transition", () => {
+    const scene = validContentDocument().scenes[1]!;
+    expect(sceneTransitionOf(scene)).toEqual({ preset: "cut", durationMs: 0 });
+  });
+
+  it("accepts a transition within the adjacent scene durations", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 300 } };
+    expect(collectSceneTransitionIssues(document)).toEqual([]);
+  });
+
+  it("rejects a transition longer than the shorter adjacent scene", () => {
+    const document = validContentDocument();
+    document.scenes[2]!.transition = { enter: { preset: "fade", durationMs: 1500 } };
+    const issues = collectSceneTransitionIssues(document);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.code).toBe("scene_transition_overflow");
+    expect(issues[0]!.path).toEqual(["scenes", 2, "transition", "enter", "durationMs"]);
+  });
+
+  it("ignores the first scene transition", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.transition = { enter: { preset: "crossfade", durationMs: 5000 } };
+    expect(collectSceneTransitionIssues(document)).toEqual([]);
   });
 });

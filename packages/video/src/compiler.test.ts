@@ -199,6 +199,32 @@ describe("compileDocument", () => {
     expect(compiled.html).not.toContain("kakeai-textblock");
   });
 
+  it("crossfades by extending the previous scene and fading in the entering scene", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 300 } };
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain(
+      'id="kakeai-scene-0-bg" class="clip" data-start="0" data-duration="4.3"',
+    );
+    expect(compiled.html).toContain('getElementById("kakeai-scene-1")');
+  });
+
+  it("fades through black at both sides of a fade transition", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.transition = { enter: { preset: "fade", durationMs: 400 } };
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain('getElementById("kakeai-scene-1")');
+    expect(compiled.html).toContain('getElementById("kakeai-scene-0")');
+  });
+
+  it("rejects a scene transition that overflows the adjacent scene", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 5000 } };
+    expect(() => compileDocument({ document, assetResolver: resolver })).toThrow(
+      CompositionCompileError,
+    );
+  });
+
   it("rejects unknown template versions", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues.push(
