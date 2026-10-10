@@ -342,7 +342,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
   return (
     <form onSubmit={onSubmit}>
-      <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
+      <div id="editor-actionbar" className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
         <button type="submit" className={buttonPrimaryClass} disabled={save.isPending}>
           保存
         </button>

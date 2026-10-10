@@ -16,6 +16,21 @@ function clampWidth(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function escapeId(id: string): string {
+  return typeof CSS !== "undefined" && typeof CSS.escape === "function"
+    ? CSS.escape(id)
+    : id.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+}
+
+function findTarget(root: HTMLElement, targetId: string): HTMLElement | null {
+  return root.querySelector<HTMLElement>(`#${escapeId(targetId)}`);
+}
+
+function stickyOffset(root: HTMLElement): number {
+  const actionBar = root.querySelector<HTMLElement>("#editor-actionbar");
+  return (actionBar?.offsetHeight ?? 0) + 8;
+}
+
 function PaneDivider({
   ariaValue,
   ariaMin,
@@ -99,6 +114,7 @@ export function WorkEditPage() {
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
   const [formScenes, setFormScenes] = useState<SceneFormValue[] | null>(null);
+  const [activeTargetId, setActiveTargetId] = useState<string | null>(null);
   const [leftWidth, setLeftWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(420);
   const playerRef = useRef<HTMLElement | null>(null);
@@ -172,17 +188,13 @@ export function WorkEditPage() {
   const jump = useCallback((targetId: string, seekMs: number | null) => {
     const root = centerRef.current;
     if (root !== null) {
-      const escaped =
-        typeof CSS !== "undefined" && typeof CSS.escape === "function"
-          ? CSS.escape(targetId)
-          : targetId.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
-      const element = root.querySelector<HTMLElement>(`#${escaped}`);
+      const element = findTarget(root, targetId);
       if (element !== null) {
         const top =
           element.getBoundingClientRect().top -
           root.getBoundingClientRect().top +
           root.scrollTop;
-        root.scrollTo({ top: Math.max(0, top - 8), behavior: "smooth" });
+        root.scrollTo({ top: Math.max(0, top - stickyOffset(root)), behavior: "smooth" });
       }
     }
     if (seekMs === null) {
@@ -214,6 +226,58 @@ export function WorkEditPage() {
     });
     return map;
   }, [formScenes, pointOrdinals]);
+
+  const targetIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const scene of formScenes ?? []) {
+      ids.push(`scene-${scene.id}`);
+      for (const cue of scene.cues) {
+        ids.push(`cue-${cue.id}`);
+      }
+      for (const line of scene.lines) {
+        ids.push(`line-${line.id}`);
+      }
+    }
+    return ids;
+  }, [formScenes]);
+
+  useEffect(() => {
+    const root = centerRef.current;
+    if (root === null || targetIds.length === 0) {
+      setActiveTargetId(null);
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const containerTop = root.getBoundingClientRect().top;
+      let active: string | null = null;
+      for (const id of targetIds) {
+        const element = findTarget(root, id);
+        if (element === null) {
+          continue;
+        }
+        if (element.getBoundingClientRect().top >= containerTop - 4) {
+          active = id;
+          break;
+        }
+      }
+      setActiveTargetId(active ?? targetIds[targetIds.length - 1] ?? null);
+    };
+    const onScroll = () => {
+      if (frame === 0) {
+        frame = requestAnimationFrame(update);
+      }
+    };
+    update();
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      root.removeEventListener("scroll", onScroll);
+      if (frame !== 0) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, [targetIds]);
 
   const title = titleDraft ?? work.data?.title ?? "";
 
@@ -267,7 +331,12 @@ export function WorkEditPage() {
                   <li key={scene.id} className="mb-1.5">
                     <button
                       type="button"
-                      className="w-full text-left font-medium hover:underline"
+                      aria-current={activeTargetId === `scene-${scene.id}` ? "true" : undefined}
+                      className={
+                        activeTargetId === `scene-${scene.id}`
+                          ? "w-full rounded bg-border/60 px-1 text-left font-semibold"
+                          : "w-full text-left font-medium hover:underline"
+                      }
                       onClick={() => jump(`scene-${scene.id}`, sceneStartById.get(scene.id) ?? null)}
                     >
                       {SCENE_LABELS[scene.kind] ?? scene.kind}
@@ -278,7 +347,12 @@ export function WorkEditPage() {
                         <li key={cue.id}>
                           <button
                             type="button"
-                            className="w-full text-left text-xs text-muted-foreground hover:underline"
+                            aria-current={activeTargetId === `cue-${cue.id}` ? "true" : undefined}
+                            className={
+                              activeTargetId === `cue-${cue.id}`
+                                ? "w-full rounded bg-border/60 px-1 text-left text-xs font-semibold"
+                                : "w-full text-left text-xs text-muted-foreground hover:underline"
+                            }
                             onClick={() => jump(`cue-${cue.id}`, cueSeekById.get(cue.id) ?? null)}
                           >
                             {cueLabel(cue)}
@@ -289,7 +363,12 @@ export function WorkEditPage() {
                         <li key={line.id}>
                           <button
                             type="button"
-                            className="w-full truncate text-left text-xs text-muted-foreground hover:underline"
+                            aria-current={activeTargetId === `line-${line.id}` ? "true" : undefined}
+                            className={
+                              activeTargetId === `line-${line.id}`
+                                ? "w-full truncate rounded bg-border/60 px-1 text-left text-xs font-semibold"
+                                : "w-full truncate text-left text-xs text-muted-foreground hover:underline"
+                            }
                             onClick={() =>
                               jump(`line-${line.id}`, lineStartById.get(line.id) ?? null)
                             }
