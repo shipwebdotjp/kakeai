@@ -548,4 +548,82 @@ describe("compileDocument", () => {
       CompositionCompileError,
     );
   });
+
+  it("renders a site-mockup with chrome, nested media and logo", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-mockup",
+        template: { id: "scene.site-mockup", version: 1 },
+        layer: "card",
+        input: {
+          variant: "github",
+          theme: "dark",
+          name: "kakeai",
+          handle: "@kakeai",
+          caption: "README",
+          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
+          logo: { kind: "media", assetId: "asset-logo", fit: "contain" },
+          animation: { preset: "slide-up", durationMs: 300 },
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.assetIds).toContain("asset-screen");
+    expect(compiled.assetIds).toContain("asset-logo");
+    expect(compiled.html).toContain("kakeai-mockup-github");
+    expect(compiled.html).toContain("kakeai-mockup-theme-dark");
+    const screenId = cueScope("vc-mockup").id("screen");
+    expect(compiled.html).toContain(`id="${screenId}"`);
+    expect(compiled.html).toContain(`document.getElementById("${screenId}")`);
+    expect(compiled.html).toContain("y:60");
+  });
+
+  it("keeps two site-mockups from colliding", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-a",
+        template: { id: "scene.site-mockup", version: 1 },
+        layer: "card",
+        order: 0,
+        input: { variant: "x", screen: { kind: "media", assetId: "asset-a", fit: "cover" } },
+      }),
+      cue({
+        id: "vc-b",
+        template: { id: "scene.site-mockup", version: 1 },
+        layer: "card",
+        order: 1,
+        input: { variant: "x", screen: { kind: "media", assetId: "asset-b", fit: "cover" } },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const a = cueScope("vc-a").id("screen");
+    const b = cueScope("vc-b").id("screen");
+    expect(a).not.toBe(b);
+    expect(compiled.html).toContain(`id="${a}"`);
+    expect(compiled.html).toContain(`id="${b}"`);
+  });
+
+  it("rejects a nested-template screen in scene.site-mockup", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-bad",
+        template: { id: "scene.site-mockup", version: 1 },
+        layer: "card",
+        input: {
+          variant: "x",
+          screen: {
+            kind: "template",
+            template: { id: "text.body", version: 1 },
+            input: { heading: "h", body: "b" },
+          },
+        },
+      }),
+    ];
+    expect(() => compileDocument({ document, assetResolver: resolver })).toThrow(
+      CompositionCompileError,
+    );
+  });
 });

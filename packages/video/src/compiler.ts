@@ -6,6 +6,7 @@ import {
   mediaFullBleedV1,
   sceneDeviceFrameV1,
   sceneDeviceFrameV2,
+  sceneSiteMockupV1,
   deviceFrameInputSchema,
   deviceFrameV2InputSchema,
   textBodyV1,
@@ -34,6 +35,7 @@ import {
   renderCharacterStandingV2,
 } from "./templates/character-standing";
 import { renderDeviceFrame } from "./templates/device-frame";
+import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, resolveCueMedia } from "./templates/shared";
 
 export const COMPOSITION_ID = "kakeai-main";
@@ -181,6 +183,8 @@ function dispatchTemplate(
       return renderDeviceFrame(input, context, deviceFrameInputSchema);
     case `${sceneDeviceFrameV2.id}@${sceneDeviceFrameV2.version}`:
       return renderDeviceFrame(input, context, deviceFrameV2InputSchema);
+    case `${sceneSiteMockupV1.id}@${sceneSiteMockupV1.version}`:
+      return renderSiteMockup(input, context);
     default:
       throw new CompositionCompileError([
         {
@@ -245,6 +249,35 @@ const STYLES = [
   ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/19.5;border-radius:36px;border:18px solid #1f2937;}",
   ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
   ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:rgba(0,0,0,.55);border-radius:12px;padding:12px 36px;text-shadow:0 2px 12px rgba(0,0,0,.6);}",
+  ".kakeai-mockup{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
+  ".kakeai-mockup-chrome{position:relative;width:auto;max-width:90%;max-height:92%;border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;background:var(--kakeai-mockup-surface,#fff);color:var(--kakeai-mockup-fg,#111827);}",
+  ".kakeai-mockup-chrome::before{content:'';display:block;height:8px;background:var(--kakeai-mockup-accent,#6b7280);}",
+  ".kakeai-mockup-theme-dark .kakeai-mockup-chrome{--kakeai-mockup-surface:#16181c;--kakeai-mockup-fg:#e5e7eb;}",
+  ".kakeai-mockup-header{display:flex;align-items:center;gap:16px;padding:20px 28px;border-bottom:1px solid rgba(127,127,127,.25);}",
+  ".kakeai-mockup-header .kakeai-nestedmedia{height:40px;width:auto;max-width:120px;object-fit:contain;}",
+  ".kakeai-mockup-ident{display:flex;flex-direction:column;min-width:0;}",
+  ".kakeai-mockup-name{font-size:26px;font-weight:700;}",
+  ".kakeai-mockup-handle{font-size:20px;opacity:.7;}",
+  ".kakeai-mockup-url{font-size:18px;opacity:.6;}",
+  ".kakeai-mockup-screen{position:relative;height:600px;width:auto;aspect-ratio:16/9;background:#000;overflow:hidden;}",
+  ".kakeai-mockup-screen .kakeai-nestedmedia{width:100%;height:100%;display:block;}",
+  ".kakeai-mockup-caption{padding:18px 28px;font-size:24px;line-height:1.6;white-space:pre-line;overflow:hidden;}",
+  ".kakeai-mockup-x{--kakeai-mockup-accent:#1d9bf0;}",
+  ".kakeai-mockup-instagram{--kakeai-mockup-accent:#d62976;}",
+  ".kakeai-mockup-instagram .kakeai-mockup-screen{aspect-ratio:1/1;}",
+  ".kakeai-mockup-tiktok{--kakeai-mockup-accent:#25f4ee;}",
+  ".kakeai-mockup-tiktok .kakeai-mockup-screen{aspect-ratio:9/16;}",
+  ".kakeai-mockup-youtube{--kakeai-mockup-accent:#ff0000;}",
+  ".kakeai-mockup-github{--kakeai-mockup-accent:#24292f;}",
+  ".kakeai-mockup-qiita{--kakeai-mockup-accent:#55c500;}",
+  ".kakeai-mockup-zenn{--kakeai-mockup-accent:#3ea8ff;}",
+  ".kakeai-mockup-note{--kakeai-mockup-accent:#41c9b4;}",
+  ".kakeai-mockup-stackoverflow{--kakeai-mockup-accent:#f48024;}",
+  ".kakeai-mockup-hackernews{--kakeai-mockup-accent:#ff6600;}",
+  ".kakeai-mockup-reddit{--kakeai-mockup-accent:#ff4500;}",
+  ".kakeai-mockup-pixiv{--kakeai-mockup-accent:#0096fa;}",
+  ".kakeai-mockup-niconico{--kakeai-mockup-accent:#252525;}",
+  ".kakeai-mockup-browser{--kakeai-mockup-accent:#6b7280;}",
 ].join("\n");
 
 const FADE_START_EPSILON_MS = 1;

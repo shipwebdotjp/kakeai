@@ -23,6 +23,15 @@ describe("visual template metadata", () => {
     expect(isEditableTemplate("text.body", 1)).toBe(true);
   });
 
+  it("registers scene.site-mockup@1 as an editable card/overlay template", () => {
+    const definition = getVisualTemplate("scene.site-mockup", 1);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
+    expect(isEditableTemplate("scene.site-mockup", 1)).toBe(true);
+    const fields = getTemplateInputFields("scene.site-mockup", 1);
+    expect(fields?.some((field) => field.kind === "animation")).toBe(true);
+    expect(fields?.some((field) => field.key === "logo")).toBe(true);
+  });
+
   it("exposes an editable flag in the catalog", () => {
     const catalog = listVisualTemplateCatalog();
     const standing = catalog.find((entry) => entry.id === "character.standing");

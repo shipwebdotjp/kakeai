@@ -14,6 +14,7 @@ import {
   MAX_NESTED_VISUAL_DEPTH,
   fitSchema,
   focalPointSchema,
+  nestedMediaVisualSchema,
   nestedVisualSchema,
   type NestedVisual,
 } from "../content/nested";
@@ -29,7 +30,7 @@ export interface TemplateDisplay {
 
 export type TemplateFieldSpec =
   | { kind: "media"; key: string; label: string; assetKinds: readonly AssetKindName[] }
-  | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[] }
+  | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[]; optional?: boolean }
   | { kind: "text"; key: string; label: string }
   | { kind: "optionalText"; key: string; label: string }
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
@@ -280,6 +281,94 @@ const sceneDeviceFrameV2: VisualTemplateDefinition = {
     collectDeviceFrameRefs(deviceFrameV2InputSchema, input, path, depth),
 };
 
+export const siteMockupVariantSchema = z.enum([
+  "x",
+  "instagram",
+  "tiktok",
+  "youtube",
+  "github",
+  "qiita",
+  "zenn",
+  "note",
+  "stackoverflow",
+  "hackernews",
+  "reddit",
+  "pixiv",
+  "niconico",
+  "browser",
+]);
+export type SiteMockupVariant = z.infer<typeof siteMockupVariantSchema>;
+
+const SITE_MOCKUP_VARIANT_OPTIONS = [
+  { value: "x", label: "X（旧Twitter）" },
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "youtube", label: "YouTube" },
+  { value: "github", label: "GitHub" },
+  { value: "qiita", label: "Qiita" },
+  { value: "zenn", label: "Zenn" },
+  { value: "note", label: "note" },
+  { value: "stackoverflow", label: "Stack Overflow" },
+  { value: "hackernews", label: "Hacker News" },
+  { value: "reddit", label: "Reddit" },
+  { value: "pixiv", label: "pixiv" },
+  { value: "niconico", label: "ニコニコ動画" },
+  { value: "browser", label: "ブラウザ" },
+] as const;
+
+const THEME_OPTIONS = [
+  { value: "light", label: "ライト" },
+  { value: "dark", label: "ダーク" },
+] as const;
+
+export const siteMockupInputSchema = z.strictObject({
+  variant: siteMockupVariantSchema,
+  screen: nestedMediaVisualSchema,
+  theme: z.enum(["light", "dark"]).optional(),
+  name: z.string().optional(),
+  handle: z.string().optional(),
+  url: z.string().optional(),
+  caption: z.string().optional(),
+  logo: nestedMediaVisualSchema.optional(),
+  animation: animationSpecSchema.optional(),
+});
+
+const sceneSiteMockupV1: VisualTemplateDefinition = {
+  id: "scene.site-mockup",
+  version: 1,
+  inputSchema: siteMockupInputSchema,
+  layers: ["card", "overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: {
+    label: "サイトモックアップ",
+    description: "有名サイトやブラウザのガワに画像・動画を収める",
+    category: "composition",
+  },
+  inputFields: [
+    { kind: "select", key: "variant", label: "種類", options: SITE_MOCKUP_VARIANT_OPTIONS },
+    { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS },
+    { kind: "select", key: "theme", label: "テーマ", options: THEME_OPTIONS, optional: true },
+    { kind: "optionalText", key: "name", label: "表示名" },
+    { kind: "optionalText", key: "handle", label: "ハンドル" },
+    { kind: "optionalText", key: "url", label: "URL" },
+    { kind: "optionalText", key: "caption", label: "本文" },
+    { kind: "nestedMedia", key: "logo", label: "ロゴ（任意）", assetKinds: MEDIA_KINDS, optional: true },
+    { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
+  ],
+  collectAssetRefs: (input, path, depth = 0) => {
+    const parsed = siteMockupInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    const references = collectNestedAssetRefs(parsed.data.screen, [...path, "screen"], depth);
+    if (parsed.data.logo !== undefined) {
+      references.push(...collectNestedAssetRefs(parsed.data.logo, [...path, "logo"], depth));
+    }
+    return references;
+  },
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textTitleV1,
   textBodyV1,
@@ -289,10 +378,12 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   characterStandingV2,
   sceneDeviceFrameV1,
   sceneDeviceFrameV2,
+  sceneSiteMockupV1,
 ];
 
 export { textTitleV1, textBodyV1, mediaFullBleedV1, mediaCardV1 };
 export { characterStandingV1, characterStandingV2, sceneDeviceFrameV1, sceneDeviceFrameV2 };
+export { sceneSiteMockupV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

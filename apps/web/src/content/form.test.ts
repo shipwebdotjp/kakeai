@@ -816,6 +816,77 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("round-trips a site-mockup cue through generic fields", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-mockup",
+        template: { id: "scene.site-mockup", version: 1 },
+        layer: "card",
+        input: {
+          variant: "qiita",
+          theme: "dark",
+          name: "kakeai",
+          handle: "@kakeai",
+          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
+          logo: { kind: "media", assetId: "asset-logo", fit: "contain" },
+        },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.fields.variant).toBe("qiita");
+    expect(cue.fields.theme).toBe("dark");
+    expect(cue.fields.screen).toBe("asset-screen");
+    expect(cue.fields.logo).toBe("asset-logo");
+    cue.fields.variant = "zenn";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
+      variant: string;
+      screen: { assetId: string };
+      logo?: { assetId: string };
+    };
+    expect(input.variant).toBe("zenn");
+    expect(input.screen.assetId).toBe("asset-screen");
+    expect(input.logo?.assetId).toBe("asset-logo");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("initializes site-mockup fields with defaults", () => {
+    const cueValue = createCueFormValue({
+      sceneId: "scene-intro",
+      templateId: "scene.site-mockup",
+      templateVersion: 1,
+      layer: "card",
+      order: 0,
+    });
+    expect(cueValue.fields.variant).toBe("x");
+    expect(cueValue.fields.theme).toBe("");
+    expect(cueValue.fields.screen).toBe("");
+    expect(cueValue.fields.animation).toBe("none");
+  });
+
+  it("allows a site-mockup without a logo", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.scenes[0]!.cues = [
+      createCueFormValue({
+        sceneId: values.scenes[0]!.id,
+        templateId: "scene.site-mockup",
+        templateVersion: 1,
+        layer: "card",
+        order: 0,
+      }),
+    ];
+    values.scenes[0]!.cues[0]!.fields.screen = "asset-screen";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as Record<string, unknown>;
+    expect("logo" in input).toBe(false);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
   it("initializes device-frame@2 fields with animation defaults", () => {
     const cueValue = createCueFormValue({
       sceneId: "scene-intro",
