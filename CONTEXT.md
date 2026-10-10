@@ -92,6 +92,14 @@ _Avoid_: Composition HTML, scene
 The enter/exit presentation of a Visual Cue, expressed only as a registered preset and a duration, bounded within the cue's range.
 _Avoid_: animation, keyframe
 
+**Animation Plan**:
+The bounded, local-time animation a template renderer returns for its own elements (target, preset, start, duration). Only the top-level compiler turns it into a timeline.
+_Avoid_: keyframe, timeline
+
+**Template Field**:
+A declarative input-field spec (`inputFields`) on a Visual Template that drives the generic Cue editor, so adding a template needs no editor code.
+_Avoid_: form schema, zod
+
 **Audio Cue**:
 An instruction to place an audio Asset, such as background music, over a range of a work.
 _Avoid_: BGM asset, narration segment

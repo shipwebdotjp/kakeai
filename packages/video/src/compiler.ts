@@ -5,8 +5,12 @@ import {
   mediaCardV1,
   mediaFullBleedV1,
   sceneDeviceFrameV1,
+  sceneDeviceFrameV2,
+  deviceFrameInputSchema,
+  deviceFrameV2InputSchema,
   textBodyV1,
   textTitleV1,
+  type AnimationPreset,
   type ContentDocument,
   type CueLayer,
   type NestedVisual,
@@ -174,7 +178,9 @@ function dispatchTemplate(
     case `${characterStandingV2.id}@${characterStandingV2.version}`:
       return renderCharacterStandingV2(input, context);
     case `${sceneDeviceFrameV1.id}@${sceneDeviceFrameV1.version}`:
-      return renderDeviceFrame(input, context);
+      return renderDeviceFrame(input, context, deviceFrameInputSchema);
+    case `${sceneDeviceFrameV2.id}@${sceneDeviceFrameV2.version}`:
+      return renderDeviceFrame(input, context, deviceFrameV2InputSchema);
     default:
       throw new CompositionCompileError([
         {
@@ -222,7 +228,7 @@ const STYLES = [
   ".kakeai-bodywrap{max-width:1500px;}",
   ".kakeai-heading{margin:0 0 32px;font-size:72px;font-weight:700;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 4px 24px rgba(0,0,0,.55);}",
   ".kakeai-body{margin:0;font-size:42px;line-height:1.8;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 2px 16px rgba(0,0,0,.55);}",
-  ".kakeai-cuebody{position:absolute;inset:0;}",
+  ".kakeai-cuebody{position:absolute;inset:0;transform-origin:center center;}",
   ".kakeai-fullbleed{position:absolute;inset:0;width:100%;height:100%;}",
   ".kakeai-card{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:90px 160px;box-sizing:border-box;}",
   ".kakeai-cardmedia{width:100%;max-height:640px;object-fit:cover;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,.5);}",
@@ -243,6 +249,38 @@ const STYLES = [
 
 const FADE_START_EPSILON_MS = 1;
 const MAX_LOOP_COPIES = 1000;
+const PRESET_OFFSET_PX = 60;
+
+function presetVars(preset: AnimationPreset, phase: "enter" | "exit"): string | null {
+  switch (preset) {
+    case "none":
+      return null;
+    case "fade":
+      return "opacity:0";
+    case "slide-up":
+      return phase === "enter" ? `opacity:0,y:${PRESET_OFFSET_PX}` : `opacity:0,y:-${PRESET_OFFSET_PX}`;
+    case "slide-down":
+      return phase === "enter" ? `opacity:0,y:-${PRESET_OFFSET_PX}` : `opacity:0,y:${PRESET_OFFSET_PX}`;
+    case "slide-left":
+      return phase === "enter" ? `opacity:0,x:${PRESET_OFFSET_PX}` : `opacity:0,x:-${PRESET_OFFSET_PX}`;
+    case "slide-right":
+      return phase === "enter" ? `opacity:0,x:-${PRESET_OFFSET_PX}` : `opacity:0,x:${PRESET_OFFSET_PX}`;
+    case "scale-in":
+      return phase === "enter" ? "opacity:0,scale:0.9" : "opacity:0,scale:1.05";
+    case "pulse":
+      return phase === "enter" ? "scale:1.06" : "scale:0.98";
+    default: {
+      const exhaustive: never = preset;
+      throw new CompositionCompileError([
+        {
+          path: [],
+          code: "unknown_preset",
+          message: `未対応のアニメーションpresetです: ${String(exhaustive)}`,
+        },
+      ]);
+    }
+  }
+}
 
 function gainToVolume(gainDb: number | undefined): string {
   const db = gainDb ?? 0;
@@ -410,21 +448,33 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         `<div id="${clipId}" class="clip" data-start="${toSecondsText(absStartMs)}" data-duration="${toSecondsText(span)}"><div id="${bodyId}" class="kakeai-cuebody">${rendered.html}</div></div>`,
       );
 
-      if (cue.transition.enter.preset === "fade" && cue.transition.enter.durationMs > 0) {
-        tweenLines.push(
-          `tl.from(document.getElementById("${bodyId}"),{opacity:0,duration:${secondsText(cue.transition.enter.durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(absStartMs + FADE_START_EPSILON_MS)});`,
-        );
+      if (cue.transition.enter.durationMs > 0) {
+        const vars = presetVars(cue.transition.enter.preset, "enter");
+        if (vars !== null) {
+          tweenLines.push(
+            `tl.from(document.getElementById("${bodyId}"),{${vars},duration:${secondsText(cue.transition.enter.durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(absStartMs + FADE_START_EPSILON_MS)});`,
+          );
+        }
       }
-      if (cue.transition.exit.preset === "fade" && cue.transition.exit.durationMs > 0) {
-        const exitStartMs = absEndMs - cue.transition.exit.durationMs;
-        tweenLines.push(
-          `tl.to(document.getElementById("${bodyId}"),{opacity:0,duration:${secondsText(cue.transition.exit.durationMs / 1000)},ease:"power1.in",immediateRender:false},${toSecondsText(exitStartMs)});`,
-        );
+      if (cue.transition.exit.durationMs > 0) {
+        const vars = presetVars(cue.transition.exit.preset, "exit");
+        if (vars !== null) {
+          const exitStartMs = absEndMs - cue.transition.exit.durationMs;
+          tweenLines.push(
+            `tl.to(document.getElementById("${bodyId}"),{${vars},duration:${secondsText(cue.transition.exit.durationMs / 1000)},ease:"power1.in",immediateRender:false},${toSecondsText(exitStartMs)});`,
+          );
+        }
       }
       for (const item of rendered.animation) {
-        tweenLines.push(
-          `tl.from(document.getElementById("${item.targetId}"),{opacity:0,duration:${secondsText(item.durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,
-        );
+        if (item.durationMs <= 0) {
+          continue;
+        }
+        const vars = presetVars(item.preset, "enter");
+        if (vars !== null) {
+          tweenLines.push(
+            `tl.from(document.getElementById("${item.targetId}"),{${vars},duration:${secondsText(item.durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,
+          );
+        }
       }
 
       if (

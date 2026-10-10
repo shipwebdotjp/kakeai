@@ -1,9 +1,10 @@
-import type { ContentDocument, NestedVisual } from "@kakeai/contracts";
+import type { AnimationPreset, ContentDocument, NestedVisual } from "@kakeai/contracts";
 import type { AssetResolver } from "./resolver";
 import type { RenderScope } from "./scope";
 
 export interface AnimationItem {
   targetId: string;
+  preset: AnimationPreset;
   startMs: number;
   durationMs: number;
 }

@@ -1,5 +1,6 @@
 export * from "./content/primitives";
 export * from "./content/timing";
+export * from "./content/animation";
 export * from "./content/layers";
 export * from "./content/nested";
 export * from "./content/asset-reference";

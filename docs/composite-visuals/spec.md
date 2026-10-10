@@ -72,12 +72,42 @@ NestedVisual =
 | `media.card@1` | card | assetId, heading, caption?, focalPoint? | 対応 |
 | `character.standing@1` | standing | characterId, appearanceId, x, y, scale | 読出しのみ |
 | `character.standing@2` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体） |
-| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor? | 対応（最初の複合ビジュアル） |
+| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor? | 対応（複合ビジュアル） |
+| `scene.device-frame@2` | background, card | `@1` ＋ animation? | 対応（画面の登場アニメーション） |
+
+## テンプレート入力メタデータと汎用エディタ
+
+テンプレート定義は `inputFields`（UIフィールド仕様）を持ち、編集画面はこれを解釈してフォームを生成する。テンプレートを追加してもエディタのコードを増やさない。
+
+```ts
+type TemplateFieldSpec =
+  | { kind: "media"; key; label; assetKinds }        // トップレベルの assetId
+  | { kind: "nestedMedia"; key; label; assetKinds }  // NestedVisual を media として編集
+  | { kind: "text"; key; label }
+  | { kind: "optionalText"; key; label }             // 空なら key を削除
+  | { kind: "select"; key; label; options }
+  | { kind: "color"; key; label }                    // #RRGGBB を検証
+  | { kind: "animation"; key; label }                // preset と durationMs
+```
+
+- `inputFields` を持つテンプレートは編集可能、持たないテンプレートは読み取り専用で非破壊に保持する。
+- `nestedMedia` は、既存の `input` が `media` 以外（入れ子テンプレート）の場合は元の値を保持し、`media` のときだけ素材の解除でCueを消す。
+- `collectAssetRefs` はテンプレート定義に集約し、`inputFields` とは独立して素材参照を走査する。
+
+## アニメーションpreset
+
+入場・退場とテンプレート内部アニメーションは、有限presetと数値だけで表す。汎用keyframe・任意CSS値・任意easing・スクリプト文字列は追加しない。
+
+- preset: `none` / `fade` / `slide-up` / `slide-down` / `slide-left` / `slide-right` / `scale-in`（入退場）、加えて内部用に `pulse`。
+- 入退場は `transitionPolicy`（許可preset・既定値・最大尺）に照合し、`enter + exit <= Cue範囲` を共通タイムライン解決器で検証する。
+- テンプレート内部アニメーションは `animationPolicy`（許可preset・既定尺・最大尺）に照合し、テンプレート入力を経由して `AnimationPlan`（対象要素ID・preset・ローカル時刻・尺）としてコンパイラへ渡す。コンパイラだけがGSAPタイムラインを生成する。
+- `scene.device-frame@2` は任意の `animation` を画面要素に適用する。`@1` はアニメーションを持たず、描画を変えない。
 
 ## 編集UI
 
 - 各Sceneに **Cue一覧** を表示し、追加・削除・レイヤー・順序・表示区間・入場/退場を編集する。
-- 背景・カードはテンプレート `media.full-bleed@1`/`media.card@1`/`scene.device-frame@1` から選ぶ。素材ピッカーで画像・動画を選ぶ。
+- テンプレート固有の入力は `inputFields` から生成する。素材はピッカーで画像・動画を選び、色・選択・数値・テキスト・アニメーションを編集する。
+- 「Cueを追加」は編集可能なテンプレート（背景・カード・デバイスフレーム・タイトル・本文）の最新版を提示する。
 - 立ち絵は一覧内に「左」「右」の固定2行として表示し、side一意・最大2の制約を保つ。
 - UI未対応のテンプレート・Cueは読み取り専用で非破壊に保持する。
 
