@@ -215,7 +215,7 @@ function LineEditor({
   const ttsDisabled = generate.isPending || styleId === null || !voiceMatches || !speechReady;
 
   return (
-    <div className="my-2 grid gap-1.5 rounded border border-border p-2">
+    <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">
       <textarea
         rows={2}
         placeholder="字幕テキスト"

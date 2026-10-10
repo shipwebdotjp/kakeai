@@ -112,7 +112,7 @@ function CueRow({
   };
 
   return (
-    <div className="mt-2 rounded border border-border p-2">
+    <div id={`cue-${cue.id}`} className="mt-2 rounded border border-border p-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">
           {definition?.display.label ?? cue.templateId}@{cue.templateVersion}

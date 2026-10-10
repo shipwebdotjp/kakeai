@@ -1,13 +1,20 @@
 import "@hyperframes/player";
+import { memo, type RefObject } from "react";
 import { useScriptVersionPreview } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
 import { buttonNeutralClass, errorTextClass, metaTextClass } from "../ui";
 
-export function PreviewSection({ scriptVersionId }: { scriptVersionId: string }) {
+export const PreviewSection = memo(function PreviewSection({
+  scriptVersionId,
+  playerRef,
+}: {
+  scriptVersionId: string;
+  playerRef?: RefObject<HTMLElement | null>;
+}) {
   const preview = useScriptVersionPreview(scriptVersionId);
 
   return (
-    <section className="mt-8">
+    <section>
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">プレビュー</h2>
         <button
@@ -28,6 +35,7 @@ export function PreviewSection({ scriptVersionId }: { scriptVersionId: string })
           <div className="mt-3 aspect-video w-full overflow-hidden rounded border border-border bg-black">
             <hyperframes-player
               key={preview.data.scriptVersionId}
+              ref={playerRef}
               srcdoc={preview.data.compositionHtml}
               controls
               className="h-full w-full"
@@ -40,4 +48,4 @@ export function PreviewSection({ scriptVersionId }: { scriptVersionId: string })
       )}
     </section>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useFieldArray,
   useForm,
@@ -31,7 +31,9 @@ import {
   DEFAULT_BGM_GAIN_DB,
   type CharacterFormValue,
   type DocumentFormValues,
+  type SceneFormValue,
 } from "../content/form";
+import { SCENE_LABELS } from "../content/labels";
 import { errorMessage } from "../lib/errorMessage";
 import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { CharacterFields } from "./CharacterFields";
@@ -44,14 +46,9 @@ interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
   scriptVersionId: string;
-  onSaved?: (scriptVersion: ScriptVersion, options: { focusPreview: boolean }) => void;
+  onSaved?: (scriptVersion: ScriptVersion) => void;
+  onValuesChange?: (scenes: SceneFormValue[]) => void;
 }
-
-const SCENE_LABELS: Record<string, string> = {
-  intro: "導入",
-  point: "要点",
-  outro: "結び",
-};
 
 interface TimingFieldsProps {
   control: Control<DocumentFormValues>;
@@ -122,7 +119,7 @@ function TimingFields({ control, register, sceneIndex, sceneKind }: TimingFields
   );
 }
 
-export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
@@ -130,7 +127,6 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
-  const focusPreviewRef = useRef(false);
 
   useEffect(() => {
     if (savedAtMs === null) {
@@ -150,9 +146,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
     append: appendCharacter,
     remove: removeCharacter,
   } = useFieldArray({ control, name: "characters" });
-  const watchedScenes = useWatch({ control, name: "scenes" }) ?? [];
+  const watchedScenesValue = useWatch({ control, name: "scenes" });
+  const watchedScenes = useMemo(() => watchedScenesValue ?? [], [watchedScenesValue]);
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
   const watchedSpeakers = useWatch({ control, name: "speakers" }) ?? [];
+
+  useEffect(() => {
+    const snapshot = [...watchedScenes];
+    const timer = setTimeout(() => onValuesChange?.(snapshot), 150);
+    return () => clearTimeout(timer);
+  }, [watchedScenes, onValuesChange]);
   const savedVoiceByLineId = useMemo(() => {
     const speakerById = new Map(base.speakers.map((speaker) => [speaker.id, speaker]));
     const map = new Map<string, string | null>();
@@ -171,8 +174,6 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
 
   const onSubmit = handleSubmit(
     (values) => {
-      const focusPreview = focusPreviewRef.current;
-      focusPreviewRef.current = false;
       let document: ContentDocument;
       try {
         document = buildContentDocument(base, values);
@@ -194,12 +195,9 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
         onSuccess: (result) => {
           setWarnings(result.warnings);
           setSavedAtMs(Date.now());
-          onSaved?.(result.scriptVersion, { focusPreview });
+          onSaved?.(result.scriptVersion);
         },
       });
-    },
-    () => {
-      focusPreviewRef.current = false;
     },
   );
 
@@ -311,6 +309,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
   const pointCount = pointOrdinals.filter((ordinal) => ordinal > 0).length;
 
   const allValues = useWatch({ control }) as DocumentFormValues | undefined;
+
   const timing = useMemo(() => {
     if (allValues === undefined || allValues.scenes === undefined) {
       return { placements: [] as ReturnType<typeof resolveTimeline>["scenes"], error: null };
@@ -333,25 +332,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
   return (
     <form onSubmit={onSubmit}>
       <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
-        <button
-          type="submit"
-          className={buttonPrimaryClass}
-          disabled={save.isPending}
-          onClick={() => {
-            focusPreviewRef.current = false;
-          }}
-        >
+        <button type="submit" className={buttonPrimaryClass} disabled={save.isPending}>
           保存
-        </button>
-        <button
-          type="submit"
-          className={buttonNeutralClass}
-          disabled={save.isPending}
-          onClick={() => {
-            focusPreviewRef.current = true;
-          }}
-        >
-          保存してプレビュー
         </button>
         {savedAtMs !== null && (
           <span className={metaTextClass}>
@@ -487,6 +469,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved }: Scene
         return (
           <section
             key={field.id}
+            id={`scene-${scene.id}`}
             className="my-4 rounded-lg border border-border p-4"
           >
             <div className="mt-0 mb-2 flex flex-wrap items-center gap-2">

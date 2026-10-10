@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Job } from "@kakeai/contracts";
 import { useCancelJob, useCreateRenderJob, useWorkJobs } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
@@ -23,7 +24,7 @@ function JobError({ job }: { job: Job }) {
   return <p className={errorTextClass}>{job.error.message}</p>;
 }
 
-export function RenderSection({
+export const RenderSection = memo(function RenderSection({
   workId,
   scriptVersionId,
 }: {
@@ -103,4 +104,4 @@ export function RenderSection({
       {cancelJob.isError && <p className={errorTextClass}>{errorMessage(cancelJob.error)}</p>}
     </section>
   );
-}
+});
