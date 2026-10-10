@@ -1,18 +1,26 @@
 import {
   characterStandingV1,
   characterStandingV2,
+  characterStandingV2InputSchema,
   mediaCardV1,
   mediaFullBleedV1,
+  sceneDeviceFrameV1,
   textBodyV1,
   textTitleV1,
+  type ContentDocument,
+  type CueLayer,
+  type NestedVisual,
+  type Scene,
+  type VisualCue,
 } from "@kakeai/contracts";
-import type { ContentDocument, Scene, VisualCue } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver } from "./resolver";
-import { resolveTimeline, type ScenePlacement } from "./timeline";
+import { cueScope, type RenderScope } from "./scope";
+import type { RenderedCue, RenderContext } from "./render-context";
+import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline, type ScenePlacement } from "./timeline";
 import { renderTextTitle } from "./templates/text-title";
 import { renderTextBody } from "./templates/text-body";
 import { renderMediaFullBleed } from "./templates/media-full-bleed";
@@ -21,6 +29,8 @@ import {
   renderCharacterStandingV1,
   renderCharacterStandingV2,
 } from "./templates/character-standing";
+import { renderDeviceFrame } from "./templates/device-frame";
+import { focalPointStyle, resolveCueMedia } from "./templates/shared";
 
 export const COMPOSITION_ID = "kakeai-main";
 
@@ -35,16 +45,12 @@ export interface CompiledComposition {
   durationMs: number;
 }
 
-interface CueWindow {
-  startMs: number;
-  endMs: number;
-}
-
-interface FadeUnit {
-  bodyId: string;
-  atSec: number;
-  durationSec: number;
-}
+const LAYER_ORDER: Record<CueLayer, number> = {
+  background: 0,
+  card: 1,
+  standing: 2,
+  overlay: 3,
+};
 
 export function toSecondsText(ms: number): string {
   const seconds = ms / 1000;
@@ -130,32 +136,49 @@ function renderSceneSlot(scene: Scene, sceneIndex: number): string {
   }
 }
 
-function renderCueInner(
-  cue: VisualCue,
-  cuePath: (string | number)[],
-  document: ContentDocument,
-  assetResolver: AssetResolver,
-  mediaElementId: string,
-): { html: string; assetIds: string[] } {
-  const key = templateKey(cue);
-  const inputPath = [...cuePath, "input"];
+function renderNestedMedia(node: NestedVisual & { kind: "media" }, context: RenderContext): RenderedCue {
+  const media = resolveCueMedia(node.assetId, context.assetResolver, context.path);
+  const id = context.scope.id("media");
+  const fit = node.fit === "contain" ? "contain" : "cover";
+  const style = `object-fit:${fit};${focalPointStyle(node.focalPoint)}`;
+  if (media.kind === "video") {
+    return {
+      html: `<video id="${id}" class="kakeai-nestedmedia" src="${escapeHtmlAttribute(media.url)}" style="${style}" muted playsinline preload="auto" data-media-start="0"></video>`,
+      assetIds: [node.assetId],
+      animation: [],
+    };
+  }
+  return {
+    html: `<img id="${id}" class="kakeai-nestedmedia" src="${escapeHtmlAttribute(media.url)}" style="${style}" alt="">`,
+    assetIds: [node.assetId],
+    animation: [],
+  };
+}
+
+function dispatchTemplate(
+  key: string,
+  input: unknown,
+  context: RenderContext,
+): RenderedCue {
   switch (key) {
     case `${textTitleV1.id}@${textTitleV1.version}`:
-      return { html: renderTextTitle(cue.input, inputPath), assetIds: [] };
+      return { html: renderTextTitle(input, context.path), assetIds: [], animation: [] };
     case `${textBodyV1.id}@${textBodyV1.version}`:
-      return { html: renderTextBody(cue.input, inputPath), assetIds: [] };
+      return { html: renderTextBody(input, context.path), assetIds: [], animation: [] };
     case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
-      return renderMediaFullBleed(cue.input, inputPath, assetResolver, mediaElementId);
+      return renderMediaFullBleed(input, context);
     case `${mediaCardV1.id}@${mediaCardV1.version}`:
-      return renderMediaCard(cue.input, inputPath, assetResolver, mediaElementId);
+      return renderMediaCard(input, context);
     case `${characterStandingV1.id}@${characterStandingV1.version}`:
-      return renderCharacterStandingV1(cue.input, inputPath, document, assetResolver, mediaElementId);
+      return renderCharacterStandingV1(input, context);
     case `${characterStandingV2.id}@${characterStandingV2.version}`:
-      return renderCharacterStandingV2(cue.input, inputPath, document, assetResolver, mediaElementId);
+      return renderCharacterStandingV2(input, context);
+    case `${sceneDeviceFrameV1.id}@${sceneDeviceFrameV1.version}`:
+      return renderDeviceFrame(input, context);
     default:
       throw new CompositionCompileError([
         {
-          path: [...cuePath, "template"],
+          path: [...context.path, "template"],
           code: "unknown_template",
           message: `未対応のVisualTemplateです: ${key}`,
         },
@@ -163,76 +186,63 @@ function renderCueInner(
   }
 }
 
-function resolveCueWindow(
-  placement: ScenePlacement,
-  cue: VisualCue,
-  cuePath: (string | number)[],
-): CueWindow | null {
-  switch (cue.range.kind) {
-    case "scene":
-      return { startMs: 0, endMs: placement.durationMs };
-    case "offset": {
-      const startMs = Math.max(0, cue.range.startMs);
-      const endMs = Math.min(placement.durationMs, cue.range.endMs);
-      return startMs < endMs ? { startMs, endMs } : null;
-    }
-    case "lines": {
-      const byId = new Map(placement.lines.map((line) => [line.lineId, line]));
-      const start = byId.get(cue.range.startLineId);
-      const end = byId.get(cue.range.endLineId);
-      if (start === undefined || end === undefined) {
-        throw new CompositionCompileError([
-          { path: cuePath, code: "unresolvable_range", message: "表示区間を解決できません。" },
-        ]);
-      }
-      const startMs = start.startMs - placement.startMs;
-      const endMs = end.endMs - placement.startMs;
-      if (endMs <= startMs) {
-        throw new CompositionCompileError([
-          { path: cuePath, code: "unresolvable_range", message: "表示区間を解決できません。" },
-        ]);
-      }
-      return { startMs, endMs };
-    }
-    default:
-      throw new CompositionCompileError([
-        { path: cuePath, code: "unresolvable_range", message: "表示区間を解決できません。" },
-      ]);
-  }
+function makeContext(
+  document: ContentDocument,
+  assetResolver: AssetResolver,
+  scope: RenderScope,
+  path: (string | number)[],
+): RenderContext {
+  const context: RenderContext = {
+    document,
+    assetResolver,
+    scope,
+    path,
+    renderNested: (node, nestedScope, nestedPath) =>
+      renderNestedVisual(node, makeContext(document, assetResolver, nestedScope, nestedPath)),
+  };
+  return context;
 }
 
-function fadeDurationSec(windowSec: number): number {
-  return Math.min(0.35, windowSec / 2);
+function renderNestedVisual(node: NestedVisual, context: RenderContext): RenderedCue {
+  if (node.kind === "media") {
+    return renderNestedMedia(node, context);
+  }
+  return dispatchTemplate(`${node.template.id}@${node.template.version}`, node.input, context);
 }
 
-function templateKey(cue: VisualCue): string {
-  return `${cue.template.id}@${cue.template.version}`;
-}
+const STYLES = [
+  "html,body{margin:0;padding:0;background:#000;height:100%;}",
+  "#kakeai-root{position:relative;width:100%;height:100%;overflow:hidden;background:#000;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;color:#fff;}",
+  ".clip{position:absolute;inset:0;}",
+  ".kakeai-scenebg{position:absolute;inset:0;}",
+  ".kakeai-slotframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:120px 140px;box-sizing:border-box;}",
+  ".kakeai-titlewrap{max-width:1500px;}",
+  ".kakeai-title{margin:0;font-size:96px;font-weight:700;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 4px 24px rgba(0,0,0,.55);}",
+  ".kakeai-subtitle{margin:24px 0 0;font-size:48px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 2px 16px rgba(0,0,0,.55);}",
+  ".kakeai-bodywrap{max-width:1500px;}",
+  ".kakeai-heading{margin:0 0 32px;font-size:72px;font-weight:700;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 4px 24px rgba(0,0,0,.55);}",
+  ".kakeai-body{margin:0;font-size:42px;line-height:1.8;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 2px 16px rgba(0,0,0,.55);}",
+  ".kakeai-cuebody{position:absolute;inset:0;}",
+  ".kakeai-fullbleed{position:absolute;inset:0;width:100%;height:100%;}",
+  ".kakeai-card{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:90px 160px;box-sizing:border-box;}",
+  ".kakeai-cardmedia{width:100%;max-height:640px;object-fit:cover;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,.5);}",
+  ".kakeai-cardtext{margin:0;background:rgba(0,0,0,.55);border-radius:16px;padding:28px 48px;max-width:1400px;}",
+  ".kakeai-cardheading{margin:0;font-size:56px;font-weight:700;line-height:1.4;}",
+  ".kakeai-cardcaption{margin:12px 0 0;font-size:34px;line-height:1.7;}",
+  ".kakeai-standing{position:absolute;transform:translate(-50%,-50%);height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
+  ".kakeai-standingv2{position:absolute;transform:translate(-50%,-50%);}",
+  ".kakeai-standingimg{display:block;height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
+  ".kakeai-nestedmedia{display:block;width:100%;height:100%;}",
+  ".kakeai-deviceframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
+  ".kakeai-deviceframe-screen{overflow:hidden;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.55);}",
+  ".kakeai-deviceframe-laptop .kakeai-deviceframe-screen{width:72%;aspect-ratio:16/9;border-radius:18px;border:24px solid #1f2937;}",
+  ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/19.5;border-radius:36px;border:18px solid #1f2937;}",
+  ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
+  ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:rgba(0,0,0,.55);border-radius:12px;padding:12px 36px;text-shadow:0 2px 12px rgba(0,0,0,.6);}",
+].join("\n");
 
-const LAYER_FULL_BLEED = 0;
-const LAYER_CARD = 1;
-const LAYER_STANDING = 2;
-const LAYER_OTHER = 3;
-
-function cueLayerRank(cue: VisualCue): number {
-  if (cue.template.id === mediaFullBleedV1.id) {
-    return LAYER_FULL_BLEED;
-  }
-  if (cue.template.id === mediaCardV1.id) {
-    return LAYER_CARD;
-  }
-  if (cue.template.id === characterStandingV1.id) {
-    return LAYER_STANDING;
-  }
-  return LAYER_OTHER;
-}
-
-const FADE_START_EPSILON_SEC = 0.001;
+const FADE_START_EPSILON_MS = 1;
 const MAX_LOOP_COPIES = 1000;
-
-function fadeAtSec(startMs: number): number {
-  return startMs / 1000 + FADE_START_EPSILON_SEC;
-}
 
 function gainToVolume(gainDb: number | undefined): string {
   const db = gainDb ?? 0;
@@ -296,32 +306,6 @@ function buildLoopAudios(options: {
   return elements;
 }
 
-const STYLES = [
-  "html,body{margin:0;padding:0;background:#000;height:100%;}",
-  "#kakeai-root{position:relative;width:100%;height:100%;overflow:hidden;background:#000;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;color:#fff;}",
-  ".clip{position:absolute;inset:0;}",
-  ".kakeai-scenebg{position:absolute;inset:0;}",
-  ".kakeai-slotframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:120px 140px;box-sizing:border-box;}",
-  ".kakeai-titlewrap{max-width:1500px;}",
-  ".kakeai-title{margin:0;font-size:96px;font-weight:700;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 4px 24px rgba(0,0,0,.55);}",
-  ".kakeai-subtitle{margin:24px 0 0;font-size:48px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 2px 16px rgba(0,0,0,.55);}",
-  ".kakeai-bodywrap{max-width:1500px;}",
-  ".kakeai-heading{margin:0 0 32px;font-size:72px;font-weight:700;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 4px 24px rgba(0,0,0,.55);}",
-  ".kakeai-body{margin:0;font-size:42px;line-height:1.8;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;text-shadow:0 2px 16px rgba(0,0,0,.55);}",
-  ".kakeai-cuebody{position:absolute;inset:0;}",
-  ".kakeai-fullbleed{position:absolute;inset:0;width:100%;height:100%;}",
-  ".kakeai-card{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:90px 160px;box-sizing:border-box;}",
-  ".kakeai-cardmedia{width:100%;max-height:640px;object-fit:cover;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,.5);}",
-  ".kakeai-cardtext{margin:0;background:rgba(0,0,0,.55);border-radius:16px;padding:28px 48px;max-width:1400px;}",
-  ".kakeai-cardheading{margin:0;font-size:56px;font-weight:700;line-height:1.4;}",
-  ".kakeai-cardcaption{margin:12px 0 0;font-size:34px;line-height:1.7;}",
-  ".kakeai-standing{position:absolute;transform:translate(-50%,-50%);height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
-  ".kakeai-standingv2{position:absolute;transform:translate(-50%,-50%);}",
-  ".kakeai-standingimg{display:block;height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
-  ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
-  ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:rgba(0,0,0,.55);border-radius:12px;padding:12px 36px;text-shadow:0 2px 12px rgba(0,0,0,.6);}",
-].join("\n");
-
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
   const { document, assetResolver } = options;
   const timeline = resolveTimeline(document);
@@ -331,7 +315,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
   const seenAssetIds = new Set<string>();
   const clips: string[] = [];
   const audios: string[] = [];
-  const fades: FadeUnit[] = [];
+  const tweenLines: string[] = [];
 
   const trackAsset = (id: string): void => {
     if (!seenAssetIds.has(id)) {
@@ -392,51 +376,92 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       speakingIntervalsByCharacter.set(characterId, intervals);
     }
 
-    const orderedCues = scene.visualCues
-      .map((cue, cueIndex) => ({ cue, cueIndex }))
-      .sort((a, b) => cueLayerRank(a.cue) - cueLayerRank(b.cue) || a.cueIndex - b.cueIndex);
-    for (const { cue, cueIndex } of orderedCues) {
+    const emitCue = (cue: VisualCue, cueIndex: number): void => {
       const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
       const window = resolveCueWindow(placement, cue, cuePath);
       if (window === null) {
-        continue;
+        return;
       }
-      const absoluteStartMs = placement.startMs + window.startMs;
-      const cueDurationMs = window.endMs - window.startMs;
-      const clipId = `kakeai-cue-${placement.sceneIndex}-${cueIndex}`;
-      const mediaId = `${clipId}-media`;
-      const rendered = renderCueInner(cue, cuePath, document, assetResolver, mediaId);
+      const span = window.endMs - window.startMs;
+      if (cueTransitionTotalMs(cue) > span) {
+        throw new CompositionCompileError([
+          {
+            path: cuePath,
+            code: "transition_range_overflow",
+            message: `transition の合計尺がCue範囲（${span}ms）を超えています。`,
+          },
+        ]);
+      }
+      const absStartMs = placement.startMs + window.startMs;
+      const absEndMs = placement.startMs + window.endMs;
+      const scope = cueScope(cue.id);
+      const context = makeContext(document, assetResolver, scope, cuePath);
+      const rendered = dispatchTemplate(
+        `${cue.template.id}@${cue.template.version}`,
+        cue.input,
+        context,
+      );
       for (const assetId of rendered.assetIds) {
         trackAsset(assetId);
       }
+      const clipId = scope.id("clip");
+      const bodyId = scope.id("body");
       clips.push(
-        `<div id="${clipId}" class="clip" data-start="${toSecondsText(absoluteStartMs)}" data-duration="${toSecondsText(cueDurationMs)}"><div id="${clipId}-body" class="kakeai-cuebody">${rendered.html}</div></div>`,
+        `<div id="${clipId}" class="clip" data-start="${toSecondsText(absStartMs)}" data-duration="${toSecondsText(span)}"><div id="${bodyId}" class="kakeai-cuebody">${rendered.html}</div></div>`,
       );
-      fades.push({
-        bodyId: `${clipId}-body`,
-        atSec: fadeAtSec(absoluteStartMs),
-        durationSec: fadeDurationSec(cueDurationMs / 1000),
-      });
+
+      if (cue.transition.enter.preset === "fade" && cue.transition.enter.durationMs > 0) {
+        tweenLines.push(
+          `tl.from(document.getElementById("${bodyId}"),{opacity:0,duration:${secondsText(cue.transition.enter.durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(absStartMs + FADE_START_EPSILON_MS)});`,
+        );
+      }
+      if (cue.transition.exit.preset === "fade" && cue.transition.exit.durationMs > 0) {
+        const exitStartMs = absEndMs - cue.transition.exit.durationMs;
+        tweenLines.push(
+          `tl.to(document.getElementById("${bodyId}"),{opacity:0,duration:${secondsText(cue.transition.exit.durationMs / 1000)},ease:"power1.in",immediateRender:false},${toSecondsText(exitStartMs)});`,
+        );
+      }
+      for (const item of rendered.animation) {
+        tweenLines.push(
+          `tl.from(document.getElementById("${item.targetId}"),{opacity:0,duration:${secondsText(item.durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,
+        );
+      }
 
       if (
+        rendered.motionTargetId !== undefined &&
         cue.template.id === characterStandingV2.id &&
         cue.template.version === characterStandingV2.version
       ) {
-        const parsed = characterStandingV2.inputSchema.safeParse(cue.input);
+        const parsed = characterStandingV2InputSchema.safeParse(cue.input);
         if (parsed.success) {
           const intervals = speakingIntervalsByCharacter.get(parsed.data.characterId);
           if (intervals !== undefined) {
-            const cueStartMs = absoluteStartMs;
-            const cueEndMs = absoluteStartMs + cueDurationMs;
+            const cueStartMs = absStartMs;
+            const cueEndMs = absEndMs;
             for (const interval of mergeIntervals(intervals)) {
               const startMs = Math.max(interval.startMs, cueStartMs);
               const endMs = Math.min(interval.endMs, cueEndMs);
               if (endMs > startMs) {
-                bounces.push({ elementId: mediaId, startMs, endMs });
+                bounces.push({ elementId: rendered.motionTargetId, startMs, endMs });
               }
             }
           }
         }
+      }
+    };
+
+    const orderedCues = scene.visualCues
+      .map((cue, cueIndex) => ({ cue, cueIndex }))
+      .sort(
+        (a, b) =>
+          LAYER_ORDER[a.cue.layer] - LAYER_ORDER[b.cue.layer] ||
+          a.cue.order - b.cue.order ||
+          a.cueIndex - b.cueIndex,
+      );
+
+    for (const { cue, cueIndex } of orderedCues) {
+      if (LAYER_ORDER[cue.layer] <= LAYER_ORDER.standing) {
+        emitCue(cue, cueIndex);
       }
     }
 
@@ -444,11 +469,10 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     clips.push(
       `<section id="${slotId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${slotId}-body" class="kakeai-slotframe">${slotHtml}</div></section>`,
     );
-    fades.push({
-      bodyId: `${slotId}-body`,
-      atSec: fadeAtSec(placement.startMs),
-      durationSec: fadeDurationSec(placement.durationMs / 1000),
-    });
+    const slotFadeSec = Math.min(0.35, placement.durationMs / 2000);
+    tweenLines.push(
+      `tl.from(document.getElementById("${slotId}-body"),{opacity:0,duration:${slotFadeSec},ease:"power1.out",immediateRender:false},${toSecondsText(placement.startMs + FADE_START_EPSILON_MS)});`,
+    );
 
     placement.lines.forEach((linePlacement, lineIndex) => {
       const line = lineById.get(linePlacement.lineId);
@@ -498,6 +522,12 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         }),
       );
     });
+
+    for (const { cue, cueIndex } of orderedCues) {
+      if (LAYER_ORDER[cue.layer] === LAYER_ORDER.overlay) {
+        emitCue(cue, cueIndex);
+      }
+    }
   }
 
   const placementBySceneId = new Map(
@@ -531,10 +561,6 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     audios.push(...elements);
   });
 
-  const tweenLines = fades.map(
-    (fade) =>
-      `tl.from(document.getElementById("${fade.bodyId}"),{opacity:0,duration:${fade.durationSec},ease:"power1.out",immediateRender:false},${fade.atSec});`,
-  );
   const bounceLines = bounces.flatMap(bounceTweenLines);
 
   const html = [

@@ -1,9 +1,9 @@
-import { textBodyV1 } from "@kakeai/contracts";
+import { textBodyInputSchema } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 
 export function renderTextBody(input: unknown, path: (string | number)[]): string {
-  const parsed = textBodyV1.inputSchema.safeParse(input);
+  const parsed = textBodyInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
       { path, code: "invalid_input", message: "text.body の入力が不正です。" },

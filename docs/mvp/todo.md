@@ -99,6 +99,6 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 
 ## MVP後（ロードマップへ記載済み）
 
-- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 背景・カードの焦点位置、複数VisualCue、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、table/chart/flow系VisualTemplate。うち複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で実装済み
+- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 複合ビジュアル基盤（VisualCue v3、NestedVisual、`scene.device-frame@1`、Cue一覧UI、transition）は [複合ビジュアル](../composite-visuals/spec.md) で実装済み。残りは 背景・カードの焦点位置、複数VisualCueの拡張、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、table/chart/flow系VisualTemplate。うち複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で実装済み
 - [ロードマップ Phase 5](./roadmap.md#phase-5-派生コンテンツと制作運用): progressPercentに依存した詳細進捗表示、実行中Jobのキャンセル、複数worker、自動再試行、contentHash/JCS、Jobリース、楽観ロック、同一SHA復旧の厳密化
 - `health.storage.status` の容量警告: 管理領域の使用量から80GiB閾値で `warning` を返し、UIとhealthに表示する（[spec.md](./spec.md) のリソース上限）。現状は常に `ok`。

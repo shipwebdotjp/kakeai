@@ -1,13 +1,6 @@
 import type { ContentDocument } from "./document";
-import { assetBearingTemplateKeys, getVisualTemplate } from "../templates";
-
-export type AssetKindName = "image" | "video" | "audio";
-
-export interface AssetReference {
-  assetId: string;
-  allowedKinds: readonly AssetKindName[];
-  path: (string | number)[];
-}
+import { getVisualTemplate } from "../templates";
+import type { AssetReference } from "./asset-reference";
 
 export function collectAssetReferences(document: ContentDocument): AssetReference[] {
   const references: AssetReference[] = [];
@@ -40,26 +33,12 @@ export function collectAssetReferences(document: ContentDocument): AssetReferenc
 
   document.scenes.forEach((scene, sceneIndex) => {
     scene.visualCues.forEach((cue, cueIndex) => {
-      if (!assetBearingTemplateKeys.has(`${cue.template.id}@${cue.template.version}`)) {
-        return;
-      }
       const definition = getVisualTemplate(cue.template.id, cue.template.version);
       if (!definition) {
         return;
       }
-      const parsed = definition.inputSchema.safeParse(cue.input);
-      if (!parsed.success) {
-        return;
-      }
-      const assetId = (parsed.data as { assetId?: unknown }).assetId;
-      if (typeof assetId !== "string") {
-        return;
-      }
-      references.push({
-        assetId,
-        allowedKinds: ["image", "video"],
-        path: ["scenes", sceneIndex, "visualCues", cueIndex, "input", "assetId"],
-      });
+      const path = ["scenes", sceneIndex, "visualCues", cueIndex, "input"];
+      references.push(...definition.collectAssetRefs(cue.input, path, 0));
     });
   });
 

@@ -1,5 +1,7 @@
 # Sceneを型付きスロット付きunionとし、VisualCue.rangeをunion化する
 
+> amended by [ADR-0029](./0029-content-document-v3-visual-cue.md): 描画順はVisualCueの `layer`/`order` で定め、`Scene本文`・`caption` はコンパイラ固定層とする。Cueは `transition` を必須で持つ。
+
 ContentDocument の拡張方針として、(a) Scene は `kind` で判別する union とし、型付きスロット（`intro`: title/subtitle、`point`: heading/body、`outro`: closing）と必須の `accentColor` を持つ、(b) `VisualCue.range` は `{ kind: "scene" }` / `{ kind: "lines", startLineId, endLineId }` / `{ kind: "offset", startMs, endMs }` の判別 union とする。破壊的変更は `schemaVersion` を上げて新しい `ScriptVersion` として移行する。
 
 理由は、導入・結びのようにラインを持たないシーンにも背景やタイトルを表示でき、見出し・本文をデータとして扱えるようにするため。`range` を union にしておけば、レンジの種類とスロットを後方互換で追加できる。

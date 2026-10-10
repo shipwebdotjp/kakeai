@@ -10,7 +10,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "locale": "ja-JP",
   "template": {
     "id": "explanation-scenes",
@@ -24,13 +24,13 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
-- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。MVPが新規作成・保存するDocumentは `1` とする。
+- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。保存済み `ScriptVersion` が無い前提のため v3 から始め、新規作成・保存するDocumentは `3` とする。
 - `locale` はBCP 47形式で保存する。MVPの有効値は `ja-JP` のみ。
 - `template` は構造と既定表現を決める。MVPでは `explanation-scenes@1` のみ。
 
 `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。
 
-`schemaVersion` は `1` から始める。過去に設計上の試行版（v1/v2相当）はあったが保存済みデータは存在しないため、移行コードや旧版の読出し解釈を先回りして実装しない。スキーマを破壊的に変えるときに初めて `schemaVersion` を上げ、その時点で保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。
+`schemaVersion` は `3` から始める。保存済み `ScriptVersion` が存在しないため、v1/v2 の読出し解釈や移行関数は持たない。スキーマを破壊的に変えるときに初めて `schemaVersion` を上げ、その時点で保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
 ## セリフと音声
 
@@ -140,6 +140,12 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
         "startLineId": "line-point-1-1",
         "endLineId": "line-point-1-2"
       },
+      "layer": "background",
+      "order": 0,
+      "transition": {
+        "enter": { "preset": "fade", "durationMs": 350 },
+        "exit": { "preset": "none", "durationMs": 0 }
+      },
       "input": {
         "assetId": "asset-background-1",
         "fit": "cover"
@@ -149,13 +155,13 @@ Sceneはテンプレート上のまとまりで、`kind` によって型付き�
 }
 ```
 
-`range` は判別unionとし、表示区間を次のいずれかで指定する。
+`range` は判別unionとし、表示区間を次のいずれかで指定する。解決後は半開区間 `[start, end)` として扱う。
 
 - `{ "kind": "scene" }`: Scene全体。ラインを持たない導入・結びの背景やタイトルに使う。
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
 - `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
 
-MVPの編集画面は、各Sceneについて `media.full-bleed@1` と `media.card@1` をそれぞれ最大1件、`character.standing@2` を左右1体ずつ最大2件、いずれも `{ "kind": "scene" }` で編集する。背景とカードは画像・動画から、立ち絵は画像から選ぶ。立ち絵は「左（上）」「右（下）」の固定2枠を常に表示し、各枠でキャラクター・外観・倍率を編集する。位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は背景、カード、立ち絵、Scene本文・字幕とする。これは編集UIの範囲であり、ContentDocumentとAPIは複数Cue、`lines`、`offset`、他の対応VisualTemplateを引き続き検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。`@1` の保存済み版は `@1` のまま描画され、見た目を変えない。
+MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。立ち絵は一覧内の「左」「右」固定2行で `character.standing@2` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → Scene本文 → caption → overlay` で固定する。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
@@ -176,6 +182,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `media.card@1` | `assetId`, 見出し、補足文, `focalPoint?` | 対応 |
 | `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
 | `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
+| `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `backgroundColor?` | 対応。端末枠内に画像・動画を表示する複合ビジュアル。背景・カードに置ける |
 | `chart.bar@1` | タイトル、系列、数値、単位 | 将来 |
 | `table.simple@1` | 列定義、行、強調セル | Phase 1で最初に追加 |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |

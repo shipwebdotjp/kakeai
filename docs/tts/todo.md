@@ -6,11 +6,11 @@
 
 ### [x] T1 契約と文書
 
-- [x] ContentDocument v2（`Speaker.voiceProfileId` 必須）と v1→v2 正規化（読取）を `packages/contracts` に追加
+- [x] ContentDocument v3（`Speaker.voiceProfileId` 必須）を `packages/contracts` に追加（v1/v2 の正規化・移行コードは持たない）
 - [x] `VoiceProfile` DTO、作成・更新リクエスト、VOICEVOX 設定スキーマ、話者一覧 DTO を追加
 - [x] `tts` Job 種別、入力スナップショット、Job 結果 DTO、health capability、エラーコードを追加
 - [x] `CONTEXT.md` に Voice Profile を追加し、本フォルダと [../mvp/api-contract.md](../mvp/api-contract.md)、[../mvp/roadmap.md](../mvp/roadmap.md) を参照でつなぐ
-- 完了条件: `npm run typecheck` と契約テストが通り、v1/v2 の検証が成立する。
+- 完了条件: `npm run typecheck` と契約テストが通り、v3 の検証が成立する。
 
 ### [x] T2 永続化・アダプター・Job
 

@@ -1,38 +1,18 @@
 import { z } from "zod";
 import { localeSchema } from "./primitives";
-import { speakerSchema, speakerV1Schema } from "./speaker";
+import { speakerSchema } from "./speaker";
 import { characterSchema } from "./character";
 import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
 import { characterStandingV1, characterStandingV2 } from "../templates";
 
-export const CONTENT_SCHEMA_VERSION = 2 as const;
-export const LEGACY_CONTENT_SCHEMA_VERSION = 1 as const;
+export const CONTENT_SCHEMA_VERSION = 3 as const;
 
 export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;
 
-export const LEGACY_TEMPLATE_ID = "explanation-5-scenes" as const;
-
-function checkSceneComposition(
-  templateId: string,
-  kinds: readonly string[],
-  ctx: z.RefinementCtx,
-): void {
-  if (templateId === LEGACY_TEMPLATE_ID) {
-    const expected = ["intro", "point", "point", "point", "outro"];
-    const matches =
-      kinds.length === expected.length && kinds.every((kind, index) => kind === expected[index]);
-    if (!matches) {
-      ctx.addIssue({
-        code: "custom",
-        message: `${LEGACY_TEMPLATE_ID}@${TEMPLATE_VERSION} は 導入→要点×3→結び の固定5シーンをこの順で要求します`,
-        path: ["scenes"],
-      });
-    }
-    return;
-  }
+function checkSceneComposition(kinds: readonly string[], ctx: z.RefinementCtx): void {
   const ordered =
     kinds.length >= 2 &&
     kinds[0] === "intro" &&
@@ -73,7 +53,7 @@ function checkUnique(
 const baseDocumentShape = {
   locale: localeSchema,
   template: z.strictObject({
-    id: z.union([z.literal(TEMPLATE_ID), z.literal(LEGACY_TEMPLATE_ID)]),
+    id: z.literal(TEMPLATE_ID),
     version: z.literal(TEMPLATE_VERSION),
   }),
   characters: z.array(characterSchema),
@@ -82,13 +62,13 @@ const baseDocumentShape = {
   audioCues: z.array(audioCueSchema),
 };
 
-const contentDocumentV2Object = z.strictObject({
+const contentDocumentObject = z.strictObject({
   schemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
   speakers: z.array(speakerSchema),
   ...baseDocumentShape,
 });
 
-type ContentDocumentBase = z.infer<typeof contentDocumentV2Object>;
+type ContentDocumentBase = z.infer<typeof contentDocumentObject>;
 
 function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx): void {
   checkUnique(doc.scenes.map((scene) => scene.id), ctx, ["scenes"]);
@@ -113,7 +93,7 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
   checkUnique(doc.audioCues.map((cue) => cue.id), ctx, ["audioCues"]);
 
   const kinds = doc.scenes.map((scene) => scene.kind);
-  checkSceneComposition(doc.template.id, kinds, ctx);
+  checkSceneComposition(kinds, ctx);
 
   const takeById = new Map(doc.audioTakes.map((take) => [take.id, take]));
   for (const take of doc.audioTakes) {
@@ -171,7 +151,19 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
       }
     }
 
-    for (const cue of scene.visualCues) {
+    const orderByLayer = new Map<string, Set<number>>();
+    for (const [cueIndex, cue] of scene.visualCues.entries()) {
+      const orders = orderByLayer.get(cue.layer) ?? new Set<number>();
+      if (orders.has(cue.order)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${scene.id} の ${cue.layer} レイヤーで order ${cue.order} が重複しています`,
+          path: ["scenes", index, "visualCues", cueIndex, "order"],
+        });
+      }
+      orders.add(cue.order);
+      orderByLayer.set(cue.layer, orders);
+
       if (cue.range.kind === "lines") {
         const startIndex = localLineIds.indexOf(cue.range.startLineId);
         const endIndex = localLineIds.indexOf(cue.range.endLineId);
@@ -210,7 +202,10 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
             ? undefined
             : standingDefinition.inputSchema.safeParse(cue.input);
         if (parsed !== undefined && parsed.success) {
-          const { characterId, appearanceId } = parsed.data;
+          const { characterId, appearanceId } = parsed.data as {
+            characterId: string;
+            appearanceId: string;
+          };
           const appearanceIds = appearanceIdsByCharacter.get(characterId);
           if (appearanceIds === undefined) {
             ctx.addIssue({
@@ -252,29 +247,10 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
   }
 }
 
-export const contentDocumentSchema = contentDocumentV2Object.superRefine(validateContentDocument);
-
-const contentDocumentV1Object = z.strictObject({
-  schemaVersion: z.literal(LEGACY_CONTENT_SCHEMA_VERSION),
-  speakers: z.array(speakerV1Schema),
-  ...baseDocumentShape,
-});
-
-export const contentDocumentV1ToV2Schema = contentDocumentV1Object
-  .transform((doc): ContentDocument => ({
-    ...doc,
-    schemaVersion: CONTENT_SCHEMA_VERSION,
-    speakers: doc.speakers.map((speaker) => ({ ...speaker, voiceProfileId: null })),
-  }))
-  .pipe(contentDocumentSchema);
-
-export const contentDocumentInputSchema = z.union([
-  contentDocumentSchema,
-  contentDocumentV1ToV2Schema,
-]);
+export const contentDocumentSchema = contentDocumentObject.superRefine(validateContentDocument);
 
 export function parseContentDocument(input: unknown): ContentDocument {
-  return contentDocumentInputSchema.parse(input);
+  return contentDocumentSchema.parse(input);
 }
 
 export type ContentDocument = z.infer<typeof contentDocumentSchema>;

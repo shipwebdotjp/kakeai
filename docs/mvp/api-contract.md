@@ -77,7 +77,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | --- | --- | --- | --- |
 | GET | /health | 200 | APIとローカルレンダーワーカーの稼働確認 |
 | GET | /works | 200 | 作品一覧 |
-| POST | /works | 201 | Work、ja-JP Edition、ContentDocument v1の初期ScriptVersionを作成 |
+| POST | /works | 201 | Work、ja-JP Edition、ContentDocument v3の初期ScriptVersionを作成 |
 | GET | /works/:workId | 200 | 作品とEditionの取得 |
 | PATCH | /works/:workId | 200 | 管理上の作品名を変更 |
 | DELETE | /works/:workId | 204 | 作品、版、Job、Artifactを明示削除 |
@@ -177,7 +177,7 @@ latestRenderJobはRender Jobがまだないときはnullとする。失敗した
 
 ### 作品作成と名称変更
 
-POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 1` の `explanation-scenes@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点3件、結びとし、各Sceneにはテンプレート既定の `accentColor` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
+POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 3` の `explanation-scenes@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点3件、結びとし、各Sceneにはテンプレート既定の `accentColor` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
 
 ~~~http
 POST /api/v1/works
@@ -262,13 +262,13 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
 
 ### 台本の保存
 
-POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 1` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
+POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 3` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
 
 ~~~jsonc
 {
   "sourceScriptVersionId": null,
   "content": {
-    "schemaVersion": 1,
+    "schemaVersion": 3,
     "locale": "ja-JP",
     "template": {
       "id": "explanation-scenes",
@@ -297,7 +297,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
     "versionNumber": 3,
     "contentSchemaVersion": 1,
     "content": {
-      "schemaVersion": 1,
+      "schemaVersion": 3,
       "locale": "ja-JP",
       "template": {
         "id": "explanation-scenes",
@@ -602,7 +602,7 @@ RENDER_INPUT_INVALIDはキュー投入前の422であり、Job error codeでは�
 - APIはJSON APIとmultipartアップロードで厳密な `Host` と `Origin` を検証する（独自ヘッダ・起動時トークンは用いない）。同一originのUIシェルおよびAPIのGET応答はプロセスごとにランダムな `HttpOnly; SameSite=Strict; Path=/api/v1/` のメディアセッションCookieを発行する。素材・Artifactのcontent配信は、そのCookieとHost（および存在する場合のOrigin／Fetch Site）を検証して、通常のブラウザsubresource・Range requestを許可する。JSON APIはCookieだけを資格情報として受け入れない。
 - 素材とArtifactのstorageKeyは内容ハッシュ由来のパスとし、`originalFilename` をパス生成に使わない。
 - アプリ管理データのルートはOS提供のアプリデータディレクトリ（macOSではApplication Support配下）とし、特定OSの絶対パスをコードへ埋め込まない。開発時は環境変数 `KAKEAI_DATA_DIR` で差し替える。`db/`、`assets/`、`artifacts/`、`tmp/` を分け、`storageKey` はルート相対で解決する。
-- APIがScriptVersionを返すときはDBのcontentJsonを、そのschemaVersionに対応するZodスキーマで復元・検証してcontentとして返す。MVPの保存済み版は `schemaVersion: 1` のみで、旧版の読出し解釈は持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
+- APIがScriptVersionを返すときはDBのcontentJsonを、そのschemaVersionに対応するZodスキーマで復元・検証してcontentとして返す。MVPの保存済み版は `schemaVersion: 3` のみで、旧版の読出し解釈は持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
 - Assetの取り込みは、一時領域への保存、ハッシュ計算とメディア検査、既存SHA-256行とそのstorageKeyの確認、アプリ管理領域への確定、Asset行とasset_ingest Jobの作成の順に行う。workerは原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってからAssetをreadyにする。既存Assetの実体が欠損・破損している場合は、内容ハッシュ由来の同じstorageKeyを上書きして取り込み直す。競合アップロードは一意制約で直列化し、失敗時の一時ファイルは清掃する。
 - すべての書込みはDBトランザクションの単位を [spec.md](./spec.md) の「書込みとJob状態遷移」に合わせる。ファイルシステム操作と完全な原子性は持てないため、確定前のファイルを公開せず、確定に失敗した孤立ファイルは起動時に清掃する。削除時はDBから参照を切った後に実体を隔離し、隔離ファイルは起動時に清掃する。
 - プレビューとレンダーは同じコンパイラと信頼済みVisualTemplateを使い、Asset解決だけを `assetResolver` の注入で切り替えて生成する。render時は正本JSON、Rendition（無ければ原本）、テンプレート版、出力設定をJobスナップショットへ固定し、ワーカーはそのJSONを実行時にコンパイルする。実行ツールの版は診断用に記録するが、完全な再現性は保証しない。

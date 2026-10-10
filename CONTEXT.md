@@ -73,8 +73,24 @@ A trusted reusable visual expression with a defined input contract.
 _Avoid_: Visual cue, scene
 
 **Visual Cue**:
-An instruction to display one Visual Template with specific inputs over a segment of a Scene.
+An instruction to display one Visual Template with specific inputs over a segment of a Scene, on a named layer and with an enter/exit transition.
 _Avoid_: Asset, template
+
+**Layer**:
+A named, ordered region of a Scene where Visual Cues are drawn (background, card, standing, overlay). It fixes the draw order independent of cue array order.
+_Avoid_: Visual cue, track
+
+**Nested Visual**:
+A media asset or a trusted template instance placed inside a Composite Visual Template's input. It carries no range, layer, or transition of its own.
+_Avoid_: Visual cue, child scene
+
+**Composite Visual Template**:
+A trusted Visual Template that composes Nested Visuals into a layout with its own internal animation, and can be placed as a background or card.
+_Avoid_: Composition HTML, scene
+
+**Cue Transition**:
+The enter/exit presentation of a Visual Cue, expressed only as a registered preset and a duration, bounded within the cue's range.
+_Avoid_: animation, keyframe
 
 **Audio Cue**:
 An instruction to place an audio Asset, such as background music, over a range of a work.

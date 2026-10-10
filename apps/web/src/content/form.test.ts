@@ -4,6 +4,7 @@ import {
   createInitialContentDocument,
   type ContentDocument,
   type PointScene,
+  type VisualCue,
 } from "@kakeai/contracts";
 import {
   buildContentDocument,
@@ -12,6 +13,21 @@ import {
   createPointSceneFormValue,
   toFormValues,
 } from "./form";
+
+const transition = {
+  enter: { preset: "fade", durationMs: 350 },
+  exit: { preset: "none", durationMs: 0 },
+} as const;
+
+function vc(partial: Partial<VisualCue> & Pick<VisualCue, "id" | "template" | "input">): VisualCue {
+  return {
+    range: { kind: "scene" },
+    layer: "background",
+    order: 0,
+    transition,
+    ...partial,
+  } as VisualCue;
+}
 
 function pointScenes(document: ContentDocument): PointScene[] {
   return document.scenes.filter((scene): scene is PointScene => scene.kind === "point");
@@ -29,6 +45,21 @@ function standingInput(cue: { input: unknown }): {
     side: "left" | "right";
     scale: number;
   };
+}
+
+function standingV1(id: string, x: number, scale = 1): VisualCue {
+  return vc({
+    id,
+    template: { id: "character.standing", version: 1 },
+    layer: "standing",
+    input: {
+      characterId: "character-rin",
+      appearanceId: "appearance-smile",
+      x,
+      y: 0.85,
+      scale,
+    },
+  });
 }
 
 describe("buildContentDocument", () => {
@@ -53,67 +84,85 @@ describe("buildContentDocument", () => {
     expect(rebuilt.scenes[2]!.id).toBe(points[0]!.id);
   });
 
-  it("updates background and card cues while keeping unmanaged cues", () => {
-    const base = createInitialContentDocument();
-    const point = pointScenes(base)[0]!;
-    point.lines = [
-      {
-        id: "l1",
-        speakerId: null,
-        captionText: "セリフ",
-        speechText: "せりふ",
-        selectedAudioTakeId: null,
-      },
-    ];
-    point.visualCues = [
-      {
-        id: "vc-lines",
-        template: { id: "media.full-bleed", version: 1 },
-        range: { kind: "lines", startLineId: "l1", endLineId: "l1" },
-        input: { assetId: "asset-line-bg", fit: "cover" },
-      },
-      {
-        id: "vc-old-bg",
-        template: { id: "media.full-bleed", version: 1 },
-        range: { kind: "scene" },
-        input: { assetId: "asset-old", fit: "cover" },
-      },
-    ];
-
-    const values = toFormValues(base);
-    const target = values.scenes.find((scene) => scene.id === point.id)!;
-    target.backgroundAssetId = "asset-new";
-    target.cardAssetId = "asset-card";
-    target.cardHeading = "カード見出し";
-
-    const rebuilt = buildContentDocument(base, values);
-    const rebuiltPoint = pointScenes(rebuilt)[0]!;
-    const sceneCues = rebuiltPoint.visualCues.filter((cue) => cue.range.kind === "scene");
-    const assetIds = sceneCues.map((cue) => (cue.input as { assetId: string }).assetId);
-    expect(rebuiltPoint.visualCues.some((cue) => cue.id === "vc-lines")).toBe(true);
-    expect(assetIds).toContain("asset-new");
-    expect(assetIds).not.toContain("asset-old");
-    expect(assetIds).toContain("asset-card");
-    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
-  });
-
-  it("dissolves a cue when the selection is cleared", () => {
+  it("updates an editable cue and keeps unmanaged cues", () => {
     const base = createInitialContentDocument();
     const intro = base.scenes[0]!;
     intro.visualCues = [
-      {
+      vc({
         id: "vc-bg",
         template: { id: "media.full-bleed", version: 1 },
-        range: { kind: "scene" },
-        input: { assetId: "asset-bg", fit: "cover" },
-      },
+        input: { assetId: "asset-old", fit: "cover" },
+      }),
+      vc({
+        id: "vc-text",
+        template: { id: "text.body", version: 1 },
+        layer: "overlay",
+        input: { heading: "見出し", body: "本文" },
+      }),
     ];
 
     const values = toFormValues(base);
-    values.scenes[0]!.backgroundAssetId = null;
+    const target = values.scenes[0]!;
+    const bg = target.cues.find((cue) => cue.id === "vc-bg")!;
+    bg.assetId = "asset-new";
+
+    const rebuilt = buildContentDocument(base, values);
+    const cues = rebuilt.scenes[0]!.visualCues;
+    const byId = new Map(cues.map((cue) => [cue.id, cue]));
+    expect((byId.get("vc-bg")!.input as { assetId: string }).assetId).toBe("asset-new");
+    expect(byId.get("vc-text")!.template).toEqual({ id: "text.body", version: 1 });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("dissolves a cue when its asset selection is cleared", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover" },
+      }),
+    ];
+
+    const values = toFormValues(base);
+    values.scenes[0]!.cues[0]!.assetId = null;
 
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.scenes[0]!.visualCues).toEqual([]);
+  });
+
+  it("round-trips a device-frame composition with its nested media", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-device",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "card",
+        input: {
+          frame: "phone",
+          backgroundColor: "#112233",
+          screen: { kind: "media", assetId: "asset-screen", fit: "contain" },
+        },
+      }),
+    ];
+
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.assetId).toBe("asset-screen");
+    expect(cue.frame).toBe("phone");
+    cue.assetId = "asset-screen-2";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
+      screen: { assetId: string; fit: string };
+      frame: string;
+      backgroundColor: string;
+    };
+    expect(input.screen.assetId).toBe("asset-screen-2");
+    expect(input.screen.fit).toBe("contain");
+    expect(input.frame).toBe("phone");
+    expect(input.backgroundColor).toBe("#112233");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
   it("builds a valid document when a new point scene is added", () => {
@@ -129,14 +178,12 @@ describe("buildContentDocument", () => {
 
   it("preserves focalPoint when a managed cue is re-saved", () => {
     const base = createInitialContentDocument();
-    const intro = base.scenes[0]!;
-    intro.visualCues = [
-      {
+    base.scenes[0]!.visualCues = [
+      vc({
         id: "vc-bg",
         template: { id: "media.full-bleed", version: 1 },
-        range: { kind: "scene" },
         input: { assetId: "asset-bg", fit: "cover", focalPoint: { x: 0.2, y: 0.8 } },
-      },
+      }),
     ];
 
     const values = toFormValues(base);
@@ -145,7 +192,8 @@ describe("buildContentDocument", () => {
     expect((cue.input as { focalPoint?: unknown }).focalPoint).toEqual({ x: 0.2, y: 0.8 });
   });
 
-  it("prunes orphaned takes and scene audio cues when a scene is deleted", () => {    const base = createInitialContentDocument();
+  it("prunes orphaned takes and scene audio cues when a scene is deleted", () => {
+    const base = createInitialContentDocument();
     const point = pointScenes(base)[0]!;
     point.lines = [
       {
@@ -176,15 +224,6 @@ describe("buildContentDocument", () => {
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.audioTakes).toEqual([]);
     expect(rebuilt.audioCues.map((cue) => cue.id)).toEqual(["cue-work"]);
-    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
-  });
-
-  it("stamps the current template when saving a legacy document", () => {
-    const base = createInitialContentDocument();
-    base.template = { id: "explanation-5-scenes", version: 1 };
-
-    const rebuilt = buildContentDocument(base, toFormValues(base));
-    expect(rebuilt.template).toEqual({ id: "explanation-scenes", version: 1 });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
@@ -242,7 +281,8 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
-  it("manages a single work BGM and keeps other audio cues", () => {    const base = createInitialContentDocument();
+  it("manages a single work BGM and keeps other audio cues", () => {
+    const base = createInitialContentDocument();
     base.audioCues = [
       { id: "cue-work", role: "bgm", assetId: "asset-bgm", range: { kind: "work" }, gainDb: -18, loop: true },
       { id: "cue-scene", role: "sfx", assetId: "asset-sfx", range: { kind: "work" } },
@@ -276,21 +316,7 @@ describe("buildContentDocument", () => {
         ],
       },
     ];
-    const point = pointScenes(base)[0]!;
-    point.visualCues = [
-      {
-        id: "vc-standing",
-        template: { id: "character.standing", version: 1 },
-        range: { kind: "scene" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
-          scale: 1,
-        },
-      },
-    ];
+    base.scenes[1]!.visualCues = [standingV1("vc-standing", 0.85)];
 
     const values = toFormValues(base);
     expect(values.characters).toEqual([
@@ -309,7 +335,8 @@ describe("buildContentDocument", () => {
         ],
       },
     ]);
-    const target = values.scenes.find((scene) => scene.id === point.id)!;
+    const target = values.scenes[1]!;
+    expect(target.cues).toEqual([]);
     expect(target.standings).toEqual([
       { cueId: null, characterId: null, appearanceId: null, side: "left", scale: 1 },
       {
@@ -322,9 +349,7 @@ describe("buildContentDocument", () => {
     ]);
 
     const rebuilt = buildContentDocument(base, values);
-    expect(rebuilt.characters[0]!.id).toBe("character-rin");
-    expect(rebuilt.characters[0]!.appearances[0]!.id).toBe("appearance-smile");
-    const cue = rebuilt.scenes.find((scene) => scene.id === point.id)!.visualCues[0]!;
+    const cue = rebuilt.scenes[1]!.visualCues[0]!;
     expect(cue.id).toBe("vc-standing");
     expect(cue.template).toEqual({ id: "character.standing", version: 2 });
     expect(standingInput(cue)).toEqual({
@@ -365,8 +390,7 @@ describe("buildContentDocument", () => {
     ];
 
     const values = toFormValues(base);
-    const intro = values.scenes[0]!;
-    intro.standings = [
+    values.scenes[0]!.standings = [
       {
         cueId: null,
         characterId: "character-rin",
@@ -380,7 +404,7 @@ describe("buildContentDocument", () => {
     const cue = rebuilt.scenes[0]!.visualCues.find(
       (entry) => entry.template.id === "character.standing",
     )!;
-    expect(cue.id).toBe("visual-scene-intro-standing-left");
+    expect(cue.id).toContain("standing-left");
     expect(standingInput(cue)).toEqual({
       characterId: "character-rin",
       appearanceId: "appearance-smile",
@@ -441,20 +465,7 @@ describe("buildContentDocument", () => {
         ],
       },
     ];
-    base.scenes[0]!.visualCues = [
-      {
-        id: "vc-standing",
-        template: { id: "character.standing", version: 1 },
-        range: { kind: "scene" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.5,
-          y: 0.5,
-          scale: 1,
-        },
-      },
-    ];
+    base.scenes[0]!.visualCues = [standingV1("vc-standing", 0.5)];
 
     const values = toFormValues(base);
     values.scenes[0]!.standings = [];
@@ -476,30 +487,8 @@ describe("buildContentDocument", () => {
       },
     ];
     base.scenes[0]!.visualCues = [
-      {
-        id: "vc-left",
-        template: { id: "character.standing", version: 1 },
-        range: { kind: "scene" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.2,
-          y: 0.5,
-          scale: 1,
-        },
-      },
-      {
-        id: "vc-right",
-        template: { id: "character.standing", version: 1 },
-        range: { kind: "scene" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.5,
-          scale: 1,
-        },
-      },
+      standingV1("vc-left", 0.2),
+      { ...standingV1("vc-right", 0.85), order: 1 },
     ];
 
     const values = toFormValues(base);
@@ -539,41 +528,11 @@ describe("buildContentDocument", () => {
     ];
     point.visualCues = [
       {
-        id: "vc-lines-standing",
-        template: { id: "character.standing", version: 1 },
+        ...standingV1("vc-lines-standing", 0.1, 0.5),
         range: { kind: "lines", startLineId: "l1", endLineId: "l1" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.1,
-          y: 0.2,
-          scale: 0.5,
-        },
       },
-      {
-        id: "vc-standing",
-        template: { id: "character.standing", version: 1 },
-        range: { kind: "scene" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
-          scale: 1,
-        },
-      },
-      {
-        id: "vc-standing-extra",
-        template: { id: "character.standing", version: 1 },
-        range: { kind: "scene" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.2,
-          y: 0.3,
-          scale: 0.75,
-        },
-      },
+      standingV1("vc-standing", 0.85),
+      { ...standingV1("vc-standing-extra", 0.2, 0.75), order: 1 },
     ];
 
     const values = toFormValues(base);
@@ -622,20 +581,7 @@ describe("buildContentDocument", () => {
       },
     ];
     base.speakers = [{ id: "speaker-narrator", name: "ナレーター", characterId: "character-rin", voiceProfileId: null }];
-    base.scenes[0]!.visualCues = [
-      {
-        id: "vc-standing",
-        template: { id: "character.standing", version: 1 },
-        range: { kind: "scene" },
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
-          scale: 1,
-        },
-      },
-    ];
+    base.scenes[0]!.visualCues = [standingV1("vc-standing", 0.85)];
 
     const values = toFormValues(base);
     values.characters = [];
@@ -758,18 +704,7 @@ describe("buildContentDocument", () => {
       },
     ];
     base.speakers = [{ id: "speaker-narrator", name: "ナレーター", characterId: "character-rin", voiceProfileId: null }];
-    const standingCue = (id: string) => ({
-      id,
-      template: { id: "character.standing", version: 1 },
-      range: { kind: "scene" as const },
-      input: {
-        characterId: "character-rin",
-        appearanceId: "appearance-smile",
-        x: 0.85,
-        y: 0.85,
-        scale: 1,
-      },
-    });
+    const standingCue = (id: string) => standingV1(id, 0.85);
     base.scenes[0]!.visualCues = [standingCue("vc-a")];
     base.scenes[1]!.visualCues = [standingCue("vc-b")];
 

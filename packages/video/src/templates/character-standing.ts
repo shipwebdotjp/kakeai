@@ -1,13 +1,14 @@
 import {
-  characterStandingV1,
-  characterStandingV2,
+  characterStandingV1InputSchema,
+  characterStandingV2InputSchema,
   type ContentDocument,
 } from "@kakeai/contracts";
 import type { AssetResolver } from "../resolver";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
 import { OUTPUT_WIDTH } from "../meta";
-import { resolveCueMedia, type RenderedMedia } from "./shared";
+import type { RenderedCue, RenderContext } from "../render-context";
+import { resolveCueMedia } from "./shared";
 
 const STANDING_BASE_WIDTH_PX = 480;
 const STANDING_EDGE_MARGIN = 0.03;
@@ -48,61 +49,54 @@ function resolveStandingAppearance(
   return { src: escapeHtmlAttribute(media.url), assetId: appearance.assetId };
 }
 
-export function renderCharacterStandingV1(
-  input: unknown,
-  path: (string | number)[],
-  document: ContentDocument,
-  assetResolver: AssetResolver,
-  mediaElementId: string,
-): RenderedMedia {
-  const parsed = characterStandingV1.inputSchema.safeParse(input);
+export function renderCharacterStandingV1(input: unknown, context: RenderContext): RenderedCue {
+  const parsed = characterStandingV1InputSchema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
-      { path, code: "invalid_input", message: "character.standing の入力が不正です。" },
+      { path: context.path, code: "invalid_input", message: "character.standing の入力が不正です。" },
     ]);
   }
   const { characterId, appearanceId, x, y, scale } = parsed.data;
   const { src, assetId } = resolveStandingAppearance(
     characterId,
     appearanceId,
-    document,
-    path,
-    assetResolver,
+    context.document,
+    context.path,
+    context.assetResolver,
   );
+  const id = context.scope.id("img");
   const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale);
   return {
-    html: `<img id="${mediaElementId}" class="kakeai-standing" src="${src}" style="left:${x * 100}%;top:${y * 100}%;width:${widthPx}px;" alt="">`,
+    html: `<img id="${id}" class="kakeai-standing" src="${src}" style="left:${x * 100}%;top:${y * 100}%;width:${widthPx}px;" alt="">`,
     assetIds: [assetId],
+    animation: [],
   };
 }
 
-export function renderCharacterStandingV2(
-  input: unknown,
-  path: (string | number)[],
-  document: ContentDocument,
-  assetResolver: AssetResolver,
-  mediaElementId: string,
-): RenderedMedia {
-  const parsed = characterStandingV2.inputSchema.safeParse(input);
+export function renderCharacterStandingV2(input: unknown, context: RenderContext): RenderedCue {
+  const parsed = characterStandingV2InputSchema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
-      { path, code: "invalid_input", message: "character.standing の入力が不正です。" },
+      { path: context.path, code: "invalid_input", message: "character.standing の入力が不正です。" },
     ]);
   }
   const { characterId, appearanceId, side, scale } = parsed.data;
   const { src, assetId } = resolveStandingAppearance(
     characterId,
     appearanceId,
-    document,
-    path,
-    assetResolver,
+    context.document,
+    context.path,
+    context.assetResolver,
   );
   const layout = standingPosition(side, scale);
+  const id = context.scope.id("img");
   const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale);
   const leftPercent = Math.round(layout.x * 10000) / 100;
   const topPercent = Math.round(layout.y * 10000) / 100;
   return {
-    html: `<div class="kakeai-standingv2" style="left:${leftPercent}%;top:${topPercent}%;"><img id="${mediaElementId}" class="kakeai-standingimg" src="${src}" style="width:${widthPx}px;" alt=""></div>`,
+    html: `<div class="kakeai-standingv2" style="left:${leftPercent}%;top:${topPercent}%;"><img id="${id}" class="kakeai-standingimg" src="${src}" style="width:${widthPx}px;" alt=""></div>`,
     assetIds: [assetId],
+    animation: [],
+    motionTargetId: id,
   };
 }

@@ -31,6 +31,12 @@ export function validContentDocument(): ContentDocument {
             id: "vc-intro-bg",
             template: { id: "media.full-bleed", version: 1 },
             range: { kind: "scene" },
+            layer: "background",
+            order: 0,
+            transition: {
+              enter: { preset: "fade", durationMs: 350 },
+              exit: { preset: "none", durationMs: 0 },
+            },
             input: { assetId: "asset-bg", fit: "cover" },
           },
         ],

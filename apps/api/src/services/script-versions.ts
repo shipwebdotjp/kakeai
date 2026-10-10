@@ -4,6 +4,7 @@ import {
   HYPERFRAMES_PLAYER_VERSION,
   compileDocument,
   CompositionCompileError,
+  collectCueTransitionIssues,
   type CompiledComposition,
   type ResolvedAssetKind,
 } from "@kakeai/video";
@@ -302,6 +303,34 @@ export async function saveScriptVersion(
         message: `言語版のロケール(${edition.locale})と一致しません。`,
       },
     ]);
+  }
+
+  let transitionIssues: ReturnType<typeof collectCueTransitionIssues> = [];
+  try {
+    transitionIssues = collectCueTransitionIssues(content);
+  } catch (error) {
+    if (!(error instanceof CompositionCompileError)) {
+      throw error;
+    }
+    const fatal = error.issues.filter((issue) => issue.code !== "fixed_duration_overflow");
+    if (fatal.length > 0) {
+      throw validationError(
+        fatal.map((issue) => ({
+          path: issue.path,
+          code: issue.code,
+          message: issue.message,
+        })),
+      );
+    }
+  }
+  if (transitionIssues.length > 0) {
+    throw validationError(
+      transitionIssues.map((issue) => ({
+        path: issue.path,
+        code: issue.code,
+        message: issue.message,
+      })),
+    );
   }
 
   if (sourceScriptVersionId !== null) {
