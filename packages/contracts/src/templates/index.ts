@@ -32,7 +32,7 @@ export type TemplateFieldSpec =
   | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[] }
   | { kind: "text"; key: string; label: string }
   | { kind: "optionalText"; key: string; label: string }
-  | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[] }
+  | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
   | { kind: "color"; key: string; label: string }
   | { kind: "animation"; key: string; label: string };
 
@@ -83,7 +83,7 @@ const textTitleV1: VisualTemplateDefinition = {
   inputFields: [
     { kind: "text", key: "title", label: "タイトル" },
     { kind: "text", key: "subtitle", label: "サブタイトル" },
-    { kind: "select", key: "anchor", label: "配置", options: ANCHOR_OPTIONS },
+    { kind: "select", key: "anchor", label: "配置", options: ANCHOR_OPTIONS, optional: true },
   ],
   collectAssetRefs: () => [],
 };

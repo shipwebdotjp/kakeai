@@ -796,6 +796,26 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("keeps an unset optional select absent on round-trip", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-title",
+        template: { id: "text.title", version: 1 },
+        layer: "overlay",
+        input: { title: "タイトル", subtitle: "" },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.fields.anchor).toBe("");
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as Record<string, unknown>;
+    expect("anchor" in input).toBe(false);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
   it("initializes device-frame@2 fields with animation defaults", () => {
     const cueValue = createCueFormValue({
       sceneId: "scene-intro",

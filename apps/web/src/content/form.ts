@@ -296,7 +296,11 @@ function readCueFields(
       case "select": {
         const value = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
         const allowed = field.options.map((option) => option.value);
-        result[field.key] = allowed.includes(value) ? value : (field.options[0]?.value ?? "");
+        result[field.key] = allowed.includes(value)
+          ? value
+          : field.optional
+            ? ""
+            : (field.options[0]?.value ?? "");
         break;
       }
       case "animation": {
@@ -562,7 +566,13 @@ function buildCueInput(
         break;
       case "select": {
         const allowed = field.options.map((option) => option.value);
-        input[field.key] = allowed.includes(raw) ? raw : (field.options[0]?.value ?? "");
+        if (allowed.includes(raw)) {
+          input[field.key] = raw;
+        } else if (field.optional) {
+          delete input[field.key];
+        } else {
+          input[field.key] = field.options[0]?.value ?? "";
+        }
         break;
       }
       case "color": {

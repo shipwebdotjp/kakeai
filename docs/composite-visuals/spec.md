@@ -19,8 +19,8 @@
   "layer": "background" | "card" | "standing" | "overlay",
   "order": 0,
   "transition": {
-    "enter": { "preset": "none" | "fade", "durationMs": 0 },
-    "exit":  { "preset": "none" | "fade", "durationMs": 0 }
+    "enter": { "preset": "none" | "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "scale-in", "durationMs": 0 },
+    "exit":  { "preset": "none" | "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "scale-in", "durationMs": 0 }
   },
   "template": { "id": "...", "version": 1 },
   "input": {}
@@ -66,8 +66,8 @@ NestedVisual =
 
 | VisualTemplate | layer | 入力 | 状態 |
 | --- | --- | --- | --- |
-| `text.title@1` | overlay | title, subtitle, anchor | UI未対応（非破壊保持） |
-| `text.body@1` | overlay | heading, body | UI未対応（非破壊保持） |
+| `text.title@1` | overlay | title, subtitle, anchor? | 対応（inputFieldsで編集） |
+| `text.body@1` | overlay | heading, body | 対応（inputFieldsで編集） |
 | `media.full-bleed@1` | background | assetId, fit, focalPoint? | 対応 |
 | `media.card@1` | card | assetId, heading, caption?, focalPoint? | 対応 |
 | `character.standing@1` | standing | characterId, appearanceId, x, y, scale | 読出しのみ |

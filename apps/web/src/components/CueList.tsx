@@ -255,6 +255,7 @@ function CueRow({
               field={field}
               values={cue.fields}
               setField={setField}
+              animationPresets={definition?.animationPolicy.presets ?? ANIMATION_PRESETS}
             />
           ))}
         </div>
@@ -267,9 +268,10 @@ interface CueFieldProps {
   field: TemplateFieldSpec;
   values: Record<string, string>;
   setField: (key: string, value: string) => void;
+  animationPresets: readonly AnimationPreset[];
 }
 
-function CueField({ field, values, setField }: CueFieldProps) {
+function CueField({ field, values, setField, animationPresets }: CueFieldProps) {
   const value = values[field.key] ?? "";
   switch (field.kind) {
     case "media":
@@ -318,6 +320,7 @@ function CueField({ field, values, setField }: CueFieldProps) {
             value={value}
             onChange={(event) => setField(field.key, event.target.value)}
           >
+            {field.optional && <option value="">未指定</option>}
             {field.options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -349,7 +352,7 @@ function CueField({ field, values, setField }: CueFieldProps) {
               value={value.length > 0 ? value : "none"}
               onChange={(event) => setField(field.key, event.target.value)}
             >
-              {ANIMATION_PRESETS.map((preset: AnimationPreset) => (
+              {animationPresets.map((preset) => (
                 <option key={preset} value={preset}>
                   {PRESET_LABELS[preset] ?? preset}
                 </option>
