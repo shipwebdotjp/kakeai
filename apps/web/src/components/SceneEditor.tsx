@@ -8,23 +8,30 @@ import {
 } from "react-hook-form";
 import {
   contentDocumentSchema,
+  type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
   type ContentDocument,
   type ScriptVersion,
+  type TtsJobResult,
   type Warning,
 } from "@kakeai/contracts";
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
   useAdapterVoicesMap,
+  useBulkGenerateTtsTakes,
   useCharacters,
   useSaveScriptVersion,
   useVoiceProfiles,
+  type BulkTtsFailure,
 } from "../api/hooks";
 import {
   buildContentDocument,
+  bulkTtsCandidateLineIds,
   cloneSceneFormValue,
   countCharacterFormUsage,
   createPointSceneFormValue,
+  generatedTakePolicy,
+  mergeTake,
   newAppearanceId,
   newCharacterId,
   newSceneId,
@@ -133,6 +140,13 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{
+    succeeded: number;
+    excluded: BulkTtsJobExclusion[];
+    failed: BulkTtsFailure[];
+  } | null>(null);
+  const bulkGenerate = useBulkGenerateTtsTakes(scriptVersionId);
 
   useEffect(() => {
     if (savedAtMs === null) {
@@ -142,7 +156,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     return () => clearTimeout(timer);
   }, [savedAtMs]);
 
-  const { register, control, handleSubmit, reset, getValues, setValue } =
+  const { register, control, handleSubmit, reset, getValues, setValue, formState } =
     useForm<DocumentFormValues>({
       defaultValues: toFormValues(base),
     });
@@ -204,6 +218,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         onSuccess: (result) => {
           setWarnings(result.warnings);
           setSavedAtMs(Date.now());
+          setBulkResult(null);
           onSaved?.(result.scriptVersion);
         },
       });
@@ -261,6 +276,58 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       result.second,
       ...scenes.slice(sceneIndex + 1),
     ]);
+  };
+
+  const bulkCandidateCount = useMemo(() => bulkTtsCandidateLineIds(base).length, [base]);
+
+  const addBulkTake = (narrationSegmentId: string, result: TtsJobResult) => {
+    const scenes = getValues("scenes");
+    for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex += 1) {
+      const scene = scenes[sceneIndex];
+      if (scene === undefined) {
+        continue;
+      }
+      const lineIndex = scene.lines.findIndex((line) => line.id === narrationSegmentId);
+      if (lineIndex === -1) {
+        continue;
+      }
+      const line = scene.lines[lineIndex];
+      if (line === undefined) {
+        continue;
+      }
+      const next = mergeTake(
+        line,
+        { assetId: result.assetId, durationMs: result.durationMs, source: "tts" },
+        generatedTakePolicy("bulk").select,
+      );
+      setValue(`scenes.${sceneIndex}.lines.${lineIndex}.takes`, next.takes, { shouldDirty: true });
+      setValue(`scenes.${sceneIndex}.lines.${lineIndex}.selectedAudioTakeId`, next.selectedAudioTakeId, {
+        shouldDirty: true,
+      });
+      return;
+    }
+  };
+
+  const onBulkGenerate = () => {
+    setBulkResult(null);
+    setBulkProgress(null);
+    bulkGenerate.mutate(
+      {
+        onProgress: (done, total) => setBulkProgress({ done, total }),
+        onJobSucceeded: (result) => addBulkTake(result.narrationSegmentId, result),
+      },
+      {
+        onSuccess: (summary) => {
+          setBulkResult({
+            succeeded: summary.succeeded,
+            excluded: summary.excluded,
+            failed: summary.failed,
+          });
+          setBulkProgress(null);
+        },
+        onError: () => setBulkProgress(null),
+      },
+    );
   };
 
   const addSpeakerFor = (characterId: string, name: string, voiceProfileId: string | null) => {
@@ -380,17 +447,69 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   return (
     <>
     <form onSubmit={onSubmit}>
-      <div id="editor-actionbar" className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
-        <button type="submit" className={buttonPrimaryClass} disabled={save.isPending}>
+      <div
+        id="editor-actionbar"
+        className="sticky top-0 z-10 flex flex-wrap items-center gap-3 bg-surface py-2.5"
+      >
+        <button
+          type="submit"
+          className={buttonPrimaryClass}
+          disabled={save.isPending || bulkGenerate.isPending}
+        >
           保存
         </button>
+        <button
+          type="button"
+          className={buttonNeutralClass}
+          disabled={formState.isDirty || bulkGenerate.isPending || bulkCandidateCount === 0}
+          onClick={onBulkGenerate}
+        >
+          {bulkGenerate.isPending ? "一括生成中…" : `未音声を一括生成（${bulkCandidateCount}）`}
+        </button>
+        {bulkProgress !== null && (
+          <span className={metaTextClass}>
+            進捗 {bulkProgress.done}/{bulkProgress.total}
+          </span>
+        )}
+        {formState.isDirty && !bulkGenerate.isPending && bulkCandidateCount > 0 && (
+          <span className={metaTextClass}>保存すると一括生成できます</span>
+        )}
         {savedAtMs !== null && (
           <span className={metaTextClass}>
             保存しました（{new Date(savedAtMs).toLocaleTimeString("ja-JP")}）
           </span>
         )}
         {save.isError && <span className={errorTextClass}>{errorMessage(save.error)}</span>}
+        {bulkGenerate.isError && (
+          <span className={errorTextClass}>{errorMessage(bulkGenerate.error)}</span>
+        )}
       </div>
+
+      {bulkResult !== null && (
+        <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
+          <strong>一括生成の結果</strong>
+          <p>
+            成功 {bulkResult.succeeded} 件 / 対象外 {bulkResult.excluded.length} 件 / 失敗{" "}
+            {bulkResult.failed.length} 件（追加した音声は「保存」で台本に反映されます）
+          </p>
+          {bulkResult.excluded.length > 0 && (
+            <ul>
+              {bulkResult.excluded.map((entry) => (
+                <li key={`excluded-${entry.narrationSegmentId}`}>
+                  対象外: {entry.message}
+                </li>
+              ))}
+            </ul>
+          )}
+          {bulkResult.failed.length > 0 && (
+            <ul>
+              {bulkResult.failed.map((entry) => (
+                <li key={`failed-${entry.narrationSegmentId}`}>失敗: {entry.message}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {warnings.length > 0 && (
         <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
@@ -631,6 +750,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   voiceProfiles={voiceProfiles.data ?? []}
                   adapterVoices={adapterVoices}
                   savedVoiceByLineId={savedVoiceByLineId}
+                  bulkRunning={bulkGenerate.isPending}
                   onSplitScene={onSplitScene}
                 />
             )}

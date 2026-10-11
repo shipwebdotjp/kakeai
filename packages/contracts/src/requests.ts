@@ -40,9 +40,12 @@ export const createTtsJobRequestSchema = z.strictObject({
     .default(DEFAULT_TTS_SPEED_SCALE),
 });
 
+export const createBulkTtsJobsRequestSchema = z.strictObject({});
+
 export type CreateWorkRequest = z.infer<typeof createWorkRequestSchema>;
 export type UpdateWorkRequest = z.infer<typeof updateWorkRequestSchema>;
 export type SaveScriptVersionRequest = z.infer<typeof saveScriptVersionRequestSchema>;
 export type CreateRenderJobRequest = z.infer<typeof createRenderJobRequestSchema>;
 export type CreateTtsJobRequest = z.infer<typeof createTtsJobRequestSchema>;
+export type CreateBulkTtsJobsRequest = z.infer<typeof createBulkTtsJobsRequestSchema>;
 export type UpdateAssetRequest = z.infer<typeof updateAssetRequestSchema>;

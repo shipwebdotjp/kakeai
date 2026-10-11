@@ -967,6 +967,65 @@ export function newTakeId(lineId: string): string {
   return `take-${lineId}-${randomId()}`;
 }
 
+export interface GeneratedTakeInput {
+  assetId: string;
+  durationMs: number;
+  source: "manual" | "tts";
+}
+
+export type GeneratedTakeSelect = "always" | "ifEmpty";
+
+export function mergeTake(
+  line: LineFormValue,
+  take: GeneratedTakeInput,
+  select: GeneratedTakeSelect,
+): LineFormValue {
+  const existing = line.takes.find(
+    (entry) => entry.assetId === take.assetId && entry.source === take.source,
+  );
+  const takeId = existing?.id ?? newTakeId(line.id);
+  const takes =
+    existing === undefined
+      ? [...line.takes, { id: takeId, ...take }]
+      : line.takes.map((entry) =>
+          entry.id === takeId ? { ...entry, durationMs: take.durationMs } : entry,
+        );
+  const shouldSelect = select === "always" || line.selectedAudioTakeId === null;
+  return {
+    ...line,
+    takes,
+    selectedAudioTakeId: shouldSelect ? takeId : line.selectedAudioTakeId,
+  };
+}
+
+export type GeneratedTakeTrigger = "individual" | "bulk";
+
+export interface GeneratedTakePolicy {
+  select: GeneratedTakeSelect;
+  autoplay: boolean;
+}
+
+export function generatedTakePolicy(trigger: GeneratedTakeTrigger): GeneratedTakePolicy {
+  return trigger === "individual"
+    ? { select: "always", autoplay: true }
+    : { select: "ifEmpty", autoplay: false };
+}
+
+export function bulkTtsCandidateLineIds(content: ContentDocument): string[] {
+  const ids: string[] = [];
+  for (const scene of content.scenes) {
+    if (scene.kind !== "point") {
+      continue;
+    }
+    for (const line of scene.lines) {
+      if (line.selectedAudioTakeId === null) {
+        ids.push(line.id);
+      }
+    }
+  }
+  return ids;
+}
+
 export function newSceneId(): string {
   return `scene-point-${randomId()}`;
 }

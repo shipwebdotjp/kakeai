@@ -25,11 +25,13 @@ import {
   countLineCueReferences,
   createEmptyLine,
   duplicateLineFormValue,
+  generatedTakePolicy,
   lineSummary,
+  mergeTake,
   moveLineInScene,
   newSpeakerId,
-  newTakeId,
   removeLineInScene,
+  type GeneratedTakeSelect,
 } from "../content/form";
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
@@ -56,6 +58,7 @@ interface LinesEditorProps {
   voiceProfiles: VoiceProfile[];
   adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
+  bulkRunning: boolean;
   onSplitScene: (sceneIndex: number, lineIndex: number) => void;
 }
 
@@ -218,12 +221,15 @@ function LineEditor({
   voiceProfiles,
   adapterVoices,
   savedVoiceByLineId,
+  bulkRunning,
   scriptVersionId,
 }: LineEditorProps) {
   const assets = useAssets();
   const generate = useGenerateTtsTake(scriptVersionId);
   const [styleId, setStyleId] = useState<number | null>(null);
   const [speedScale, setSpeedScale] = useState(1);
+  const [autoPlayToken, setAutoPlayToken] = useState(0);
+  const autoPlayTakeIdRef = useRef<string | null>(null);
 
   const speaker = speakers.find((entry) => entry.id === line.speakerId);
   const characterId = speaker?.characterId ?? null;
@@ -263,26 +269,38 @@ function LineEditor({
 
   const path = `scenes.${sceneIndex}.lines.${lineIndex}` as const;
 
-  const addTake = (assetId: string, durationMs: number, source: "manual" | "tts") => {
-    const takes = (getValues(`${path}.takes`) ?? []) as TakeFormValue[];
-    const existing = takes.find(
-      (take) => take.assetId === assetId && take.source === source,
-    );
-    const takeId = existing?.id ?? newTakeId(line.id);
-    if (existing === undefined) {
+  const addTake = (
+    assetId: string,
+    durationMs: number,
+    source: "manual" | "tts",
+    select: GeneratedTakeSelect = "always",
+  ): string => {
+    const scenes = getValues("scenes");
+    for (let targetSceneIndex = 0; targetSceneIndex < scenes.length; targetSceneIndex += 1) {
+      const scene = scenes[targetSceneIndex];
+      if (scene === undefined) {
+        continue;
+      }
+      const targetLineIndex = scene.lines.findIndex((entry) => entry.id === line.id);
+      if (targetLineIndex === -1) {
+        continue;
+      }
+      const current = scene.lines[targetLineIndex];
+      if (current === undefined) {
+        continue;
+      }
+      const next = mergeTake(current, { assetId, durationMs, source }, select);
+      setValue(`scenes.${targetSceneIndex}.lines.${targetLineIndex}.takes`, next.takes, {
+        shouldDirty: true,
+      });
       setValue(
-        `${path}.takes`,
-        [...takes, { id: takeId, assetId, durationMs, source }],
+        `scenes.${targetSceneIndex}.lines.${targetLineIndex}.selectedAudioTakeId`,
+        next.selectedAudioTakeId,
         { shouldDirty: true },
       );
-    } else {
-      setValue(
-        `${path}.takes`,
-        takes.map((take) => (take.id === takeId ? { ...take, durationMs } : take)),
-        { shouldDirty: true },
-      );
+      return next.selectedAudioTakeId ?? "";
     }
-    setValue(`${path}.selectedAudioTakeId`, takeId, { shouldDirty: true });
+    return "";
   };
 
   const addManualTake = (assetId: string) => {
@@ -337,11 +355,16 @@ function LineEditor({
     if (styleId === null) {
       return;
     }
+    const policy = generatedTakePolicy("individual");
     generate.mutate(
       { narrationSegmentId: line.id, styleId, speedScale, speechText: line.speechText },
       {
         onSuccess: (result) => {
-          addTake(result.assetId, result.durationMs, "tts");
+          const takeId = addTake(result.assetId, result.durationMs, "tts", policy.select);
+          if (policy.autoplay) {
+            autoPlayTakeIdRef.current = takeId;
+            setAutoPlayToken((token) => token + 1);
+          }
         },
       },
     );
@@ -353,7 +376,8 @@ function LineEditor({
   const voiceMatches = saved && profileId === savedVoice;
   const speechLength = line.speechText.trim().length;
   const speechReady = speechLength > 0 && speechLength <= MAX_TTS_SPEECH_TEXT_LENGTH;
-  const ttsDisabled = generate.isPending || styleId === null || !voiceMatches || !speechReady;
+  const ttsDisabled =
+    bulkRunning || generate.isPending || styleId === null || !voiceMatches || !speechReady;
 
   return (
     <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">
@@ -420,7 +444,10 @@ function LineEditor({
                   {take.source === "tts" ? "TTS: " : ""}
                   {fileName(take.assetId)}（{formatDuration(take.durationMs)}）
                 </label>
-                <TakeAudioPlayer assetId={take.assetId} />
+                <TakeAudioPlayer
+                  assetId={take.assetId}
+                  autoPlayToken={autoPlayTakeIdRef.current === take.id ? autoPlayToken : 0}
+                />
                 <button
                   type="button"
                   className={buttonNeutralClass}
@@ -560,6 +587,7 @@ export function LinesEditor({
   voiceProfiles,
   adapterVoices,
   savedVoiceByLineId,
+  bulkRunning,
   onSplitScene,
 }: LinesEditorProps) {
   const { fields, append, insert, replace } = useFieldArray({
@@ -638,6 +666,7 @@ export function LinesEditor({
             voiceProfiles={voiceProfiles}
             adapterVoices={adapterVoices}
             savedVoiceByLineId={savedVoiceByLineId}
+            bulkRunning={bulkRunning}
           />
         );
       })}

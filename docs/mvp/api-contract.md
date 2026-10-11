@@ -67,6 +67,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
 | VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は `voicevox` または `aivisspeech`（作成後は不変）、`settings` はアダプター専用で両者とも `speakerUuid` と `defaultStyleId`。詳細は [../tts/spec.md](../tts/spec.md)。 |
 | TtsVoice | voiceId, name, styles | 接続中エンジンの話者。`styles` は `styleId` と表示名の配列。`styleId` は 32bit 符号付き整数。 |
+| BulkTtsJobsResult | jobs, excluded | 一括TTS生成の応答。`jobs` は `narrationSegmentId` と Job DTO の組、`excluded` は `narrationSegmentId`・エラーコード・安全な理由。詳細は [../tts/spec.md](../tts/spec.md)。 |
 | CharacterLibraryEntry | id, name, voiceProfileId, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。
@@ -105,6 +106,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | DELETE | /voice-profiles/:voiceProfileId | 204 | 未参照のVoice Profileを削除 |
 | GET | /voice-profiles/voices?adapterId=voicevox\|aivisspeech | 200 | 接続中エンジンの話者とスタイルを取得（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
+| POST | /script-versions/:scriptVersionId/tts-jobs | 202 | 音声が未選択の要点セリフを一括でTTS Jobへ追加。投入Jobと除外セリフを返す（[../tts/spec.md](../tts/spec.md)） |
 | GET | /characters | 200 | キャラクターライブラリの一覧を取得（[../character-library/spec.md](../character-library/spec.md)） |
 | POST | /characters | 201 | キャラクターを作成 |
 | PATCH | /characters/:characterId | 200 | キャラクターの名前・声・外観を更新 |
@@ -607,6 +609,8 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 503 | DATABASE_BUSY | busy timeoutを超えるSQLite競合 | 任意のretryAfterMs |
 
 未対応localeのように画面側で個別表示が必要な検証は、MVPではVALIDATION_ERRORのdetails.issuesに含める。専用codeが必要になった時点で後方互換な追加として定義する。
+
+一括TTS生成（POST /script-versions/:scriptVersionId/tts-jobs）は、個別のセリフを生成できないときも全体を失敗させない。投入できなかったセリフは、その理由を応答の `excluded` に `TTS_INPUT_INVALID` または `TTS_ENGINE_UNAVAILABLE` のコードと安全なメッセージで含める。外部 HTTP エラーの本文は返さない。投入済み Job の実行中の失敗は、個別生成と同じく `GET /jobs/:jobId` の `status: failed` で伝える。
 
 ### レンダー失敗
 

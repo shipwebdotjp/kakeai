@@ -51,7 +51,21 @@ Voice Profile はアプリ共通の声の設定であり、作品台本（`Speak
 - Asset の `originalFilename` は `tts-<adapterId>-<話者名>-<スタイル名>[-<話速>x]-<narrationSegmentId>.wav` とする。話速は 1.0 以外のときだけ付ける。名前に使えない文字は `_` に置換し、空なら `speakerId` / `styleId` へフォールバックする。再利用時は最初の生成時の名前を保持する。
 - 来歴にはアダプター、`voiceId`、`styleId`、話速、エンジン版、元 ScriptVersion と Segment を保存する。
 - Job 結果は生成済み Audio Take 候補（`narrationSegmentId`、`assetId`、`durationMs`、`source: "tts"`）を返す。UI はこれを編集フォームへ Take として追加し、自動選択して未保存状態にする。
+- 個別生成の成功時だけ、追加・選択した Take の再生を1回開始する。再生がブラウザに拒否・失敗された場合は通常の再生エラー表示に切り替え、生成結果自体は保持する。
 - 生成済み音声は通常の Take と同様に切替・選択解除・削除できる。
+
+## 一括生成
+
+要点シーンで音声が未選択のセリフをまとめて生成できる。1 セリフにつき 1 つの `tts` Job を作る点は個別生成と同じで、入力検証・Voice Profile 解決・Job スナップショット生成も同じ処理を使う。Asset 再利用と単一 worker の逐次処理はそのまま適用する。
+
+- 対象は保存済み `ScriptVersion` の要点シーン（`scene.kind === "point"`）のセリフのうち、`selectedAudioTakeId` が `null` のものとする。未選択の既存 Take があっても対象に含める。
+- 各セリフは話者の Voice Profile の既定スタイルと話速 1.0 倍を使う。一括生成のためのセリフ別スタイル・話速は保存しない。
+- 保存済み台本だけを対象とする。未保存の編集内容は一括生成へ渡さない。
+- 話者未設定、声プロファイル未設定、空の読み上げテキスト、話速・スタイル不正、エンジン接続不能などで Job を作れないセリフは、そのセリフだけを除外理由つきで返し、他のセリフの生成は続行する。接続不能もセリフ単位の除外として扱い、全体を失敗させない。
+- 応答はキューへ投入した Job（`narrationSegmentId` と Job DTO の組）と、除外したセリフ ID・安全な理由（エラーコードとメッセージ）を返す。外部 HTTP エラーの本文は含めない。
+- Job 実行中の失敗は個別生成と同じく `GET /jobs/:jobId` の `status: failed` で伝える。
+- 成功した Job ごとに Take を編集フォームへ追加する。追加後の選択は、そのセリフに利用者が既に選択した Take を上書きしない。一括生成の Take は自動再生しない。
+- 一括生成の結果は通常の明示保存まで `ScriptVersion` に入らない。未保存変更または生成中は一括生成を開始できず、保存を促す。生成中は保存と個別生成を無効化し、フォームのリセットで結果が失われないようにする。
 
 ## エラー
 
@@ -76,6 +90,9 @@ Job 実行中の失敗（`GET /jobs/:jobId` の `status: failed`）:
 - `GET /voice-profiles/voices?adapterId=voicevox|aivisspeech` で接続中エンジンの話者とスタイルを取得する
 - `POST /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs`
   - 任意の `speechText`、`styleId`、`speedScale`（既定 1.0）を受け付ける。`speechText` を省略すると保存済みセグメントの値を使う
+- `POST /script-versions/:scriptVersionId/tts-jobs`
+  - リクエスト本文は空とする。保存済み台本の要点シーンで音声が未選択のセリフを対象に、セリフごとの `tts` Job を作る
+  - 応答（202）は投入した Job の一覧と除外したセリフ（ID・エラーコード・理由）を返す
 - `GET /health` の `capabilities.jobKinds` に `tts`、`capabilities.voiceAdapters` に登録済みアダプター（`voicevox`、`aivisspeech`）を含める
 
 Job 種別は `asset_ingest` / `render` / `tts` の 3 つとなる。単一 worker、`queued → running → succeeded|failed`・`queued → cancelled` の状態遷移、リースなし、起動時 `WORKER_INTERRUPTED` 掃除は [ADR 0020](../adr/0020-no-job-lease-startup-reap.md) と [../mvp/spec.md](../mvp/spec.md) の規則をそのまま適用する。

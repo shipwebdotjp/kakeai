@@ -2,6 +2,7 @@ import { z } from "zod";
 import { idSchema, localeSchema, nonNegativeInt, positiveInt, timestampSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { assetTagsSchema } from "./asset";
+import { errorCodeSchema } from "./error";
 
 export const jobKindSchema = z.enum(["asset_ingest", "render", "tts"]);
 export const jobStatusSchema = z.enum([
@@ -203,6 +204,22 @@ export const jobSchema = z
     }
   });
 
+export const bulkTtsJobEntrySchema = z.object({
+  narrationSegmentId: idSchema,
+  job: jobSchema,
+});
+
+export const bulkTtsJobExclusionSchema = z.object({
+  narrationSegmentId: idSchema,
+  code: errorCodeSchema,
+  message: z.string().min(1),
+});
+
+export const bulkTtsJobsResultSchema = z.object({
+  jobs: z.array(bulkTtsJobEntrySchema),
+  excluded: z.array(bulkTtsJobExclusionSchema),
+});
+
 export const previewAssetSchema = z.object({
   assetId: idSchema,
   contentUrl: z.string().min(1),
@@ -250,6 +267,9 @@ export type ScriptVersion = z.infer<typeof scriptVersionSchema>;
 export type Asset = z.infer<typeof assetSchema>;
 export type Artifact = z.infer<typeof artifactSchema>;
 export type Job = z.infer<typeof jobSchema>;
+export type BulkTtsJobEntry = z.infer<typeof bulkTtsJobEntrySchema>;
+export type BulkTtsJobExclusion = z.infer<typeof bulkTtsJobExclusionSchema>;
+export type BulkTtsJobsResult = z.infer<typeof bulkTtsJobsResultSchema>;
 export type PreviewAsset = z.infer<typeof previewAssetSchema>;
 export type PreviewRenderer = z.infer<typeof previewRendererSchema>;
 export type PreviewLineTiming = z.infer<typeof previewLineTimingSchema>;

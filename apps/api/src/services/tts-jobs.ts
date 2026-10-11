@@ -1,14 +1,21 @@
 import {
+  DEFAULT_TTS_SPEED_SCALE,
   MAX_TTS_SPEECH_TEXT_LENGTH,
   SNAPSHOT_SCHEMA_VERSION,
   ttsJobSnapshotSchema,
   voiceAdapterIdSchema,
   voiceProfileSettingsSchemaFor,
+  type BulkTtsJobEntry,
+  type BulkTtsJobExclusion,
+  type BulkTtsJobsResult,
   type ContentDocument,
   type CreateTtsJobRequest,
   type Job as JobDto,
   type NarrationSegment,
+  type TtsJobSnapshot,
   type TtsVoice,
+  type TtsVoiceListing,
+  type VoiceAdapterId,
 } from "@kakeai/contracts";
 import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
 import { deserializeContent } from "../domain/content-json.ts";
@@ -17,6 +24,21 @@ import type { PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 import { getTtsAdapter, TtsEngineUnavailableError } from "../tts/index.ts";
+
+interface LoadedScriptVersion {
+  id: string;
+  contentJson: string;
+  languageEdition: { id: string; workId: string };
+}
+
+interface TtsJobCaches {
+  voiceListings: Map<VoiceAdapterId, TtsVoiceListing>;
+  voiceListingErrors: Map<VoiceAdapterId, ApiError>;
+}
+
+function emptyCaches(): TtsJobCaches {
+  return { voiceListings: new Map(), voiceListingErrors: new Map() };
+}
 
 function findSegment(
   content: ContentDocument,
@@ -57,13 +79,10 @@ function truncateName(value: string): string | undefined {
   return truncated.length === 0 ? undefined : truncated;
 }
 
-export async function createTtsJob(
+async function loadScriptVersion(
   prisma: PrismaClient,
-  config: AppConfig,
   scriptVersionId: string,
-  narrationSegmentId: string,
-  input: CreateTtsJobRequest,
-): Promise<JobDto> {
+): Promise<LoadedScriptVersion> {
   const row = await prisma.scriptVersion.findUnique({
     where: { id: scriptVersionId },
     include: { languageEdition: { select: { id: true, workId: true } } },
@@ -71,18 +90,69 @@ export async function createTtsJob(
   if (row === null) {
     throw resourceNotFound("script_version", scriptVersionId);
   }
+  return { id: row.id, contentJson: row.contentJson, languageEdition: row.languageEdition };
+}
 
-  let content: ContentDocument;
+function deserializeContentOrThrow(contentJson: string): ContentDocument {
   try {
-    content = deserializeContent(row.contentJson);
+    return deserializeContent(contentJson);
   } catch {
     throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
   }
+}
 
-  const segment = findSegment(content, narrationSegmentId);
-  if (segment === undefined) {
-    throw resourceNotFound("narration_segment", narrationSegmentId);
+function exclusionMessage(error: ApiError): string {
+  const details = error.details;
+  if (typeof details === "object" && details !== null) {
+    const issues = (details as { issues?: unknown }).issues;
+    if (Array.isArray(issues) && issues.length > 0) {
+      const message = (issues[0] as { message?: unknown }).message;
+      if (typeof message === "string" && message.length > 0) {
+        return message;
+      }
+    }
   }
+  return error.message;
+}
+
+async function listVoicesCached(
+  config: AppConfig,
+  adapterId: VoiceAdapterId,
+  caches: TtsJobCaches,
+): Promise<TtsVoiceListing> {
+  const cached = caches.voiceListings.get(adapterId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const cachedError = caches.voiceListingErrors.get(adapterId);
+  if (cachedError !== undefined) {
+    throw cachedError;
+  }
+  const adapter = getTtsAdapter(adapterId);
+  let listing: TtsVoiceListing;
+  try {
+    listing = await adapter.listVoices(resolveVoiceBaseUrl(config, adapterId));
+  } catch (error) {
+    if (error instanceof TtsEngineUnavailableError) {
+      const apiError = new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
+      caches.voiceListingErrors.set(adapterId, apiError);
+      throw apiError;
+    }
+    throw error;
+  }
+  caches.voiceListings.set(adapterId, listing);
+  return listing;
+}
+
+async function prepareTtsJobSnapshot(
+  prisma: PrismaClient,
+  config: AppConfig,
+  row: LoadedScriptVersion,
+  content: ContentDocument,
+  segment: NarrationSegment,
+  input: CreateTtsJobRequest,
+  caches: TtsJobCaches,
+): Promise<TtsJobSnapshot> {
   const speechText = (input.speechText ?? segment.speechText).trim();
   if (speechText.length === 0) {
     throw ttsInputIssue(["speechText"], "読み上げテキストが空です。");
@@ -125,22 +195,8 @@ export async function createTtsJob(
   settings = parsedSettings.data;
 
   const styleId = input.styleId ?? settings.defaultStyleId;
-  const adapter = getTtsAdapter(adapterId.data);
-
-  let voices: TtsVoice[];
-  let engineVersion: string | null;
-  try {
-    const listing = await adapter.listVoices(resolveVoiceBaseUrl(config, adapterId.data));
-    voices = listing.voices;
-    engineVersion = listing.engineVersion;
-  } catch (error) {
-    if (error instanceof TtsEngineUnavailableError) {
-      throw new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
-    }
-    throw error;
-  }
-
-  const voice = findVoice(voices, settings.speakerUuid);
+  const listing = await listVoicesCached(config, adapterId.data, caches);
+  const voice = findVoice(listing.voices, settings.speakerUuid);
   if (voice === undefined) {
     throw ttsInputIssue(
       ["voiceProfileId"],
@@ -152,11 +208,11 @@ export async function createTtsJob(
     throw ttsInputIssue(["styleId"], "この話者で使えないスタイルです。");
   }
 
-  const snapshot = ttsJobSnapshotSchema.parse({
+  const snapshot = ttsJobSnapshotSchema.safeParse({
     snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
     kind: "tts",
     scriptVersionId: row.id,
-    narrationSegmentId,
+    narrationSegmentId: segment.id,
     languageEditionId: row.languageEdition.id,
     workId: row.languageEdition.workId,
     speakerId: speaker.id,
@@ -167,20 +223,109 @@ export async function createTtsJob(
     styleName: truncateName(selectedStyle.name),
     speedScale: input.speedScale,
     speechText,
-    engineVersion,
+    engineVersion: listing.engineVersion,
   });
+  if (!snapshot.success) {
+    throw ttsInputIssue([], "音声生成の情報を組み立てられませんでした。");
+  }
+  return snapshot.data;
+}
 
+function jobCreateData(row: LoadedScriptVersion, snapshot: TtsJobSnapshot) {
+  return {
+    kind: "tts" as const,
+    status: "queued" as const,
+    workId: row.languageEdition.workId,
+    languageEditionId: row.languageEdition.id,
+    scriptVersionId: row.id,
+    snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+    inputSnapshotJson: JSON.stringify(snapshot),
+  };
+}
+
+export async function createTtsJob(
+  prisma: PrismaClient,
+  config: AppConfig,
+  scriptVersionId: string,
+  narrationSegmentId: string,
+  input: CreateTtsJobRequest,
+): Promise<JobDto> {
+  const row = await loadScriptVersion(prisma, scriptVersionId);
+  const content = deserializeContentOrThrow(row.contentJson);
+  const segment = findSegment(content, narrationSegmentId);
+  if (segment === undefined) {
+    throw resourceNotFound("narration_segment", narrationSegmentId);
+  }
+  const snapshot = await prepareTtsJobSnapshot(
+    prisma,
+    config,
+    row,
+    content,
+    segment,
+    input,
+    emptyCaches(),
+  );
   const created = await prisma.job.create({
-    data: {
-      kind: "tts",
-      status: "queued",
-      workId: row.languageEdition.workId,
-      languageEditionId: row.languageEdition.id,
-      scriptVersionId: row.id,
-      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
-      inputSnapshotJson: JSON.stringify(snapshot),
-    },
+    data: jobCreateData(row, snapshot),
     include: { artifacts: true },
   });
   return toJob(created);
+}
+
+export async function createBulkTtsJobs(
+  prisma: PrismaClient,
+  config: AppConfig,
+  scriptVersionId: string,
+): Promise<BulkTtsJobsResult> {
+  const row = await loadScriptVersion(prisma, scriptVersionId);
+  const content = deserializeContentOrThrow(row.contentJson);
+  const caches = emptyCaches();
+  const prepared: { narrationSegmentId: string; snapshot: TtsJobSnapshot }[] = [];
+  const excluded: BulkTtsJobExclusion[] = [];
+  for (const scene of content.scenes) {
+    if (scene.kind !== "point") {
+      continue;
+    }
+    for (const segment of scene.lines) {
+      if (segment.selectedAudioTakeId !== null) {
+        continue;
+      }
+      try {
+        const snapshot = await prepareTtsJobSnapshot(
+          prisma,
+          config,
+          row,
+          content,
+          segment,
+          { speedScale: DEFAULT_TTS_SPEED_SCALE },
+          caches,
+        );
+        prepared.push({ narrationSegmentId: segment.id, snapshot });
+      } catch (error) {
+        if (error instanceof ApiError) {
+          excluded.push({
+            narrationSegmentId: segment.id,
+            code: error.code,
+            message: exclusionMessage(error),
+          });
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  if (prepared.length === 0) {
+    return { jobs: [], excluded };
+  }
+  const rows = await prisma.$transaction(
+    prepared.map((entry) =>
+      prisma.job.create({ data: jobCreateData(row, entry.snapshot), include: { artifacts: true } }),
+    ),
+  );
+  const jobs: BulkTtsJobEntry[] = rows.map((created, index) => ({
+    narrationSegmentId: prepared[index]!.narrationSegmentId,
+    job: toJob(created),
+  }));
+  return { jobs, excluded };
 }

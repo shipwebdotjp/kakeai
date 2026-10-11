@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import {
+  bulkTtsJobsResultSchema,
   createInitialContentDocument,
+  type ContentDocument,
   type TtsJobSnapshot,
   type VoiceProfile,
 } from "@kakeai/contracts";
@@ -211,6 +213,18 @@ async function createLineVersion(voiceProfileId: string): Promise<string> {
       selectedAudioTakeId: null,
     },
   ];
+  const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+    sourceScriptVersionId: null,
+    content,
+  });
+  return saved.scriptVersion.id;
+}
+
+async function saveContentVersion(build: (content: ContentDocument) => void): Promise<string> {
+  const work = await works.createWork(prisma, `TTS作品-${Date.now()}-${Math.random()}`, "ja-JP");
+  const edition = work.languageEditions[0]!;
+  const content = createInitialContentDocument();
+  build(content);
   const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
     sourceScriptVersionId: null,
     content,
@@ -574,6 +588,149 @@ describe("tts job", () => {
     });
     const cancelled = await jobs.cancelJob(prisma, job.id);
     expect(cancelled.status).toBe("cancelled");
+  });
+});
+
+describe("bulk tts jobs", () => {
+  it("targets only unselected point lines and reports exclusions", async () => {
+    const profile = await createProfile();
+    const asset = await prisma.asset.create({
+      data: {
+        kind: "audio",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: `test/manual-${Date.now()}-${Math.random()}`,
+        originalFilename: "manual.wav",
+        mediaType: "audio/wav",
+        byteSize: BigInt(1),
+        sha256: `sha-${Date.now()}-${Math.random()}`,
+        durationMs: 1000,
+      },
+    });
+    const scriptVersionId = await saveContentVersion((content) => {
+      content.speakers = [
+        { id: "speaker-narrator", name: "ナレーター", characterId: null, voiceProfileId: profile.id },
+      ];
+      const intro = content.scenes[0]!;
+      intro.lines = [
+        {
+          id: "line-intro",
+          speakerId: "speaker-narrator",
+          captionText: "",
+          speechText: "いんとろ",
+          selectedAudioTakeId: null,
+        },
+      ];
+      const point = content.scenes[1]!;
+      if (point.kind !== "point") {
+        throw new Error("expected a point scene");
+      }
+      point.lines = [
+        {
+          id: "line-a",
+          speakerId: "speaker-narrator",
+          captionText: "",
+          speechText: "いち",
+          selectedAudioTakeId: null,
+        },
+        {
+          id: "line-b",
+          speakerId: "speaker-narrator",
+          captionText: "",
+          speechText: "に",
+          selectedAudioTakeId: "take-b",
+        },
+        {
+          id: "line-empty",
+          speakerId: "speaker-narrator",
+          captionText: "",
+          speechText: "   ",
+          selectedAudioTakeId: null,
+        },
+        {
+          id: "line-nospeaker",
+          speakerId: null,
+          captionText: "",
+          speechText: "よん",
+          selectedAudioTakeId: null,
+        },
+      ];
+      content.audioTakes = [
+        {
+          id: "take-b",
+          narrationSegmentId: "line-b",
+          source: "manual",
+          assetId: asset.id,
+          durationMs: 1000,
+        },
+      ];
+    });
+
+    const result = await ttsJobs.createBulkTtsJobs(prisma, config, scriptVersionId);
+    expect(bulkTtsJobsResultSchema.safeParse(result).success).toBe(true);
+    expect(result.jobs.map((entry) => entry.narrationSegmentId)).toEqual(["line-a"]);
+    expect(result.excluded.map((entry) => entry.narrationSegmentId).sort()).toEqual([
+      "line-empty",
+      "line-nospeaker",
+    ]);
+    expect(result.excluded.every((entry) => entry.code === "TTS_INPUT_INVALID")).toBe(true);
+
+    const individual = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-a", {
+      speedScale: SPEED,
+    });
+    const bulkRow = await prisma.job.findUniqueOrThrow({ where: { id: result.jobs[0]!.job.id } });
+    const individualRow = await prisma.job.findUniqueOrThrow({ where: { id: individual.id } });
+    expect(bulkRow.inputSnapshotJson).toBe(individualRow.inputSnapshotJson);
+
+    await jobs.cancelJob(prisma, result.jobs[0]!.job.id);
+    await jobs.cancelJob(prisma, individual.id);
+  });
+
+  it("continues when one adapter is unavailable", async () => {
+    const vv = await createProfile();
+    const av = await createAivisProfile();
+    const scriptVersionId = await saveContentVersion((content) => {
+      content.speakers = [
+        { id: "speaker-vv", name: "ぶい", characterId: null, voiceProfileId: vv.id },
+        { id: "speaker-av", name: "えーぶい", characterId: null, voiceProfileId: av.id },
+      ];
+      const point = content.scenes[1]!;
+      if (point.kind !== "point") {
+        throw new Error("expected a point scene");
+      }
+      point.lines = [
+        {
+          id: "line-vv",
+          speakerId: "speaker-vv",
+          captionText: "",
+          speechText: "ぶい",
+          selectedAudioTakeId: null,
+        },
+        {
+          id: "line-av",
+          speakerId: "speaker-av",
+          captionText: "",
+          speechText: "えーぶい",
+          selectedAudioTakeId: null,
+        },
+      ];
+    });
+
+    const previous = config.voiceBaseUrls.voicevox;
+    config.voiceBaseUrls.voicevox = "http://127.0.0.1:1";
+    try {
+      const result = await ttsJobs.createBulkTtsJobs(prisma, config, scriptVersionId);
+      expect(result.jobs.map((entry) => entry.narrationSegmentId)).toEqual(["line-av"]);
+      expect(result.excluded).toEqual([
+        expect.objectContaining({
+          narrationSegmentId: "line-vv",
+          code: "TTS_ENGINE_UNAVAILABLE",
+        }),
+      ]);
+      await jobs.cancelJob(prisma, result.jobs[0]!.job.id);
+    } finally {
+      config.voiceBaseUrls.voicevox = previous;
+    }
   });
 });
 

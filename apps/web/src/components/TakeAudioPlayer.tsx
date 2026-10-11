@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { assetContentUrl } from "../api/client";
 import { errorTextClass, buttonNeutralClass } from "../ui";
 
@@ -6,10 +6,17 @@ const players = new Map<object, (playing: boolean) => void>();
 let sharedAudio: HTMLAudioElement | null = null;
 let ownerId: object | null = null;
 
-export function TakeAudioPlayer({ assetId }: { assetId: string }) {
+export function TakeAudioPlayer({
+  assetId,
+  autoPlayToken = 0,
+}: {
+  assetId: string;
+  autoPlayToken?: number;
+}) {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState(false);
   const idRef = useRef<object>({});
+  const playedTokenRef = useRef(0);
 
   useEffect(() => {
     const id = idRef.current;
@@ -18,23 +25,19 @@ export function TakeAudioPlayer({ assetId }: { assetId: string }) {
     return () => {
       players.delete(id);
       if (ownerId === id) {
-        sharedAudio?.pause();
-        sharedAudio = null;
-        ownerId = null;
+        queueMicrotask(() => {
+          if (!players.has(id) && ownerId === id) {
+            sharedAudio?.pause();
+            sharedAudio = null;
+            ownerId = null;
+          }
+        });
       }
     };
   }, []);
 
-  const toggle = () => {
+  const play = useCallback(() => {
     const id = idRef.current;
-    if (playing) {
-      sharedAudio?.pause();
-      setPlaying(false);
-      if (ownerId === id) {
-        ownerId = null;
-      }
-      return;
-    }
     for (const setter of players.values()) {
       setter(false);
     }
@@ -66,7 +69,32 @@ export function TakeAudioPlayer({ assetId }: { assetId: string }) {
         setPlaying(false);
         setError(true);
       });
+  }, [assetId]);
+
+  const stop = () => {
+    const id = idRef.current;
+    sharedAudio?.pause();
+    setPlaying(false);
+    if (ownerId === id) {
+      ownerId = null;
+    }
   };
+
+  const toggle = () => {
+    if (playing) {
+      stop();
+      return;
+    }
+    play();
+  };
+
+  useEffect(() => {
+    if (autoPlayToken === 0 || playedTokenRef.current === autoPlayToken) {
+      return;
+    }
+    playedTokenRef.current = autoPlayToken;
+    play();
+  }, [autoPlayToken, play]);
 
   return (
     <span className="inline-flex items-center gap-1">

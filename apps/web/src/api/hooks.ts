@@ -3,6 +3,9 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { voiceAdapterIdSchema, warningsMetaSchema } from "@kakeai/contracts";
 import type {
   Asset,
+  BulkTtsJobEntry,
+  BulkTtsJobExclusion,
+  BulkTtsJobsResult,
   CharacterLibraryEntry,
   ContentDocument,
   CreateCharacterRequest,
@@ -410,6 +413,7 @@ export function useAdapterVoicesMap(): Record<VoiceAdapterId, AdapterVoicesState
 
 const TTS_POLL_INTERVAL_MS = 1000;
 const TTS_POLL_MAX_ATTEMPTS = 120;
+const BULK_TTS_POLL_CONCURRENCY = 5;
 
 const TTS_JOB_ERROR_MESSAGES: Record<string, string> = {
   TTS_ENGINE_UNAVAILABLE: "音声エンジンに接続できません。起動を確認してください。",
@@ -420,6 +424,45 @@ const TTS_JOB_ERROR_MESSAGES: Record<string, string> = {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class TtsJobFailedError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "TtsJobFailedError";
+    this.code = code;
+  }
+}
+
+async function pollTtsJob(jobId: string): Promise<TtsJobResult> {
+  for (let attempt = 0; attempt < TTS_POLL_MAX_ATTEMPTS; attempt += 1) {
+    await sleep(TTS_POLL_INTERVAL_MS);
+    let job: Job;
+    try {
+      job = (await apiRequest<Job>(`/jobs/${encodeURIComponent(jobId)}`)).data;
+    } catch (error) {
+      if (error instanceof ApiError && error.status < 500) {
+        throw error;
+      }
+      continue;
+    }
+    if (job.status === "succeeded") {
+      if (job.ttsResult === null) {
+        throw new Error("音声生成に失敗しました。");
+      }
+      return job.ttsResult;
+    }
+    if (job.status === "failed" || job.status === "cancelled") {
+      const code = job.error?.code ?? "TTS_SYNTHESIS_FAILED";
+      throw new TtsJobFailedError(code, TTS_JOB_ERROR_MESSAGES[code] ?? "音声生成に失敗しました。");
+    }
+  }
+  await apiRequest(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }).catch(
+    () => undefined,
+  );
+  throw new Error("音声生成がタイムアウトしました。");
 }
 
 export interface GenerateTtsInput {
@@ -453,29 +496,77 @@ export function useGenerateTtsTake(scriptVersionId: string | undefined) {
           },
         )
       ).data;
-      for (let attempt = 0; attempt < TTS_POLL_MAX_ATTEMPTS; attempt += 1) {
-        await sleep(TTS_POLL_INTERVAL_MS);
-        let job: Job;
-        try {
-          job = (await apiRequest<Job>(`/jobs/${encodeURIComponent(created.id)}`)).data;
-        } catch {
-          continue;
-        }
-        if (job.status === "succeeded") {
-          if (job.ttsResult === null) {
-            throw new Error("音声生成に失敗しました。");
-          }
-          return job.ttsResult;
-        }
-        if (job.status === "failed" || job.status === "cancelled") {
-          const code = job.error?.code ?? "TTS_SYNTHESIS_FAILED";
-          throw new Error(TTS_JOB_ERROR_MESSAGES[code] ?? "音声生成に失敗しました。");
-        }
+      return pollTtsJob(created.id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
+  });
+}
+
+export interface BulkTtsFailure {
+  narrationSegmentId: string;
+  code: string;
+  message: string;
+}
+
+export interface BulkTtsRunCallbacks {
+  onProgress?: (done: number, total: number) => void;
+  onJobSucceeded?: (result: TtsJobResult) => void;
+}
+
+export interface BulkTtsSummary {
+  excluded: BulkTtsJobExclusion[];
+  failed: BulkTtsFailure[];
+  succeeded: number;
+}
+
+export function useBulkGenerateTtsTakes(scriptVersionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (callbacks: BulkTtsRunCallbacks = {}): Promise<BulkTtsSummary> => {
+      if (scriptVersionId === undefined || scriptVersionId.length === 0) {
+        throw new Error("scriptVersionId がありません");
       }
-      await apiRequest(`/jobs/${encodeURIComponent(created.id)}/cancel`, { method: "POST" }).catch(
-        () => undefined,
-      );
-      throw new Error("音声生成がタイムアウトしました。");
+      const result = (
+        await apiRequest<BulkTtsJobsResult>(
+          `/script-versions/${encodeURIComponent(scriptVersionId)}/tts-jobs`,
+          { method: "POST", body: {} },
+        )
+      ).data;
+      const total = result.jobs.length;
+      let done = 0;
+      callbacks.onProgress?.(done, total);
+      const failed: BulkTtsFailure[] = [];
+      const runEntry = async (entry: BulkTtsJobEntry) => {
+        try {
+          const ttsResult = await pollTtsJob(entry.job.id);
+          callbacks.onJobSucceeded?.(ttsResult);
+        } catch (error) {
+          const code =
+            error instanceof TtsJobFailedError
+              ? error.code
+              : error instanceof ApiError
+                ? String(error.code)
+                : "TTS_SYNTHESIS_FAILED";
+          const message =
+            error instanceof TtsJobFailedError
+              ? error.message
+              : error instanceof ApiError
+                ? (TTS_JOB_ERROR_MESSAGES[String(error.code)] ?? error.message)
+                : error instanceof Error
+                  ? error.message
+                  : "音声生成に失敗しました。";
+          failed.push({ narrationSegmentId: entry.narrationSegmentId, code, message });
+        } finally {
+          done += 1;
+          callbacks.onProgress?.(done, total);
+        }
+      };
+      for (let index = 0; index < result.jobs.length; index += BULK_TTS_POLL_CONCURRENCY) {
+        await Promise.all(
+          result.jobs.slice(index, index + BULK_TTS_POLL_CONCURRENCY).map(runEntry),
+        );
+      }
+      return { excluded: result.excluded, failed, succeeded: total - failed.length };
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assets"] }),
   });

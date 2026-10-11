@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { createRenderJobRequestSchema, createTtsJobRequestSchema } from "@kakeai/contracts";
+import {
+  createBulkTtsJobsRequestSchema,
+  createRenderJobRequestSchema,
+  createTtsJobRequestSchema,
+} from "@kakeai/contracts";
 import type { AppConfig } from "../../config.ts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
@@ -67,6 +71,18 @@ export function createScriptVersionsRouter(dependencies: ScriptVersionsRouterDep
           pathParam(req, "narrationSegmentId"),
           input,
         ),
+      );
+    }),
+  );
+
+  router.post(
+    "/script-versions/:scriptVersionId/tts-jobs",
+    asyncHandler(async (req, res) => {
+      parseBody(createBulkTtsJobsRequestSchema, req.body);
+      sendData(
+        res,
+        202,
+        await ttsJobs.createBulkTtsJobs(prisma, config, pathParam(req, "scriptVersionId")),
       );
     }),
   );
