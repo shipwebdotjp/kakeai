@@ -42,6 +42,7 @@ import { CharacterFields } from "./CharacterFields";
 import { CueList } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
+import { ScriptImportModal } from "./ScriptImportModal";
 import { StandingFields } from "./StandingFields";
 
 interface SceneEditorProps {
@@ -129,6 +130,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const [issues, setIssues] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (savedAtMs === null) {
@@ -142,7 +144,10 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     useForm<DocumentFormValues>({
       defaultValues: toFormValues(base),
     });
-  const { fields, insert, remove, move } = useFieldArray({ control, name: "scenes" });
+  const { fields, insert, remove, move, replace: replaceScenes } = useFieldArray({
+    control,
+    name: "scenes",
+  });
   const {
     fields: characterFields,
     append: appendCharacter,
@@ -341,6 +346,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const watchedBgm = allValues?.bgm;
 
   return (
+    <>
     <form onSubmit={onSubmit}>
       <div id="editor-actionbar" className="sticky top-0 z-10 flex items-center gap-3 bg-surface py-2.5">
         <button type="submit" className={buttonPrimaryClass} disabled={save.isPending}>
@@ -593,12 +599,29 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         );
       })}
 
-      <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
-        要点を追加
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
+          要点を追加
+        </button>
+        <button
+          type="button"
+          className={buttonNeutralClass}
+          onClick={() => setImportOpen(true)}
+        >
+          台本をインポート
+        </button>
+      </div>
       {pointCount === 0 && (
         <p className={metaTextClass}>要点Sceneがありません。追加してください。</p>
       )}
     </form>
+    <ScriptImportModal
+      open={importOpen}
+      onClose={() => setImportOpen(false)}
+      scenes={watchedScenes}
+      speakers={watchedSpeakers}
+      onApply={(nextScenes) => replaceScenes(nextScenes)}
+    />
+    </>
   );
 }
