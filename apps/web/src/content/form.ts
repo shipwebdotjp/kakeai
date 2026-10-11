@@ -1298,6 +1298,55 @@ export function normalizeLineRangeCues(scene: SceneFormValue): SceneFormValue {
   return { ...scene, cues };
 }
 
+export function removeLineInScene(scene: SceneFormValue, lineIndex: number): SceneFormValue {
+  const lines = scene.lines;
+  if (lineIndex < 0 || lineIndex >= lines.length) {
+    return scene;
+  }
+  const deletedId = lines[lineIndex]!.id;
+  const indexById = new Map(lines.map((line, index) => [line.id, index]));
+  const nextLines = lines.filter((_, index) => index !== lineIndex);
+  const cues: CueFormValue[] = [];
+  for (const cue of scene.cues) {
+    if (cue.rangeKind !== "lines") {
+      cues.push(cue);
+      continue;
+    }
+    const start = indexById.get(cue.startLineId);
+    const end = indexById.get(cue.endLineId);
+    if (start === undefined || end === undefined) {
+      if (cue.startLineId === deletedId || cue.endLineId === deletedId) {
+        continue;
+      }
+      cues.push(cue);
+      continue;
+    }
+    const low = Math.min(start, end);
+    const high = Math.max(start, end);
+    if (lineIndex < low || lineIndex > high) {
+      cues.push(cue);
+      continue;
+    }
+    if (low === high) {
+      continue;
+    }
+    cues.push({
+      ...cue,
+      startLineId: lineIndex === low ? lines[low + 1]!.id : lines[low]!.id,
+      endLineId: lineIndex === high ? lines[high - 1]!.id : lines[high]!.id,
+    });
+  }
+  return { ...scene, lines: nextLines, cues };
+}
+
+export function countLineCueReferences(scene: SceneFormValue, lineId: string): number {
+  return scene.cues.filter(
+    (cue) =>
+      cue.rangeKind === "lines" &&
+      (cue.startLineId === lineId || cue.endLineId === lineId),
+  ).length;
+}
+
 export function moveLineInScene(
   scene: SceneFormValue,
   fromIndex: number,

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { VisualCue } from "@kakeai/contracts";
 import {
+  countLineCueReferences,
   lineOptionLabel,
   lineRangeEndCandidates,
   moveLineInScene,
   nextEndLineId,
   normalizeLineRangeCues,
+  removeLineInScene,
   splitPointScene,
   type CueFormValue,
   type LineFormValue,
@@ -144,6 +146,78 @@ describe("normalizeLineRangeCues", () => {
       endLineId: "l9",
     });
     expect(normalized.cues.find((entry) => entry.id === "scene")?.rangeKind).toBe("scene");
+  });
+});
+
+describe("removeLineInScene", () => {
+  it("drops the line and adjusts line-range cues", () => {
+    const scene = makeScene(
+      [
+        line("l1", null, "A", "a"),
+        line("l2", null, "B", "b", [take("t2")], "t2"),
+        line("l3", null, "C", "c"),
+        line("l4", null, "D", "d"),
+      ],
+      [
+        lineCue("before", "l1", "l2"),
+        lineCue("after", "l3", "l4"),
+        lineCue("span", "l2", "l4"),
+        lineCue("single", "l3", "l3"),
+      ],
+    );
+
+    const next = removeLineInScene(scene, 2);
+
+    expect(next.lines.map((entry) => entry.id)).toEqual(["l1", "l2", "l4"]);
+    expect(next.cues.find((entry) => entry.id === "before")).toMatchObject({
+      startLineId: "l1",
+      endLineId: "l2",
+    });
+    expect(next.cues.find((entry) => entry.id === "after")).toMatchObject({
+      startLineId: "l4",
+      endLineId: "l4",
+    });
+    expect(next.cues.find((entry) => entry.id === "span")).toMatchObject({
+      startLineId: "l2",
+      endLineId: "l4",
+    });
+    expect(next.cues.some((entry) => entry.id === "single")).toBe(false);
+  });
+
+  it("drops a cue when its only line is removed", () => {
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [lineCue("only", "l2", "l2"), lineCue("other", "l1", "l1")],
+    );
+    const next = removeLineInScene(scene, 1);
+    expect(next.lines.map((entry) => entry.id)).toEqual(["l1"]);
+    expect(next.cues.map((entry) => entry.id)).toEqual(["other"]);
+  });
+
+  it("drops a cue that references the deleted line but has an unresolvable end", () => {
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [lineCue("broken", "l2", "l9"), lineCue("kept", "l9", "l9")],
+    );
+    const next = removeLineInScene(scene, 1);
+    expect(next.cues.map((entry) => entry.id)).toEqual(["kept"]);
+  });
+
+  it("returns the scene unchanged for an out-of-range index", () => {
+    const scene = makeScene([line("l1", null, "A", "a")]);
+    expect(removeLineInScene(scene, 3)).toBe(scene);
+  });
+});
+
+describe("countLineCueReferences", () => {
+  it("counts cues whose start or end is the line", () => {
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [lineCue("a", "l2", "l3"), lineCue("b", "l1", "l2"), cue("scene")],
+    );
+    expect(countLineCueReferences(scene, "l2")).toBe(2);
+    expect(countLineCueReferences(scene, "l3")).toBe(1);
+    expect(countLineCueReferences(scene, "l9")).toBe(0);
   });
 });
 

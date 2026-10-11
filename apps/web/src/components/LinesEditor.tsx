@@ -22,12 +22,14 @@ import type {
   TakeFormValue,
 } from "../content/form";
 import {
+  countLineCueReferences,
   createEmptyLine,
   duplicateLineFormValue,
   lineSummary,
   moveLineInScene,
   newSpeakerId,
   newTakeId,
+  removeLineInScene,
 } from "../content/form";
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
@@ -560,7 +562,7 @@ export function LinesEditor({
   savedVoiceByLineId,
   onSplitScene,
 }: LinesEditorProps) {
-  const { fields, append, remove, insert, replace } = useFieldArray({
+  const { fields, append, insert, replace } = useFieldArray({
     control,
     name: `scenes.${sceneIndex}.lines`,
   });
@@ -587,6 +589,26 @@ export function LinesEditor({
     insert(lineIndex + 1, duplicateLineFormValue(line, sceneId));
   };
 
+  const removeLine = (lineIndex: number) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    const line = scene?.lines[lineIndex];
+    if (scene === undefined || line === undefined) {
+      return;
+    }
+    const usage = countLineCueReferences(scene, line.id);
+    if (
+      usage > 0 &&
+      !window.confirm(
+        `このセリフは ${usage} 件のCueの表示区間に使われています。削除すると該当するCueの区間を調整します。`,
+      )
+    ) {
+      return;
+    }
+    const next = removeLineInScene(scene, lineIndex);
+    replace(next.lines);
+    setValue(`scenes.${sceneIndex}.cues`, next.cues, { shouldDirty: true });
+  };
+
   return (
     <div className="mt-3 border-t border-dashed border-border pt-2">
       <h4 className="mb-2 font-semibold">セリフ</h4>
@@ -609,7 +631,7 @@ export function LinesEditor({
             onMove={(direction) => moveLine(lineIndex, lineIndex + direction)}
             onDuplicate={() => duplicateLine(lineIndex)}
             onSplit={() => onSplitScene(sceneIndex, lineIndex)}
-            onRemove={() => remove(lineIndex)}
+            onRemove={() => removeLine(lineIndex)}
             scriptVersionId={scriptVersionId}
             speakers={speakers}
             characters={characters}
