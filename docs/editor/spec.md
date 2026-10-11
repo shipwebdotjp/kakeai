@@ -51,7 +51,9 @@ Scene の `accentColor`、`timing`、`lines`、`visualCues` は維持する。�
 
 ### 既定生成
 
-新規作品は、導入1・要点3・結び1のSceneに対し、`role` に応じた既定の統合テキストCueを空テキスト（`text: ""`）で生成する。利用者がCue一覧で入力する。新規に追加した要点Sceneにも同様に既定Cueを生成する。
+新規作品は、導入1・要点1・結び1のSceneに対し、`role` に応じた既定の統合テキストCueを空テキスト（`text: ""`）で生成する。利用者がCue一覧で入力する。新規に追加した要点Sceneにも同様に既定Cueを生成する。
+
+各Sceneは編集用の名称 `label` を必須で持つ。`label` は映像に描画せず、左ペインの構成・中央ペインのScene見出し・右ペインのプレビューSceneジャンプに表示する。見出しを映像に出すかは `heading` テキストCueで別途決める。詳細は [../scene-labels/spec.md](../scene-labels/spec.md) を正とする。
 
 ## 編集レイアウト（3ペイン）
 

@@ -43,9 +43,12 @@ describe("work and script version flow", () => {
     expect(current.content.scenes.map((scene) => scene.kind)).toEqual([
       "intro",
       "point",
-      "point",
-      "point",
       "outro",
+    ]);
+    expect(current.content.scenes.map((scene) => scene.label)).toEqual([
+      "導入",
+      "要点 1",
+      "結び",
     ]);
   });
 
@@ -65,14 +68,17 @@ describe("work and script version flow", () => {
     ]);
 
     const manyPoints = createInitialContentDocument();
-    for (const id of ["scene-point-9", "scene-point-10"]) {
-      manyPoints.scenes.splice(manyPoints.scenes.length - 1, 0, createPointScene(id));
+    for (const [id, label] of [
+      ["scene-point-9", "要点 2"],
+      ["scene-point-10", "要点 3"],
+    ] as const) {
+      manyPoints.scenes.splice(manyPoints.scenes.length - 1, 0, createPointScene(id, label));
     }
     const savedMany = await scriptVersions.saveScriptVersion(prisma, edition.id, {
       sourceScriptVersionId: null,
       content: manyPoints,
     });
-    expect(savedMany.scriptVersion.content.scenes.filter((scene) => scene.kind === "point")).toHaveLength(5);
+    expect(savedMany.scriptVersion.content.scenes.filter((scene) => scene.kind === "point")).toHaveLength(3);
   });
 
   it("saves a new immutable version and advances current", async () => {

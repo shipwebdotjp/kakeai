@@ -28,6 +28,10 @@ _Avoid_: Narration segment, BGM
 A template-defined editorial unit of a Script Version, identified by a kind, with a duration, a per-scene accent color, narration lines, and visual cues. Text is expressed as visual cues, not typed slots.
 _Avoid_: Visual cue, template
 
+**Scene Label**:
+A required, saved, non-rendered editing name for a Scene, shown in navigation and lists to tell Scenes apart. It is separate from a heading text cue and is not an identifier.
+_Avoid_: heading, title, scene id
+
 **Speaker**:
 The voice identity for a Narration Segment, whether or not it appears on screen.
 _Avoid_: Character, narrator

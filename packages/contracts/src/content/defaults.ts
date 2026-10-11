@@ -7,17 +7,23 @@ import { textBlockV1, type TextRole } from "../templates";
 export const DEFAULT_SCENE_IDS = {
   intro: "scene-intro",
   point1: "scene-point-1",
-  point2: "scene-point-2",
-  point3: "scene-point-3",
   outro: "scene-outro",
 } as const;
 
 export const DEFAULT_ACCENT_COLORS = {
   intro: "#2563EB",
   point1: "#2563EB",
-  point2: "#16A34A",
-  point3: "#DC2626",
   outro: "#2563EB",
+} as const;
+
+export function defaultPointLabel(ordinal: number): string {
+  return `要点 ${ordinal}`;
+}
+
+export const DEFAULT_SCENE_LABELS = {
+  intro: "導入",
+  point1: defaultPointLabel(1),
+  outro: "結び",
 } as const;
 
 export const INTRO_FIXED_DURATION_MS = 4000;
@@ -51,10 +57,11 @@ export function pointSceneTextCues(sceneId: string): VisualCue[] {
   return [textCue(sceneId, "heading", "heading", 0), textCue(sceneId, "body", "body", 1)];
 }
 
-export function createPointScene(sceneId: string): PointScene {
+export function createPointScene(sceneId: string, label: string): PointScene {
   return {
     id: sceneId,
     kind: "point",
+    label,
     accentColor: DEFAULT_POINT_ACCENT_COLOR,
     timing: { mode: "auto" },
     lines: [],
@@ -74,6 +81,7 @@ export function createInitialContentDocument(): ContentDocument {
       {
         id: DEFAULT_SCENE_IDS.intro,
         kind: "intro",
+        label: DEFAULT_SCENE_LABELS.intro,
         accentColor: DEFAULT_ACCENT_COLORS.intro,
         timing: { mode: "fixed", durationMs: INTRO_FIXED_DURATION_MS },
         lines: [],
@@ -85,30 +93,16 @@ export function createInitialContentDocument(): ContentDocument {
       {
         id: DEFAULT_SCENE_IDS.point1,
         kind: "point",
+        label: DEFAULT_SCENE_LABELS.point1,
         accentColor: DEFAULT_ACCENT_COLORS.point1,
         timing: { mode: "auto" },
         lines: [],
         visualCues: pointSceneTextCues(DEFAULT_SCENE_IDS.point1),
       },
       {
-        id: DEFAULT_SCENE_IDS.point2,
-        kind: "point",
-        accentColor: DEFAULT_ACCENT_COLORS.point2,
-        timing: { mode: "auto" },
-        lines: [],
-        visualCues: pointSceneTextCues(DEFAULT_SCENE_IDS.point2),
-      },
-      {
-        id: DEFAULT_SCENE_IDS.point3,
-        kind: "point",
-        accentColor: DEFAULT_ACCENT_COLORS.point3,
-        timing: { mode: "auto" },
-        lines: [],
-        visualCues: pointSceneTextCues(DEFAULT_SCENE_IDS.point3),
-      },
-      {
         id: DEFAULT_SCENE_IDS.outro,
         kind: "outro",
+        label: DEFAULT_SCENE_LABELS.outro,
         accentColor: DEFAULT_ACCENT_COLORS.outro,
         timing: { mode: "fixed", durationMs: OUTRO_FIXED_DURATION_MS },
         lines: [],

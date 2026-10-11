@@ -25,7 +25,7 @@
 - `話者名:` と `話者名：`（半角・全角コロン）をセリフとして扱い、最初の区切り記号だけで分割する。話者名とセリフ本文はそれぞれ空白を除去する。
 - 空行は無視する。
 - 1物理行を1セリフ、すなわち1字幕・1TTS生成単位とする。
-- 見出しは、生成する要点Sceneの `heading` テキストCueへ設定する。
+- 見出しは、生成する要点Sceneの `label`（編集用名称）へ設定する。`heading` テキストCueの `text` は変更しない。
 - セリフの `captionText` と `speechText` は同じ文で作成し、音声（`selectedAudioTakeId`・Audio Take）は未設定にする。
 - 話者の新規作成は行わない。未登録の話者は既存話者へ割り当てるか、明示的に「話者なし」を選ぶ。
 
@@ -57,7 +57,7 @@
 
 ## 反映規則
 
-- 章ごとに `createPointSceneFormValue` で要点Sceneを作り、`heading` Cueのテキストを章見出しにする。
+- 章ごとに `createPointSceneFormValue` で要点Sceneを作り、章見出しを `scene.label` に設定する。通常のpoint Sceneにある空の `heading` / `body` Cueはそのまま残す。
 - セリフは `createEmptyLine` で作り、`captionText`・`speechText` に同じ本文を入れ、話者対応表のID（「話者なし」は `null`）を `speakerId` に設定する。
 - IDは既存の生成関数（`newSceneId`・`newLineId`・`newVisualCueId`）で発行し、Scene・Cue・Lineで一意にする。既存のCue既定値・ID不変条件に従う。
 - 話者候補は、作品内キャラクターに紐づく話者と、声だけの話者の両方から作る。取り込み後のセリフは話者IDを持つため、現在のTTSフローをそのまま利用できる。

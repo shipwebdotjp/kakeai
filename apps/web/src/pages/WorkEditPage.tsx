@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getVisualTemplate, type ScriptVersion } from "@kakeai/contracts";
+import { defaultPointLabel, getVisualTemplate, type ScriptVersion } from "@kakeai/contracts";
 import { resolveCueWindow, resolveTimeline } from "@kakeai/video/timeline";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
 import { PreviewSection } from "../components/PreviewSection";
@@ -207,25 +207,26 @@ export function WorkEditPage() {
     }
   }, []);
 
-  const pointOrdinals = useMemo(() => {
-    let count = 0;
-    return (formScenes ?? []).map((scene) => {
-      if (scene.kind !== "point") {
-        return 0;
-      }
-      count += 1;
-      return count;
-    });
-  }, [formScenes]);
-
   const sceneLabels = useMemo(() => {
     const map = new Map<string, string>();
-    (formScenes ?? []).forEach((scene, index) => {
-      const ordinal = scene.kind === "point" ? ` ${pointOrdinals[index]}` : "";
-      map.set(scene.id, `${SCENE_LABELS[scene.kind] ?? scene.kind}${ordinal}`);
-    });
+    let pointOrdinal = 0;
+    for (const scene of formScenes ?? []) {
+      if (scene.kind === "point") {
+        pointOrdinal += 1;
+      }
+      const label = (scene.label ?? "").trim();
+      let display: string;
+      if (label.length > 0) {
+        display = label;
+      } else if (scene.kind === "point") {
+        display = defaultPointLabel(pointOrdinal);
+      } else {
+        display = SCENE_LABELS[scene.kind] ?? scene.kind;
+      }
+      map.set(scene.id, display);
+    }
     return map;
-  }, [formScenes, pointOrdinals]);
+  }, [formScenes]);
 
   const targetIds = useMemo(() => {
     const ids: string[] = [];
@@ -327,7 +328,7 @@ export function WorkEditPage() {
           ) : (
             <nav>
               <ul className="m-0 list-none p-0">
-                {formScenes.map((scene, sceneIndex) => (
+                {formScenes.map((scene) => (
                   <li key={scene.id} className="mb-1.5">
                     <button
                       type="button"
@@ -339,8 +340,7 @@ export function WorkEditPage() {
                       }
                       onClick={() => jump(`scene-${scene.id}`, sceneStartById.get(scene.id) ?? null)}
                     >
-                      {SCENE_LABELS[scene.kind] ?? scene.kind}
-                      {scene.kind === "point" ? ` ${pointOrdinals[sceneIndex]}` : ""}
+                      {sceneLabels.get(scene.id) ?? scene.id}
                     </button>
                     <ul className="m-0 ml-3 list-none p-0">
                       {scene.cues.map((cue) => (

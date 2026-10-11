@@ -10,7 +10,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "locale": "ja-JP",
   "template": {
     "id": "explanation-scenes",
@@ -24,13 +24,13 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
-- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。Sceneスロット廃止とシーン間トランジション追加（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)/[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)）で `4` とする。開発段階のため v3 以前の保存版は持ちず、新規作成・保存するDocumentは `4` とする。
+- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。Scene Label の追加（[../scene-labels/spec.md](../scene-labels/spec.md)）で `5` とする。新規作成・保存するDocumentは `5` とする。開発段階のため v3 以前の保存版は持たず、v4 は読み出し時に v5 へ移行する。
 - `locale` はBCP 47形式で保存する。MVPの有効値は `ja-JP` のみ。
 - `template` は構造と既定表現を決める。MVPでは `explanation-scenes@1` のみ。
 
 `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。
 
-`schemaVersion` は `4` とする。Sceneスロットを廃止しテキストをVisualCueへ統一した時点（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)）で `3` → `4` に上げた。開発段階では破壊的変更で移行関数を持たない（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。開発環境に残る v4 未満の保存版は削除し、読み出し解釈や移行関数を先回りして持たない。正式リリース後は、スキーマを破壊的に変えるときに保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。編集画面・テキストモデル・シーン間トランジションの詳細は [../editor/spec.md](../editor/spec.md) を正とする。
+`schemaVersion` は `5` とする。Sceneスロット廃止とシーン間トランジション追加（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)/[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)）で `4` に上げ、Scene Label の追加（[../scene-labels/spec.md](../scene-labels/spec.md)）で `5` に上げた。読み出し時は v4 の各Sceneへ従来表示名（`導入` / `要点 N` / `結び`）を補って v5 として解釈する。保存済みJSONは書き換えず、次回の保存で新しい v5 `ScriptVersion` を作る。v3 以前の保存版は削除し、読み出し解釈を持たない。正式リリース後は、スキーマを破壊的に変えるときに保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。編集画面・テキストモデル・シーン間トランジションの詳細は [../editor/spec.md](../editor/spec.md) を正とする。
 
 ## セリフと音声
 
@@ -90,9 +90,11 @@ MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、�
 
 ## シーンとVisualCue
 
-Sceneはテンプレート上のまとまりで、`kind` によって並び順と新規生成の意味を持つ。`explanation-scenes@1` は `intro`、0件以上の `point`、`outro` をこの順に持つ。新規作品は導入、要点3件、結びで開始する。Sceneは**型付きスロットを持たない**。タイトル・サブタイトル・見出し・本文・結びは、統合テキストテンプレート `text.block@1` のVisualCueとして表現する（[../editor/spec.md](../editor/spec.md)、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)）。
+Sceneはテンプレート上のまとまりで、`kind` によって並び順と新規生成の意味を持つ。`explanation-scenes@1` は `intro`、0件以上の `point`、`outro` をこの順に持つ。新規作品は導入、要点1件、結びで開始する。Sceneは**型付きスロットを持たない**。タイトル・サブタイトル・見出し・本文・結びは、統合テキストテンプレート `text.block@1` のVisualCueとして表現する（[../editor/spec.md](../editor/spec.md)、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)）。
 
-すべてのSceneは必須の `accentColor` を持つ。値は大文字に正規化した `#RRGGBB` 形式に限定し、透過色・CSS関数・任意文字列は受け入れない。これはSceneの表示設定であり、VisualCueではない。新規作品の導入、要点3件、結びには `explanation-scenes@1` が定める既定色を入れる。
+すべてのSceneは必須の `label` を持つ。`label` は映像に描画しない編集用の名称で、`heading` テキストCueとは別物である。空白のみは不可、重複は許可する。初期Sceneは `導入` / `要点 1` / `結び` とする。詳細は [../scene-labels/spec.md](../scene-labels/spec.md) を正とする。
+
+すべてのSceneは必須の `accentColor` を持つ。値は大文字に正規化した `#RRGGBB` 形式に限定し、透過色・CSS関数・任意文字列は受け入れない。これはSceneの表示設定であり、VisualCueではない。導入、要点1件、結びには `explanation-scenes@1` が定める既定色を入れる。
 
 Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`）で持つ。preset は `cut`（既定・尺0）／`fade`（暗転を挟む）／`crossfade` の有限enumで、尺は `durationMs`。総尺は変えない（[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)、[../editor/spec.md](../editor/spec.md)）。`D <= min(先行Scene尺, 入場Scene尺)` を保存・レンダー投入前に検証する。テキストは `text.block@1` のVisualCueとして置き、`role` で意味付けする。背景素材はSceneではなくVisualCueで指定する。
 
@@ -100,6 +102,7 @@ Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`�
 {
   "id": "scene-point-1",
   "kind": "point",
+  "label": "要点 1",
   "accentColor": "#2563EB",
   "transition": {
     "enter": { "preset": "fade", "durationMs": 300 }
@@ -257,7 +260,7 @@ BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset
 
 ## 実装上のルール
 
-- `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `accentColor: z.string().regex(/^#[0-9A-F]{6}$/)`、`timing: z.discriminatedUnion("mode", ...)`、任意の `transition` を持ち、NarrationSegmentの `selectedAudioTakeId` は必須の `z.string().nullable()` とする。Sceneは型付きスロットを持たず、`VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
+- `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `label`（空白のみ拒否）、必須の `accentColor: z.string().regex(/^#[0-9A-F]{6}$/)`、`timing: z.discriminatedUnion("mode", ...)`、任意の `transition` を持ち、NarrationSegmentの `selectedAudioTakeId` は必須の `z.string().nullable()` とする。Sceneは型付きスロットを持たず、`VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
 - 正本JSONにはローカルパス、フレーム番号、HyperFrames固有のDOM属性やHTMLを保存しない。
 - 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・Sceneのアクセント色・`scene.transition` の尺（`D <= min(先行Scene尺, 入場Scene尺)`）を検証する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。テキスト量の目安超過は拒否せず警告として返す。
 - Render Jobには、検証済みの正本JSON、選択AudioTake、使用するレンダー入力（Renditionまたは原本）の参照情報、テンプレート版、出力設定を保存する。ワーカーはスナップショットJSONを実行時の信頼済みコンパイラでHTMLへ変換する。ツール更新後の同一MP4再現は要件にしない。

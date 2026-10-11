@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   contentDocumentSchema,
   createInitialContentDocument,
+  createPointScene,
   type ContentDocument,
   type PointScene,
   type VisualCue,
@@ -86,6 +87,12 @@ function standingV1(id: string, x: number, scale = 1): VisualCue {
 describe("buildContentDocument", () => {
   it("maps scene values to base scenes by id, not position", () => {
     const base = createInitialContentDocument();
+    base.scenes.splice(
+      base.scenes.length - 1,
+      0,
+      createPointScene("scene-point-2", "要点 2"),
+      createPointScene("scene-point-3", "要点 3"),
+    );
     const points = pointScenes(base);
     setSceneText(points[0]!, "heading", "見出し1");
     setSceneText(points[1]!, "heading", "見出し2");
@@ -238,10 +245,10 @@ describe("buildContentDocument", () => {
     const base = createInitialContentDocument();
     const values = toFormValues(base);
     const outroIndex = values.scenes.findIndex((scene) => scene.kind === "outro");
-    values.scenes.splice(outroIndex, 0, createPointSceneFormValue());
+    values.scenes.splice(outroIndex, 0, createPointSceneFormValue("要点 2"));
 
     const rebuilt = buildContentDocument(base, values);
-    expect(pointScenes(rebuilt)).toHaveLength(4);
+    expect(pointScenes(rebuilt)).toHaveLength(2);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
@@ -1006,7 +1013,11 @@ describe("buildContentDocument", () => {
     source.cues[0]!.startLineId = sourceLine.id;
     source.cues[0]!.endLineId = sourceLine.id;
 
-    const copy = cloneSceneFormValue(source as SceneFormValue & { kind: "point" }, newSceneId());
+    const copy = cloneSceneFormValue(
+      source as SceneFormValue & { kind: "point" },
+      newSceneId(),
+      "要点 2",
+    );
     expect(copy.kind).toBe("point");
     expect(copy.lines).toEqual([]);
     expect(copy.accentColor).toBe("#123456");

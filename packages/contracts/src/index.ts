@@ -12,6 +12,7 @@ export * from "./content/visual";
 export * from "./content/scene";
 export * from "./content/document";
 export * from "./content/defaults";
+export * from "./content/migrate";
 export * from "./content/warnings";
 export * from "./content/asset-refs";
 export * from "./templates";

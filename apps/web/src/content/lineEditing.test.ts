@@ -65,6 +65,7 @@ function makeScene(lines: LineFormValue[], cues: CueFormValue[] = []): SceneForm
   return {
     id: "scene-point-1",
     kind: "point",
+    label: "要点 1",
     accentColor: "#2563EB",
     timingMode: "auto",
     durationMs: 4000,
@@ -230,7 +231,7 @@ describe("splitPointScene", () => {
       line("l4", null, "D", "d"),
     ]);
 
-    const { first, second } = splitPointScene(scene, 2);
+    const { first, second } = splitPointScene(scene, 2, "要点 2");
 
     expect(first.id).toBe("scene-point-1");
     expect(first.lines.map((entry) => entry.id)).toEqual(["l1", "l2"]);
@@ -264,7 +265,7 @@ describe("splitPointScene", () => {
       ],
     );
 
-    const { first, second } = splitPointScene(scene, 2);
+    const { first, second } = splitPointScene(scene, 2, "要点 2");
 
     expect(first.cues.map((entry) => entry.id)).toEqual(["scene", "offset", "before", "span"]);
     expect(first.cues.find((entry) => entry.id === "span")).toMatchObject({
@@ -304,7 +305,7 @@ describe("splitPointScene", () => {
       [span],
     );
 
-    const { first, second } = splitPointScene(scene, 2);
+    const { first, second } = splitPointScene(scene, 2, "要点 2");
     const firstSpan = first.cues.find((entry) => entry.id === "span")!;
     const secondSpan = second.cues.find((entry) => entry.rangeKind === "lines")!;
 
@@ -315,10 +316,10 @@ describe("splitPointScene", () => {
 
   it("rejects splits at the first line or beyond the last line", () => {
     const scene = makeScene([line("l1", null, "A", "a"), line("l2", null, "B", "b")]);
-    expect(() => splitPointScene(scene, 0)).toThrow();
-    expect(() => splitPointScene(scene, 2)).toThrow();
+    expect(() => splitPointScene(scene, 0, "要点 2")).toThrow();
+    expect(() => splitPointScene(scene, 2, "要点 2")).toThrow();
     const single = makeScene([line("l1", null, "A", "a")]);
-    expect(() => splitPointScene(single, 1)).toThrow();
+    expect(() => splitPointScene(single, 1, "要点 2")).toThrow();
   });
 });
 

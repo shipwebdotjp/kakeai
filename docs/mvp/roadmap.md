@@ -13,7 +13,7 @@
 詳細は [spec.md](./spec.md) を参照。実装フェーズと完了状況は [todo.md](./todo.md) を正とする。
 
 - 横型解説動画の可変Sceneテンプレート、手動素材、手動立ち絵、セリフ単位の手動音声候補、作品全体BGM、プレビュー、MP4出力を提供する。
-- 新規作品は導入、要点3件、結びで開始し、要点Sceneを追加・削除・並べ替えできる。背景とカードは各Sceneに各1件、立ち絵は各Sceneに1体指定できる。
+- 新規作品は導入、要点1件、結びで開始し、要点Sceneを追加・削除・並べ替えできる。背景とカードは各Sceneに各1件、立ち絵は各Sceneに1体指定できる。
 - `Work`、`LanguageEdition`、`ScriptVersion`、`Asset`、`Job`、`Artifact` をテーブルとして確立する。`NarrationSegment` は独立したテーブルではなく `ScriptVersion.contentJson` 内の構造として持つ。
 - `ja-JP` だけを有効化し、単一Mac上でSQLite、ローカル保存、ローカルワーカーを動かす。
 

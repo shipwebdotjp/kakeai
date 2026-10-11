@@ -29,6 +29,7 @@ import {
   newCharacterId,
   newSceneId,
   newSpeakerId,
+  nextPointLabel,
   splitPointScene,
   toFormValues,
   DEFAULT_BGM_GAIN_DB,
@@ -210,8 +211,10 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   );
 
   const onAddPoint = () => {
-    const outroIndex = getValues("scenes").findIndex((scene) => scene.kind === "outro");
-    insert(outroIndex === -1 ? fields.length : outroIndex, createPointSceneFormValue());
+    const scenes = getValues("scenes");
+    const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
+    const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
+    insert(insertIndex, createPointSceneFormValue(nextPointLabel(scenes, insertIndex)));
   };
 
   const onClonePrevious = (index: number) => {
@@ -220,7 +223,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     if (previous === undefined || previous.kind !== "point") {
       return;
     }
-    insert(index, cloneSceneFormValue(previous as SceneFormValue & { kind: "point" }, newSceneId()));
+    insert(
+      index,
+      cloneSceneFormValue(
+        previous as SceneFormValue & { kind: "point" },
+        newSceneId(),
+        nextPointLabel(scenes, index),
+      ),
+    );
   };
 
   const onMove = (index: number, direction: -1 | 1) => {
@@ -240,7 +250,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     }
     let result: ReturnType<typeof splitPointScene>;
     try {
-      result = splitPointScene(scene, lineIndex);
+      result = splitPointScene(scene, lineIndex, nextPointLabel(scenes, sceneIndex + 1));
     } catch (error) {
       setIssues([errorMessage(error)]);
       return;
@@ -512,10 +522,15 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             className="my-4 rounded-lg border border-border p-4"
           >
             <div className="mt-0 mb-2 flex flex-wrap items-center gap-2">
-              <h3 className="m-0 flex items-baseline gap-2 text-lg font-semibold">
+              <input
+                aria-label="シーン名"
+                placeholder="シーン名"
+                className={`min-w-[160px] font-semibold ${textFieldClass}`}
+                {...register(`scenes.${sceneIndex}.label`)}
+              />
+              <span className="text-xs font-normal text-muted-foreground">
                 {SCENE_LABELS[scene.kind] ?? scene.kind}
-                {scene.kind === "point" && ` ${pointOrdinals[sceneIndex]}`}
-              </h3>
+              </span>
               <span className="text-xs font-normal text-muted-foreground">{scene.id}</span>
               {scene.kind === "point" && (
                 <span className="ml-auto flex gap-1">

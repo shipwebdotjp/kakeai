@@ -6,6 +6,7 @@ import {
   TEMPLATE_VERSION,
   characterStandingV1,
   characterStandingV2,
+  defaultPointLabel,
   getTemplateInputFields,
   getVisualTemplate,
   mediaCardV1,
@@ -104,6 +105,7 @@ export interface CueFormValue {
 export interface SceneFormValue {
   id: string;
   kind: "intro" | "point" | "outro";
+  label: string;
   accentColor: string;
   timingMode: "auto" | "fixed";
   durationMs: number;
@@ -418,6 +420,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
       return {
         id: scene.id,
         kind: scene.kind,
+        label: scene.label ?? "",
         accentColor: scene.accentColor,
         timingMode: scene.kind === "point" ? scene.timing.mode : "fixed",
         durationMs: scene.timing.mode === "fixed" ? scene.timing.durationMs : FALLBACK_DURATION_MS,
@@ -898,6 +901,7 @@ export function buildContentDocument(
           };
     const common = {
       id: sceneValue.id,
+      label: (sceneValue.label ?? "").trim(),
       accentColor: (sceneValue.accentColor || DEFAULT_POINT_ACCENT_COLOR).toUpperCase(),
       timing,
       ...(transition === undefined ? {} : { transition }),
@@ -1031,11 +1035,21 @@ export function createCueFormValue(options: {
   };
 }
 
-export function createPointSceneFormValue(): SceneFormValue {
+export function nextPointLabel(
+  scenes: readonly SceneFormValue[],
+  insertIndex: number,
+): string {
+  const ordinal =
+    scenes.slice(0, insertIndex).filter((scene) => scene.kind === "point").length + 1;
+  return defaultPointLabel(ordinal);
+}
+
+export function createPointSceneFormValue(label: string): SceneFormValue {
   const id = newSceneId();
   return {
     id,
     kind: "point",
+    label,
     accentColor: DEFAULT_POINT_ACCENT_COLOR,
     timingMode: "auto",
     durationMs: FALLBACK_DURATION_MS,
@@ -1050,10 +1064,12 @@ export function createPointSceneFormValue(): SceneFormValue {
 export function cloneSceneFormValue(
   source: SceneFormValue & { kind: "point" },
   newId: string,
+  label: string,
 ): SceneFormValue {
   return {
     id: newId,
     kind: "point",
+    label,
     accentColor: source.accentColor,
     timingMode: source.timingMode,
     durationMs: source.durationMs,
@@ -1375,13 +1391,17 @@ export interface SplitSceneResult {
   second: SceneFormValue;
 }
 
-export function splitPointScene(scene: SceneFormValue, splitAt: number): SplitSceneResult {
+export function splitPointScene(
+  scene: SceneFormValue,
+  splitAt: number,
+  secondLabel: string,
+): SplitSceneResult {
   if (scene.kind !== "point" || splitAt <= 0 || splitAt >= scene.lines.length) {
     throw new Error("この位置ではシーンを分割できません。");
   }
   const lines = scene.lines;
   const indexById = new Map(lines.map((line, index) => [line.id, index]));
-  const second = createPointSceneFormValue();
+  const second = createPointSceneFormValue(secondLabel);
   const firstCues: CueFormValue[] = [];
   const secondCues: CueFormValue[] = [...second.cues];
   for (const cue of scene.cues) {

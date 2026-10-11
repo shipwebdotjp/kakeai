@@ -101,7 +101,8 @@ describe("buildImportedScenes", () => {
     });
     const points = pointScenes(scenes);
     expect(points).toHaveLength(2);
-    expect(points.map(headingText)).toEqual(["第一章", "第二章"]);
+    expect(points.map((scene) => scene.label)).toEqual(["第一章", "第二章"]);
+    expect(points.every((scene) => headingText(scene) === "")).toBe(true);
     expect(points[0]!.lines.map((line) => line.speakerId)).toEqual([
       "speaker-rin",
       "speaker-ren",
@@ -164,7 +165,8 @@ describe("buildImportedScenes", () => {
     expect(scenes[0]!.kind).toBe("intro");
     expect(scenes[scenes.length - 1]!.kind).toBe("outro");
     expect(pointScenes(scenes)).toHaveLength(1);
-    expect(headingText(pointScenes(scenes)[0]!)).toBe("新しい章");
+    expect(pointScenes(scenes)[0]!.label).toBe("新しい章");
+    expect(headingText(pointScenes(scenes)[0]!)).toBe("");
   });
 
   it("appends after the last point scene while keeping existing points", () => {

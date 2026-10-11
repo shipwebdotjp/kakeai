@@ -135,11 +135,7 @@ function buildChapterScene(
   chapter: ScriptChapter,
   assignments: SpeakerAssignmentMap,
 ): SceneFormValue {
-  const scene = createPointSceneFormValue();
-  const headingCue = scene.cues.find((cue) => cue.fields.role === "heading");
-  if (headingCue !== undefined) {
-    headingCue.fields.text = chapter.heading;
-  }
+  const scene = createPointSceneFormValue(chapter.heading.trim());
   scene.lines = chapter.lines.map((line) => {
     const value = createEmptyLine(scene.id);
     value.captionText = line.text;

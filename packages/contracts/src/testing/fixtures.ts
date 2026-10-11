@@ -39,6 +39,7 @@ export function validContentDocument(): ContentDocument {
       {
         id: "scene-intro",
         kind: "intro",
+        label: "導入",
         accentColor: "#2563EB",
         timing: { mode: "fixed", durationMs: 4000 },
         lines: [],
@@ -62,6 +63,7 @@ export function validContentDocument(): ContentDocument {
       {
         id: "scene-point-1",
         kind: "point",
+        label: "要点 1",
         accentColor: "#2563EB",
         timing: { mode: "auto" },
         lines: [
@@ -81,6 +83,7 @@ export function validContentDocument(): ContentDocument {
       {
         id: "scene-point-2",
         kind: "point",
+        label: "要点 2",
         accentColor: "#16A34A",
         timing: { mode: "auto" },
         lines: [],
@@ -92,6 +95,7 @@ export function validContentDocument(): ContentDocument {
       {
         id: "scene-point-3",
         kind: "point",
+        label: "要点 3",
         accentColor: "#DC2626",
         timing: { mode: "auto" },
         lines: [],
@@ -103,6 +107,7 @@ export function validContentDocument(): ContentDocument {
       {
         id: "scene-outro",
         kind: "outro",
+        label: "結び",
         accentColor: "#2563EB",
         timing: { mode: "fixed", durationMs: 4000 },
         lines: [],

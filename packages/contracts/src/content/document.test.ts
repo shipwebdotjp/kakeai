@@ -8,7 +8,7 @@ const transition = {
 } as const;
 
 describe("contentDocumentSchema", () => {
-  it("accepts a valid v3 document", () => {
+  it("accepts a valid document", () => {
     const result = contentDocumentSchema.safeParse(validContentDocument());
     expect(result.success).toBe(true);
   });
@@ -19,8 +19,16 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
-  it("rejects a non-v3 schemaVersion", () => {
+  it("rejects a non-current schemaVersion", () => {
     const doc = { ...validContentDocument(), schemaVersion: 2 };
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("requires a non-blank label on every scene", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.label = "   ";
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+    delete (doc.scenes[0] as { label?: unknown }).label;
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 

@@ -36,8 +36,14 @@ export const sceneTransitionSchema = z.strictObject({
 export type SceneTransition = z.infer<typeof sceneTransitionSchema>;
 export type SceneTransitionEdge = z.infer<typeof sceneTransitionEdgeSchema>;
 
+export const sceneLabelSchema = z
+  .string()
+  .trim()
+  .min(1, { message: "Scene Label は必須です" });
+
 const sceneBaseShape = {
   id: idSchema,
+  label: sceneLabelSchema,
   accentColor: accentColorSchema,
   timing: sceneTimingSchema,
   transition: sceneTransitionSchema.optional(),

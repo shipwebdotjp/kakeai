@@ -4,6 +4,8 @@
 
 シーン構成を可変にする `explanation-scenes@1` を導入し、新規作成・保存はこれを使う。
 構成は「導入 → 要点0件以上 → 結び」の順で、新規作品は要点3件で開始する。
+
+> amended by [../scene-labels/spec.md](../scene-labels/spec.md): 新規作品の初期Sceneは導入 / 要点 1 / 結び の3件に変更した。
 `contentDocumentSchema` は `template.id` で構成規則を切り替える判別unionとし、
 旧 `explanation-5-scenes@1`（導入→要点×3→結び）も引き続き検証・読み出し・描画できるようにする。
 
