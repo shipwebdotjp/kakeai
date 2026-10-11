@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useFieldArray,
   useWatch,
@@ -21,7 +21,14 @@ import type {
   SpeakerFormValue,
   TakeFormValue,
 } from "../content/form";
-import { createEmptyLine, newSpeakerId, newTakeId } from "../content/form";
+import {
+  createEmptyLine,
+  duplicateLineFormValue,
+  lineSummary,
+  moveLineInScene,
+  newSpeakerId,
+  newTakeId,
+} from "../content/form";
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
 import {
@@ -47,6 +54,7 @@ interface LinesEditorProps {
   voiceProfiles: VoiceProfile[];
   adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
+  onSplitScene: (sceneIndex: number, lineIndex: number) => void;
 }
 
 function formatDuration(durationMs: number): string {
@@ -54,10 +62,136 @@ function formatDuration(durationMs: number): string {
   return `${seconds.toFixed(seconds < 10 ? 1 : 0)}秒`;
 }
 
-interface LineEditorProps extends Omit<LinesEditorProps, "sceneId" | "control"> {
+interface LineEditorProps extends Omit<LinesEditorProps, "sceneId" | "control" | "onSplitScene"> {
   lineIndex: number;
   line: LineFormValue;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMove: (direction: -1 | 1) => void;
+  onDuplicate: () => void;
+  onSplit: () => void;
   onRemove: () => void;
+}
+
+interface LineActionsMenuProps {
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  canSplit: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onSplit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}
+
+const MENU_ITEM_CLASS =
+  "block w-full whitespace-nowrap rounded px-2 py-1 text-left text-sm hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40";
+
+function LineActionsMenu({
+  canMoveUp,
+  canMoveDown,
+  canSplit,
+  onMoveUp,
+  onMoveDown,
+  onSplit,
+  onDuplicate,
+  onDelete,
+}: LineActionsMenuProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      if (containerRef.current !== null && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const run = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="セリフ操作"
+        className={buttonNeutralClass}
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        …
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-1 min-w-48 rounded border border-border bg-surface p-1 shadow-lg"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU_ITEM_CLASS}
+            disabled={!canMoveUp}
+            onClick={() => run(onMoveUp)}
+          >
+            上へ
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU_ITEM_CLASS}
+            disabled={!canMoveDown}
+            onClick={() => run(onMoveDown)}
+          >
+            下へ
+          </button>
+          {canSplit && (
+            <button
+              type="button"
+              role="menuitem"
+              className={MENU_ITEM_CLASS}
+              onClick={() => run(onSplit)}
+            >
+              このセリフの前でシーンを分割
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU_ITEM_CLASS}
+            onClick={() => run(onDuplicate)}
+          >
+            複製
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={MENU_ITEM_CLASS}
+            onClick={() => run(onDelete)}
+          >
+            削除
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const MIN_SPEED = MIN_TTS_SPEED_SCALE;
@@ -71,6 +205,11 @@ function LineEditor({
   sceneIndex,
   lineIndex,
   line,
+  canMoveUp,
+  canMoveDown,
+  onMove,
+  onDuplicate,
+  onSplit,
   onRemove,
   speakers,
   characters,
@@ -216,6 +355,23 @@ function LineEditor({
 
   return (
     <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium break-words">
+          {lineIndex + 1}. {lineSummary(line, speakers)}
+        </span>
+        <span className="ml-auto">
+          <LineActionsMenu
+            canMoveUp={canMoveUp}
+            canMoveDown={canMoveDown}
+            canSplit={lineIndex > 0}
+            onMoveUp={() => onMove(-1)}
+            onMoveDown={() => onMove(1)}
+            onSplit={onSplit}
+            onDuplicate={onDuplicate}
+            onDelete={onRemove}
+          />
+        </span>
+      </div>
       <textarea
         rows={2}
         placeholder="字幕テキスト"
@@ -385,10 +541,6 @@ function LineEditor({
         )}
         {generate.isError && <p className={errorTextClass}>{generate.error.message}</p>}
       </div>
-
-      <button type="button" className={buttonNeutralClass} onClick={onRemove}>
-        セリフを削除
-      </button>
     </div>
   );
 }
@@ -406,12 +558,34 @@ export function LinesEditor({
   voiceProfiles,
   adapterVoices,
   savedVoiceByLineId,
+  onSplitScene,
 }: LinesEditorProps) {
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, insert, replace } = useFieldArray({
     control,
     name: `scenes.${sceneIndex}.lines`,
   });
   const watchedLines = useWatch({ control, name: `scenes.${sceneIndex}.lines` }) ?? [];
+
+  const moveLine = (from: number, to: number) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    const moved = moveLineInScene(scene, from, to);
+    if (moved === scene) {
+      return;
+    }
+    replace(moved.lines);
+    setValue(`scenes.${sceneIndex}.cues`, moved.cues, { shouldDirty: true });
+  };
+
+  const duplicateLine = (lineIndex: number) => {
+    const line = getValues(`scenes.${sceneIndex}.lines.${lineIndex}`);
+    if (line === undefined) {
+      return;
+    }
+    insert(lineIndex + 1, duplicateLineFormValue(line, sceneId));
+  };
 
   return (
     <div className="mt-3 border-t border-dashed border-border pt-2">
@@ -430,6 +604,11 @@ export function LinesEditor({
             sceneIndex={sceneIndex}
             lineIndex={lineIndex}
             line={line}
+            canMoveUp={lineIndex > 0}
+            canMoveDown={lineIndex < fields.length - 1}
+            onMove={(direction) => moveLine(lineIndex, lineIndex + direction)}
+            onDuplicate={() => duplicateLine(lineIndex)}
+            onSplit={() => onSplitScene(sceneIndex, lineIndex)}
             onRemove={() => remove(lineIndex)}
             scriptVersionId={scriptVersionId}
             speakers={speakers}

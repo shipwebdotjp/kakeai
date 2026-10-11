@@ -1208,3 +1208,171 @@ function countStandingReferences(
   }
   return { scenes: sceneIds.size, cues, speakers };
 }
+
+export function lineSpeakerName(
+  line: LineFormValue,
+  speakers: readonly SpeakerFormValue[],
+): string {
+  if (line.speakerId === null) {
+    return "話者なし";
+  }
+  const speaker = speakers.find((entry) => entry.id === line.speakerId);
+  const name = speaker?.name.trim() ?? "";
+  return name.length > 0 ? name : "話者なし";
+}
+
+export function lineCaptionText(line: LineFormValue): string {
+  const caption = line.captionText.trim();
+  return caption.length > 0 ? caption : "（字幕なし）";
+}
+
+export function lineSummary(
+  line: LineFormValue,
+  speakers: readonly SpeakerFormValue[],
+): string {
+  return `${lineSpeakerName(line, speakers)} — ${lineCaptionText(line)}`;
+}
+
+export function lineOptionLabel(
+  lines: readonly LineFormValue[],
+  index: number,
+  speakers: readonly SpeakerFormValue[],
+  captionLimit = 20,
+): string {
+  const line = lines[index];
+  if (line === undefined) {
+    return "";
+  }
+  const caption = lineCaptionText(line);
+  const chars = Array.from(caption);
+  const shown = chars.length > captionLimit ? `${chars.slice(0, captionLimit).join("")}…` : caption;
+  return `${index + 1}. ${lineSpeakerName(line, speakers)} — ${shown}`;
+}
+
+export function lineIndex(lines: readonly LineFormValue[], lineId: string): number {
+  return lines.findIndex((line) => line.id === lineId);
+}
+
+export function lineRangeEndCandidates(
+  lines: readonly LineFormValue[],
+  startLineId: string,
+): LineFormValue[] {
+  const start = lineIndex(lines, startLineId);
+  return start === -1 ? [...lines] : lines.slice(start);
+}
+
+export function nextEndLineId(
+  lines: readonly LineFormValue[],
+  startLineId: string,
+  currentEndLineId: string,
+): string {
+  const start = lineIndex(lines, startLineId);
+  const end = lineIndex(lines, currentEndLineId);
+  if (start !== -1 && end !== -1 && end < start) {
+    return startLineId;
+  }
+  return currentEndLineId;
+}
+
+export function duplicateLineFormValue(line: LineFormValue, sceneId: string): LineFormValue {
+  const copy = createEmptyLine(sceneId);
+  copy.speakerId = line.speakerId;
+  copy.captionText = line.captionText;
+  copy.speechText = line.speechText;
+  return copy;
+}
+
+export function normalizeLineRangeCues(scene: SceneFormValue): SceneFormValue {
+  const indexById = new Map(scene.lines.map((line, index) => [line.id, index]));
+  const cues = scene.cues.map((cue) => {
+    if (cue.rangeKind !== "lines") {
+      return cue;
+    }
+    const start = indexById.get(cue.startLineId);
+    const end = indexById.get(cue.endLineId);
+    if (start === undefined || end === undefined || start <= end) {
+      return cue;
+    }
+    return { ...cue, startLineId: cue.endLineId, endLineId: cue.startLineId };
+  });
+  return { ...scene, cues };
+}
+
+export function moveLineInScene(
+  scene: SceneFormValue,
+  fromIndex: number,
+  toIndex: number,
+): SceneFormValue {
+  const lines = [...scene.lines];
+  if (
+    fromIndex < 0 ||
+    fromIndex >= lines.length ||
+    toIndex < 0 ||
+    toIndex >= lines.length ||
+    fromIndex === toIndex
+  ) {
+    return scene;
+  }
+  const [moved] = lines.splice(fromIndex, 1);
+  if (moved === undefined) {
+    return scene;
+  }
+  lines.splice(toIndex, 0, moved);
+  return normalizeLineRangeCues({ ...scene, lines });
+}
+
+export interface SplitSceneResult {
+  first: SceneFormValue;
+  second: SceneFormValue;
+}
+
+export function splitPointScene(scene: SceneFormValue, splitAt: number): SplitSceneResult {
+  if (scene.kind !== "point" || splitAt <= 0 || splitAt >= scene.lines.length) {
+    throw new Error("この位置ではシーンを分割できません。");
+  }
+  const lines = scene.lines;
+  const indexById = new Map(lines.map((line, index) => [line.id, index]));
+  const second = createPointSceneFormValue();
+  const firstCues: CueFormValue[] = [];
+  const secondCues: CueFormValue[] = [...second.cues];
+  for (const cue of scene.cues) {
+    if (cue.rangeKind !== "lines") {
+      firstCues.push(cue);
+      continue;
+    }
+    const start = indexById.get(cue.startLineId);
+    const end = indexById.get(cue.endLineId);
+    if (start === undefined || end === undefined) {
+      firstCues.push(cue);
+      continue;
+    }
+    const low = Math.min(start, end);
+    const high = Math.max(start, end);
+    if (high < splitAt) {
+      firstCues.push({ ...cue, startLineId: lines[low]!.id, endLineId: lines[high]!.id });
+      continue;
+    }
+    if (low >= splitAt) {
+      secondCues.push({ ...cue, startLineId: lines[low]!.id, endLineId: lines[high]!.id });
+      continue;
+    }
+    const secondCueId = newVisualCueId(second.id, cue.templateId.replace(/\W/g, "-"));
+    firstCues.push({
+      ...cue,
+      startLineId: lines[low]!.id,
+      endLineId: lines[splitAt - 1]!.id,
+    });
+    secondCues.push({
+      ...cue,
+      id: secondCueId,
+      fields: { ...cue.fields },
+      baseCue: cue.baseCue === null ? null : { ...structuredClone(cue.baseCue), id: secondCueId },
+      startLineId: lines[splitAt]!.id,
+      endLineId: lines[high]!.id,
+    });
+  }
+  return {
+    first: { ...scene, lines: lines.slice(0, splitAt), cues: firstCues },
+    second: { ...second, lines: lines.slice(splitAt), cues: secondCues },
+  };
+}

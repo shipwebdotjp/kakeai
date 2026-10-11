@@ -19,9 +19,15 @@ import {
 import {
   STANDING_TEMPLATE_ID,
   createCueFormValue,
+  lineIndex,
+  lineOptionLabel,
+  lineRangeEndCandidates,
+  lineSummary,
+  nextEndLineId,
   type CueFormValue,
   type DocumentFormValues,
   type LineFormValue,
+  type SpeakerFormValue,
 } from "../content/form";
 import { buttonNeutralClass, metaTextClass, textFieldClass } from "../ui";
 import { MediaPicker } from "./MediaPicker";
@@ -78,6 +84,7 @@ interface CueListProps {
   sceneIndex: number;
   sceneId: string;
   lines: LineFormValue[];
+  speakers: SpeakerFormValue[];
 }
 
 interface CueRowProps {
@@ -88,6 +95,7 @@ interface CueRowProps {
   cueIndex: number;
   cue: CueFormValue;
   lines: LineFormValue[];
+  speakers: SpeakerFormValue[];
   onRemove: () => void;
 }
 
@@ -99,6 +107,7 @@ function CueRow({
   cueIndex,
   cue,
   lines,
+  speakers,
   onRemove,
 }: CueRowProps) {
   const base = `scenes.${sceneIndex}.cues.${cueIndex}` as const;
@@ -110,6 +119,9 @@ function CueRow({
     const current = getValues(fieldsPath) ?? {};
     setValue(fieldsPath, { ...current, [key]: value }, { shouldDirty: true });
   };
+  const startIndex = lineIndex(lines, cue.startLineId);
+  const endIndex = lineIndex(lines, cue.endLineId);
+  const endCandidates = lineRangeEndCandidates(lines, cue.startLineId);
 
   return (
     <div id={`cue-${cue.id}`} className="mt-2 rounded border border-border p-2">
@@ -154,22 +166,38 @@ function CueRow({
           <>
             <label className="inline-flex items-center gap-1.5">
               開始
-              <select className={textFieldClass} {...register(`${base}.startLineId`)}>
+              <select
+                className={textFieldClass}
+                value={cue.startLineId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  setValue(`${base}.startLineId`, nextId, { shouldDirty: true });
+                  setValue(`${base}.endLineId`, nextEndLineId(lines, nextId, cue.endLineId), {
+                    shouldDirty: true,
+                  });
+                }}
+              >
                 <option value="">選択</option>
                 {lines.map((line, index) => (
                   <option key={line.id} value={line.id}>
-                    {index + 1}
+                    {lineOptionLabel(lines, index, speakers)}
                   </option>
                 ))}
               </select>
             </label>
             <label className="inline-flex items-center gap-1.5">
               終了
-              <select className={textFieldClass} {...register(`${base}.endLineId`)}>
+              <select
+                className={textFieldClass}
+                value={cue.endLineId}
+                onChange={(event) =>
+                  setValue(`${base}.endLineId`, event.target.value, { shouldDirty: true })
+                }
+              >
                 <option value="">選択</option>
-                {lines.map((line, index) => (
+                {endCandidates.map((line) => (
                   <option key={line.id} value={line.id}>
-                    {index + 1}
+                    {lineOptionLabel(lines, lineIndex(lines, line.id), speakers)}
                   </option>
                 ))}
               </select>
@@ -199,6 +227,14 @@ function CueRow({
           </>
         )}
       </div>
+
+      {cue.rangeKind === "lines" && (cue.startLineId !== "" || cue.endLineId !== "") && (
+        <p className={`mt-1 ${metaTextClass}`}>
+          開始: {startIndex === -1 ? "未選択" : lineSummary(lines[startIndex]!, speakers)}
+          {" / "}
+          終了: {endIndex === -1 ? "未選択" : lineSummary(lines[endIndex]!, speakers)}
+        </p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="inline-flex items-center gap-1.5">
@@ -450,6 +486,7 @@ export function CueList({
   sceneIndex,
   sceneId,
   lines,
+  speakers,
 }: CueListProps) {
   const { fields, append, remove } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.cues` }) ?? [];
@@ -496,6 +533,7 @@ export function CueList({
             cueIndex={cueIndex}
             cue={cue}
             lines={lines}
+            speakers={speakers}
             onRemove={() => remove(cueIndex)}
           />
         );

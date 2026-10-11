@@ -29,6 +29,7 @@ import {
   newCharacterId,
   newSceneId,
   newSpeakerId,
+  splitPointScene,
   toFormValues,
   DEFAULT_BGM_GAIN_DB,
   type CharacterFormValue,
@@ -229,6 +230,27 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       return;
     }
     move(index, target);
+  };
+
+  const onSplitScene = (sceneIndex: number, lineIndex: number) => {
+    const scenes = getValues("scenes");
+    const scene = scenes[sceneIndex];
+    if (scene === undefined || scene.kind !== "point") {
+      return;
+    }
+    let result: ReturnType<typeof splitPointScene>;
+    try {
+      result = splitPointScene(scene, lineIndex);
+    } catch (error) {
+      setIssues([errorMessage(error)]);
+      return;
+    }
+    replaceScenes([
+      ...scenes.slice(0, sceneIndex),
+      result.first,
+      result.second,
+      ...scenes.slice(sceneIndex + 1),
+    ]);
   };
 
   const addSpeakerFor = (characterId: string, name: string, voiceProfileId: string | null) => {
@@ -569,6 +591,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               sceneIndex={sceneIndex}
               sceneId={scene.id}
               lines={scene.lines}
+              speakers={watchedSpeakers}
             />
 
             <StandingFields
@@ -593,6 +616,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   voiceProfiles={voiceProfiles.data ?? []}
                   adapterVoices={adapterVoices}
                   savedVoiceByLineId={savedVoiceByLineId}
+                  onSplitScene={onSplitScene}
                 />
             )}
           </section>

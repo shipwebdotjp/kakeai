@@ -1,0 +1,295 @@
+import { describe, expect, it } from "vitest";
+import type { VisualCue } from "@kakeai/contracts";
+import {
+  lineOptionLabel,
+  lineRangeEndCandidates,
+  moveLineInScene,
+  nextEndLineId,
+  normalizeLineRangeCues,
+  splitPointScene,
+  type CueFormValue,
+  type LineFormValue,
+  type SceneFormValue,
+  type SpeakerFormValue,
+  type TakeFormValue,
+} from "./form";
+
+function take(id: string): TakeFormValue {
+  return { id, assetId: `asset-${id}`, durationMs: 1000, source: "tts" };
+}
+
+function line(
+  id: string,
+  speakerId: string | null,
+  captionText: string,
+  speechText: string,
+  takes: TakeFormValue[] = [],
+  selectedAudioTakeId: string | null = null,
+): LineFormValue {
+  return { id, speakerId, captionText, speechText, selectedAudioTakeId, takes };
+}
+
+function speaker(id: string, name: string): SpeakerFormValue {
+  return { id, name, characterId: null, voiceProfileId: null };
+}
+
+function cue(id: string, overrides: Partial<CueFormValue> = {}): CueFormValue {
+  return {
+    id,
+    baseCue: null,
+    templateId: "text.block",
+    templateVersion: 1,
+    layer: "overlay",
+    order: 0,
+    rangeKind: "scene",
+    startLineId: "",
+    endLineId: "",
+    startMs: 0,
+    endMs: 0,
+    enterPreset: "fade",
+    enterDurationMs: 350,
+    exitPreset: "none",
+    exitDurationMs: 0,
+    fields: {},
+    ...overrides,
+  };
+}
+
+function lineCue(id: string, startLineId: string, endLineId: string): CueFormValue {
+  return cue(id, { rangeKind: "lines", startLineId, endLineId });
+}
+
+function makeScene(lines: LineFormValue[], cues: CueFormValue[] = []): SceneFormValue {
+  return {
+    id: "scene-point-1",
+    kind: "point",
+    accentColor: "#2563EB",
+    timingMode: "auto",
+    durationMs: 4000,
+    transitionPreset: "cut",
+    transitionDurationMs: 0,
+    lines,
+    cues,
+    standings: [
+      { cueId: null, characterId: null, appearanceId: null, side: "left", scale: 1 },
+      { cueId: null, characterId: null, appearanceId: null, side: "right", scale: 1 },
+    ],
+  };
+}
+
+describe("moveLineInScene", () => {
+  it("reorders lines while preserving ids, speakers, and audio", () => {
+    const scene = makeScene([
+      line("l1", "speaker-a", "A", "a", [take("t1")], "t1"),
+      line("l2", null, "B", "b"),
+      line("l3", "speaker-a", "C", "c", [take("t3")], "t3"),
+    ]);
+
+    const moved = moveLineInScene(scene, 0, 2);
+
+    expect(moved.lines.map((entry) => entry.id)).toEqual(["l2", "l3", "l1"]);
+    const movedLine = moved.lines.find((entry) => entry.id === "l1")!;
+    expect(movedLine).toMatchObject({
+      speakerId: "speaker-a",
+      captionText: "A",
+      speechText: "a",
+      selectedAudioTakeId: "t1",
+    });
+    expect(movedLine.takes.map((entry) => entry.id)).toEqual(["t1"]);
+  });
+
+  it("returns the scene unchanged for an out-of-range move", () => {
+    const scene = makeScene([line("l1", null, "A", "a"), line("l2", null, "B", "b")]);
+    expect(moveLineInScene(scene, 0, 0)).toBe(scene);
+    expect(moveLineInScene(scene, 0, 5)).toBe(scene);
+  });
+
+  it("normalizes a line-range cue that becomes reversed", () => {
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [lineCue("c1", "l1", "l3")],
+    );
+
+    const moved = moveLineInScene(scene, 2, 0);
+
+    expect(moved.lines.map((entry) => entry.id)).toEqual(["l3", "l1", "l2"]);
+    expect(moved.cues[0]).toMatchObject({ startLineId: "l3", endLineId: "l1" });
+  });
+});
+
+describe("normalizeLineRangeCues", () => {
+  it("swaps only reversed, resolvable line ranges", () => {
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [
+        lineCue("reversed", "l2", "l1"),
+        lineCue("ordered", "l1", "l2"),
+        lineCue("missing", "l2", "l9"),
+        cue("scene"),
+      ],
+    );
+
+    const normalized = normalizeLineRangeCues(scene);
+
+    expect(normalized.cues.find((entry) => entry.id === "reversed")).toMatchObject({
+      startLineId: "l1",
+      endLineId: "l2",
+    });
+    expect(normalized.cues.find((entry) => entry.id === "ordered")).toMatchObject({
+      startLineId: "l1",
+      endLineId: "l2",
+    });
+    expect(normalized.cues.find((entry) => entry.id === "missing")).toMatchObject({
+      startLineId: "l2",
+      endLineId: "l9",
+    });
+    expect(normalized.cues.find((entry) => entry.id === "scene")?.rangeKind).toBe("scene");
+  });
+});
+
+describe("splitPointScene", () => {
+  it("splits lines and keeps the later lines' ids and audio", () => {
+    const scene = makeScene([
+      line("l1", "speaker-a", "A", "a", [take("t1")], "t1"),
+      line("l2", null, "B", "b"),
+      line("l3", "speaker-b", "C", "c", [take("t3")], "t3"),
+      line("l4", null, "D", "d"),
+    ]);
+
+    const { first, second } = splitPointScene(scene, 2);
+
+    expect(first.id).toBe("scene-point-1");
+    expect(first.lines.map((entry) => entry.id)).toEqual(["l1", "l2"]);
+    expect(second.id).not.toBe("scene-point-1");
+    expect(second.lines.map((entry) => entry.id)).toEqual(["l3", "l4"]);
+    expect(second.lines[0]).toMatchObject({
+      speakerId: "speaker-b",
+      captionText: "C",
+      selectedAudioTakeId: "t3",
+    });
+    expect(second.lines[0]!.takes.map((entry) => entry.id)).toEqual(["t3"]);
+    expect(second.kind).toBe("point");
+    expect(second.transitionPreset).toBe("cut");
+    expect(second.cues.some((entry) => entry.fields.role === "heading")).toBe(true);
+  });
+
+  it("routes cues by their line range", () => {
+    const scene = makeScene(
+      [
+        line("l1", null, "A", "a"),
+        line("l2", null, "B", "b"),
+        line("l3", null, "C", "c"),
+        line("l4", null, "D", "d"),
+      ],
+      [
+        cue("scene", { rangeKind: "scene" }),
+        cue("offset", { rangeKind: "offset", startMs: 0, endMs: 100 }),
+        lineCue("before", "l1", "l2"),
+        lineCue("after", "l3", "l4"),
+        lineCue("span", "l2", "l3"),
+      ],
+    );
+
+    const { first, second } = splitPointScene(scene, 2);
+
+    expect(first.cues.map((entry) => entry.id)).toEqual(["scene", "offset", "before", "span"]);
+    expect(first.cues.find((entry) => entry.id === "span")).toMatchObject({
+      startLineId: "l2",
+      endLineId: "l2",
+    });
+    expect(second.cues.find((entry) => entry.id === "after")).toMatchObject({
+      startLineId: "l3",
+      endLineId: "l4",
+    });
+    const secondSpan = second.cues.find(
+      (entry) => entry.rangeKind === "lines" && entry.id !== "after",
+    );
+    expect(secondSpan?.id).not.toBe("span");
+    expect(secondSpan).toMatchObject({ startLineId: "l3", endLineId: "l3" });
+    expect(second.cues.some((entry) => entry.id === "scene")).toBe(false);
+    expect(second.cues.some((entry) => entry.id === "offset")).toBe(false);
+  });
+
+  it("clones fields and baseCue id for a split span", () => {
+    const span = lineCue("span", "l2", "l3");
+    span.fields = { text: "本文" };
+    span.baseCue = {
+      id: "span",
+      template: { id: "x.y", version: 1 },
+      range: { kind: "lines", startLineId: "l2", endLineId: "l3" },
+      layer: "overlay",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {},
+    } as VisualCue;
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [span],
+    );
+
+    const { first, second } = splitPointScene(scene, 2);
+    const firstSpan = first.cues.find((entry) => entry.id === "span")!;
+    const secondSpan = second.cues.find((entry) => entry.rangeKind === "lines")!;
+
+    expect(secondSpan.fields).not.toBe(firstSpan.fields);
+    expect(secondSpan.baseCue?.id).toBe(secondSpan.id);
+    expect(firstSpan.baseCue?.id).toBe("span");
+  });
+
+  it("rejects splits at the first line or beyond the last line", () => {
+    const scene = makeScene([line("l1", null, "A", "a"), line("l2", null, "B", "b")]);
+    expect(() => splitPointScene(scene, 0)).toThrow();
+    expect(() => splitPointScene(scene, 2)).toThrow();
+    const single = makeScene([line("l1", null, "A", "a")]);
+    expect(() => splitPointScene(single, 1)).toThrow();
+  });
+});
+
+describe("line labels", () => {
+  it("shows ordinal, speaker, and caption", () => {
+    const lines = [
+      line("l1", "sp", "やっほー", "やっほー"),
+      line("l2", null, "こんにちは", "こんにちは"),
+      line("l3", "sp", "", ""),
+    ];
+    const speakers = [speaker("sp", "レン")];
+    expect(lineOptionLabel(lines, 0, speakers)).toBe("1. レン — やっほー");
+    expect(lineOptionLabel(lines, 1, speakers)).toBe("2. 話者なし — こんにちは");
+    expect(lineOptionLabel(lines, 2, speakers)).toBe("3. レン — （字幕なし）");
+  });
+
+  it("truncates a long caption", () => {
+    const lines = [line("l1", "sp", "あ".repeat(40), "あ")];
+    const label = lineOptionLabel(lines, 0, [speaker("sp", "リン")]);
+    expect(label.startsWith("1. リン — ")).toBe(true);
+    expect(label.endsWith("…")).toBe(true);
+    expect(label.length).toBeLessThan(30);
+  });
+});
+
+describe("line range candidates", () => {
+  const lines = [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")];
+
+  it("lists only lines at or after the start", () => {
+    expect(lineRangeEndCandidates(lines, "l2").map((entry) => entry.id)).toEqual(["l2", "l3"]);
+    expect(lineRangeEndCandidates(lines, "l1").map((entry) => entry.id)).toEqual([
+      "l1",
+      "l2",
+      "l3",
+    ]);
+    expect(lineRangeEndCandidates(lines, "").map((entry) => entry.id)).toEqual([
+      "l1",
+      "l2",
+      "l3",
+    ]);
+  });
+
+  it("corrects an end that is before the start", () => {
+    expect(nextEndLineId(lines, "l3", "l1")).toBe("l3");
+    expect(nextEndLineId(lines, "l1", "l2")).toBe("l2");
+    expect(nextEndLineId(lines, "l2", "")).toBe("");
+  });
+});
