@@ -44,16 +44,20 @@ v1 は 1920×1080 の全画面モーションだけを受け入れる。外部 U
 ```
 
 - `width` / `height` は `1920` / `1080` 固定、`durationMs` は正の整数（ms）。
-- `contentHash` は任意。サーバが publish 時に bundle 内容から `bundleHash` を計算するため、manifest の値は検証しない（省略可）。
-- `dependencies` の各要素は bundle 内に実在する相対パスでなければならない。
+- `contentHash` は任意。サーバが publish 時に bundle 内容から `bundleHash` を計算し、保存・返却する manifest の `contentHash` にはその実ハッシュを設定する（bundle 内の `manifest.json` は書き換えない）。
+- `dependencies` の各要素は bundle 内に実在する相対パスでなければならない。バイナリ（画像など）も依存に含められる。
 - entry HTML は standalone 形式（`<body>` 直下に root、`<style>` は `<head>`）で書き、root の `data-composition-id` は `runtimeCompositionId` と一致させる。`<template>` 形式はコンパイル時に `<head>` の style/script が破棄されるため使わない。
 - entry に `http(s)://` の外部 URL を含めてはならない。ライブラリは bundle へ同梱し `dependencies` に登録する。
 
 ### authoring API
 
-- `POST /compositions/:id/draft` は `{ entrypoint?, files?, manifest? }` を受け取る。`files` は指定したファイルだけを上書きする部分更新（削除はしない）。`manifest` を渡すとサーバが `manifest.json` を生成する（`entrypoint`・`runtimeCompositionId`・`width`・`height`・`contentHash` はサーバが設定し、`durationMs`・`dependencies` を上書きする）。`files["manifest.json"]` の直書きも引き続き可能。
-- `GET /compositions/:id/draft/files` は `{ entrypoint, files }` を返し、seed を含む draft の内容を読み戻せる。
+- `POST /compositions/:id/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取る。`files` はテキストファイル、`filesBase64` は base64 文字列で表したバイナリファイル（画像など）で、指定したファイルだけを上書きする部分更新（削除はしない）。同じ正規化パスを両方に含めることはできない。`manifest` を渡すとサーバが `manifest.json` を生成する（`entrypoint`・`runtimeCompositionId`・`width`・`height`・`contentHash` はサーバが設定し、`durationMs`・`dependencies` を上書きする）。`files["manifest.json"]` の直書きも引き続き可能。
+- `GET /compositions/:id/draft/files` は `{ entrypoint, files, binaryFiles? }` を返し、seed を含む draft の内容を読み戻せる。`files` は UTF-8 テキスト、`binaryFiles` は base64 文字列で表したバイナリ（存在する場合のみ）。
 - `POST /compositions/:id/publish?dryRun=true` は version を作らずに publish と同じ検証だけを行い、成功時 `{ manifest }` を返す。失敗は常に 422 `VALIDATION_ERROR` と `details.issues`（`path`・`code`・`message`）で返し、manifest・依存・entry・外部 URL・entry id・lint の各問題を列挙する。
+
+### 保存レイアウト
+
+bundle と draft はアプリデータ領域の `compositions/` 配下に置く。`Composition` 作成時に `drafts/<compositionId>/`（seed の entry と `manifest.json`）が即時作成され、draft 更新のたびに指定ファイルが上書きされる。publish 時に `bundles/<contentHash>/<versionId>/` が作られ、以後書き換えない。`drafts/` と `bundles/` はサーバ管理であり、利用者や AI が直接編集しない。
 
 同一 CompositionVersion は一つの ScriptVersion 内で一度だけ参照できる。HyperFrames の sub-composition は組み立て後の DOM、CSS、timeline ID を共有するため、この制約により AI が生成した project を書き換えずに ID 衝突を防ぐ。異なる Composition には異なる runtime composition ID を割り当てる。
 

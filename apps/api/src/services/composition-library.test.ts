@@ -433,4 +433,60 @@ describe("Composition Library Integration Tests", () => {
       },
     });
   });
+
+  it("test 13: accepts binary draft files as base64 and sets contentHash on publish", async () => {
+    const comp = await service.createComposition({
+      name: "Binary",
+      runtimeCompositionId: "cmp.test.binary",
+    });
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02]).toString(
+      "base64",
+    );
+    await service.updateDraft(comp.id, { filesBase64: { "assets/logo.png": png } });
+
+    const files = await service.getDraftFiles(comp.id);
+    expect(files.binaryFiles?.["assets/logo.png"]).toBe(png);
+    expect(files.files["assets/logo.png"]).toBeUndefined();
+
+    const version = await service.publish(comp.id, {});
+    expect(version.manifest.contentHash).toBe(version.bundleHash);
+
+    const reloaded = await service.getVersionById(version.id);
+    expect(reloaded.manifest.contentHash).toBe(version.bundleHash);
+  });
+
+  it("test 14: rejects the same path in files and filesBase64", async () => {
+    const comp = await service.createComposition({
+      name: "Duplicate",
+      runtimeCompositionId: "cmp.test.duplicate",
+    });
+    await expect(
+      service.updateDraft(comp.id, {
+        files: { "a.txt": "x" },
+        filesBase64: { "a.txt": Buffer.from("y").toString("base64") },
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([expect.objectContaining({ code: "duplicate_file" })]),
+      },
+    });
+  });
+
+  it("test 15: rejects invalid base64", async () => {
+    const comp = await service.createComposition({
+      name: "Bad Base64",
+      runtimeCompositionId: "cmp.test.bad-base64",
+    });
+    await expect(
+      service.updateDraft(comp.id, { filesBase64: { "x.bin": "not base64!!" } }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([expect.objectContaining({ code: "invalid_base64" })]),
+      },
+    });
+  });
 });

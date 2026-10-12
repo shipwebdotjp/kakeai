@@ -16,6 +16,7 @@ export type CompositionManifest = z.infer<typeof compositionManifestSchema>;
 export const compositionDraftFilesSchema = z.strictObject({
   entrypoint: z.string().min(1),
   files: z.record(z.string(), z.string()),
+  binaryFiles: z.record(z.string(), z.string()).optional(),
 });
 
 export type CompositionDraftFiles = z.infer<typeof compositionDraftFilesSchema>;

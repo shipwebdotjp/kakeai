@@ -40,3 +40,7 @@
 - [x] `POST /compositions/:id/publish?dryRun=true` で version を作らず検証できるようにする
 - [x] draft 更新で `manifest`（durationMs/dependencies）をサーバー生成できるようにする
 - [x] スキル・仕様・API契約を新APIに合わせて同期する
+- [x] `filesBase64` でバイナリdraftファイルを送受信できるようにする（読み戻しは `binaryFiles`）
+- [x] publish時に返却・保存する manifest の `contentHash` を実ハッシュに設定する
+- [x] スキルにバイナリ資産・HyperFramesとの関係・lint escape hatch・保存レイアウト・複数composition運用を追記する
+- [x] スターターテンプレート（`skills/kakeai-composition/templates/starter/`）を同梱する

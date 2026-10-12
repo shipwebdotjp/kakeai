@@ -86,6 +86,7 @@ export type CompositionDraftManifestInput = z.infer<typeof compositionDraftManif
 export const updateCompositionDraftRequestSchema = z.strictObject({
   entrypoint: bundleRelativePathSchema.optional(),
   files: z.record(bundleRelativePathSchema, z.string()).optional(),
+  filesBase64: z.record(bundleRelativePathSchema, z.string()).optional(),
   manifest: compositionDraftManifestInputSchema.optional(),
 });
 

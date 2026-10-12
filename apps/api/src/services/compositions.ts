@@ -7,6 +7,7 @@ import type { PrismaClient } from "../generated/prisma/client.ts";
 import {
   type Composition,
   type CompositionDraft,
+  type CompositionDraftFiles,
   type CompositionVersion,
   type CompositionManifest,
   type ContentDocument,
@@ -119,13 +120,16 @@ async function collectDraftFiles(
   dir: string,
   base: string = dir,
   budget: DraftBudget = { files: 0, bytes: 0 },
-): Promise<Record<string, string>> {
+  collected: { files: Record<string, string>; binaryFiles: Record<string, string> } = {
+    files: {},
+    binaryFiles: {},
+  },
+): Promise<{ files: Record<string, string>; binaryFiles: Record<string, string> }> {
   const entries = await readdir(dir, { withFileTypes: true });
-  const files: Record<string, string> = {};
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      Object.assign(files, await collectDraftFiles(full, base, budget));
+      await collectDraftFiles(full, base, budget, collected);
       continue;
     }
     if (!entry.isFile()) {
@@ -143,12 +147,12 @@ async function collectDraftFiles(
     }
     const buffer = await readFile(full);
     try {
-      files[key] = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+      collected.files[key] = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
     } catch {
-      continue;
+      collected.binaryFiles[key] = buffer.toString("base64");
     }
   }
-  return files;
+  return collected;
 }
 
 async function measureDraft(
@@ -616,6 +620,7 @@ export class CompositionService {
     input: {
       entrypoint?: string;
       files?: Record<string, string>;
+      filesBase64?: Record<string, string>;
       manifest?: { durationMs?: number; dependencies?: string[] };
     },
   ): Promise<CompositionDraft> {
@@ -627,20 +632,78 @@ export class CompositionService {
     const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
     await mkdir(draftDir, { recursive: true });
 
-    const normalizedFiles = new Map<string, string>();
+    const normalizeKey = (key: string): string => {
+      let filePath: string;
+      try {
+        filePath = resolveWithin(draftDir, key, "file path");
+      } catch {
+        throw invalidPathError(key, "file path");
+      }
+      return relative(draftDir, filePath).split(sep).join("/");
+    };
+
+    const textFiles = new Map<string, string>();
     if (input.files !== undefined) {
       for (const [key, content] of Object.entries(input.files)) {
-        let filePath: string;
-        try {
-          filePath = resolveWithin(draftDir, key, "file path");
-        } catch {
-          throw invalidPathError(key, "file path");
+        const normalized = normalizeKey(key);
+        if (textFiles.has(normalized)) {
+          throw compositionValidationError([
+            {
+              path: ["files", normalized],
+              code: "duplicate_file",
+              message: `'${normalized}' が重複しています`,
+            },
+          ]);
         }
-        normalizedFiles.set(relative(draftDir, filePath).split(sep).join("/"), content);
+        textFiles.set(normalized, content);
       }
     }
 
-    if (input.manifest !== undefined && normalizedFiles.has("manifest.json")) {
+    const binaryFiles = new Map<string, Buffer>();
+    if (input.filesBase64 !== undefined) {
+      for (const [key, encoded] of Object.entries(input.filesBase64)) {
+        const normalized = normalizeKey(key);
+        const sanitized = encoded.replace(/\s/g, "");
+        if (Math.floor((sanitized.length * 3) / 4) > MAX_DRAFT_FILE_BYTES) {
+          throw draftLimitError(`ファイル '${normalized}' が大きすぎます`);
+        }
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(sanitized) || sanitized.length % 4 !== 0) {
+          throw compositionValidationError([
+            {
+              path: ["filesBase64", normalized],
+              code: "invalid_base64",
+              message: `'${normalized}' は有効なbase64ではありません`,
+            },
+          ]);
+        }
+        if (binaryFiles.has(normalized)) {
+          throw compositionValidationError([
+            {
+              path: ["filesBase64", normalized],
+              code: "duplicate_file",
+              message: `'${normalized}' が重複しています`,
+            },
+          ]);
+        }
+        binaryFiles.set(normalized, Buffer.from(sanitized, "base64"));
+      }
+    }
+
+    for (const key of binaryFiles.keys()) {
+      if (textFiles.has(key)) {
+        throw compositionValidationError([
+          {
+            path: ["files", key],
+            code: "duplicate_file",
+            message: `'${key}' が files と filesBase64 の両方に指定されています`,
+          },
+        ]);
+      }
+    }
+
+    const allKeys = new Set([...textFiles.keys(), ...binaryFiles.keys()]);
+
+    if (input.manifest !== undefined && allKeys.has("manifest.json")) {
       throw compositionValidationError([
         {
           path: ["manifest"],
@@ -650,15 +713,21 @@ export class CompositionService {
       ]);
     }
 
-    if (normalizedFiles.size > 0) {
-      if (normalizedFiles.size > MAX_DRAFT_FILES) {
+    if (allKeys.size > 0) {
+      if (allKeys.size > MAX_DRAFT_FILES) {
         throw draftLimitError("draft のファイル数が上限を超えています");
       }
       const existingSizes = await measureDraft(draftDir);
       let totalFiles = existingSizes.size;
       let totalBytes = [...existingSizes.values()].reduce((sum, size) => sum + size, 0);
-      for (const [relPath, content] of normalizedFiles) {
-        const size = Buffer.byteLength(content, "utf-8");
+      const sizes = new Map<string, number>();
+      for (const [relPath, content] of textFiles) {
+        sizes.set(relPath, Buffer.byteLength(content, "utf-8"));
+      }
+      for (const [relPath, buffer] of binaryFiles) {
+        sizes.set(relPath, buffer.length);
+      }
+      for (const [relPath, size] of sizes) {
         if (size > MAX_DRAFT_FILE_BYTES) {
           throw draftLimitError(`ファイル '${relPath}' が大きすぎます`);
         }
@@ -672,10 +741,15 @@ export class CompositionService {
       if (totalFiles > MAX_DRAFT_FILES || totalBytes > MAX_DRAFT_TOTAL_BYTES) {
         throw draftLimitError("draft のファイル数または合計サイズが上限を超えています");
       }
-      for (const [relPath, content] of normalizedFiles) {
+      for (const [relPath, content] of textFiles) {
         const filePath = join(draftDir, relPath);
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, content, "utf-8");
+      }
+      for (const [relPath, buffer] of binaryFiles) {
+        const filePath = join(draftDir, relPath);
+        await mkdir(dirname(filePath), { recursive: true });
+        await writeFile(filePath, buffer);
       }
     }
 
@@ -741,18 +815,19 @@ export class CompositionService {
     return parsed.manifest;
   }
 
-  async getDraftFiles(
-    compositionId: string,
-  ): Promise<{ entrypoint: string; files: Record<string, string> }> {
+  async getDraftFiles(compositionId: string): Promise<CompositionDraftFiles> {
     const composition = await this.getCompositionById(compositionId);
     if (!composition.draft) {
       throw draftNotFound(compositionId);
     }
     const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
-    const files = await collectDraftFiles(draftDir);
+    const collected = await collectDraftFiles(draftDir);
     const parsed = compositionDraftFilesSchema.safeParse({
       entrypoint: composition.draft.entrypoint,
-      files,
+      files: collected.files,
+      ...(Object.keys(collected.binaryFiles).length > 0
+        ? { binaryFiles: collected.binaryFiles }
+        : {}),
     });
     if (!parsed.success) {
       throw compositionValidationError(
@@ -778,12 +853,12 @@ export class CompositionService {
     }
     const entrypoint = input.entrypoint ?? composition.draft.entrypoint;
     const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
-    const { manifest } = await validateCompositionBundle(
+    const { manifest, contentHash } = await validateCompositionBundle(
       draftDir,
       entrypoint,
       composition.runtimeCompositionId,
     );
-    return manifest;
+    return { ...manifest, contentHash };
   }
 
   async publish(
@@ -798,11 +873,12 @@ export class CompositionService {
     const entrypoint = input.entrypoint ?? composition.draft.entrypoint;
     const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
 
-    const { manifest, contentHash } = await validateCompositionBundle(
+    const { manifest: draftManifest, contentHash } = await validateCompositionBundle(
       draftDir,
       entrypoint,
       composition.runtimeCompositionId,
     );
+    const manifest: CompositionManifest = { ...draftManifest, contentHash };
 
     const latestVersion = composition.versions && composition.versions.length > 0
       ? Math.max(...composition.versions.map((v) => v.versionNumber))
