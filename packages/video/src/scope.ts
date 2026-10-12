@@ -3,16 +3,21 @@ export interface RenderScope {
   child(key: string): RenderScope;
 }
 
-function encodeId(value: string): string {
-  let out = "";
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint === undefined) {
-      continue;
-    }
-    out += codePoint.toString(16).padStart(6, "0");
+const FNV_PRIME = 0x01000193;
+
+function fnv1a32(value: string, seed: number): number {
+  let hash = seed >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, FNV_PRIME);
   }
-  return out;
+  return hash >>> 0;
+}
+
+function digestId(value: string): string {
+  const high = fnv1a32(value, 0x811c9dc5).toString(16).padStart(8, "0");
+  const low = fnv1a32(value, 0x01000193).toString(16).padStart(8, "0");
+  return `${high}${low}`;
 }
 
 function sanitize(part: string): string {
@@ -27,5 +32,5 @@ function makeScope(prefix: string): RenderScope {
 }
 
 export function cueScope(cueId: string): RenderScope {
-  return makeScope(`kakeai-${encodeId(cueId)}`);
+  return makeScope(`kakeai-${digestId(cueId)}`);
 }

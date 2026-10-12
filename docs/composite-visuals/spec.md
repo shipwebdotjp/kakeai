@@ -59,7 +59,7 @@ NestedVisual =
 ## レンダリングと分離
 
 - 各テンプレート renderer は HTML断片、素材参照、ローカル時刻の AnimationPlan だけを返す。GSAPタイムラインと Composition HTML の生成はトップレベルコンパイラだけが行う。
-- Cue ID を可逆なDOM-safe文字列へ符号化した scope を作り、子Visualには構造パス由来のsuffixを付ける。DOM ID、`getElementById`、CSSセレクタ、AnimationPlanのtargetはすべて scope 配下だけを参照する。
+- Cue ID を決定的な短いダイジェストへ符号化した scope を作り、子Visualには構造パス由来のsuffixを付ける。要素IDはHyperFramesのフレーム抽出ディレクトリ名に使われるため、ファイル名上限（255バイト）に収まる長さにする。DOM ID、`getElementById`、CSSセレクタ、AnimationPlanのtargetはすべて scope 配下だけを参照する。
 - テンプレートは `<script>`・グローバルID・グローバルquery selector を返さない。複数Cue・入れ子・同一テンプレート重複配置で衝突しないことをコンパイラテストで確認する。
 
 ## テンプレート

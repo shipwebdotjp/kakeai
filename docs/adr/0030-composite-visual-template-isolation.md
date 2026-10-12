@@ -1,10 +1,12 @@
 # Composite Visual Template と分離（NestedVisual再帰・scope）
 
+> amended by [ADR-0041](./0041-scope-id-digest.md)（scope符号化を可逆な16進展開から短いダイジェストへ変更）
+
 複合ビジュアルを、信頼済み `VisualTemplate` の入力内に再帰的な `NestedVisual`（`media` または信頼済みtemplate参照）を置く構造で表す。再帰はテンプレート入力内だけに閉じ、文書レベルは `layer`/`order` とCue全体のtransition に留める。
 
 - 上限は深さ8・総ノード64。子Visualのテンプレート存在・入力・素材参照はDocumentの再帰walkerで検証する。
 - 各rendererはHTML断片・素材参照・ローカル時刻のAnimationPlanのみ返し、GSAPタイムラインとComposition HTMLはトップレベルコンパイラだけが生成する。
-- Cue IDを可逆なDOM-safe文字列へ符号化したscopeを作り、子Visualは構造パス由来のsuffixを付ける。DOM ID・`getElementById`・CSSセレクタ・AnimationPlan targetはscope配下のみを参照する。テンプレートは `<script>`・グローバルID・グローバルquery selectorを返さない。
+- Cue IDを短いダイジェストへ符号化したscopeを作り、子Visualは構造パス由来のsuffixを付ける。DOM ID・`getElementById`・CSSセレクタ・AnimationPlan targetはscope配下のみを参照する。テンプレートは `<script>`・グローバルID・グローバルquery selectorを返さない。
 
 理由は、HyperFramesの入れ子Compositionに相当する表現を、任意HTMLを正本に持ち込まずに安全に実現するため。scope分離により、複数Cue・入れ子・同一テンプレート重複配置でもIDとアニメーションが衝突しない。最初の複合ビジュアルは `scene.device-frame@1`（背景・カードに画像/動画を収める）。
 
