@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useFieldArray,
   useForm,
@@ -225,11 +225,44 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
   const watchedSpeakers = useWatch({ control, name: "speakers" }) ?? [];
 
+  const navProjection = useMemo(
+    () =>
+      JSON.stringify(
+        watchedScenes.map((scene) => ({
+          id: scene?.id,
+          kind: scene?.kind,
+          label: scene?.label,
+          cues: (scene?.cues ?? []).map((cue) => ({
+            id: cue?.id,
+            templateId: cue?.templateId,
+            templateVersion: cue?.templateVersion,
+            role: cue?.fields?.role ?? "",
+          })),
+          lines: (scene?.lines ?? []).map((line) => ({
+            id: line?.id,
+            speakerId: line?.speakerId,
+            captionText: line?.captionText,
+          })),
+        })),
+      ),
+    [watchedScenes],
+  );
+  const lastEmittedNavProjection = useRef<string | null>(null);
+
   useEffect(() => {
+    if (navProjection === lastEmittedNavProjection.current) {
+      return;
+    }
     const snapshot = [...watchedScenes];
-    const timer = setTimeout(() => onValuesChange?.(snapshot), 150);
+    const timer = setTimeout(() => {
+      if (navProjection === lastEmittedNavProjection.current) {
+        return;
+      }
+      lastEmittedNavProjection.current = navProjection;
+      onValuesChange?.(snapshot);
+    }, 150);
     return () => clearTimeout(timer);
-  }, [watchedScenes, onValuesChange]);
+  }, [watchedScenes, navProjection, onValuesChange]);
   const savedVoiceByLineId = useMemo(() => {
     const speakerById = new Map(base.speakers.map((speaker) => [speaker.id, speaker]));
     const map = new Map<string, string | null>();
@@ -585,10 +618,6 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         </div>
       )}
 
-      {timing.error !== null && (
-        <p className={errorTextClass}>尺の計算: {timing.error}</p>
-      )}
-
       <section className="my-4 rounded-lg border border-border p-4">
         <h3 className="mt-0 mb-2 text-lg font-semibold">BGM（作品全体）</h3>
         <MediaPicker
@@ -747,27 +776,35 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               sceneKind={scene.kind}
             />
 
-            {(() => {
-              const placement = placementBySceneId.get(scene.id);
-              if (placement === undefined) {
-                return null;
-              }
-              return (
-                <div className={`mt-1 text-xs ${metaTextClass}`}>
-                  <p>シーン尺: {(placement.durationMs / 1000).toFixed(1)}秒</p>
-                  {placement.lines.length > 0 && (
-                    <ol className="my-1 ml-4 list-decimal p-0">
-                      {placement.lines.map((line) => (
-                        <li key={line.lineId}>
-                          {(line.startMs / 1000).toFixed(2)}s 〜{" "}
-                          {(line.endMs / 1000).toFixed(2)}s（{(line.durationMs / 1000).toFixed(2)}秒）
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
-              );
-            })()}
+            <details className={`mt-1 text-xs ${metaTextClass}`}>
+              <summary className="cursor-pointer text-muted-foreground select-none">
+                尺を表示
+              </summary>
+              <div className="mt-1">
+                {(() => {
+                  const placement = placementBySceneId.get(scene.id);
+                  if (placement === undefined) {
+                    return timing.error !== null ? <p>尺の計算: {timing.error}</p> : null;
+                  }
+                  return (
+                    <>
+                      <p>シーン尺: {(placement.durationMs / 1000).toFixed(1)}秒</p>
+                      {placement.lines.length > 0 && (
+                        <ol className="my-1 ml-4 list-decimal p-0">
+                          {placement.lines.map((line) => (
+                            <li key={line.lineId}>
+                              {(line.startMs / 1000).toFixed(2)}s 〜{" "}
+                              {(line.endMs / 1000).toFixed(2)}s（
+                              {(line.durationMs / 1000).toFixed(2)}秒）
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </details>
 
             <CueList
               control={control}
