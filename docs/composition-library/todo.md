@@ -22,11 +22,11 @@
 - [x] compiler 出力を parent HTML と child file tree を含む render project に拡張し、`data-composition-src` host を生成する
 - [x] published bundle の読み取り専用 preview content URL と、preview DTO の composition entry 参照を追加する
 - [x] Render Job snapshot に CompositionVersion ID、bundle hash、manifest を追加し、worker が照合済み bundle を一時 project へ materialize する
-- [ ] 完了条件: 全画面 composition を保存済み台本とドラフト・プレビューで seek でき、同じ snapshot から MP4 を render できる
+- [x] 完了条件: 全画面 composition を保存済み台本とドラフト・プレビューで seek でき、同じ snapshot から MP4 を render できる
 
 ## C4 UI・検証・文書
 
-- [ ] Composition Library の一覧、AI の draft / publish 状態、Scene背景への published version 選択を追加する
-- [ ] テスト: version 不変性、参照検証、bundle 欠損、同一 version の重複参照、preview URL の path 制約、snapshot 固定、nested render の実写 fixture
-- [ ] [仕様](./spec.md)、[ロードマップ](./roadmap.md)、MVP契約、ADR、CONTEXT、ユーザーガイドを同期する
-- [ ] 完了条件: AI が作った全画面・無音 composition を publish し、背景として保存、プレビュー、MP4出力できる
+- [x] Composition Library の一覧、AI の draft / publish 状態、Scene背景への published version 選択を追加する
+- [x] テスト: version 不変性、参照検証、bundle 欠損、同一 version の重複参照、preview URL の path 制約、snapshot 固定、nested render の実写 fixture
+- [x] [仕様](./spec.md)、[ロードマップ](./roadmap.md)、MVP契約、ADR、CONTEXT、ユーザーガイドを同期する
+- [x] 完了条件: AI が作った全画面・無音 composition を publish し、背景として保存、プレビュー、MP4出力できる

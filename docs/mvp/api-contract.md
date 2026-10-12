@@ -63,8 +63,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。MVPでは1 Workにつき1つのja-JP Editionだけを作る。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt | contentはContentDocumentそのもの。保存後に更新しない。 |
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
-| Composition | id, runtimeCompositionId, name, currentCompositionVersionId, createdAt, updatedAt | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。 |
-| CompositionVersion | id, compositionId, versionNumber, bundleSha256, manifest, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、幅、高さ、既定尺、依存一覧を持つ。bundleの内部storage keyや絶対パスは返さない。 |
+| Composition | id, runtimeCompositionId, name, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
+| CompositionVersion | id, compositionId, versionNumber, bundleHash, storageKey, manifest, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、幅、高さ、既定尺、依存一覧を持つ。`storageKey` はアプリデータルート相対の内部キーであり、参照やURL生成に使わない（絶対パスは返さない）。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
 | VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は `voicevox` または `aivisspeech`（作成後は不変）、`settings` はアダプター専用で両者とも `speakerUuid` と `defaultStyleId`。詳細は [../tts/spec.md](../tts/spec.md)。 |
@@ -95,7 +95,10 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /assets/:assetId/render-content | 200 / 206 | readyなrender Renditionを配信 |
 | DELETE | /assets/:assetId | 204 | 未参照の素材を明示削除 |
 | GET | /compositions | 200 | Composition Libraryの一覧を取得 |
+| POST | /compositions | 201 | Compositionとactive draftを作成（AI authoring） |
 | GET | /compositions/:compositionId | 200 | Compositionとpublish済みversionのメタデータを取得 |
+| POST | /compositions/:compositionId/draft | 200 | draftのentrypoint・bundleファイルを更新（AI authoring） |
+| POST | /compositions/:compositionId/publish | 201 | draftを検証し不変のCompositionVersionを公開（AI authoring） |
 | GET | /compositions/versions/:compositionVersionId/content/*bundlePath | 200 / 206 | published bundleのentrypointまたは相対依存を配信。previewレスポンス内のURLだけを使用する |
 | GET | /script-versions/:scriptVersionId/preview | 200 | 信頼済みComposition HTMLと素材URLを取得 |
 | POST | /language-editions/:editionId/draft-preview | 200 | 未保存の台本案から書込みなしでドラフト・プレビューを合成 |
@@ -435,6 +438,17 @@ Content-Type: image/png
 
 DELETE /assets/:assetId は、残っているScriptVersionまたはqueued/running render Jobの入力スナップショットがそのAssetを参照すると409 `ASSET_IN_USE` を返す。参照がなければ、Asset自身のasset_ingest Job、原本、Rendition、Asset行を削除して204 No Contentを返す。Workの削除後などに残ったAssetは、UIからの明示削除または「未参照素材を清掃」で回収できる。
 
+## Composition Library
+
+Compositionは再利用するHyperFrames projectの論理単位で、draftを編集してpublishすると不変のCompositionVersionになる。詳細は [../composition-library/spec.md](../composition-library/spec.md) を正とする。AI authoringは次のエンドポイントを使う。入力はZodで検証し、draft・bundleのパスはアプリデータルート相対で解決する。絶対パスと `..` を含むパスは拒否する。
+
+- `POST /compositions` は `{ name, runtimeCompositionId, entrypoint? }` を受け取り、Compositionとactive draftをdefault `index.html`・`manifest.json` 付きで作成する。`runtimeCompositionId` はComposition間で一意。
+- `POST /compositions/:compositionId/draft` は `{ entrypoint?, files? }` を受け取り、draftのentrypointとbundleファイルを置き換える。親ディレクトリは自動作成する。
+- `POST /compositions/:compositionId/publish` は任意の `{ entrypoint? }` でdraftを検証し、CompositionVersionを作る。検証はentrypointの存在、manifestのruntime composition ID・1920×1080・有限尺・依存の一致、音声要素の不在、HyperFrames lintのerror不在（warningは許容）を確認する。同じdraftを再publishすると新しいversionNumberの不変versionが作られる。
+- `GET /compositions`、`GET /compositions/:compositionId` は一覧・メタデータを返す。published bundleは `GET /compositions/versions/:compositionVersionId/content/*bundlePath` で配信し、path traversalは403 `LOCAL_ACCESS_DENIED` で拒否する。
+
+台本は `composition.full-bleed@1` の `input.compositionVersionId` としてversion IDだけを参照する。参照はpublish済みversionに限り、同一ContentDocument内で同じversionを複数回参照できない。
+
 ## プレビュー
 
 GET /script-versions/:scriptVersionId/preview は、保存済みの完全なScriptVersionだけをプレビュー対象にする。編集中で未保存のフォーム値をこのエンドポイントへ送らない。
@@ -456,8 +470,7 @@ APIはContentDocument、参照Asset、参照CompositionVersionを検証し、利
     "compositions": [
       {
         "compositionVersionId": "cmpver_001",
-        "entryUrl": "/api/v1/compositions/versions/cmpver_001/content/index.html",
-        "bundleSha256": "sha256:beef..."
+        "entryUrl": "/api/v1/compositions/versions/cmpver_001/content/index.html"
       }
     ],
     "renderer": {

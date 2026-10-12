@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from "express";
-import { join, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import {
   createCompositionRequestSchema,
@@ -10,6 +10,16 @@ import type { CompositionService } from "../../services/compositions.ts";
 import { sendData } from "../envelope.ts";
 import { parseBody } from "../validation.ts";
 import { ApiError } from "../errors.ts";
+
+export function isPathInside(baseDir: string, target: string): boolean {
+  const base = resolve(baseDir);
+  const resolvedTarget = resolve(target);
+  if (resolvedTarget === base) {
+    return true;
+  }
+  const rel = relative(base, resolvedTarget);
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
 
 export function createCompositionsRouter(
   compositionService: CompositionService,
@@ -29,13 +39,15 @@ export function createCompositionsRouter(
   const contentHandler = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const versionId = req.params.versionId as string;
-      const subpath = (req.params[0] as string) || "index.html";
+      const rawBundlePath = req.params.bundlePath;
+      const subpath =
+        (Array.isArray(rawBundlePath) ? rawBundlePath.join("/") : rawBundlePath) || "index.html";
       const version = await compositionService.getVersionById(versionId);
       const dataDir = (compositionService as unknown as { dataDir: string }).dataDir;
       const bundleDir = resolve(join(dataDir, version.storageKey));
       const targetFile = resolve(join(bundleDir, subpath));
 
-      if (targetFile !== bundleDir && !targetFile.startsWith(bundleDir + sep)) {
+      if (!isPathInside(bundleDir, targetFile)) {
         throw new ApiError(403, "LOCAL_ACCESS_DENIED", "アクセスが拒否されました");
       }
 
@@ -50,9 +62,9 @@ export function createCompositionsRouter(
   };
 
   if (mediaGuard) {
-    router.get("/versions/:versionId/content/*", mediaGuard, contentHandler);
+    router.get("/versions/:versionId/content/*bundlePath", mediaGuard, contentHandler);
   } else {
-    router.get("/versions/:versionId/content/*", contentHandler);
+    router.get("/versions/:versionId/content/*bundlePath", contentHandler);
   }
 
   router.post("/", async (req: Request, res: Response, next: NextFunction) => {

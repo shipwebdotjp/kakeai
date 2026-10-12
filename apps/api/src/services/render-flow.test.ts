@@ -24,6 +24,7 @@ import * as jobs from "./jobs.ts";
 import * as renderJobs from "./render-jobs.ts";
 import * as scriptVersions from "./script-versions.ts";
 import * as works from "./works.ts";
+import { CompositionService } from "./compositions.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -523,6 +524,70 @@ describe("render worker", () => {
       location.path,
     ]);
     expect(probe.stdout.trim()).toBe("audio");
+    await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
+  }, 300000);
+
+  it("renders a nested CompositionVersion into the mp4", async () => {
+    if (!ffmpegReady || !renderEnabled) {
+      return;
+    }
+    const compositionService = new CompositionService({ db: prisma, dataDir });
+    const composition = await compositionService.createComposition({
+      name: "Nested Render",
+      runtimeCompositionId: "cmp.render.nested",
+    });
+    const version = await compositionService.publish(composition.id, {});
+
+    const work = await works.createWork(prisma, "ネストレンダー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const intro = content.scenes[0]!;
+    if (intro.kind !== "intro") {
+      throw new Error("expected an intro scene");
+    }
+    intro.visualCues.push({
+      id: "vc-intro-composition",
+      template: { id: "composition.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: { compositionVersionId: version.id },
+    });
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    await drainWorker();
+
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    expect(finished.artifacts).toHaveLength(1);
+    const artifact = finished.artifacts[0]!;
+    expect(artifact.format).toBe("mp4");
+    expect(artifact.durationMs).toBeGreaterThan(0);
+
+    const location = await artifacts.resolveArtifactContent(
+      prisma,
+      config.directories,
+      artifact.id,
+    );
+    const probe = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v",
+      "-show_entries",
+      "stream=codec_type",
+      "-of",
+      "csv=p=0",
+      location.path,
+    ]);
+    expect(probe.stdout.trim()).toBe("video");
     await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
   }, 300000);
 });
