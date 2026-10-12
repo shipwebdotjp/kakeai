@@ -25,7 +25,7 @@ CompositionVersion は次の manifest を持つ。
 - すべての子 composition、固定画像、動画、フォントなどの bundle 内依存。
 - 音声トラックを含まないこと。
 
-v1 は 1920×1080 の全画面モーションだけを受け入れる。外部 URL、絶対パス、ネットワーク取得に依存する素材は許可しない。AI は通常の HyperFrames composition QA と preview を通してから publish するが、外部 project 用の sandbox や手動承認フローは持たない。
+v1 は 1920×1080 の全画面モーションだけを受け入れる。外部 URL、絶対パス、ネットワーク取得に依存する素材は許可しない。AI は通常の HyperFrames composition QA と preview を通してから publish するが、外部 project 用の sandbox や手動承認フローは持たない。publish 時はサーバが entry HTML に HyperFrames lint を実行し、error がある bundle は拒否する（warning は許容する）。
 
 同一 CompositionVersion は一つの ScriptVersion 内で一度だけ参照できる。HyperFrames の sub-composition は組み立て後の DOM、CSS、timeline ID を共有するため、この制約により AI が生成した project を書き換えずに ID 衝突を防ぐ。異なる Composition には異なる runtime composition ID を割り当てる。
 

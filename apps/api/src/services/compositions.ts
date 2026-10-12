@@ -1,6 +1,8 @@
 import { mkdir, readdir, readFile, stat, writeFile, cp } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join, dirname, isAbsolute, resolve, sep } from "node:path";
+import { prepareHyperframeLintBody, runHyperframeLint } from "@hyperframes/producer";
+import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH, escapeHtmlAttribute, toSecondsText } from "@kakeai/video";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import {
   type Composition,
@@ -41,6 +43,15 @@ function assertSafeRelativePath(relativePath: string, label: string): void {
   ) {
     throw new Error(`Invalid ${label}: ${relativePath}`);
   }
+}
+
+const DRAFT_DEFAULT_DURATION_MS = 5000;
+
+function buildDefaultEntryHtml(runtimeCompositionId: string): string {
+  const attr = escapeHtmlAttribute(runtimeCompositionId);
+  const jsKey = JSON.stringify(runtimeCompositionId).replace(/</g, "\\u003c");
+  const durationSec = toSecondsText(DRAFT_DEFAULT_DURATION_MS);
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app" data-composition-id="${attr}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${durationSec}" data-fps="${OUTPUT_FPS}"></div><script>window.__timelines = window.__timelines || {};window.__timelines[${jsKey}] = { duration: ${durationSec} };<\/script></body></html>`;
 }
 
 function resolveWithin(baseDir: string, relativePath: string, label: string): string {
@@ -84,8 +95,8 @@ export async function validateCompositionBundle(
   if (manifest.runtimeCompositionId !== expectedRuntimeCompositionId) {
     throw new Error(`Manifest runtimeCompositionId '${manifest.runtimeCompositionId}' does not match expected '${expectedRuntimeCompositionId}'`);
   }
-  if (manifest.width !== 1920 || manifest.height !== 1080) {
-    throw new Error(`Composition dimensions must be 1920x1080 (got ${manifest.width}x${manifest.height})`);
+  if (manifest.width !== OUTPUT_WIDTH || manifest.height !== OUTPUT_HEIGHT) {
+    throw new Error(`Composition dimensions must be ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (got ${manifest.width}x${manifest.height})`);
   }
   if (typeof manifest.durationMs !== "number" || manifest.durationMs <= 0 || !Number.isFinite(manifest.durationMs)) {
     throw new Error(`Composition durationMs must be a positive finite number (got ${manifest.durationMs})`);
@@ -93,6 +104,28 @@ export async function validateCompositionBundle(
 
   if (entryHtml.includes("<audio") || entryHtml.includes("<bgsound") || /<source[^>]+type=["']audio\//i.test(entryHtml)) {
     throw new Error("Audio tracks or elements are not allowed in composition bundle");
+  }
+
+  const lintInput = prepareHyperframeLintBody({ html: entryHtml, entryFile: entrypoint });
+  if ("error" in lintInput) {
+    throw new Error(`Cannot lint composition entrypoint '${entrypoint}': ${lintInput.error}`);
+  }
+  let lintResult: Awaited<ReturnType<typeof runHyperframeLint>>;
+  try {
+    lintResult = await runHyperframeLint(lintInput.prepared);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Cannot lint composition entrypoint '${entrypoint}': ${detail}`);
+  }
+  if (!lintResult.ok) {
+    const details = lintResult.findings
+      .filter((finding) => finding.severity === "error")
+      .slice(0, 5)
+      .map((finding) => `${finding.code}: ${finding.message}`)
+      .join("; ") || `${lintResult.errorCount} error(s)`;
+    throw new Error(
+      `Composition entrypoint '${entrypoint}' has ${lintResult.errorCount} HyperFrames lint errors: ${details}`,
+    );
   }
 
   for (const dep of manifest.dependencies) {
@@ -144,14 +177,14 @@ export class CompositionService {
     const draftDir = join(dataDirectories(this.dataDir).root, draftStorageKey);
     await mkdir(draftDir, { recursive: true });
 
-    const defaultHtml = `<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app"></div></body></html>`;
+    const defaultHtml = buildDefaultEntryHtml(input.runtimeCompositionId);
     const defaultManifest = {
       entrypoint,
       contentHash: "draft",
       runtimeCompositionId: input.runtimeCompositionId,
-      width: 1920,
-      height: 1080,
-      durationMs: 5000,
+      width: OUTPUT_WIDTH,
+      height: OUTPUT_HEIGHT,
+      durationMs: DRAFT_DEFAULT_DURATION_MS,
       dependencies: [],
     };
 

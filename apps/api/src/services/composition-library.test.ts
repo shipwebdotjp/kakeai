@@ -49,7 +49,8 @@ describe("Composition Library Integration Tests", () => {
 
     await service.updateDraft(comp.id, {
       files: {
-        "index.html": "<!doctype html><html><body>Updated Draft</body></html>",
+        "index.html":
+          '<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app" data-composition-id="cmp.test.motion" data-width="1920" data-height="1080" data-duration="6" data-fps="30"></div><script>window.__timelines = window.__timelines || {};window.__timelines["cmp.test.motion"] = { duration: 6 };</script></body></html>',
       },
     });
 
@@ -74,6 +75,20 @@ describe("Composition Library Integration Tests", () => {
         entrypoint: "../escape.html",
       }),
     ).rejects.toThrow();
+  });
+
+  it("test 1b: publish rejects lint errors", async () => {
+    const comp = await service.createComposition({
+      name: "Lint Gate",
+      runtimeCompositionId: "cmp.test.lint-gate",
+    });
+
+    await service.updateDraft(comp.id, {
+      files: {
+        "index.html": "<!doctype html><html><body><p>bad</p></body></html>",
+      },
+    });
+    await expect(service.publish(comp.id, {})).rejects.toThrow(/lint errors/);
   });
 
   it("test 2: ContentDocument reference validation (Background constraint & single reference)", () => {

@@ -73,9 +73,9 @@ update the draft and publish a new version, then point the script at the new ver
 Per project spec, pass the normal HyperFrames composition QA and preview before publishing:
 
 - Lint the entry HTML with the HyperFrames lint (`/hyperframes-cli`). Fix errors; warnings are acceptable.
-- Fetch the draft `index.html` (via the draft on disk is not exposed over HTTP; verify by
-  publishing to a throwaway Composition or by rendering locally) and confirm 1920x1080,
-  silence, and no external references.
+- Confirm 1920x1080, silence, and no external references by rendering the draft locally.
+- The server also runs the HyperFrames lint at publish time and rejects bundles with lint
+  errors (warnings allowed), but do not rely on it as your only check.
 
 ## 5. Publish
 
