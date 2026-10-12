@@ -41,7 +41,7 @@
 | Composite Visual Template | 内部レイアウトと、入力スキーマで許可した内部アニメーション |
 | NestedVisual | 親テンプレート内に描画される子。独自の range・layer・transition を持たない |
 
-- テンプレート定義は `transitionPolicy` を持ち、許可preset・既定値・最大尺を定める。既定値はCue作成時に明示値として書き込み、レンダー時に暗黙導出しない。
+- テンプレート定義は `transitionPolicy` を持ち、許可preset・既定値・最大尺を定める。既定値はCue作成時に明示値として書き込み、レンダー時に暗黙導出しない。既定は入場・退場とも `none`（尺0）とする。
 - テンプレート固有の動きは入力スキーマ内の有限presetと数値だけで表す。汎用keyframe、任意CSS値、任意easing、スクリプト文字列は追加しない。
 
 ## NestedVisual と再帰

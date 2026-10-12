@@ -76,8 +76,28 @@ function makeScene(lines: LineFormValue[], cues: CueFormValue[] = []): SceneForm
     lines,
     cues,
     standings: [
-      { cueId: null, characterId: null, appearanceId: null, side: "left", scale: 1 },
-      { cueId: null, characterId: null, appearanceId: null, side: "right", scale: 1 },
+      {
+        cueId: null,
+        characterId: null,
+        appearanceId: null,
+        side: "left",
+        scale: 1,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
+      },
+      {
+        cueId: null,
+        characterId: null,
+        appearanceId: null,
+        side: "right",
+        scale: 1,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
+      },
     ],
   };
 }

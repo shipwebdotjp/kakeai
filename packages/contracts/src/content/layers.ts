@@ -48,7 +48,7 @@ export interface TransitionPolicy {
 
 export const DEFAULT_TRANSITION_POLICY: TransitionPolicy = {
   presets: [...transitionPresetSchema.options],
-  defaultEnter: { preset: "fade", durationMs: 350 },
+  defaultEnter: { preset: "none", durationMs: 0 },
   defaultExit: { preset: "none", durationMs: 0 },
   maxDurationMs: 1000,
 };

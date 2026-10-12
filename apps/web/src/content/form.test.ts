@@ -414,13 +414,27 @@ describe("buildContentDocument", () => {
     const target = values.scenes[1]!;
     expect(target.cues).toEqual([]);
     expect(target.standings).toEqual([
-      { cueId: null, characterId: null, appearanceId: null, side: "left", scale: 1 },
+      {
+        cueId: null,
+        characterId: null,
+        appearanceId: null,
+        side: "left",
+        scale: 1,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
+      },
       {
         cueId: "vc-standing",
         characterId: "character-rin",
         appearanceId: "appearance-smile",
         side: "right",
         scale: 1,
+        enterPreset: "fade",
+        enterDurationMs: 350,
+        exitPreset: "none",
+        exitDurationMs: 0,
       },
     ]);
 
@@ -473,6 +487,10 @@ describe("buildContentDocument", () => {
         appearanceId: "appearance-smile",
         side: "left",
         scale: 1,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
       },
     ];
 
@@ -486,6 +504,10 @@ describe("buildContentDocument", () => {
       appearanceId: "appearance-smile",
       side: "left",
       scale: 1,
+    });
+    expect(cue.transition).toEqual({
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
     });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
@@ -510,6 +532,10 @@ describe("buildContentDocument", () => {
         appearanceId: "appearance-smile",
         side: "left",
         scale: 1,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
       },
       {
         cueId: null,
@@ -517,6 +543,10 @@ describe("buildContentDocument", () => {
         appearanceId: "appearance-smile",
         side: "right",
         scale: 0.8,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
       },
     ];
 
@@ -527,6 +557,43 @@ describe("buildContentDocument", () => {
     expect(cues.map((cue) => cue.template.version)).toEqual([2, 2]);
     expect(cues.map((cue) => standingInput(cue).side)).toEqual(["left", "right"]);
     expect(cues.map((cue) => standingInput(cue).scale)).toEqual([1, 0.8]);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("writes standing enter and exit transitions and clamps the duration", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        ],
+      },
+    ];
+
+    const values = toFormValues(base);
+    values.scenes[0]!.standings = values.scenes[0]!.standings.map((standing, index) => ({
+      ...standing,
+      characterId: "character-rin",
+      appearanceId: "appearance-smile",
+      ...(index === 0
+        ? { enterPreset: "fade" as const, enterDurationMs: 99999, exitPreset: "fade" as const, exitDurationMs: 400 }
+        : { enterPreset: "fade" as const, enterDurationMs: 250 }),
+    }));
+
+    const rebuilt = buildContentDocument(base, values);
+    const cues = rebuilt.scenes[0]!.visualCues.filter(
+      (cue) => cue.template.id === "character.standing",
+    );
+    expect(cues[0]!.transition).toEqual({
+      enter: { preset: "fade", durationMs: 1000 },
+      exit: { preset: "fade", durationMs: 400 },
+    });
+    expect(cues[1]!.transition).toEqual({
+      enter: { preset: "fade", durationMs: 250 },
+      exit: { preset: "none", durationMs: 0 },
+    });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
@@ -934,6 +1001,20 @@ describe("buildContentDocument", () => {
     expect(cueValue.fields.frame).toBe("laptop");
     expect(cueValue.fields.animation).toBe("none");
     expect(cueValue.fields["animation__duration"]).toBe("400");
+  });
+
+  it("creates new cues with the none enter and exit defaults", () => {
+    const cueValue = createCueFormValue({
+      sceneId: "scene-intro",
+      templateId: "text.block",
+      templateVersion: 1,
+      layer: "overlay",
+      order: 0,
+    });
+    expect(cueValue.enterPreset).toBe("none");
+    expect(cueValue.enterDurationMs).toBe(0);
+    expect(cueValue.exitPreset).toBe("none");
+    expect(cueValue.exitDurationMs).toBe(0);
   });
 
   it("clamps device-frame animation duration to the policy maximum", () => {

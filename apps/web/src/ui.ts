@@ -13,3 +13,14 @@ export const buttonDangerClass = `${buttonBase} border border-red-300 bg-red-50 
 export const errorTextClass = "text-sm text-red-600 dark:text-red-400";
 
 export const metaTextClass = "text-sm text-muted-foreground";
+
+export const PRESET_LABELS: Record<string, string> = {
+  none: "なし",
+  fade: "フェード",
+  "slide-up": "上へスライド",
+  "slide-down": "下へスライド",
+  "slide-left": "左へスライド",
+  "slide-right": "右へスライド",
+  "scale-in": "拡大",
+  pulse: "パルス",
+};

@@ -84,6 +84,10 @@ export interface StandingFormValue {
   appearanceId: string | null;
   side: StandingSide;
   scale: number;
+  enterPreset: TransitionPreset;
+  enterDurationMs: number;
+  exitPreset: TransitionPreset;
+  exitDurationMs: number;
 }
 
 export interface CueFormValue {
@@ -145,6 +149,7 @@ export const MEDIA_FULL_BLEED_ID = mediaFullBleedV1.id;
 export const MEDIA_CARD_ID = mediaCardV1.id;
 export const DEVICE_FRAME_ID = sceneDeviceFrameV1.id;
 export const STANDING_TEMPLATE_ID = characterStandingV1.id;
+export const STANDING_TRANSITION_POLICY: TransitionPolicy = characterStandingV2.transitionPolicy;
 
 function readInputObject(cue: VisualCue | null): Record<string, unknown> {
   if (cue === null || typeof cue.input !== "object" || cue.input === null) {
@@ -273,6 +278,10 @@ export function emptyStandingSlots(): StandingFormValue[] {
     appearanceId: null,
     side,
     scale: DEFAULT_STANDING_SCALE,
+    enterPreset: STANDING_TRANSITION_POLICY.defaultEnter.preset,
+    enterDurationMs: STANDING_TRANSITION_POLICY.defaultEnter.durationMs,
+    exitPreset: STANDING_TRANSITION_POLICY.defaultExit.preset,
+    exitDurationMs: STANDING_TRANSITION_POLICY.defaultExit.durationMs,
   }));
 }
 
@@ -285,6 +294,10 @@ function readStandings(scene: Scene): StandingFormValue[] {
       appearanceId: standing.appearanceId,
       side: standing.side,
       scale: standing.scale,
+      enterPreset: cue.transition.enter.preset,
+      enterDurationMs: cue.transition.enter.durationMs,
+      exitPreset: cue.transition.exit.preset,
+      exitDurationMs: cue.transition.exit.durationMs,
     });
   }
   return emptyStandingSlots().map((slot) => bySide.get(slot.side) ?? slot);
@@ -558,21 +571,31 @@ function intOrZero(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
-function buildTransition(cue: CueFormValue, policy: TransitionPolicy): VisualCue["transition"] {
-  const enterPreset = policy.presets.includes(cue.enterPreset)
-    ? cue.enterPreset
+interface TransitionEdgesFormValue {
+  enterPreset: TransitionPreset;
+  enterDurationMs: number;
+  exitPreset: TransitionPreset;
+  exitDurationMs: number;
+}
+
+function buildTransition(
+  transition: TransitionEdgesFormValue,
+  policy: TransitionPolicy,
+): VisualCue["transition"] {
+  const enterPreset = policy.presets.includes(transition.enterPreset)
+    ? transition.enterPreset
     : policy.defaultEnter.preset;
-  const exitPreset = policy.presets.includes(cue.exitPreset)
-    ? cue.exitPreset
+  const exitPreset = policy.presets.includes(transition.exitPreset)
+    ? transition.exitPreset
     : policy.defaultExit.preset;
   return {
     enter: {
       preset: enterPreset,
-      durationMs: enterPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(cue.enterDurationMs)),
+      durationMs: enterPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(transition.enterDurationMs)),
     },
     exit: {
       preset: exitPreset,
-      durationMs: exitPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(cue.exitDurationMs)),
+      durationMs: exitPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(transition.exitDurationMs)),
     },
   };
 }
@@ -806,10 +829,7 @@ function buildStandingCues(
       range: { kind: "scene" },
       layer: "standing",
       order,
-      transition: {
-        enter: { preset: "fade", durationMs: 350 },
-        exit: { preset: "none", durationMs: 0 },
-      },
+      transition: buildTransition(standing, STANDING_TRANSITION_POLICY),
       input: {
         characterId: standing.characterId,
         appearanceId: standing.appearanceId,
@@ -1098,6 +1118,9 @@ export function createCueFormValue(options: {
   order: number;
 }): CueFormValue {
   const fields = defaultCueFields(options.templateId, options.templateVersion);
+  const policy =
+    getVisualTemplate(options.templateId, options.templateVersion)?.transitionPolicy ??
+    DEFAULT_TRANSITION_POLICY;
   return {
     id: newVisualCueId(options.sceneId, options.templateId.replace(/\W/g, "-")),
     baseCue: null,
@@ -1110,10 +1133,10 @@ export function createCueFormValue(options: {
     endLineId: "",
     startMs: 0,
     endMs: 0,
-    enterPreset: "fade",
-    enterDurationMs: 350,
-    exitPreset: "none",
-    exitDurationMs: 0,
+    enterPreset: policy.defaultEnter.preset,
+    enterDurationMs: policy.defaultEnter.durationMs,
+    exitPreset: policy.defaultExit.preset,
+    exitDurationMs: policy.defaultExit.durationMs,
     fields,
   };
 }

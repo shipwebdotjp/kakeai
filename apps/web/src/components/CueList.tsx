@@ -31,7 +31,7 @@ import {
   type LineFormValue,
   type SpeakerFormValue,
 } from "../content/form";
-import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { PRESET_LABELS, buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { useCompositions } from "../api/hooks";
 import { MediaPicker } from "./MediaPicker";
 
@@ -42,17 +42,6 @@ const LAYER_LABELS: Record<CueLayer, string> = {
   card: "カード",
   standing: "立ち絵",
   overlay: "オーバーレイ",
-};
-
-const PRESET_LABELS: Record<string, string> = {
-  none: "なし",
-  fade: "フェード",
-  "slide-up": "上へスライド",
-  "slide-down": "下へスライド",
-  "slide-left": "左へスライド",
-  "slide-right": "右へスライド",
-  "scale-in": "拡大",
-  pulse: "パルス",
 };
 
 interface AddableTemplate {

@@ -2,6 +2,7 @@ import type { ContentDocument } from "../content/document";
 import { CONTENT_SCHEMA_VERSION, TEMPLATE_ID, TEMPLATE_VERSION } from "../content/document";
 import { SUPPORTED_LOCALES } from "../content/primitives";
 import { DEFAULT_VISUAL_THEME_REF } from "../content/theme";
+import { DEFAULT_TRANSITION_POLICY } from "../content/layers";
 import type { VisualCue } from "../content/visual";
 import { textBlockV1, type TextRole } from "../templates";
 
@@ -13,8 +14,8 @@ function textCue(id: string, role: TextRole, text: string, order: number): Visua
     layer: "overlay",
     order,
     transition: {
-      enter: { preset: "fade", durationMs: 350 },
-      exit: { preset: "none", durationMs: 0 },
+      enter: { ...DEFAULT_TRANSITION_POLICY.defaultEnter },
+      exit: { ...DEFAULT_TRANSITION_POLICY.defaultExit },
     },
     input: { text, role },
   };
@@ -53,8 +54,8 @@ export function validContentDocument(): ContentDocument {
             layer: "background",
             order: 0,
             transition: {
-              enter: { preset: "fade", durationMs: 350 },
-              exit: { preset: "none", durationMs: 0 },
+              enter: { ...DEFAULT_TRANSITION_POLICY.defaultEnter },
+              exit: { ...DEFAULT_TRANSITION_POLICY.defaultExit },
             },
             input: { assetId: "asset-bg", fit: "cover" },
           },
