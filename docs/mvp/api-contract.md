@@ -93,6 +93,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /assets/:assetId/render-content | 200 / 206 | readyなrender Renditionを配信 |
 | DELETE | /assets/:assetId | 204 | 未参照の素材を明示削除 |
 | GET | /script-versions/:scriptVersionId/preview | 200 | 信頼済みComposition HTMLと素材URLを取得 |
+| POST | /language-editions/:editionId/draft-preview | 200 | 未保存の台本案から書込みなしでドラフト・プレビューを合成 |
 | POST | /script-versions/:scriptVersionId/render-jobs | 202 | 入力スナップショットを持つRender Jobをキューへ追加 |
 | GET | /works/:workId/jobs | 200 | 作品のRender Job履歴を新しい順に取得 |
 | GET | /jobs/:jobId | 200 | Render Jobの状態をポーリング |
@@ -461,6 +462,9 @@ APIはContentDocumentと参照Assetを検証し、すべてがreadyであるこ�
           "durationMs": 6120,
           "lines": [
             { "lineId": "line-point-1-1", "startMs": 500, "durationMs": 3200 }
+          ],
+          "cues": [
+            { "cueId": "cue-point-1-bg", "startMs": 0 }
           ]
         }
       ]
@@ -469,9 +473,39 @@ APIはContentDocumentと参照Assetを検証し、すべてがreadyであるこ�
 }
 ~~~
 
-`timeline` は解決済みのScene区間・line区間・総尺であり、プレビューの再生コントロール（Scene／セリフ移動、±x秒、コマ送り）がUIで再計算しないための非永続の派生データである。出力fpsは `output.fps`（30）を用いる。解決ロジックはコンパイラと同じタイムライン解決器を使う。詳細は [../editor/spec.md](../editor/spec.md) を正とする。
+`timeline` は解決済みのScene区間・line区間・Cue開始時刻（絶対ms）・総尺であり、プレビューの再生コントロール（Scene／セリフ／Cue移動、±x秒、コマ送り）がUIで再計算しないための非永続の派生データである。出力fpsは `output.fps`（30）を用いる。解決ロジックはコンパイラと同じタイムライン解決器を使う。詳細は [../editor/spec.md](../editor/spec.md) と [../preview-workflow/spec.md](../preview-workflow/spec.md) を正とする。
 
 この結果は永続化しないプレビュー用の派生データである。Assetがprocessingなら409 `ASSET_PROCESSING`、failed・欠損・破損・削除済みなら422 `ASSET_UNAVAILABLE` を返す。Composition HTMLが生成できない場合は422 PREVIEW_INPUT_INVALIDとし、原因となったContentDocumentまたはVisualTemplateの位置をJSON Pointerとしてdetails.issuesに含める。ファイルシステムパスは返さない。
+
+## ドラフト・プレビュー
+
+POST /language-editions/:editionId/draft-preview は、未保存のContentDocumentだけをプレビュー対象にする。本文は `{ "content": ContentDocument }` とする。DBへの書込み、ScriptVersion作成、Job作成、ファイル保存、キャッシュ保存を一切行わない。
+
+言語版の存在、ContentDocument、参照素材の準備完了状態を検証し、保存済みプレビューと同じコンパイラ・asset resolverで合成する。ドラフト応答は `source: { "kind": "draft" }` の判別子を持ち、`scriptVersionId` は含まない。Composition HTML、素材URL、レンダラー情報、解決済みタイムラインは保存済みプレビューと同じ形である。
+
+~~~json
+{
+  "data": {
+    "source": { "kind": "draft" },
+    "compositionHtml": "<!doctype html><html>...</html>",
+    "assets": [
+      {
+        "assetId": "ast_image_001",
+        "contentUrl": "/api/v1/assets/ast_image_001/render-content",
+        "sha256": "sha256:4d8b..."
+      }
+    ],
+    "renderer": {
+      "engine": "hyperframes",
+      "compilerVersion": "app-1",
+      "playerVersion": "0.8.141"
+    },
+    "timeline": { "totalDurationMs": 18340, "fps": 30, "scenes": [] }
+  }
+}
+~~~
+
+失敗は保存済みプレビューと同じエラー契約で返す（存在しない言語版は404 `RESOURCE_NOT_FOUND`、不正なContentDocumentは422 `VALIDATION_ERROR`、素材の未準備は `ASSET_PROCESSING` / `ASSET_UNAVAILABLE`、生成不能なタイミングは422 `PREVIEW_INPUT_INVALID`）。詳細は [../preview-workflow/spec.md](../preview-workflow/spec.md) を正とする。
 
 ## レンダー
 

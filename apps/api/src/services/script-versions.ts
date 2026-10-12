@@ -5,10 +5,12 @@ import {
   compileDocument,
   CompositionCompileError,
   collectTimelineIssues,
+  resolveCueWindow,
   resolveTimeline,
   OUTPUT_FPS,
   type CompiledComposition,
   type ResolvedAssetKind,
+  type ScenePlacement,
 } from "@kakeai/video";
 import {
   RENDITION_PURPOSE,
@@ -18,6 +20,7 @@ import {
   type AssetKindName,
   type AssetReference,
   type ContentDocument,
+  type PreviewCueTiming,
   type SaveScriptVersionRequest,
   type ScriptVersion as ScriptVersionDto,
   type ScriptVersionPreview,
@@ -210,6 +213,22 @@ export function renderSourceDurationMs(asset: AssetWithRenditions): number | nul
   return rendition?.durationMs ?? asset.durationMs;
 }
 
+function previewCueTimings(content: ContentDocument, placement: ScenePlacement): PreviewCueTiming[] {
+  const scene = content.scenes[placement.sceneIndex];
+  if (scene === undefined) {
+    return [];
+  }
+  const timings: PreviewCueTiming[] = [];
+  scene.visualCues.forEach((cue, cueIndex) => {
+    const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
+    const window = resolveCueWindow(placement, cue, cuePath);
+    if (window !== null) {
+      timings.push({ cueId: cue.id, startMs: placement.startMs + window.startMs });
+    }
+  });
+  return timings;
+}
+
 function buildPreviewTimeline(content: ContentDocument) {
   const timeline = resolveTimeline(content);
   return {
@@ -224,6 +243,7 @@ function buildPreviewTimeline(content: ContentDocument) {
         startMs: line.startMs,
         durationMs: line.durationMs,
       })),
+      cues: previewCueTimings(content, placement),
     })),
   };
 }
@@ -251,6 +271,7 @@ export async function getScriptVersionPreview(
     `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/render-content`;
 
   let compiled: CompiledComposition;
+  let timeline: ReturnType<typeof buildPreviewTimeline>;
   try {
     compiled = compileDocument({
       document: content,
@@ -276,6 +297,7 @@ export async function getScriptVersionPreview(
         };
       },
     });
+    timeline = buildPreviewTimeline(content);
   } catch (error) {
     if (error instanceof CompositionCompileError) {
       throw new ApiError(422, "PREVIEW_INPUT_INVALID", undefined, { issues: error.issues });
@@ -299,7 +321,7 @@ export async function getScriptVersionPreview(
       compilerVersion: COMPILER_VERSION,
       playerVersion: HYPERFRAMES_PLAYER_VERSION,
     },
-    timeline: buildPreviewTimeline(content),
+    timeline,
   };
   const parsed = scriptVersionPreviewSchema.safeParse(preview);
   if (!parsed.success) {

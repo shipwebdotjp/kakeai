@@ -1,101 +1,57 @@
 import "@hyperframes/player";
-import { memo, useEffect, useMemo, useState, type RefObject } from "react";
-import type { ScriptVersionPreview } from "@kakeai/contracts";
-import { useScriptVersionPreview } from "../api/hooks";
+import { memo, useState, type KeyboardEvent } from "react";
+import { usePreviewActions, usePreviewTime } from "../lib/PreviewController";
 import { errorMessage } from "../lib/errorMessage";
-import { asSeekablePlayer, formatTime, seekTo } from "../lib/player";
+import { formatTime } from "../lib/player";
+import { previewKeyAction } from "../lib/previewNavigation";
 import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
-
-type PreviewTimeline = ScriptVersionPreview["timeline"];
 
 const TIME_PRESETS = [1, 5, 10] as const;
 
-function nextTime(times: number[], current: number, direction: 1 | -1): number | null {
-  if (direction === 1) {
-    return times.find((value) => value > current + 0.001) ?? null;
-  }
-  for (let index = times.length - 1; index >= 0; index -= 1) {
-    if (times[index]! < current - 0.001) {
-      return times[index]!;
-    }
-  }
-  return null;
-}
-
 export const PreviewSection = memo(function PreviewSection({
-  scriptVersionId,
-  playerRef,
   sceneLabels,
 }: {
-  scriptVersionId: string;
-  playerRef?: RefObject<HTMLElement | null>;
   sceneLabels?: ReadonlyMap<string, string>;
 }) {
-  const preview = useScriptVersionPreview(scriptVersionId);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [paused, setPaused] = useState(true);
+  const actions = usePreviewActions();
+  const time = usePreviewTime();
+  const preview = time.savedPreview;
   const [stepSeconds, setStepSeconds] = useState(5);
 
-  const timeline: PreviewTimeline | undefined = preview.data?.timeline;
+  const timeline = time.timeline;
+  const currentTime = time.currentTime;
+  const paused = time.paused;
+  const durationSeconds = time.totalSeconds;
 
-  useEffect(() => {
-    setCurrentTime(0);
-    setPaused(true);
-  }, [scriptVersionId]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const player = asSeekablePlayer(playerRef?.current ?? null);
-      if (player === null) {
-        return;
-      }
-      if (typeof player.currentTime === "number") {
-        setCurrentTime(player.currentTime);
-      }
-      if (typeof player.paused === "boolean") {
-        setPaused(player.paused);
-      }
-    }, 200);
-    return () => clearInterval(timer);
-  }, [playerRef, scriptVersionId]);
-
-  const lineTimes = useMemo(
-    () =>
-      (timeline?.scenes ?? []).flatMap((scene) =>
-        scene.lines.map((line) => line.startMs / 1000),
-      ),
-    [timeline],
-  );
-  const sceneTimes = useMemo(
-    () => (timeline?.scenes ?? []).map((scene) => scene.startMs / 1000),
-    [timeline],
-  );
-
-  const durationSeconds = (timeline?.totalDurationMs ?? 0) / 1000;
-  const frameStep = 1 / (timeline?.fps ?? 30);
-
-  const player = () => asSeekablePlayer(playerRef?.current ?? null);
-  const now = () => {
-    const value = player()?.currentTime;
-    return typeof value === "number" && Number.isFinite(value) ? value : currentTime;
-  };
-  const seek = (timeInSeconds: number) => {
-    seekTo(player(), timeInSeconds);
-    setCurrentTime(Math.min(Math.max(0, timeInSeconds), durationSeconds));
-  };
-  const togglePlay = () => {
-    const target = player();
-    if (target === null) {
+  const onPreviewKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const action = previewKeyAction(
+      {
+        key: event.key,
+        shiftKey: event.shiftKey,
+        target: event.target instanceof HTMLElement ? event.target : null,
+      },
+      stepSeconds,
+    );
+    if (action === null) {
       return;
     }
-    if (paused) {
-      Promise.resolve(target.play?.()).catch(() => {
-        // playback can be rejected before the user interacts with the page
-      });
-      setPaused(false);
-    } else {
-      target.pause?.();
-      setPaused(true);
+    event.preventDefault();
+    switch (action.kind) {
+      case "toggle-play":
+        actions.togglePlay();
+        break;
+      case "step-seconds":
+        actions.stepBySeconds(action.seconds);
+        break;
+      case "frame-step":
+        actions.frameBy(action.frames);
+        break;
+      case "line":
+        actions.moveToLine(action.direction);
+        break;
+      case "scene":
+        actions.moveToScene(action.direction);
+        break;
     }
   };
 
@@ -117,11 +73,17 @@ export const PreviewSection = memo(function PreviewSection({
       {preview.isError && <p className={errorTextClass}>{errorMessage(preview.error)}</p>}
 
       {preview.data && (
-        <>
+        <div
+          tabIndex={0}
+          role="group"
+          aria-label="プレビュー操作"
+          onKeyDown={onPreviewKeyDown}
+          className="rounded focus:outline-2 focus:outline-brand-500"
+        >
           <div className="mt-3 aspect-video w-full overflow-hidden rounded border border-border bg-black">
             <hyperframes-player
               key={preview.data.scriptVersionId}
-              ref={playerRef}
+              ref={actions.playerRef}
               srcdoc={preview.data.compositionHtml}
               controls
               className="h-full w-full"
@@ -131,60 +93,48 @@ export const PreviewSection = memo(function PreviewSection({
           {timeline !== undefined && (
             <>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <button type="button" className={buttonNeutralClass} onClick={togglePlay}>
+                <button type="button" className={buttonNeutralClass} onClick={actions.togglePlay}>
                   {paused ? "再生" : "一時停止"}
                 </button>
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => seek(now() - frameStep)}
+                  onClick={() => actions.frameBy(-1)}
                 >
                   コマ戻し
                 </button>
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => seek(now() + frameStep)}
+                  onClick={() => actions.frameBy(1)}
                 >
                   コマ送り
                 </button>
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => {
-                    const next = nextTime(lineTimes, now(), -1);
-                    if (next !== null) seek(next);
-                  }}
+                  onClick={() => actions.moveToLine(-1)}
                 >
                   前のセリフ
                 </button>
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => {
-                    const next = nextTime(lineTimes, now(), 1);
-                    if (next !== null) seek(next);
-                  }}
+                  onClick={() => actions.moveToLine(1)}
                 >
                   次のセリフ
                 </button>
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => {
-                    const next = nextTime(sceneTimes, now(), -1);
-                    if (next !== null) seek(next);
-                  }}
+                  onClick={() => actions.moveToScene(-1)}
                 >
                   前のシーン
                 </button>
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => {
-                    const next = nextTime(sceneTimes, now(), 1);
-                    if (next !== null) seek(next);
-                  }}
+                  onClick={() => actions.moveToScene(1)}
                 >
                   次のシーン
                 </button>
@@ -194,14 +144,14 @@ export const PreviewSection = memo(function PreviewSection({
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => seek(now() - stepSeconds)}
+                  onClick={() => actions.stepBySeconds(-stepSeconds)}
                 >
                   −{stepSeconds}秒
                 </button>
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={() => seek(now() + stepSeconds)}
+                  onClick={() => actions.stepBySeconds(stepSeconds)}
                 >
                   ＋{stepSeconds}秒
                 </button>
@@ -230,19 +180,33 @@ export const PreviewSection = memo(function PreviewSection({
                     key={scene.sceneId}
                     type="button"
                     className="rounded border border-border px-2 py-0.5 text-xs hover:bg-border/50"
-                    onClick={() => seek(scene.startMs / 1000)}
+                    onClick={() => actions.jumpToScene(scene.sceneId)}
                   >
                     {sceneLabels?.get(scene.sceneId) ?? `シーン ${index + 1}`}
                   </button>
                 ))}
               </div>
+
+              <details className={`mt-2 text-xs ${metaTextClass}`}>
+                <summary className="cursor-pointer select-none">ショートカット</summary>
+                <ul className="m-0 mt-1 list-none p-0">
+                  <li>Space: 再生／一時停止</li>
+                  <li>← / →: 移動量だけ戻る／進む</li>
+                  <li>Shift+← / Shift+→: コマ戻し／送り</li>
+                  <li>J / L: 前／次のセリフ</li>
+                  <li>Shift+J / Shift+L: 前／次のシーン</li>
+                </ul>
+                <p className="m-0 mt-1">
+                  プレビュー表示の背景部分にフォーカスがあるときだけ有効です。ボタンや入力欄にフォーカスがあるときはそちらが優先されます。
+                </p>
+              </details>
             </>
           )}
 
           <p className={metaTextClass}>
             版 {preview.data.scriptVersionId} / 素材 {preview.data.assets.length} 件
           </p>
-        </>
+        </div>
       )}
     </section>
   );

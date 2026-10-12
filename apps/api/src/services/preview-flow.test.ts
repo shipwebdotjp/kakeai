@@ -143,6 +143,7 @@ describe("script version preview", () => {
       "scene-point-1",
       "scene-outro",
     ]);
+    expect(preview.timeline.scenes[0]!.cues).toContainEqual({ cueId: "vc-intro-bg", startMs: 0 });
   });
 
   it("includes a standing appearance image in the preview", async () => {

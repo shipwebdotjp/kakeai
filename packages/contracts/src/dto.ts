@@ -238,11 +238,17 @@ export const previewLineTimingSchema = z.object({
   durationMs: nonNegativeInt,
 });
 
+export const previewCueTimingSchema = z.object({
+  cueId: idSchema,
+  startMs: nonNegativeInt,
+});
+
 export const previewSceneTimingSchema = z.object({
   sceneId: idSchema,
   startMs: nonNegativeInt,
   durationMs: nonNegativeInt,
   lines: z.array(previewLineTimingSchema),
+  cues: z.array(previewCueTimingSchema),
 });
 
 export const previewTimelineSchema = z.object({
@@ -273,6 +279,7 @@ export type BulkTtsJobsResult = z.infer<typeof bulkTtsJobsResultSchema>;
 export type PreviewAsset = z.infer<typeof previewAssetSchema>;
 export type PreviewRenderer = z.infer<typeof previewRendererSchema>;
 export type PreviewLineTiming = z.infer<typeof previewLineTimingSchema>;
+export type PreviewCueTiming = z.infer<typeof previewCueTimingSchema>;
 export type PreviewSceneTiming = z.infer<typeof previewSceneTimingSchema>;
 export type PreviewTimeline = z.infer<typeof previewTimelineSchema>;
 export type ScriptVersionPreview = z.infer<typeof scriptVersionPreviewSchema>;

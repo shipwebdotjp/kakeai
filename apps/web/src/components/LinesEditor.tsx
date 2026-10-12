@@ -60,6 +60,7 @@ interface LinesEditorProps {
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
   bulkRunning: boolean;
   onSplitScene: (sceneIndex: number, lineIndex: number) => void;
+  onJumpToLine?: (lineId: string) => void;
 }
 
 function formatDuration(durationMs: number): string {
@@ -76,6 +77,7 @@ interface LineEditorProps extends Omit<LinesEditorProps, "sceneId" | "control" |
   onDuplicate: () => void;
   onSplit: () => void;
   onRemove: () => void;
+  onJumpToLine?: (lineId: string) => void;
 }
 
 interface LineActionsMenuProps {
@@ -216,6 +218,7 @@ function LineEditor({
   onDuplicate,
   onSplit,
   onRemove,
+  onJumpToLine,
   speakers,
   characters,
   voiceProfiles,
@@ -385,7 +388,18 @@ function LineEditor({
         <span className="text-sm font-medium break-words">
           {lineIndex + 1}. {lineSummary(line, speakers)}
         </span>
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-1">
+          {onJumpToLine !== undefined && (
+            <button
+              type="button"
+              className={buttonNeutralClass}
+              title="プレビューをこのセリフへ移動"
+              aria-label="プレビューをこのセリフへ移動"
+              onClick={() => onJumpToLine(line.id)}
+            >
+              ▶
+            </button>
+          )}
           <LineActionsMenu
             canMoveUp={canMoveUp}
             canMoveDown={canMoveDown}
@@ -589,6 +603,7 @@ export function LinesEditor({
   savedVoiceByLineId,
   bulkRunning,
   onSplitScene,
+  onJumpToLine,
 }: LinesEditorProps) {
   const { fields, append, insert, replace } = useFieldArray({
     control,
@@ -660,6 +675,7 @@ export function LinesEditor({
             onDuplicate={() => duplicateLine(lineIndex)}
             onSplit={() => onSplitScene(sceneIndex, lineIndex)}
             onRemove={() => removeLine(lineIndex)}
+            onJumpToLine={onJumpToLine}
             scriptVersionId={scriptVersionId}
             speakers={speakers}
             characters={characters}

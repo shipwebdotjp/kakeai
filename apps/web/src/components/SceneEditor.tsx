@@ -65,6 +65,7 @@ interface SceneEditorProps {
   scriptVersionId: string;
   onSaved?: (scriptVersion: ScriptVersion) => void;
   onValuesChange?: (scenes: SceneFormValue[]) => void;
+  onJumpToLine?: (lineId: string) => void;
 }
 
 interface TimingFieldsProps {
@@ -182,7 +183,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
   );
 }
 
-export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
@@ -841,6 +842,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   savedVoiceByLineId={savedVoiceByLineId}
                   bulkRunning={bulkGenerate.isPending}
                   onSplitScene={onSplitScene}
+                  onJumpToLine={onJumpToLine}
                 />
             )}
           </section>
