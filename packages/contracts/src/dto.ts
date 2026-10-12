@@ -257,12 +257,23 @@ export const previewTimelineSchema = z.object({
   scenes: z.array(previewSceneTimingSchema),
 });
 
-export const scriptVersionPreviewSchema = z.object({
-  scriptVersionId: idSchema,
+const previewBodySchema = z.object({
   compositionHtml: z.string().min(1),
   assets: z.array(previewAssetSchema),
   renderer: previewRendererSchema,
   timeline: previewTimelineSchema,
+});
+
+export const scriptVersionPreviewSchema = previewBodySchema.extend({
+  scriptVersionId: idSchema,
+});
+
+export const draftPreviewSourceSchema = z.object({
+  kind: z.literal("draft"),
+});
+
+export const draftPreviewSchema = previewBodySchema.extend({
+  source: draftPreviewSourceSchema,
 });
 
 export type WorkSummary = z.infer<typeof workSummarySchema>;
@@ -283,3 +294,5 @@ export type PreviewCueTiming = z.infer<typeof previewCueTimingSchema>;
 export type PreviewSceneTiming = z.infer<typeof previewSceneTimingSchema>;
 export type PreviewTimeline = z.infer<typeof previewTimelineSchema>;
 export type ScriptVersionPreview = z.infer<typeof scriptVersionPreviewSchema>;
+export type DraftPreviewSource = z.infer<typeof draftPreviewSourceSchema>;
+export type DraftPreview = z.infer<typeof draftPreviewSchema>;

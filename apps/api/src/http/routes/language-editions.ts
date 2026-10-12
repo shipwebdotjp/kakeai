@@ -1,11 +1,20 @@
 import { Router } from "express";
-import { saveScriptVersionRequestSchema } from "@kakeai/contracts";
+import { draftPreviewRequestSchema, saveScriptVersionRequestSchema } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
+import type { DataDirectories } from "../../storage/paths.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
 import { parseBody, pathParam } from "../validation.ts";
 import * as scriptVersions from "../../services/script-versions.ts";
 
-export function createLanguageEditionsRouter(prisma: PrismaClient): Router {
+export interface LanguageEditionsRouterDependencies {
+  prisma: PrismaClient;
+  directories: DataDirectories;
+}
+
+export function createLanguageEditionsRouter(
+  dependencies: LanguageEditionsRouterDependencies,
+): Router {
+  const { prisma, directories } = dependencies;
   const router = Router();
 
   router.get(
@@ -36,6 +45,23 @@ export function createLanguageEditionsRouter(prisma: PrismaClient): Router {
         201,
         result.scriptVersion,
         result.warnings.length > 0 ? { warnings: result.warnings } : undefined,
+      );
+    }),
+  );
+
+  router.post(
+    "/language-editions/:editionId/draft-preview",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(draftPreviewRequestSchema, req.body);
+      sendData(
+        res,
+        200,
+        await scriptVersions.createDraftPreview(
+          prisma,
+          directories,
+          pathParam(req, "editionId"),
+          input,
+        ),
       );
     }),
   );

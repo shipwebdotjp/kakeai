@@ -15,7 +15,9 @@ export const PreviewSection = memo(function PreviewSection({
 }) {
   const actions = usePreviewActions();
   const time = usePreviewTime();
-  const preview = time.savedPreview;
+  const saved = time.savedPreview;
+  const draftView = time.draft;
+  const active = time.active;
   const [stepSeconds, setStepSeconds] = useState(5);
 
   const timeline = time.timeline;
@@ -59,20 +61,35 @@ export const PreviewSection = memo(function PreviewSection({
     <section>
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">プレビュー</h2>
-        <button
-          type="button"
-          className={buttonNeutralClass}
-          disabled={preview.isFetching}
-          onClick={() => preview.refetch()}
-        >
-          更新
-        </button>
+        {active === undefined && saved.isError && (
+          <button type="button" className={buttonNeutralClass} onClick={() => saved.refetch()}>
+            再試行
+          </button>
+        )}
+        {draftView.error !== null && (
+          <button
+            type="button"
+            className={buttonNeutralClass}
+            disabled={!draftView.canRetry}
+            onClick={draftView.retry}
+          >
+            再試行
+          </button>
+        )}
       </div>
 
-      {preview.isLoading && <p className={metaTextClass}>プレビューを生成中…</p>}
-      {preview.isError && <p className={errorTextClass}>{errorMessage(preview.error)}</p>}
+      {active === undefined && saved.isLoading && (
+        <p className={metaTextClass}>プレビューを生成中…</p>
+      )}
+      {active === undefined && saved.isError && (
+        <p className={errorTextClass}>{errorMessage(saved.error)}</p>
+      )}
+      {draftView.isPending && <p className={metaTextClass}>プレビューを更新中…</p>}
+      {draftView.error !== null && (
+        <p className={errorTextClass}>{errorMessage(draftView.error)}</p>
+      )}
 
-      {preview.data && (
+      {active !== undefined && (
         <div
           tabIndex={0}
           role="group"
@@ -82,13 +99,20 @@ export const PreviewSection = memo(function PreviewSection({
         >
           <div className="mt-3 aspect-video w-full overflow-hidden rounded border border-border bg-black">
             <hyperframes-player
-              key={preview.data.scriptVersionId}
+              key={active.identity}
               ref={actions.playerRef}
-              srcdoc={preview.data.compositionHtml}
+              srcdoc={active.compositionHtml}
               controls
               className="h-full w-full"
             />
           </div>
+
+          {active.source === "draft" && !draftView.unreflected && (
+            <p className={metaTextClass}>未保存の変更を反映しています。</p>
+          )}
+          {draftView.unreflected && (
+            <p className={metaTextClass}>未保存の変更が未反映です。</p>
+          )}
 
           {timeline !== undefined && (
             <>
@@ -204,7 +228,9 @@ export const PreviewSection = memo(function PreviewSection({
           )}
 
           <p className={metaTextClass}>
-            版 {preview.data.scriptVersionId} / 素材 {preview.data.assets.length} 件
+            {active.source === "draft"
+              ? `ドラフト（未保存） / 素材 ${active.assetsCount} 件`
+              : `版 ${saved.data?.scriptVersionId} / 素材 ${active.assetsCount} 件`}
           </p>
         </div>
       )}

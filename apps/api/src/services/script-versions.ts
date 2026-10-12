@@ -16,10 +16,13 @@ import {
   RENDITION_PURPOSE,
   collectAssetReferences,
   computeContentWarnings,
+  draftPreviewSchema,
   scriptVersionPreviewSchema,
   type AssetKindName,
   type AssetReference,
   type ContentDocument,
+  type DraftPreview,
+  type DraftPreviewRequest,
   type PreviewCueTiming,
   type SaveScriptVersionRequest,
   type ScriptVersion as ScriptVersionDto,
@@ -248,24 +251,23 @@ function buildPreviewTimeline(content: ContentDocument) {
   };
 }
 
-export async function getScriptVersionPreview(
+export type CompiledPreview = Omit<ScriptVersionPreview, "scriptVersionId">;
+
+export interface CompilePreviewOptions {
+  strictTakeDurations?: boolean;
+}
+
+export async function compilePreview(
   prisma: PrismaClient,
   directories: DataDirectories,
-  scriptVersionId: string,
-): Promise<ScriptVersionPreview> {
-  const row = await prisma.scriptVersion.findUnique({ where: { id: scriptVersionId } });
-  if (row === null) {
-    throw resourceNotFound("script_version", scriptVersionId);
-  }
-  let content: ContentDocument;
-  try {
-    content = deserializeContent(row.contentJson);
-  } catch {
-    throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
-  }
-
+  content: ContentDocument,
+  options: CompilePreviewOptions = {},
+): Promise<CompiledPreview> {
   const { references, assetById } = await loadAssetReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
+  if (options.strictTakeDurations === true) {
+    assertTakeDurations(content, assetById);
+  }
 
   const renderContentUrl = (assetId: string): string =>
     `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/render-content`;
@@ -312,8 +314,7 @@ export async function getScriptVersionPreview(
     }),
   );
 
-  const preview = {
-    scriptVersionId: row.id,
+  return {
     compositionHtml: compiled.html,
     assets: previewAssets,
     renderer: {
@@ -323,7 +324,57 @@ export async function getScriptVersionPreview(
     },
     timeline,
   };
+}
+
+export async function getScriptVersionPreview(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  scriptVersionId: string,
+): Promise<ScriptVersionPreview> {
+  const row = await prisma.scriptVersion.findUnique({ where: { id: scriptVersionId } });
+  if (row === null) {
+    throw resourceNotFound("script_version", scriptVersionId);
+  }
+  let content: ContentDocument;
+  try {
+    content = deserializeContent(row.contentJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
+  }
+
+  const preview = {
+    scriptVersionId: row.id,
+    ...(await compilePreview(prisma, directories, content)),
+  };
   const parsed = scriptVersionPreviewSchema.safeParse(preview);
+  if (!parsed.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", "プレビュー応答を生成できません。");
+  }
+  return parsed.data;
+}
+
+export async function createDraftPreview(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  editionId: string,
+  input: DraftPreviewRequest,
+): Promise<DraftPreview> {
+  const edition = await requireEdition(prisma, editionId);
+  const { content } = input;
+  if (content.locale !== edition.locale) {
+    throw validationError([
+      {
+        path: ["content", "locale"],
+        code: "invalid_value",
+        message: `言語版のロケール(${edition.locale})と一致しません。`,
+      },
+    ]);
+  }
+  const draft = {
+    source: { kind: "draft" as const },
+    ...(await compilePreview(prisma, directories, content, { strictTakeDurations: true })),
+  };
+  const parsed = draftPreviewSchema.safeParse(draft);
   if (!parsed.success) {
     throw new ApiError(500, "INTERNAL_ERROR", "プレビュー応答を生成できません。");
   }

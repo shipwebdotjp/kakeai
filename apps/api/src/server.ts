@@ -124,7 +124,12 @@ export function createApp(dependencies: AppDependencies): Express {
       directories: dependencies.config.directories,
     }),
   );
-  api.use(createLanguageEditionsRouter(dependencies.prisma));
+  api.use(
+    createLanguageEditionsRouter({
+      prisma: dependencies.prisma,
+      directories: dependencies.config.directories,
+    }),
+  );
   api.use(
     createScriptVersionsRouter({
       prisma: dependencies.prisma,

@@ -8,6 +8,7 @@ import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
 import { errorMessage } from "../lib/errorMessage";
 import { PreviewControllerProvider, usePreviewActions } from "../lib/PreviewController";
+import { useDraftPreview, type UnsavedDocumentState } from "../lib/useDraftPreview";
 import type { CueFormValue, SceneFormValue } from "../content/form";
 import { SCENE_LABELS, TEXT_ROLE_LABELS } from "../content/labels";
 import { buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
@@ -187,15 +188,19 @@ export function WorkEditPage() {
   const updateWork = useUpdateWork(workId);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
+  const [unsaved, setUnsaved] = useState<UnsavedDocumentState>({ dirty: false, document: null });
+  const draft = useDraftPreview(editionId, unsaved);
   const playerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setTitleDraft(null);
     setPreviewVersionId(null);
+    setUnsaved({ dirty: false, document: null });
   }, [workId, editionId]);
 
   const onSaved = useCallback((scriptVersion: ScriptVersion) => {
     setPreviewVersionId(scriptVersion.id);
+    setUnsaved({ dirty: false, document: null });
   }, []);
 
   const title = titleDraft ?? work.data?.title ?? "";
@@ -237,13 +242,14 @@ export function WorkEditPage() {
         <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(updateWork.error)}</p>
       )}
 
-      <PreviewControllerProvider playerRef={playerRef} scriptVersionId={scriptVersionId}>
+      <PreviewControllerProvider playerRef={playerRef} scriptVersionId={scriptVersionId} draft={draft}>
         <WorkEditPanes
           workId={workId}
           editionId={editionId}
           scriptVersionId={scriptVersionId}
           current={current}
           onSaved={onSaved}
+          onDocumentChange={setUnsaved}
         />
       </PreviewControllerProvider>
     </section>
@@ -256,12 +262,14 @@ function WorkEditPanes({
   scriptVersionId,
   current,
   onSaved,
+  onDocumentChange,
 }: {
   workId: string | undefined;
   editionId: string | undefined;
   scriptVersionId: string | undefined;
   current: UseQueryResult<ScriptVersion, Error>;
   onSaved: (scriptVersion: ScriptVersion) => void;
+  onDocumentChange: (state: UnsavedDocumentState) => void;
 }) {
   const actions = usePreviewActions();
   const [formScenes, setFormScenes] = useState<SceneFormValue[] | null>(null);
@@ -419,6 +427,7 @@ function WorkEditPanes({
             onSaved={onSaved}
             onValuesChange={onValuesChange}
             onJumpToLine={onJumpToLine}
+            onDocumentChange={onDocumentChange}
           />
         )}
       </div>

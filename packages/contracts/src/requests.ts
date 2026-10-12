@@ -18,6 +18,10 @@ export const saveScriptVersionRequestSchema = z.strictObject({
   content: contentDocumentSchema,
 });
 
+export const draftPreviewRequestSchema = z.strictObject({
+  content: contentDocumentSchema,
+});
+
 export const createRenderJobRequestSchema = z.strictObject({});
 
 export const updateAssetRequestSchema = z.strictObject({
@@ -45,6 +49,7 @@ export const createBulkTtsJobsRequestSchema = z.strictObject({});
 export type CreateWorkRequest = z.infer<typeof createWorkRequestSchema>;
 export type UpdateWorkRequest = z.infer<typeof updateWorkRequestSchema>;
 export type SaveScriptVersionRequest = z.infer<typeof saveScriptVersionRequestSchema>;
+export type DraftPreviewRequest = z.infer<typeof draftPreviewRequestSchema>;
 export type CreateRenderJobRequest = z.infer<typeof createRenderJobRequestSchema>;
 export type CreateTtsJobRequest = z.infer<typeof createTtsJobRequestSchema>;
 export type CreateBulkTtsJobsRequest = z.infer<typeof createBulkTtsJobsRequestSchema>;

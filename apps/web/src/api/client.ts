@@ -26,6 +26,7 @@ export interface Envelope<T> {
 export interface RequestOptions {
   method?: string;
   body?: unknown;
+  signal?: AbortSignal;
 }
 
 const API_BASE_PATH = "/api/v1";
@@ -76,6 +77,7 @@ export async function apiRequest<T>(
     method: options.method ?? "GET",
     headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal,
   });
   return parseEnvelope<T>(response);
 }

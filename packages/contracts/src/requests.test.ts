@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createWorkRequestSchema,
+  draftPreviewRequestSchema,
   saveScriptVersionRequestSchema,
   updateAssetRequestSchema,
 } from "./requests";
+import { draftPreviewSchema } from "./dto";
 import { assetTagsSchema, MAX_ASSET_TAG_LENGTH, MAX_ASSET_TAGS } from "./asset";
 import { validContentDocument } from "./testing/fixtures";
 
@@ -39,6 +41,32 @@ describe("saveScriptVersionRequestSchema", () => {
       extra: true,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("draftPreviewRequestSchema", () => {
+  it("accepts a content document and rejects unknown fields", () => {
+    expect(
+      draftPreviewRequestSchema.safeParse({ content: validContentDocument() }).success,
+    ).toBe(true);
+    expect(
+      draftPreviewRequestSchema.safeParse({ content: validContentDocument(), extra: 1 }).success,
+    ).toBe(false);
+  });
+});
+
+describe("draftPreviewSchema", () => {
+  it("requires the draft source and the saved preview shape", () => {
+    const base = {
+      compositionHtml: "<!doctype html><html></html>",
+      assets: [],
+      renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
+      timeline: { totalDurationMs: 0, fps: 30, scenes: [] },
+    };
+    expect(
+      draftPreviewSchema.safeParse({ ...base, source: { kind: "draft" } }).success,
+    ).toBe(true);
+    expect(draftPreviewSchema.safeParse({ ...base }).success).toBe(false);
   });
 });
 

@@ -51,6 +51,7 @@ import {
 } from "../content/form";
 import { SCENE_LABELS } from "../content/labels";
 import { errorMessage } from "../lib/errorMessage";
+import type { UnsavedDocumentState } from "../lib/useDraftPreview";
 import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { CharacterFields } from "./CharacterFields";
 import { CueList } from "./CueList";
@@ -66,6 +67,7 @@ interface SceneEditorProps {
   onSaved?: (scriptVersion: ScriptVersion) => void;
   onValuesChange?: (scenes: SceneFormValue[]) => void;
   onJumpToLine?: (lineId: string) => void;
+  onDocumentChange?: (state: UnsavedDocumentState) => void;
 }
 
 interface TimingFieldsProps {
@@ -183,7 +185,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
   );
 }
 
-export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onDocumentChange }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
@@ -279,6 +281,30 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   useEffect(() => {
     reset(toFormValues(base));
   }, [base, reset]);
+
+  const allValues = useWatch({ control }) as DocumentFormValues | undefined;
+  useEffect(() => {
+    if (onDocumentChange === undefined || allValues === undefined) {
+      return;
+    }
+    if (!formState.isDirty) {
+      onDocumentChange({ dirty: false, document: null });
+      return;
+    }
+    const timer = setTimeout(() => {
+      let document: ContentDocument | null = null;
+      try {
+        const built = buildContentDocument(base, allValues);
+        if (contentDocumentSchema.safeParse(built).success) {
+          document = built;
+        }
+      } catch {
+        document = null;
+      }
+      onDocumentChange({ dirty: true, document });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [allValues, base, formState.isDirty, onDocumentChange]);
 
   const onSubmit = handleSubmit(
     (values) => {
@@ -507,8 +533,6 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   }, [watchedScenes]);
 
   const pointCount = pointOrdinals.filter((ordinal) => ordinal > 0).length;
-
-  const allValues = useWatch({ control }) as DocumentFormValues | undefined;
 
   const timing = useMemo(() => {
     if (allValues === undefined || allValues.scenes === undefined) {

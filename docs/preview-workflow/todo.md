@@ -17,11 +17,11 @@
 
 ## P2 未保存内容のドラフト・プレビュー
 
-- [ ] `packages/contracts` に `DraftPreviewRequest` と `DraftPreview` を追加する（`source: { kind: "draft" }`＋保存済みと同形のcomposition/assets/renderer/timeline）
-- [ ] APIにドラフト合成を追加する（`compilePreview` の共用、`POST /language-editions/:editionId/draft-preview`、書込みゼロ、同じエラー契約）
-- [ ] Webにドラフト送信を追加する（`SceneEditor` の500msデバウンス検証送信、AbortController＋連番で最新応答のみ採用、不正時は直前の有効プレビュー維持）
-- [ ] `PreviewSection` を更新する（時刻の維持・尺短縮時の末尾丸め・再生中のみ再開、通常の「更新」廃止・失敗時のみ再試行、未反映状態の表示）
-- [ ] 保存成功で保存済み版プレビューへ戻し、レンダーとTTSに保存済み版IDだけを渡す
-- [ ] テスト: ドラフトAPIの版・Job・永続ファイル非増加と保存済みpreviewとの同等解決、エラー契約、最新有効応答の選択、時刻維持と丸め、背景Cueの未保存確認フロー
-- [ ] ドキュメント同期: [./spec.md](./spec.md)、[../mvp/api-contract.md](../mvp/api-contract.md)、保存対象とプレビュー対象の区別をユーザーガイドに明記
+- [x] `packages/contracts` に `DraftPreviewRequest` と `DraftPreview` を追加する（`source: { kind: "draft" }`＋保存済みと同形のcomposition/assets/renderer/timeline）
+- [x] APIにドラフト合成を追加する（`compilePreview` の共用、`POST /language-editions/:editionId/draft-preview`、書込みゼロ、同じエラー契約）
+- [x] Webにドラフト送信を追加する（`SceneEditor` の500msデバウンス検証送信、AbortController＋連番で最新応答のみ採用、不正時は直前の有効プレビュー維持）
+- [x] `PreviewSection` を更新する（時刻の維持・尺短縮時の末尾丸め・再生中のみ再開、通常の「更新」廃止・失敗時のみ再試行、未反映状態の表示）
+- [x] 保存成功で保存済み版プレビューへ戻し、レンダーとTTSに保存済み版IDだけを渡す
+- [x] テスト: ドラフトAPIの版・Job・永続ファイル非増加と保存済みpreviewとの同等解決、エラー契約、最新有効応答の選択、時刻維持と丸め、背景Cueの未保存確認フロー
+- [x] ドキュメント同期: [./spec.md](./spec.md)、[../mvp/api-contract.md](../mvp/api-contract.md)、保存対象とプレビュー対象の区別をユーザーガイドに明記
 - 完了条件: 有効な未保存編集がデバウンス後にプレビューへ反映され、保存・レンダーは常に保存済み版だけを対象にする。
