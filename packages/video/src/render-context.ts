@@ -1,4 +1,9 @@
-import type { AnimationPreset, ContentDocument, NestedVisual } from "@kakeai/contracts";
+import type {
+  AnimationPreset,
+  ContentDocument,
+  NestedVisual,
+  VisualThemeDefinition,
+} from "@kakeai/contracts";
 import type { AssetResolver } from "./resolver";
 import type { RenderScope } from "./scope";
 
@@ -18,6 +23,7 @@ export interface RenderedCue {
 
 export interface RenderContext {
   document: ContentDocument;
+  theme: VisualThemeDefinition;
   assetResolver: AssetResolver;
   scope: RenderScope;
   path: (string | number)[];

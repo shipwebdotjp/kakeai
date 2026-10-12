@@ -5,9 +5,10 @@ import { characterSchema } from "./character";
 import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
+import { getVisualTheme, visualThemeRefSchema } from "./theme";
 import { characterStandingV1, characterStandingV2 } from "../templates";
 
-export const CONTENT_SCHEMA_VERSION = 5 as const;
+export const CONTENT_SCHEMA_VERSION = 6 as const;
 
 export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;
@@ -64,6 +65,7 @@ const baseDocumentShape = {
 
 const contentDocumentObject = z.strictObject({
   schemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
+  visualTheme: visualThemeRefSchema,
   speakers: z.array(speakerSchema),
   ...baseDocumentShape,
 });
@@ -71,6 +73,13 @@ const contentDocumentObject = z.strictObject({
 type ContentDocumentBase = z.infer<typeof contentDocumentObject>;
 
 function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx): void {
+  if (getVisualTheme(doc.visualTheme.id, doc.visualTheme.version) === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: `未対応のVisual Themeです: ${doc.visualTheme.id}@${doc.visualTheme.version}`,
+      path: ["visualTheme"],
+    });
+  }
   checkUnique(doc.scenes.map((scene) => scene.id), ctx, ["scenes"]);
   const lineIds = doc.scenes.flatMap((scene) => scene.lines.map((line) => line.id));
   checkUnique(lineIds, ctx, ["scenes"]);

@@ -223,11 +223,30 @@ describe("contentDocumentSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects a lowercase accent color", () => {
+  it("rejects a lowercase custom accent color", () => {
     const doc = validContentDocument();
-    doc.scenes[0]!.accentColor = "#2563eb";
+    doc.scenes[0]!.accent = { kind: "custom", color: "#2563eb" };
     const result = contentDocumentSchema.safeParse(doc);
     expect(result.success).toBe(false);
+  });
+
+  it("accepts theme and custom scene accents", () => {
+    const doc = validContentDocument();
+    doc.scenes[0]!.accent = { kind: "theme", token: "secondary" };
+    doc.scenes[1]!.accent = { kind: "custom", color: "#123ABC" };
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects an unknown accent token", () => {
+    const doc = validContentDocument();
+    doc.scenes[0]!.accent = { kind: "theme", token: "quaternary" } as never;
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an unknown visual theme", () => {
+    const doc = validContentDocument();
+    doc.visualTheme = { id: "unknown-theme", version: 1 };
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
   it("rejects a wrong scene composition", () => {

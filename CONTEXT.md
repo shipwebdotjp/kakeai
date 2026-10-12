@@ -84,6 +84,10 @@ _Avoid_: Visual cue, scene
 An instruction to display one Visual Template with specific inputs over a segment of a Scene, on a named layer and with an enter/exit transition.
 _Avoid_: Asset, template
 
+**Visual Theme**:
+An app-managed, versioned set of default visual tokens (palette, text styles, surfaces, motion budget) fixed on a Script Version. Explicit cue inputs always override it.
+_Avoid_: UI theme, site mockup theme
+
 **Layer**:
 A named, ordered region of a Scene where Visual Cues are drawn (background, card, standing, overlay). It fixes the draw order independent of cue array order.
 _Avoid_: Visual cue, track

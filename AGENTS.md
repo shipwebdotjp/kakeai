@@ -77,6 +77,8 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 
 ## コーディングおよびテスト実行時注意事項
 
+- zshでは `===` や `--include=*.ts` のような未クォートの `=`・globを含む引数が展開・エラーになる（`zsh:1: == not found`、`no matches found`）。bashツールでは該当箇所をシングルクォートで囲うか、`rg --glob`・専用ツール（Grep/Glob）を使う。
+
 ## ユーザーガイド
 
 - `README.md` stays as a project overview. Do not add detailed usage,

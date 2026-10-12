@@ -93,9 +93,9 @@ SQLiteでリレーションとして管理するのは、作品の一覧・版�
 - セリフやVisualTemplateの入力構造を将来増やしても、台本のテーブル移行を毎回必要としない。
 - 素材、作品、Artifact、JobはJSON内だけでなく横断して扱うため、外部キーと通常カラムで管理できる。
 
-`contentJson`、`provenanceJson`、`inputSnapshotJson`、`resultJson` は、SQLiteではJSON型ではなくJSON文字列として保存する。保存前と読出時に `packages/contracts` のZodスキーマで検証する。`contentSchemaVersion` は保存時点の `contentJson.schemaVersion` と同じ値を重複して保持し、移行対象をJSON解析なしで特定できるようにする。読出し時に旧版（v4）を現行版（v5）へ移行する場合、保存カラムは旧版のまま、返す `content.schemaVersion` は現行版になり得る。
+`contentJson`、`provenanceJson`、`inputSnapshotJson`、`resultJson` は、SQLiteではJSON型ではなくJSON文字列として保存する。保存前と読出時に `packages/contracts` のZodスキーマで検証する。`contentSchemaVersion` は保存時点の `contentJson.schemaVersion` と同じ値を重複して保持し、移行対象をJSON解析なしで特定できるようにする。読出し時に旧版（v4/v5）を現行版（v6）へ移行する場合、保存カラムは旧版のまま、返す `content.schemaVersion` は現行版になり得る。
 
-`contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化と `contentHash` は持たない。同一内容の検出や変更追跡は版IDと `sourceScriptVersionId` で行う。同一MP4バイト列を将来も再生成することはMVPの要件にしない。`ScriptVersion` は不変であり、`contentSchemaVersion` の移行は保存済みの版を書き換えずに新しい `ScriptVersion` を作って行う。MVPの保存済み版は `schemaVersion: 5` とし、v4 は読み出し時に v5 へ移行する。v3 以前の解釈コードは持たない。
+`contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化と `contentHash` は持たない。同一内容の検出や変更追跡は版IDと `sourceScriptVersionId` で行う。同一MP4バイト列を将来も再生成することはMVPの要件にしない。`ScriptVersion` は不変であり、`contentSchemaVersion` の移行は保存済みの版を書き換えずに新しい `ScriptVersion` を作って行う。MVPの保存済み版は `schemaVersion: 6` とし、v4/v5 は読み出し時に v6 へ移行する（v5 → v6 は `visualTheme: soft-editorial@1` と全Sceneの `theme.primary` を補う。[../visual-themes/spec.md](../visual-themes/spec.md)）。v3 以前の解釈コードは持たない。
 
 Assetは作品に所属させず、ローカルアプリ全体で再利用できる素材ライブラリとする。ScriptVersionのJSONはAssetのIDだけを参照する。Assetの論理的なID・原本メタデータ・バイト列は取り込み後に不変とし、`status` とreadyなRendition由来の表示メタデータだけは取り込み処理により更新される。利用者が後から編集できるのは分類用のタグ（`tagsJson`）だけであり、これは原本の同一性に影響しない（[ADR 0039](../adr/0039-asset-tags-mutable-metadata.md)）。実体ファイルが欠損・改変された場合は、同じSHA-256の再アップロードで内容ハッシュ由来の同じパスへ上書きして取り込み直す。原本とは別に、レンダー入力として使う不変の `AssetRendition` を持てる。
 
@@ -150,7 +150,7 @@ Render Jobを作る時点で、次を `inputSnapshotJson` に不変の値とし�
 
 ### 書込みとJob状態遷移
 
-1. **作品作成**：1つのWork、`ja-JP`のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accentColor`・`label` を設定した導入、要点1件、結びを持つ、`schemaVersion: 5` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
+1. **作品作成**：1つのWork、`ja-JP`のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accent`（`theme.primary`）・`label` を設定した導入、要点1件、結びを持ち、`visualTheme: soft-editorial@1` を固定した、`schemaVersion: 6` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
 2. **台本保存**：利用者は明示的に保存する（自動保存はしない）。フォーム値をZodで検証し、`ready` のAsset参照を確認して、新しいScriptVersionを追加する。過去の版は更新しない。テキスト量の目安を超える入力は保存を拒否せず、警告を返す。保存はlast-write-winsとし、クライアントは版番号を送らない。同一トランザクションで新しい版をcurrentへ進める。過去版の復元は、その内容を新しい版として保存し、復元元を `sourceScriptVersionId` に記録する。
 3. **素材取り込み**：アップロードで原本Assetを作成し、`asset_ingest` Jobをキューへ追加する。Jobは形式・長さ・寸法を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってAssetを `ready` にする。失敗時は `failed` にし、台本保存・プレビュー・レンダーでそのAssetを使わせない。
 4. **レンダー投入**：特定のScriptVersionとreadyなRenditionから、入力スナップショットを持つ `queued` Jobを追加する。MVPでは「現在版をレンダー」がUIの入口だが、Job自体は必ず版IDと素材Renditionを固定する。
@@ -163,7 +163,7 @@ Jobの状態遷移は `queued → running → succeeded | failed` と `queued �
 
 `Asset` は実体ファイルだけを表す。画像、スクリーンショット、動画、生成済みのモーショングラフィックス、音声はいずれもAssetであり、BGMや背景はAssetの種類ではなく配置時の役割である。
 
-`VisualCue` は実体ファイルを直接描く、または `VisualTemplate` に入力を渡して描く。たとえばスクリーンショットや背景画像は画像Assetを参照し、表・グラフ・フローチャートは行・列やノード・辺などの構造化データをテンプレートへ渡す。MVPで実装するテンプレートは、統合テキスト（`text.block@1`）、背景メディア、画像／動画カード、立ち絵に限定する。Sceneは `kind` と必須の `accentColor`、任意の `transition` を持ち、型付きスロットは持たない。テキストは `text.block@1` のVisualCueとして表現する（[../editor/spec.md](../editor/spec.md)）。
+`VisualCue` は実体ファイルを直接描く、または `VisualTemplate` に入力を渡して描く。たとえばスクリーンショットや背景画像は画像Assetを参照し、表・グラフ・フローチャートは行・列やノード・辺などの構造化データをテンプレートへ渡す。MVPで実装するテンプレートは、統合テキスト（`text.block@1`）、背景メディア、画像／動画カード、立ち絵に限定する。Sceneは `kind` と必須の `accent`、任意の `transition` を持ち、型付きスロットは持たない。テキストは `text.block@1` のVisualCueとして表現する（[../editor/spec.md](../editor/spec.md)）。見た目の既定値はVisual Theme（[../visual-themes/spec.md](../visual-themes/spec.md)）で提供し、Cueの明示設定が常に優先する。
 
 VisualCueの表示区間はフレーム番号ではなく判別union（Scene全体、セリフ区間、Scene先頭からのオフセット）で指定する。レンダー時に選択音声の尺から実時間とフレームを解決するため、将来TTSで音声尺が変わっても視覚演出がセリフに追従する。
 
@@ -194,6 +194,7 @@ VisualCueの表示区間はフレーム番号ではなく判別union（Scene全�
 - Web UI はライト/ダークの両モードに対応する。既定はOS設定に従い、利用者がシステム/ライト/ダークを切り替えられる。
 - アクセントは緑系のブランドカラー `brand-50`〜`brand-950`。面・境界・文字は用途別のセマンティックトークン（`surface` / `surface-muted` / `border` / `foreground` / `muted-foreground`）で表現し、コンポーネントはブランドとセマンティックトークンだけを使う。
 - 配色は `apps/web` の Tailwind `@theme` に定義し、ライト/ダークの切替は `html` の `dark` クラスで行う。
+- UIテーマは映像の見た目（Visual Theme、[../visual-themes/spec.md](../visual-themes/spec.md)）と別概念であり、出力MP4の配色に影響しない。
 
 ## 実装方針
 

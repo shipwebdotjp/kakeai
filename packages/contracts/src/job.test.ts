@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jobInputSnapshotSchema, renderJobSnapshotSchema } from "./job";
+import { jobInputSnapshotSchema, parseRenderJobSnapshot, renderJobSnapshotSchema } from "./job";
 import { validContentDocument } from "./testing/fixtures";
 
 describe("jobInputSnapshotSchema", () => {
@@ -84,5 +84,43 @@ describe("jobInputSnapshotSchema", () => {
   it("rejects an unknown job kind", () => {
     const snapshot = { snapshotSchemaVersion: 1, kind: "translate" };
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(false);
+  });
+});
+
+describe("parseRenderJobSnapshot", () => {
+  function renderSnapshotWith(content: unknown) {
+    return {
+      snapshotSchemaVersion: 1,
+      kind: "render",
+      scriptVersionId: "scr_001",
+      versionNumber: 1,
+      content,
+      assets: [],
+      template: { id: "explanation-scenes", version: 1 },
+      output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
+    };
+  }
+
+  it("migrates v5 snapshot content to the current version", () => {
+    const v5 = validContentDocument() as unknown as Record<string, unknown>;
+    v5.schemaVersion = 5;
+    delete v5.visualTheme;
+    v5.scenes = (v5.scenes as Record<string, unknown>[]).map((scene) => {
+      const copy = { ...scene };
+      copy.accentColor = "#2563EB";
+      delete copy.accent;
+      return copy;
+    });
+    const parsed = parseRenderJobSnapshot(renderSnapshotWith(v5));
+    expect(parsed.content.schemaVersion).toBe(6);
+    expect(parsed.content.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
+    for (const scene of parsed.content.scenes) {
+      expect(scene.accent).toEqual({ kind: "theme", token: "primary" });
+    }
+  });
+
+  it("parses a current snapshot unchanged", () => {
+    const parsed = parseRenderJobSnapshot(renderSnapshotWith(validContentDocument()));
+    expect(parsed.content.schemaVersion).toBe(6);
   });
 });

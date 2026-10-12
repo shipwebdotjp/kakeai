@@ -29,6 +29,7 @@
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。
 - 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、表情自動切替、口パクを追加する。
 - 有名な投稿サイト・技術サイト・ブラウザのガワに画像・動画を収めるサイトモックアップ（フレーム型）は [../site-mockup/spec.md](../site-mockup/spec.md) で実装済み（`scene.site-mockup@1`、variantの加算的追加を許容、汎用スタイル＋利用者ロゴ）。
+- 見た目の既定値を提供するVisual Theme基盤は [../visual-themes/spec.md](../visual-themes/spec.md) で実装済み（`soft-editorial@1` を全作品で固定、`schemaVersion: 6`、Sceneアクセントのテーマ3色／自由色、Cue明示値が常に優先）。二つ目のテーマとWorkごとの選択UIは将来のテーマ追加時に導入する。
 - 編集画面の構成とテキストモデルを再設計する（[../editor/spec.md](../editor/spec.md)）。Sceneスロットを廃止しテキストをVisualCueへ統一（統合テキストテンプレート、配置・フォント・サイズ・色・装飾）、3ペイン化と静的ジャンプメニュー、プレビューの再生コントロールとScene・セリフ間ナビゲーション、シーン間トランジション（カット／フェード／クロスフェード）、立ち絵の前Sceneコピーを含む。テキスト統一とシーン間トランジションは `schemaVersion: 4` の破壊的変更を伴う。
 - `table.simple@1` と、その列定義、行、強調セルの構造化入力を編集可能にする。続けてchart、flow系VisualTemplateを追加する。サイトモックアップの後に着手する。
 

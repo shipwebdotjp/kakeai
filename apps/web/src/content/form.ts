@@ -1,9 +1,10 @@
 import {
   DEFAULT_ANIMATION_POLICY,
-  DEFAULT_POINT_ACCENT_COLOR,
+  DEFAULT_SCENE_ACCENT,
   DEFAULT_TRANSITION_POLICY,
   TEMPLATE_ID,
   TEMPLATE_VERSION,
+  THEME_ACCENT_TOKENS,
   characterStandingV1,
   characterStandingV2,
   defaultPointLabel,
@@ -18,9 +19,11 @@ import {
   type ContentDocument,
   type CueLayer,
   type Scene,
+  type SceneAccent,
   type SceneTransitionPreset,
   type Speaker,
   type TemplateFieldSpec,
+  type ThemeAccentToken,
   type TransitionPolicy,
   type TransitionPreset,
   type VisualCue,
@@ -102,10 +105,14 @@ export interface CueFormValue {
   fields: Record<string, string>;
 }
 
+export type SceneAccentKind = "theme" | "custom";
+
 export interface SceneFormValue {
   id: string;
   kind: "intro" | "point" | "outro";
   label: string;
+  accentKind: SceneAccentKind;
+  accentToken: ThemeAccentToken;
   accentColor: string;
   timingMode: "auto" | "fixed";
   durationMs: number;
@@ -417,11 +424,14 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
       const cues = scene.visualCues
         .filter((cue) => cue.template.id !== STANDING_TEMPLATE_ID)
         .map(toCueFormValue);
+      const accent = scene.accent ?? { ...DEFAULT_SCENE_ACCENT };
       return {
         id: scene.id,
         kind: scene.kind,
         label: scene.label ?? "",
-        accentColor: scene.accentColor,
+        accentKind: accent.kind,
+        accentToken: accent.kind === "theme" ? accent.token : "primary",
+        accentColor: accent.kind === "custom" ? accent.color : "",
         timingMode: scene.kind === "point" ? scene.timing.mode : "fixed",
         durationMs: scene.timing.mode === "fixed" ? scene.timing.durationMs : FALLBACK_DURATION_MS,
         transitionPreset: scene.transition?.enter.preset ?? "cut",
@@ -528,6 +538,20 @@ function buildCharacters(values: CharacterFormValue[]): Character[] {
 
 function normalizeScale(value: number, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function buildSceneAccent(sceneValue: SceneFormValue): SceneAccent {
+  if (sceneValue.accentKind === "custom") {
+    const color = (sceneValue.accentColor ?? "").trim();
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
+      return { kind: "custom", color: color.toUpperCase() };
+    }
+  } else if (
+    (THEME_ACCENT_TOKENS as readonly string[]).includes(sceneValue.accentToken)
+  ) {
+    return { kind: "theme", token: sceneValue.accentToken };
+  }
+  return { ...DEFAULT_SCENE_ACCENT };
 }
 
 function intOrZero(value: number): number {
@@ -902,7 +926,7 @@ export function buildContentDocument(
     const common = {
       id: sceneValue.id,
       label: (sceneValue.label ?? "").trim(),
-      accentColor: (sceneValue.accentColor || DEFAULT_POINT_ACCENT_COLOR).toUpperCase(),
+      accent: buildSceneAccent(sceneValue),
       timing,
       ...(transition === undefined ? {} : { transition }),
       lines: buildLines(sceneValue, speakerIds),
@@ -1109,7 +1133,9 @@ export function createPointSceneFormValue(label: string): SceneFormValue {
     id,
     kind: "point",
     label,
-    accentColor: DEFAULT_POINT_ACCENT_COLOR,
+    accentKind: "theme",
+    accentToken: "primary",
+    accentColor: "",
     timingMode: "auto",
     durationMs: FALLBACK_DURATION_MS,
     transitionPreset: "cut",
@@ -1129,6 +1155,8 @@ export function cloneSceneFormValue(
     id: newId,
     kind: "point",
     label,
+    accentKind: source.accentKind,
+    accentToken: source.accentToken,
     accentColor: source.accentColor,
     timingMode: source.timingMode,
     durationMs: source.durationMs,

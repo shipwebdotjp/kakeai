@@ -1,6 +1,7 @@
 import type { ContentDocument } from "../content/document";
 import { CONTENT_SCHEMA_VERSION, TEMPLATE_ID, TEMPLATE_VERSION } from "../content/document";
 import { SUPPORTED_LOCALES } from "../content/primitives";
+import { DEFAULT_VISUAL_THEME_REF } from "../content/theme";
 import type { VisualCue } from "../content/visual";
 import { textBlockV1, type TextRole } from "../templates";
 
@@ -22,6 +23,7 @@ function textCue(id: string, role: TextRole, text: string, order: number): Visua
 export function validContentDocument(): ContentDocument {
   return {
     schemaVersion: CONTENT_SCHEMA_VERSION,
+    visualTheme: { ...DEFAULT_VISUAL_THEME_REF },
     locale: SUPPORTED_LOCALES[0],
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
     speakers: [{ id: "speaker-narrator", name: "ナレーター", characterId: null, voiceProfileId: null }],
@@ -40,7 +42,7 @@ export function validContentDocument(): ContentDocument {
         id: "scene-intro",
         kind: "intro",
         label: "導入",
-        accentColor: "#2563EB",
+        accent: { kind: "theme", token: "primary" },
         timing: { mode: "fixed", durationMs: 4000 },
         lines: [],
         visualCues: [
@@ -64,7 +66,7 @@ export function validContentDocument(): ContentDocument {
         id: "scene-point-1",
         kind: "point",
         label: "要点 1",
-        accentColor: "#2563EB",
+        accent: { kind: "theme", token: "primary" },
         timing: { mode: "auto" },
         lines: [
           {
@@ -84,7 +86,7 @@ export function validContentDocument(): ContentDocument {
         id: "scene-point-2",
         kind: "point",
         label: "要点 2",
-        accentColor: "#16A34A",
+        accent: { kind: "theme", token: "secondary" },
         timing: { mode: "auto" },
         lines: [],
         visualCues: [
@@ -96,7 +98,7 @@ export function validContentDocument(): ContentDocument {
         id: "scene-point-3",
         kind: "point",
         label: "要点 3",
-        accentColor: "#DC2626",
+        accent: { kind: "theme", token: "tertiary" },
         timing: { mode: "auto" },
         lines: [],
         visualCues: [
@@ -108,7 +110,7 @@ export function validContentDocument(): ContentDocument {
         id: "scene-outro",
         kind: "outro",
         label: "結び",
-        accentColor: "#2563EB",
+        accent: { kind: "theme", token: "primary" },
         timing: { mode: "fixed", durationMs: 4000 },
         lines: [],
         visualCues: [textCue("vc-outro-closing", "closing", "結びの文言", 0)],

@@ -5,13 +5,17 @@ import {
   useWatch,
   type Control,
   type UseFormRegister,
+  type UseFormSetValue,
 } from "react-hook-form";
 import {
   contentDocumentSchema,
+  DEFAULT_VISUAL_THEME_REF,
+  getVisualTheme,
   type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
   type ContentDocument,
   type ScriptVersion,
+  type ThemeAccentToken,
   type TtsJobResult,
   type Warning,
 } from "@kakeai/contracts";
@@ -42,6 +46,7 @@ import {
   DEFAULT_BGM_GAIN_DB,
   type CharacterFormValue,
   type DocumentFormValues,
+  type SceneAccentKind,
   type SceneFormValue,
 } from "../content/form";
 import { SCENE_LABELS } from "../content/labels";
@@ -65,24 +70,70 @@ interface SceneEditorProps {
 interface TimingFieldsProps {
   control: Control<DocumentFormValues>;
   register: UseFormRegister<DocumentFormValues>;
+  setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
   sceneKind: "intro" | "point" | "outro";
 }
 
-function TimingFields({ control, register, sceneIndex, sceneKind }: TimingFieldsProps) {
+const THEME_ACCENTS = getVisualTheme(
+  DEFAULT_VISUAL_THEME_REF.id,
+  DEFAULT_VISUAL_THEME_REF.version,
+)?.accents ?? { primary: "#19736D", secondary: "#A84D3E", tertiary: "#80600F" };
+
+const ACCENT_TOKEN_OPTIONS: readonly { value: ThemeAccentToken; label: string }[] = [
+  { value: "primary", label: `プライマリ（${THEME_ACCENTS.primary}）` },
+  { value: "secondary", label: `セカンダリ（${THEME_ACCENTS.secondary}）` },
+  { value: "tertiary", label: `ターシャリ（${THEME_ACCENTS.tertiary}）` },
+];
+
+function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: TimingFieldsProps) {
   const mode = useWatch({ control, name: `scenes.${sceneIndex}.timingMode` });
+  const accentKind = useWatch({ control, name: `scenes.${sceneIndex}.accentKind` });
+  const accentColor = useWatch({ control, name: `scenes.${sceneIndex}.accentColor` });
   const transitionPreset = useWatch({ control, name: `scenes.${sceneIndex}.transitionPreset` });
   const fixedOnly = sceneKind !== "point";
   return (
     <div className="my-2 flex flex-wrap items-center gap-3">
       <label className="inline-flex items-center gap-1.5">
-        アクセント色
-        <input
-          type="color"
-          className="h-8 w-12 cursor-pointer rounded border border-border"
-          {...register(`scenes.${sceneIndex}.accentColor`)}
-        />
+        アクセント
+        <select
+          className={textFieldClass}
+          value={accentKind}
+          onChange={(event) => {
+            const next = event.target.value as SceneAccentKind;
+            setValue(`scenes.${sceneIndex}.accentKind`, next, { shouldDirty: true });
+            if (next === "custom" && !/^#[0-9A-Fa-f]{6}$/.test(accentColor)) {
+              setValue(`scenes.${sceneIndex}.accentColor`, THEME_ACCENTS.primary, {
+                shouldDirty: true,
+              });
+            }
+          }}
+        >
+          <option value="theme">テーマ色</option>
+          <option value="custom">自由色</option>
+        </select>
       </label>
+      {accentKind === "custom" ? (
+        <label className="inline-flex items-center gap-1.5">
+          自由色
+          <input
+            type="color"
+            className="h-8 w-12 cursor-pointer rounded border border-border"
+            {...register(`scenes.${sceneIndex}.accentColor`)}
+          />
+        </label>
+      ) : (
+        <label className="inline-flex items-center gap-1.5">
+          テーマ色
+          <select className={textFieldClass} {...register(`scenes.${sceneIndex}.accentToken`)}>
+            {ACCENT_TOKEN_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="inline-flex items-center gap-1.5">
         尺
         <select className={textFieldClass} {...register(`scenes.${sceneIndex}.timingMode`)}>
@@ -691,6 +742,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             <TimingFields
               control={control}
               register={register}
+              setValue={setValue}
               sceneIndex={sceneIndex}
               sceneKind={scene.kind}
             />

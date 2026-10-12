@@ -5,6 +5,7 @@ import type { AssetResolver } from "./resolver";
 import { CompositionCompileError } from "./compile-error";
 import { compileDocument } from "./compiler";
 import { cueScope } from "./scope";
+import { mixHex } from "./theme";
 
 const resolver: AssetResolver = (assetId) => {
   if (assetId.includes("audio") || assetId.includes("bgm")) {
@@ -91,7 +92,8 @@ describe("compileDocument", () => {
     const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
     expect(compiled.html).toContain('id="kakeai-audio-take-line-p1-1"');
     expect(compiled.html).toContain('src="/preview/asset-audio-1"');
-    expect(compiled.html).toContain('class="kakeai-captiontext">最初の要点です。');
+    expect(compiled.html).toContain('class="kakeai-captiontext"');
+    expect(compiled.html).toContain('>最初の要点です。</p>');
     expect(compiled.html).toContain('data-start="4.5" data-duration="3"');
   });
 
@@ -680,5 +682,129 @@ describe("compileDocument", () => {
     expect(() => compileDocument({ document, assetResolver: resolver })).toThrow(
       CompositionCompileError,
     );
+  });
+});
+
+describe("visual theme", () => {
+  it("emits theme variables on the composition root", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain("--kakeai-canvas:#FAF6EE");
+    expect(compiled.html).toContain("--kakeai-text:#232B3D");
+    expect(compiled.html).toContain("--kakeai-accent-primary:#19736D");
+    expect(compiled.html).toContain("--kakeai-accent-secondary:#A84D3E");
+    expect(compiled.html).toContain("--kakeai-accent-tertiary:#80600F");
+    expect(compiled.html).toContain("--kakeai-scrim:rgba(27,39,64,0.55)");
+    expect(compiled.html).toContain("--kakeai-radius-lg:20px");
+  });
+
+  it("resolves a theme accent token into a soft scene background", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.accent = { kind: "theme", token: "secondary" };
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const expected = `linear-gradient(135deg, ${mixHex("#A84D3E", "#FAF6EE", 0.72)} 0%, ${mixHex("#A84D3E", "#FAF6EE", 0.88)} 100%)`;
+    expect(compiled.html).toContain(`background:${expected}`);
+    expect(compiled.html).toContain("--kakeai-accent:#A84D3E");
+    expect(compiled.html).toContain("--kakeai-accent-soft:");
+    expect(compiled.html).toContain("--kakeai-accent-fg:");
+  });
+
+  it("mixes a custom accent with the theme canvas", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.accent = { kind: "custom", color: "#123456" };
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("--kakeai-accent:#123456");
+    expect(compiled.html).toContain(`--kakeai-accent-soft:${mixHex("#123456", "#FAF6EE", 0.8)}`);
+  });
+
+  it("applies theme role defaults to text cues", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain("color:#175C57");
+    expect(compiled.html).toContain("font-size:72px");
+    expect(compiled.html).toContain("color:#232B3D");
+    expect(compiled.html).toContain("font-size:42px");
+    expect(compiled.html).toContain("line-height:1.8");
+  });
+
+  it("lets explicit cue styles override theme role defaults", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-override",
+        template: { id: "text.block", version: 1 },
+        layer: "overlay",
+        input: {
+          text: "上書き",
+          role: "body",
+          font: "serif",
+          fontSize: 100,
+          color: "#FF0000",
+          decoration: { bold: true },
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("color:#FF0000");
+    expect(compiled.html).toContain("font-size:100px");
+    expect(compiled.html).toContain("Yu Mincho");
+    expect(compiled.html).toContain("font-weight:700");
+  });
+
+  it("keeps theme defaults for unspecified decoration flags", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-partial",
+        template: { id: "text.block", version: 1 },
+        layer: "overlay",
+        input: { text: "部分", role: "body", decoration: { italic: true } },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("color:#232B3D");
+    expect(compiled.html).toContain("font-style:italic");
+    expect(compiled.html).toContain("font-weight:400");
+  });
+
+  it("styles burned-in captions from the caption token and scrim", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain("color:#FFFFFF");
+    expect(compiled.html).toContain("background:rgba(27,39,64,0.55)");
+  });
+
+  it("falls back to the theme surface for a device-frame without a background color", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-theme",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("background:#F1EAD9");
+  });
+
+  it("keeps the site-specific accent on site mockups", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain("--kakeai-mockup-accent:#1d9bf0;");
+    expect(compiled.html).toContain(
+      "background:var(--kakeai-mockup-surface,var(--kakeai-surface))",
+    );
+  });
+
+  it("rejects an unknown visual theme", () => {
+    const document = validContentDocument();
+    document.visualTheme = { id: "unknown-theme", version: 1 };
+    try {
+      compileDocument({ document, assetResolver: resolver });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe("unknown_theme");
+    }
   });
 });

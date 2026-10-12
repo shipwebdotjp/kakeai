@@ -7,7 +7,7 @@ import {
   type ResolvedAssetKind,
 } from "@kakeai/video";
 import {
-  renderJobSnapshotSchema,
+  parseRenderJobSnapshot,
   type RenderJobSnapshot,
 } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
@@ -66,7 +66,7 @@ function extensionForMediaType(mediaType: string): string {
 
 function parseSnapshot(job: Job): RenderJobSnapshot {
   try {
-    return renderJobSnapshotSchema.parse(JSON.parse(job.inputSnapshotJson));
+    return parseRenderJobSnapshot(JSON.parse(job.inputSnapshotJson));
   } catch {
     throw new RenderJobError("RENDER_FAILED", "レンダー入力を解釈できません。");
   }

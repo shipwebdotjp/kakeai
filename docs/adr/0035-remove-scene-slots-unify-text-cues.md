@@ -1,5 +1,7 @@
 # Sceneスロットを廃止し、テキストをVisualCueへ統一する
 
+> amended by [ADR-0040](./0040-visual-theme-contract.md): Sceneの `accentColor`（`#RRGGBB`）は `accent` union（`{ kind: "theme", token }` / `{ kind: "custom", color }`）へ置換する（`schemaVersion: 6`）。
+
 `intro`/`point`/`outro` Scene が持つ `slots`（`title`/`subtitle`/`heading`/`body`/`closing`）を廃止する。タイトル・サブタイトル・見出し・本文・結びは、統合した1種のテキスト系 VisualTemplate を VisualCue として配置して表現する。
 
 統合テキストテンプレートは、配置（左右・上下）・フォント・フォントサイズ・色・装飾を入力に持つ。`text.title@1` と `text.body@1` はこのテンプレートへ統合し、複数のテキスト表現を1つの入力契約に閉じる。

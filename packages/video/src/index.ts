@@ -12,3 +12,18 @@ export type {
 } from "./timeline";
 export { compileDocument, toSecondsText } from "./compiler";
 export type { CompileDocumentOptions, CompiledComposition } from "./compiler";
+export {
+  THEME_FONT_STACKS,
+  accentForegroundHex,
+  accentSoftHex,
+  contrastRatio,
+  hexToRgb,
+  mixHex,
+  overlayToRgba,
+  relativeLuminance,
+  resolveSceneAccentHex,
+  resolveVisualTheme,
+  rgbToHex,
+  sceneAccentStyle,
+  themeRootStyle,
+} from "./theme";

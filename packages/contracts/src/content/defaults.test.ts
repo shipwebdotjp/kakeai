@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { contentDocumentSchema } from "./document";
 import {
-  DEFAULT_ACCENT_COLORS,
+  DEFAULT_SCENE_ACCENT,
   DEFAULT_SCENE_IDS,
   DEFAULT_SCENE_LABELS,
+  DEFAULT_VISUAL_THEME,
   INTRO_FIXED_DURATION_MS,
   OUTRO_FIXED_DURATION_MS,
   createInitialContentDocument,
@@ -34,12 +35,17 @@ describe("createInitialContentDocument", () => {
     ]);
   });
 
-  it("applies template default accent colors and timing", () => {
+  it("uses the default visual theme", () => {
     const document = createInitialContentDocument();
-    expect(document.scenes.map((scene) => scene.accentColor)).toEqual([
-      DEFAULT_ACCENT_COLORS.intro,
-      DEFAULT_ACCENT_COLORS.point1,
-      DEFAULT_ACCENT_COLORS.outro,
+    expect(document.visualTheme).toEqual(DEFAULT_VISUAL_THEME);
+  });
+
+  it("applies the template default accent and timing", () => {
+    const document = createInitialContentDocument();
+    expect(document.scenes.map((scene) => scene.accent)).toEqual([
+      DEFAULT_SCENE_ACCENT,
+      DEFAULT_SCENE_ACCENT,
+      DEFAULT_SCENE_ACCENT,
     ]);
     expect(document.scenes[0]!.timing).toEqual({
       mode: "fixed",

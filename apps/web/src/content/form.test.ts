@@ -1003,6 +1003,7 @@ describe("buildContentDocument", () => {
     if (source.kind !== "point") {
       throw new Error("fixture changed");
     }
+    source.accentKind = "custom";
     source.accentColor = "#123456";
     source.transitionPreset = "fade";
     source.transitionDurationMs = 250;
@@ -1020,6 +1021,7 @@ describe("buildContentDocument", () => {
     );
     expect(copy.kind).toBe("point");
     expect(copy.lines).toEqual([]);
+    expect(copy.accentKind).toBe("custom");
     expect(copy.accentColor).toBe("#123456");
     expect(copy.transitionPreset).toBe("fade");
     expect(copy.transitionDurationMs).toBe(250);
@@ -1037,12 +1039,83 @@ describe("buildContentDocument", () => {
     const rebuilt = buildContentDocument(base, values);
     const cloned = rebuilt.scenes[1]!;
     expect(cloned.kind).toBe("point");
-    expect(cloned.accentColor).toBe("#123456");
+    expect(cloned.accent).toEqual({ kind: "custom", color: "#123456" });
     expect(cloned.lines).toEqual([]);
     expect(cloned.visualCues).toHaveLength(source.cues.length);
     expect(cloned.transition).toEqual({ enter: { preset: "fade", durationMs: 250 } });
     const cueIds = rebuilt.scenes.flatMap((scene) => scene.visualCues.map((cue) => cue.id));
     expect(new Set(cueIds).size).toBe(cueIds.length);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+});
+
+describe("scene accent", () => {
+  it("reads theme and custom accents into the form", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.accent = { kind: "theme", token: "secondary" };
+    base.scenes[2]!.accent = { kind: "custom", color: "#123ABC" };
+    const values = toFormValues(base);
+    expect(values.scenes[1]).toMatchObject({
+      accentKind: "theme",
+      accentToken: "secondary",
+      accentColor: "",
+    });
+    expect(values.scenes[2]).toMatchObject({
+      accentKind: "custom",
+      accentColor: "#123ABC",
+    });
+  });
+
+  it("round-trips a theme token accent", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.scenes[1]!.accentKind = "theme";
+    values.scenes[1]!.accentToken = "tertiary";
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.accent).toEqual({ kind: "theme", token: "tertiary" });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("normalizes a custom accent color to uppercase", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.scenes[1]!.accentKind = "custom";
+    values.scenes[1]!.accentColor = "#abcdef";
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.accent).toEqual({ kind: "custom", color: "#ABCDEF" });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("falls back to the theme default for an empty custom color", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.scenes[1]!.accentKind = "custom";
+    values.scenes[1]!.accentColor = "";
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.accent).toEqual({ kind: "theme", token: "primary" });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("keeps explicit text cue styles through a form round-trip", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const cue = values.scenes[1]!.cues[0]!;
+    cue.fields.text = "見出し";
+    cue.fields.role = "heading";
+    cue.fields.font = "serif";
+    cue.fields.fontSize = "80";
+    cue.fields.color = "#FF0000";
+    cue.fields["decoration.bold"] = "true";
+    cue.fields["decoration.italic"] = "";
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual({
+      text: "見出し",
+      role: "heading",
+      font: "serif",
+      fontSize: 80,
+      color: "#FF0000",
+      decoration: { bold: true },
+    });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });

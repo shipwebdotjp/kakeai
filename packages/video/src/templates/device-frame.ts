@@ -23,7 +23,7 @@ export function renderDeviceFrame(
     [...context.path, "screen"],
   );
   const screenId = context.scope.id("screen");
-  const background = backgroundColor ?? "#f1f5f9";
+  const background = backgroundColor ?? context.theme.surfaceMuted;
   const policy = DEFAULT_ANIMATION_POLICY;
   const animationItems: AnimationItem[] =
     animation !== undefined &&

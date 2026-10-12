@@ -1,7 +1,8 @@
 import { CONTENT_SCHEMA_VERSION, TEMPLATE_ID, TEMPLATE_VERSION, type ContentDocument } from "./document";
 import { SUPPORTED_LOCALES } from "./primitives";
-import type { PointScene } from "./scene";
+import type { PointScene, SceneAccent } from "./scene";
 import type { VisualCue } from "./visual";
+import { DEFAULT_VISUAL_THEME_REF, type VisualThemeRef } from "./theme";
 import { textBlockV1, type TextRole } from "../templates";
 
 export const DEFAULT_SCENE_IDS = {
@@ -10,11 +11,9 @@ export const DEFAULT_SCENE_IDS = {
   outro: "scene-outro",
 } as const;
 
-export const DEFAULT_ACCENT_COLORS = {
-  intro: "#2563EB",
-  point1: "#2563EB",
-  outro: "#2563EB",
-} as const;
+export const DEFAULT_SCENE_ACCENT: SceneAccent = { kind: "theme", token: "primary" };
+
+export const DEFAULT_VISUAL_THEME: VisualThemeRef = { ...DEFAULT_VISUAL_THEME_REF };
 
 export function defaultPointLabel(ordinal: number): string {
   return `要点 ${ordinal}`;
@@ -30,8 +29,6 @@ export const INTRO_FIXED_DURATION_MS = 4000;
 export const OUTRO_FIXED_DURATION_MS = 4000;
 export const SCENE_PADDING_MS = 500;
 export const SILENT_CAPTION_DURATION_MS = 2500;
-
-export const DEFAULT_POINT_ACCENT_COLOR = DEFAULT_ACCENT_COLORS.point1;
 
 function textCue(
   sceneId: string,
@@ -62,7 +59,7 @@ export function createPointScene(sceneId: string, label: string): PointScene {
     id: sceneId,
     kind: "point",
     label,
-    accentColor: DEFAULT_POINT_ACCENT_COLOR,
+    accent: { ...DEFAULT_SCENE_ACCENT },
     timing: { mode: "auto" },
     lines: [],
     visualCues: pointSceneTextCues(sceneId),
@@ -72,6 +69,7 @@ export function createPointScene(sceneId: string, label: string): PointScene {
 export function createInitialContentDocument(): ContentDocument {
   return {
     schemaVersion: CONTENT_SCHEMA_VERSION,
+    visualTheme: { ...DEFAULT_VISUAL_THEME },
     locale: SUPPORTED_LOCALES[0],
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
     speakers: [],
@@ -82,7 +80,7 @@ export function createInitialContentDocument(): ContentDocument {
         id: DEFAULT_SCENE_IDS.intro,
         kind: "intro",
         label: DEFAULT_SCENE_LABELS.intro,
-        accentColor: DEFAULT_ACCENT_COLORS.intro,
+        accent: { ...DEFAULT_SCENE_ACCENT },
         timing: { mode: "fixed", durationMs: INTRO_FIXED_DURATION_MS },
         lines: [],
         visualCues: [
@@ -94,7 +92,7 @@ export function createInitialContentDocument(): ContentDocument {
         id: DEFAULT_SCENE_IDS.point1,
         kind: "point",
         label: DEFAULT_SCENE_LABELS.point1,
-        accentColor: DEFAULT_ACCENT_COLORS.point1,
+        accent: { ...DEFAULT_SCENE_ACCENT },
         timing: { mode: "auto" },
         lines: [],
         visualCues: pointSceneTextCues(DEFAULT_SCENE_IDS.point1),
@@ -103,7 +101,7 @@ export function createInitialContentDocument(): ContentDocument {
         id: DEFAULT_SCENE_IDS.outro,
         kind: "outro",
         label: DEFAULT_SCENE_LABELS.outro,
-        accentColor: DEFAULT_ACCENT_COLORS.outro,
+        accent: { ...DEFAULT_SCENE_ACCENT },
         timing: { mode: "fixed", durationMs: OUTRO_FIXED_DURATION_MS },
         lines: [],
         visualCues: [textCue(DEFAULT_SCENE_IDS.outro, "closing", "closing", 0)],

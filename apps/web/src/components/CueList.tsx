@@ -10,8 +10,10 @@ import {
 import {
   ANIMATION_PRESETS,
   DEFAULT_ANIMATION_POLICY,
+  DEFAULT_VISUAL_THEME_REF,
   getVisualTemplate,
   listVisualTemplateCatalog,
+  textBlockV1,
   type AnimationPreset,
   type CueLayer,
   type TemplateFieldSpec,
@@ -152,6 +154,11 @@ function CueRow({
           削除
         </button>
       </div>
+      {cue.templateId === textBlockV1.id && cue.templateVersion === textBlockV1.version && (
+        <p className={metaTextClass}>
+          未指定の項目はテーマ（{DEFAULT_VISUAL_THEME_REF.id}@{DEFAULT_VISUAL_THEME_REF.version}）の役割別スタイルで描画されます
+        </p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="inline-flex items-center gap-1.5">

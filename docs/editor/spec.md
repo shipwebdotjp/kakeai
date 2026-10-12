@@ -20,7 +20,7 @@
 
 `intro`/`point`/`outro` Scene は `slots` を持たない。タイトル・サブタイトル・見出し・本文・結びは、統合テキストテンプレートを既存の `overlay` 層の VisualCue として配置して表現する（既存 `text.title@1`/`text.body@1` も `overlay` を使うため、層のenumは変更しない）。コンパイラの固定「Scene本文」層（`kakeai-slotframe`）は廃止する。`kind` は残し、導入→要点→結びの並び順と新規作品の既定生成に使う。
 
-Scene の `accentColor`、`timing`、`lines`、`visualCues` は維持する。字幕は従来どおり `lines.captionText` をコンパイラ固定層で描画し、テキストCueとは独立に保つ。
+Scene の `accent`、`timing`、`lines`、`visualCues` は維持する。字幕は従来どおり `lines.captionText` をコンパイラ固定層で描画し、テキストCueとは独立に保つ。
 
 ### 統合テキストテンプレート
 
@@ -95,7 +95,7 @@ Scene の境界に、カット／フェードイン・フェードアウト／�
 
 各 point Scene の見出しコントロール群の最左に「前のシーンを複製」ボタンを置く。直前Scene（pointに限る）の視覚要素を新IDで複製し、複製元の直後に新しい point Scene として挿入する（[ADR-0038](../adr/0038-scene-clone-visuals-only.md)）。
 
-複製するもの: `accentColor`・`timing`・`scene.transition`（遷移）・全VisualCue（テキスト・背景・カード・端末枠・サイト枠など）・立ち絵。**複製しないもの**: セリフ（`lines`）と `AudioTake`。素材・話者・キャラクター・外観はdocument-levelのため共有し、複製しない。
+複製するもの: `accent`・`timing`・`scene.transition`（遷移）・全VisualCue（テキスト・背景・カード・端末枠・サイト枠など）・立ち絵。**複製しないもの**: セリフ（`lines`）と `AudioTake`。素材・話者・キャラクター・外観はdocument-levelのため共有し、複製しない。
 
 - IDは複製対象ごとに新規発行する（Scene・VisualCue）。立ち絵Cueの `cueId` は新規にする。`lines`・`AudioTake` は複製しないため生成しない。
 - 複製元がpointでない場合（直前が導入など）はボタンを無効化する。複製先は常にpointとし、`intro → point* → outro` の順序を保つ。

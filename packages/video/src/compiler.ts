@@ -15,6 +15,7 @@ import {
   type CueLayer,
   type NestedVisual,
   type VisualCue,
+  type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
@@ -23,6 +24,15 @@ import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import type { RenderedCue, RenderContext } from "./render-context";
+import {
+  THEME_FONT_STACKS,
+  mixHex,
+  overlayToRgba,
+  resolveSceneAccentHex,
+  resolveVisualTheme,
+  sceneAccentStyle,
+  themeRootStyle,
+} from "./theme";
 import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type ResolvedTimeline } from "./timeline";
 import { renderTextBlock } from "./templates/text-block";
 import { renderMediaFullBleed } from "./templates/media-full-bleed";
@@ -114,10 +124,8 @@ function bounceTweenLines(unit: BounceUnit): string[] {
   return [tween, reset];
 }
 
-function shade(hex: string, factor: number): string {
-  const channel = (offset: number): number =>
-    Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(offset, offset + 2), 16) * factor)));
-  return `rgb(${channel(1)},${channel(3)},${channel(5)})`;
+function sceneBackground(accentHex: string, theme: VisualThemeDefinition): string {
+  return `linear-gradient(135deg, ${mixHex(accentHex, theme.canvas.base, 0.72)} 0%, ${mixHex(accentHex, theme.canvas.base, 0.88)} 100%)`;
 }
 
 function renderNestedMedia(node: NestedVisual & { kind: "media" }, context: RenderContext): RenderedCue {
@@ -146,7 +154,7 @@ function dispatchTemplate(
 ): RenderedCue {
   switch (key) {
     case `${textBlockV1.id}@${textBlockV1.version}`:
-      return { html: renderTextBlock(input, context.path), assetIds: [], animation: [] };
+      return { html: renderTextBlock(input, context.path, context.theme), assetIds: [], animation: [] };
     case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
       return renderMediaFullBleed(input, context);
     case `${mediaCardV1.id}@${mediaCardV1.version}`:
@@ -174,17 +182,19 @@ function dispatchTemplate(
 
 function makeContext(
   document: ContentDocument,
+  theme: VisualThemeDefinition,
   assetResolver: AssetResolver,
   scope: RenderScope,
   path: (string | number)[],
 ): RenderContext {
   const context: RenderContext = {
     document,
+    theme,
     assetResolver,
     scope,
     path,
     renderNested: (node, nestedScope, nestedPath) =>
-      renderNestedVisual(node, makeContext(document, assetResolver, nestedScope, nestedPath)),
+      renderNestedVisual(node, makeContext(document, theme, assetResolver, nestedScope, nestedPath)),
   };
   return context;
 }
@@ -198,29 +208,29 @@ function renderNestedVisual(node: NestedVisual, context: RenderContext): Rendere
 
 const STYLES = [
   "html,body{margin:0;padding:0;background:#000;height:100%;}",
-  "#kakeai-root{position:relative;width:100%;height:100%;overflow:hidden;background:#000;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;color:#fff;}",
+  "#kakeai-root{position:relative;width:100%;height:100%;overflow:hidden;background:var(--kakeai-canvas);font-family:var(--kakeai-font-sans);color:var(--kakeai-text);}",
   ".clip{position:absolute;inset:0;}",
   ".kakeai-scenebg{position:absolute;inset:0;}",
   ".kakeai-sceneclip{position:absolute;inset:0;}",
   ".kakeai-cuebody{position:absolute;inset:0;transform-origin:center center;}",
   ".kakeai-fullbleed{position:absolute;inset:0;width:100%;height:100%;}",
   ".kakeai-card{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:90px 160px;box-sizing:border-box;}",
-  ".kakeai-cardmedia{width:100%;max-height:640px;object-fit:cover;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,.5);}",
-  ".kakeai-cardtext{margin:0;background:rgba(0,0,0,.55);border-radius:16px;padding:28px 48px;max-width:1400px;}",
-  ".kakeai-cardheading{margin:0;font-size:56px;font-weight:700;line-height:1.4;}",
-  ".kakeai-cardcaption{margin:12px 0 0;font-size:34px;line-height:1.7;}",
-  ".kakeai-standing{position:absolute;transform:translate(-50%,-50%);height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
+  ".kakeai-cardmedia{width:100%;max-height:640px;object-fit:cover;border-radius:var(--kakeai-radius-lg);box-shadow:0 12px 48px var(--kakeai-shadow);}",
+  ".kakeai-cardtext{margin:0;background:var(--kakeai-scrim);border-radius:var(--kakeai-radius-md);padding:28px 48px;max-width:1400px;}",
+  ".kakeai-cardheading{margin:0;font-size:56px;font-weight:700;line-height:1.4;color:var(--kakeai-onmedia);}",
+  ".kakeai-cardcaption{margin:12px 0 0;font-size:34px;line-height:1.7;color:var(--kakeai-onmedia);}",
+  ".kakeai-standing{position:absolute;transform:translate(-50%,-50%);height:auto;filter:drop-shadow(0 12px 32px var(--kakeai-shadow));}",
   ".kakeai-standingv2{position:absolute;transform:translate(-50%,-50%);}",
-  ".kakeai-standingimg{display:block;height:auto;filter:drop-shadow(0 12px 32px rgba(0,0,0,.5));}",
+  ".kakeai-standingimg{display:block;height:auto;filter:drop-shadow(0 12px 32px var(--kakeai-shadow));}",
   ".kakeai-nestedmedia{display:block;width:100%;height:100%;}",
   ".kakeai-deviceframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
-  ".kakeai-deviceframe-screen{overflow:hidden;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.55);}",
-  ".kakeai-deviceframe-laptop .kakeai-deviceframe-screen{width:72%;aspect-ratio:16/9;border-radius:18px;border:24px solid #1f2937;}",
-  ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/19.5;border-radius:36px;border:18px solid #1f2937;}",
+  ".kakeai-deviceframe-screen{overflow:hidden;background:#000;box-shadow:0 24px 60px var(--kakeai-shadow);}",
+  ".kakeai-deviceframe-laptop .kakeai-deviceframe-screen{width:72%;aspect-ratio:16/9;border-radius:18px;border:24px solid var(--kakeai-ink);}",
+  ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/19.5;border-radius:36px;border:18px solid var(--kakeai-ink);}",
   ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
-  ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:rgba(0,0,0,.55);border-radius:12px;padding:12px 36px;text-shadow:0 2px 12px rgba(0,0,0,.6);}",
+  ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:var(--kakeai-scrim);border-radius:var(--kakeai-radius-sm);padding:12px 36px;color:var(--kakeai-onmedia);text-shadow:0 2px 12px rgba(0,0,0,.6);}",
   ".kakeai-mockup{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
-  ".kakeai-mockup-chrome{position:relative;width:auto;max-width:90%;max-height:92%;border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;background:var(--kakeai-mockup-surface,#fff);color:var(--kakeai-mockup-fg,#111827);}",
+  ".kakeai-mockup-chrome{position:relative;width:auto;max-width:90%;max-height:92%;border-radius:var(--kakeai-radius-md);overflow:hidden;box-shadow:0 24px 60px var(--kakeai-shadow);display:flex;flex-direction:column;background:var(--kakeai-mockup-surface,var(--kakeai-surface));color:var(--kakeai-mockup-fg,var(--kakeai-text));}",
   ".kakeai-mockup-chrome::before{content:'';display:block;height:8px;background:var(--kakeai-mockup-accent,#6b7280);}",
   ".kakeai-mockup-theme-dark .kakeai-mockup-chrome{--kakeai-mockup-surface:#16181c;--kakeai-mockup-fg:#e5e7eb;}",
   ".kakeai-mockup-header{display:flex;align-items:center;gap:16px;padding:20px 28px;border-bottom:1px solid rgba(127,127,127,.25);}",
@@ -366,6 +376,7 @@ function clipEndsAtSceneEnd(html: string, sceneEndMs: number): boolean {
 
 function applySceneTransitions(
   document: ContentDocument,
+  theme: VisualThemeDefinition,
   timeline: ResolvedTimeline,
   groups: readonly string[][],
   tweenLines: string[],
@@ -419,12 +430,18 @@ function applySceneTransitions(
   }
   return extendedGroups.map((group, index) => {
     const sceneIndex = timeline.scenes[index]?.sceneIndex ?? index;
-    return `<div id="kakeai-scene-${sceneIndex}" class="kakeai-sceneclip">${group.join("")}</div>`;
+    const scene = document.scenes[sceneIndex];
+    const accentVars =
+      scene === undefined
+        ? ""
+        : ` style="${sceneAccentStyle(resolveSceneAccentHex(scene, theme), theme)}"`;
+    return `<div id="kakeai-scene-${sceneIndex}" class="kakeai-sceneclip"${accentVars}>${group.join("")}</div>`;
   });
 }
 
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
   const { document, assetResolver } = options;
+  const theme = resolveVisualTheme(document);
   const timeline = resolveTimeline(document);
   const sceneById = new Map(document.scenes.map((scene) => [scene.id, scene]));
 
@@ -472,7 +489,8 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     const durationSec = toSecondsText(placement.durationMs);
     const sceneClips: string[] = [];
     const bgId = `kakeai-scene-${placement.sceneIndex}-bg`;
-    const background = `linear-gradient(135deg, ${shade(scene.accentColor, 0.55)} 0%, ${shade(scene.accentColor, 0.22)} 100%)`;
+    const accentHex = resolveSceneAccentHex(scene, theme);
+    const background = sceneBackground(accentHex, theme);
     sceneClips.push(
       `<section id="${bgId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${bgId}-body" class="kakeai-scenebg" style="background:${background}"></div></section>`,
     );
@@ -512,7 +530,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const absStartMs = placement.startMs + window.startMs;
       const absEndMs = placement.startMs + window.endMs;
       const scope = cueScope(cue.id);
-      const context = makeContext(document, assetResolver, scope, cuePath);
+      const context = makeContext(document, theme, assetResolver, scope, cuePath);
       const rendered = dispatchTemplate(
         `${cue.template.id}@${cue.template.version}`,
         cue.input,
@@ -610,8 +628,18 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       }
       const captionText = line.captionText.trim();
       if (captionText.length > 0) {
+        const captionToken = theme.textRoles.caption;
+        const captionStyle = [
+          `font-family:${THEME_FONT_STACKS[captionToken.font]}`,
+          `font-size:${captionToken.fontSize}px`,
+          `color:${captionToken.color}`,
+          `line-height:${captionToken.lineHeight}`,
+          `font-weight:${captionToken.decoration.bold ? "700" : "400"}`,
+          `font-style:${captionToken.decoration.italic ? "italic" : "normal"}`,
+          `background:${overlayToRgba(theme.scrim)}`,
+        ].join(";");
         sceneClips.push(
-          `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="kakeai-caption"><p class="kakeai-captiontext">${escapeHtmlText(captionText)}</p></div></div>`,
+          `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="kakeai-caption"><p class="kakeai-captiontext" style="${captionStyle}">${escapeHtmlText(captionText)}</p></div></div>`,
         );
       }
       if (line.selectedAudioTakeId === null) {
@@ -655,7 +683,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     sceneClipGroups.push(sceneClips);
   }
 
-  const clips = applySceneTransitions(document, timeline, sceneClipGroups, tweenLines);
+  const clips = applySceneTransitions(document, theme, timeline, sceneClipGroups, tweenLines);
 
   const placementBySceneId = new Map(
     timeline.scenes.map((placement) => [placement.sceneId, placement]),
@@ -700,7 +728,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     `<style>${STYLES}</style>`,
     "</head>",
     "<body>",
-    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}">`,
+    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme)}">`,
     ...clips,
     ...audios,
     "</div>",

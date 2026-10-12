@@ -1,7 +1,10 @@
 import { CONTENT_SCHEMA_VERSION } from "./document";
 import { DEFAULT_SCENE_LABELS, defaultPointLabel } from "./defaults";
+import { sceneAccentSchema } from "./scene";
+import { DEFAULT_VISUAL_THEME_REF } from "./theme";
 
 const V4_SCHEMA_VERSION = 4;
+const V5_SCHEMA_VERSION = 5;
 
 function defaultLabel(kind: unknown, pointOrdinal: number): string | null {
   switch (kind) {
@@ -16,7 +19,7 @@ function defaultLabel(kind: unknown, pointOrdinal: number): string | null {
   }
 }
 
-function migrateScenes(scenes: unknown): unknown {
+function migrateSceneLabels(scenes: unknown): unknown {
   if (!Array.isArray(scenes)) {
     return scenes;
   }
@@ -37,17 +40,51 @@ function migrateScenes(scenes: unknown): unknown {
   });
 }
 
+function migrateSceneAccents(scenes: unknown): unknown {
+  if (!Array.isArray(scenes)) {
+    return scenes;
+  }
+  return scenes.map((scene) => {
+    if (typeof scene !== "object" || scene === null) {
+      return scene;
+    }
+    const record = scene as Record<string, unknown>;
+    const { accentColor, accent, ...rest } = record;
+    void accentColor;
+    if (accent !== undefined && sceneAccentSchema.safeParse(accent).success) {
+      return { ...rest, accent };
+    }
+    return { ...rest, accent: { kind: "theme", token: "primary" } };
+  });
+}
+
+function migrateV4ToV5(record: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...record,
+    schemaVersion: V5_SCHEMA_VERSION,
+    scenes: migrateSceneLabels(record.scenes),
+  };
+}
+
+function migrateV5ToV6(record: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...record,
+    schemaVersion: CONTENT_SCHEMA_VERSION,
+    visualTheme: { ...DEFAULT_VISUAL_THEME_REF },
+    scenes: migrateSceneAccents(record.scenes),
+  };
+}
+
 export function migrateContentDocument(input: unknown): unknown {
   if (typeof input !== "object" || input === null) {
     return input;
   }
   const record = input as Record<string, unknown>;
-  if (record.schemaVersion !== V4_SCHEMA_VERSION) {
-    return input;
+  if (record.schemaVersion === V4_SCHEMA_VERSION) {
+    return migrateV5ToV6(migrateV4ToV5(record));
   }
-  return {
-    ...record,
-    schemaVersion: CONTENT_SCHEMA_VERSION,
-    scenes: migrateScenes(record.scenes),
-  };
+  if (record.schemaVersion === V5_SCHEMA_VERSION) {
+    return migrateV5ToV6(record);
+  }
+  return input;
 }

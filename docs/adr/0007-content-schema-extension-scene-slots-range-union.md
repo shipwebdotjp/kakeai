@@ -3,6 +3,8 @@
 > amended by [ADR-0029](./0029-content-document-v3-visual-cue.md): 描画順はVisualCueの `layer`/`order` で定め、`Scene本文`・`caption` はコンパイラ固定層とする。Cueは `transition` を必須で持つ。
 >
 > superseded by [ADR-0035](./0035-remove-scene-slots-unify-text-cues.md): Sceneスロットは廃止し、テキストはVisualCueへ統一する（`range` の判別unionは維持）。
+>
+> amended by [ADR-0040](./0040-visual-theme-contract.md): Sceneの `accentColor`（`#RRGGBB`）は `accent` union（`{ kind: "theme", token }` / `{ kind: "custom", color }`）へ置換する（`schemaVersion: 6`）。
 
 ContentDocument の拡張方針として、(a) Scene は `kind` で判別する union とし、型付きスロット（`intro`: title/subtitle、`point`: heading/body、`outro`: closing）と必須の `accentColor` を持つ、(b) `VisualCue.range` は `{ kind: "scene" }` / `{ kind: "lines", startLineId, endLineId }` / `{ kind: "offset", startMs, endMs }` の判別 union とする。破壊的変更は `schemaVersion` を上げて新しい `ScriptVersion` として移行する。
 

@@ -1,10 +1,15 @@
-import { textBlockInputSchema, type TextRole } from "@kakeai/contracts";
+import {
+  textBlockInputSchema,
+  type TextRole,
+  type ThemeFontCategory,
+  type VisualThemeTextToken,
+} from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
+import { THEME_FONT_STACKS } from "../theme";
 
 type TextAnchor = "left" | "center" | "right";
 type VerticalAlign = "top" | "middle" | "bottom";
-type FontName = "sans" | "serif" | "mono";
 
 interface TextDecoration {
   bold: boolean;
@@ -16,9 +21,10 @@ interface TextDecoration {
 interface RoleDefault {
   anchor: TextAnchor;
   verticalAlign: VerticalAlign;
-  font: FontName;
+  font: ThemeFontCategory;
   fontSize: number;
   color: string;
+  lineHeight: number;
   decoration: TextDecoration;
 }
 
@@ -28,47 +34,46 @@ const ROLE_DEFAULTS: Record<TextRole, RoleDefault> = {
     verticalAlign: "middle",
     font: "sans",
     fontSize: 96,
-    color: "#FFFFFF",
-    decoration: { bold: true, italic: false, outline: false, shadow: true },
+    color: "#175C57",
+    lineHeight: 1.4,
+    decoration: { bold: true, italic: false, outline: false, shadow: false },
   },
   subtitle: {
     anchor: "center",
     verticalAlign: "middle",
     font: "sans",
     fontSize: 48,
-    color: "#FFFFFF",
-    decoration: { bold: false, italic: false, outline: false, shadow: true },
+    color: "#4E5A6B",
+    lineHeight: 1.4,
+    decoration: { bold: false, italic: false, outline: false, shadow: false },
   },
   heading: {
     anchor: "center",
     verticalAlign: "middle",
     font: "sans",
     fontSize: 72,
-    color: "#FFFFFF",
-    decoration: { bold: true, italic: false, outline: false, shadow: true },
+    color: "#175C57",
+    lineHeight: 1.4,
+    decoration: { bold: true, italic: false, outline: false, shadow: false },
   },
   body: {
     anchor: "center",
     verticalAlign: "middle",
     font: "sans",
     fontSize: 42,
-    color: "#FFFFFF",
-    decoration: { bold: false, italic: false, outline: false, shadow: true },
+    color: "#232B3D",
+    lineHeight: 1.8,
+    decoration: { bold: false, italic: false, outline: false, shadow: false },
   },
   closing: {
     anchor: "center",
     verticalAlign: "middle",
     font: "sans",
     fontSize: 48,
-    color: "#FFFFFF",
-    decoration: { bold: true, italic: false, outline: false, shadow: true },
+    color: "#232B3D",
+    lineHeight: 1.4,
+    decoration: { bold: true, italic: false, outline: false, shadow: false },
   },
-};
-
-const FONT_STACKS: Record<FontName, string> = {
-  sans: "'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif",
-  serif: "'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif",
-  mono: "'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace",
 };
 
 const JUSTIFY: Record<TextAnchor, string> = {
@@ -98,7 +103,11 @@ function textShadow(decoration: TextDecoration): string {
   return parts.length === 0 ? "none" : parts.join(",");
 }
 
-export function renderTextBlock(input: unknown, path: (string | number)[]): string {
+export function renderTextBlock(
+  input: unknown,
+  path: (string | number)[],
+  theme: { textRoles: Record<TextRole, VisualThemeTextToken> },
+): string {
   const parsed = textBlockInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
@@ -109,17 +118,26 @@ export function renderTextBlock(input: unknown, path: (string | number)[]): stri
   if (text.trim().length === 0) {
     return "";
   }
-  const roleDefault = ROLE_DEFAULTS[role];
-  const anchor = parsed.data.anchor ?? roleDefault.anchor;
-  const verticalAlign = parsed.data.verticalAlign ?? roleDefault.verticalAlign;
-  const font = parsed.data.font ?? roleDefault.font;
-  const fontSize = parsed.data.fontSize ?? roleDefault.fontSize;
-  const color = (parsed.data.color ?? roleDefault.color).toUpperCase();
+  const themeToken = theme.textRoles[role];
+  const fallback = ROLE_DEFAULTS[role];
+  const anchor = parsed.data.anchor ?? fallback.anchor;
+  const verticalAlign = parsed.data.verticalAlign ?? fallback.verticalAlign;
+  const font = parsed.data.font ?? themeToken.font ?? fallback.font;
+  const fontSize = parsed.data.fontSize ?? themeToken.fontSize ?? fallback.fontSize;
+  const color = (parsed.data.color ?? themeToken.color ?? fallback.color).toUpperCase();
+  const lineHeight = themeToken.lineHeight ?? fallback.lineHeight;
   const decoration: TextDecoration = {
-    bold: parsed.data.decoration?.bold ?? roleDefault.decoration.bold,
-    italic: parsed.data.decoration?.italic ?? roleDefault.decoration.italic,
-    outline: parsed.data.decoration?.outline ?? roleDefault.decoration.outline,
-    shadow: parsed.data.decoration?.shadow ?? roleDefault.decoration.shadow,
+    bold: parsed.data.decoration?.bold ?? themeToken.decoration.bold ?? fallback.decoration.bold,
+    italic:
+      parsed.data.decoration?.italic ?? themeToken.decoration.italic ?? fallback.decoration.italic,
+    outline:
+      parsed.data.decoration?.outline ??
+      themeToken.decoration.outline ??
+      fallback.decoration.outline,
+    shadow:
+      parsed.data.decoration?.shadow ??
+      themeToken.decoration.shadow ??
+      fallback.decoration.shadow,
   };
 
   const wrapperStyle = [
@@ -135,12 +153,12 @@ export function renderTextBlock(input: unknown, path: (string | number)[]): stri
   const textStyle = [
     "margin:0",
     "max-width:1600px",
-    `font-family:${FONT_STACKS[font]}`,
+    `font-family:${THEME_FONT_STACKS[font]}`,
     `font-size:${fontSize}px`,
     `color:${color}`,
     `font-weight:${decoration.bold ? "700" : "400"}`,
     `font-style:${decoration.italic ? "italic" : "normal"}`,
-    `line-height:${role === "body" ? "1.8" : "1.4"}`,
+    `line-height:${lineHeight}`,
     "white-space:pre-line",
     `text-align:${anchor}`,
     `text-shadow:${textShadow(decoration)}`,

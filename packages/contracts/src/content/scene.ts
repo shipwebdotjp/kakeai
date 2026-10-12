@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { accentColorSchema, idSchema, nonNegativeInt } from "./primitives";
+import { themeAccentTokenSchema } from "./theme";
 import { sceneTimingSchema } from "./timing";
 import { narrationSegmentSchema } from "./narration";
 import { visualCueSchema } from "./visual";
@@ -41,10 +42,22 @@ export const sceneLabelSchema = z
   .trim()
   .min(1, { message: "Scene Label は必須です" });
 
+export const sceneAccentSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("theme"),
+    token: themeAccentTokenSchema,
+  }),
+  z.strictObject({
+    kind: z.literal("custom"),
+    color: accentColorSchema,
+  }),
+]);
+export type SceneAccent = z.infer<typeof sceneAccentSchema>;
+
 const sceneBaseShape = {
   id: idSchema,
   label: sceneLabelSchema,
-  accentColor: accentColorSchema,
+  accent: sceneAccentSchema,
   timing: sceneTimingSchema,
   transition: sceneTransitionSchema.optional(),
   lines: z.array(narrationSegmentSchema),

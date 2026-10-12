@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { migrateContentDocument } from "./content/migrate";
 import { styleIdSchema, voiceAdapterIdSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 
@@ -82,6 +83,17 @@ export const jobInputSnapshotSchema = z.discriminatedUnion("kind", [
   assetIngestJobSnapshotSchema,
   ttsJobSnapshotSchema,
 ]);
+
+export function parseRenderJobSnapshot(input: unknown): RenderJobSnapshot {
+  if (typeof input === "object" && input !== null && "content" in input) {
+    const record = input as Record<string, unknown>;
+    return renderJobSnapshotSchema.parse({
+      ...record,
+      content: migrateContentDocument(record.content),
+    });
+  }
+  return renderJobSnapshotSchema.parse(input);
+}
 
 export type RenderJobSnapshot = z.infer<typeof renderJobSnapshotSchema>;
 export type AssetIngestJobSnapshot = z.infer<typeof assetIngestJobSnapshotSchema>;
