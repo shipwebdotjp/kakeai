@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from "express";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import {
   createCompositionRequestSchema,
@@ -35,7 +35,7 @@ export function createCompositionsRouter(
       const bundleDir = resolve(join(dataDir, version.storageKey));
       const targetFile = resolve(join(bundleDir, subpath));
 
-      if (!targetFile.startsWith(bundleDir)) {
+      if (targetFile !== bundleDir && !targetFile.startsWith(bundleDir + sep)) {
         throw new ApiError(403, "LOCAL_ACCESS_DENIED", "アクセスが拒否されました");
       }
 

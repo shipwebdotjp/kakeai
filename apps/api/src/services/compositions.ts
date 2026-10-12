@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, stat, writeFile, cp } from "node:fs/promises";
-import { join, dirname, isAbsolute } from "node:path";
+import { randomUUID } from "node:crypto";
+import { join, dirname, isAbsolute, resolve, sep } from "node:path";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import {
   type Composition,
@@ -31,6 +32,27 @@ export function parseAndValidateManifest(manifestContent: string): CompositionMa
   return compositionManifestSchema.parse(raw);
 }
 
+function assertSafeRelativePath(relativePath: string, label: string): void {
+  if (
+    relativePath.length === 0 ||
+    relativePath === "." ||
+    isAbsolute(relativePath) ||
+    relativePath.split(/[\\/]/).includes("..")
+  ) {
+    throw new Error(`Invalid ${label}: ${relativePath}`);
+  }
+}
+
+function resolveWithin(baseDir: string, relativePath: string, label: string): string {
+  assertSafeRelativePath(relativePath, label);
+  const base = resolve(baseDir);
+  const target = resolve(base, relativePath);
+  if (target !== base && !target.startsWith(base + sep)) {
+    throw new Error(`Invalid ${label}: ${relativePath}`);
+  }
+  return target;
+}
+
 export async function validateCompositionBundle(
   bundleDir: string,
   entrypoint: string,
@@ -38,7 +60,7 @@ export async function validateCompositionBundle(
 ): Promise<ValidateBundleResult> {
   const { bundleHash } = await computeDirectoryHashAndFiles(bundleDir);
 
-  const entryPath = join(bundleDir, entrypoint);
+  const entryPath = resolveWithin(bundleDir, entrypoint, "entrypoint");
   let entryHtml: string;
   try {
     entryHtml = await readFile(entryPath, "utf-8");
@@ -74,10 +96,7 @@ export async function validateCompositionBundle(
   }
 
   for (const dep of manifest.dependencies) {
-    if (isAbsolute(dep) || dep.includes("..")) {
-      throw new Error(`Invalid relative dependency in manifest: ${dep}`);
-    }
-    const depPath = join(bundleDir, dep);
+    const depPath = resolveWithin(bundleDir, dep, "dependency");
     try {
       await stat(depPath);
     } catch {
@@ -106,6 +125,7 @@ export class CompositionService {
     entrypoint?: string;
   }): Promise<Composition> {
     const entrypoint = input.entrypoint ?? "index.html";
+    assertSafeRelativePath(entrypoint, "entrypoint");
     const existing = await this.db.composition.findUnique({
       where: { runtimeCompositionId: input.runtimeCompositionId },
     });
@@ -135,7 +155,9 @@ export class CompositionService {
       dependencies: [],
     };
 
-    await writeFile(join(draftDir, entrypoint), defaultHtml, "utf-8");
+    const entryPath = resolveWithin(draftDir, entrypoint, "entrypoint");
+    await mkdir(dirname(entryPath), { recursive: true });
+    await writeFile(entryPath, defaultHtml, "utf-8");
     await writeFile(join(draftDir, "manifest.json"), JSON.stringify(defaultManifest, null, 2), "utf-8");
 
     await this.db.compositionDraft.create({
@@ -255,13 +277,14 @@ export class CompositionService {
 
     if (input.files) {
       for (const [relPath, content] of Object.entries(input.files)) {
-        if (isAbsolute(relPath) || relPath.includes("..")) {
-          throw new Error(`Invalid file path in draft update: ${relPath}`);
-        }
-        const filePath = join(draftDir, relPath);
+        const filePath = resolveWithin(draftDir, relPath, "file path");
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, content, "utf-8");
       }
+    }
+
+    if (input.entrypoint !== undefined) {
+      resolveWithin(draftDir, input.entrypoint, "entrypoint");
     }
 
     const updatedEntrypoint = input.entrypoint ?? composition.draft.entrypoint;
@@ -309,7 +332,8 @@ export class CompositionService {
       : 0;
     const nextVersionNumber = latestVersion + 1;
 
-    const versionStorageKey = `compositions/bundles/${contentHash}`;
+    const versionId = randomUUID();
+    const versionStorageKey = `compositions/bundles/${contentHash}/${versionId}`;
     const versionDir = join(dataDirectories(this.dataDir).root, versionStorageKey);
 
     await mkdir(dirname(versionDir), { recursive: true });
@@ -317,6 +341,7 @@ export class CompositionService {
 
     const createdVersion = await this.db.compositionVersion.create({
       data: {
+        id: versionId,
         compositionId,
         versionNumber: nextVersionNumber,
         bundleHash: contentHash,

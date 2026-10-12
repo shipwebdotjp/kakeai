@@ -6,7 +6,7 @@ import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
 import { getVisualTheme, visualThemeRefSchema } from "./theme";
-import { characterStandingV1, characterStandingV2 } from "../templates";
+import { characterStandingV1, characterStandingV2, compositionFullBleedInputSchema } from "../templates";
 
 export const CONTENT_SCHEMA_VERSION = 6 as const;
 
@@ -126,16 +126,17 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
             path: ["scenes", sIdx, "visualCues", cIdx],
           });
         }
-        const input = cue.input as { compositionVersionId?: string };
-        if (input && typeof input.compositionVersionId === "string") {
-          if (compositionVersionIdsInDoc.has(input.compositionVersionId)) {
+        const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
+        if (parsedInput.success) {
+          const compositionVersionId = parsedInput.data.compositionVersionId;
+          if (compositionVersionIdsInDoc.has(compositionVersionId)) {
             ctx.addIssue({
               code: "custom",
-              message: `同一 CompositionVersion (${input.compositionVersionId}) は 1 ScriptVersion 内で 1 度しか参照できません`,
+              message: `同一 CompositionVersion (${compositionVersionId}) は 1 ScriptVersion 内で 1 度しか参照できません`,
               path: ["scenes", sIdx, "visualCues", cIdx, "input", "compositionVersionId"],
             });
           } else {
-            compositionVersionIdsInDoc.add(input.compositionVersionId);
+            compositionVersionIdsInDoc.add(compositionVersionId);
           }
         }
       }

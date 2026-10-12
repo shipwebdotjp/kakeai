@@ -59,6 +59,21 @@ describe("Composition Library Integration Tests", () => {
     const v2 = await service.publish(comp.id, {});
     expect(v2.versionNumber).toBe(2);
     expect(v2.bundleHash).not.toBe(v1.bundleHash);
+
+    const v3 = await service.publish(comp.id, {});
+    expect(v3.versionNumber).toBe(3);
+    expect(v3.storageKey).not.toBe(v2.storageKey);
+
+    await expect(
+      service.updateDraft(comp.id, { entrypoint: "../escape.html" }),
+    ).rejects.toThrow();
+    await expect(
+      service.createComposition({
+        name: "Bad Entrypoint",
+        runtimeCompositionId: "cmp.test.bad-entrypoint",
+        entrypoint: "../escape.html",
+      }),
+    ).rejects.toThrow();
   });
 
   it("test 2: ContentDocument reference validation (Background constraint & single reference)", () => {
@@ -103,7 +118,11 @@ describe("Composition Library Integration Tests", () => {
 
     const compiled = compileDocument({
       document: doc,
-      assetResolver: (assetId) => ({ url: `assets/${assetId}`, kind: "image", durationMs: 1000 }),
+      assetResolver: (assetId) => ({
+        url: `assets/${assetId}`,
+        kind: assetId === "asset-audio-1" || assetId === "asset-bgm" ? "audio" : "image",
+        durationMs: 1000,
+      }),
       compositionResolver: (id: string) => ({
         id,
         runtimeCompositionId: "cmp.runtime.test",
