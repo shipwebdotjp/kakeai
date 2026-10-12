@@ -86,6 +86,15 @@ export function createCompositionsRouter(
     }
   });
 
+  router.get("/:id/draft/files", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const files = await compositionService.getDraftFiles(req.params.id as string);
+      sendData(res, 200, files);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post("/:id/draft", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = parseBody(updateCompositionDraftRequestSchema, req.body);
@@ -99,7 +108,23 @@ export function createCompositionsRouter(
   router.post("/:id/publish", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = parseBody(publishCompositionRequestSchema, req.body);
-      const version = await compositionService.publish(req.params.id as string, body);
+      const compositionId = req.params.id as string;
+      const rawDryRun = req.query.dryRun;
+      const dryRun = Array.isArray(rawDryRun) ? rawDryRun[0] : rawDryRun;
+      if (
+        rawDryRun !== undefined &&
+        (typeof dryRun !== "string" || (dryRun !== "true" && dryRun !== "false"))
+      ) {
+        throw new ApiError(422, "VALIDATION_ERROR", undefined, {
+          issues: [{ path: ["dryRun"], code: "invalid_value", message: "dryRun は 'true' または 'false' を指定してください" }],
+        });
+      }
+      if (dryRun === "true") {
+        const manifest = await compositionService.validateDraft(compositionId, body);
+        sendData(res, 200, { manifest });
+        return;
+      }
+      const version = await compositionService.publish(compositionId, body);
       sendData(res, 201, version);
     } catch (err) {
       next(err);

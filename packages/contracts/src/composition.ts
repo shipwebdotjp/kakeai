@@ -3,7 +3,7 @@ import { idSchema } from "./content/primitives.ts";
 
 export const compositionManifestSchema = z.strictObject({
   entrypoint: z.string().min(1),
-  contentHash: z.string().min(1),
+  contentHash: z.string().min(1).optional(),
   runtimeCompositionId: z.string().min(1),
   width: z.literal(1920),
   height: z.literal(1080),
@@ -12,6 +12,13 @@ export const compositionManifestSchema = z.strictObject({
 });
 
 export type CompositionManifest = z.infer<typeof compositionManifestSchema>;
+
+export const compositionDraftFilesSchema = z.strictObject({
+  entrypoint: z.string().min(1),
+  files: z.record(z.string(), z.string()),
+});
+
+export type CompositionDraftFiles = z.infer<typeof compositionDraftFilesSchema>;
 
 export const compositionDraftSchema = z.strictObject({
   id: idSchema,

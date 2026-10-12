@@ -57,9 +57,22 @@ describe("compositions content route", () => {
         },
         createdAt: new Date(0).toISOString(),
       }),
+      getDraftFiles: async () => ({
+        entrypoint: "index.html",
+        files: { "index.html": "<!doctype html>draft" },
+      }),
+      validateDraft: async () => ({
+        entrypoint: "index.html",
+        runtimeCompositionId: "cmp.test",
+        width: 1920,
+        height: 1080,
+        durationMs: 5000,
+        dependencies: [],
+      }),
     };
 
     const app = express();
+    app.use(express.json());
     app.use("/compositions", createCompositionsRouter(service as never));
     app.use(
       (
@@ -100,5 +113,33 @@ describe("compositions content route", () => {
       `${origin}/compositions/versions/ver-1/content/..%2f..%2f..%2fmanifest.json`,
     );
     expect(res.status).toBe(403);
+  });
+
+  it("reads draft files back", async () => {
+    const res = await fetch(`${origin}/compositions/cmp_1/draft/files`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { entrypoint: string; files: Record<string, string> } };
+    expect(body.data.entrypoint).toBe("index.html");
+    expect(body.data.files["index.html"]).toContain("draft");
+  });
+
+  it("validates a draft with publish?dryRun=true", async () => {
+    const res = await fetch(`${origin}/compositions/cmp_1/publish?dryRun=true`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { manifest: { runtimeCompositionId: string } } };
+    expect(body.data.manifest.runtimeCompositionId).toBe("cmp.test");
+  });
+
+  it("rejects an invalid dryRun value", async () => {
+    const res = await fetch(`${origin}/compositions/cmp_1/publish?dryRun=1`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(422);
   });
 });

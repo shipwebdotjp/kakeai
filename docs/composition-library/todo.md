@@ -30,3 +30,13 @@
 - [x] テスト: version 不変性、参照検証、bundle 欠損、同一 version の重複参照、preview URL の path 制約、snapshot 固定、nested render の実写 fixture
 - [x] [仕様](./spec.md)、[ロードマップ](./roadmap.md)、MVP契約、ADR、CONTEXT、ユーザーガイドを同期する
 - [x] 完了条件: AI が作った全画面・無音 composition を publish し、背景として保存、プレビュー、MP4出力できる
+
+## C5 authoring ergonomics（AIのpublish摩擦解消）
+
+- [x] publish の検証失敗を `422 VALIDATION_ERROR` と `details.issues`（path/code/message）で返す
+- [x] entry の外部URLと `data-composition-id` 不一致を publish 時に検出する
+- [x] manifest の `contentHash` を任意化する
+- [x] `GET /compositions/:id/draft/files` で draft を読み戻せるようにする
+- [x] `POST /compositions/:id/publish?dryRun=true` で version を作らず検証できるようにする
+- [x] draft 更新で `manifest`（durationMs/dependencies）をサーバー生成できるようにする
+- [x] スキル・仕様・API契約を新APIに合わせて同期する

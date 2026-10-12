@@ -55,23 +55,44 @@ export type CreateTtsJobRequest = z.infer<typeof createTtsJobRequestSchema>;
 export type CreateBulkTtsJobsRequest = z.infer<typeof createBulkTtsJobsRequestSchema>;
 export type UpdateAssetRequest = z.infer<typeof updateAssetRequestSchema>;
 
+export const bundleRelativePathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(
+    (value) =>
+      !value.startsWith("/") &&
+      !value.startsWith("\\") &&
+      !/^[a-zA-Z]:[\\/]/.test(value) &&
+      !value.split(/[\\/]/).includes(".."),
+    { message: "バンドル内の相対パスを指定してください" },
+  );
+
 export const createCompositionRequestSchema = z.strictObject({
   name: z.string().trim().min(1),
   runtimeCompositionId: z.string().trim().min(1),
-  entrypoint: z.string().trim().min(1).optional(),
+  entrypoint: bundleRelativePathSchema.optional(),
 });
 
 export type CreateCompositionRequest = z.infer<typeof createCompositionRequestSchema>;
 
+export const compositionDraftManifestInputSchema = z.strictObject({
+  durationMs: z.number().int().positive().optional(),
+  dependencies: z.array(z.string().min(1)).optional(),
+});
+
+export type CompositionDraftManifestInput = z.infer<typeof compositionDraftManifestInputSchema>;
+
 export const updateCompositionDraftRequestSchema = z.strictObject({
-  entrypoint: z.string().trim().min(1).optional(),
-  files: z.record(z.string(), z.string()).optional(),
+  entrypoint: bundleRelativePathSchema.optional(),
+  files: z.record(bundleRelativePathSchema, z.string()).optional(),
+  manifest: compositionDraftManifestInputSchema.optional(),
 });
 
 export type UpdateCompositionDraftRequest = z.infer<typeof updateCompositionDraftRequestSchema>;
 
 export const publishCompositionRequestSchema = z.strictObject({
-  entrypoint: z.string().trim().min(1).optional(),
+  entrypoint: bundleRelativePathSchema.optional(),
 });
 
 export type PublishCompositionRequest = z.infer<typeof publishCompositionRequestSchema>;

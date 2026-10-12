@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, stat, writeFile, cp } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { join, dirname, isAbsolute, resolve, sep } from "node:path";
+import { join, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { prepareHyperframeLintBody, runHyperframeLint } from "@hyperframes/producer";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH, escapeHtmlAttribute, toSecondsText } from "@kakeai/video";
 import type { PrismaClient } from "../generated/prisma/client.ts";
@@ -10,11 +10,13 @@ import {
   type CompositionVersion,
   type CompositionManifest,
   type ContentDocument,
+  compositionDraftFilesSchema,
   compositionFullBleedInputSchema,
   compositionManifestSchema,
 } from "@kakeai/contracts";
 import { dataDirectories } from "../storage/paths.ts";
 import { computeDirectoryHashAndFiles } from "../storage/composition-store.ts";
+import { ApiError } from "../http/errors.ts";
 
 export interface CompositionServiceDependencies {
   db: PrismaClient;
@@ -26,14 +28,190 @@ export interface ValidateBundleResult {
   contentHash: string;
 }
 
-export function parseAndValidateManifest(manifestContent: string): CompositionManifest {
+export interface CompositionIssue {
+  path: (string | number)[];
+  code: string;
+  message: string;
+}
+
+const MAX_LINT_ISSUES = 20;
+const MAX_DRAFT_FILES = 256;
+const MAX_DRAFT_FILE_BYTES = 4_000_000;
+const MAX_DRAFT_TOTAL_BYTES = 16_000_000;
+const MAX_DEPENDENCY_SCAN_BYTES = 2_000_000;
+
+function compositionValidationError(issues: CompositionIssue[]): ApiError {
+  return new ApiError(422, "VALIDATION_ERROR", undefined, { issues });
+}
+
+function draftLimitError(message: string): ApiError {
+  return compositionValidationError([{ path: ["files"], code: "draft_too_large", message }]);
+}
+
+function draftNotFound(compositionId: string): ApiError {
+  return new ApiError(404, "RESOURCE_NOT_FOUND", undefined, {
+    resource: "composition_draft",
+    id: compositionId,
+  });
+}
+
+function invalidPathError(relPath: string, label: string): ApiError {
+  return compositionValidationError([
+    { path: ["files", relPath], code: "invalid_path", message: `${label} '${relPath}' はバンドル内の相対パスにしてください` },
+  ]);
+}
+
+function parseManifestIssues(manifestContent: string): {
+  manifest?: CompositionManifest;
+  issues: CompositionIssue[];
+} {
   let raw: unknown;
   try {
     raw = JSON.parse(manifestContent);
   } catch (err) {
-    throw new Error(`Manifest is not valid JSON: ${(err as Error).message}`);
+    return {
+      issues: [
+        {
+          path: ["manifest"],
+          code: "invalid_json",
+          message: `manifest.json をJSONとして解釈できません: ${(err as Error).message}`,
+        },
+      ],
+    };
   }
-  return compositionManifestSchema.parse(raw);
+  const parsed = compositionManifestSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      issues: parsed.error.issues.map((issue) => ({
+        path: [
+          "manifest",
+          ...issue.path.map((segment) =>
+            typeof segment === "symbol" ? segment.toString() : segment,
+          ),
+        ],
+        code: issue.code,
+        message: issue.message,
+      })),
+    };
+  }
+  return { manifest: parsed.data, issues: [] };
+}
+
+const EXTERNAL_URL_PATTERN =
+  /(?:src|href|poster)\s*=\s*["']?\s*(?:\/\/|https?:\/\/)|url\(\s*["']?\s*(?:\/\/|https?:\/\/)|@import\s+(?:url\()?\s*["']?\s*(?:\/\/|https?:\/\/)|(?:fetch|import|XMLHttpRequest\.open|WebSocket)\s*\(\s*["']\s*(?:\/\/|https?:\/\/|wss?:\/\/)/i;
+
+function findExternalUrl(content: string): string | undefined {
+  const match = content.match(EXTERNAL_URL_PATTERN);
+  return match?.[0];
+}
+
+function findCompositionId(html: string): string | undefined {
+  const match = html.match(/<[^>]*\bdata-composition-id\s*=\s*["']([^"']*)["']/i);
+  return match?.[1];
+}
+
+interface DraftBudget {
+  files: number;
+  bytes: number;
+}
+
+async function collectDraftFiles(
+  dir: string,
+  base: string = dir,
+  budget: DraftBudget = { files: 0, bytes: 0 },
+): Promise<Record<string, string>> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files: Record<string, string> = {};
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      Object.assign(files, await collectDraftFiles(full, base, budget));
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
+    const key = relative(base, full).split(sep).join("/");
+    const info = await stat(full);
+    if (info.size > MAX_DRAFT_FILE_BYTES) {
+      throw draftLimitError(`ファイル '${key}' が大きすぎます`);
+    }
+    budget.files += 1;
+    budget.bytes += info.size;
+    if (budget.files > MAX_DRAFT_FILES || budget.bytes > MAX_DRAFT_TOTAL_BYTES) {
+      throw draftLimitError("draft のファイル数または合計サイズが上限を超えています");
+    }
+    const buffer = await readFile(full);
+    try {
+      files[key] = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    } catch {
+      continue;
+    }
+  }
+  return files;
+}
+
+async function measureDraft(
+  dir: string,
+  base: string = dir,
+  sizes: Map<string, number> = new Map(),
+): Promise<Map<string, number>> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await measureDraft(full, base, sizes);
+    } else if (entry.isFile()) {
+      const info = await stat(full);
+      sizes.set(relative(base, full).split(sep).join("/"), info.size);
+    }
+  }
+  return sizes;
+}
+
+async function scanBundleExternalUrls(
+  bundleDir: string,
+  skipRelative: string | undefined,
+  dir: string = bundleDir,
+  budget: DraftBudget = { files: 0, bytes: 0 },
+): Promise<CompositionIssue[]> {
+  const issues: CompositionIssue[] = [];
+  if (budget.bytes > MAX_DRAFT_TOTAL_BYTES) {
+    return issues;
+  }
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (budget.bytes > MAX_DRAFT_TOTAL_BYTES) {
+      return issues;
+    }
+    const full = join(dir, entry.name);
+    const key = relative(bundleDir, full).split(sep).join("/");
+    if (entry.isDirectory()) {
+      issues.push(...(await scanBundleExternalUrls(bundleDir, skipRelative, full, budget)));
+      continue;
+    }
+    if (!entry.isFile() || key === skipRelative || key === "manifest.json") {
+      continue;
+    }
+    const info = await stat(full);
+    if (info.size > MAX_DEPENDENCY_SCAN_BYTES) {
+      continue;
+    }
+    budget.bytes += info.size;
+    const buffer = await readFile(full);
+    if (buffer.includes(0)) {
+      continue;
+    }
+    const hit = findExternalUrl(buffer.toString("utf-8"));
+    if (hit !== undefined) {
+      issues.push({
+        path: ["dependencies"],
+        code: "external_url",
+        message: `'${key}' に外部URLが含まれます: ${hit}`,
+      });
+    }
+  }
+  return issues;
 }
 
 function assertSafeRelativePath(relativePath: string, label: string): void {
@@ -87,76 +265,174 @@ export async function validateCompositionBundle(
   entrypoint: string,
   expectedRuntimeCompositionId: string,
 ): Promise<ValidateBundleResult> {
+  const issues: CompositionIssue[] = [];
   const { bundleHash } = await computeDirectoryHashAndFiles(bundleDir);
 
-  const entryPath = resolveWithin(bundleDir, entrypoint, "entrypoint");
-  let entryHtml: string;
+  let entryPath: string | undefined;
   try {
-    entryHtml = await readFile(entryPath, "utf-8");
+    entryPath = resolveWithin(bundleDir, entrypoint, "entrypoint");
   } catch {
-    throw new Error(`Entrypoint file '${entrypoint}' does not exist in bundle`);
+    issues.push({
+      path: ["entrypoint"],
+      code: "invalid_path",
+      message: `entrypoint '${entrypoint}' はバンドル内の相対パスにしてください`,
+    });
   }
 
-  const manifestPath = join(bundleDir, "manifest.json");
-  let manifestContent: string;
-  try {
-    manifestContent = await readFile(manifestPath, "utf-8");
-  } catch {
-    throw new Error("Bundle missing 'manifest.json'");
-  }
-
-  const manifest = parseAndValidateManifest(manifestContent);
-
-  if (manifest.entrypoint !== entrypoint) {
-    throw new Error(`Manifest entrypoint '${manifest.entrypoint}' does not match specified entrypoint '${entrypoint}'`);
-  }
-  if (manifest.runtimeCompositionId !== expectedRuntimeCompositionId) {
-    throw new Error(`Manifest runtimeCompositionId '${manifest.runtimeCompositionId}' does not match expected '${expectedRuntimeCompositionId}'`);
-  }
-  if (manifest.width !== OUTPUT_WIDTH || manifest.height !== OUTPUT_HEIGHT) {
-    throw new Error(`Composition dimensions must be ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (got ${manifest.width}x${manifest.height})`);
-  }
-  if (typeof manifest.durationMs !== "number" || manifest.durationMs <= 0 || !Number.isFinite(manifest.durationMs)) {
-    throw new Error(`Composition durationMs must be a positive finite number (got ${manifest.durationMs})`);
-  }
-
-  if (entryHtml.includes("<audio") || entryHtml.includes("<bgsound") || /<source[^>]+type=["']audio\//i.test(entryHtml)) {
-    throw new Error("Audio tracks or elements are not allowed in composition bundle");
-  }
-
-  const lintInput = prepareHyperframeLintBody({ html: entryHtml, entryFile: entrypoint });
-  if ("error" in lintInput) {
-    throw new Error(`Cannot lint composition entrypoint '${entrypoint}': ${lintInput.error}`);
-  }
-  let lintResult: Awaited<ReturnType<typeof runHyperframeLint>>;
-  try {
-    lintResult = await runHyperframeLint(lintInput.prepared);
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    throw new Error(`Cannot lint composition entrypoint '${entrypoint}': ${detail}`);
-  }
-  if (!lintResult.ok) {
-    const details = lintResult.findings
-      .filter((finding) => finding.severity === "error")
-      .slice(0, 5)
-      .map((finding) => `${finding.code}: ${finding.message}`)
-      .join("; ") || `${lintResult.errorCount} error(s)`;
-    throw new Error(
-      `Composition entrypoint '${entrypoint}' has ${lintResult.errorCount} HyperFrames lint errors: ${details}`,
-    );
-  }
-
-  for (const dep of manifest.dependencies) {
-    const depPath = resolveWithin(bundleDir, dep, "dependency");
+  let entryHtml: string | undefined;
+  if (entryPath !== undefined) {
     try {
-      await stat(depPath);
+      entryHtml = await readFile(entryPath, "utf-8");
     } catch {
-      throw new Error(`Dependency '${dep}' listed in manifest does not exist in bundle`);
+      issues.push({
+        path: ["entrypoint"],
+        code: "missing_entrypoint",
+        message: `entrypoint '${entrypoint}' がバンドル内に存在しません`,
+      });
     }
   }
 
+  let manifestContent: string | undefined;
+  try {
+    manifestContent = await readFile(join(bundleDir, "manifest.json"), "utf-8");
+  } catch {
+    issues.push({
+      path: ["manifest"],
+      code: "missing_manifest",
+      message: "バンドルに 'manifest.json' がありません",
+    });
+  }
+
+  let manifest: CompositionManifest | undefined;
+  if (manifestContent !== undefined) {
+    const parsed = parseManifestIssues(manifestContent);
+    issues.push(...parsed.issues);
+    manifest = parsed.manifest;
+  }
+
+  if (manifest !== undefined) {
+    if (manifest.entrypoint !== entrypoint) {
+      issues.push({
+        path: ["manifest", "entrypoint"],
+        code: "entrypoint_mismatch",
+        message: `manifest の entrypoint '${manifest.entrypoint}' が指定 '${entrypoint}' と一致しません`,
+      });
+    }
+    if (manifest.runtimeCompositionId !== expectedRuntimeCompositionId) {
+      issues.push({
+        path: ["manifest", "runtimeCompositionId"],
+        code: "runtime_composition_id_mismatch",
+        message: `manifest の runtimeCompositionId '${manifest.runtimeCompositionId}' が Composition '${expectedRuntimeCompositionId}' と一致しません`,
+      });
+    }
+    if (manifest.width !== OUTPUT_WIDTH || manifest.height !== OUTPUT_HEIGHT) {
+      issues.push({
+        path: ["manifest", "width"],
+        code: "invalid_dimensions",
+        message: `寸法は ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} である必要があります（現在 ${manifest.width}x${manifest.height}）`,
+      });
+    }
+    if (!Number.isFinite(manifest.durationMs) || manifest.durationMs <= 0) {
+      issues.push({
+        path: ["manifest", "durationMs"],
+        code: "invalid_duration",
+        message: `durationMs は正の有限値である必要があります（現在 ${manifest.durationMs}）`,
+      });
+    }
+    for (const dep of manifest.dependencies) {
+      let depPath: string;
+      try {
+        depPath = resolveWithin(bundleDir, dep, "dependency");
+      } catch {
+        issues.push({
+          path: ["manifest", "dependencies"],
+          code: "invalid_dependency_path",
+          message: `依存 '${dep}' はバンドル内の相対パスにしてください`,
+        });
+        continue;
+      }
+      try {
+        await stat(depPath);
+      } catch {
+        issues.push({
+          path: ["manifest", "dependencies"],
+          code: "missing_dependency",
+          message: `依存 '${dep}' がバンドル内に存在しません`,
+        });
+        continue;
+      }
+    }
+  }
+
+  if (entryHtml !== undefined) {
+    if (entryHtml.includes("<audio") || entryHtml.includes("<bgsound") || /<source[^>]+type=["']audio\//i.test(entryHtml)) {
+      issues.push({
+        path: ["entrypoint"],
+        code: "audio_not_allowed",
+        message: "バンドルに音声要素（audio / bgsound / audio source）を含めることはできません",
+      });
+    }
+
+    const externalUrl = findExternalUrl(entryHtml);
+    if (externalUrl !== undefined) {
+      issues.push({
+        path: ["entrypoint"],
+        code: "external_url",
+        message: `外部URLは使用できません: ${externalUrl}（依存はバンドルへ同梱してください）`,
+      });
+    }
+
+    const compositionId = findCompositionId(entryHtml);
+    if (compositionId !== undefined && compositionId !== expectedRuntimeCompositionId) {
+      issues.push({
+        path: ["entrypoint", "data-composition-id"],
+        code: "composition_id_mismatch",
+        message: `entry の data-composition-id '${compositionId}' が runtimeCompositionId '${expectedRuntimeCompositionId}' と一致しません`,
+      });
+    }
+
+    const lintInput = prepareHyperframeLintBody({ html: entryHtml, entryFile: entrypoint });
+    if ("error" in lintInput) {
+      issues.push({
+        path: ["entrypoint"],
+        code: "lint_failed",
+        message: `HyperFrames lint を実行できません: ${lintInput.error}`,
+      });
+    } else {
+      let lintResult: Awaited<ReturnType<typeof runHyperframeLint>> | undefined;
+      try {
+        lintResult = await runHyperframeLint(lintInput.prepared);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        issues.push({
+          path: ["entrypoint"],
+          code: "lint_failed",
+          message: `HyperFrames lint を実行できません: ${detail}`,
+        });
+      }
+      if (lintResult !== undefined && !lintResult.ok) {
+        for (const finding of lintResult.findings.filter((entry) => entry.severity === "error").slice(0, MAX_LINT_ISSUES)) {
+          const location = finding.line === undefined ? "" : ` (line ${finding.line})`;
+          issues.push({
+            path: ["entrypoint"],
+            code: finding.code,
+            message: `${finding.message}${location}`,
+          });
+        }
+      }
+    }
+  }
+
+  const entryRelative =
+    entryPath === undefined ? undefined : relative(bundleDir, entryPath).split(sep).join("/");
+  issues.push(...(await scanBundleExternalUrls(bundleDir, entryRelative)));
+
+  if (issues.length > 0) {
+    throw compositionValidationError(issues);
+  }
+
   return {
-    manifest,
+    manifest: manifest as CompositionManifest,
     contentHash: bundleHash,
   };
 }
@@ -232,7 +508,7 @@ export class CompositionService {
     });
 
     if (!composition) {
-      throw new Error(`Composition not found: ${id}`);
+      throw new ApiError(404, "RESOURCE_NOT_FOUND", undefined, { resource: "composition", id });
     }
 
     return {
@@ -337,29 +613,96 @@ export class CompositionService {
 
   async updateDraft(
     compositionId: string,
-    input: { entrypoint?: string; files?: Record<string, string> },
+    input: {
+      entrypoint?: string;
+      files?: Record<string, string>;
+      manifest?: { durationMs?: number; dependencies?: string[] };
+    },
   ): Promise<CompositionDraft> {
     const composition = await this.getCompositionById(compositionId);
     if (!composition.draft) {
-      throw new Error(`Composition ${compositionId} has no active draft`);
+      throw draftNotFound(compositionId);
     }
 
     const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
     await mkdir(draftDir, { recursive: true });
 
-    if (input.files) {
-      for (const [relPath, content] of Object.entries(input.files)) {
-        const filePath = resolveWithin(draftDir, relPath, "file path");
+    const normalizedFiles = new Map<string, string>();
+    if (input.files !== undefined) {
+      for (const [key, content] of Object.entries(input.files)) {
+        let filePath: string;
+        try {
+          filePath = resolveWithin(draftDir, key, "file path");
+        } catch {
+          throw invalidPathError(key, "file path");
+        }
+        normalizedFiles.set(relative(draftDir, filePath).split(sep).join("/"), content);
+      }
+    }
+
+    if (input.manifest !== undefined && normalizedFiles.has("manifest.json")) {
+      throw compositionValidationError([
+        {
+          path: ["manifest"],
+          code: "conflict",
+          message: "manifest と files['manifest.json'] は同時に指定できません",
+        },
+      ]);
+    }
+
+    if (normalizedFiles.size > 0) {
+      if (normalizedFiles.size > MAX_DRAFT_FILES) {
+        throw draftLimitError("draft のファイル数が上限を超えています");
+      }
+      const existingSizes = await measureDraft(draftDir);
+      let totalFiles = existingSizes.size;
+      let totalBytes = [...existingSizes.values()].reduce((sum, size) => sum + size, 0);
+      for (const [relPath, content] of normalizedFiles) {
+        const size = Buffer.byteLength(content, "utf-8");
+        if (size > MAX_DRAFT_FILE_BYTES) {
+          throw draftLimitError(`ファイル '${relPath}' が大きすぎます`);
+        }
+        if (existingSizes.has(relPath)) {
+          totalBytes -= existingSizes.get(relPath) ?? 0;
+        } else {
+          totalFiles += 1;
+        }
+        totalBytes += size;
+      }
+      if (totalFiles > MAX_DRAFT_FILES || totalBytes > MAX_DRAFT_TOTAL_BYTES) {
+        throw draftLimitError("draft のファイル数または合計サイズが上限を超えています");
+      }
+      for (const [relPath, content] of normalizedFiles) {
+        const filePath = join(draftDir, relPath);
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, content, "utf-8");
       }
     }
 
     if (input.entrypoint !== undefined) {
-      resolveWithin(draftDir, input.entrypoint, "entrypoint");
+      try {
+        resolveWithin(draftDir, input.entrypoint, "entrypoint");
+      } catch {
+        throw invalidPathError(input.entrypoint, "entrypoint");
+      }
     }
 
     const updatedEntrypoint = input.entrypoint ?? composition.draft.entrypoint;
+
+    if (input.manifest !== undefined) {
+      const existing = await this.readDraftManifest(draftDir);
+      const manifest: CompositionManifest = {
+        entrypoint: updatedEntrypoint,
+        contentHash: "draft",
+        runtimeCompositionId: composition.runtimeCompositionId,
+        width: OUTPUT_WIDTH,
+        height: OUTPUT_HEIGHT,
+        durationMs: input.manifest.durationMs ?? existing?.durationMs ?? DRAFT_DEFAULT_DURATION_MS,
+        dependencies: input.manifest.dependencies ?? existing?.dependencies ?? [],
+      };
+      await writeFile(join(draftDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
+    }
+
     const updatedDraftRecord = await this.db.compositionDraft.update({
       where: { compositionId },
       data: {
@@ -381,13 +724,75 @@ export class CompositionService {
     };
   }
 
+  private async readDraftManifest(draftDir: string): Promise<CompositionManifest | undefined> {
+    let content: string;
+    try {
+      content = await readFile(join(draftDir, "manifest.json"), "utf-8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return undefined;
+      }
+      throw err;
+    }
+    const parsed = parseManifestIssues(content);
+    if (parsed.issues.length > 0) {
+      throw compositionValidationError(parsed.issues);
+    }
+    return parsed.manifest;
+  }
+
+  async getDraftFiles(
+    compositionId: string,
+  ): Promise<{ entrypoint: string; files: Record<string, string> }> {
+    const composition = await this.getCompositionById(compositionId);
+    if (!composition.draft) {
+      throw draftNotFound(compositionId);
+    }
+    const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
+    const files = await collectDraftFiles(draftDir);
+    const parsed = compositionDraftFilesSchema.safeParse({
+      entrypoint: composition.draft.entrypoint,
+      files,
+    });
+    if (!parsed.success) {
+      throw compositionValidationError(
+        parsed.error.issues.map((issue) => ({
+          path: issue.path.map((segment) =>
+            typeof segment === "symbol" ? segment.toString() : segment,
+          ),
+          code: issue.code,
+          message: issue.message,
+        })),
+      );
+    }
+    return parsed.data;
+  }
+
+  async validateDraft(
+    compositionId: string,
+    input: { entrypoint?: string },
+  ): Promise<CompositionManifest> {
+    const composition = await this.getCompositionById(compositionId);
+    if (!composition.draft) {
+      throw draftNotFound(compositionId);
+    }
+    const entrypoint = input.entrypoint ?? composition.draft.entrypoint;
+    const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
+    const { manifest } = await validateCompositionBundle(
+      draftDir,
+      entrypoint,
+      composition.runtimeCompositionId,
+    );
+    return manifest;
+  }
+
   async publish(
     compositionId: string,
     input: { entrypoint?: string },
   ): Promise<CompositionVersion> {
     const composition = await this.getCompositionById(compositionId);
     if (!composition.draft) {
-      throw new Error(`Composition ${compositionId} has no active draft`);
+      throw draftNotFound(compositionId);
     }
 
     const entrypoint = input.entrypoint ?? composition.draft.entrypoint;
@@ -443,7 +848,10 @@ export class CompositionService {
       where: { id: versionId },
     });
     if (!v) {
-      throw new Error(`CompositionVersion not found: ${versionId}`);
+      throw new ApiError(404, "RESOURCE_NOT_FOUND", undefined, {
+        resource: "composition_version",
+        id: versionId,
+      });
     }
     return {
       id: v.id,

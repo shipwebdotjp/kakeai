@@ -95,7 +95,11 @@ describe("Composition Library Integration Tests", () => {
         "index.html": "<!doctype html><html><body><p>bad</p></body></html>",
       },
     });
-    await expect(service.publish(comp.id, {})).rejects.toThrow(/lint errors/);
+    await expect(service.publish(comp.id, {})).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: { issues: expect.arrayContaining([expect.objectContaining({ path: ["entrypoint"] })]) },
+    });
   });
 
   it("test 2: ContentDocument reference validation (Background constraint & single reference)", () => {
@@ -268,5 +272,165 @@ describe("Composition Library Integration Tests", () => {
     expect(snapshot.compositionVersions[0]!.manifest).toEqual(v1.manifest);
 
     await jobs.cancelJob(db, job.id);
+  });
+
+  it("test 6: draft read-back, partial update, and manifest generation", async () => {
+    const comp = await service.createComposition({
+      name: "Draft API",
+      runtimeCompositionId: "cmp.test.draft-api",
+    });
+
+    const seeded = await service.getDraftFiles(comp.id);
+    expect(seeded.entrypoint).toBe("index.html");
+    expect(seeded.files["index.html"]).toContain('data-composition-id="cmp.test.draft-api"');
+    expect(seeded.files["manifest.json"]).toContain("cmp.test.draft-api");
+
+    await service.updateDraft(comp.id, { files: { "style.css": "body{background:#000}" } });
+    const afterPartial = await service.getDraftFiles(comp.id);
+    expect(afterPartial.files["index.html"]).toContain("cmp.test.draft-api");
+    expect(afterPartial.files["style.css"]).toBe("body{background:#000}");
+
+    await service.updateDraft(comp.id, {
+      manifest: { durationMs: 8000, dependencies: ["style.css"] },
+    });
+    const afterManifest = await service.getDraftFiles(comp.id);
+    const manifest = JSON.parse(afterManifest.files["manifest.json"]);
+    expect(manifest.durationMs).toBe(8000);
+    expect(manifest.dependencies).toEqual(["style.css"]);
+    expect(manifest.contentHash).toBe("draft");
+  });
+
+  it("test 7: publish returns structured issues for an invalid manifest", async () => {
+    const comp = await service.createComposition({
+      name: "Bad Manifest",
+      runtimeCompositionId: "cmp.test.bad-manifest",
+    });
+    await service.updateDraft(comp.id, { files: { "manifest.json": "{}" } });
+
+    await expect(service.publish(comp.id, {})).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: ["manifest", "entrypoint"] }),
+        ]),
+      },
+    });
+  });
+
+  it("test 8: publish rejects external URLs and a mismatched composition id", async () => {
+    const comp = await service.createComposition({
+      name: "External",
+      runtimeCompositionId: "cmp.test.external",
+    });
+
+    await service.updateDraft(comp.id, {
+      files: {
+        "index.html":
+          '<!doctype html><html><head><script src="https://cdn.example.com/gsap.js"></script></head><body><div data-composition-id="cmp.test.external" data-width="1920" data-height="1080" data-duration="5" data-fps="30"></div><script>window.__timelines={};window.__timelines["cmp.test.external"]={duration:5}</script></body></html>',
+      },
+    });
+    await expect(service.publish(comp.id, {})).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([expect.objectContaining({ code: "external_url" })]),
+      },
+    });
+
+    await service.updateDraft(comp.id, {
+      files: {
+        "index.html":
+          '<!doctype html><html><head><meta charset="utf-8"></head><body><div data-composition-id="cmp.wrong" data-width="1920" data-height="1080" data-duration="5" data-fps="30"></div><script>window.__timelines={};window.__timelines["cmp.wrong"]={duration:5}</script></body></html>',
+      },
+    });
+    await expect(service.publish(comp.id, {})).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: "composition_id_mismatch" }),
+        ]),
+      },
+    });
+  });
+
+  it("test 9: publish dry-run validates without creating a version", async () => {
+    const comp = await service.createComposition({
+      name: "Dry Run",
+      runtimeCompositionId: "cmp.test.dry-run",
+    });
+
+    const manifest = await service.validateDraft(comp.id, {});
+    expect(manifest.runtimeCompositionId).toBe("cmp.test.dry-run");
+
+    const reloaded = await service.getCompositionById(comp.id);
+    expect(reloaded.versions ?? []).toHaveLength(0);
+
+    await service.updateDraft(comp.id, { files: { "manifest.json": "{}" } });
+    await expect(service.validateDraft(comp.id, {})).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+    });
+  });
+
+  it("test 10: manifest without contentHash is accepted", async () => {
+    const comp = await service.createComposition({
+      name: "No Hash",
+      runtimeCompositionId: "cmp.test.no-hash",
+    });
+    await service.updateDraft(comp.id, {
+      files: {
+        "manifest.json": JSON.stringify({
+          entrypoint: "index.html",
+          runtimeCompositionId: "cmp.test.no-hash",
+          width: 1920,
+          height: 1080,
+          durationMs: 5000,
+          dependencies: [],
+        }),
+      },
+    });
+    const version = await service.publish(comp.id, {});
+    expect(version.versionNumber).toBe(1);
+  });
+
+  it("test 11: rejects manifest and files['manifest.json'] together", async () => {
+    const comp = await service.createComposition({
+      name: "Conflict",
+      runtimeCompositionId: "cmp.test.conflict",
+    });
+    await expect(
+      service.updateDraft(comp.id, {
+        manifest: { durationMs: 6000 },
+        files: { "manifest.json": "{}" },
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([expect.objectContaining({ code: "conflict" })]),
+      },
+    });
+  });
+
+  it("test 12: rejects an external URL in a declared dependency", async () => {
+    const comp = await service.createComposition({
+      name: "Dep URL",
+      runtimeCompositionId: "cmp.test.dep-url",
+    });
+    await service.updateDraft(comp.id, {
+      files: { "vendor/style.css": "@import url(//cdn.example.com/x.css);" },
+      manifest: { dependencies: ["vendor/style.css"] },
+    });
+    await expect(service.publish(comp.id, {})).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: "external_url", path: ["dependencies"] }),
+        ]),
+      },
+    });
   });
 });
