@@ -15,11 +15,16 @@ const DIRECT_AUDIO_CODECS = new Set([
   "pcm_u8",
 ]);
 
+const DIRECT_ALPHA_VIDEO_CODECS = new Set(["vp8", "vp9"]);
+
 export function requiresRenderRendition(probe: MediaProbe): boolean {
   if (probe.kind === "image") {
     return !DIRECT_IMAGE_CODECS.has(probe.codec) || probe.exifOrientation !== 1;
   }
   if (probe.kind === "video") {
+    if (probe.hasAlpha && DIRECT_ALPHA_VIDEO_CODECS.has(probe.codec)) {
+      return false;
+    }
     if (probe.codec !== "h264" || !probe.constantFrameRate || probe.rotation !== 0) {
       return true;
     }

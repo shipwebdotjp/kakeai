@@ -12,6 +12,7 @@ export interface MediaProbe {
   constantFrameRate: boolean;
   audioCodec: string | null;
   exifOrientation: number;
+  hasAlpha: boolean;
 }
 
 interface ProbeStream {
@@ -19,6 +20,7 @@ interface ProbeStream {
   codec_name?: unknown;
   width?: unknown;
   height?: unknown;
+  pix_fmt?: unknown;
   r_frame_rate?: unknown;
   avg_frame_rate?: unknown;
   side_data_list?: unknown;
@@ -70,6 +72,30 @@ function rotationFromStream(stream: ProbeStream): number {
   return tagRotation ?? 0;
 }
 
+const ALPHA_PIX_FMT_TOKENS = ["yuva", "rgba", "argb", "abgr", "bgra", "gbrap", "ayuv"];
+
+function pixelFormatHasAlpha(pixFmt: string | undefined): boolean {
+  if (pixFmt === undefined) {
+    return false;
+  }
+  const name = pixFmt.toLowerCase();
+  if (/^ya\d/.test(name)) {
+    return true;
+  }
+  return ALPHA_PIX_FMT_TOKENS.some((token) => name.includes(token));
+}
+
+function alphaModeEnabled(tags: unknown): boolean {
+  if (typeof tags !== "object" || tags === null) {
+    return false;
+  }
+  const entry = Object.entries(tags as Record<string, unknown>).find(
+    ([key]) => key.toUpperCase() === "ALPHA_MODE",
+  );
+  const mode = entry?.[1];
+  return mode === "1" || mode === 1;
+}
+
 export function summarizeProbe(kind: AssetKindName, raw: unknown): MediaProbe {
   const streams =
     typeof raw === "object" && raw !== null && Array.isArray((raw as { streams?: unknown }).streams)
@@ -104,6 +130,8 @@ export function summarizeProbe(kind: AssetKindName, raw: unknown): MediaProbe {
     constantFrameRate,
     audioCodec: asString(audio?.codec_name) ?? null,
     exifOrientation: 1,
+    hasAlpha:
+      pixelFormatHasAlpha(asString(video?.pix_fmt)) || alphaModeEnabled(video?.tags),
   };
 }
 

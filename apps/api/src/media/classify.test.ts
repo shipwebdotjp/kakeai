@@ -13,6 +13,7 @@ function probe(overrides: Partial<MediaProbe>): MediaProbe {
     constantFrameRate: true,
     audioCodec: null,
     exifOrientation: 1,
+    hasAlpha: false,
     ...overrides,
   };
 }
