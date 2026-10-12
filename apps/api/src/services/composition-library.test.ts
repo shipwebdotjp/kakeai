@@ -2,12 +2,18 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
 import { appendFile, rm } from "node:fs/promises";
 import {
+  createInitialContentDocument,
   parseContentDocument,
+  renderJobSnapshotSchema,
 } from "@kakeai/contracts";
 import { compileDocument } from "@kakeai/video";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import { CompositionService } from "./compositions.ts";
 import { resolvePreviewCompositions } from "./script-versions.ts";
+import * as jobs from "./jobs.ts";
+import * as renderJobs from "./render-jobs.ts";
+import * as scriptVersions from "./script-versions.ts";
+import * as works from "./works.ts";
 import { dataDirectories, ensureDataDirectories } from "../storage/paths.ts";
 import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
@@ -209,5 +215,58 @@ describe("Composition Library Integration Tests", () => {
       status: 422,
       code: "COMPOSITION_UNAVAILABLE",
     });
+  });
+
+  it("test 5: saved and draft previews seek a composition, render snapshot pins it", async () => {
+    const comp = await service.createComposition({
+      name: "Preview E2E",
+      runtimeCompositionId: "cmp.test.preview-e2e",
+    });
+    const v1 = await service.publish(comp.id, {});
+    const directories = dataDirectories(tmpDir);
+
+    const work = await works.createWork(db, "composition preview", "ja-JP");
+    const edition = work.languageEditions[0]!;
+
+    const content = createInitialContentDocument();
+    const intro = content.scenes[0]!;
+    if (intro.kind !== "intro") {
+      throw new Error("expected an intro scene");
+    }
+    intro.visualCues.push({
+      id: "cue-comp-bg",
+      template: { id: "composition.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      input: { compositionVersionId: v1.id },
+    });
+
+    const saved = await scriptVersions.saveScriptVersion(db, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+
+    const savedPreview = await scriptVersions.getScriptVersionPreview(db, directories, saved.scriptVersion.id);
+    expect(savedPreview.compositions).toHaveLength(1);
+    expect(savedPreview.compositions[0]!.compositionVersionId).toBe(v1.id);
+    expect(savedPreview.compositions[0]!.entryUrl).toContain(`/api/v1/compositions/versions/${v1.id}/content/`);
+    expect(savedPreview.timeline.scenes.length).toBeGreaterThan(0);
+    expect(savedPreview.timeline.totalDurationMs).toBeGreaterThan(0);
+
+    const draft = await scriptVersions.createDraftPreview(db, directories, edition.id, { content });
+    expect(draft.compositions).toEqual(savedPreview.compositions);
+    expect(draft.timeline).toEqual(savedPreview.timeline);
+
+    const job = await renderJobs.createRenderJob(db, saved.scriptVersion.id);
+    const row = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
+    expect(snapshot.compositionVersions).toHaveLength(1);
+    expect(snapshot.compositionVersions[0]!.id).toBe(v1.id);
+    expect(snapshot.compositionVersions[0]!.bundleHash).toBe(v1.bundleHash);
+    expect(snapshot.compositionVersions[0]!.manifest).toEqual(v1.manifest);
+
+    await jobs.cancelJob(db, job.id);
   });
 });
