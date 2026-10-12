@@ -1,8 +1,13 @@
 import { Link, Outlet, Route, Routes } from "react-router-dom";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { AssetsPage } from "./pages/AssetsPage";
-import { CHARACTER_LIBRARY_ROUTE_PATH, VOICE_PROFILES_ROUTE_PATH } from "./lib/routes";
+import {
+  CHARACTER_LIBRARY_ROUTE_PATH,
+  COMPOSITION_LIBRARY_ROUTE_PATH,
+  VOICE_PROFILES_ROUTE_PATH,
+} from "./lib/routes";
 import { CharacterLibraryPage } from "./pages/CharacterLibraryPage";
+import { CompositionLibraryPage } from "./pages/CompositionLibraryPage";
 import { VoiceProfilesPage } from "./pages/VoiceProfilesPage";
 import { WorkEditPage } from "./pages/WorkEditPage";
 import { WorkListPage } from "./pages/WorkListPage";
@@ -42,6 +47,12 @@ export function App() {
             >
               キャラクター
             </Link>
+            <Link
+              to={COMPOSITION_LIBRARY_ROUTE_PATH}
+              className="text-inherit no-underline hover:underline"
+            >
+              コンポジション
+            </Link>
           </nav>
         </div>
         <ThemeToggle />
@@ -54,6 +65,7 @@ export function App() {
             <Route path="/assets" element={<AssetsPage />} />
             <Route path={VOICE_PROFILES_ROUTE_PATH} element={<VoiceProfilesPage />} />
             <Route path={CHARACTER_LIBRARY_ROUTE_PATH} element={<CharacterLibraryPage />} />
+            <Route path={COMPOSITION_LIBRARY_ROUTE_PATH} element={<CompositionLibraryPage />} />
             <Route
               path="*"
               element={

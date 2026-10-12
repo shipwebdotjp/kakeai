@@ -7,6 +7,7 @@ import type {
   BulkTtsJobExclusion,
   BulkTtsJobsResult,
   CharacterLibraryEntry,
+  Composition,
   ContentDocument,
   CreateCharacterRequest,
   CreateVoiceProfileRequest,
@@ -609,5 +610,12 @@ export function useDeleteCharacter() {
       await apiRequest(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["characters"] }),
+  });
+}
+
+export function useCompositions() {
+  return useQuery({
+    queryKey: ["compositions"],
+    queryFn: async () => (await apiRequest<Composition[]>("/compositions")).data,
   });
 }

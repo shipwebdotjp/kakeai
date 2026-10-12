@@ -31,8 +31,11 @@ import {
   type LineFormValue,
   type SpeakerFormValue,
 } from "../content/form";
-import { buttonNeutralClass, metaTextClass, textFieldClass } from "../ui";
+import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { useCompositions } from "../api/hooks";
 import { MediaPicker } from "./MediaPicker";
+
+const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
 
 const LAYER_LABELS: Record<CueLayer, string> = {
   background: "背景",
@@ -316,8 +319,63 @@ interface CueFieldProps {
   animationPresets: readonly AnimationPreset[];
 }
 
+interface CompositionVersionFieldProps {
+  label: string;
+  value: string;
+  setField: (key: string, value: string) => void;
+  fieldKey: string;
+}
+
+function CompositionVersionField({ label, value, setField, fieldKey }: CompositionVersionFieldProps) {
+  const compositions = useCompositions();
+  const options = (compositions.data ?? []).flatMap((composition) =>
+    (composition.versions ?? []).map((version) => ({
+      value: version.id,
+      label: `${composition.name} v${version.versionNumber}`,
+    })),
+  );
+  const knowsCurrent = value.length === 0 || options.some((option) => option.value === value);
+  return (
+    <div className="my-2">
+      <label className="inline-flex items-center gap-1.5">
+        {label}
+        <select
+          className={textFieldClass}
+          value={value}
+          onChange={(event) => setField(fieldKey, event.target.value)}
+        >
+          <option value="">未指定</option>
+          {!knowsCurrent && <option value={value}>{value}（未公開または不明）</option>}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {compositions.isLoading && <p className={metaTextClass}>公開バージョンを読み込み中…</p>}
+      {compositions.isError && (
+        <p className={errorTextClass}>公開バージョンを取得できませんでした。</p>
+      )}
+      {!compositions.isLoading && compositions.data !== undefined && options.length === 0 && (
+        <p className={metaTextClass}>公開済みのCompositionVersionがありません。</p>
+      )}
+    </div>
+  );
+}
+
 function CueField({ field, values, setField, animationPresets }: CueFieldProps) {
   const value = values[field.key] ?? "";
+  if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
+    return (
+      <CompositionVersionField
+        label={field.label}
+        value={value}
+        setField={setField}
+        fieldKey={field.key}
+      />
+    );
+  }
   switch (field.kind) {
     case "media":
     case "nestedMedia":
