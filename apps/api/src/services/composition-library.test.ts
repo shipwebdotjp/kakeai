@@ -1,12 +1,13 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
-import { rm } from "node:fs/promises";
+import { appendFile, rm } from "node:fs/promises";
 import {
   parseContentDocument,
 } from "@kakeai/contracts";
 import { compileDocument } from "@kakeai/video";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import { CompositionService } from "./compositions.ts";
+import { resolvePreviewCompositions } from "./script-versions.ts";
 import { dataDirectories, ensureDataDirectories } from "../storage/paths.ts";
 import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
@@ -160,5 +161,53 @@ describe("Composition Library Integration Tests", () => {
     expect(compiled.html).includes('data-composition-src="index.html"');
     expect(compiled.compositionVersions).toHaveLength(1);
     expect(compiled.compositionVersions[0]!.id).toBe("cmpver_001");
+  });
+
+  it("test 4: preview composition resolution and availability errors", async () => {
+    const comp = await service.createComposition({
+      name: "Preview Resolve",
+      runtimeCompositionId: "cmp.test.preview-resolve",
+    });
+    const v1 = await service.publish(comp.id, {});
+    const directories = dataDirectories(tmpDir);
+
+    const doc = validContentDocument();
+    doc.scenes[0]!.visualCues.push({
+      id: "cue-comp-1",
+      range: { kind: "scene" },
+      layer: "background",
+      order: 1,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      template: { id: "composition.full-bleed", version: 1 },
+      input: { compositionVersionId: v1.id },
+    });
+
+    const resolved = await resolvePreviewCompositions(db, directories, doc);
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]!.compositionVersionId).toBe(v1.id);
+    expect(resolved[0]!.entryUrl).toBe(
+      `/api/v1/compositions/versions/${encodeURIComponent(v1.id)}/content/index.html`,
+    );
+
+    const missing = validContentDocument();
+    missing.scenes[0]!.visualCues.push({
+      id: "cue-comp-1",
+      range: { kind: "scene" },
+      layer: "background",
+      order: 1,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      template: { id: "composition.full-bleed", version: 1 },
+      input: { compositionVersionId: "cmpver_missing" },
+    });
+    await expect(resolvePreviewCompositions(db, directories, missing)).rejects.toMatchObject({
+      status: 422,
+      code: "COMPOSITION_UNAVAILABLE",
+    });
+
+    await appendFile(join(directories.root, v1.storageKey, "index.html"), "<!-- tamper -->", "utf-8");
+    await expect(resolvePreviewCompositions(db, directories, doc)).rejects.toMatchObject({
+      status: 422,
+      code: "COMPOSITION_UNAVAILABLE",
+    });
   });
 });

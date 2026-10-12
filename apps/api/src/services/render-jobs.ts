@@ -26,7 +26,7 @@ import {
   loadAssetReferences,
   renderSourceDurationMs,
 } from "./script-versions.ts";
-import { CompositionService } from "./compositions.ts";
+import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -72,22 +72,10 @@ export async function createRenderJob(
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
 
-  const compositionVersionIds = new Set<string>();
-  for (const scene of content.scenes) {
-    for (const cue of scene.visualCues) {
-      if (cue.template.id === "composition.full-bleed") {
-        const input = cue.input as { compositionVersionId?: string };
-        if (input?.compositionVersionId) {
-          compositionVersionIds.add(input.compositionVersionId);
-        }
-      }
-    }
-  }
-
   const compositionService = new CompositionService({ db: prisma, dataDir: "" });
   const snapshotCompositions: RenderJobSnapshot["compositionVersions"] = [];
 
-  for (const compVerId of compositionVersionIds) {
+  for (const compVerId of collectCompositionVersionIds(content)) {
     let compVer;
     try {
       compVer = await compositionService.getVersionById(compVerId);

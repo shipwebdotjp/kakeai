@@ -15,6 +15,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   VALIDATION_ERROR: "入力内容を確認してください。",
   ASSET_NOT_FOUND: "指定された素材が見つかりません。",
   ASSET_UNAVAILABLE: "素材ファイルを利用できません。",
+  COMPOSITION_UNAVAILABLE: "参照先のCompositionVersionを利用できません。",
   MEDIA_INSPECTION_FAILED: "素材の情報を取得できませんでした。",
   MEDIA_LIMIT_EXCEEDED: "素材の長さまたは寸法が上限を超えています。",
   PREVIEW_INPUT_INVALID: "プレビューを生成できません。",

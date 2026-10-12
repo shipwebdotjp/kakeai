@@ -60,6 +60,7 @@ describe("draftPreviewSchema", () => {
     const base = {
       compositionHtml: "<!doctype html><html></html>",
       assets: [],
+      compositions: [],
       renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
       timeline: { totalDurationMs: 0, fps: 30, scenes: [] },
     };

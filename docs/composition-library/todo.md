@@ -13,14 +13,14 @@
 
 - [x] Kakeai 管理の draft を作成、fork、publish する composition library service を追加する
 - [x] publish 時に entrypoint、runtime composition ID、1920×1080、有限尺、音声なし、bundle 内依存を検証する
-- [ ] HyperFrames の通常の check / preview を AI authoring フローへ接続する。外部 import と手動 HTML 編集 API は追加しない
+- [x] HyperFrames の通常の check / preview を AI authoring フローへ接続する。外部 import と手動 HTML 編集 API は追加しない
 - [x] AI向けauthoringスキル（`skills/kakeai-composition/`、接続・作成・更新・QA・publish・台本参照の手順）を追加する
 - [x] 完了条件: AI の変更は新しい CompositionVersion となり、以前の参照を変更しない
 
 ## C3 compiler・preview・render
 
 - [x] compiler 出力を parent HTML と child file tree を含む render project に拡張し、`data-composition-src` host を生成する
-- [ ] published bundle の読み取り専用 preview content URL と、preview DTO の composition entry 参照を追加する
+- [x] published bundle の読み取り専用 preview content URL と、preview DTO の composition entry 参照を追加する
 - [x] Render Job snapshot に CompositionVersion ID、bundle hash、manifest を追加し、worker が照合済み bundle を一時 project へ materialize する
 - [ ] 完了条件: 全画面 composition を保存済み台本とドラフト・プレビューで seek でき、同じ snapshot から MP4 を render できる
 

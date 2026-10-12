@@ -226,6 +226,11 @@ export const previewAssetSchema = z.object({
   sha256: z.string().min(1),
 });
 
+export const previewCompositionSchema = z.object({
+  compositionVersionId: idSchema,
+  entryUrl: z.string().min(1),
+});
+
 export const previewRendererSchema = z.object({
   engine: z.literal("hyperframes"),
   compilerVersion: z.string().min(1),
@@ -260,6 +265,7 @@ export const previewTimelineSchema = z.object({
 const previewBodySchema = z.object({
   compositionHtml: z.string().min(1),
   assets: z.array(previewAssetSchema),
+  compositions: z.array(previewCompositionSchema),
   renderer: previewRendererSchema,
   timeline: previewTimelineSchema,
 });
@@ -288,6 +294,7 @@ export type BulkTtsJobEntry = z.infer<typeof bulkTtsJobEntrySchema>;
 export type BulkTtsJobExclusion = z.infer<typeof bulkTtsJobExclusionSchema>;
 export type BulkTtsJobsResult = z.infer<typeof bulkTtsJobsResultSchema>;
 export type PreviewAsset = z.infer<typeof previewAssetSchema>;
+export type PreviewComposition = z.infer<typeof previewCompositionSchema>;
 export type PreviewRenderer = z.infer<typeof previewRendererSchema>;
 export type PreviewLineTiming = z.infer<typeof previewLineTimingSchema>;
 export type PreviewCueTiming = z.infer<typeof previewCueTimingSchema>;

@@ -96,7 +96,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | DELETE | /assets/:assetId | 204 | 未参照の素材を明示削除 |
 | GET | /compositions | 200 | Composition Libraryの一覧を取得 |
 | GET | /compositions/:compositionId | 200 | Compositionとpublish済みversionのメタデータを取得 |
-| GET | /composition-versions/:compositionVersionId/content/*bundlePath | 200 / 206 | published bundleのentrypointまたは相対依存を配信。previewレスポンス内のURLだけを使用する |
+| GET | /compositions/versions/:compositionVersionId/content/*bundlePath | 200 / 206 | published bundleのentrypointまたは相対依存を配信。previewレスポンス内のURLだけを使用する |
 | GET | /script-versions/:scriptVersionId/preview | 200 | 信頼済みComposition HTMLと素材URLを取得 |
 | POST | /language-editions/:editionId/draft-preview | 200 | 未保存の台本案から書込みなしでドラフト・プレビューを合成 |
 | POST | /script-versions/:scriptVersionId/render-jobs | 202 | 入力スナップショットを持つRender Jobをキューへ追加 |
@@ -456,7 +456,7 @@ APIはContentDocument、参照Asset、参照CompositionVersionを検証し、利
     "compositions": [
       {
         "compositionVersionId": "cmpver_001",
-        "entryUrl": "/api/v1/composition-versions/cmpver_001/content/index.html",
+        "entryUrl": "/api/v1/compositions/versions/cmpver_001/content/index.html",
         "bundleSha256": "sha256:beef..."
       }
     ],

@@ -9,6 +9,8 @@ import {
   type CompositionDraft,
   type CompositionVersion,
   type CompositionManifest,
+  type ContentDocument,
+  compositionFullBleedInputSchema,
   compositionManifestSchema,
 } from "@kakeai/contracts";
 import { dataDirectories } from "../storage/paths.ts";
@@ -62,6 +64,22 @@ function resolveWithin(baseDir: string, relativePath: string, label: string): st
     throw new Error(`Invalid ${label}: ${relativePath}`);
   }
   return target;
+}
+
+export function collectCompositionVersionIds(content: ContentDocument): string[] {
+  const ids = new Set<string>();
+  for (const scene of content.scenes) {
+    for (const cue of scene.visualCues) {
+      if (cue.template.id !== "composition.full-bleed") {
+        continue;
+      }
+      const parsed = compositionFullBleedInputSchema.safeParse(cue.input);
+      if (parsed.success) {
+        ids.add(parsed.data.compositionVersionId);
+      }
+    }
+  }
+  return [...ids];
 }
 
 export async function validateCompositionBundle(
@@ -250,6 +268,27 @@ export class CompositionService {
         createdAt: v.createdAt.toISOString(),
       })),
     };
+  }
+
+  async resolvePublishedBundle(
+    versionId: string,
+  ): Promise<{ version: CompositionVersion; bundleDir: string }> {
+    const version = await this.getVersionById(versionId);
+    const bundleDir = join(dataDirectories(this.dataDir).root, version.storageKey);
+    let info;
+    try {
+      info = await stat(bundleDir);
+    } catch {
+      throw new Error(`Composition bundle directory missing: ${versionId}`);
+    }
+    if (!info.isDirectory()) {
+      throw new Error(`Composition bundle directory missing: ${versionId}`);
+    }
+    const { bundleHash } = await computeDirectoryHashAndFiles(bundleDir);
+    if (bundleHash !== version.bundleHash) {
+      throw new Error(`Composition bundle hash mismatch: ${versionId}`);
+    }
+    return { version, bundleDir };
   }
 
   async listCompositions(): Promise<Composition[]> {

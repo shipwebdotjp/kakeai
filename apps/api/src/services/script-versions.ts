@@ -9,6 +9,7 @@ import {
   resolveTimeline,
   OUTPUT_FPS,
   type CompiledComposition,
+  type CompositionVersionResolved,
   type ResolvedAssetKind,
   type ScenePlacement,
 } from "@kakeai/video";
@@ -38,6 +39,7 @@ import { API_BASE_PATH } from "../http/security.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 import type { DataDirectories } from "../storage/paths.ts";
 import { resolveAssetContent } from "./assets.ts";
+import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
 
 export interface SaveScriptVersionResult {
   scriptVersion: ScriptVersionDto;
@@ -257,6 +259,52 @@ export interface CompilePreviewOptions {
   strictTakeDurations?: boolean;
 }
 
+export interface PreviewCompositionResolution {
+  compositionVersionId: string;
+  entryUrl: string;
+  resolved: CompositionVersionResolved;
+}
+
+function compositionEntryUrl(versionId: string, entrypoint: string): string {
+  const encodedPath = entrypoint
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${API_BASE_PATH}/compositions/versions/${encodeURIComponent(versionId)}/content/${encodedPath}`;
+}
+
+export async function resolvePreviewCompositions(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  content: ContentDocument,
+): Promise<PreviewCompositionResolution[]> {
+  const compositionService = new CompositionService({ db: prisma, dataDir: directories.root });
+  const resolutions: PreviewCompositionResolution[] = [];
+  for (const versionId of collectCompositionVersionIds(content)) {
+    let bundle;
+    try {
+      bundle = await compositionService.resolvePublishedBundle(versionId);
+    } catch {
+      throw new ApiError(422, "COMPOSITION_UNAVAILABLE", "参照先のCompositionVersionを利用できません。");
+    }
+    const entryUrl = compositionEntryUrl(bundle.version.id, bundle.version.manifest.entrypoint);
+    resolutions.push({
+      compositionVersionId: bundle.version.id,
+      entryUrl,
+      resolved: {
+        id: bundle.version.id,
+        runtimeCompositionId: bundle.version.manifest.runtimeCompositionId,
+        entrypoint: entryUrl,
+        previewUrl: entryUrl,
+        bundleHash: bundle.version.bundleHash,
+        storageKey: bundle.version.storageKey,
+        manifest: bundle.version.manifest,
+      },
+    });
+  }
+  return resolutions;
+}
+
 export async function compilePreview(
   prisma: PrismaClient,
   directories: DataDirectories,
@@ -272,11 +320,23 @@ export async function compilePreview(
   const renderContentUrl = (assetId: string): string =>
     `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/render-content`;
 
+  const previewCompositions = await resolvePreviewCompositions(prisma, directories, content);
+  const compositionByVersionId = new Map(
+    previewCompositions.map((entry) => [entry.compositionVersionId, entry.resolved]),
+  );
+
   let compiled: CompiledComposition;
   let timeline: ReturnType<typeof buildPreviewTimeline>;
   try {
     compiled = compileDocument({
       document: content,
+      compositionResolver: (versionId) => {
+        const found = compositionByVersionId.get(versionId);
+        if (!found) {
+          throw new Error(`CompositionVersionを解決できません: ${versionId}`);
+        }
+        return found;
+      },
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);
         const kind = asset?.kind;
@@ -317,6 +377,10 @@ export async function compilePreview(
   return {
     compositionHtml: compiled.html,
     assets: previewAssets,
+    compositions: compiled.compositionVersions.map((resolved) => ({
+      compositionVersionId: resolved.id,
+      entryUrl: resolved.previewUrl ?? compositionEntryUrl(resolved.id, resolved.manifest.entrypoint),
+    })),
     renderer: {
       engine: COMPOSITION_ENGINE,
       compilerVersion: COMPILER_VERSION,

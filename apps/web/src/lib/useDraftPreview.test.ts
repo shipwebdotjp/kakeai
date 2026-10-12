@@ -16,6 +16,7 @@ function savedPreview(): ScriptVersionPreview {
     scriptVersionId: "scr_001",
     compositionHtml: "<!doctype html><html></html>",
     assets: [],
+    compositions: [],
     renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
     timeline: { totalDurationMs: 9000, fps: 30, scenes: [] },
   };
@@ -26,6 +27,7 @@ function draftPreview(): DraftPreview {
     source: { kind: "draft" },
     compositionHtml: "<!doctype html><html>draft</html>",
     assets: [],
+    compositions: [],
     renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
     timeline: { totalDurationMs: 9000, fps: 30, scenes: [] },
   };
@@ -41,6 +43,7 @@ describe("requestDraftPreview", () => {
       source: { kind: "draft" },
       compositionHtml: "<!doctype html><html></html>",
       assets: [],
+      compositions: [],
       renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
       timeline: { totalDurationMs: 9000, fps: 30, scenes: [] },
     },
