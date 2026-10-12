@@ -74,8 +74,8 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 }
 ```
 
-- `range` は `scene`、`layer` は `background`、`order` はその Scene の背景で一意とする。
-- VisualCue の解決済み Scene 尺が child host の `data-duration` になる。child の animation が短ければ最後のフレームを保持し、長ければ Scene の終端で切る。
+- `range` は `scene`、`layer` は `background`、`order` はその Scene の背景で一意とする。v1 では `range` が `lines` / `offset` の Cue や `background` 以外のレイヤーには配置できず、ContentDocument 検証が拒否する（他レイヤーへの配置は [roadmap](./roadmap.md) の R3、複数 instance は R2）。
+- **尺**: composition の再生尺は child 自身（manifest の `durationMs` と child の `window.__timelines[id].duration()`）で決まる。コンパイラは host に `data-duration` を出力せず、Scene 尺は親 clip の表示窓としてのみ与えられる。そのため「child が短ければ最後のフレームを保持し、長ければ Scene の終端で切る」ことはコンパイラが保証しない。Scene 尺と composition 尺を揃えるか、導入・結びなど固定尺の Scene を使うのが安全である。
 - 音声、利用時の text/color/media slot、端末枠など Composite Visual Template 内への配置は v1 では持たない。
 
 ScriptVersion の保存、プレビュー、Render Job の作成時に CompositionVersion の存在と bundle 完全性を確認する。draft、削除済み version、破損した bundle は参照できない。
