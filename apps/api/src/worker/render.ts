@@ -1,4 +1,4 @@
-import { mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, rm, stat, symlink, writeFile, cp } from "node:fs/promises";
 import { join } from "node:path";
 import { createRenderJob, executeRenderJob } from "@hyperframes/producer";
 import {
@@ -6,6 +6,7 @@ import {
   type CompiledComposition,
   type ResolvedAssetKind,
 } from "@kakeai/video";
+import { computeDirectoryHashAndFiles } from "../storage/composition-store.ts";
 import {
   parseRenderJobSnapshot,
   type RenderJobSnapshot,
@@ -160,6 +161,35 @@ export async function processRenderJob(
         }
       });
     }
+
+    const snapshotCompositions = snapshot.compositionVersions ?? [];
+    const compositionResolverMap = new Map<string, { id: string; runtimeCompositionId: string; entrypoint: string; bundleHash: string; storageKey: string; manifest: any }>();
+
+    for (const compRef of snapshotCompositions) {
+      const bundleSourcePath = resolveStoragePath(config.directories, compRef.storageKey);
+      const info = await stat(bundleSourcePath).catch(() => null);
+      if (!info || !info.isDirectory()) {
+        throw new RenderJobError("ASSET_UNAVAILABLE", `Composition bundle directory missing: ${compRef.id}`);
+      }
+      const { bundleHash } = await computeDirectoryHashAndFiles(bundleSourcePath);
+      if (bundleHash !== compRef.bundleHash) {
+        throw new RenderJobError("ASSET_UNAVAILABLE", `Composition bundle hash mismatch for ${compRef.id}`);
+      }
+
+      const targetSubdir = join(projectDir, compRef.storageKey);
+      await mkdir(targetSubdir, { recursive: true });
+      await cp(bundleSourcePath, targetSubdir, { recursive: true });
+
+      compositionResolverMap.set(compRef.id, {
+        id: compRef.id,
+        runtimeCompositionId: compRef.manifest.runtimeCompositionId,
+        entrypoint: compRef.manifest.entrypoint,
+        bundleHash: compRef.bundleHash,
+        storageKey: compRef.storageKey,
+        manifest: compRef.manifest,
+      });
+    }
+
     const fileById = new Map(assets.map((asset) => [asset.assetId, asset.fileName]));
     let compiled: CompiledComposition;
     try {
@@ -180,6 +210,20 @@ export async function processRenderJob(
             url: `assets/${fileName}`,
             kind,
             durationMs: kind === "audio" ? asset.durationMs : null,
+          };
+        },
+        compositionResolver: (versionId) => {
+          const found = compositionResolverMap.get(versionId);
+          if (!found) {
+            throw new RenderJobError("RENDER_FAILED", `Composition version missing from job snapshot: ${versionId}`);
+          }
+          return {
+            id: found.id,
+            runtimeCompositionId: found.runtimeCompositionId,
+            entrypoint: `${found.storageKey}/${found.entrypoint}`,
+            bundleHash: found.bundleHash,
+            storageKey: found.storageKey,
+            manifest: found.manifest,
           };
         },
       });

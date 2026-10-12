@@ -25,4 +25,5 @@ export * from "./dto";
 export * from "./error";
 export * from "./job";
 export * from "./health";
+export * from "./composition.ts";
 export * from "./requests";

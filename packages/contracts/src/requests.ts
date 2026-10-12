@@ -54,3 +54,24 @@ export type CreateRenderJobRequest = z.infer<typeof createRenderJobRequestSchema
 export type CreateTtsJobRequest = z.infer<typeof createTtsJobRequestSchema>;
 export type CreateBulkTtsJobsRequest = z.infer<typeof createBulkTtsJobsRequestSchema>;
 export type UpdateAssetRequest = z.infer<typeof updateAssetRequestSchema>;
+
+export const createCompositionRequestSchema = z.strictObject({
+  name: z.string().trim().min(1),
+  runtimeCompositionId: z.string().trim().min(1),
+  entrypoint: z.string().trim().min(1).optional(),
+});
+
+export type CreateCompositionRequest = z.infer<typeof createCompositionRequestSchema>;
+
+export const updateCompositionDraftRequestSchema = z.strictObject({
+  entrypoint: z.string().trim().min(1).optional(),
+  files: z.record(z.string(), z.string()).optional(),
+});
+
+export type UpdateCompositionDraftRequest = z.infer<typeof updateCompositionDraftRequestSchema>;
+
+export const publishCompositionRequestSchema = z.strictObject({
+  entrypoint: z.string().trim().min(1).optional(),
+});
+
+export type PublishCompositionRequest = z.infer<typeof publishCompositionRequestSchema>;

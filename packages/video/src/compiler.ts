@@ -7,6 +7,8 @@ import {
   sceneDeviceFrameV1,
   sceneDeviceFrameV2,
   sceneSiteMockupV1,
+  compositionFullBleedV1,
+  compositionFullBleedInputSchema,
   deviceFrameInputSchema,
   deviceFrameV2InputSchema,
   textBlockV1,
@@ -17,6 +19,7 @@ import {
   type VisualCue,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
+import type { CompositionVersionResolver, CompositionVersionResolved } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
@@ -50,11 +53,13 @@ export const COMPOSITION_ID = "kakeai-main";
 export interface CompileDocumentOptions {
   document: ContentDocument;
   assetResolver: AssetResolver;
+  compositionResolver?: CompositionVersionResolver;
 }
 
 export interface CompiledComposition {
   html: string;
   assetIds: string[];
+  compositionVersions: CompositionVersionResolved[];
   durationMs: number;
 }
 
@@ -147,11 +152,59 @@ function renderNestedMedia(node: NestedVisual & { kind: "media" }, context: Rend
   };
 }
 
+function renderCompositionFullBleed(
+  input: unknown,
+  context: RenderContext,
+  compositionResolver?: CompositionVersionResolver,
+): RenderedCue & { compositionVersion?: CompositionVersionResolved } {
+  const parsed = compositionFullBleedInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new CompositionCompileError([
+      {
+        path: [...context.path, "input"],
+        code: "invalid_input",
+        message: "compositionVersionId を指定してください",
+      },
+    ]);
+  }
+  if (!compositionResolver) {
+    throw new CompositionCompileError([
+      {
+        path: [...context.path, "input"],
+        code: "missing_composition_resolver",
+        message: "CompositionVersionResolver が設定されていません",
+      },
+    ]);
+  }
+  let resolved: CompositionVersionResolved;
+  try {
+    resolved = compositionResolver(parsed.data.compositionVersionId);
+  } catch (err) {
+    throw new CompositionCompileError([
+      {
+        path: [...context.path, "input", "compositionVersionId"],
+        code: "unknown_composition_version",
+        message: `CompositionVersion を解釈できません: ${(err as Error).message}`,
+      },
+    ]);
+  }
+
+  const hostId = context.scope.id("comp-host");
+  const src = resolved.previewUrl ?? resolved.entrypoint;
+  return {
+    html: `<div id="${hostId}" class="kakeai-fullbleed" data-composition-id="${escapeHtmlAttribute(resolved.runtimeCompositionId)}" data-composition-src="${escapeHtmlAttribute(src)}"></div>`,
+    assetIds: [],
+    animation: [],
+    compositionVersion: resolved,
+  };
+}
+
 function dispatchTemplate(
   key: string,
   input: unknown,
   context: RenderContext,
-): RenderedCue {
+  compositionResolver?: CompositionVersionResolver,
+): RenderedCue & { compositionVersion?: CompositionVersionResolved } {
   switch (key) {
     case `${textBlockV1.id}@${textBlockV1.version}`:
       return { html: renderTextBlock(input, context.path, context.theme), assetIds: [], animation: [] };
@@ -169,6 +222,8 @@ function dispatchTemplate(
       return renderDeviceFrame(input, context, deviceFrameV2InputSchema);
     case `${sceneSiteMockupV1.id}@${sceneSiteMockupV1.version}`:
       return renderSiteMockup(input, context);
+    case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
+      return renderCompositionFullBleed(input, context, compositionResolver);
     default:
       throw new CompositionCompileError([
         {
@@ -440,13 +495,15 @@ function applySceneTransitions(
 }
 
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
-  const { document, assetResolver } = options;
+  const { document, assetResolver, compositionResolver } = options;
   const theme = resolveVisualTheme(document);
   const timeline = resolveTimeline(document);
   const sceneById = new Map(document.scenes.map((scene) => [scene.id, scene]));
 
   const assetIds: string[] = [];
   const seenAssetIds = new Set<string>();
+  const compositionVersions: CompositionVersionResolved[] = [];
+  const seenCompositionVersionIds = new Set<string>();
   const sceneClipGroups: string[][] = [];
   const audios: string[] = [];
   const tweenLines: string[] = [];
@@ -535,9 +592,16 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         `${cue.template.id}@${cue.template.version}`,
         cue.input,
         context,
+        compositionResolver,
       );
       for (const assetId of rendered.assetIds) {
         trackAsset(assetId);
+      }
+      if (rendered.compositionVersion) {
+        if (!seenCompositionVersionIds.has(rendered.compositionVersion.id)) {
+          seenCompositionVersionIds.add(rendered.compositionVersion.id);
+          compositionVersions.push(rendered.compositionVersion);
+        }
       }
       if (rendered.html.length === 0) {
         return;
@@ -743,5 +807,5 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     "</html>",
   ].join("\n");
 
-  return { html, assetIds, durationMs: timeline.totalDurationMs };
+  return { html, assetIds, compositionVersions, durationMs: timeline.totalDurationMs };
 }

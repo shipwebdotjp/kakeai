@@ -403,6 +403,28 @@ const sceneSiteMockupV1: VisualTemplateDefinition = {
   },
 };
 
+export const compositionFullBleedInputSchema = z.strictObject({
+  compositionVersionId: idSchema,
+});
+
+export const compositionFullBleedV1: VisualTemplateDefinition = {
+  id: "composition.full-bleed",
+  version: 1,
+  inputSchema: compositionFullBleedInputSchema,
+  layers: ["background"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: {
+    label: "コンポジション背景（全面）",
+    description: "Composition Libraryの完全画面モーションを配置",
+    category: "composition",
+  },
+  inputFields: [
+    { kind: "text", key: "compositionVersionId", label: "Composition Version ID" },
+  ],
+  collectAssetRefs: () => [],
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   mediaFullBleedV1,
@@ -412,6 +434,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   sceneDeviceFrameV1,
   sceneDeviceFrameV2,
   sceneSiteMockupV1,
+  compositionFullBleedV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };

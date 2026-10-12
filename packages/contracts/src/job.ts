@@ -4,8 +4,16 @@ import { contentDocumentSchema } from "./content/document";
 import { migrateContentDocument } from "./content/migrate";
 import { styleIdSchema, voiceAdapterIdSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
+import { compositionManifestSchema } from "./composition";
 
 export const SNAPSHOT_SCHEMA_VERSION = 1 as const;
+
+export const snapshotCompositionVersionRefSchema = z.object({
+  id: idSchema,
+  bundleHash: z.string().min(1),
+  storageKey: z.string().min(1),
+  manifest: compositionManifestSchema,
+});
 
 export const snapshotAssetRefSchema = z.object({
   assetId: idSchema,
@@ -40,6 +48,7 @@ export const renderJobSnapshotSchema = z.object({
   versionNumber: positiveInt,
   content: contentDocumentSchema,
   assets: z.array(snapshotAssetRefSchema),
+  compositionVersions: z.array(snapshotCompositionVersionRefSchema).optional().default([]),
   template: z.object({
     id: z.string().min(1),
     version: positiveInt,

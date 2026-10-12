@@ -44,6 +44,7 @@ describe("dataDirectories", () => {
       db: "/root/db",
       assets: "/root/assets",
       artifacts: "/root/artifacts",
+      compositions: "/root/compositions",
       tmp: "/root/tmp",
     });
   });

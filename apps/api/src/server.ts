@@ -15,6 +15,8 @@ import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createVoiceProfilesRouter } from "./http/routes/voice-profiles.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
+import { createCompositionsRouter } from "./http/routes/compositions.ts";
+import { CompositionService } from "./services/compositions.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
 import {
   API_BASE_PATH,
@@ -160,6 +162,12 @@ export function createApp(dependencies: AppDependencies): Express {
       mediaGuard,
     }),
   );
+
+  const compositionService = new CompositionService({
+    db: dependencies.prisma,
+    dataDir: dependencies.config.directories.root,
+  });
+  api.use("/compositions", createCompositionsRouter(compositionService, mediaGuard));
 
   app.use(API_BASE_PATH, api);
   app.use(API_BASE_PATH, (_req, res) => {

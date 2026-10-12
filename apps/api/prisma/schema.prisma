@@ -176,3 +176,35 @@ model Artifact {
 
   @@index([jobId])
 }
+
+model Composition {
+  id                   String               @id @default(cuid())
+  name                 String
+  runtimeCompositionId String               @unique
+  draft                CompositionDraft?
+  versions             CompositionVersion[]
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+}
+
+model CompositionDraft {
+  id            String      @id @default(cuid())
+  compositionId String      @unique
+  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
+  entrypoint    String
+  storageKey    String      @unique
+  updatedAt     DateTime    @updatedAt
+}
+
+model CompositionVersion {
+  id            String      @id @default(cuid())
+  compositionId String
+  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
+  versionNumber Int
+  bundleHash    String
+  storageKey    String      @unique
+  manifestJson  String
+  createdAt     DateTime    @default(now())
+
+  @@unique([compositionId, versionNumber])
+}

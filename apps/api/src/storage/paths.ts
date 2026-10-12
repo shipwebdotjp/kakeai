@@ -7,6 +7,7 @@ export interface DataDirectories {
   db: string;
   assets: string;
   artifacts: string;
+  compositions: string;
   tmp: string;
 }
 
@@ -40,15 +41,21 @@ export function dataDirectories(root: string): DataDirectories {
     db: join(root, "db"),
     assets: join(root, "assets"),
     artifacts: join(root, "artifacts"),
+    compositions: join(root, "compositions"),
     tmp: join(root, "tmp"),
   };
 }
 
 export async function ensureDataDirectories(directories: DataDirectories): Promise<void> {
   await Promise.all(
-    [directories.root, directories.db, directories.assets, directories.artifacts, directories.tmp].map(
-      (directory) => mkdir(directory, { recursive: true }),
-    ),
+    [
+      directories.root,
+      directories.db,
+      directories.assets,
+      directories.artifacts,
+      directories.compositions,
+      directories.tmp,
+    ].map((directory) => mkdir(directory, { recursive: true })),
   );
 }
 

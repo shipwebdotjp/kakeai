@@ -26,6 +26,7 @@ import {
   loadAssetReferences,
   renderSourceDurationMs,
 } from "./script-versions.ts";
+import { CompositionService } from "./compositions.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -71,6 +72,36 @@ export async function createRenderJob(
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
 
+  const compositionVersionIds = new Set<string>();
+  for (const scene of content.scenes) {
+    for (const cue of scene.visualCues) {
+      if (cue.template.id === "composition.full-bleed") {
+        const input = cue.input as { compositionVersionId?: string };
+        if (input?.compositionVersionId) {
+          compositionVersionIds.add(input.compositionVersionId);
+        }
+      }
+    }
+  }
+
+  const compositionService = new CompositionService({ db: prisma, dataDir: "" });
+  const snapshotCompositions: RenderJobSnapshot["compositionVersions"] = [];
+
+  for (const compVerId of compositionVersionIds) {
+    let compVer;
+    try {
+      compVer = await compositionService.getVersionById(compVerId);
+    } catch {
+      throw new ApiError(422, "RENDER_INPUT_INVALID", `Composition version not found: ${compVerId}`);
+    }
+    snapshotCompositions.push({
+      id: compVer.id,
+      bundleHash: compVer.bundleHash,
+      storageKey: compVer.storageKey,
+      manifest: compVer.manifest,
+    });
+  }
+
   try {
     compileDocument({
       document: content,
@@ -93,6 +124,26 @@ export async function createRenderJob(
           url: "",
           kind: kind as ResolvedAssetKind,
           durationMs: kind === "audio" ? renderSourceDurationMs(asset) : null,
+        };
+      },
+      compositionResolver: (versionId) => {
+        const found = snapshotCompositions.find((c) => c.id === versionId);
+        if (!found) {
+          throw new CompositionCompileError([
+            {
+              path: ["compositions", versionId],
+              code: "unresolvable_composition",
+              message: "CompositionVersionを解決できません。",
+            },
+          ]);
+        }
+        return {
+          id: found.id,
+          runtimeCompositionId: found.manifest.runtimeCompositionId,
+          entrypoint: found.manifest.entrypoint,
+          bundleHash: found.bundleHash,
+          storageKey: found.storageKey,
+          manifest: found.manifest,
         };
       },
     });
@@ -132,6 +183,7 @@ export async function createRenderJob(
     versionNumber: row.versionNumber,
     content,
     assets: snapshotAssets,
+    compositionVersions: snapshotCompositions,
     template: { id: content.template.id, version: content.template.version },
     output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
     renderer: {

@@ -115,6 +115,33 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
     }
   }
 
+  const compositionVersionIdsInDoc = new Set<string>();
+  for (const [sIdx, scene] of doc.scenes.entries()) {
+    for (const [cIdx, cue] of scene.visualCues.entries()) {
+      if (cue.template.id === "composition.full-bleed") {
+        if (cue.range.kind !== "scene" || cue.layer !== "background") {
+          ctx.addIssue({
+            code: "custom",
+            message: "composition.full-bleed は Scene 背景 (range: scene, layer: background) にのみ配置できます",
+            path: ["scenes", sIdx, "visualCues", cIdx],
+          });
+        }
+        const input = cue.input as { compositionVersionId?: string };
+        if (input && typeof input.compositionVersionId === "string") {
+          if (compositionVersionIdsInDoc.has(input.compositionVersionId)) {
+            ctx.addIssue({
+              code: "custom",
+              message: `同一 CompositionVersion (${input.compositionVersionId}) は 1 ScriptVersion 内で 1 度しか参照できません`,
+              path: ["scenes", sIdx, "visualCues", cIdx, "input", "compositionVersionId"],
+            });
+          } else {
+            compositionVersionIdsInDoc.add(input.compositionVersionId);
+          }
+        }
+      }
+    }
+  }
+
   const speakerIds = new Set(doc.speakers.map((speaker) => speaker.id));
   const characterIds = new Set(doc.characters.map((character) => character.id));
   const appearanceIdsByCharacter = new Map(

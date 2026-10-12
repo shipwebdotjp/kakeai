@@ -12,6 +12,7 @@ export type {
 } from "./timeline";
 export { compileDocument, toSecondsText } from "./compiler";
 export type { CompileDocumentOptions, CompiledComposition } from "./compiler";
+export type { CompositionVersionResolver, CompositionVersionResolved } from "./composition-resolver";
 export {
   THEME_FONT_STACKS,
   accentForegroundHex,
