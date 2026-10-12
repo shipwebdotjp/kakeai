@@ -4,7 +4,7 @@
 
 この文書は、作品を編集するための正本JSONの契約を定める。HyperFrames Composition HTML、開始・終了フレーム、アプリが出力するMP4は正本ではなく、このJSONと選択済み素材から導出する。外部で作成したMP4はvideo Assetとして参照できるが、編集可能な表現の正本にはしない。
 
-JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照する必要がある間は維持する。素材ファイルのパスはJSONへ埋め込まず、必ず `Asset.id` を参照する。
+JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照する必要がある間は維持する。素材ファイルのパスはJSONへ埋め込まず、必ず `Asset.id` を参照する。Compositionを使うCueは、HTMLやbundleのパスではなくpublish済みの `CompositionVersion.id` を参照する。
 
 ## 構造
 
@@ -185,7 +185,7 @@ Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`�
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
 - `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
 
-MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。立ち絵は一覧内の「左」「右」固定2行で `character.standing@2` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → caption → overlay` で固定する（Scene本文の固定層は廃止し、テキストは `overlay` のCueとして描画する）。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
+MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。Composition Library導入後は、publish済みの全画面・無音CompositionVersionだけを `composition.full-bleed@1` のScene背景として選べる。立ち絵は一覧内の「左」「右」固定2行で `character.standing@2` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → caption → overlay` で固定する（Scene本文の固定層は廃止し、テキストは `overlay` のCueとして描画する）。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@2` を書き出す。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) と [../composition-library/spec.md](../composition-library/spec.md) を正とする。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
@@ -202,6 +202,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | --- | --- | --- |
 | `text.block@1` | `text`, `role`(title/subtitle/heading/body/closing), 配置`anchor`/`verticalAlign`, `font`, `fontSize`, `color`, `decoration` | 対応。Sceneのテキストを表現する（[../editor/spec.md](../editor/spec.md)）。未指定時の既定スタイルはVisual Themeのrole別トークンを使う（[../visual-themes/spec.md](../visual-themes/spec.md)） |
 | `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?` | 対応 |
+| `composition.full-bleed@1` | `compositionVersionId` | Composition Library導入後に対応。`range: scene`、`layer: background`だけを許可し、同じCompositionVersionは一つのScriptVersion内で一度だけ参照できる。 |
 | `media.card@1` | `assetId`, 見出し、補足文, `focalPoint?` | 対応 |
 | `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
 | `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
@@ -214,7 +215,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
-スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
+スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。例外として、Kakeai管理下でAIが作成し不変bundleとしてpublishしたCompositionVersionは、`composition.full-bleed@1` のID入力を通じてnative nested compositionとして参照できる。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
 
 `VisualTemplate` の版は、正式リリース後は不変とする。`id@version` の意味とレイアウト規約を変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは原則削除せず、保存済み作品が参照する版を描画し続けられるようにする。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい。正式リリース（`1.0.0`）前の開発段階では、版を追加せず既存版を書き換えてよい（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
 
@@ -266,8 +267,8 @@ BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset
 ## 実装上のルール
 
 - `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `label`（空白のみ拒否）、必須の `accent`（`theme` tokenまたは大文字 `#RRGGBB` の `custom`）、`timing: z.discriminatedUnion("mode", ...)`、任意の `transition` を持ち、NarrationSegmentの `selectedAudioTakeId` は必須の `z.string().nullable()` とする。Documentは必須の `visualTheme` を持ち、未知のテーマ参照は拒否する。Sceneは型付きスロットを持たず、`VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
-- 正本JSONにはローカルパス、フレーム番号、HyperFrames固有のDOM属性やHTMLを保存しない。
-- 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・Sceneのアクセント・`scene.transition` の尺（`D <= min(先行Scene尺, 入場Scene尺)`）を検証する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。テキスト量の目安超過は拒否せず警告として返す。
-- Render Jobには、検証済みの正本JSON、選択AudioTake、使用するレンダー入力（Renditionまたは原本）の参照情報、テンプレート版、出力設定を保存する。ワーカーはスナップショットJSONを実行時の信頼済みコンパイラでHTMLへ変換する。ツール更新後の同一MP4再現は要件にしない。
-- Composition HTMLは、アプリが管理するVisualTemplateと検証済み入力からだけ生成する。利用者入力やAI出力をHTML/JavaScriptとして直接実行しない。Asset IDの表示参照への変換はコンパイラに注入する `assetResolver` が担う。
+- 正本JSONにはローカルパス、フレーム番号、HyperFrames固有のDOM属性やHTMLを保存しない。Compositionを使うCueはpublish済み `CompositionVersion.id` だけを保存する。
+- 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・publish済みCompositionVersion参照・Sceneのアクセント・`scene.transition` の尺（`D <= min(先行Scene尺, 入場Scene尺)`）を検証する。`composition.full-bleed@1` はScene背景だけに置き、同じCompositionVersionの重複参照を拒否する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。テキスト量の目安超過は拒否せず警告として返す。
+- Render Jobには、検証済みの正本JSON、選択AudioTake、使用するレンダー入力（Renditionまたは原本）の参照情報、CompositionVersionのID・bundle hash・manifest、テンプレート版、出力設定を保存する。ワーカーはスナップショットJSONを実行時の信頼済みコンパイラでHTMLとchild file treeへ変換する。ツール更新後の同一MP4再現は要件にしない。
+- Composition HTMLは、アプリが管理するVisualTemplateと検証済み入力からだけ生成する。利用者入力や外部AI出力をHTML/JavaScriptとして直接実行しない。Kakeai管理下でAIが作成しpublish済みのCompositionVersionだけは、検証済みmanifestとbundleを用いるnative nested compositionとして実行できる。Asset IDの表示参照への変換はコンパイラに注入する `assetResolver` が担う。
 - `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。移行関数は実際に版を上げる時点で `packages/contracts` に追加し、先回りして持たない。

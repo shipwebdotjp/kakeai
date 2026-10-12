@@ -53,9 +53,9 @@
 
 HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生物であり、編集データの正本にはしない。正本はSQLiteに保存し、素材と出力ファイルはローカルディレクトリに保存する。
 
-既にレンダー済みの動画は通常のvideo Assetとして取り込んで利用できるが、後から内容を変えたい表・グラフ・フローチャートなどの正本にはしない。これらは、信頼済みVisualTemplateへ構造化データを渡して描画する。利用者または外部AIが生成した任意のHyperFrames／HTMLコードをWorkへ保存または実行する機能は持たず、VisualTemplateの実装はアプリ側で管理する。
+既にレンダー済みの動画は通常のvideo Assetとして取り込んで利用できるが、後から内容を変えたい表・グラフ・フローチャートなどの正本にはしない。これらは、信頼済みVisualTemplateへ構造化データを渡して描画する。利用者または外部AIが生成した任意のHyperFrames／HTMLコードをWorkへ保存または実行する機能は持たない。例外として、Kakeai管理下でAIが作成し不変bundleとしてpublishしたCompositionVersionだけは、台本からID参照しnative nested compositionとして実行できる。詳細は[Composition Library仕様](../composition-library/spec.md)を正とする。
 
-アプリ管理データの保存先は、OSが提供するアプリデータディレクトリ（macOSではApplication Support配下）をルートとし、特定OSの絶対パスをコードへ埋め込まない。開発時は環境変数 `KAKEAI_DATA_DIR` でルートを差し替える。SQLite、原本、Rendition、Artifactは同一ルート配下にサブディレクトリを分けて置き、絶対パスを正本データへ埋め込まない。
+アプリ管理データの保存先は、OSが提供するアプリデータディレクトリ（macOSではApplication Support配下）をルートとし、特定OSの絶対パスをコードへ埋め込まない。開発時は環境変数 `KAKEAI_DATA_DIR` でルートを差し替える。SQLite、原本、Rendition、Artifact、Compositionのdraftとbundleは同一ルート配下にサブディレクトリを分けて置き、絶対パスを正本データへ埋め込まない。
 
 | 用語 | 意味 |
 | --- | --- |
@@ -70,12 +70,14 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 | `AudioCue` | BGMや効果音をどの区間にどの設定で配置するかという指示。 |
 | `Asset` | アップロードまたは将来の生成で得る不変の原本画像、動画、音声ファイル。種類・保存先・来歴・利用可能状態を持つ。 |
 | `AssetRendition` | Assetから導いた、プレビューまたはレンダーに安全に使える不変の正規化ファイル。 |
+| `Composition` | AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。 |
+| `CompositionVersion` | publish済みCompositionの不変bundle。ScriptVersionはIDだけを参照し、Render Jobはbundle hashを固定する。 |
 | `Job` | 非同期処理の実行記録。MVPでは `asset_ingest` と `render` を実行する。 |
 | `Artifact` | あるJobが生成した出力ファイル。MVPではrender Jobが生成するMP4。Assetへ自動昇格せず、再利用は明示的なAsset化による。 |
 
 `Work` の原本言語と `LanguageEdition.locale` はBCP 47形式で保存する。画面上は日本語だけを選択可能にし、未対応の言語版やジョブ種別は明示的に未対応として扱う。
 
-`Asset` には `uploaded` / `generated` の作成元と、生成条件・モデル情報を格納できる来歴を持たせる。MVPで作成できるのは `uploaded` のみである。
+`Asset` には `uploaded` / `generated` の作成元と、生成条件・モデル情報を格納できる来歴を持たせる。MVPで作成できるのは `uploaded` のみである。CompositionはAssetと異なる再利用ライブラリであり、CompositionVersionはHTMLをScriptVersionへ保存せず、bundleを不変に保持する。
 
 `Job` は種別、状態（`queued` / `running` / `succeeded` / `failed` / `cancelled`）、入力スナップショット、成果物参照、エラー、開始・完了時刻を持つ。MVPの `asset_ingest` はアップロード原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけRenditionを作り、`render` はMP4を作る。将来のTTS、画像生成、調査、台本下書きも同じ枠組みに追加する。
 
@@ -97,9 +99,9 @@ SQLiteでリレーションとして管理するのは、作品の一覧・版�
 
 `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化と `contentHash` は持たない。同一内容の検出や変更追跡は版IDと `sourceScriptVersionId` で行う。同一MP4バイト列を将来も再生成することはMVPの要件にしない。`ScriptVersion` は不変であり、`contentSchemaVersion` の移行は保存済みの版を書き換えずに新しい `ScriptVersion` を作って行う。MVPの保存済み版は `schemaVersion: 6` とし、v4/v5 は読み出し時に v6 へ移行する（v5 → v6 は `visualTheme: soft-editorial@1` と全Sceneの `theme.primary` を補う。[../visual-themes/spec.md](../visual-themes/spec.md)）。v3 以前の解釈コードは持たない。
 
-Assetは作品に所属させず、ローカルアプリ全体で再利用できる素材ライブラリとする。ScriptVersionのJSONはAssetのIDだけを参照する。Assetの論理的なID・原本メタデータ・バイト列は取り込み後に不変とし、`status` とreadyなRendition由来の表示メタデータだけは取り込み処理により更新される。利用者が後から編集できるのは分類用のタグ（`tagsJson`）だけであり、これは原本の同一性に影響しない（[ADR 0039](../adr/0039-asset-tags-mutable-metadata.md)）。実体ファイルが欠損・改変された場合は、同じSHA-256の再アップロードで内容ハッシュ由来の同じパスへ上書きして取り込み直す。原本とは別に、レンダー入力として使う不変の `AssetRendition` を持てる。
+Assetは作品に所属させず、ローカルアプリ全体で再利用できる素材ライブラリとする。ScriptVersionのJSONはAssetのIDと、対応VisualTemplateに限ってCompositionVersionのIDを参照する。Assetの論理的なID・原本メタデータ・バイト列は取り込み後に不変とし、`status` とreadyなRendition由来の表示メタデータだけは取り込み処理により更新される。利用者が後から編集できるのは分類用のタグ（`tagsJson`）だけであり、これは原本の同一性に影響しない（[ADR 0039](../adr/0039-asset-tags-mutable-metadata.md)）。実体ファイルが欠損・改変された場合は、同じSHA-256の再アップロードで内容ハッシュ由来の同じパスへ上書きして取り込み直す。原本とは別に、レンダー入力として使う不変の `AssetRendition` を持てる。
 
-履歴と実体を永久保持することはMVPの要件にしない。Workが存続する間は全ScriptVersionを保持し、個別の版削除・履歴圧縮は提供しない。不要になった作品はWorkの明示削除で、そのEdition、ScriptVersion、render Job、Artifactをまとめて削除する。Assetは残存するScriptVersionまたはキュー・実行中のrender Jobの入力スナップショットから参照されている間は削除できず、参照がない場合だけ明示削除または未参照データ清掃で実体と行を削除できる。Asset自身のasset_ingest JobはAssetとともに削除する。Artifactは個別に削除できる。削除された版やRenditionを必要とする過去Jobは、再プレビュー・再レンダーできないものとして扱い、履歴を偽って保持しない。
+履歴と実体を永久保持することはMVPの要件にしない。Workが存続する間は全ScriptVersionを保持し、個別の版削除・履歴圧縮は提供しない。不要になった作品はWorkの明示削除で、そのEdition、ScriptVersion、render Job、Artifactをまとめて削除する。Assetは残存するScriptVersionまたはキュー・実行中のrender Jobの入力スナップショットから参照されている間は削除できず、参照がない場合だけ明示削除または未参照データ清掃で実体と行を削除できる。CompositionVersionも同様に参照中は削除できず、draftだけはいつでも破棄できる。Asset自身のasset_ingest JobはAssetとともに削除する。Artifactは個別に削除できる。削除された版やRenditionを必要とする過去Jobは、再プレビュー・再レンダーできないものとして扱い、履歴を偽って保持しない。
 
 ### テーブルと制約
 
@@ -112,6 +114,9 @@ Prismaモデル名は以下のとおりとする。IDはアプリ生成の文字
 | `ScriptVersion` | `id`, `languageEditionId`, `versionNumber`, `contentSchemaVersion`, `contentJson`, `sourceScriptVersionId?`, `createdAt` | 不変の編集データ。`@@unique([languageEditionId, versionNumber])`。版番号は表示・並び替えのため単調増加させる。`sourceScriptVersionId` は手動復元、翻訳、下書きなどの派生元を示す。 |
 | `Asset` | `id`, `kind`, `origin`, `status`, `storageKey`, `originalFilename`, `mediaType`, `byteSize`, `sha256`, `durationMs?`, `widthPx?`, `heightPx?`, `tagsJson?`, `provenanceJson?`, `generatedByJobId?`, `createdAt` | 再利用可能な原本ファイル。`status` は `processing` / `ready` / `failed`。`kind` は `image` / `video` / `audio`、`origin` は `uploaded` / `generated`。`storageKey` と `sha256` はそれぞれ一意にし、同一バイト列の重複保存を避ける。`tagsJson` は利用者編集の分類タグで、取り込み後も更新されうる唯一のメタデータ。 |
 | `AssetRendition` | `id`, `assetId`, `purpose`, `storageKey`, `mediaType`, `sha256`, `byteSize`, `durationMs?`, `widthPx?`, `heightPx?`, `codecJson?`, `createdAt` | 原本をレンダーに直接使えない場合に必要時だけ作る、レンダー用の正規化派生物。MVPの `purpose` は `render`。画像は適用済みの向き、動画はH.264/AAC・CFR、音声はWAVへ正規化する。アルファ付き動画（VP8/VP9）は透過保持のため原本をそのまま使い、Renditionを作らない。`@@unique([assetId, purpose])`。 |
+| `Composition` | `id`, `runtimeCompositionId`, `name`, `currentCompositionVersionId?`, `createdAt`, `updatedAt` | AIが作業する再利用可能なHyperFrames projectの論理単位。`runtimeCompositionId` は安定し、異なるComposition間で一意。 |
+| `CompositionDraft` | `id`, `compositionId`, `storageKey`, `createdAt`, `updatedAt` | AIが更新する可変の作業コピー。ScriptVersionとJobから参照しない。Compositionごとに高々1つのactive draftを持つ。 |
+| `CompositionVersion` | `id`, `compositionId`, `versionNumber`, `bundleStorageKey`, `bundleSha256`, `manifestJson`, `createdAt` | publish済みの不変bundle。`@@unique([compositionId, versionNumber])`。bundle hashとmanifestは作成後に変更しない。詳細は[Composition Library仕様](../composition-library/spec.md)。 |
 | `Job` | `id`, `kind`, `status`, `workId?`, `assetId?`, `languageEditionId?`, `scriptVersionId?`, `snapshotSchemaVersion`, `inputSnapshotJson`, `resultJson?`, `progressPercent`, `errorCode?`, `errorMessage?`, `createdAt`, `startedAt?`, `finishedAt?` | 非同期実行の記録。statusは `queued` / `running` / `succeeded` / `failed` / `cancelled`。MVPの `kind` は `asset_ingest` / `render`。renderは `workId` と `scriptVersionId` を必須、asset_ingestは `assetId` を必須とする。`inputSnapshotJson` はkindごとの判別unionで定義し、`snapshotSchemaVersion` で解釈版を特定する。`@@index([status, createdAt])`、`@@index([workId, createdAt])`、`@@index([assetId, createdAt])` を置く。 |
 | `Artifact` | `id`, `jobId`, `role`, `format`, `storageKey`, `sha256`, `byteSize`, `durationMs?`, `widthPx?`, `heightPx?`, `fps?`, `createdAt` | Jobが生成した出力ファイル。`role` は `render` / `thumbnail` / `caption` などの用途、`format` は `mp4` などの形式。MVPはrender Jobが `role=render`、`format=mp4` のArtifactを1つ生成する。1 Jobは複数Artifactを持てる。`storageKey` は一意とし、`@@index([jobId])` を置く。 |
 
@@ -130,17 +135,20 @@ Work ──< LanguageEdition ──< ScriptVersion
 
 Asset ──< AssetRendition
   └── generatedByJobId ──> Job
-ScriptVersion.contentJson と Job.inputSnapshotJson は Asset.id を参照する
+Composition ──< CompositionVersion
+  └── 0..1 CompositionDraft
+ScriptVersion.contentJson と Job.inputSnapshotJson は Asset.id と CompositionVersion.id を参照する
 ```
 
 ### JSONとリレーションの接続
 
-`ScriptVersion.contentJson` に含まれる `assetId` はAssetの外部キーにはできないため、版の保存前にすべての参照Assetが存在することをアプリケーション層で検証する。Assetの種類と用途の組み合わせもここで検証する。たとえば、背景用の `media.full-bleed` がaudio Assetを参照することは許可しない。
+`ScriptVersion.contentJson` に含まれる `assetId` および `compositionVersionId` は外部キーにはできないため、版の保存前にすべての参照Assetとpublish済みCompositionVersionの存在・利用可能状態をアプリケーション層で検証する。Assetの種類と用途の組み合わせもここで検証する。たとえば、背景用の `media.full-bleed` がaudio Assetを参照することは許可しない。
 
 Render Jobを作る時点で、次を `inputSnapshotJson` に不変の値として記録する。
 
 - `ScriptVersion` のID、版番号、検証済みの `contentJson`
 - 参照した各Assetと、使用するレンダー入力（正規化Renditionがあればそれ、無ければ原本）のID、SHA-256、MIME type、サイズ・長さなどのレンダーに必要なメタデータ
+- 参照した各CompositionVersionのID、bundle hash、検証済みmanifest
 - テンプレートID・バージョン、出力設定
 - コンパイラとレンダラーの版（障害調査用）。Chrome build、フォント、FFmpegのバイト単位の固定は要求しない
 
@@ -213,7 +221,7 @@ VisualCueの表示区間はフレーム番号ではなく判別union（Scene全�
 - HyperFramesの採用は、実装開始前の別PoCを通過条件にしない。最初の縦切り実装で実素材の取り込み・プレビュー・レンダーを継続的に検証し、問題が出た場合も正本JSONとコンパイラ境界を保って対処または差し替える。
 - 実行環境：Node.js 22以上、FFmpeg、HyperFramesで指定したChrome、明示的に管理した日本語フォントを必要とする。依存バージョンは通常のlockfileで管理し、Jobには障害調査用の実行版を記録する。バイト単位の出力再現性は要件にせず、更新時は代表素材でレンダー回帰テストを実行する。
 - リソース上限：サーバー設定の既定値を、アップロード1ファイルあたり4GiB、動画・音声の最大長30分、入力映像の最大寸法3840x2160、管理領域の警告しきい値80GiBとする。出力は常に1920x1080である。上限値は環境設定で変更可能にし、80GiB到達は新規書込みを止めずUIとhealthで警告する。
-- 安全性：無認証のローカルAPIをループバックに束縛し、JSON／アップロードAPIには厳密な `Host` と `Origin` の検証を要求する。素材・Artifactのcontent URLは、同一オリジンかつ `HttpOnly; SameSite=Strict` のメディアセッションCookieで認可し、JSON APIではCookieだけによる認可を許可しない。DNSリバインディングは `Host` 検証で、CSRFと素材漏洩は `Origin` 検証と `SameSite=Strict` Cookieで防ぐ。素材やArtifactの保存パスは内容ハッシュ由来とし、利用者入力のファイル名をパス生成に使わない。利用者または将来のAIが任意のHTML/JavaScriptをCompositionへ直接書き込むことは許可しない。Zodで検証したVisualTemplate入力だけから、アプリが管理するHTMLを生成する。
+- 安全性：無認証のローカルAPIをループバックに束縛し、JSON／アップロードAPIには厳密な `Host` と `Origin` の検証を要求する。素材・Artifact・published CompositionVersion bundleのcontent URLは、同一オリジンかつ `HttpOnly; SameSite=Strict` のメディアセッションCookieで認可し、JSON APIではCookieだけによる認可を許可しない。DNSリバインディングは `Host` 検証で、CSRFと素材漏洩は `Origin` 検証と `SameSite=Strict` Cookieで防ぐ。素材やArtifactの保存パスは内容ハッシュ由来とし、利用者入力のファイル名をパス生成に使わない。利用者または将来のAIが任意のHTML/JavaScriptをCompositionへ直接書き込むことは許可しない。例外はKakeaiが管理し不変bundleへpublishしたCompositionVersionだけであり、外部URL・絶対パスを含まないことを検証する。Zodで検証したVisualTemplate入力だけから、アプリが管理するHTMLを生成する。
 
 HyperFramesはApache-2.0で公開されているが、導入するCatalogブロック、フォント、素材、外部サービスは個別に利用条件を確認する。OSS候補の比較と導入上の注意は [oss-research.md](./oss-research.md) を参照する。
 

@@ -16,8 +16,8 @@
 - リクエストの未定義フィールドは拒否する。API入力、ContentDocument、VisualTemplate入力はZodで検証する。
 - APIは絶対ローカルパス、storageKey、Job入力スナップショット、Composition生成の内部設定を返さない。素材やMP4はcontent URL経由で参照する。
 - 認証は行わないが、通常起動時のWeb UI、API、素材・Artifactのcontent URLは同じループバックoriginで提供し、ネットワークインターフェースへ公開しない。開発時のVite dev serverは信頼済みループバックproxyとして同じパスを中継し、ブラウザからAPIポートを直接呼ばせない。JSON APIとmultipartアップロードは、厳密な `Host` と `Origin` の検証を要求する。DNSリバインディングは `Host` 検証で、CSRFは `Origin` 検証で防ぐ。独自ヘッダや起動時トークンは用いない。
-- `GET /assets/:assetId/content` と `GET /artifacts/:artifactId/content` は、ブラウザが独自ヘッダを付けられないsubresource・Range requestとして利用できなければならない。同一originのUIシェルの応答、および開発時にシェルをVite dev serverが配信する場合に備えて同一originのAPIのGET応答で、プロセスごとにランダムなホスト専用・非永続の `Kakeai-Media-Session` Cookieを `HttpOnly; SameSite=Strict; Path=/api/v1/` で発行する。`Sec-Fetch-Site` が `cross-site` の要求では発行しない。content配信はこのCookieと厳密なHost検証で認可し、`Origin` がある場合は同一originだけを受け入れる。`Sec-Fetch-Site` がある場合も `same-origin` でなければならない。JSON APIはこのCookieだけでは認可しない。将来UIをHTTPSで提供するときはCookieに `Secure` を追加する。
-- content配信は上記メディアセッションCookieで認可する。`contentUrl` は資格情報をクエリへ埋め込まない同一originの相対URLとし、HyperFrames Playerは不透明originになるsandboxで実行しない。
+- `GET /assets/:assetId/content`、`GET /artifacts/:artifactId/content`、published CompositionVersion bundleのcontent URLは、ブラウザが独自ヘッダを付けられないsubresource・Range requestとして利用できなければならない。同一originのUIシェルの応答、および開発時にシェルをVite dev serverが配信する場合に備えて同一originのAPIのGET応答で、プロセスごとにランダムなホスト専用・非永続の `Kakeai-Media-Session` Cookieを `HttpOnly; SameSite=Strict; Path=/api/v1/` で発行する。`Sec-Fetch-Site` が `cross-site` の要求では発行しない。content配信はこのCookieと厳密なHost検証で認可し、`Origin` がある場合は同一originだけを受け入れる。`Sec-Fetch-Site` がある場合も `same-origin` でなければならない。JSON APIはこのCookieだけでは認可しない。将来UIをHTTPSで提供するときはCookieに `Secure` を追加する。
+- content配信は上記メディアセッションCookieで認可する。`contentUrl` は資格情報をクエリへ埋め込まない同一originの相対URLとし、HyperFrames Playerは不透明originになるsandboxで実行しない。Composition bundleの相対依存はentry URLを基準に解決し、path traversal、絶対パス、draftは配信しない。
 
 ### 成功・失敗の共通形式
 
@@ -63,6 +63,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。MVPでは1 Workにつき1つのja-JP Editionだけを作る。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt | contentはContentDocumentそのもの。保存後に更新しない。 |
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
+| Composition | id, runtimeCompositionId, name, currentCompositionVersionId, createdAt, updatedAt | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。 |
+| CompositionVersion | id, compositionId, versionNumber, bundleSha256, manifest, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、幅、高さ、既定尺、依存一覧を持つ。bundleの内部storage keyや絶対パスは返さない。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
 | VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は `voicevox` または `aivisspeech`（作成後は不変）、`settings` はアダプター専用で両者とも `speakerUuid` と `defaultStyleId`。詳細は [../tts/spec.md](../tts/spec.md)。 |
@@ -92,6 +94,9 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /assets/:assetId/content | 200 / 206 | 素材ファイルを配信 |
 | GET | /assets/:assetId/render-content | 200 / 206 | readyなrender Renditionを配信 |
 | DELETE | /assets/:assetId | 204 | 未参照の素材を明示削除 |
+| GET | /compositions | 200 | Composition Libraryの一覧を取得 |
+| GET | /compositions/:compositionId | 200 | Compositionとpublish済みversionのメタデータを取得 |
+| GET | /composition-versions/:compositionVersionId/content/*bundlePath | 200 / 206 | published bundleのentrypointまたは相対依存を配信。previewレスポンス内のURLだけを使用する |
 | GET | /script-versions/:scriptVersionId/preview | 200 | 信頼済みComposition HTMLと素材URLを取得 |
 | POST | /language-editions/:editionId/draft-preview | 200 | 未保存の台本案から書込みなしでドラフト・プレビューを合成 |
 | POST | /script-versions/:scriptVersionId/render-jobs | 202 | 入力スナップショットを持つRender Jobをキューへ追加 |
@@ -288,7 +293,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
 }
 ~~~
 
-上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
+上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。`composition.full-bleed@1` はScene背景だけに置け、同じCompositionVersionを一つのContentDocument内で複数回参照できない。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
 
 成功時は201 Createdと、新しい完全なScriptVersion DTOを返す。
 
@@ -434,7 +439,7 @@ DELETE /assets/:assetId は、残っているScriptVersionまたはqueued/runnin
 
 GET /script-versions/:scriptVersionId/preview は、保存済みの完全なScriptVersionだけをプレビュー対象にする。編集中で未保存のフォーム値をこのエンドポイントへ送らない。
 
-APIはContentDocumentと参照Assetを検証し、すべてがreadyであることを確認してアプリ管理のVisualTemplateからComposition HTMLを生成する。Asset IDの表示参照への解決は、プレビュー向けの `assetResolver`（各Assetのレンダー用content URLへ変換。正規化Renditionが無ければ原本）をコンパイラに注入して行う。コンパイラは解決方式を知らず、レンダーでは同じコンパイラにレンダー用のローカルファイルパス（Renditionが無ければ原本）を解決する `assetResolver` を注入する。利用者入力をHTMLまたはJavaScriptとしてそのまま返すことはない。Web UIは返されたHTMLを同一originで実行するHyperFrames Playerへ渡し、Asset URLを同じレスポンスの `assets[].contentUrl` から解決する。Playerの素材読み込みはメディアセッションCookieで認可される。
+APIはContentDocument、参照Asset、参照CompositionVersionを検証し、利用可能なものだけからアプリ管理のVisualTemplateとparent Composition HTMLを生成する。Asset IDの表示参照への解決は、プレビュー向けの `assetResolver`（各Assetのレンダー用content URLへ変換。正規化Renditionが無ければ原本）をコンパイラに注入して行う。CompositionVersionはentrypointと相対依存を解決する読み取り専用content URLへ変換する。コンパイラは解決方式を知らず、レンダーでは同じコンパイラにレンダー用のローカルファイルパス（Renditionが無ければ原本）と検証済みbundleを解決するresolverを注入する。利用者入力をHTMLまたはJavaScriptとしてそのまま返すことはない。Web UIは返されたHTMLを同一originで実行するHyperFrames Playerへ渡し、Asset URLを同じレスポンスの `assets[].contentUrl`、Composition entry URLを `compositions[].entryUrl` から解決する。Playerの素材読み込みはメディアセッションCookieで認可される。
 
 ~~~json
 {
@@ -446,6 +451,13 @@ APIはContentDocumentと参照Assetを検証し、すべてがreadyであるこ�
         "assetId": "ast_image_001",
         "contentUrl": "/api/v1/assets/ast_image_001/render-content",
         "sha256": "sha256:4d8b..."
+      }
+    ],
+    "compositions": [
+      {
+        "compositionVersionId": "cmpver_001",
+        "entryUrl": "/api/v1/composition-versions/cmpver_001/content/index.html",
+        "bundleSha256": "sha256:beef..."
       }
     ],
     "renderer": {
@@ -475,13 +487,13 @@ APIはContentDocumentと参照Assetを検証し、すべてがreadyであるこ�
 
 `timeline` は解決済みのScene区間・line区間・Cue開始時刻（絶対ms）・総尺であり、プレビューの再生コントロール（Scene／セリフ／Cue移動、±x秒、コマ送り）がUIで再計算しないための非永続の派生データである。出力fpsは `output.fps`（30）を用いる。解決ロジックはコンパイラと同じタイムライン解決器を使う。詳細は [../editor/spec.md](../editor/spec.md) と [../preview-workflow/spec.md](../preview-workflow/spec.md) を正とする。
 
-この結果は永続化しないプレビュー用の派生データである。Assetがprocessingなら409 `ASSET_PROCESSING`、failed・欠損・破損・削除済みなら422 `ASSET_UNAVAILABLE` を返す。Composition HTMLが生成できない場合は422 PREVIEW_INPUT_INVALIDとし、原因となったContentDocumentまたはVisualTemplateの位置をJSON Pointerとしてdetails.issuesに含める。ファイルシステムパスは返さない。
+この結果は永続化しないプレビュー用の派生データである。Assetがprocessingなら409 `ASSET_PROCESSING`、failed・欠損・破損・削除済みなら422 `ASSET_UNAVAILABLE` を返す。参照先がpublish済みCompositionVersionでない、versionが削除済み、bundle欠損・破損、またはmanifest不一致なら422 `COMPOSITION_UNAVAILABLE` を返す。Composition HTMLが生成できない場合は422 PREVIEW_INPUT_INVALIDとし、原因となったContentDocumentまたはVisualTemplateの位置をJSON Pointerとしてdetails.issuesに含める。ファイルシステムパスは返さない。
 
 ## ドラフト・プレビュー
 
 POST /language-editions/:editionId/draft-preview は、未保存のContentDocumentだけをプレビュー対象にする。本文は `{ "content": ContentDocument }` とする。DBへの書込み、ScriptVersion作成、Job作成、ファイル保存、キャッシュ保存を一切行わない。
 
-言語版の存在、ContentDocument、参照素材の準備完了状態を検証し、保存済みプレビューと同じコンパイラ・asset resolverで合成する。ドラフト応答は `source: { "kind": "draft" }` の判別子を持ち、`scriptVersionId` は含まない。Composition HTML、素材URL、レンダラー情報、解決済みタイムラインは保存済みプレビューと同じ形である。
+言語版の存在、ContentDocument、参照素材と参照CompositionVersionの準備完了状態を検証し、保存済みプレビューと同じコンパイラ・resolverで合成する。ドラフト応答は `source: { "kind": "draft" }` の判別子を持ち、`scriptVersionId` は含まない。Composition HTML、素材URL、Composition bundle entry URL、レンダラー情報、解決済みタイムラインは保存済みプレビューと同じ形である。
 
 ~~~json
 {
@@ -495,6 +507,7 @@ POST /language-editions/:editionId/draft-preview は、未保存のContentDocume
         "sha256": "sha256:4d8b..."
       }
     ],
+    "compositions": [],
     "renderer": {
       "engine": "hyperframes",
       "compilerVersion": "app-1",
@@ -505,13 +518,13 @@ POST /language-editions/:editionId/draft-preview は、未保存のContentDocume
 }
 ~~~
 
-失敗は保存済みプレビューと同じエラー契約で返す（存在しない言語版は404 `RESOURCE_NOT_FOUND`、不正なContentDocumentは422 `VALIDATION_ERROR`、素材の未準備は `ASSET_PROCESSING` / `ASSET_UNAVAILABLE`、生成不能なタイミングは422 `PREVIEW_INPUT_INVALID`）。詳細は [../preview-workflow/spec.md](../preview-workflow/spec.md) を正とする。
+失敗は保存済みプレビューと同じエラー契約で返す（存在しない言語版は404 `RESOURCE_NOT_FOUND`、不正なContentDocumentは422 `VALIDATION_ERROR`、素材の未準備は `ASSET_PROCESSING` / `ASSET_UNAVAILABLE`、CompositionVersionの未準備は `COMPOSITION_UNAVAILABLE`、生成不能なタイミングは422 `PREVIEW_INPUT_INVALID`）。詳細は [../preview-workflow/spec.md](../preview-workflow/spec.md) を正とする。
 
 ## レンダー
 
 ### Render Jobの作成
 
-POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
+POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、参照CompositionVersionのID・bundle hash・manifest、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
 
 MVPの出力設定は固定であるため、リクエストボディは空のJSON objectとする。
 

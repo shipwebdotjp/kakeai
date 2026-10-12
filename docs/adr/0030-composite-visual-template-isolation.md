@@ -1,6 +1,8 @@
 # Composite Visual Template と分離（NestedVisual再帰・scope）
 
 > amended by [ADR-0041](./0041-scope-id-digest.md)（scope符号化を可逆な16進展開から短いダイジェストへ変更）
+>
+> amended by [ADR-0042](./0042-composition-version-library.md): Kakeai管理下の不変・信頼済みCompositionVersionに限り、`data-composition-src` による外部HTML sub-compositionを許可する。任意外部HTMLの保存・実行は引き続き不採用。
 
 複合ビジュアルを、信頼済み `VisualTemplate` の入力内に再帰的な `NestedVisual`（`media` または信頼済みtemplate参照）を置く構造で表す。再帰はテンプレート入力内だけに閉じ、文書レベルは `layer`/`order` とCue全体のtransition に留める。
 

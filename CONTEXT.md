@@ -64,6 +64,18 @@ _Avoid_: Background, BGM, visual
 A user-assigned flat label on an Asset, used to classify and filter the asset library. It does not affect the asset's original bytes or identity.
 _Avoid_: Character appearance tag, category
 
+**Composition**:
+A reusable AI-authored HyperFrames motion held by Kakeai as a versioned project, not as a media Asset.
+_Avoid_: Asset, Work, Composition HTML
+
+**Composition Draft**:
+The mutable working copy of a Composition that an AI changes before publication.
+_Avoid_: Composition Version, Script Version
+
+**Composition Version**:
+An immutable published bundle of one Composition that a Script Version may reference.
+_Avoid_: Composition Draft, Asset Rendition
+
 **Job**:
 A durable record of one asynchronous operation on a Work or its edition.
 _Avoid_: Render, task

@@ -24,6 +24,7 @@
 ## Phase 1: 編集表現の拡張
 
 - 背景・カードに画像・動画・アプリ管理の複合ビジュアル（Composite Visual Template）を置く基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) で実装済み（VisualCue v3 の `layer`/`order`/`transition`、`NestedVisual` 再帰、`scene.device-frame@1`/`@2`、Cue一覧UI、テンプレート `inputFields` による汎用エディタ、有限presetの `AnimationPlan`）。
+- AIが作る全画面・無音のHyperFrames projectを、Assetではなく不変のCompositionVersionとしてpublishし、Scene背景にnative nested compositionとして置くComposition Libraryを追加する。v1の詳細と将来のslot・複数instance・音声・外部project対応は [../composition-library/spec.md](../composition-library/spec.md) と [../composition-library/roadmap.md](../composition-library/roadmap.md) を正とする。
 - 背景とカードの正規化した焦点位置を編集する。
 - 1 Scene内の複数VisualCue、表示順、セリフ区間・offset区間を編集する。
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。
