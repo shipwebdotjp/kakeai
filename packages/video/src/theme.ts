@@ -9,7 +9,7 @@ import {
 import { CompositionCompileError } from "./compile-error";
 
 export const THEME_FONT_STACKS: Record<ThemeFontCategory, string> = {
-  sans: "'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif",
+  sans: "'Noto Sans JP','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif",
   serif: "'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif",
   mono: "'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace",
 };
