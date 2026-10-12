@@ -1,6 +1,6 @@
 # ローカルAPI保護はHost・Origin・SameSite Cookieを必須とし、独自ヘッダと起動トークンを省く
 
-Status: supersedes ADR-0005
+Status: supersedes ADR-0005; amended by ADR-0044
 
 無認証のローカルAPIの保護は、JSON／アップロードAPIに対する厳密な `Host` と `Origin` の検証、および素材・Artifactのcontent配信に対する同一originの `HttpOnly; SameSite=Strict` メディアセッションCookieに限定する。`Host` 検証でDNSリバインディングを、`Origin` 検証と `SameSite=Strict` CookieでCSRFと素材漏洩を防ぐ。独自ヘッダ `X-Kakeai-Client` と起動時トークンは、同じ脅威に対する冗長な追加層のため省く。
 

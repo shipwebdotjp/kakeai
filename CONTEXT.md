@@ -16,6 +16,14 @@ _Avoid_: Translation, locale
 An immutable version of the editorial structure for one Language Edition.
 _Avoid_: Composition HTML, timeline
 
+**Version Author**:
+The user or Agent recorded as the creator of a Script Version, used to identify and revert AI-authored revisions.
+_Avoid_: owner, editor
+
+**Agent**:
+An external, user-controlled AI client that operates Kakeai through the app's local agent interface.
+_Avoid_: bot, LLM, model
+
 **Narration Segment**:
 The smallest unit of spoken content, with separate caption and spoken text and an optional selected Audio Take.
 _Avoid_: Subtitle, audio file
