@@ -311,13 +311,15 @@ describe("render job creation", () => {
           heightPx: 960,
         },
       });
-    const [brow, eye, mouth, base] = await Promise.all([imageRow(), imageRow(), imageRow(), imageRow()]);
+    const [brow, eye, eyeClosed, mouth, mouthOpen, base] = await Promise.all([imageRow(), imageRow(), imageRow(), imageRow(), imageRow(), imageRow()]);
     const faceSet = await faceSets.createFaceSet(prisma, {
       name: "スナップショット",
       layers: [
         { id: "brow", part: "brow", assetId: brow.id, blinkLayerId: null, speakingLayerId: null },
-        { id: "eye", part: "eye", assetId: eye.id, blinkLayerId: null, speakingLayerId: null },
-        { id: "mouth", part: "mouth", assetId: mouth.id, blinkLayerId: null, speakingLayerId: null },
+        { id: "eye", part: "eye", assetId: eye.id, blinkLayerId: "eye-closed", speakingLayerId: null },
+        { id: "eye-closed", part: "eye", assetId: eyeClosed.id, blinkLayerId: null, speakingLayerId: null },
+        { id: "mouth", part: "mouth", assetId: mouth.id, blinkLayerId: null, speakingLayerId: "mouth-open" },
+        { id: "mouth-open", part: "mouth", assetId: mouthOpen.id, blinkLayerId: null, speakingLayerId: null },
       ],
       expressions: [
         { id: "normal", name: "通常", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
@@ -378,11 +380,11 @@ describe("render job creation", () => {
     const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
     expect(snapshot.faceSets.map((entry) => entry.id)).toEqual([faceSet.id]);
     expect(snapshot.faceSets[0]!.layers.map((layer) => layer.assetId).sort()).toEqual(
-      [brow.id, eye.id, mouth.id].sort(),
+      [brow.id, eye.id, eyeClosed.id, mouth.id, mouthOpen.id].sort(),
     );
     expect(snapshot.faceSets[0]!.expressions.map((preset) => preset.id)).toEqual(["normal"]);
     expect(snapshot.assets.map((asset) => asset.assetId)).toEqual(
-      expect.arrayContaining([brow.id, eye.id, mouth.id, base.id]),
+      expect.arrayContaining([brow.id, eye.id, eyeClosed.id, mouth.id, mouthOpen.id, base.id]),
     );
   });
 });

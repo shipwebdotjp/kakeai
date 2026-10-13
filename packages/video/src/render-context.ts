@@ -17,6 +17,8 @@ export interface AnimationItem {
 export interface ExpressionTarget {
   presetId: string;
   elementId: string;
+  eyeBlinkId?: string;
+  mouthSpeakingId?: string;
 }
 
 export interface RenderedCue {

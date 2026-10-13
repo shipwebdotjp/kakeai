@@ -154,6 +154,7 @@ describe("script version preview", () => {
     const base = await readyImage();
     const brow = await readyImage();
     const eye = await readyImage();
+    const eyeClosed = await readyImage();
     const mouth = await readyImage();
     const layer = (id: string, part: "brow" | "eye" | "mouth", assetId: string) => ({
       id,
@@ -164,7 +165,12 @@ describe("script version preview", () => {
     });
     const faceSet = await faceSets.createFaceSet(prisma, {
       name: "プレビュー",
-      layers: [layer("brow", "brow", brow.id), layer("eye", "eye", eye.id), layer("mouth", "mouth", mouth.id)],
+      layers: [
+        layer("brow", "brow", brow.id),
+        { ...layer("eye", "eye", eye.id), blinkLayerId: "eye-closed" },
+        layer("eye-closed", "eye", eyeClosed.id),
+        layer("mouth", "mouth", mouth.id),
+      ],
       expressions: [
         { id: "normal", name: "通常", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
       ],
@@ -226,7 +232,7 @@ describe("script version preview", () => {
     );
     expect(scriptVersionPreviewSchema.safeParse(preview).success).toBe(true);
     expect(preview.compositionHtml).toContain('class="kakeai-facegroup"');
-    for (const assetId of [base.id, brow.id, eye.id, mouth.id]) {
+    for (const assetId of [base.id, brow.id, eye.id, eyeClosed.id, mouth.id]) {
       expect(preview.compositionHtml).toContain(
         `/api/v1/assets/${encodeURIComponent(assetId)}/render-content`,
       );

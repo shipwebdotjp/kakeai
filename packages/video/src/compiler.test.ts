@@ -1080,5 +1080,146 @@ describe("visual theme", () => {
       const second = compileDocument({ document: faceDocument(), assetResolver: resolver, faceSetResolver });
       expect(second.html).toBe(first.html);
     });
+
+    describe("blink and mouth", () => {
+      const variantFaceSet: SnapshotFaceSet = {
+        id: "faceset-blink",
+        name: "瞬き",
+        layers: [
+          { id: "brow", part: "brow", assetId: "asset-brow", blinkLayerId: null, speakingLayerId: null },
+          { id: "eye", part: "eye", assetId: "asset-eye", blinkLayerId: "eye-closed", speakingLayerId: null },
+          { id: "eye-closed", part: "eye", assetId: "asset-eye-closed", blinkLayerId: null, speakingLayerId: null },
+          { id: "mouth", part: "mouth", assetId: "asset-mouth", blinkLayerId: null, speakingLayerId: "mouth-open" },
+          { id: "mouth-open", part: "mouth", assetId: "asset-mouth-open", blinkLayerId: null, speakingLayerId: null },
+        ],
+        expressions: [
+          { id: "normal", name: "通常", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
+          { id: "happy", name: "笑い", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
+        ],
+      };
+
+      const variantResolver: FaceSetResolver = (faceSetId) => {
+        if (faceSetId !== variantFaceSet.id) {
+          throw new Error(`unknown face set: ${faceSetId}`);
+        }
+        return variantFaceSet;
+      };
+
+      function variantDocument() {
+        const document = faceDocument();
+        document.characters[0]!.appearances[0]!.faceSetId = variantFaceSet.id;
+        return document;
+      }
+
+      function setEvents(html: string): { elementId: string; visible: boolean; at: number }[] {
+        const pattern =
+          /tl\.set\(document\.getElementById\("([^"]+)"\),\{opacity:([01])\},([0-9.]+)\);/g;
+        const events: { elementId: string; visible: boolean; at: number }[] = [];
+        for (const match of html.matchAll(pattern)) {
+          events.push({
+            elementId: match[1]!,
+            visible: match[2] === "1",
+            at: Number(match[3]),
+          });
+        }
+        return events;
+      }
+
+      it("renders closed-eye and open-mouth variants hidden with tracked assets", () => {
+        const compiled = compileDocument({
+          document: variantDocument(),
+          assetResolver: resolver,
+          faceSetResolver: variantResolver,
+        });
+        const eyeBlink = cueScope("vc-face").id("face-0-eye");
+        const mouthSpeaking = cueScope("vc-face").id("face-0-mouth");
+        expect(compiled.html).toContain(
+          `<img id="${eyeBlink}" class="kakeai-face" src="/preview/asset-eye-closed" style="opacity:0;" alt="">`,
+        );
+        expect(compiled.html).toContain(
+          `<img id="${mouthSpeaking}" class="kakeai-face" src="/preview/asset-mouth-open" style="opacity:0;" alt="">`,
+        );
+        expect(compiled.assetIds).toContain("asset-eye-closed");
+        expect(compiled.assetIds).toContain("asset-mouth-open");
+      });
+
+      it("blinks across the whole cue and flaps the mouth only while speaking", () => {
+        const compiled = compileDocument({
+          document: variantDocument(),
+          assetResolver: resolver,
+          faceSetResolver: variantResolver,
+        });
+        const eyeBlinkIds = new Set(
+          [0, 1].map((index) => cueScope("vc-face").id(`face-${index}-eye`)),
+        );
+        const mouthSpeakingIds = new Set(
+          [0, 1].map((index) => cueScope("vc-face").id(`face-${index}-mouth`)),
+        );
+        const blinks = setEvents(compiled.html).filter((event) =>
+          eyeBlinkIds.has(event.elementId),
+        );
+        const mouths = setEvents(compiled.html).filter((event) =>
+          mouthSpeakingIds.has(event.elementId),
+        );
+        expect(blinks.length).toBeGreaterThan(0);
+        expect(mouths.length).toBeGreaterThan(0);
+        for (const event of [...blinks, ...mouths]) {
+          expect(event.at).toBeGreaterThanOrEqual(4);
+          expect(event.at).toBeLessThanOrEqual(10);
+        }
+        const blinkOns = blinks.filter((event) => event.visible);
+        expect(blinkOns.length).toBeGreaterThan(0);
+        for (const on of blinkOns) {
+          const off = blinks.find(
+            (candidate) =>
+              candidate.elementId === on.elementId && !candidate.visible && candidate.at > on.at,
+          );
+          expect(off).toBeDefined();
+          expect(off!.at - on.at).toBeLessThanOrEqual(0.2);
+        }
+        for (const event of mouths.filter((candidate) => candidate.visible)) {
+          expect(event.at).toBeGreaterThanOrEqual(4.5);
+          expect(event.at).toBeLessThan(9.5);
+        }
+      });
+
+      it("resets variants when the expression changes", () => {
+        const compiled = compileDocument({
+          document: variantDocument(),
+          assetResolver: resolver,
+          faceSetResolver: variantResolver,
+        });
+        const happyEye = cueScope("vc-face").id("face-1-eye");
+        const happyMouth = cueScope("vc-face").id("face-1-mouth");
+        expect(compiled.html).toContain(
+          `tl.set(document.getElementById("${happyEye}"),{opacity:0},4.5);`,
+        );
+        expect(compiled.html).toContain(
+          `tl.set(document.getElementById("${happyMouth}"),{opacity:0},4.5);`,
+        );
+      });
+
+      it("emits no variant tweens when no variant is registered", () => {
+        const compiled = compileDocument({ document: faceDocument(), assetResolver: resolver, faceSetResolver });
+        expect(compiled.html).not.toContain("face-0-eye");
+        expect(compiled.html).not.toContain("face-0-mouth");
+        const events = setEvents(compiled.html);
+        expect(events.every((event) => !event.elementId.includes("-eye") && !event.elementId.includes("-mouth"))).toBe(true);
+      });
+
+      it("compiles blink and mouth deterministically", () => {
+        const first = compileDocument({
+          document: variantDocument(),
+          assetResolver: resolver,
+          faceSetResolver: variantResolver,
+        });
+        const second = compileDocument({
+          document: variantDocument(),
+          assetResolver: resolver,
+          faceSetResolver: variantResolver,
+        });
+        expect(second.html).toBe(first.html);
+      });
+    });
   });
 });

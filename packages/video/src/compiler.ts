@@ -29,6 +29,7 @@ import { getGsapBundleSource } from "./gsap-bundle";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
+import { seededRandom } from "./random";
 import type { RenderedCue, ExpressionTarget, RenderContext } from "./render-context";
 import {
   THEME_FONT_STACKS,
@@ -235,6 +236,111 @@ function expressionTweenLines(
       }
     }
     previous = interval.presetId;
+  }
+  return lines;
+}
+
+const BLINK_GAP_MIN_MS = 2500;
+const BLINK_GAP_MAX_MS = 5500;
+const BLINK_DURATION_MIN_MS = 90;
+const BLINK_DURATION_MAX_MS = 160;
+const MOUTH_OPEN_MIN_MS = 90;
+const MOUTH_OPEN_MAX_MS = 150;
+const MOUTH_CLOSED_MIN_MS = 130;
+const MOUTH_CLOSED_MAX_MS = 260;
+const MIN_FACE_EVENT_MS = 30;
+
+interface FaceEvent {
+  startMs: number;
+  endMs: number;
+}
+
+function blinkSchedule(random: () => number, startMs: number, endMs: number): FaceEvent[] {
+  const events: FaceEvent[] = [];
+  let cursor = startMs + 800 + random() * 2200;
+  while (cursor < endMs) {
+    const durationMs =
+      BLINK_DURATION_MIN_MS + random() * (BLINK_DURATION_MAX_MS - BLINK_DURATION_MIN_MS);
+    const eventEndMs = Math.min(cursor + durationMs, endMs);
+    if (eventEndMs - cursor >= MIN_FACE_EVENT_MS) {
+      events.push({ startMs: Math.round(cursor), endMs: Math.round(eventEndMs) });
+    }
+    cursor =
+      eventEndMs + BLINK_GAP_MIN_MS + random() * (BLINK_GAP_MAX_MS - BLINK_GAP_MIN_MS);
+  }
+  return events;
+}
+
+function mouthSchedule(
+  random: () => number,
+  windows: readonly FaceEvent[],
+): FaceEvent[] {
+  const events: FaceEvent[] = [];
+  for (const window of windows) {
+    let cursor = window.startMs + random() * MOUTH_CLOSED_MAX_MS;
+    while (cursor < window.endMs) {
+      const openMs = MOUTH_OPEN_MIN_MS + random() * (MOUTH_OPEN_MAX_MS - MOUTH_OPEN_MIN_MS);
+      const openEndMs = Math.min(cursor + openMs, window.endMs);
+      if (openEndMs - cursor >= MIN_FACE_EVENT_MS) {
+        events.push({ startMs: Math.round(cursor), endMs: Math.round(openEndMs) });
+      }
+      cursor =
+        openEndMs + MOUTH_CLOSED_MIN_MS + random() * (MOUTH_CLOSED_MAX_MS - MOUTH_CLOSED_MIN_MS);
+    }
+  }
+  return events;
+}
+
+function activePresetAt(intervals: readonly ExpressionInterval[], timeMs: number): string {
+  for (const interval of intervals) {
+    if (timeMs >= interval.startMs && timeMs < interval.endMs) {
+      return interval.presetId;
+    }
+  }
+  return "normal";
+}
+
+function faceVariantTweenLines(
+  targets: readonly ExpressionTarget[],
+  intervals: readonly ExpressionInterval[],
+  blinks: readonly FaceEvent[],
+  mouths: readonly FaceEvent[],
+): string[] {
+  const byPreset = new Map(targets.map((target) => [target.presetId, target]));
+  const lines: string[] = [];
+  const setLine = (elementId: string, visible: boolean, startMs: number): void => {
+    lines.push(
+      `tl.set(document.getElementById("${elementId}"),{opacity:${visible ? 1 : 0}},${toSecondsText(startMs)});`,
+    );
+  };
+  let previous: string | null = null;
+  for (const interval of intervals) {
+    if (previous !== interval.presetId) {
+      const entering = byPreset.get(interval.presetId);
+      if (entering?.eyeBlinkId !== undefined) {
+        setLine(entering.eyeBlinkId, false, interval.startMs);
+      }
+      if (entering?.mouthSpeakingId !== undefined) {
+        setLine(entering.mouthSpeakingId, false, interval.startMs);
+      }
+    }
+    previous = interval.presetId;
+  }
+  for (const blink of blinks) {
+    const blinkId = byPreset.get(activePresetAt(intervals, blink.startMs))?.eyeBlinkId;
+    if (blinkId === undefined) {
+      continue;
+    }
+    setLine(blinkId, true, blink.startMs);
+    setLine(blinkId, false, blink.endMs);
+  }
+  for (const mouth of mouths) {
+    const speakingId = byPreset.get(activePresetAt(intervals, mouth.startMs))?.mouthSpeakingId;
+    if (speakingId === undefined) {
+      continue;
+    }
+    setLine(speakingId, true, mouth.startMs);
+    setLine(speakingId, false, mouth.endMs);
   }
   return lines;
 }
@@ -804,6 +910,38 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
             absEndMs,
           );
           for (const line of expressionTweenLines(rendered.expressionTargets, intervals)) {
+            tweenLines.push(line);
+          }
+          const seedKey = `${cue.id}|${parsed.data.characterId}`;
+          const hasBlink = rendered.expressionTargets.some(
+            (target) => target.eyeBlinkId !== undefined,
+          );
+          const hasMouth = rendered.expressionTargets.some(
+            (target) => target.mouthSpeakingId !== undefined,
+          );
+          const blinks =
+            hasBlink && absEndMs > absStartMs
+              ? blinkSchedule(seededRandom(`${seedKey}|blink`), absStartMs, absEndMs)
+              : [];
+          let mouths: FaceEvent[] = [];
+          if (hasMouth) {
+            const speaking = speakingIntervalsByCharacter.get(parsed.data.characterId) ?? [];
+            const windows: FaceEvent[] = [];
+            for (const interval of mergeIntervals(speaking)) {
+              const startMs = Math.max(interval.startMs, absStartMs);
+              const endMs = Math.min(interval.endMs, absEndMs);
+              if (endMs > startMs) {
+                windows.push({ startMs, endMs });
+              }
+            }
+            mouths = mouthSchedule(seededRandom(`${seedKey}|mouth`), windows);
+          }
+          for (const line of faceVariantTweenLines(
+            rendered.expressionTargets,
+            intervals,
+            blinks,
+            mouths,
+          )) {
             tweenLines.push(line);
           }
         }

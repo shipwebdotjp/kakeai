@@ -9,7 +9,7 @@ import type { AssetResolver } from "../resolver";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
 import { OUTPUT_WIDTH } from "../meta";
-import type { RenderedCue, RenderContext } from "../render-context";
+import type { ExpressionTarget, RenderedCue, RenderContext } from "../render-context";
 import { resolveCueMedia } from "./shared";
 
 const STANDING_BASE_WIDTH_PX = 480;
@@ -107,7 +107,7 @@ function resolveFaceLayerImage(
   faceSet: SnapshotFaceSet,
   layerId: string | null,
   context: RenderContext,
-): { html: string; assetId: string } | null {
+): { html: string; src: string; assetId: string } | null {
   if (layerId === null) {
     return null;
   }
@@ -125,6 +125,7 @@ function resolveFaceLayerImage(
   }
   return {
     html: `<img class="kakeai-face" src="${escapeHtmlAttribute(media.url)}" alt="">`,
+    src: escapeHtmlAttribute(media.url),
     assetId: layer.assetId,
   };
 }
@@ -192,12 +193,49 @@ export function renderCharacterStandingV3(input: unknown, context: RenderContext
     track(resolved.assetId);
     return resolved.html;
   };
-  const expressionTargets: { presetId: string; elementId: string }[] = [];
+  const partHtml = (
+    layerId: string | null,
+    part: "eye" | "mouth",
+    groupIndex: number,
+    target: ExpressionTarget,
+  ): string => {
+    if (layerId === null) {
+      return "";
+    }
+    const base = resolveFaceLayerImage(faceSet, layerId, context);
+    if (base === null) {
+      return "";
+    }
+    track(base.assetId);
+    const baseLayer = faceSet.layers.find((entry) => entry.id === layerId);
+    const variantLayerId =
+      baseLayer === undefined ? null : part === "eye" ? baseLayer.blinkLayerId : baseLayer.speakingLayerId;
+    if (variantLayerId === null) {
+      return base.html;
+    }
+    const variant = resolveFaceLayerImage(faceSet, variantLayerId, context);
+    if (variant === null) {
+      return base.html;
+    }
+    track(variant.assetId);
+    const elementId = context.scope.id(`face-${groupIndex}-${part}`);
+    if (part === "eye") {
+      target.eyeBlinkId = elementId;
+    } else {
+      target.mouthSpeakingId = elementId;
+    }
+    return `${base.html}<img id="${elementId}" class="kakeai-face" src="${variant.src}" style="opacity:0;" alt="">`;
+  };
+  const expressionTargets: ExpressionTarget[] = [];
   const groups = faceSet.expressions.map((preset, index) => {
     const elementId = context.scope.id(`face-${index}`);
-    expressionTargets.push({ presetId: preset.id, elementId });
+    const target: ExpressionTarget = { presetId: preset.id, elementId };
+    expressionTargets.push(target);
     const hidden = preset.id === "normal" ? "" : ` style="opacity:0;"`;
-    return `<div id="${elementId}" class="kakeai-facegroup"${hidden}>${layerHtml(preset.browLayerId)}${layerHtml(preset.eyeLayerId)}${layerHtml(preset.mouthLayerId)}</div>`;
+    const brow = layerHtml(preset.browLayerId);
+    const eye = partHtml(preset.eyeLayerId, "eye", index, target);
+    const mouth = partHtml(preset.mouthLayerId, "mouth", index, target);
+    return `<div id="${elementId}" class="kakeai-facegroup"${hidden}>${brow}${eye}${mouth}</div>`;
   });
   const foreground = faceSet.layers
     .filter((layer) => layer.part === "foreground")
