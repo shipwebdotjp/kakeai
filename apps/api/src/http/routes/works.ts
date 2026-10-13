@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { createWorkRequestSchema, updateWorkRequestSchema } from "@kakeai/contracts";
+import {
+  cloneWorkRequestSchema,
+  createWorkRequestSchema,
+  updateWorkRequestSchema,
+} from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
@@ -43,6 +47,14 @@ export function createWorksRouter(dependencies: WorksRouterDependencies): Router
     asyncHandler(async (req, res) => {
       const input = parseBody(updateWorkRequestSchema, req.body);
       sendData(res, 200, await works.updateWork(prisma, pathParam(req, "workId"), input.title));
+    }),
+  );
+
+  router.post(
+    "/works/:workId/clone",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(cloneWorkRequestSchema, req.body);
+      sendData(res, 201, await works.cloneWork(prisma, pathParam(req, "workId"), input.title));
     }),
   );
 

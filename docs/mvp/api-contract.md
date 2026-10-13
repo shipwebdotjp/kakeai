@@ -84,6 +84,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /works | 201 | Work、ja-JP Edition、ContentDocument v3の初期ScriptVersionを作成 |
 | GET | /works/:workId | 200 | 作品とEditionの取得 |
 | PATCH | /works/:workId | 200 | 管理上の作品名を変更 |
+| POST | /works/:workId/clone | 201 | 元作品の現在版を複製した新しい子Workを作成 |
 | DELETE | /works/:workId | 204 | 作品、版、Job、Artifactを明示削除 |
 | GET | /language-editions/:editionId/current-script-version | 200 | 現在の完全な台本を取得 |
 | GET | /language-editions/:editionId/script-versions | 200 | 台本版のメタデータ履歴を取得 |

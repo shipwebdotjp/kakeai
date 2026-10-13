@@ -14,6 +14,7 @@ import type {
   Job,
   ScriptVersion,
   ScriptVersionPreview,
+  ScriptVersionSummary,
   TtsJobResult,
   UpdateCharacterRequest,
   UpdateVoiceProfileRequest,
@@ -69,6 +70,23 @@ export function useUpdateWork(workId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["works"] });
       queryClient.invalidateQueries({ queryKey: ["work", workId] });
+    },
+  });
+}
+
+export function useCloneWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workId, title }: { workId: string; title: string }) =>
+      (
+        await apiRequest<Work>(`/works/${encodeURIComponent(workId)}/clone`, {
+          method: "POST",
+          body: { title },
+        })
+      ).data,
+    onSuccess: (newWork) => {
+      queryClient.invalidateQueries({ queryKey: ["works"] });
+      queryClient.setQueryData(["work", newWork.id], newWork);
     },
   });
 }
@@ -231,6 +249,66 @@ export function useCurrentScriptVersion(editionId: string | undefined) {
           `/language-editions/${encodeURIComponent(editionId ?? "")}/current-script-version`,
         )
       ).data,
+  });
+}
+
+export function useScriptVersions(editionId: string | undefined) {
+  return useQuery({
+    queryKey: ["script-versions", editionId],
+    enabled: editionId !== undefined && editionId.length > 0,
+    queryFn: async () =>
+      (
+        await apiRequest<ScriptVersionSummary[]>(
+          `/language-editions/${encodeURIComponent(editionId ?? "")}/script-versions`,
+        )
+      ).data,
+  });
+}
+
+export function useScriptVersion(scriptVersionId: string | undefined) {
+  return useQuery({
+    queryKey: ["script-version", scriptVersionId],
+    enabled: scriptVersionId !== undefined && scriptVersionId.length > 0,
+    queryFn: async () =>
+      (
+        await apiRequest<ScriptVersion>(
+          `/script-versions/${encodeURIComponent(scriptVersionId ?? "")}`,
+        )
+      ).data,
+  });
+}
+
+export function useRestoreScriptVersion(workId: string | undefined, editionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (sourceScriptVersionId: string): Promise<SaveScriptVersionResult> => {
+      if (editionId === undefined || editionId.length === 0) {
+        throw new Error("editionId がありません");
+      }
+      const sourceVersion = (
+        await apiRequest<ScriptVersion>(
+          `/script-versions/${encodeURIComponent(sourceScriptVersionId)}`,
+        )
+      ).data;
+
+      const response: Envelope<ScriptVersion> = await apiRequest<ScriptVersion>(
+        `/language-editions/${encodeURIComponent(editionId)}/script-versions`,
+        { method: "POST", body: { sourceScriptVersionId, content: sourceVersion.content } },
+      );
+      const parsedMeta = warningsMetaSchema.safeParse(response.meta);
+      const warnings = parsedMeta.success ? parsedMeta.data.warnings : [];
+      return { scriptVersion: response.data, warnings };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["works"] });
+      if (workId !== undefined && workId.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["work", workId] });
+      }
+      if (editionId !== undefined && editionId.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["current-script-version", editionId] });
+        queryClient.invalidateQueries({ queryKey: ["script-versions", editionId] });
+      }
+    },
   });
 }
 

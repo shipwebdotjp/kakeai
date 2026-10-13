@@ -153,6 +153,72 @@ describe("work and script version flow", () => {
     ).rejects.toMatchObject({ code: "ASSET_NOT_FOUND" });
   });
 
+  it("clones a work, creates child work with parentWorkId, copies content, and enforces parent deletion restriction", async () => {
+    const parentWork = await works.createWork(prisma, "親作品", "ja-JP");
+    const parentEdition = parentWork.languageEditions[0]!;
+
+    // Modify parent's current version so we can verify the content is copied
+    const content = createInitialContentDocument();
+    content.scenes[0]!.label = "カスタム導入";
+    await scriptVersions.saveScriptVersion(prisma, parentEdition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+
+    const clonedWork = await works.cloneWork(prisma, parentWork.id, "親作品のコピー");
+    expect(clonedWork.title).toBe("親作品のコピー");
+    expect(clonedWork.parentWorkId).toBe(parentWork.id);
+    expect(clonedWork.languageEditions).toHaveLength(1);
+
+    const clonedEdition = clonedWork.languageEditions[0]!;
+    expect(clonedEdition.locale).toBe("ja-JP");
+    const clonedCurrent = await scriptVersions.getCurrentScriptVersion(prisma, clonedEdition.id);
+    expect(clonedCurrent.versionNumber).toBe(1);
+    expect(clonedCurrent.content.scenes[0]!.label).toBe("カスタム導入");
+
+    // Attempting to delete parentWork while cloned child exists should fail with WORK_HAS_CHILDREN
+    await expect(works.deleteWork(prisma, directories, parentWork.id)).rejects.toMatchObject({
+      code: "WORK_HAS_CHILDREN",
+    });
+
+    // Deleting cloned child work should succeed
+    await works.deleteWork(prisma, directories, clonedWork.id);
+
+    // Now deleting parent work should succeed
+    await works.deleteWork(prisma, directories, parentWork.id);
+  });
+
+  it("restores a past version by saving a new version with sourceScriptVersionId", async () => {
+    const work = await works.createWork(prisma, "復元テスト", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const v1 = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+
+    // Create v2 with a change
+    const v2Content = createInitialContentDocument();
+    v2Content.scenes[0]!.label = "v2導入";
+    await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content: v2Content,
+    });
+
+    // Restore v1 by saving a new v3 version with v1's content and sourceScriptVersionId set to v1.id
+    const v1Full = await scriptVersions.getScriptVersion(prisma, v1.id);
+    const restored = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: v1.id,
+      content: v1Full.content,
+    });
+
+    expect(restored.scriptVersion.versionNumber).toBe(3);
+    expect(restored.scriptVersion.content.scenes[0]!.label).toBe("導入");
+
+    const current = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+    expect(current.versionNumber).toBe(3);
+
+    // Check that v1 and v2 still exist unchanged
+    const history = await scriptVersions.listScriptVersions(prisma, edition.id);
+    expect(history.map((h) => h.versionNumber)).toEqual([3, 2, 1]);
+  });
+
   it("deletes a work and removes its artifact files", async () => {
     const work = await works.createWork(prisma, "削除テスト", "ja-JP");
     const edition = work.languageEditions[0]!;
