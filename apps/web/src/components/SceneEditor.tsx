@@ -60,6 +60,8 @@ import { MediaPicker } from "./MediaPicker";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { StandingFields } from "./StandingFields";
 
+const DRAFT_PREVIEW_DEBOUNCE_MS = 800;
+
 interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
@@ -302,7 +304,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         document = null;
       }
       onDocumentChange({ dirty: true, document });
-    }, 500);
+    }, DRAFT_PREVIEW_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [allValues, base, formState.isDirty, onDocumentChange]);
 

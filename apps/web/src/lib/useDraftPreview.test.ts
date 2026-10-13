@@ -9,6 +9,7 @@ import {
   isDraftUnreflected,
   requestDraftPreview,
   selectActivePreview,
+  shouldStartDraftRequest,
 } from "./useDraftPreview";
 
 function savedPreview(): ScriptVersionPreview {
@@ -83,6 +84,32 @@ describe("requestDraftPreview", () => {
     await expect(
       requestDraftPreview("led_1", createInitialContentDocument()),
     ).rejects.toThrow();
+  });
+});
+
+describe("shouldStartDraftRequest", () => {
+  it("starts only when idle with a pending document on a known edition", () => {
+    expect(shouldStartDraftRequest({ inFlight: false, hasPending: true, editionId: "led_1" })).toBe(
+      true,
+    );
+  });
+
+  it("defers while a request is in flight to coalesce onto the latest document", () => {
+    expect(shouldStartDraftRequest({ inFlight: true, hasPending: true, editionId: "led_1" })).toBe(
+      false,
+    );
+  });
+
+  it("does nothing without a pending document or a known edition", () => {
+    expect(shouldStartDraftRequest({ inFlight: false, hasPending: false, editionId: "led_1" })).toBe(
+      false,
+    );
+    expect(
+      shouldStartDraftRequest({ inFlight: false, hasPending: true, editionId: undefined }),
+    ).toBe(false);
+    expect(shouldStartDraftRequest({ inFlight: false, hasPending: true, editionId: "" })).toBe(
+      false,
+    );
   });
 });
 
