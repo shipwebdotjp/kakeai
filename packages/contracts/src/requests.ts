@@ -13,6 +13,10 @@ export const updateWorkRequestSchema = z.strictObject({
   title: z.string().trim().min(1),
 });
 
+export const cloneWorkRequestSchema = z.strictObject({
+  title: z.string().trim().min(1),
+});
+
 export const saveScriptVersionRequestSchema = z.strictObject({
   sourceScriptVersionId: idSchema.nullable().default(null),
   content: contentDocumentSchema,
@@ -48,6 +52,7 @@ export const createBulkTtsJobsRequestSchema = z.strictObject({});
 
 export type CreateWorkRequest = z.infer<typeof createWorkRequestSchema>;
 export type UpdateWorkRequest = z.infer<typeof updateWorkRequestSchema>;
+export type CloneWorkRequest = z.infer<typeof cloneWorkRequestSchema>;
 export type SaveScriptVersionRequest = z.infer<typeof saveScriptVersionRequestSchema>;
 export type DraftPreviewRequest = z.infer<typeof draftPreviewRequestSchema>;
 export type CreateRenderJobRequest = z.infer<typeof createRenderJobRequestSchema>;

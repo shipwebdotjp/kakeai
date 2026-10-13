@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cloneWorkRequestSchema,
   createWorkRequestSchema,
   draftPreviewRequestSchema,
   saveScriptVersionRequestSchema,
@@ -8,6 +9,22 @@ import {
 import { draftPreviewSchema } from "./dto";
 import { assetTagsSchema, MAX_ASSET_TAG_LENGTH, MAX_ASSET_TAGS } from "./asset";
 import { validContentDocument } from "./testing/fixtures";
+
+describe("cloneWorkRequestSchema", () => {
+  it("accepts a valid request", () => {
+    expect(cloneWorkRequestSchema.safeParse({ title: "作品のコピー" }).success).toBe(true);
+  });
+
+  it("rejects unknown fields", () => {
+    expect(
+      cloneWorkRequestSchema.safeParse({ title: "作品のコピー", extra: "bar" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects blank title", () => {
+    expect(cloneWorkRequestSchema.safeParse({ title: "   " }).success).toBe(false);
+  });
+});
 
 describe("createWorkRequestSchema", () => {
   it("accepts a valid request", () => {

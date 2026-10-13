@@ -99,6 +99,63 @@ export async function createWork(
   return getWork(prisma, workId);
 }
 
+export async function cloneWork(
+  prisma: PrismaClient,
+  workId: string,
+  title: string,
+): Promise<Work> {
+  const work = await prisma.work.findUnique({
+    where: { id: workId },
+    include: {
+      languageEditions: {
+        include: {
+          currentScriptVersion: true,
+        },
+      },
+    },
+  });
+  if (work === null) {
+    throw resourceNotFound("work", workId);
+  }
+  const primaryEdition = work.languageEditions[0];
+  if (!primaryEdition || !primaryEdition.currentScriptVersion) {
+    throw resourceNotFound("work", workId);
+  }
+  const sourceScript = primaryEdition.currentScriptVersion;
+
+  const newWorkId = await prisma.$transaction(async (tx) => {
+    const newWork = await tx.work.create({
+      data: {
+        title,
+        originalLocale: work.originalLocale,
+        parentWorkId: workId,
+      },
+    });
+    const newEdition = await tx.languageEdition.create({
+      data: {
+        workId: newWork.id,
+        locale: primaryEdition.locale,
+      },
+    });
+    const newScript = await tx.scriptVersion.create({
+      data: {
+        languageEditionId: newEdition.id,
+        versionNumber: 1,
+        contentSchemaVersion: sourceScript.contentSchemaVersion,
+        contentJson: sourceScript.contentJson,
+        sourceScriptVersionId: null,
+      },
+    });
+    await tx.languageEdition.update({
+      where: { id: newEdition.id },
+      data: { currentScriptVersionId: newScript.id },
+    });
+    return newWork.id;
+  });
+
+  return getWork(prisma, newWorkId);
+}
+
 export async function updateWork(
   prisma: PrismaClient,
   workId: string,
