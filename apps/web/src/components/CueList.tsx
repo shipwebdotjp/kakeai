@@ -378,14 +378,14 @@ function CueField({ field, values, setField, animationPresets }: CueFieldProps) 
           />
           {field.kind === "nestedMedia" && (
             <label className="my-2 inline-flex items-center gap-1.5">
-              fit
+              表示方法
               <select
                 className={textFieldClass}
                 value={values[`${field.key}__fit`] ?? "cover"}
                 onChange={(event) => setField(`${field.key}__fit`, event.target.value)}
               >
-                <option value="cover">cover</option>
-                <option value="contain">contain</option>
+                <option value="cover">全体を覆う（切り抜き）</option>
+                <option value="contain">全体を収める</option>
               </select>
             </label>
           )}

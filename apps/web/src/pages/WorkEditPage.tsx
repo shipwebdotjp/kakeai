@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useBeforeUnload, useBlocker, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { defaultPointLabel, getVisualTemplate, type ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
@@ -187,6 +187,7 @@ export function WorkEditPage() {
   const current = useCurrentScriptVersion(editionId);
   const updateWork = useUpdateWork(workId);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [sceneEditorDirty, setSceneEditorDirty] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState<UnsavedDocumentState>({ dirty: false, document: null });
   const draft = useDraftPreview(editionId, unsaved);
@@ -194,9 +195,50 @@ export function WorkEditPage() {
 
   useEffect(() => {
     setTitleDraft(null);
+    setSceneEditorDirty(false);
     setPreviewVersionId(null);
     setUnsaved({ dirty: false, document: null });
   }, [workId, editionId]);
+
+  const savedTitle = (work.data?.title ?? "").trim();
+  const titleDraftTrimmed = titleDraft !== null ? titleDraft.trim() : null;
+  const isTitleDirty =
+    titleDraftTrimmed !== null &&
+    titleDraftTrimmed.length > 0 &&
+    titleDraftTrimmed !== savedTitle;
+  const isDirty = sceneEditorDirty || isTitleDirty;
+
+  const blocker = useBlocker(isDirty);
+  const handledBlockerRef = useRef<typeof blocker | null>(null);
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      if (handledBlockerRef.current === blocker) {
+        return;
+      }
+      handledBlockerRef.current = blocker;
+      const confirmed = window.confirm("編集内容が保存されていません。移動しますか？");
+      if (confirmed) {
+        blocker.proceed();
+      } else {
+        blocker.reset();
+      }
+    } else {
+      handledBlockerRef.current = null;
+    }
+  }, [blocker]);
+
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (isDirty) {
+          event.preventDefault();
+          event.returnValue = "";
+        }
+      },
+      [isDirty],
+    ),
+  );
 
   const onSaved = useCallback((scriptVersion: ScriptVersion) => {
     setPreviewVersionId(scriptVersion.id);
@@ -250,6 +292,7 @@ export function WorkEditPage() {
           current={current}
           onSaved={onSaved}
           onDocumentChange={setUnsaved}
+          onDirtyChange={setSceneEditorDirty}
         />
       </PreviewControllerProvider>
     </section>
@@ -263,6 +306,7 @@ function WorkEditPanes({
   current,
   onSaved,
   onDocumentChange,
+  onDirtyChange,
 }: {
   workId: string | undefined;
   editionId: string | undefined;
@@ -270,6 +314,7 @@ function WorkEditPanes({
   current: UseQueryResult<ScriptVersion, Error>;
   onSaved: (scriptVersion: ScriptVersion) => void;
   onDocumentChange: (state: UnsavedDocumentState) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const actions = usePreviewActions();
   const [formScenes, setFormScenes] = useState<SceneFormValue[] | null>(null);
@@ -427,7 +472,9 @@ function WorkEditPanes({
             onSaved={onSaved}
             onValuesChange={onValuesChange}
             onJumpToLine={onJumpToLine}
+            onJumpToTarget={jump}
             onDocumentChange={onDocumentChange}
+            onDirtyChange={onDirtyChange}
           />
         )}
       </div>
