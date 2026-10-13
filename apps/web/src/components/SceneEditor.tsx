@@ -318,9 +318,13 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     return map;
   }, [base]);
 
+  const lastBaseRef = useRef(base);
   useEffect(() => {
-    if (!formState.isDirty) {
-      reset(toFormValues(base));
+    if (lastBaseRef.current !== base) {
+      lastBaseRef.current = base;
+      if (!formState.isDirty) {
+        reset(toFormValues(base));
+      }
     }
   }, [base, reset, formState.isDirty]);
 
@@ -999,6 +1003,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       onClose={() => setImportOpen(false)}
       scenes={watchedScenes}
       speakers={watchedSpeakers}
+      disabled={save.isPending}
       onApply={(nextScenes) => replaceScenes(nextScenes)}
     />
     </>

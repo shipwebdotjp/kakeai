@@ -100,10 +100,11 @@ describe("diagnosticTarget", () => {
     expect(diagnosticTarget(["scenes", 1, "lines", 99], sampleScenes)).toBeNull();
   });
 
-  it("returns null for document-level or non-scene paths", () => {
+  it("returns null for document-level or non-scene paths and unmapped scene children like standings", () => {
     expect(diagnosticTarget(["characters", 0, "name"], sampleScenes)).toBeNull();
     expect(diagnosticTarget(["speakers", 0, "voiceProfileId"], sampleScenes)).toBeNull();
     expect(diagnosticTarget(["bgm", "assetId"], sampleScenes)).toBeNull();
+    expect(diagnosticTarget(["scenes", 0, "standings", 0, "characterId"], sampleScenes)).toBeNull();
     expect(diagnosticTarget([], sampleScenes)).toBeNull();
     expect(diagnosticTarget(undefined, sampleScenes)).toBeNull();
   });

@@ -200,8 +200,12 @@ export function WorkEditPage() {
     setUnsaved({ dirty: false, document: null });
   }, [workId, editionId]);
 
-  const savedTitle = work.data?.title ?? "";
-  const isTitleDirty = titleDraft !== null && titleDraft !== savedTitle;
+  const savedTitle = (work.data?.title ?? "").trim();
+  const titleDraftTrimmed = titleDraft !== null ? titleDraft.trim() : null;
+  const isTitleDirty =
+    titleDraftTrimmed !== null &&
+    titleDraftTrimmed.length > 0 &&
+    titleDraftTrimmed !== savedTitle;
   const isDirty = sceneEditorDirty || isTitleDirty;
 
   const blocker = useBlocker(isDirty);

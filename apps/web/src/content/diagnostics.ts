@@ -14,6 +14,21 @@ export interface DiagnosticTarget {
   };
 }
 
+const SCENE_LEVEL_KEYS = new Set([
+  "label",
+  "kind",
+  "accent",
+  "accentKind",
+  "accentToken",
+  "accentColor",
+  "timing",
+  "timingMode",
+  "durationMs",
+  "transition",
+  "transitionPreset",
+  "transitionDurationMs",
+]);
+
 export function diagnosticTarget(
   path: (string | number)[] | undefined,
   scenes: SceneFormValue[],
@@ -28,7 +43,22 @@ export function diagnosticTarget(
     return null;
   }
 
-  if (path.length >= 4 && path[2] === "lines" && typeof path[3] === "number") {
+  if (path.length === 2) {
+    return {
+      targetId: `scene-${scene.id}`,
+      seek: { kind: "scene", id: scene.id },
+    };
+  }
+
+  const segment = path[2];
+  if (typeof segment === "string" && SCENE_LEVEL_KEYS.has(segment)) {
+    return {
+      targetId: `scene-${scene.id}`,
+      seek: { kind: "scene", id: scene.id },
+    };
+  }
+
+  if (segment === "lines" && path.length >= 4 && typeof path[3] === "number") {
     const lineIndex = path[3];
     const line = scene.lines[lineIndex];
     if (line) {
@@ -40,7 +70,7 @@ export function diagnosticTarget(
     return null;
   }
 
-  if (path.length >= 4 && path[2] === "visualCues" && typeof path[3] === "number") {
+  if (segment === "visualCues" && path.length >= 4 && typeof path[3] === "number") {
     const cueIndex = path[3];
     const cue = scene.cues[cueIndex];
     if (cue) {
@@ -52,8 +82,5 @@ export function diagnosticTarget(
     return null;
   }
 
-  return {
-    targetId: `scene-${scene.id}`,
-    seek: { kind: "scene", id: scene.id },
-  };
+  return null;
 }

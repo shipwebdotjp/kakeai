@@ -16,6 +16,7 @@ interface ScriptImportModalProps {
   onClose: () => void;
   scenes: SceneFormValue[];
   speakers: SpeakerFormValue[];
+  disabled?: boolean;
   onApply: (scenes: SceneFormValue[]) => void;
 }
 
@@ -33,6 +34,7 @@ export function ScriptImportModal({
   onClose,
   scenes,
   speakers,
+  disabled = false,
   onApply,
 }: ScriptImportModalProps) {
   const [text, setText] = useState("");
@@ -253,7 +255,7 @@ export function ScriptImportModal({
           <button
             type="button"
             className={buttonPrimaryClass}
-            disabled={!ready}
+            disabled={disabled || !ready}
             onClick={onConfirm}
           >
             反映
