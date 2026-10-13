@@ -71,7 +71,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は `voicevox` または `aivisspeech`（作成後は不変）、`settings` はアダプター専用で両者とも `speakerUuid` と `defaultStyleId`。詳細は [../tts/spec.md](../tts/spec.md)。 |
 | TtsVoice | voiceId, name, styles | 接続中エンジンの話者。`styles` は `styleId` と表示名の配列。`styleId` は 32bit 符号付き整数。 |
 | BulkTtsJobsResult | jobs, excluded | 一括TTS生成の応答。`jobs` は `narrationSegmentId` と Job DTO の組、`excluded` は `narrationSegmentId`・エラーコード・安全な理由。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| CharacterLibraryEntry | id, name, voiceProfileId, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
+| CharacterLibraryEntry | id, name, voiceProfileId, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
+| FaceSet | id, name, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。
 
@@ -123,6 +124,10 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /characters | 201 | キャラクターを作成 |
 | PATCH | /characters/:characterId | 200 | キャラクターの名前・声・外観を更新 |
 | DELETE | /characters/:characterId | 204 | キャラクターを削除 |
+| GET | /face-sets | 200 | Face Set ライブラリの一覧を取得（[../face-expression/spec.md](../face-expression/spec.md)） |
+| POST | /face-sets | 201 | Face Set（Face Layer と Expression Preset を含む）を作成 |
+| PATCH | /face-sets/:faceSetId | 200 | Face Set の名称・Face Layer・Expression Preset を更新 |
+| DELETE | /face-sets/:faceSetId | 204 | 未参照の Face Set を削除 |
 
 この一覧のパスはすべて /api/v1 を先頭に持つ。たとえば作品一覧は GET /api/v1/works である。
 
@@ -191,7 +196,7 @@ latestRenderJobはRender Jobがまだないときはnullとする。失敗した
 
 ### 作品作成と名称変更
 
-POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 6` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
+POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 7` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
 
 ~~~http
 POST /api/v1/works
@@ -276,13 +281,13 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
 
 ### 台本の保存
 
-POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 6` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
+POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 7` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
 
 ~~~jsonc
 {
   "sourceScriptVersionId": null,
   "content": {
-    "schemaVersion": 6,
+    "schemaVersion": 7,
     "locale": "ja-JP",
     "template": {
       "id": "explanation-scenes",
@@ -299,7 +304,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
 }
 ~~~
 
-上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。`composition.full-bleed@1` はScene背景だけに置け、同じCompositionVersionを一つのContentDocument内で複数回参照できない。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
+上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、`faceSetId`／`expressionId` の参照整合、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。`faceSetId` は参照先 Face Set が存在し、その Face Layer が ready な画像 Asset を指し、ベース画像と寸法が一致すること、`normal` preset を含むことを検証する。`expressionId` は、話者（`Speaker.characterId`）に対応するキャラクターの、そのSceneで有効な Character Appearance が参照する Face Set 内に存在することを検証する。`speakerId` が `null` のラインに `expressionId` を指定できない（[../face-expression/spec.md](../face-expression/spec.md)）。`composition.full-bleed@1` はScene背景だけに置け、同じCompositionVersionを一つのContentDocument内で複数回参照できない。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
 
 成功時は201 Createdと、新しい完全なScriptVersion DTOを返す。
 
@@ -311,7 +316,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
     "versionNumber": 3,
     "contentSchemaVersion": 5,
     "content": {
-      "schemaVersion": 6,
+      "schemaVersion": 7,
       "locale": "ja-JP",
       "template": {
         "id": "explanation-scenes",
@@ -440,6 +445,15 @@ Content-Type: image/png
 アップロードサイズの上限はサーバー設定で管理する。既定4GiBを超えた場合は413 FILE_TOO_LARGEとし、details.maxBytesを返す。長さまたは寸法の上限を超えた場合は422 MEDIA_LIMIT_EXCEEDEDとし、detailsには測定値と該当する上限を返す。管理領域が80GiB以上ならhealthのstorage.statusを`warning`にし、UIへ警告するが、書込みは停止しない。
 
 DELETE /assets/:assetId は、残っているScriptVersionまたはqueued/running render Jobの入力スナップショットがそのAssetを参照すると409 `ASSET_IN_USE` を返す。参照がなければ、Asset自身のasset_ingest Job、原本、Rendition、Asset行を削除して204 No Contentを返す。Workの削除後などに残ったAssetは、UIからの明示削除または「未参照素材を清掃」で回収できる。
+
+## Face Set ライブラリ
+
+Face Set は、眉・目・口・前景の Face Layer と Expression Preset を持つアプリ共通の顔素材である。作品の Character Appearance は `faceSetId` で参照し、内容をコピーしない。詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。
+
+- `POST /face-sets` は `{ name, layers, expressions }` を受け取る。`layers` は `{ id, part: "brow"|"eye"|"mouth"|"foreground", assetId, blinkLayerId?, speakingLayerId? }`、`expressions` は `{ id, name, browLayerId?, eyeLayerId?, mouthLayerId? }`。`normal` の preset を必ず1つ含む。`blinkLayerId` は `part: "eye"` にだけ、`speakingLayerId` は `part: "mouth"` にだけ許可する。
+- `PATCH /face-sets/:faceSetId` は `POST` と同じ形で全体を置き換える。`POST`／`PATCH` は、各 `assetId` が ready な画像 Asset であること、全 Face Layer の `widthPx`／`heightPx` が一致すること、preset が同一 Face Set 内の Face Layer だけを参照することを検証する。違反は422 `VALIDATION_ERROR` の `details.issues` で返す。
+- `DELETE /face-sets/:faceSetId` は、いずれかの Character Appearance（ライブラリまたは保存済み ScriptVersion の外観）から `faceSetId` で参照されている間は409 `FACE_SET_IN_USE` を返す。Face Layer を削除・置換しても、それを参照する Expression Preset が残る操作は拒否する。
+- 保存済み ScriptVersion の外観は Face Set をコピーしないため、Face Set の更新は次回のプレビュー／レンダーに反映される。Render Job は投入時に解決した Face Set を入力スナップショットへ固定する（[ADR-0045](../adr/0045-face-set-global-reference.md)）。
 
 ## Composition Library
 
@@ -657,6 +671,7 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 404 | RESOURCE_NOT_FOUND | 指定IDのWork、Edition、ScriptVersion、Asset、Job、Artifactがない | resource, id |
 | 409 | ASSET_PROCESSING | 参照Assetの取り込みJobが完了していない | assetIds |
 | 409 | ASSET_IN_USE | Asset削除時に残存する版またはJobが参照している | assetId, references |
+| 409 | FACE_SET_IN_USE | Face Set削除時に外観（ライブラリまたは保存済み版）が参照している | faceSetId, references |
 | 409 | WORK_HAS_CHILDREN | 子Workを持つWorkの削除 | workId, childWorkIds |
 | 409 | JOB_NOT_CANCELLABLE | queued以外のJobをキャンセルしようとした | jobId, status |
 | 413 | FILE_TOO_LARGE | アップロードが設定済み上限を超過 | maxBytes |
@@ -699,7 +714,7 @@ RENDER_INPUT_INVALIDはキュー投入前の422であり、Job error codeでは�
 - APIはJSON APIとmultipartアップロードで厳密な `Host` と `Origin` を検証する（独自ヘッダ・起動時トークンは用いない）。同一originのUIシェルおよびAPIのGET応答はプロセスごとにランダムな `HttpOnly; SameSite=Strict; Path=/api/v1/` のメディアセッションCookieを発行する。素材・Artifactのcontent配信は、そのCookieとHost（および存在する場合のOrigin／Fetch Site）を検証して、通常のブラウザsubresource・Range requestを許可する。JSON APIはCookieだけを資格情報として受け入れない。
 - 素材とArtifactのstorageKeyは内容ハッシュ由来のパスとし、`originalFilename` をパス生成に使わない。
 - アプリ管理データのルートはOS提供のアプリデータディレクトリ（macOSではApplication Support配下）とし、特定OSの絶対パスをコードへ埋め込まない。開発時は環境変数 `KAKEAI_DATA_DIR` で差し替える。`db/`、`assets/`、`artifacts/`、`tmp/` を分け、`storageKey` はルート相対で解決する。
-- APIがScriptVersionを返すときはDBのcontentJsonを復元・検証してcontentとして返す。現行版は `schemaVersion: 6` とし、v4/v5 は読み出し時に v6 へ移行する（[../scene-labels/spec.md](../scene-labels/spec.md)）。v3 以前の読出し解釈は持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
+- APIがScriptVersionを返すときはDBのcontentJsonを復元・検証してcontentとして返す。現行版は `schemaVersion: 7` とし、v4/v5/v6 は読み出し時に v7 へ移行する（[../scene-labels/spec.md](../scene-labels/spec.md)、[../face-expression/spec.md](../face-expression/spec.md)）。v3 以前の読出し解釈は持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
 - Assetの取り込みは、一時領域への保存、ハッシュ計算とメディア検査、既存SHA-256行とそのstorageKeyの確認、アプリ管理領域への確定、Asset行とasset_ingest Jobの作成の順に行う。workerは原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってからAssetをreadyにする。既存Assetの実体が欠損・破損している場合は、内容ハッシュ由来の同じstorageKeyを上書きして取り込み直す。競合アップロードは一意制約で直列化し、失敗時の一時ファイルは清掃する。
 - すべての書込みはDBトランザクションの単位を [spec.md](./spec.md) の「書込みとJob状態遷移」に合わせる。ファイルシステム操作と完全な原子性は持てないため、確定前のファイルを公開せず、確定に失敗した孤立ファイルは起動時に清掃する。削除時はDBから参照を切った後に実体を隔離し、隔離ファイルは起動時に清掃する。
 - プレビューとレンダーは同じコンパイラと信頼済みVisualTemplateを使い、Asset解決だけを `assetResolver` の注入で切り替えて生成する。render時は正本JSON、Rendition（無ければ原本）、テンプレート版、出力設定をJobスナップショットへ固定し、ワーカーはそのJSONを実行時にコンパイルする。実行ツールの版は診断用に記録するが、完全な再現性は保証しない。

@@ -72,6 +72,7 @@ NestedVisual =
 | `media.card@1` | card | assetId, heading, caption?, focalPoint? | 対応 |
 | `character.standing@1` | standing | characterId, appearanceId, x, y, scale | 読出しのみ |
 | `character.standing@2` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体） |
+| `character.standing@3` | standing | `@2` と同一 | [../face-expression/spec.md](../face-expression/spec.md) で追加。Face Set を持つ外観の表情合成（台詞区間ごと） |
 | `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor? | 対応（複合ビジュアル） |
 | `scene.device-frame@2` | background, card | `@1` ＋ animation? | 対応（画面の登場アニメーション） |
 

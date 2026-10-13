@@ -8,6 +8,7 @@
 - 台本へは「ライブラリから追加」で**コピー**する。台本内のキャラクター実体は従来どおり ContentDocument に保持し、`schemaVersion` は `2` のまま変更しない（[ADR 0026](../adr/0026-character-library-copy-semantics.md)）。
 - ライブラリ側の変更は既存台本のコピーへ波及しない。作品ごとに調整したい場合は、その作品のコピーを編集するか、外観を分けてライブラリに登録する。
 - 外観（`CharacterAppearance`）は任意の表示名 `label`（例「夏服」「冬服」）を持つ。表情・ポーズのタグに加えて、バリエーションを名前で選べるようにする。
+- 外観は任意で1つの Face Set を `faceSetId` で参照できる。Face Set は台本へコピーせず、アプリ共通のグローバルライブラリの実体を参照する（[../face-expression/spec.md](../face-expression/spec.md)、[ADR-0045](../adr/0045-face-set-global-reference.md)）。台本へ「ライブラリから追加」でコピーするときも `faceSetId` は参照のまま引き継ぎ、Face Set の内容はコピーしない。したがって Face Set の更新は、その外観を使う全作品の次回プレビュー／レンダーへ反映される。
 
 ## ライブラリのデータ
 
@@ -19,7 +20,7 @@
   "name": "四国めたん",
   "voiceProfileId": "vp_1",
   "appearances": [
-    { "id": "appearance_summer", "assetId": "asset_img_1", "expression": "smile", "pose": "front", "label": "夏服" }
+    { "id": "appearance_summer", "assetId": "asset_img_1", "expression": "smile", "pose": "front", "label": "夏服", "faceSetId": null }
   ],
   "createdAt": "2026-10-09T00:00:00.000Z",
   "updatedAt": "2026-10-09T00:00:00.000Z"
@@ -28,7 +29,7 @@
 
 - 声プロファイルを1つ紐付けられる。同じキャラクターはどの作品でも同じ声を既定にする。
 - 外観の画像は ready な画像 Asset だけを使う。保存時に存在・種類・状態を検証する。
-- 削除は常に可能（台本はコピーを持つだけなので参照ガードは不要）。ただし声プロファイルを参照している間は、その声プロファイル側の削除を拒否する。
+- 削除は常に可能（台本はコピーを持つだけなので参照ガードは不要）。ただし声プロファイルを参照している間は、その声プロファイル側の削除を拒否する。外観が `faceSetId` で参照している間は、その Face Set 側の削除を拒否する。
 
 ## 台本への取り込み
 

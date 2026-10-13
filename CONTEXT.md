@@ -17,7 +17,7 @@ An immutable version of the editorial structure for one Language Edition.
 _Avoid_: Composition HTML, timeline
 
 **Narration Segment**:
-The smallest unit of spoken content, with separate caption and spoken text and an optional selected Audio Take.
+The smallest unit of spoken content, with separate caption and spoken text, an optional selected Audio Take, and an optional per-line Expression Preset reference.
 _Avoid_: Subtitle, audio file
 
 **Audio Take**:
@@ -49,8 +49,20 @@ A person or avatar that may, but need not, have standing appearances, and may, b
 _Avoid_: Speaker, voice
 
 **Character Appearance**:
-A particular visual form of a Character, such as a standing image with an expression and pose.
+A particular visual form of a Character, such as a standing image with an expression and pose. It may optionally reference one Face Set for per-line expression switching.
 _Avoid_: Character, asset
+
+**Face Set**:
+An app-wide library of compatible face materials (Face Layers and Expression Presets) shared across appearances, referenced by id and not copied into a Script Version. It holds one required normal Expression Preset.
+_Avoid_: Character appearance, asset
+
+**Face Layer**:
+A same-size transparent image for one face part (brow, eye, mouth, or an optional foreground) that a Face Set composes over a standing base image.
+_Avoid_: Character appearance, asset
+
+**Expression Preset**:
+A stable, Face Set-scoped name for a combination of brow, eye, and mouth Face Layers. A Narration Segment references it by id to switch expression during its utterance.
+_Avoid_: face tag, animation
 
 **Character Library**:
 The app-wide set of reusable Character definitions that are copied into a Script Version when used.

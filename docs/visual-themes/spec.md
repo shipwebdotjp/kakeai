@@ -10,7 +10,7 @@
 
 ## 参照と解決
 
-- ContentDocument は直下に必須の `visualTheme: { id: "soft-editorial", version: 1 }` を持つ（`schemaVersion: 6`）。
+- ContentDocument は直下に必須の `visualTheme: { id: "soft-editorial", version: 1 }` を持つ（`schemaVersion: 6` で導入し、キャラクター表情の `7` でも維持する）。
 - テーマ定義は `packages/contracts` の版付きレジストリ（`id@version`）に置く。参照スキーマは `{ id, version }` で、未知の参照はDocument検証で拒否する。コンパイラも未知テーマを `unknown_theme` で失敗させる。
 - テーマ定義自体の形状はZodスキーマで検証し、組込み定義の妥当性をテストする。
 
