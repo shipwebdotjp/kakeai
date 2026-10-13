@@ -54,8 +54,8 @@ export interface VisualTemplateDefinition {
 const MEDIA_KINDS = ["image", "video"] as const;
 
 const FIT_OPTIONS = [
-  { value: "cover", label: "cover" },
-  { value: "contain", label: "contain" },
+  { value: "cover", label: "全体を覆う（切り抜き）" },
+  { value: "contain", label: "全体を収める" },
 ] as const;
 
 const ANCHOR_OPTIONS = [
@@ -159,7 +159,7 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
   display: { label: "背景（全面）", description: "画像・動画を全面に敷く", category: "media" },
   inputFields: [
     { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
-    { kind: "select", key: "fit", label: "fit", options: FIT_OPTIONS },
+    { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
   ],
   collectAssetRefs: (input, path) => {
     const parsed = mediaFullBleedInputSchema.safeParse(input);
@@ -434,7 +434,7 @@ export const compositionFullBleedV1: VisualTemplateDefinition = {
     category: "composition",
   },
   inputFields: [
-    { kind: "text", key: "compositionVersionId", label: "Composition Version ID" },
+    { kind: "text", key: "compositionVersionId", label: "Composition バージョン" },
   ],
   collectAssetRefs: () => [],
 };

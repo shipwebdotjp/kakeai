@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { OctagonAlert, TriangleAlert } from "lucide-react";
 import {
   useFieldArray,
   useForm,
@@ -17,8 +18,9 @@ import {
   type ScriptVersion,
   type ThemeAccentToken,
   type TtsJobResult,
-  type Warning,
 } from "@kakeai/contracts";
+import { ApiError } from "../api/client";
+import { diagnosticTarget, type Diagnostic, type DiagnosticTarget } from "../content/diagnostics";
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
   useAdapterVoicesMap,
@@ -69,7 +71,30 @@ interface SceneEditorProps {
   onSaved?: (scriptVersion: ScriptVersion) => void;
   onValuesChange?: (scenes: SceneFormValue[]) => void;
   onJumpToLine?: (lineId: string) => void;
+  onJumpToTarget?: (targetId: string, seek: DiagnosticTarget["seek"]) => void;
   onDocumentChange?: (state: UnsavedDocumentState) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+function extractServerErrors(error: unknown): Diagnostic[] {
+  if (
+    error instanceof ApiError &&
+    error.details &&
+    typeof error.details === "object" &&
+    "issues" in error.details &&
+    Array.isArray((error.details as { issues: unknown }).issues)
+  ) {
+    return (
+      error.details as {
+        issues: { path?: (string | number)[]; code?: string; message: string }[];
+      }
+    ).issues.map((issue) => ({
+      path: issue.path,
+      code: issue.code,
+      message: issue.message ?? "入力エラーが発生しました",
+    }));
+  }
+  return [{ message: errorMessage(error) }];
 }
 
 interface TimingFieldsProps {
@@ -187,13 +212,16 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
   );
 }
 
-export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onDocumentChange }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onJumpToTarget, onDocumentChange, onDirtyChange }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
   const adapterVoices = useAdapterVoicesMap();
-  const [issues, setIssues] = useState<string[]>([]);
-  const [warnings, setWarnings] = useState<Warning[]>([]);
+  const [diagnostics, setDiagnostics] = useState<{ errors: Diagnostic[]; warnings: Diagnostic[] }>({
+    errors: [],
+    warnings: [],
+  });
+  const [openKind, setOpenKind] = useState<"error" | "warning" | null>(null);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
@@ -216,6 +244,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     useForm<DocumentFormValues>({
       defaultValues: toFormValues(base),
     });
+
+  const isFormDirty = formState.isDirty;
+  const lastEmittedDirtyRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    if (lastEmittedDirtyRef.current !== isFormDirty) {
+      lastEmittedDirtyRef.current = isFormDirty;
+      onDirtyChange?.(isFormDirty);
+    }
+  }, [isFormDirty, onDirtyChange]);
   const { fields, insert, remove, move, replace: replaceScenes } = useFieldArray({
     control,
     name: "scenes",
@@ -314,25 +352,39 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       try {
         document = buildContentDocument(base, values);
       } catch (error) {
-        setIssues([errorMessage(error)]);
-        setWarnings([]);
+        setDiagnostics({ errors: [{ message: errorMessage(error) }], warnings: [] });
+        setOpenKind("error");
         return;
       }
       const parsed = contentDocumentSchema.safeParse(document);
       if (!parsed.success) {
-        setIssues(
-          parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
-        );
-        setWarnings([]);
+        setDiagnostics({
+          errors: parsed.error.issues.map((issue) => ({
+            path: issue.path as (string | number)[],
+            code: issue.code,
+            message: issue.message,
+          })),
+          warnings: [],
+        });
+        setOpenKind("error");
         return;
       }
-      setIssues([]);
       save.mutate(parsed.data, {
         onSuccess: (result) => {
-          setWarnings(result.warnings);
+          const warnings = result.warnings.map((warning) => ({
+            path: warning.path,
+            code: warning.code,
+            message: warning.message,
+          }));
+          setDiagnostics({ errors: [], warnings });
+          setOpenKind(warnings.length > 0 ? "warning" : null);
           setSavedAtMs(Date.now());
           setBulkResult(null);
           onSaved?.(result.scriptVersion);
+        },
+        onError: (error) => {
+          setDiagnostics((prev) => ({ ...prev, errors: extractServerErrors(error) }));
+          setOpenKind("error");
         },
       });
     },
@@ -380,7 +432,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     try {
       result = splitPointScene(scene, lineIndex, nextPointLabel(scenes, sceneIndex + 1));
     } catch (error) {
-      setIssues([errorMessage(error)]);
+      setDiagnostics((prev) => ({ ...prev, errors: [{ message: errorMessage(error) }] }));
+      setOpenKind("error");
       return;
     }
     replaceScenes([
@@ -569,6 +622,34 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         >
           保存
         </button>
+        {diagnostics.errors.length > 0 && (
+          <button
+            type="button"
+            className={`inline-flex cursor-pointer items-center gap-1 rounded px-2.5 py-1 text-xs font-medium ${
+              openKind === "error"
+                ? "border border-red-400 bg-red-200 text-red-900 dark:bg-red-900/60 dark:text-red-100"
+                : "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-950/60 dark:text-red-200"
+            }`}
+            onClick={() => setOpenKind(openKind === "error" ? null : "error")}
+          >
+            <OctagonAlert className="h-4 w-4 shrink-0" />
+            <span>エラー({diagnostics.errors.length})</span>
+          </button>
+        )}
+        {diagnostics.warnings.length > 0 && (
+          <button
+            type="button"
+            className={`inline-flex cursor-pointer items-center gap-1 rounded px-2.5 py-1 text-xs font-medium ${
+              openKind === "warning"
+                ? "border border-amber-400 bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100"
+                : "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-200"
+            }`}
+            onClick={() => setOpenKind(openKind === "warning" ? null : "warning")}
+          >
+            <TriangleAlert className="h-4 w-4 shrink-0" />
+            <span>警告({diagnostics.warnings.length})</span>
+          </button>
+        )}
         <button
           type="button"
           className={buttonNeutralClass}
@@ -590,11 +671,51 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             保存しました（{new Date(savedAtMs).toLocaleTimeString("ja-JP")}）
           </span>
         )}
-        {save.isError && <span className={errorTextClass}>{errorMessage(save.error)}</span>}
         {bulkGenerate.isError && (
           <span className={errorTextClass}>{errorMessage(bulkGenerate.error)}</span>
         )}
       </div>
+
+      {openKind !== null && (
+        <div
+          className={`mt-2 max-h-60 overflow-auto rounded border p-3 text-sm ${
+            openKind === "error"
+              ? "border-red-400 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200"
+              : "border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          }`}
+        >
+          <div className="mb-1 font-semibold">
+            {openKind === "error" ? "エラー一覧" : "警告一覧"}
+          </div>
+          <ul className="m-0 list-disc space-y-1 pl-5">
+            {(openKind === "error" ? diagnostics.errors : diagnostics.warnings).map((diag, index) => {
+              const target = diagnosticTarget(diag.path, watchedScenes);
+              const pathStr = diag.path ? diag.path.join(".") : null;
+              return (
+                <li key={index}>
+                  {pathStr !== null && (
+                    <>
+                      {target !== null ? (
+                        <button
+                          type="button"
+                          className="mr-1.5 cursor-pointer font-mono underline hover:no-underline"
+                          onClick={() => onJumpToTarget?.(target.targetId, target.seek)}
+                        >
+                          {pathStr}
+                        </button>
+                      ) : (
+                        <span className="mr-1.5 font-mono text-muted-foreground">{pathStr}</span>
+                      )}
+                      :{" "}
+                    </>
+                  )}
+                  <span>{diag.message}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {bulkResult !== null && (
         <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
@@ -619,29 +740,6 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               ))}
             </ul>
           )}
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
-          <strong>警告</strong>
-          <ul>
-            {warnings.map((warning, index) => (
-              <li key={index}>
-                {warning.path.join(".")}: {warning.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {issues.length > 0 && (
-        <div className="rounded border border-red-400 bg-red-50 p-3 text-sm dark:bg-red-950/40">
-          <strong>入力エラー</strong>
-          <ul>
-            {issues.map((issue, index) => (
-              <li key={index}>{issue}</li>
-            ))}
-          </ul>
         </div>
       )}
 
