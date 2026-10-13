@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import type { VisualCue } from "@kakeai/contracts";
 import type { AssetResolver } from "./resolver";
+import type { CompositionVersionResolver } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
 import { compileDocument } from "./compiler";
 import { cueScope } from "./scope";
@@ -13,6 +14,23 @@ const resolver: AssetResolver = (assetId) => {
   }
   return { url: `/preview/${assetId}`, kind: assetId.includes("video") ? "video" : "image" };
 };
+
+const compositionResolver: CompositionVersionResolver = (versionId) => ({
+  id: versionId,
+  runtimeCompositionId: "cmp.test",
+  entrypoint: "index.html",
+  bundleHash: "bundle-hash",
+  storageKey: "compositions/test",
+  previewUrl: "/preview/composition",
+  manifest: {
+    entrypoint: "index.html",
+    runtimeCompositionId: "cmp.test",
+    width: 1920,
+    height: 1080,
+    durationMs: 5000,
+    dependencies: [],
+  },
+});
 
 const transition = {
   enter: { preset: "fade", durationMs: 350 },
@@ -158,6 +176,57 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('data-start="4.5" data-duration="3"');
     expect(compiled.html).toContain("<video");
     expect(compiled.html).toContain("カード見出し");
+  });
+
+  it("stamps the cue window onto media elements", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-p1-card",
+        template: { id: "media.card", version: 1 },
+        layer: "card",
+        range: { kind: "lines", startLineId: "line-p1-1", endLineId: "line-p1-1" },
+        input: { assetId: "asset-video-1", heading: "カード見出し" },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain('<video data-start="4.5" data-duration="3"');
+  });
+
+  it("stamps the cue window onto a composition host", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-intro-comp",
+        template: { id: "composition.full-bleed", version: 1 },
+        layer: "background",
+        input: { compositionVersionId: "ver-1" },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver, compositionResolver });
+    expect(compiled.html).toContain(
+      `<div data-start="0" data-duration="4" id="${cueScope("vc-intro-comp").id("comp-host")}"`,
+    );
+    expect(compiled.html).toContain('data-width="1920" data-height="1080"');
+    expect(compiled.compositionVersions).toHaveLength(1);
+  });
+
+  it("extends media timing when a crossfade stretches the previous scene", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-intro-video",
+        template: { id: "media.full-bleed", version: 1 },
+        layer: "background",
+        input: { assetId: "asset-video-1", fit: "cover" },
+      }),
+    ];
+    document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 300 } };
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain(
+      `id="${clipId("vc-intro-video")}" class="clip" data-start="0" data-duration="4.3"`,
+    );
+    expect(compiled.html).toContain('<video data-start="0" data-duration="4.3"');
   });
 
   it("escapes slot text", () => {

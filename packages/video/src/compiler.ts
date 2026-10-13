@@ -82,6 +82,19 @@ function secondsText(seconds: number): string {
   return toSecondsText(seconds * 1000);
 }
 
+function applyCueTiming(html: string, startMs: number, spanMs: number): string {
+  const start = toSecondsText(startMs);
+  const duration = toSecondsText(spanMs);
+  const withVideos = html.replace(
+    /<video\b/g,
+    `<video data-start="${start}" data-duration="${duration}"`,
+  );
+  return withVideos.replace(
+    /<div\b([^>]*\bdata-composition-src=[^>]*)>/g,
+    `<div data-start="${start}" data-duration="${duration}"$1>`,
+  );
+}
+
 const BOUNCE_AMPLITUDE_PX = 20;
 const BOUNCE_PERIOD_SEC = 1.6;
 const BOUNCE_MIN_INTERVAL_SEC = 0.12;
@@ -191,8 +204,10 @@ function renderCompositionFullBleed(
 
   const hostId = context.scope.id("comp-host");
   const src = resolved.previewUrl ?? resolved.entrypoint;
+  const width = resolved.manifest.width;
+  const height = resolved.manifest.height;
   return {
-    html: `<div id="${hostId}" class="kakeai-fullbleed" data-composition-id="${escapeHtmlAttribute(resolved.runtimeCompositionId)}" data-composition-src="${escapeHtmlAttribute(src)}"></div>`,
+    html: `<div id="${hostId}" class="kakeai-fullbleed" data-composition-id="${escapeHtmlAttribute(resolved.runtimeCompositionId)}" data-composition-src="${escapeHtmlAttribute(src)}" data-width="${width}" data-height="${height}"></div>`,
     assetIds: [],
     animation: [],
     compositionVersion: resolved,
@@ -413,7 +428,7 @@ function buildLoopAudios(options: {
 }
 
 function addClipDurationMs(html: string, extraMs: number): string {
-  return html.replace(/data-duration="([0-9.]+)"/, (_match, value: string) => {
+  return html.replace(/data-duration="([0-9.]+)"/g, (_match, value: string) => {
     const totalMs = Math.round(Number(value) * 1000) + extraMs;
     return `data-duration="${toSecondsText(totalMs)}"`;
   });
@@ -606,10 +621,11 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       if (rendered.html.length === 0) {
         return;
       }
+      const cueHtml = applyCueTiming(rendered.html, absStartMs, span);
       const clipId = scope.id("clip");
       const bodyId = scope.id("body");
       sceneClips.push(
-        `<div id="${clipId}" class="clip" data-start="${toSecondsText(absStartMs)}" data-duration="${toSecondsText(span)}"><div id="${bodyId}" class="kakeai-cuebody">${rendered.html}</div></div>`,
+        `<div id="${clipId}" class="clip" data-start="${toSecondsText(absStartMs)}" data-duration="${toSecondsText(span)}"><div id="${bodyId}" class="kakeai-cuebody">${cueHtml}</div></div>`,
       );
 
       if (cue.transition.enter.durationMs > 0) {
