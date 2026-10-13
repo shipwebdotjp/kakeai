@@ -117,9 +117,14 @@ export async function cloneWork(
   if (work === null) {
     throw resourceNotFound("work", workId);
   }
-  const primaryEdition = work.languageEditions[0];
-  if (!primaryEdition || !primaryEdition.currentScriptVersion) {
+  const primaryEdition =
+    work.languageEditions.find((edition) => edition.locale === work.originalLocale) ??
+    work.languageEditions[0];
+  if (!primaryEdition) {
     throw resourceNotFound("work", workId);
+  }
+  if (!primaryEdition.currentScriptVersion) {
+    throw new ApiError(500, "INTERNAL_ERROR", "現在の台本版が設定されていません。");
   }
   const sourceScript = primaryEdition.currentScriptVersion;
 

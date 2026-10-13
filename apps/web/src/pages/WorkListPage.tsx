@@ -31,11 +31,13 @@ function CloneModal({ open, onClose, work }: CloneModalProps) {
   const cloneWork = useCloneWork();
   const [title, setTitle] = useState("");
 
+  const resetMutation = cloneWork.reset;
   useEffect(() => {
-    if (work !== null) {
+    if (open && work !== null) {
       setTitle(`「${work.title}」のコピー`);
+      resetMutation();
     }
-  }, [work]);
+  }, [open, work, resetMutation]);
 
   if (work === null) {
     return null;
