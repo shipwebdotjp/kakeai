@@ -27,8 +27,9 @@ function line(
   speechText: string,
   takes: TakeFormValue[] = [],
   selectedAudioTakeId: string | null = null,
+  expressionId: string | null = null,
 ): LineFormValue {
-  return { id, speakerId, captionText, speechText, selectedAudioTakeId, takes };
+  return { id, speakerId, captionText, speechText, selectedAudioTakeId, expressionId, takes };
 }
 
 function speaker(id: string, name: string): SpeakerFormValue {

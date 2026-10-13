@@ -4,7 +4,7 @@ import type {
   NestedVisual,
   VisualThemeDefinition,
 } from "@kakeai/contracts";
-import type { AssetResolver } from "./resolver";
+import type { AssetResolver, FaceSetResolver } from "./resolver";
 import type { RenderScope } from "./scope";
 
 export interface AnimationItem {
@@ -14,17 +14,24 @@ export interface AnimationItem {
   durationMs: number;
 }
 
+export interface ExpressionTarget {
+  presetId: string;
+  elementId: string;
+}
+
 export interface RenderedCue {
   html: string;
   assetIds: string[];
   animation: AnimationItem[];
   motionTargetId?: string;
+  expressionTargets?: ExpressionTarget[];
 }
 
 export interface RenderContext {
   document: ContentDocument;
   theme: VisualThemeDefinition;
   assetResolver: AssetResolver;
+  faceSetResolver?: FaceSetResolver;
   scope: RenderScope;
   path: (string | number)[];
   renderNested: (node: NestedVisual, scope: RenderScope, path: (string | number)[]) => RenderedCue;

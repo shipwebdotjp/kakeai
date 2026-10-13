@@ -15,6 +15,9 @@ import {
 } from "@kakeai/video";
 import {
   RENDITION_PURPOSE,
+  characterStandingV1InputSchema,
+  characterStandingV2InputSchema,
+  characterStandingV3InputSchema,
   collectAssetReferences,
   computeContentWarnings,
   draftPreviewSchema,
@@ -29,11 +32,12 @@ import {
   type ScriptVersion as ScriptVersionDto,
   type ScriptVersionPreview,
   type ScriptVersionSummary,
+  type VisualCue,
   type Warning,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent, serializeContent } from "../domain/content-json.ts";
-import { toScriptVersion, toScriptVersionSummary } from "../dto/mappers.ts";
+import { toFaceSet, toScriptVersion, toScriptVersionSummary } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
 import { API_BASE_PATH } from "../http/security.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
@@ -77,6 +81,252 @@ export type AssetWithRenditions = Prisma.AssetGetPayload<{ include: { renditions
 export interface LoadedAssetReferences {
   references: AssetReference[];
   assetById: Map<string, AssetWithRenditions>;
+}
+
+export type FaceSetDetails = Prisma.FaceSetGetPayload<{
+  include: { layers: true; expressions: true };
+}>;
+
+export interface LoadedReferences extends LoadedAssetReferences {
+  faceSetById: Map<string, FaceSetDetails>;
+}
+
+export function collectFaceSetIds(content: ContentDocument): string[] {
+  return [
+    ...new Set(
+      content.characters.flatMap((character) =>
+        character.appearances.map((appearance) => appearance.faceSetId),
+      ),
+    ),
+  ].filter((id): id is string => id !== null);
+}
+
+export async function loadFaceSets(
+  client: PrismaClient | Prisma.TransactionClient,
+  content: ContentDocument,
+): Promise<Map<string, FaceSetDetails>> {
+  const ids = collectFaceSetIds(content);
+  const rows =
+    ids.length === 0
+      ? []
+      : await client.faceSet.findMany({
+          where: { id: { in: ids } },
+          include: {
+            layers: { orderBy: { position: "asc" } },
+            expressions: { orderBy: { position: "asc" } },
+          },
+        });
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+export async function loadLayerAssets(
+  client: PrismaClient | Prisma.TransactionClient,
+  faceSetById: Map<string, FaceSetDetails>,
+): Promise<Map<string, AssetWithRenditions>> {
+  const ids = [
+    ...new Set(
+      [...faceSetById.values()].flatMap((faceSet) => faceSet.layers.map((layer) => layer.assetId)),
+    ),
+  ];
+  if (ids.length === 0) {
+    return new Map();
+  }
+  const assets = await client.asset.findMany({
+    where: { id: { in: ids } },
+    include: { renditions: true },
+  });
+  return new Map(assets.map((asset) => [asset.id, asset]));
+}
+
+export function collectFaceLayerReferences(
+  content: ContentDocument,
+  faceSetById: Map<string, FaceSetDetails>,
+): AssetReference[] {
+  const references: AssetReference[] = [];
+  const seen = new Set<string>();
+  content.characters.forEach((character, characterIndex) => {
+    character.appearances.forEach((appearance, appearanceIndex) => {
+      if (appearance.faceSetId === null) {
+        return;
+      }
+      const faceSet = faceSetById.get(appearance.faceSetId);
+      if (faceSet === undefined) {
+        return;
+      }
+      for (const layer of faceSet.layers) {
+        if (seen.has(layer.assetId)) {
+          continue;
+        }
+        seen.add(layer.assetId);
+        references.push({
+          assetId: layer.assetId,
+          allowedKinds: ["image"],
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+        });
+      }
+    });
+  });
+  return references;
+}
+
+export async function loadAllReferences(
+  client: PrismaClient | Prisma.TransactionClient,
+  content: ContentDocument,
+): Promise<LoadedReferences> {
+  const { references, assetById } = await loadAssetReferences(client, content);
+  const faceSetById = await loadFaceSets(client, content);
+  const layerAssets = await loadLayerAssets(client, faceSetById);
+  for (const [id, asset] of layerAssets) {
+    if (!assetById.has(id)) {
+      assetById.set(id, asset);
+    }
+  }
+  return {
+    references: [...references, ...collectFaceLayerReferences(content, faceSetById)],
+    assetById,
+    faceSetById,
+  };
+}
+
+function standingCueTarget(cue: VisualCue): { characterId: string; appearanceId: string } | undefined {
+  if (cue.template.id !== "character.standing") {
+    return undefined;
+  }
+  for (const schema of [
+    characterStandingV3InputSchema,
+    characterStandingV2InputSchema,
+    characterStandingV1InputSchema,
+  ]) {
+    const parsed = schema.safeParse(cue.input);
+    if (parsed.success) {
+      return { characterId: parsed.data.characterId, appearanceId: parsed.data.appearanceId };
+    }
+  }
+  return undefined;
+}
+
+function readyDimensions(
+  asset: AssetWithRenditions | undefined,
+): { widthPx: number; heightPx: number } | undefined {
+  if (
+    asset === undefined ||
+    asset.status !== "ready" ||
+    asset.widthPx === null ||
+    asset.heightPx === null
+  ) {
+    return undefined;
+  }
+  return { widthPx: asset.widthPx, heightPx: asset.heightPx };
+}
+
+export function assertFaceSetReferences(
+  content: ContentDocument,
+  faceSetById: Map<string, FaceSetDetails>,
+  assetById: Map<string, AssetWithRenditions>,
+): void {
+  const issues: ValidationIssue[] = [];
+  const characterById = new Map(content.characters.map((character) => [character.id, character]));
+  content.characters.forEach((character, characterIndex) => {
+    character.appearances.forEach((appearance, appearanceIndex) => {
+      if (appearance.faceSetId === null) {
+        return;
+      }
+      const faceSet = faceSetById.get(appearance.faceSetId);
+      if (faceSet === undefined) {
+        issues.push({
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+          code: "invalid_value",
+          message: "表情セットが見つかりません。",
+        });
+        return;
+      }
+      const base = readyDimensions(assetById.get(appearance.assetId));
+      const layerDims = faceSet.layers.map((layer) =>
+        readyDimensions(assetById.get(layer.assetId)),
+      );
+      if (
+        faceSet.layers.length > 0 &&
+        (base === undefined || layerDims.some((dims) => dims === undefined))
+      ) {
+        issues.push({
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+          code: "invalid_value",
+          message: "顔レイヤーの寸法を確認できません。",
+        });
+        return;
+      }
+      const mismatch =
+        base !== undefined &&
+        layerDims.some(
+          (dims) =>
+            dims !== undefined &&
+            (dims.widthPx !== base.widthPx || dims.heightPx !== base.heightPx),
+        );
+      if (mismatch) {
+        issues.push({
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+          code: "invalid_value",
+          message: "顔レイヤーはベース画像と同じ寸法にしてください。",
+        });
+      }
+    });
+  });
+
+  const characterIdBySpeakerId = new Map(
+    content.speakers.map((speaker) => [speaker.id, speaker.characterId]),
+  );
+  content.scenes.forEach((scene, sceneIndex) => {
+    scene.lines.forEach((line, lineIndex) => {
+      if (line.expressionId === null || line.speakerId === null) {
+        return;
+      }
+      const path: (string | number)[] = ["scenes", sceneIndex, "lines", lineIndex, "expressionId"];
+      const characterId = characterIdBySpeakerId.get(line.speakerId);
+      const character =
+        characterId === null || characterId === undefined
+          ? undefined
+          : characterById.get(characterId);
+      if (character === undefined) {
+        issues.push({
+          path,
+          code: "invalid_value",
+          message: "表情を指定する台詞にはキャラクターを持つ話者が必要です。",
+        });
+        return;
+      }
+      const appearanceIds = scene.visualCues
+        .map(standingCueTarget)
+        .filter(
+          (target): target is { characterId: string; appearanceId: string } =>
+            target !== undefined && target.characterId === character.id,
+        )
+        .map((target) => target.appearanceId);
+      if (appearanceIds.length === 0) {
+        return;
+      }
+      for (const appearanceId of appearanceIds) {
+        const appearance = character.appearances.find((entry) => entry.id === appearanceId);
+        const faceSet =
+          appearance?.faceSetId === null || appearance?.faceSetId === undefined
+            ? undefined
+            : faceSetById.get(appearance.faceSetId);
+        if (
+          faceSet === undefined ||
+          !faceSet.expressions.some((preset) => preset.id === line.expressionId)
+        ) {
+          issues.push({
+            path,
+            code: "invalid_value",
+            message: "この表情は話者の立ち絵で利用できません。",
+          });
+          return;
+        }
+      }
+    });
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
 }
 
 export async function loadAssetReferences(
@@ -164,12 +414,21 @@ async function validateAssetReferences(
   client: PrismaClient | Prisma.TransactionClient,
   content: ContentDocument,
 ): Promise<void> {
-  if (content.audioTakes.length === 0 && collectAssetReferences(content).length === 0) {
+  const hasExpressions = content.scenes.some((scene) =>
+    scene.lines.some((line) => line.expressionId !== null),
+  );
+  if (
+    content.audioTakes.length === 0 &&
+    collectAssetReferences(content).length === 0 &&
+    collectFaceSetIds(content).length === 0 &&
+    !hasExpressions
+  ) {
     return;
   }
-  const { references, assetById } = await loadAssetReferences(client, content);
+  const { references, assetById, faceSetById } = await loadAllReferences(client, content);
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
+  assertFaceSetReferences(content, faceSetById, assetById);
 }
 
 export async function getCurrentScriptVersion(
@@ -311,8 +570,9 @@ export async function compilePreview(
   content: ContentDocument,
   options: CompilePreviewOptions = {},
 ): Promise<CompiledPreview> {
-  const { references, assetById } = await loadAssetReferences(prisma, content);
+  const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
+  assertFaceSetReferences(content, faceSetById, assetById);
   if (options.strictTakeDurations === true) {
     assertTakeDurations(content, assetById);
   }
@@ -336,6 +596,20 @@ export async function compilePreview(
           throw new Error(`CompositionVersionを解決できません: ${versionId}`);
         }
         return found;
+      },
+      faceSetResolver: (faceSetId) => {
+        const row = faceSetById.get(faceSetId);
+        if (row === undefined) {
+          throw new CompositionCompileError([
+            {
+              path: ["faceSets", faceSetId],
+              code: "unresolvable_face_set",
+              message: "表情セットを解決できません。",
+            },
+          ]);
+        }
+        const dto = toFaceSet(row);
+        return { id: dto.id, name: dto.name, layers: dto.layers, expressions: dto.expressions };
       },
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);

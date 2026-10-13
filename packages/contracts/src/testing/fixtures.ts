@@ -76,6 +76,7 @@ export function validContentDocument(): ContentDocument {
             captionText: "最初の要点です。",
             speechText: "さいしょのようてんです。",
             selectedAudioTakeId: "take-line-p1-1",
+            expressionId: null,
           },
         ],
         visualCues: [

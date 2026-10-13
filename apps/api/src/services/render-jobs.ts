@@ -17,13 +17,14 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent } from "../domain/content-json.ts";
-import { bigIntToSafeNumber, toJob } from "../dto/mappers.ts";
+import { bigIntToSafeNumber, toFaceSet, toJob } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 import {
   assertAssetsAvailable,
+  assertFaceSetReferences,
   assertTakeDurations,
-  loadAssetReferences,
+  loadAllReferences,
   renderSourceDurationMs,
 } from "./script-versions.ts";
 import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
@@ -68,9 +69,17 @@ export async function createRenderJob(
     throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
   }
 
-  const { references, assetById } = await loadAssetReferences(prisma, content);
+  const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
+  assertFaceSetReferences(content, faceSetById, assetById);
+
+  const snapshotFaceSets: RenderJobSnapshot["faceSets"] = [...faceSetById.values()]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((faceSet) => {
+      const dto = toFaceSet(faceSet);
+      return { id: dto.id, name: dto.name, layers: dto.layers, expressions: dto.expressions };
+    });
 
   const compositionService = new CompositionService({ db: prisma, dataDir: "" });
   const snapshotCompositions: RenderJobSnapshot["compositionVersions"] = [];
@@ -134,6 +143,19 @@ export async function createRenderJob(
           manifest: found.manifest,
         };
       },
+      faceSetResolver: (faceSetId) => {
+        const found = snapshotFaceSets.find((faceSet) => faceSet.id === faceSetId);
+        if (!found) {
+          throw new CompositionCompileError([
+            {
+              path: ["faceSets", faceSetId],
+              code: "unresolvable_face_set",
+              message: "表情セットを解決できません。",
+            },
+          ]);
+        }
+        return found;
+      },
     });
   } catch (error) {
     if (error instanceof CompositionCompileError) {
@@ -172,6 +194,7 @@ export async function createRenderJob(
     content,
     assets: snapshotAssets,
     compositionVersions: snapshotCompositions,
+    faceSets: snapshotFaceSets,
     template: { id: content.template.id, version: content.template.version },
     output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
     renderer: {

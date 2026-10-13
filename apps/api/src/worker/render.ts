@@ -226,6 +226,13 @@ export async function processRenderJob(
             manifest: found.manifest,
           };
         },
+        faceSetResolver: (faceSetId) => {
+          const found = (snapshot.faceSets ?? []).find((faceSet) => faceSet.id === faceSetId);
+          if (!found) {
+            throw new RenderJobError("RENDER_FAILED", `Face set missing from job snapshot: ${faceSetId}`);
+          }
+          return found;
+        },
       });
     } catch (error) {
       if (error instanceof RenderJobError) {

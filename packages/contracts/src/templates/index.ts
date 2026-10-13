@@ -252,6 +252,19 @@ const characterStandingV2: VisualTemplateDefinition = {
   collectAssetRefs: () => [],
 };
 
+export const characterStandingV3InputSchema = characterStandingV2InputSchema;
+
+const characterStandingV3: VisualTemplateDefinition = {
+  id: "character.standing",
+  version: 3,
+  inputSchema: characterStandingV3InputSchema,
+  layers: ["standing"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "立ち絵（表情）", description: "左右1体ずつ立ち絵を表示し表情を切り替える", category: "character" },
+  collectAssetRefs: () => [],
+};
+
 export const deviceFrameInputSchema = z.strictObject({
   screen: nestedVisualSchema,
   frame: z.enum(["laptop", "phone"]),
@@ -445,6 +458,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   mediaCardV1,
   characterStandingV1,
   characterStandingV2,
+  characterStandingV3,
   sceneDeviceFrameV1,
   sceneDeviceFrameV2,
   sceneSiteMockupV1,
@@ -452,7 +466,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
-export { characterStandingV1, characterStandingV2, sceneDeviceFrameV1, sceneDeviceFrameV2 };
+export { characterStandingV1, characterStandingV2, characterStandingV3, sceneDeviceFrameV1, sceneDeviceFrameV2 };
 export { sceneSiteMockupV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(

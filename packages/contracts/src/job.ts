@@ -5,6 +5,7 @@ import { migrateContentDocument } from "./content/migrate";
 import { styleIdSchema, voiceAdapterIdSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 import { compositionManifestSchema } from "./composition";
+import { expressionPresetSchema, faceLayerSchema } from "./face-set";
 
 export const SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
@@ -13,6 +14,13 @@ export const snapshotCompositionVersionRefSchema = z.object({
   bundleHash: z.string().min(1),
   storageKey: z.string().min(1),
   manifest: compositionManifestSchema,
+});
+
+export const snapshotFaceSetRefSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  layers: z.array(faceLayerSchema),
+  expressions: z.array(expressionPresetSchema),
 });
 
 export const snapshotAssetRefSchema = z.object({
@@ -49,6 +57,7 @@ export const renderJobSnapshotSchema = z.object({
   content: contentDocumentSchema,
   assets: z.array(snapshotAssetRefSchema),
   compositionVersions: z.array(snapshotCompositionVersionRefSchema).optional().default([]),
+  faceSets: z.array(snapshotFaceSetRefSchema).optional().default([]),
   template: z.object({
     id: z.string().min(1),
     version: positiveInt,
@@ -105,6 +114,7 @@ export function parseRenderJobSnapshot(input: unknown): RenderJobSnapshot {
 }
 
 export type RenderJobSnapshot = z.infer<typeof renderJobSnapshotSchema>;
+export type SnapshotFaceSet = z.infer<typeof snapshotFaceSetRefSchema>;
 export type AssetIngestJobSnapshot = z.infer<typeof assetIngestJobSnapshotSchema>;
 export type TtsJobSnapshot = z.infer<typeof ttsJobSnapshotSchema>;
 export type JobInputSnapshot = z.infer<typeof jobInputSnapshotSchema>;

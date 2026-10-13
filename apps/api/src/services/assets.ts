@@ -236,7 +236,7 @@ export async function updateAssetTags(
 }
 
 interface AssetReference {
-  type: "script_version" | "render_job" | "character";
+  type: "script_version" | "render_job" | "character" | "face_set";
   id: string;
 }
 
@@ -252,6 +252,14 @@ async function findAssetReferences(
   });
   for (const appearance of characters) {
     references.push({ type: "character", id: appearance.characterId });
+  }
+
+  const faceLayers = await client.faceLayer.findMany({
+    where: { assetId },
+    select: { faceSetId: true },
+  });
+  for (const faceSetId of new Set(faceLayers.map((layer) => layer.faceSetId))) {
+    references.push({ type: "face_set", id: faceSetId });
   }
 
   const versions = await client.scriptVersion.findMany({
@@ -275,7 +283,12 @@ async function findAssetReferences(
   for (const job of jobs) {
     try {
       const snapshot = renderJobSnapshotSchema.parse(JSON.parse(job.inputSnapshotJson));
-      if (snapshot.assets.some((asset) => asset.assetId === assetId)) {
+      if (
+        snapshot.assets.some((asset) => asset.assetId === assetId) ||
+        snapshot.faceSets.some((faceSet) =>
+          faceSet.layers.some((layer) => layer.assetId === assetId),
+        )
+      ) {
         references.push({ type: "render_job", id: job.id });
       }
     } catch {

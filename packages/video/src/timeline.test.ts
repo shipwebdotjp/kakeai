@@ -36,6 +36,7 @@ describe("resolveTimeline", () => {
       captionText: "字幕のみ",
       speechText: "じまくのみ",
       selectedAudioTakeId: null,
+      expressionId: null,
     });
     scene.lines.push({
       id: "line-p1-3",
@@ -43,6 +44,7 @@ describe("resolveTimeline", () => {
       captionText: "字幕のみ2",
       speechText: "じまくのみ2",
       selectedAudioTakeId: null,
+      expressionId: null,
     });
     const timeline = resolveTimeline(document);
     expect(timeline.scenes[1]?.lines.map((line) => [line.startMs, line.durationMs])).toEqual([
@@ -84,6 +86,7 @@ describe("resolveTimeline", () => {
       captionText: "欠落",
       speechText: "けつらく",
       selectedAudioTakeId: "take-missing",
+      expressionId: null,
     });
     try {
       resolveTimeline(document);

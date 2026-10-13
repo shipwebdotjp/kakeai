@@ -7,6 +7,7 @@ export const narrationSegmentSchema = z.strictObject({
   captionText: z.string(),
   speechText: z.string(),
   selectedAudioTakeId: idSchema.nullable(),
+  expressionId: idSchema.nullable(),
 });
 
 export const audioTakeSourceSchema = z.enum(["manual", "tts"]);

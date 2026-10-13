@@ -1,3 +1,4 @@
+import type { FaceSet } from "@kakeai/contracts";
 import {
   DEFAULT_APPEARANCE_EXPRESSION,
   DEFAULT_APPEARANCE_POSE,
@@ -11,6 +12,7 @@ interface AppearanceFieldsProps {
   onAdd: () => void;
   onPatch: (id: string, patch: Partial<AppearanceFormValue>) => void;
   onRemove: (id: string) => void;
+  faceSets?: Pick<FaceSet, "id" | "name">[];
 }
 
 export function AppearanceFields({
@@ -18,6 +20,7 @@ export function AppearanceFields({
   onAdd,
   onPatch,
   onRemove,
+  faceSets = [],
 }: AppearanceFieldsProps) {
   return (
     <div className="mt-3 border-t border-dashed border-border pt-2">
@@ -57,6 +60,31 @@ export function AppearanceFields({
                 className={textFieldClass}
                 onChange={(event) => onPatch(appearance.id, { pose: event.target.value })}
               />
+            </label>
+            <label className="inline-flex items-center gap-1.5">
+              表情セット
+              <select
+                className={textFieldClass}
+                value={appearance.faceSetId ?? ""}
+                onChange={(event) =>
+                  onPatch(appearance.id, {
+                    faceSetId: event.target.value === "" ? null : event.target.value,
+                  })
+                }
+              >
+                <option value="">なし</option>
+                {appearance.faceSetId !== null &&
+                  !faceSets.some((entry) => entry.id === appearance.faceSetId) && (
+                    <option value={appearance.faceSetId} disabled>
+                      不明な表情セット ({appearance.faceSetId})
+                    </option>
+                  )}
+                {faceSets.map((faceSet) => (
+                  <option key={faceSet.id} value={faceSet.id}>
+                    {faceSet.name || faceSet.id}
+                  </option>
+                ))}
+              </select>
             </label>
             <button
               type="button"

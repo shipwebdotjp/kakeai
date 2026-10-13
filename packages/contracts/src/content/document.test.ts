@@ -87,7 +87,7 @@ describe("contentDocumentSchema", () => {
       id: "character-rin",
       name: "リン",
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
     });
     doc.scenes[1]!.visualCues = [
@@ -115,7 +115,7 @@ describe("contentDocumentSchema", () => {
       id: "character-rin",
       name: "リン",
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
     });
     doc.scenes[1]!.visualCues = [
@@ -135,6 +135,53 @@ describe("contentDocumentSchema", () => {
       },
     ];
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("accepts a character.standing@3 cue that references an existing appearance", () => {
+    const doc = validContentDocument();
+    doc.characters.push({
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
+      ],
+    });
+    doc.scenes[1]!.visualCues = [
+      {
+        id: "vc-standing-left",
+        template: { id: "character.standing", version: 3 },
+        range: { kind: "scene" },
+        layer: "standing",
+        order: 0,
+        transition,
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          side: "left",
+          scale: 1,
+        },
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("accepts an expressionId on a line that has a speaker", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.lines[0]!.expressionId = "happy";
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects an expressionId on a line without a speaker", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.lines[0]!.speakerId = null;
+    doc.scenes[1]!.lines[0]!.expressionId = "happy";
+    const result = contentDocumentSchema.safeParse(doc);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]).toMatchObject({
+        path: ["scenes", 1, "lines", 0, "expressionId"],
+      });
+    }
   });
 
   it("rejects an unknown template id or version", () => {
@@ -200,6 +247,7 @@ describe("contentDocumentSchema", () => {
         captionText: "重複",
         speechText: "じゅうふく",
         selectedAudioTakeId: null,
+        expressionId: null,
       },
     ];
     const result = contentDocumentSchema.safeParse(doc);
@@ -217,6 +265,7 @@ describe("contentDocumentSchema", () => {
         captionText: "別の行",
         speechText: "べつのぎょう",
         selectedAudioTakeId: "take-line-p1-1",
+        expressionId: null,
       },
     ];
     const result = contentDocumentSchema.safeParse(doc);

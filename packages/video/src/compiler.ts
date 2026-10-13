@@ -2,6 +2,8 @@ import {
   characterStandingV1,
   characterStandingV2,
   characterStandingV2InputSchema,
+  characterStandingV3,
+  characterStandingV3InputSchema,
   mediaCardV1,
   mediaFullBleedV1,
   sceneDeviceFrameV1,
@@ -15,6 +17,7 @@ import {
   type AnimationPreset,
   type ContentDocument,
   type CueLayer,
+  type NarrationSegment,
   type NestedVisual,
   type VisualCue,
   type VisualThemeDefinition,
@@ -24,9 +27,9 @@ import { CompositionCompileError } from "./compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
-import type { AssetResolver } from "./resolver";
+import type { AssetResolver, FaceSetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
-import type { RenderedCue, RenderContext } from "./render-context";
+import type { RenderedCue, ExpressionTarget, RenderContext } from "./render-context";
 import {
   THEME_FONT_STACKS,
   mixHex,
@@ -36,13 +39,14 @@ import {
   sceneAccentStyle,
   themeRootStyle,
 } from "./theme";
-import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type ResolvedTimeline } from "./timeline";
+import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type LinePlacement, type ResolvedTimeline } from "./timeline";
 import { renderTextBlock } from "./templates/text-block";
 import { renderMediaFullBleed } from "./templates/media-full-bleed";
 import { renderMediaCard } from "./templates/media-card";
 import {
   renderCharacterStandingV1,
   renderCharacterStandingV2,
+  renderCharacterStandingV3,
 } from "./templates/character-standing";
 import { renderDeviceFrame } from "./templates/device-frame";
 import { renderSiteMockup } from "./templates/site-mockup";
@@ -54,6 +58,7 @@ export interface CompileDocumentOptions {
   document: ContentDocument;
   assetResolver: AssetResolver;
   compositionResolver?: CompositionVersionResolver;
+  faceSetResolver?: FaceSetResolver;
 }
 
 export interface CompiledComposition {
@@ -140,6 +145,98 @@ function bounceTweenLines(unit: BounceUnit): string[] {
   }
   const reset = `tl.set(${target},{y:0},${toSecondsText(unit.endMs)});`;
   return [tween, reset];
+}
+
+interface ExpressionInterval {
+  presetId: string;
+  startMs: number;
+  endMs: number;
+}
+
+function expressionIntervalsForCharacter(
+  characterId: string,
+  lines: readonly LinePlacement[],
+  lineById: ReadonlyMap<string, NarrationSegment>,
+  characterIdBySpeakerId: ReadonlyMap<string, string | null>,
+  knownPresets: ReadonlySet<string>,
+  cueStartMs: number,
+  cueEndMs: number,
+): ExpressionInterval[] {
+  const sorted = [...lines].sort((a, b) => a.startMs - b.startMs);
+  const raw: ExpressionInterval[] = [];
+  for (const placement of sorted) {
+    const startMs = Math.max(placement.startMs, cueStartMs);
+    const endMs = Math.min(placement.endMs, cueEndMs);
+    if (endMs <= startMs) {
+      continue;
+    }
+    let presetId = "normal";
+    const line = lineById.get(placement.lineId);
+    if (line !== undefined && line.speakerId !== null) {
+      if (characterIdBySpeakerId.get(line.speakerId) === characterId) {
+        const requested = line.expressionId ?? "normal";
+        presetId = knownPresets.has(requested) ? requested : "normal";
+      }
+    }
+    raw.push({ presetId, startMs, endMs });
+  }
+  const filled: ExpressionInterval[] = [];
+  let cursor = cueStartMs;
+  for (const interval of raw) {
+    if (interval.startMs > cursor) {
+      filled.push({ presetId: "normal", startMs: cursor, endMs: interval.startMs });
+    }
+    filled.push(interval);
+    cursor = Math.max(cursor, interval.endMs);
+  }
+  if (cursor < cueEndMs) {
+    filled.push({ presetId: "normal", startMs: cursor, endMs: cueEndMs });
+  }
+  const merged: ExpressionInterval[] = [];
+  for (const interval of filled) {
+    const last = merged[merged.length - 1];
+    if (
+      last !== undefined &&
+      last.presetId === interval.presetId &&
+      interval.startMs <= last.endMs
+    ) {
+      last.endMs = Math.max(last.endMs, interval.endMs);
+    } else {
+      merged.push({ ...interval });
+    }
+  }
+  return merged;
+}
+
+function expressionTweenLines(
+  targets: readonly ExpressionTarget[],
+  intervals: readonly ExpressionInterval[],
+): string[] {
+  const lines: string[] = [];
+  const setLine = (target: ExpressionTarget, visible: boolean, startMs: number): void => {
+    lines.push(
+      `tl.set(document.getElementById("${target.elementId}"),{opacity:${visible ? 1 : 0}},${toSecondsText(startMs)});`,
+    );
+  };
+  let previous: string | null = null;
+  for (const interval of intervals) {
+    if (previous === null) {
+      for (const target of targets) {
+        setLine(target, target.presetId === interval.presetId, interval.startMs);
+      }
+    } else if (previous !== interval.presetId) {
+      const leaving = targets.find((target) => target.presetId === previous);
+      const entering = targets.find((target) => target.presetId === interval.presetId);
+      if (leaving !== undefined) {
+        setLine(leaving, false, interval.startMs);
+      }
+      if (entering !== undefined) {
+        setLine(entering, true, interval.startMs);
+      }
+    }
+    previous = interval.presetId;
+  }
+  return lines;
 }
 
 function sceneBackground(accentHex: string, theme: VisualThemeDefinition): string {
@@ -231,6 +328,8 @@ function dispatchTemplate(
       return renderCharacterStandingV1(input, context);
     case `${characterStandingV2.id}@${characterStandingV2.version}`:
       return renderCharacterStandingV2(input, context);
+    case `${characterStandingV3.id}@${characterStandingV3.version}`:
+      return renderCharacterStandingV3(input, context);
     case `${sceneDeviceFrameV1.id}@${sceneDeviceFrameV1.version}`:
       return renderDeviceFrame(input, context, deviceFrameInputSchema);
     case `${sceneDeviceFrameV2.id}@${sceneDeviceFrameV2.version}`:
@@ -256,15 +355,17 @@ function makeContext(
   assetResolver: AssetResolver,
   scope: RenderScope,
   path: (string | number)[],
+  faceSetResolver?: FaceSetResolver,
 ): RenderContext {
   const context: RenderContext = {
     document,
     theme,
     assetResolver,
+    faceSetResolver,
     scope,
     path,
     renderNested: (node, nestedScope, nestedPath) =>
-      renderNestedVisual(node, makeContext(document, theme, assetResolver, nestedScope, nestedPath)),
+      renderNestedVisual(node, makeContext(document, theme, assetResolver, nestedScope, nestedPath, faceSetResolver)),
   };
   return context;
 }
@@ -292,6 +393,8 @@ const STYLES = [
   ".kakeai-standing{position:absolute;transform:translate(-50%,-50%);height:auto;filter:drop-shadow(0 12px 32px var(--kakeai-shadow));}",
   ".kakeai-standingv2{position:absolute;transform:translate(-50%,-50%);}",
   ".kakeai-standingimg{display:block;height:auto;filter:drop-shadow(0 12px 32px var(--kakeai-shadow));}",
+  ".kakeai-facegroup{position:absolute;inset:0;}",
+  ".kakeai-face{position:absolute;left:0;top:0;width:100%;height:100%;}",
   ".kakeai-nestedmedia{display:block;width:100%;height:100%;}",
   ".kakeai-deviceframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
   ".kakeai-deviceframe-screen{overflow:hidden;background:#000;box-shadow:0 24px 60px var(--kakeai-shadow);}",
@@ -510,7 +613,7 @@ function applySceneTransitions(
 }
 
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
-  const { document, assetResolver, compositionResolver } = options;
+  const { document, assetResolver, compositionResolver, faceSetResolver } = options;
   const theme = resolveVisualTheme(document);
   const timeline = resolveTimeline(document);
   const sceneById = new Map(document.scenes.map((scene) => [scene.id, scene]));
@@ -602,7 +705,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const absStartMs = placement.startMs + window.startMs;
       const absEndMs = placement.startMs + window.endMs;
       const scope = cueScope(cue.id);
-      const context = makeContext(document, theme, assetResolver, scope, cuePath);
+      const context = makeContext(document, theme, assetResolver, scope, cuePath, faceSetResolver);
       const rendered = dispatchTemplate(
         `${cue.template.id}@${cue.template.version}`,
         cue.input,
@@ -659,8 +762,9 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
 
       if (
         rendered.motionTargetId !== undefined &&
-        cue.template.id === characterStandingV2.id &&
-        cue.template.version === characterStandingV2.version
+        (cue.template.id === characterStandingV2.id || cue.template.id === characterStandingV3.id) &&
+        (cue.template.version === characterStandingV2.version ||
+          cue.template.version === characterStandingV3.version)
       ) {
         const parsed = characterStandingV2InputSchema.safeParse(cue.input);
         if (parsed.success) {
@@ -675,6 +779,32 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
                 bounces.push({ elementId: rendered.motionTargetId, startMs, endMs });
               }
             }
+          }
+        }
+      }
+
+      if (
+        rendered.expressionTargets !== undefined &&
+        rendered.expressionTargets.length > 0 &&
+        cue.template.id === characterStandingV3.id &&
+        cue.template.version === characterStandingV3.version
+      ) {
+        const parsed = characterStandingV3InputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          const knownPresets = new Set(
+            rendered.expressionTargets.map((target) => target.presetId),
+          );
+          const intervals = expressionIntervalsForCharacter(
+            parsed.data.characterId,
+            placement.lines,
+            lineById,
+            characterIdBySpeakerId,
+            knownPresets,
+            absStartMs,
+            absEndMs,
+          );
+          for (const line of expressionTweenLines(rendered.expressionTargets, intervals)) {
+            tweenLines.push(line);
           }
         }
       }

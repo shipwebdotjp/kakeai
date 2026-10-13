@@ -7,7 +7,14 @@ import type { PrismaClient } from "../generated/prisma/client.ts";
 import { toCharacterLibraryEntry } from "../dto/mappers.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 
-type AppearanceInput = { id: string; assetId: string; expression: string; pose: string; label?: string };
+type AppearanceInput = {
+  id: string;
+  assetId: string;
+  expression: string;
+  pose: string;
+  label?: string;
+  faceSetId: string | null;
+};
 
 async function assertAppearancesUsable(
   prisma: PrismaClient,
@@ -76,6 +83,36 @@ async function assertVoiceProfileExists(
   }
 }
 
+async function assertFaceSetsExist(
+  prisma: PrismaClient,
+  appearances: readonly AppearanceInput[],
+): Promise<void> {
+  const ids = [...new Set(appearances.map((appearance) => appearance.faceSetId))].filter(
+    (faceSetId): faceSetId is string => faceSetId !== null,
+  );
+  if (ids.length === 0) {
+    return;
+  }
+  const rows = await prisma.faceSet.findMany({
+    where: { id: { in: ids } },
+    select: { id: true },
+  });
+  const found = new Set(rows.map((row) => row.id));
+  const issues: ValidationIssue[] = [];
+  appearances.forEach((appearance, index) => {
+    if (appearance.faceSetId !== null && !found.has(appearance.faceSetId)) {
+      issues.push({
+        path: ["appearances", index, "faceSetId"],
+        code: "invalid_value",
+        message: "表情セットが見つかりません。",
+      });
+    }
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
 async function assertAppearanceIdsUsable(
   prisma: PrismaClient,
   characterId: string | null,
@@ -127,6 +164,7 @@ function toAppearanceData(appearance: AppearanceInput, position: number) {
     expression: appearance.expression,
     pose: appearance.pose,
     label: appearance.label === undefined || appearance.label.length === 0 ? null : appearance.label,
+    faceSetId: appearance.faceSetId,
     position,
   };
 }
@@ -163,6 +201,7 @@ export async function createCharacter(
 ): Promise<CharacterLibraryEntry> {
   await assertAppearancesUsable(prisma, input.appearances);
   await assertAppearanceIdsUsable(prisma, null, input.appearances);
+  await assertFaceSetsExist(prisma, input.appearances);
   await assertVoiceProfileExists(prisma, input.voiceProfileId);
   try {
     const row = await prisma.character.create({
@@ -195,6 +234,7 @@ export async function updateCharacter(
 ): Promise<CharacterLibraryEntry> {
   await assertAppearancesUsable(prisma, input.appearances);
   await assertAppearanceIdsUsable(prisma, characterId, input.appearances);
+  await assertFaceSetsExist(prisma, input.appearances);
   await assertVoiceProfileExists(prisma, input.voiceProfileId);
   const existing = await prisma.character.findUnique({
     where: { id: characterId },

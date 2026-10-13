@@ -6,6 +6,7 @@ import {
   assetOriginSchema,
   assetStatusSchema,
   assetTagsSchema,
+  faceLayerPartSchema,
   jobErrorCodeSchema,
   jobKindSchema,
   jobStatusSchema,
@@ -16,6 +17,7 @@ import {
   type Artifact,
   type Asset,
   type CharacterLibraryEntry,
+  type FaceSet,
   type Job,
   type LanguageEditionSummary,
   type ScriptVersion,
@@ -30,6 +32,9 @@ import type {
   Asset as AssetRow,
   Character as CharacterRow,
   CharacterAppearance as CharacterAppearanceRow,
+  ExpressionPreset as ExpressionPresetRow,
+  FaceLayer as FaceLayerRow,
+  FaceSet as FaceSetRow,
   Job as JobRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
@@ -292,6 +297,35 @@ export function toCharacterLibraryEntry(row: CharacterWithAppearances): Characte
       expression: appearance.expression,
       pose: appearance.pose,
       ...(appearance.label === null ? {} : { label: appearance.label }),
+      faceSetId: appearance.faceSetId,
+    })),
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export type FaceSetWithDetails = FaceSetRow & {
+  layers: FaceLayerRow[];
+  expressions: ExpressionPresetRow[];
+};
+
+export function toFaceSet(row: FaceSetWithDetails): FaceSet {
+  return {
+    id: row.id,
+    name: row.name,
+    layers: row.layers.map((layer) => ({
+      id: layer.id,
+      part: parseEnum(faceLayerPartSchema, layer.part, "FaceLayer.part"),
+      assetId: layer.assetId,
+      blinkLayerId: layer.blinkLayerId,
+      speakingLayerId: layer.speakingLayerId,
+    })),
+    expressions: row.expressions.map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      browLayerId: preset.browLayerId,
+      eyeLayerId: preset.eyeLayerId,
+      mouthLayerId: preset.mouthLayerId,
     })),
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),

@@ -211,6 +211,7 @@ async function createLineVersion(voiceProfileId: string): Promise<string> {
       captionText: "こんにちは",
       speechText: "こんにちは",
       selectedAudioTakeId: null,
+      expressionId: null,
     },
   ];
   const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
@@ -489,6 +490,7 @@ describe("tts job", () => {
         captionText: "",
         speechText: "   ",
         selectedAudioTakeId: null,
+        expressionId: null,
       },
     ];
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
@@ -619,6 +621,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "いんとろ",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
       ];
       const point = content.scenes[1]!;
@@ -632,6 +635,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "いち",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
         {
           id: "line-b",
@@ -639,6 +643,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "に",
           selectedAudioTakeId: "take-b",
+          expressionId: null,
         },
         {
           id: "line-empty",
@@ -646,6 +651,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "   ",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
         {
           id: "line-nospeaker",
@@ -653,6 +659,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "よん",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
       ];
       content.audioTakes = [
@@ -705,6 +712,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "ぶい",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
         {
           id: "line-av",
@@ -712,6 +720,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "えーぶい",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
       ];
     });

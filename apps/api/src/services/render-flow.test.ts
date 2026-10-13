@@ -20,6 +20,7 @@ import { createWorker } from "../worker/index.ts";
 import { processAssetIngest } from "../worker/asset-ingest.ts";
 import * as artifacts from "./artifacts.ts";
 import * as assets from "./assets.ts";
+import * as faceSets from "./face-sets.ts";
 import * as jobs from "./jobs.ts";
 import * as renderJobs from "./render-jobs.ts";
 import * as scriptVersions from "./script-versions.ts";
@@ -181,7 +182,7 @@ describe("render job creation", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -282,6 +283,7 @@ describe("render job creation", () => {
       captionText: "長い音声",
       speechText: "ながいおんせい",
       selectedAudioTakeId: "take-overflow",
+      expressionId: null,
     });
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
       sourceScriptVersionId: null,
@@ -290,6 +292,98 @@ describe("render job creation", () => {
     await expect(
       renderJobs.createRenderJob(prisma, saved.scriptVersion.id),
     ).rejects.toMatchObject({ code: "RENDER_INPUT_INVALID" });
+  });
+
+  it("freezes resolved face sets into the render snapshot", async () => {
+    let assetCounter = 0;
+    const imageRow = () =>
+      prisma.asset.create({
+        data: {
+          kind: "image",
+          origin: "uploaded",
+          status: "ready",
+          storageKey: `assets/face-snap-${(assetCounter += 1)}`,
+          originalFilename: "face.png",
+          mediaType: "image/png",
+          byteSize: BigInt(10),
+          sha256: `face-snap-${assetCounter}`,
+          widthPx: 480,
+          heightPx: 960,
+        },
+      });
+    const [brow, eye, mouth, base] = await Promise.all([imageRow(), imageRow(), imageRow(), imageRow()]);
+    const faceSet = await faceSets.createFaceSet(prisma, {
+      name: "スナップショット",
+      layers: [
+        { id: "brow", part: "brow", assetId: brow.id, blinkLayerId: null, speakingLayerId: null },
+        { id: "eye", part: "eye", assetId: eye.id, blinkLayerId: null, speakingLayerId: null },
+        { id: "mouth", part: "mouth", assetId: mouth.id, blinkLayerId: null, speakingLayerId: null },
+      ],
+      expressions: [
+        { id: "normal", name: "通常", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
+      ],
+    });
+    const work = await works.createWork(prisma, "表情スナップショット", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.speakers = [
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: null },
+    ];
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
+        ],
+      },
+    ];
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-normal",
+        speakerId: "speaker-rin",
+        captionText: "普通",
+        speechText: "ふつう",
+        selectedAudioTakeId: null,
+        expressionId: "normal",
+      },
+    ];
+    point.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 3 },
+      range: { kind: "scene" },
+      layer: "standing",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-rin",
+        side: "left",
+        scale: 1,
+      },
+    });
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
+    expect(snapshot.faceSets.map((entry) => entry.id)).toEqual([faceSet.id]);
+    expect(snapshot.faceSets[0]!.layers.map((layer) => layer.assetId).sort()).toEqual(
+      [brow.id, eye.id, mouth.id].sort(),
+    );
+    expect(snapshot.faceSets[0]!.expressions.map((preset) => preset.id)).toEqual(["normal"]);
+    expect(snapshot.assets.map((asset) => asset.assetId)).toEqual(
+      expect.arrayContaining([brow.id, eye.id, mouth.id, base.id]),
+    );
   });
 });
 
@@ -404,7 +498,7 @@ describe("render worker", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -483,6 +577,7 @@ describe("render worker", () => {
         captionText: "音声つき",
         speechText: "おんせいつき",
         selectedAudioTakeId: "take-audio",
+        expressionId: null,
       },
     ];
     content.audioTakes = [

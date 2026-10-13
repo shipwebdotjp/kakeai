@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
-import type { VisualCue } from "@kakeai/contracts";
-import type { AssetResolver } from "./resolver";
+import type { SnapshotFaceSet, VisualCue } from "@kakeai/contracts";
+import type { AssetResolver, FaceSetResolver } from "./resolver";
 import type { CompositionVersionResolver } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
 import { compileDocument } from "./compiler";
@@ -345,7 +345,7 @@ describe("compileDocument", () => {
     document.characters.push({
       id: "character-rin",
       name: "リン",
-      appearances: [{ id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" }],
+      appearances: [{ id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null }],
     });
     document.scenes[1]!.visualCues.push(
       cue({
@@ -426,7 +426,7 @@ describe("compileDocument", () => {
       id: "character-rin",
       name: "リン",
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
     });
     document.scenes[1]!.visualCues.push(
@@ -456,7 +456,7 @@ describe("compileDocument", () => {
       id: "character-rin",
       name: "リン",
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
     });
     document.scenes[1]!.visualCues.push(
@@ -486,7 +486,7 @@ describe("compileDocument", () => {
       id: "character-rin",
       name: "リン",
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
     });
     document.scenes[1]!.visualCues.push(
@@ -527,14 +527,14 @@ describe("compileDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-rin", assetId: "asset-rin", expression: "normal", pose: "front" },
+          { id: "appearance-rin", assetId: "asset-rin", expression: "normal", pose: "front", faceSetId: null },
         ],
       },
       {
         id: "character-mika",
         name: "ミカ",
         appearances: [
-          { id: "appearance-mika", assetId: "asset-mika", expression: "normal", pose: "front" },
+          { id: "appearance-mika", assetId: "asset-mika", expression: "normal", pose: "front", faceSetId: null },
         ],
       },
     );
@@ -550,6 +550,7 @@ describe("compileDocument", () => {
         captionText: "リンです。",
         speechText: "りんです。",
         selectedAudioTakeId: null,
+        expressionId: null,
       },
     ];
     scene.visualCues = [
@@ -592,7 +593,7 @@ describe("compileDocument", () => {
       id: "character-rin",
       name: "リン",
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
     });
     document.speakers.push({
@@ -609,6 +610,7 @@ describe("compileDocument", () => {
         captionText: "リンです。",
         speechText: "りんです。",
         selectedAudioTakeId: null,
+        expressionId: null,
       },
     ];
     scene.visualCues = [
@@ -905,5 +907,178 @@ describe("visual theme", () => {
       expect(error).toBeInstanceOf(CompositionCompileError);
       expect((error as CompositionCompileError).issues[0]?.code).toBe("unknown_theme");
     }
+  });
+
+  describe("character.standing@3", () => {
+    const faceSet: SnapshotFaceSet = {
+      id: "faceset-rin",
+      name: "リン正面",
+      layers: [
+        { id: "brow-normal", part: "brow", assetId: "asset-brow", blinkLayerId: null, speakingLayerId: null },
+        { id: "eye-normal", part: "eye", assetId: "asset-eye", blinkLayerId: null, speakingLayerId: null },
+        { id: "mouth-normal", part: "mouth", assetId: "asset-mouth", blinkLayerId: null, speakingLayerId: null },
+        { id: "eye-happy", part: "eye", assetId: "asset-eye-happy", blinkLayerId: null, speakingLayerId: null },
+        { id: "fg", part: "foreground", assetId: "asset-fg", blinkLayerId: null, speakingLayerId: null },
+      ],
+      expressions: [
+        { id: "normal", name: "通常", browLayerId: "brow-normal", eyeLayerId: "eye-normal", mouthLayerId: "mouth-normal" },
+        { id: "happy", name: "笑い", browLayerId: "brow-normal", eyeLayerId: "eye-happy", mouthLayerId: "mouth-normal" },
+      ],
+    };
+
+    const faceSetResolver: FaceSetResolver = (faceSetId) => {
+      if (faceSetId !== faceSet.id) {
+        throw new Error(`unknown face set: ${faceSetId}`);
+      }
+      return faceSet;
+    };
+
+    function faceDocument() {
+      const document = validContentDocument();
+      document.characters.push({
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
+        ],
+      });
+      document.speakers.push(
+        { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: null },
+      );
+      const scene = document.scenes[1]!;
+      scene.lines = [
+        {
+          id: "line-happy",
+          speakerId: "speaker-rin",
+          captionText: "嬉しい",
+          speechText: "うれしい",
+          selectedAudioTakeId: null,
+          expressionId: "happy",
+        },
+        {
+          id: "line-normal",
+          speakerId: "speaker-rin",
+          captionText: "普通",
+          speechText: "ふつう",
+          selectedAudioTakeId: null,
+          expressionId: null,
+        },
+      ];
+      scene.visualCues = [
+        cue({
+          id: "vc-face",
+          template: { id: "character.standing", version: 3 },
+          layer: "standing",
+          order: 0,
+          input: {
+            characterId: "character-rin",
+            appearanceId: "appearance-rin",
+            side: "left",
+            scale: 1,
+          },
+        }),
+      ];
+      return document;
+    }
+
+    it("composes base, layers and foreground and switches expression per line", () => {
+      const compiled = compileDocument({ document: faceDocument(), assetResolver: resolver, faceSetResolver });
+      for (const assetId of [
+        "asset-rin",
+        "asset-brow",
+        "asset-eye",
+        "asset-eye-happy",
+        "asset-mouth",
+        "asset-fg",
+      ]) {
+        expect(compiled.assetIds).toContain(assetId);
+        expect(compiled.html).toContain(`src="/preview/${assetId}"`);
+      }
+      const normalGroup = cueScope("vc-face").id("face-0");
+      const happyGroup = cueScope("vc-face").id("face-1");
+      expect(compiled.html).toContain(`<div id="${normalGroup}" class="kakeai-facegroup">`);
+      expect(compiled.html).toContain(`<div id="${happyGroup}" class="kakeai-facegroup" style="opacity:0;">`);
+      expect(compiled.html).toContain(
+        `tl.set(document.getElementById("${happyGroup}"),{opacity:1},4.5);`,
+      );
+      expect(compiled.html).toContain(
+        `tl.set(document.getElementById("${normalGroup}"),{opacity:0},4.5);`,
+      );
+      expect(compiled.html).toContain(
+        `tl.set(document.getElementById("${normalGroup}"),{opacity:1},7);`,
+      );
+      expect(compiled.html).toContain(
+        `tl.set(document.getElementById("${happyGroup}"),{opacity:0},7);`,
+      );
+    });
+
+    it("bounces the wrapper together with the face layers", () => {
+      const compiled = compileDocument({ document: faceDocument(), assetResolver: resolver, faceSetResolver });
+      const wrapper = cueScope("vc-face").id("wrap");
+      expect(compiled.html).toContain(`document.getElementById("${wrapper}")`);
+      expect(compiled.html).toContain("y:-20");
+    });
+
+    it("renders base only when the appearance has no face set", () => {
+      const document = faceDocument();
+      document.characters[0]!.appearances[0]!.faceSetId = null;
+      const compiled = compileDocument({ document, assetResolver: resolver, faceSetResolver });
+      expect(compiled.html).not.toContain('class="kakeai-facegroup"');
+      expect(compiled.html).toContain(`src="/preview/asset-rin"`);
+      expect(compiled.assetIds).toEqual(
+        expect.arrayContaining(["asset-rin", "asset-bg", "asset-bgm"]),
+      );
+      expect(compiled.assetIds).not.toContain("asset-brow");
+    });
+
+    it("fails before output when the face set cannot be resolved", () => {
+      const document = faceDocument();
+      try {
+        compileDocument({ document, assetResolver: resolver });
+        expect.unreachable();
+      } catch (error) {
+        expect(error).toBeInstanceOf(CompositionCompileError);
+        expect((error as CompositionCompileError).issues[0]?.code).toBe("unknown_face_set");
+      }
+    });
+
+    it("fails before output when the face set has no normal preset", () => {
+      const broken: SnapshotFaceSet = {
+        ...faceSet,
+        expressions: faceSet.expressions.filter((preset) => preset.id !== "normal"),
+      };
+      const document = faceDocument();
+      try {
+        compileDocument({
+          document,
+          assetResolver: resolver,
+          faceSetResolver: () => broken,
+        });
+        expect.unreachable();
+      } catch (error) {
+        expect(error).toBeInstanceOf(CompositionCompileError);
+        expect((error as CompositionCompileError).issues[0]?.code).toBe("missing_normal_expression");
+      }
+    });
+
+    it("falls back to normal for an unknown expression", () => {
+      const document = faceDocument();
+      document.scenes[1]!.lines[0]!.expressionId = "angry";
+      const compiled = compileDocument({ document, assetResolver: resolver, faceSetResolver });
+      const normalGroup = cueScope("vc-face").id("face-0");
+      const happyGroup = cueScope("vc-face").id("face-1");
+      expect(compiled.html).toContain(
+        `tl.set(document.getElementById("${normalGroup}"),{opacity:1},4);`,
+      );
+      expect(compiled.html).toContain(
+        `tl.set(document.getElementById("${happyGroup}"),{opacity:0},4);`,
+      );
+    });
+
+    it("compiles deterministically", () => {
+      const first = compileDocument({ document: faceDocument(), assetResolver: resolver, faceSetResolver });
+      const second = compileDocument({ document: faceDocument(), assetResolver: resolver, faceSetResolver });
+      expect(second.html).toBe(first.html);
+    });
   });
 });

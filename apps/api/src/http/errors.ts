@@ -21,6 +21,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   PREVIEW_INPUT_INVALID: "プレビューを生成できません。",
   RENDER_INPUT_INVALID: "レンダー入力を確認してください。",
   VOICE_PROFILE_IN_USE: "この声プロファイルは使用中のため削除できません。",
+  FACE_SET_IN_USE: "この表情セットは使用中のため削除できません。",
   TTS_INPUT_INVALID: "音声生成の入力を確認してください。",
   TTS_ENGINE_UNAVAILABLE: "音声エンジンに接続できません。起動を確認してください。",
   INTERNAL_ERROR: "予期しないエラーが発生しました。",

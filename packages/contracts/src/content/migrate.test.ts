@@ -31,10 +31,34 @@ function v5Document(): Record<string, unknown> {
   return doc;
 }
 
+function v6Document(): Record<string, unknown> {
+  const doc = validContentDocument() as unknown as Record<string, unknown>;
+  doc.schemaVersion = 6;
+  doc.characters = [
+    {
+      id: "character-rin",
+      name: "リン",
+      appearances: [
+        { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front" },
+      ],
+    },
+  ];
+  doc.scenes = (doc.scenes as Record<string, unknown>[]).map((scene) => {
+    const copy = { ...scene };
+    copy.lines = ((copy.lines as Record<string, unknown>[] | undefined) ?? []).map((line) => {
+      const lineCopy = { ...line };
+      delete lineCopy.expressionId;
+      return lineCopy;
+    });
+    return copy;
+  });
+  return doc;
+}
+
 describe("migrateContentDocument", () => {
-  it("migrates a v4 document to v6 with labels, theme and unified accents", () => {
+  it("migrates a v4 document to v7 with labels, theme and unified accents", () => {
     const migrated = parseContentDocument(migrateContentDocument(v4Document()));
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(7);
     expect(migrated.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
     expect(migrated.scenes.map((scene) => scene.label)).toEqual([
       "導入",
@@ -48,9 +72,9 @@ describe("migrateContentDocument", () => {
     );
   });
 
-  it("migrates a v5 document to v6 and unifies scene accents to theme.primary", () => {
+  it("migrates a v5 document to v7 and unifies scene accents to theme.primary", () => {
     const migrated = parseContentDocument(migrateContentDocument(v5Document()));
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(7);
     expect(migrated.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
     expect(migrated.scenes.map((scene) => scene.label)).toEqual([
       "導入",
@@ -93,6 +117,17 @@ describe("migrateContentDocument", () => {
     (input.scenes as Record<string, unknown>[])[1]!.label = "独自名";
     const migrated = parseContentDocument(migrateContentDocument(input));
     expect(migrated.scenes[1]!.label).toBe("独自名");
+  });
+
+  it("migrates a v6 document to v7 with null faceSetId and expressionId", () => {
+    const migrated = parseContentDocument(migrateContentDocument(v6Document()));
+    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.characters[0]!.appearances[0]!.faceSetId).toBeNull();
+    for (const scene of migrated.scenes) {
+      for (const line of scene.lines) {
+        expect(line.expressionId).toBeNull();
+      }
+    }
   });
 
   it("returns the input unchanged for the current version", () => {

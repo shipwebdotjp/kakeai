@@ -6,7 +6,7 @@ import {
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
-import type { VoiceProfile } from "@kakeai/contracts";
+import type { FaceSet, VoiceProfile } from "@kakeai/contracts";
 import {
   createEmptyAppearance,
   type AppearanceFormValue,
@@ -23,6 +23,7 @@ interface CharacterFieldsProps {
   setValue: UseFormSetValue<DocumentFormValues>;
   characterIndex: number;
   voiceProfiles: VoiceProfile[];
+  faceSets: Pick<FaceSet, "id" | "name">[];
   onDelete: (index: number, character: CharacterFormValue) => void;
 }
 
@@ -33,6 +34,7 @@ export function CharacterFields({
   setValue,
   characterIndex,
   voiceProfiles,
+  faceSets,
   onDelete,
 }: CharacterFieldsProps) {
   const { append, remove } = useFieldArray({
@@ -124,6 +126,7 @@ export function CharacterFields({
         onAdd={onAdd}
         onPatch={onPatch}
         onRemove={onRemove}
+        faceSets={faceSets}
       />
     </div>
   );

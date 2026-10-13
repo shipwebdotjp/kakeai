@@ -11,6 +11,7 @@ import {
   MAX_TTS_SPEECH_TEXT_LENGTH,
   MAX_TTS_SPEED_SCALE,
   MIN_TTS_SPEED_SCALE,
+  type FaceSet,
   type VoiceAdapterId,
   type VoiceProfile,
 } from "@kakeai/contracts";
@@ -19,6 +20,7 @@ import type {
   DocumentFormValues,
   LineFormValue,
   SpeakerFormValue,
+  StandingFormValue,
   TakeFormValue,
 } from "../content/form";
 import {
@@ -59,6 +61,8 @@ interface LinesEditorProps {
   adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
   bulkRunning: boolean;
+  faceSets: FaceSet[];
+  faceSetsReady: boolean;
   onSplitScene: (sceneIndex: number, lineIndex: number) => void;
   onJumpToLine?: (lineId: string) => void;
 }
@@ -71,6 +75,7 @@ function formatDuration(durationMs: number): string {
 interface LineEditorProps extends Omit<LinesEditorProps, "sceneId" | "control" | "onSplitScene"> {
   lineIndex: number;
   line: LineFormValue;
+  standings: StandingFormValue[];
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMove: (direction: -1 | 1) => void;
@@ -221,6 +226,9 @@ function LineEditor({
   onJumpToLine,
   speakers,
   characters,
+  standings,
+  faceSets,
+  faceSetsReady,
   voiceProfiles,
   adapterVoices,
   savedVoiceByLineId,
@@ -237,6 +245,21 @@ function LineEditor({
   const speaker = speakers.find((entry) => entry.id === line.speakerId);
   const characterId = speaker?.characterId ?? null;
   const character = characters.find((entry) => entry.id === characterId);
+  const standingAppearanceIds = new Set(
+    (standings ?? [])
+      .filter((standing) => standing?.characterId === characterId)
+      .map((standing) => standing?.appearanceId),
+  );
+  const faceSet = faceSets.find((entry) =>
+    character?.appearances.some(
+      (appearance) => appearance.faceSetId === entry.id && standingAppearanceIds.has(appearance.id),
+    ),
+  );
+  const presets = faceSet?.expressions ?? [];
+  const staleExpression =
+    line.expressionId !== null &&
+    faceSetsReady &&
+    !presets.some((preset) => preset.id === line.expressionId);
   const profileId = character?.voiceProfileId ?? speaker?.voiceProfileId ?? null;
   const profile = voiceProfiles.find((entry) => entry.id === profileId);
   const adapterState = profile === undefined ? undefined : adapterVoices[profile.adapterId];
@@ -329,11 +352,13 @@ function LineEditor({
   const onChangeCharacter = (nextId: string) => {
     if (nextId === "") {
       setValue(`${path}.speakerId`, null, { shouldDirty: true });
+      setValue(`${path}.expressionId`, null, { shouldDirty: true });
       return;
     }
     const existing = speakers.find((entry) => entry.characterId === nextId);
     if (existing !== undefined) {
       setValue(`${path}.speakerId`, existing.id, { shouldDirty: true });
+      setValue(`${path}.expressionId`, null, { shouldDirty: true });
       return;
     }
     const selected = characters.find((entry) => entry.id === nextId);
@@ -438,6 +463,42 @@ function LineEditor({
           ))}
         </select>
       </label>
+      {staleExpression ? (
+        <p className={metaTextClass}>
+          表情「{line.expressionId}」は参照先の立ち絵・表情セットにありません。
+          <button
+            type="button"
+            className={buttonNeutralClass}
+            onClick={() => setValue(`${path}.expressionId`, null, { shouldDirty: true })}
+          >
+            クリア
+          </button>
+        </p>
+      ) : presets.length > 0 ? (
+        <label className="inline-flex items-center gap-1.5 text-sm">
+          表情
+          <select
+            className={textFieldClass}
+            value={line.expressionId ?? ""}
+            onChange={(event) =>
+              setValue(`${path}.expressionId`, event.target.value === "" ? null : event.target.value, {
+                shouldDirty: true,
+              })
+            }
+          >
+            <option value="">
+              通常（{presets.find((preset) => preset.id === "normal")?.name ?? "normal"}）
+            </option>
+            {presets
+              .filter((preset) => preset.id !== "normal")
+              .map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name || preset.id}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
 
       <div className="mt-1">
         {takes.length === 0 ? (
@@ -602,6 +663,8 @@ export function LinesEditor({
   adapterVoices,
   savedVoiceByLineId,
   bulkRunning,
+  faceSets,
+  faceSetsReady,
   onSplitScene,
   onJumpToLine,
 }: LinesEditorProps) {
@@ -610,6 +673,7 @@ export function LinesEditor({
     name: `scenes.${sceneIndex}.lines`,
   });
   const watchedLines = useWatch({ control, name: `scenes.${sceneIndex}.lines` }) ?? [];
+  const watchedStandings = useWatch({ control, name: `scenes.${sceneIndex}.standings` }) ?? [];
 
   const moveLine = (from: number, to: number) => {
     const scene = getValues(`scenes.${sceneIndex}`);
@@ -679,6 +743,9 @@ export function LinesEditor({
             scriptVersionId={scriptVersionId}
             speakers={speakers}
             characters={characters}
+            standings={watchedStandings}
+            faceSets={faceSets}
+            faceSetsReady={faceSetsReady}
             voiceProfiles={voiceProfiles}
             adapterVoices={adapterVoices}
             savedVoiceByLineId={savedVoiceByLineId}

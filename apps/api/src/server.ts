@@ -10,6 +10,7 @@ import { createHealthRouter } from "./http/health.ts";
 import { createArtifactsRouter } from "./http/routes/artifacts.ts";
 import { createAssetsRouter } from "./http/routes/assets.ts";
 import { createCharactersRouter } from "./http/routes/characters.ts";
+import { createFaceSetsRouter } from "./http/routes/face-sets.ts";
 import { createJobsRouter } from "./http/routes/jobs.ts";
 import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
@@ -146,6 +147,7 @@ export function createApp(dependencies: AppDependencies): Express {
     }),
   );
   api.use(createCharactersRouter({ prisma: dependencies.prisma }));
+  api.use(createFaceSetsRouter({ prisma: dependencies.prisma }));
   api.use(createJobsRouter(dependencies.prisma));
   api.use(
     createArtifactsRouter({

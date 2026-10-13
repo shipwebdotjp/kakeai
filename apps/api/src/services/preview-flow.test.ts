@@ -15,6 +15,7 @@ import { ensureDataDirectories } from "../storage/paths.ts";
 import { ApiError } from "../http/errors.ts";
 import { createWorker } from "../worker/index.ts";
 import * as assets from "./assets.ts";
+import * as faceSets from "./face-sets.ts";
 import * as scriptVersions from "./script-versions.ts";
 import * as works from "./works.ts";
 
@@ -146,11 +147,96 @@ describe("script version preview", () => {
     expect(preview.timeline.scenes[0]!.cues).toContainEqual({ cueId: "vc-intro-bg", startMs: 0 });
   });
 
-  it("includes a standing appearance image in the preview", async () => {
+  it("renders a character.standing@3 expression switch in the preview", async () => {
     if (!ffmpegReady) {
       return;
     }
-    const image = await readyImage();
+    const base = await readyImage();
+    const brow = await readyImage();
+    const eye = await readyImage();
+    const mouth = await readyImage();
+    const layer = (id: string, part: "brow" | "eye" | "mouth", assetId: string) => ({
+      id,
+      part,
+      assetId,
+      blinkLayerId: null,
+      speakingLayerId: null,
+    });
+    const faceSet = await faceSets.createFaceSet(prisma, {
+      name: "プレビュー",
+      layers: [layer("brow", "brow", brow.id), layer("eye", "eye", eye.id), layer("mouth", "mouth", mouth.id)],
+      expressions: [
+        { id: "normal", name: "通常", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
+      ],
+    });
+    const work = await works.createWork(prisma, "表情プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.speakers = [
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: null },
+    ];
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
+        ],
+      },
+    ];
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-face",
+        speakerId: "speaker-rin",
+        captionText: "表情",
+        speechText: "ひょうじょう",
+        selectedAudioTakeId: null,
+        expressionId: "normal",
+      },
+    ];
+    point.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 3 },
+      range: { kind: "scene" },
+      layer: "standing",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-rin",
+        side: "left",
+        scale: 1,
+      },
+    });
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+    expect(scriptVersionPreviewSchema.safeParse(preview).success).toBe(true);
+    expect(preview.compositionHtml).toContain('class="kakeai-facegroup"');
+    for (const assetId of [base.id, brow.id, eye.id, mouth.id]) {
+      expect(preview.compositionHtml).toContain(
+        `/api/v1/assets/${encodeURIComponent(assetId)}/render-content`,
+      );
+    }
+  });
+
+  it("includes a standing appearance image in the preview", async () => {
+    if (!ffmpegReady) {
+      return;
+    }    const image = await readyImage();
     const work = await works.createWork(prisma, "立ち絵プレビュー", "ja-JP");
     const edition = work.languageEditions[0]!;
     const content = createInitialContentDocument();
@@ -159,7 +245,7 @@ describe("script version preview", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -226,6 +312,7 @@ describe("script version preview", () => {
         captionText: "音声つき",
         speechText: "おんせいつき",
         selectedAudioTakeId: "take-audio",
+        expressionId: null,
       },
     ];
     content.audioTakes = [
@@ -336,6 +423,7 @@ describe("script version preview", () => {
       captionText: "長い音声",
       speechText: "ながいおんせい",
       selectedAudioTakeId: "take-overflow",
+      expressionId: null,
     });
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
       sourceScriptVersionId: null,

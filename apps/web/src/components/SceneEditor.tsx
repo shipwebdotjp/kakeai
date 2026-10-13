@@ -26,6 +26,7 @@ import {
   useAdapterVoicesMap,
   useBulkGenerateTtsTakes,
   useCharacters,
+  useFaceSets,
   useSaveScriptVersion,
   useVoiceProfiles,
   type BulkTtsFailure,
@@ -216,6 +217,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
+  const faceSets = useFaceSets();
   const adapterVoices = useAdapterVoicesMap();
   const [diagnostics, setDiagnostics] = useState<{ errors: Diagnostic[]; warnings: Diagnostic[] }>({
     errors: [],
@@ -524,6 +526,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         expression: appearance.expression,
         pose: appearance.pose,
         label: appearance.label ?? "",
+        faceSetId: appearance.faceSetId,
       })),
     };
     appendCharacter(character);
@@ -795,6 +798,9 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         {characterLibrary.isError && (
           <p className={errorTextClass}>キャラクターライブラリを読み込めませんでした。</p>
         )}
+        {faceSets.isError && (
+          <p className={errorTextClass}>表情セットを読み込めませんでした。</p>
+        )}
         {characterFields.map((field, characterIndex) => (
           <CharacterFields
             key={`${field.id}-${characterIndex}`}
@@ -804,6 +810,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             setValue={setValue}
             characterIndex={characterIndex}
             voiceProfiles={voiceProfiles.data ?? []}
+            faceSets={faceSets.data ?? []}
             onDelete={deleteCharacter}
           />
         ))}
@@ -973,6 +980,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   adapterVoices={adapterVoices}
                   savedVoiceByLineId={savedVoiceByLineId}
                   bulkRunning={bulkGenerate.isPending}
+                  faceSets={faceSets.data ?? []}
+                  faceSetsReady={faceSets.isSuccess}
                   onSplitScene={onSplitScene}
                   onJumpToLine={onJumpToLine}
                 />

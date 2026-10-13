@@ -1,6 +1,6 @@
 export { COMPOSITION_ENGINE, COMPILER_VERSION, HYPERFRAMES_PLAYER_VERSION, OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 export { CompositionCompileError } from "./compile-error";
-export type { AssetResolver, ResolvedAsset, ResolvedAssetKind } from "./resolver";
+export type { AssetResolver, FaceSetResolver, ResolvedAsset, ResolvedAssetKind } from "./resolver";
 export { resolveTimeline, resolveCueWindow, collectCueTransitionIssues, collectSceneTransitionIssues, collectTimelineIssues, sceneTransitionOf } from "./timeline";
 export type { ResolvedSceneTransition } from "./timeline";
 export type {

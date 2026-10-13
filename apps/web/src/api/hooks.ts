@@ -10,13 +10,16 @@ import type {
   Composition,
   ContentDocument,
   CreateCharacterRequest,
+  CreateFaceSetRequest,
   CreateVoiceProfileRequest,
+  FaceSet,
   Job,
   ScriptVersion,
   ScriptVersionPreview,
   ScriptVersionSummary,
   TtsJobResult,
   UpdateCharacterRequest,
+  UpdateFaceSetRequest,
   UpdateVoiceProfileRequest,
   VoiceAdapterId,
   VoiceList,
@@ -688,6 +691,46 @@ export function useDeleteCharacter() {
       await apiRequest(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["characters"] }),
+  });
+}
+
+export function useFaceSets() {
+  return useQuery({
+    queryKey: ["face-sets"],
+    queryFn: async () => (await apiRequest<FaceSet[]>("/face-sets")).data,
+  });
+}
+
+export function useCreateFaceSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateFaceSetRequest) =>
+      (await apiRequest<FaceSet>("/face-sets", { method: "POST", body: input })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["face-sets"] }),
+  });
+}
+
+export function useUpdateFaceSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateFaceSetRequest }) =>
+      (
+        await apiRequest<FaceSet>(`/face-sets/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: input,
+        })
+      ).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["face-sets"] }),
+  });
+}
+
+export function useDeleteFaceSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/face-sets/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["face-sets"] }),
   });
 }
 

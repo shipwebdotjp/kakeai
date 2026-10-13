@@ -4,6 +4,7 @@ import {
   useCharacters,
   useCreateCharacter,
   useDeleteCharacter,
+  useFaceSets,
   useUpdateCharacter,
   useVoiceProfiles,
 } from "../api/hooks";
@@ -36,6 +37,7 @@ function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
       expression: appearance.expression,
       pose: appearance.pose,
       label: appearance.label ?? "",
+      faceSetId: appearance.faceSetId,
     })),
   };
 }
@@ -47,9 +49,10 @@ function emptyDraft(): CharacterDraft {
 interface CharacterFormProps {
   entry?: CharacterLibraryEntry;
   voiceProfiles: VoiceProfile[];
+  faceSets: { id: string; name: string }[];
 }
 
-function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
+function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
   const create = useCreateCharacter();
   const update = useUpdateCharacter();
   const remove = useDeleteCharacter();
@@ -107,6 +110,7 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
       expression: appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION,
       pose: appearance.pose.trim() || DEFAULT_APPEARANCE_POSE,
       ...(appearance.label.trim().length === 0 ? {} : { label: appearance.label.trim() }),
+      faceSetId: appearance.faceSetId,
     }));
     const payload = {
       name,
@@ -168,6 +172,7 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
         onAdd={addAppearance}
         onPatch={updateAppearance}
         onRemove={removeAppearance}
+        faceSets={faceSets}
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -191,7 +196,9 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
 export function CharacterLibraryPage() {
   const characters = useCharacters();
   const voiceProfiles = useVoiceProfiles();
+  const faceSets = useFaceSets();
   const profiles = voiceProfiles.data ?? [];
+  const sets = faceSets.data ?? [];
 
   return (
     <section>
@@ -206,15 +213,18 @@ export function CharacterLibraryPage() {
       {voiceProfiles.isError && (
         <p className={errorTextClass}>{errorMessage(voiceProfiles.error)}</p>
       )}
+      {faceSets.isError && (
+        <p className={errorTextClass}>{errorMessage(faceSets.error)}</p>
+      )}
       {characters.data !== undefined && characters.data.length === 0 && (
         <p className={metaTextClass}>キャラクターがありません。下のフォームから追加してください。</p>
       )}
 
       {characters.data?.map((entry) => (
-        <CharacterForm key={entry.id} entry={entry} voiceProfiles={profiles} />
+        <CharacterForm key={entry.id} entry={entry} voiceProfiles={profiles} faceSets={sets} />
       ))}
 
-      <CharacterForm voiceProfiles={profiles} />
+      <CharacterForm voiceProfiles={profiles} faceSets={sets} />
     </section>
   );
 }

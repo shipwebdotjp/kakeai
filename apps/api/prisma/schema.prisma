@@ -123,11 +123,51 @@ model CharacterAppearance {
   expression  String
   pose        String
   label       String?
+  faceSetId   String?
   position    Int       @default(0)
   createdAt   DateTime  @default(now())
 
   @@index([characterId])
   @@index([assetId])
+  @@index([faceSetId])
+}
+
+model FaceSet {
+  id          String             @id @default(cuid())
+  name        String
+  layers      FaceLayer[]
+  expressions ExpressionPreset[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model FaceLayer {
+  faceSetId       String
+  id              String
+  faceSet         FaceSet  @relation(fields: [faceSetId], references: [id], onDelete: Cascade)
+  part            String
+  assetId         String
+  blinkLayerId    String?
+  speakingLayerId String?
+  position        Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@id([faceSetId, id])
+  @@index([assetId])
+}
+
+model ExpressionPreset {
+  faceSetId    String
+  id           String
+  faceSet      FaceSet  @relation(fields: [faceSetId], references: [id], onDelete: Cascade)
+  name         String
+  browLayerId  String?
+  eyeLayerId   String?
+  mouthLayerId String?
+  position     Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@id([faceSetId, id])
 }
 
 model Job {

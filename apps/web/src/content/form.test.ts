@@ -278,6 +278,7 @@ describe("buildContentDocument", () => {
         captionText: "せるふ",
         speechText: "せるふ",
         selectedAudioTakeId: "take-1",
+        expressionId: null,
       },
     ];
     base.audioTakes = [
@@ -313,6 +314,7 @@ describe("buildContentDocument", () => {
         captionText: "せるふ",
         speechText: "せるふ",
         selectedAudioTakeId: "take-1",
+        expressionId: null,
       },
     ];
     base.audioTakes = [
@@ -339,6 +341,7 @@ describe("buildContentDocument", () => {
         captionText: "",
         speechText: "",
         selectedAudioTakeId: "take-1",
+        expressionId: null,
       },
     ];
     base.audioTakes = [
@@ -388,7 +391,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -407,6 +410,7 @@ describe("buildContentDocument", () => {
             expression: "smile",
             pose: "front",
             label: "",
+            faceSetId: null,
           },
         ],
       },
@@ -441,7 +445,7 @@ describe("buildContentDocument", () => {
     const rebuilt = buildContentDocument(base, values);
     const cue = rebuilt.scenes[1]!.visualCues[0]!;
     expect(cue.id).toBe("vc-standing");
-    expect(cue.template).toEqual({ id: "character.standing", version: 2 });
+    expect(cue.template).toEqual({ id: "character.standing", version: 3 });
     expect(standingInput(cue)).toEqual({
       characterId: "character-rin",
       appearanceId: "appearance-smile",
@@ -474,7 +478,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -512,14 +516,14 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
-  it("emits two character.standing@2 cues for the left and right slots", () => {
+  it("emits two character.standing@3 cues for the left and right slots", () => {
     const base = createInitialContentDocument();
     base.characters = [
       {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -554,7 +558,7 @@ describe("buildContentDocument", () => {
     const cues = rebuilt.scenes[0]!.visualCues.filter(
       (cue) => cue.template.id === "character.standing",
     );
-    expect(cues.map((cue) => cue.template.version)).toEqual([2, 2]);
+    expect(cues.map((cue) => cue.template.version)).toEqual([3, 3]);
     expect(cues.map((cue) => standingInput(cue).side)).toEqual(["left", "right"]);
     expect(cues.map((cue) => standingInput(cue).scale)).toEqual([1, 0.8]);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
@@ -567,7 +571,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -604,7 +608,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -625,7 +629,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -655,7 +659,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -667,6 +671,7 @@ describe("buildContentDocument", () => {
         captionText: "セリフ",
         speechText: "せりふ",
         selectedAudioTakeId: null,
+        expressionId: null,
       },
     ];
     point.visualCues = [
@@ -694,7 +699,7 @@ describe("buildContentDocument", () => {
     expect(lineCue.template).toEqual({ id: "character.standing", version: 1 });
     expect(standingInput(lineCue).scale).toBe(0.5);
     const mainCue = byId.get("vc-standing")!;
-    expect(mainCue.template).toEqual({ id: "character.standing", version: 2 });
+    expect(mainCue.template).toEqual({ id: "character.standing", version: 3 });
     expect(standingInput(mainCue)).toEqual({
       characterId: "character-rin",
       appearanceId: "appearance-smile",
@@ -702,7 +707,7 @@ describe("buildContentDocument", () => {
       scale: 1.5,
     });
     const extraCue = byId.get("vc-standing-extra")!;
-    expect(extraCue.template).toEqual({ id: "character.standing", version: 2 });
+    expect(extraCue.template).toEqual({ id: "character.standing", version: 3 });
     expect(standingInput(extraCue)).toEqual({
       characterId: "character-rin",
       appearanceId: "appearance-smile",
@@ -719,7 +724,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -745,7 +750,7 @@ describe("buildContentDocument", () => {
         name: "リン",
         voiceProfileId: null,
         appearances: [
-          { id: "appearance-1", assetId: "asset-rin", expression: "  ", pose: "", label: "" },
+          { id: "appearance-1", assetId: "asset-rin", expression: "  ", pose: "", label: "", faceSetId: null },
         ],
       },
     ];
@@ -756,6 +761,103 @@ describe("buildContentDocument", () => {
       assetId: "asset-rin",
       expression: "normal",
       pose: "front",
+      faceSetId: null,
+    });
+  });
+
+  it("round-trips faceSetId and expressionId", () => {
+    const base = createInitialContentDocument();
+    base.speakers = [
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: null },
+    ];
+    base.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
+        ],
+      },
+    ];
+    const point = pointScenes(base)[0]!;
+    point.lines = [
+      {
+        id: "line-happy",
+        speakerId: "speaker-rin",
+        captionText: "嬉しい",
+        speechText: "うれしい",
+        selectedAudioTakeId: null,
+        expressionId: "happy",
+      },
+    ];
+
+    const values = toFormValues(base);
+    expect(values.characters[0]!.appearances[0]!.faceSetId).toBe("faceset-rin");
+    expect(values.scenes[1]!.lines[0]!.expressionId).toBe("happy");
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.characters[0]!.appearances[0]!.faceSetId).toBe("faceset-rin");
+    expect(rebuilt.scenes[1]!.lines[0]!.expressionId).toBe("happy");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("clears expressionId when the speaker is dropped", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    values.scenes[1]!.lines = [
+      {
+        id: "line-orphan",
+        speakerId: "speaker-missing",
+        captionText: "孤立",
+        speechText: "こりつ",
+        selectedAudioTakeId: null,
+        expressionId: "happy",
+        takes: [],
+      },
+    ];
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.lines[0]).toMatchObject({ speakerId: null, expressionId: null });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("reads a character.standing@3 cue into the standing slots", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        appearances: [
+          { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+        ],
+      },
+    ];
+    base.scenes[1]!.visualCues = [
+      {
+        id: "vc-standing-3",
+        template: { id: "character.standing", version: 3 },
+        range: { kind: "scene" },
+        layer: "standing",
+        order: 0,
+        transition: {
+          enter: { preset: "none", durationMs: 0 },
+          exit: { preset: "none", durationMs: 0 },
+        },
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-rin",
+          side: "left",
+          scale: 1,
+        },
+      },
+    ];
+
+    const values = toFormValues(base);
+    expect(values.scenes[1]!.standings[0]).toMatchObject({
+      cueId: "vc-standing-3",
+      characterId: "character-rin",
+      appearanceId: "appearance-rin",
+      side: "left",
     });
   });
 
@@ -768,7 +870,7 @@ describe("buildContentDocument", () => {
         name: "リン",
         voiceProfileId: null,
         appearances: [
-          { id: "appearance-1", assetId: null, expression: "", pose: "", label: "" },
+          { id: "appearance-1", assetId: null, expression: "", pose: "", label: "", faceSetId: null },
         ],
       },
     ];
@@ -825,6 +927,7 @@ describe("buildContentDocument", () => {
         captionText: "ナレーション",
         speechText: "なれーしょん",
         selectedAudioTakeId: null,
+        expressionId: null,
       },
     ];
 
@@ -842,7 +945,7 @@ describe("buildContentDocument", () => {
         id: "character-rin",
         name: "リン",
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];

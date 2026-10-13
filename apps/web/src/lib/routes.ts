@@ -1,5 +1,6 @@
 export const CHARACTER_LIBRARY_ROUTE_PATH = "/characters";
 export const COMPOSITION_LIBRARY_ROUTE_PATH = "/compositions";
+export const FACE_SETS_ROUTE_PATH = "/face-sets";
 export const VOICE_PROFILES_ROUTE_PATH = "/voice-profiles";
 
 export function workRoute(workId: string): string {

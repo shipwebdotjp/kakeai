@@ -7,6 +7,7 @@ import {
   THEME_ACCENT_TOKENS,
   characterStandingV1,
   characterStandingV2,
+  characterStandingV3,
   defaultPointLabel,
   getTemplateInputFields,
   getVisualTemplate,
@@ -43,6 +44,7 @@ export interface LineFormValue {
   captionText: string;
   speechText: string;
   selectedAudioTakeId: string | null;
+  expressionId: string | null;
   takes: TakeFormValue[];
 }
 
@@ -59,6 +61,7 @@ export interface AppearanceFormValue {
   expression: string;
   pose: string;
   label: string;
+  faceSetId: string | null;
 }
 
 export interface CharacterFormValue {
@@ -215,7 +218,8 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
   }
   if (
     cue.template.id === characterStandingV2.id &&
-    cue.template.version === characterStandingV2.version
+    (cue.template.version === characterStandingV2.version ||
+      cue.template.version === characterStandingV3.version)
   ) {
     const parsed = characterStandingV2.inputSchema.safeParse(cue.input);
     if (!parsed.success) {
@@ -316,6 +320,7 @@ function readCharacters(content: ContentDocument): CharacterFormValue[] {
         expression: appearance.expression,
         pose: appearance.pose,
         label: appearance.label ?? "",
+        faceSetId: appearance.faceSetId,
       })),
     };
   });
@@ -455,6 +460,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
           captionText: line.captionText,
           speechText: line.speechText,
           selectedAudioTakeId: line.selectedAudioTakeId,
+          expressionId: line.expressionId,
           takes: takesByLine.get(line.id) ?? [],
         })),
         cues,
@@ -483,13 +489,15 @@ function buildLines(sceneValue: SceneFormValue, speakerIds: ReadonlySet<string>)
       line.takes.some((take) => take.id === line.selectedAudioTakeId && isValidTake(take))
         ? line.selectedAudioTakeId
         : null;
+    const speakerId =
+      line.speakerId !== null && speakerIds.has(line.speakerId) ? line.speakerId : null;
     return {
       id: line.id,
-      speakerId:
-        line.speakerId !== null && speakerIds.has(line.speakerId) ? line.speakerId : null,
+      speakerId,
       captionText: line.captionText,
       speechText: line.speechText,
       selectedAudioTakeId: selected,
+      expressionId: speakerId !== null ? line.expressionId : null,
     };
   });
 }
@@ -544,6 +552,7 @@ function buildCharacters(values: CharacterFormValue[]): Character[] {
         expression: appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION,
         pose: appearance.pose.trim() || DEFAULT_APPEARANCE_POSE,
         ...(appearance.label.trim().length === 0 ? {} : { label: appearance.label.trim() }),
+        faceSetId: appearance.faceSetId,
       };
     }),
   }));
@@ -825,7 +834,7 @@ function buildStandingCues(
     emittedSides.add(standing.side);
     cues.push({
       id: standing.cueId ?? newVisualCueId(sceneValue.id, `standing-${standing.side}`),
-      template: { id: characterStandingV2.id, version: characterStandingV2.version },
+      template: { id: characterStandingV3.id, version: characterStandingV3.version },
       range: { kind: "scene" },
       layer: "standing",
       order,
@@ -1003,6 +1012,7 @@ export function createEmptyLine(sceneId: string): LineFormValue {
     captionText: "",
     speechText: "",
     selectedAudioTakeId: null,
+    expressionId: null,
     takes: [],
   };
 }
@@ -1074,7 +1084,7 @@ export function newSceneId(): string {
   return `scene-point-${randomId()}`;
 }
 
-function randomId(): string {
+export function randomId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
@@ -1226,6 +1236,7 @@ export function createEmptyAppearance(): AppearanceFormValue {
     expression: DEFAULT_APPEARANCE_EXPRESSION,
     pose: DEFAULT_APPEARANCE_POSE,
     label: "",
+    faceSetId: null,
   };
 }
 
@@ -1405,6 +1416,7 @@ export function duplicateLineFormValue(line: LineFormValue, sceneId: string): Li
   copy.speakerId = line.speakerId;
   copy.captionText = line.captionText;
   copy.speechText = line.speechText;
+  copy.expressionId = line.expressionId;
   return copy;
 }
 

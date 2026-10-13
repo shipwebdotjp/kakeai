@@ -65,7 +65,7 @@ describe("character library", () => {
       name: "リン",
       voiceProfileId: profile.id,
       appearances: [
-        { id: "appearance-1", assetId: image.id, expression: "smile", pose: "front", label: "夏服" },
+        { id: "appearance-1", assetId: image.id, expression: "smile", pose: "front", label: "夏服", faceSetId: null },
       ],
     });
     expect(created.name).toBe("リン");
@@ -79,7 +79,7 @@ describe("character library", () => {
       name: "リン（冬）",
       voiceProfileId: null,
       appearances: [
-        { id: "appearance-2", assetId: image.id, expression: "normal", pose: "front" },
+        { id: "appearance-2", assetId: image.id, expression: "normal", pose: "front", faceSetId: null },
       ],
     });
     expect(updated.name).toBe("リン（冬）");
@@ -99,7 +99,7 @@ describe("character library", () => {
       characters.createCharacter(prisma, {
         name: "だめ",
         voiceProfileId: null,
-        appearances: [{ id: "a", assetId: audio.id, expression: "", pose: "" }],
+        appearances: [{ id: "a", assetId: audio.id, expression: "", pose: "", faceSetId: null }],
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
 
@@ -107,7 +107,7 @@ describe("character library", () => {
       characters.createCharacter(prisma, {
         name: "だめ",
         voiceProfileId: null,
-        appearances: [{ id: "a", assetId: "asset-missing", expression: "", pose: "" }],
+        appearances: [{ id: "a", assetId: "asset-missing", expression: "", pose: "", faceSetId: null }],
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });

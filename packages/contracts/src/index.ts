@@ -19,6 +19,7 @@ export * from "./content/asset-refs";
 export * from "./templates";
 export * from "./voice-profile";
 export * from "./character-library";
+export * from "./face-set";
 export * from "./tts";
 export * from "./asset";
 export * from "./dto";

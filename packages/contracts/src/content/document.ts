@@ -6,9 +6,9 @@ import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
 import { getVisualTheme, visualThemeRefSchema } from "./theme";
-import { characterStandingV1, characterStandingV2, compositionFullBleedInputSchema } from "../templates";
+import { characterStandingV1, characterStandingV2, characterStandingV3, compositionFullBleedInputSchema } from "../templates";
 
-export const CONTENT_SCHEMA_VERSION = 6 as const;
+export const CONTENT_SCHEMA_VERSION = 7 as const;
 
 export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;
@@ -161,7 +161,14 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
       });
     }
     const localLineIds = scene.lines.map((line) => line.id);
-    for (const line of scene.lines) {
+    for (const [lineIndex, line] of scene.lines.entries()) {
+      if (line.speakerId === null && line.expressionId !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: `NarrationSegment ${line.id} は話者が無いため表情を指定できません`,
+          path: ["scenes", index, "lines", lineIndex, "expressionId"],
+        });
+      }
       if (line.speakerId !== null && !speakerIds.has(line.speakerId)) {
         ctx.addIssue({
           code: "custom",
@@ -226,11 +233,17 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
       }
 
       if (cue.template.id === characterStandingV1.id) {
-        let standingDefinition: typeof characterStandingV1 | typeof characterStandingV2 | undefined;
+        let standingDefinition:
+          | typeof characterStandingV1
+          | typeof characterStandingV2
+          | typeof characterStandingV3
+          | undefined;
         if (cue.template.version === characterStandingV1.version) {
           standingDefinition = characterStandingV1;
         } else if (cue.template.version === characterStandingV2.version) {
           standingDefinition = characterStandingV2;
+        } else if (cue.template.version === characterStandingV3.version) {
+          standingDefinition = characterStandingV3;
         } else {
           standingDefinition = undefined;
         }

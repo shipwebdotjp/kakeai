@@ -112,15 +112,18 @@ describe("parseRenderJobSnapshot", () => {
       return copy;
     });
     const parsed = parseRenderJobSnapshot(renderSnapshotWith(v5));
-    expect(parsed.content.schemaVersion).toBe(6);
+    expect(parsed.content.schemaVersion).toBe(7);
     expect(parsed.content.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
     for (const scene of parsed.content.scenes) {
       expect(scene.accent).toEqual({ kind: "theme", token: "primary" });
+      for (const line of scene.lines) {
+        expect(line.expressionId).toBeNull();
+      }
     }
   });
 
   it("parses a current snapshot unchanged", () => {
     const parsed = parseRenderJobSnapshot(renderSnapshotWith(validContentDocument()));
-    expect(parsed.content.schemaVersion).toBe(6);
+    expect(parsed.content.schemaVersion).toBe(7);
   });
 });
