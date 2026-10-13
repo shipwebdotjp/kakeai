@@ -4,6 +4,7 @@ import {
   getVisualTemplate,
   isEditableTemplate,
   listVisualTemplateCatalog,
+  mediaCardInputSchema,
 } from "./index";
 
 describe("visual template metadata", () => {
@@ -42,6 +43,26 @@ describe("visual template metadata", () => {
       (entry) => entry.id === "scene.device-frame" && entry.version === 2,
     );
     expect(deviceFrame?.editable).toBe(true);
+  });
+
+  it("registers media.card@1 with an aspect ratio field defaulted to 16:9", () => {
+    const fields = getTemplateInputFields("media.card", 1);
+    const aspectRatio = fields?.find((field) => field.key === "aspectRatio");
+    expect(aspectRatio?.kind).toBe("select");
+    if (aspectRatio?.kind === "select") {
+      expect(aspectRatio.options.map((option) => option.value)).toEqual([
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+      ]);
+    }
+    const parsed = mediaCardInputSchema.safeParse({ assetId: "asset-1", heading: "見出し" });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.aspectRatio).toBe("16:9");
+    }
   });
 
   it("returns undefined for unknown template versions", () => {

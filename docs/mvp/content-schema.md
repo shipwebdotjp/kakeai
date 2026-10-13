@@ -203,7 +203,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `text.block@1` | `text`, `role`(title/subtitle/heading/body/closing), 配置`anchor`/`verticalAlign`, `font`, `fontSize`, `color`, `decoration` | 対応。Sceneのテキストを表現する（[../editor/spec.md](../editor/spec.md)）。未指定時の既定スタイルはVisual Themeのrole別トークンを使う（[../visual-themes/spec.md](../visual-themes/spec.md)） |
 | `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?` | 対応 |
 | `composition.full-bleed@1` | `compositionVersionId` | Composition Library導入後に対応。`range: scene`、`layer: background`だけを許可し、同じCompositionVersionは一つのScriptVersion内で一度だけ参照できる。 |
-| `media.card@1` | `assetId`, 見出し、補足文, `focalPoint?` | 対応 |
+| `media.card@1` | `assetId`, アスペクト比(16:9/4:3/1:1/3:4/9:16、既定16:9), 見出し、補足文, `focalPoint?` | 対応。見出しと補足文が両方とも空のときはテキスト枠を描画しない |
 | `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
 | `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
 | `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `backgroundColor?` | 対応。端末枠内に画像・動画を表示する複合ビジュアル。背景・カードに置ける |

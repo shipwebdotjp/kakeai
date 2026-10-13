@@ -193,6 +193,36 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('<video data-start="4.5" data-duration="3"');
   });
 
+  it("renders the media card with the selected aspect ratio", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-p1-card",
+        template: { id: "media.card", version: 1 },
+        layer: "card",
+        input: { assetId: "asset-image-1", aspectRatio: "9:16", heading: "見出し" },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("aspect-ratio:9/16");
+  });
+
+  it("omits the text frame when heading and caption are empty", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-p1-card",
+        template: { id: "media.card", version: 1 },
+        layer: "card",
+        input: { assetId: "asset-image-1", heading: "" },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("kakeai-cardmedia");
+    expect(compiled.html).not.toContain('<figcaption class="kakeai-cardtext">');
+    expect(compiled.html).not.toContain('<h3 class="kakeai-cardheading">');
+  });
+
   it("stamps the cue window onto a composition host", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [

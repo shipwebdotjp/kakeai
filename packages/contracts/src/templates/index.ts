@@ -170,8 +170,16 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
   },
 };
 
+export const mediaCardAspectRatioSchema = z.enum(["16:9", "4:3", "1:1", "3:4", "9:16"]);
+export type MediaCardAspectRatio = z.infer<typeof mediaCardAspectRatioSchema>;
+
+const MEDIA_CARD_ASPECT_RATIO_OPTIONS = mediaCardAspectRatioSchema.options.map(
+  (value) => ({ value, label: value }),
+);
+
 export const mediaCardInputSchema = z.strictObject({
   assetId: idSchema,
+  aspectRatio: mediaCardAspectRatioSchema.default("16:9"),
   heading: z.string(),
   caption: z.string().optional(),
   focalPoint: focalPointSchema.optional(),
@@ -187,6 +195,12 @@ const mediaCardV1: VisualTemplateDefinition = {
   display: { label: "カード", description: "画像・動画を見出し付きカードで表示", category: "media" },
   inputFields: [
     { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
+    {
+      kind: "select",
+      key: "aspectRatio",
+      label: "アスペクト比",
+      options: MEDIA_CARD_ASPECT_RATIO_OPTIONS,
+    },
     { kind: "text", key: "heading", label: "見出し" },
     { kind: "optionalText", key: "caption", label: "補足文" },
   ],
