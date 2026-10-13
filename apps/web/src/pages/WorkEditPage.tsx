@@ -200,7 +200,9 @@ export function WorkEditPage() {
     setUnsaved({ dirty: false, document: null });
   }, [workId, editionId]);
 
-  const isDirty = sceneEditorDirty || titleDraft !== null;
+  const savedTitle = work.data?.title ?? "";
+  const isTitleDirty = titleDraft !== null && titleDraft !== savedTitle;
+  const isDirty = sceneEditorDirty || isTitleDirty;
 
   const blocker = useBlocker(isDirty);
   const handledBlockerRef = useRef<typeof blocker | null>(null);
@@ -227,6 +229,7 @@ export function WorkEditPage() {
       (event) => {
         if (isDirty) {
           event.preventDefault();
+          event.returnValue = "";
         }
       },
       [isDirty],

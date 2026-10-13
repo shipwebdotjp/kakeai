@@ -371,6 +371,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       }
       save.mutate(parsed.data, {
         onSuccess: (result) => {
+          reset(toFormValues(result.scriptVersion.content));
           const warnings = result.warnings.map((warning) => ({
             path: warning.path,
             code: warning.code,
