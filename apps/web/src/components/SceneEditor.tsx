@@ -319,8 +319,10 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   }, [base]);
 
   useEffect(() => {
-    reset(toFormValues(base));
-  }, [base, reset]);
+    if (!formState.isDirty) {
+      reset(toFormValues(base));
+    }
+  }, [base, reset, formState.isDirty]);
 
   const allValues = useWatch({ control }) as DocumentFormValues | undefined;
   useEffect(() => {
@@ -612,6 +614,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   return (
     <>
     <form onSubmit={onSubmit}>
+      <fieldset disabled={save.isPending} className="contents border-0 m-0 p-0">
       <div
         id="editor-actionbar"
         className="sticky top-0 z-10 flex flex-wrap items-center gap-3 bg-surface py-2.5"
@@ -989,6 +992,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       {pointCount === 0 && (
         <p className={metaTextClass}>要点Sceneがありません。追加してください。</p>
       )}
+      </fieldset>
     </form>
     <ScriptImportModal
       open={importOpen}
