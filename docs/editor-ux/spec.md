@@ -29,7 +29,7 @@
 
 ### ガード
 
-- `WorkEditPage` が `useBlocker(dirty)` を所有し、画面内遷移（ヘッダーナビ・作品一覧リンク・戻る/進む）をブロックする。ブロック時は確認ダイアログを出し、「移動する」で `proceed()`、「とどまる」で `reset()` する。
+- `WorkEditPage` が `useBlocker(dirty)` を所有し、画面内遷移（ヘッダーナビ・作品一覧リンク・戻る/進む）をブロックする。ブロック時はブラウザ標準の `window.confirm` を出し、確定で `proceed()`、取消で `reset()` する（既存の削除確認と同じ方式）。
 - リロード・タブ閉じは `useBeforeUnload` でガードする。
 - 保存成功時は未保存状態を解除し（既存の `onSaved` 経路）、ガードも解除される。
 
@@ -56,13 +56,13 @@ interface Diagnostic {
 
 - `#editor-actionbar`（`SceneEditor` の sticky バー）に「エラー(N)」「警告(N)」のチップを出す。0件の種別は表示しない。
   - エラー: 赤系、警告: amber系。アイコンは `lucide-react`（例 `OctagonAlert` / `TriangleAlert`）を使う。
-- チップのクリックで、バー直下に折りたたみパネル（`max-height` + overflow）を展開する。各項目にメッセージと、`path` がある場合はクリック可能なパス表示を出す。
+- チップのクリックで、バー直下に折りたたみパネル（`max-height` + overflow）を開閉する。パネルは押したチップの種別だけを一覧表示し、もう一方のチップを押すとその種別へ切り替える。各項目にメッセージと、`path` がある場合はクリック可能なパス表示を出す。
 - 保存成功時の既存の警告ボックス・保存失敗時の既存のエラーボックスは、このパネルへ統合する。
 
 ### 該当箇所へのジャンプ
 
 - `path` クリックで、対応するフォーム要素へ中央ペインをスクロールし、プレビューを該当区間へシークする（既存の `WorkEditPanes.jump()` を再利用）。
-- パス→対象の対応は純関数 `diagnosticTarget(path, scenes)` で行う。返す対象は `{ targetId, seek }` とし、既存の要素id規約に合わせる。
+- パス→対象の対応は純関数 `diagnosticTarget(path, scenes)` で行う。実装は `apps/web/src/content/diagnostics.ts` に置き、同ディレクトリに単体テストを追加する。返す対象は `{ targetId, seek }` とし、既存の要素id規約に合わせる。
   - `scenes[s]` → `scene-{id}`
   - `scenes[s].lines[l]` → `line-{id}`
   - `scenes[s].visualCues[c]` → `cue-{id}`
