@@ -9,6 +9,7 @@ import {
   sceneDeviceFrameV1,
   sceneDeviceFrameV2,
   sceneSiteMockupV1,
+  tableSimpleV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
   deviceFrameInputSchema,
@@ -52,6 +53,7 @@ import {
   renderCharacterStandingV3,
 } from "./templates/character-standing";
 import { renderDeviceFrame } from "./templates/device-frame";
+import { renderTableSimple } from "./templates/table-simple";
 import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, resolveCueMedia } from "./templates/shared";
 
@@ -447,6 +449,8 @@ function dispatchTemplate(
       return renderDeviceFrame(input, context, deviceFrameV2InputSchema);
     case `${sceneSiteMockupV1.id}@${sceneSiteMockupV1.version}`:
       return renderSiteMockup(input, context);
+    case `${tableSimpleV1.id}@${tableSimpleV1.version}`:
+      return renderTableSimple(input, context);
     case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
       return renderCompositionFullBleed(input, context, compositionResolver);
     default:
@@ -542,6 +546,15 @@ const STYLES = [
   ".kakeai-mockup-pixiv{--kakeai-mockup-accent:#0096fa;}",
   ".kakeai-mockup-niconico{--kakeai-mockup-accent:#252525;}",
   ".kakeai-mockup-browser{--kakeai-mockup-accent:#6b7280;}",
+  ".kakeai-tablewrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:90px 160px;box-sizing:border-box;}",
+  ".kakeai-tableframe{background:var(--kakeai-surface);border-radius:var(--kakeai-radius-lg);box-shadow:0 12px 48px var(--kakeai-shadow);padding:36px 48px;max-width:1500px;max-height:880px;overflow:hidden;}",
+  ".kakeai-tablecaption{margin:0 0 20px;font-size:44px;font-weight:700;color:var(--kakeai-text);text-align:center;}",
+  ".kakeai-table{border-collapse:collapse;width:100%;font-size:36px;line-height:1.5;color:var(--kakeai-text);}",
+  ".kakeai-tablehead{padding:14px 28px;border-bottom:4px solid var(--kakeai-accent-primary);font-weight:700;white-space:normal;word-break:break-word;}",
+  ".kakeai-tablecell{padding:14px 28px;white-space:normal;word-break:break-word;}",
+  ".kakeai-table-zebra .kakeai-tablerow:nth-child(even) .kakeai-tablecell{background:var(--kakeai-surface-muted);}",
+  ".kakeai-table-bordered .kakeai-tablecell{border:2px solid var(--kakeai-border);}",
+  ".kakeai-table-bordered .kakeai-tablehead{border:2px solid var(--kakeai-border);border-bottom:4px solid var(--kakeai-accent-primary);}",
 ].join("\n");
 
 const FADE_START_EPSILON_MS = 1;

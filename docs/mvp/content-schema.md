@@ -223,7 +223,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `scene.device-frame@2` | `@1` ＋ `animation?`（preset, durationMs） | 対応。画面要素の登場アニメーションを追加 |
 | `scene.site-mockup@1` | `variant`, `screen`(`NestedVisual`), `theme?`, `name?`/`handle?`/`url?`/`caption?`, `logo?`, `animation?` | 対応。有名サイト・ブラウザのガワに画像・動画を収める。card/overlay |
 | `chart.bar@1` | タイトル、系列、数値、単位 | 将来 |
-| `table.simple@1` | 列定義、行、強調セル | Phase 1で最初に追加 |
+| `table.simple@1` | 見出し、列定義、行、強調セル、スタイル、登場 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。

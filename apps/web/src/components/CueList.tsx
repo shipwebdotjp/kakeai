@@ -34,6 +34,7 @@ import {
 import { PRESET_LABELS, buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { useCompositions } from "../api/hooks";
 import { MediaPicker } from "./MediaPicker";
+import { TableField } from "./TableField";
 
 const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
 
@@ -467,6 +468,17 @@ function CueField({ field, values, setField, animationPresets }: CueFieldProps) 
             onChange={(event) => setField(field.key, event.target.value)}
           />
         </label>
+      );
+    case "table":
+      return (
+        <TableField
+          label={field.label}
+          fieldKey={field.key}
+          value={value}
+          setField={setField}
+          maxColumns={field.maxColumns}
+          maxRows={field.maxRows}
+        />
       );
     case "boolean": {
       const options = [

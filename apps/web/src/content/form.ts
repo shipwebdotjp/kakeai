@@ -15,6 +15,7 @@ import {
   mediaFullBleedV1,
   pointSceneTextCues,
   sceneDeviceFrameV1,
+  tableDataSchema,
   type AnimationPreset,
   type Character,
   type CharacterVoice,
@@ -379,13 +380,20 @@ function readCueFields(
         break;
       }
       case "select": {
-        const value = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
+        const value = getAtPath(input, field.key);
+        const text = typeof value === "string" ? value : "";
         const allowed = field.options.map((option) => option.value);
-        result[field.key] = allowed.includes(value)
-          ? value
+        result[field.key] = allowed.includes(text)
+          ? text
           : field.optional
             ? ""
             : (field.options[0]?.value ?? "");
+        break;
+      }
+      case "table": {
+        const value = getAtPath(input, field.key);
+        result[field.key] =
+          typeof value === "object" && value !== null ? JSON.stringify(value) : "";
         break;
       }
       case "animation": {
@@ -701,12 +709,31 @@ function buildCueInput(
       case "select": {
         const allowed = field.options.map((option) => option.value);
         if (allowed.includes(raw)) {
-          input[field.key] = raw;
+          setAtPath(input, field.key, raw);
         } else if (field.optional) {
-          delete input[field.key];
+          deleteAtPath(input, field.key);
         } else {
-          input[field.key] = field.options[0]?.value ?? "";
+          setAtPath(input, field.key, field.options[0]?.value ?? "");
         }
+        break;
+      }
+      case "table": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          deleteAtPath(input, field.key);
+          break;
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("表データを正しく入力してください");
+        }
+        const validated = tableDataSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          throw new Error("表データを正しく入力してください");
+        }
+        setAtPath(input, field.key, validated.data);
         break;
       }
       case "color": {
@@ -1139,11 +1166,25 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
       case "boolean":
         fields[field.key] = "";
         break;
+      case "table":
+        fields[field.key] = defaultTableDataJson();
+        break;
       default:
         fields[field.key] = "";
     }
   }
   return fields;
+}
+
+export function defaultTableDataJson(): string {
+  return JSON.stringify({
+    columns: [
+      { key: "col1", label: "項目", type: "text" },
+      { key: "col2", label: "値", type: "number" },
+    ],
+    rows: [{ col1: "", col2: "" }],
+    emphasis: [],
+  });
 }
 
 export function createCueFormValue(options: {

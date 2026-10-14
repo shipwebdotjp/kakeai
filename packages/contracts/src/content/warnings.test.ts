@@ -1,6 +1,29 @@
 import { describe, expect, it } from "vitest";
+import type { VisualCue } from "./visual";
 import { validContentDocument } from "../testing/fixtures";
-import { CAPTION_CONSTRAINT, TEXT_CONSTRAINTS, computeContentWarnings } from "./warnings";
+import {
+  CAPTION_CONSTRAINT,
+  TABLE_CELL_CHAR_GUIDELINE,
+  TABLE_COLUMN_GUIDELINE,
+  TABLE_ROW_GUIDELINE,
+  TEXT_CONSTRAINTS,
+  computeContentWarnings,
+} from "./warnings";
+
+function tableCue(input: unknown): VisualCue {
+  return {
+    id: "visual-table-1",
+    range: { kind: "scene" },
+    layer: "overlay",
+    order: 0,
+    transition: {
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
+    },
+    template: { id: "table.simple", version: 1 },
+    input,
+  };
+}
 
 describe("computeContentWarnings", () => {
   it("returns no warnings for a document within the template limits", () => {
@@ -22,7 +45,8 @@ describe("computeContentWarnings", () => {
     expect(warnings[0]!.path).toEqual(["scenes", 1, "visualCues", 1, "input", "text"]);
   });
 
-  it("warns when a caption exceeds the line budget", () => {
+    it("warns when a caption exceeds the line budget", () => {
+
     const document = validContentDocument();
     const scene = document.scenes[1]!;
     if (scene.kind !== "point") {
@@ -38,6 +62,68 @@ describe("computeContentWarnings", () => {
       "lines",
       0,
       "captionText",
+    ]);
+  });
+
+  it("warns when a table cell exceeds the character guideline", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues.push(
+      tableCue({
+        data: {
+          columns: [{ key: "name", label: "項目", type: "text" }],
+          rows: [{ name: "あ".repeat(TABLE_CELL_CHAR_GUIDELINE + 1) }],
+        },
+      }),
+    );
+    const warnings = computeContentWarnings(document);
+    expect(warnings.map((warning) => warning.code)).toContain("table_cell_overflow");
+    expect(warnings.map((warning) => warning.path)).toContainEqual([
+      "scenes",
+      1,
+      "visualCues",
+      2,
+      "input",
+      "data",
+      "rows",
+      0,
+      "name",
+    ]);
+  });
+
+  it("warns when table rows and columns exceed the guidelines", () => {
+    const document = validContentDocument();
+    const columns = Array.from({ length: TABLE_COLUMN_GUIDELINE + 1 }, (_, index) => ({
+      key: `col${index + 1}`,
+      label: `列${index + 1}`,
+      type: "text",
+    }));
+    const rows = Array.from({ length: TABLE_ROW_GUIDELINE + 1 }, () => ({ col1: "a" }));
+    document.scenes[1]!.visualCues.push(tableCue({ data: { columns, rows } }));
+    const warnings = computeContentWarnings(document);
+    expect(warnings.map((warning) => warning.code)).toContain("table_columns_overflow");
+    expect(warnings.map((warning) => warning.code)).toContain("table_rows_overflow");
+  });
+
+  it("warns when the total table reveal exceeds the guideline", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues.push(
+      tableCue({
+        data: {
+          columns: [{ key: "name", label: "項目", type: "text" }],
+          rows: [{ name: "a" }, { name: "b" }, { name: "c" }],
+        },
+        reveal: { mode: "rows", preset: "fade", durationMs: 2000, staggerMs: 2000 },
+      }),
+    );
+    const warnings = computeContentWarnings(document);
+    expect(warnings.map((warning) => warning.code)).toContain("table_reveal_overflow");
+    expect(warnings.map((warning) => warning.path)).toContainEqual([
+      "scenes",
+      1,
+      "visualCues",
+      2,
+      "input",
+      "reveal",
     ]);
   });
 });

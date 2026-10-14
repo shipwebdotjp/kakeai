@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idSchema } from "../content/primitives";
+import { idSchema, nonNegativeInt } from "../content/primitives";
 import {
   DEFAULT_TRANSITION_POLICY,
   type CueLayer,
@@ -10,7 +10,7 @@ import {
   animationSpecSchema,
   type AnimationPolicy,
 } from "../content/animation";
-import { fontFaceSpecSchema, textSurfaceSchema } from "../content/theme";
+import { fontFaceSpecSchema, textSurfaceSchema, themeAccentTokenSchema } from "../content/theme";
 import {
   MAX_NESTED_VISUAL_DEPTH,
   fitSchema,
@@ -38,6 +38,7 @@ export type TemplateFieldSpec =
   | { kind: "color"; key: string; label: string; optional?: boolean }
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
   | { kind: "boolean"; key: string; label: string }
+  | { kind: "table"; key: string; label: string; maxColumns: number; maxRows: number }
   | { kind: "animation"; key: string; label: string };
 
 export interface VisualTemplateDefinition {
@@ -513,6 +514,208 @@ export const textBlockV2: VisualTemplateDefinition = {
   collectAssetRefs: () => [],
 };
 
+export const TABLE_MAX_COLUMNS = 8;
+export const TABLE_MAX_ROWS = 12;
+export const TABLE_REVEAL_STAGGER_MAX_MS = 2000;
+export const TABLE_REVEAL_DEFAULT_STAGGER_MS = 150;
+
+export const tableColumnTypeSchema = z.enum(["text", "number"]);
+export type TableColumnType = z.infer<typeof tableColumnTypeSchema>;
+
+export const tableCellAlignSchema = z.enum(["left", "center", "right"]);
+export type TableCellAlign = z.infer<typeof tableCellAlignSchema>;
+
+export const tableNumberFormatSchema = z.enum(["integer", "decimal", "percent", "currency"]);
+export type TableNumberFormat = z.infer<typeof tableNumberFormatSchema>;
+
+export const tableToneSchema = z.enum([
+  "primary",
+  "secondary",
+  "tertiary",
+  "success",
+  "warning",
+  "error",
+  "info",
+]);
+export type TableTone = z.infer<typeof tableToneSchema>;
+
+export const tableStylePresetSchema = z.enum(["clean", "striped", "bordered"]);
+export type TableStylePreset = z.infer<typeof tableStylePresetSchema>;
+
+export const tableRevealModeSchema = z.enum(["none", "rows", "columns"]);
+export type TableRevealMode = z.infer<typeof tableRevealModeSchema>;
+
+export const tableRevealPresetSchema = z.enum(["fade", "slide-up", "scale-in"]);
+export type TableRevealPreset = z.infer<typeof tableRevealPresetSchema>;
+
+export const tableColumnSchema = z.strictObject({
+  key: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/),
+  label: z.string(),
+  type: tableColumnTypeSchema,
+  align: tableCellAlignSchema.optional(),
+  format: tableNumberFormatSchema.optional(),
+});
+export type TableColumn = z.infer<typeof tableColumnSchema>;
+
+export const tableRowSchema = z.record(
+  z.string().min(1).max(64),
+  z.union([z.string(), z.number()]),
+);
+export type TableRow = z.infer<typeof tableRowSchema>;
+
+export const tableEmphasisSchema = z.strictObject({
+  row: nonNegativeInt,
+  key: z.string().min(1).max(64).optional(),
+  tone: tableToneSchema,
+});
+export type TableEmphasis = z.infer<typeof tableEmphasisSchema>;
+
+export const tableDataSchema = z
+  .strictObject({
+    columns: z.array(tableColumnSchema).min(1).max(TABLE_MAX_COLUMNS),
+    rows: z.array(tableRowSchema).max(TABLE_MAX_ROWS),
+    emphasis: z.array(tableEmphasisSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const keys = data.columns.map((column) => column.key);
+    if (new Set(keys).size !== keys.length) {
+      ctx.addIssue({ code: "custom", message: "列キーは一意にしてください", path: ["columns"] });
+    }
+    const known = new Set(keys);
+    data.rows.forEach((row, rowIndex) => {
+      for (const key of Object.keys(row)) {
+        if (!known.has(key)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `未定義の列キーです: ${key}`,
+            path: ["rows", rowIndex, key],
+          });
+        }
+      }
+    });
+    for (const [columnIndex, column] of data.columns.entries()) {
+      if (column.type === "text" && column.format !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: `format は number 列だけが持てます: ${column.key}`,
+          path: ["columns", columnIndex, "format"],
+        });
+      }
+    }
+    (data.emphasis ?? []).forEach((entry, entryIndex) => {
+      if (entry.row >= data.rows.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: `強調の行番号が行数を超えています: ${entry.row}`,
+          path: ["emphasis", entryIndex, "row"],
+        });
+      }
+      if (entry.key !== undefined && !known.has(entry.key)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `強調の列キーが未定義です: ${entry.key}`,
+          path: ["emphasis", entryIndex, "key"],
+        });
+      }
+    });
+  });
+export type TableData = z.infer<typeof tableDataSchema>;
+
+export const tableStyleSchema = z.strictObject({
+  preset: tableStylePresetSchema.default("clean"),
+  zebra: z.boolean().optional(),
+  headerAccent: themeAccentTokenSchema.optional(),
+});
+export type TableStyle = z.infer<typeof tableStyleSchema>;
+
+export const tableRevealSchema = z.strictObject({
+  mode: tableRevealModeSchema.default("rows"),
+  preset: tableRevealPresetSchema.default("fade"),
+  durationMs: nonNegativeInt.max(DEFAULT_ANIMATION_POLICY.maxDurationMs).default(
+    DEFAULT_ANIMATION_POLICY.defaultDurationMs,
+  ),
+  staggerMs: nonNegativeInt.max(TABLE_REVEAL_STAGGER_MAX_MS).default(TABLE_REVEAL_DEFAULT_STAGGER_MS),
+});
+export type TableReveal = z.infer<typeof tableRevealSchema>;
+
+export const tableSimpleInputSchema = z.strictObject({
+  caption: z.string().optional(),
+  data: tableDataSchema,
+  style: tableStyleSchema.optional(),
+  reveal: tableRevealSchema.optional(),
+});
+export type TableSimpleInput = z.infer<typeof tableSimpleInputSchema>;
+
+const TABLE_STYLE_PRESET_OPTIONS = [
+  { value: "clean", label: "シンプル" },
+  { value: "striped", label: "ストライプ" },
+  { value: "bordered", label: "格子" },
+] as const;
+
+const TABLE_HEADER_ACCENT_OPTIONS = [
+  { value: "primary", label: "プライマリ" },
+  { value: "secondary", label: "セカンダリ" },
+  { value: "tertiary", label: "ターシャリ" },
+] as const;
+
+const TABLE_REVEAL_MODE_OPTIONS = [
+  { value: "rows", label: "行ごと" },
+  { value: "columns", label: "列ごと" },
+  { value: "none", label: "なし" },
+] as const;
+
+const TABLE_REVEAL_PRESET_OPTIONS = [
+  { value: "fade", label: "フェード" },
+  { value: "slide-up", label: "下から" },
+  { value: "scale-in", label: "拡大" },
+] as const;
+
+const tableSimpleV1: VisualTemplateDefinition = {
+  id: "table.simple",
+  version: 1,
+  inputSchema: tableSimpleInputSchema,
+  layers: ["overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "表", description: "列定義・行・強調セルを持つ表", category: "data" },
+  inputFields: [
+    { kind: "optionalText", key: "caption", label: "見出し" },
+    { kind: "table", key: "data", label: "表データ", maxColumns: TABLE_MAX_COLUMNS, maxRows: TABLE_MAX_ROWS },
+    { kind: "select", key: "style.preset", label: "スタイル", options: TABLE_STYLE_PRESET_OPTIONS },
+    {
+      kind: "select",
+      key: "style.headerAccent",
+      label: "見出しの色",
+      options: TABLE_HEADER_ACCENT_OPTIONS,
+      optional: true,
+    },
+    { kind: "boolean", key: "style.zebra", label: "ゼブラ" },
+    { kind: "select", key: "reveal.mode", label: "登場の仕方", options: TABLE_REVEAL_MODE_OPTIONS },
+    { kind: "select", key: "reveal.preset", label: "登場のアニメーション", options: TABLE_REVEAL_PRESET_OPTIONS },
+    {
+      kind: "number",
+      key: "reveal.durationMs",
+      label: "登場の尺(ms)",
+      min: 0,
+      max: DEFAULT_ANIMATION_POLICY.maxDurationMs,
+      step: 50,
+    },
+    {
+      kind: "number",
+      key: "reveal.staggerMs",
+      label: "登場のずれ(ms)",
+      min: 0,
+      max: TABLE_REVEAL_STAGGER_MAX_MS,
+      step: 10,
+    },
+  ],
+  collectAssetRefs: () => [],
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   textBlockV2,
@@ -525,11 +728,13 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   sceneDeviceFrameV2,
   sceneSiteMockupV1,
   compositionFullBleedV1,
+  tableSimpleV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
 export { characterStandingV1, characterStandingV2, characterStandingV3, sceneDeviceFrameV1, sceneDeviceFrameV2 };
 export { sceneSiteMockupV1 };
+export { tableSimpleV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

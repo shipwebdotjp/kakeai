@@ -1350,3 +1350,89 @@ describe("scene accent", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });
+
+describe("table.simple form", () => {
+  const tableInput = {
+    caption: "料金プラン",
+    data: {
+      columns: [
+        { key: "name", label: "プラン", type: "text" },
+        { key: "price", label: "月額", type: "number", format: "currency" },
+      ],
+      rows: [
+        { name: "Free", price: 0 },
+        { name: "Pro", price: 1500 },
+      ],
+      emphasis: [{ row: 1, tone: "primary" }],
+    },
+    style: { preset: "clean", zebra: true, headerAccent: "primary" },
+    reveal: { mode: "rows", preset: "fade", durationMs: 400, staggerMs: 150 },
+  };
+
+  function tableCue() {
+    return vc({
+      id: "vc-table",
+      template: { id: "table.simple", version: 1 },
+      layer: "overlay",
+      input: structuredClone(tableInput),
+    });
+  }
+
+  it("round-trips table data and nested style/reveal fields", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [tableCue()];
+    const values = toFormValues(base);
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(tableInput);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("reads nested select fields with defaults and writes them back", () => {
+    const base = createInitialContentDocument();
+    const input = structuredClone(tableInput) as Record<string, unknown>;
+    delete (input as { style?: unknown }).style;
+    delete (input as { reveal?: unknown }).reveal;
+    base.scenes[1]!.visualCues = [vc({
+      id: "vc-table",
+      template: { id: "table.simple", version: 1 },
+      layer: "overlay",
+      input,
+    })];
+    const values = toFormValues(base);
+    const cue = values.scenes[1]!.cues[0]!;
+    expect(cue.fields["style.preset"]).toBe("clean");
+    expect(cue.fields["style.headerAccent"]).toBe("");
+    expect(cue.fields["style.zebra"]).toBe("");
+    expect(cue.fields["reveal.mode"]).toBe("rows");
+    cue.fields["style.headerAccent"] = "secondary";
+    cue.fields["reveal.mode"] = "columns";
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual({
+      ...tableInput,
+      style: { preset: "clean", headerAccent: "secondary" },
+      reveal: { mode: "columns", preset: "fade" },
+    });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("rejects malformed table data on save", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [tableCue()];
+    const values = toFormValues(base);
+    values.scenes[1]!.cues[0]!.fields.data = JSON.stringify({ columns: [], rows: [] });
+    expect(() => buildContentDocument(base, values)).toThrow();
+  });
+
+  it("creates new table cues with starter data", () => {
+    const cue = createCueFormValue({
+      sceneId: "scene-point-1",
+      templateId: "table.simple",
+      templateVersion: 1,
+      layer: "overlay",
+      order: 0,
+    });
+    const parsed = JSON.parse(cue.fields.data ?? "") as { columns: unknown[]; rows: unknown[] };
+    expect(parsed.columns).toHaveLength(2);
+    expect(parsed.rows).toHaveLength(1);
+  });
+});

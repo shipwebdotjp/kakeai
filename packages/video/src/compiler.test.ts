@@ -791,6 +791,59 @@ describe("compileDocument", () => {
       CompositionCompileError,
     );
   });
+
+  it("renders a table.simple cue with staggered row tweens", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-table",
+        template: { id: "table.simple", version: 1 },
+        layer: "overlay",
+        input: {
+          caption: "料金プラン",
+          data: {
+            columns: [
+              { key: "name", label: "プラン", type: "text" },
+              { key: "price", label: "月額", type: "number", format: "currency" },
+            ],
+            rows: [
+              { name: "Free", price: 0 },
+              { name: "Pro", price: 1500 },
+            ],
+          },
+          reveal: { mode: "rows", preset: "fade", durationMs: 400, staggerMs: 150 },
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("kakeai-table");
+    expect(compiled.html).toContain("1,500");
+    const firstRow = cueScope("vc-table").id("row-0");
+    const secondRow = cueScope("vc-table").id("row-1");
+    expect(compiled.html).toContain(`document.getElementById("${firstRow}")`);
+    expect(compiled.html).toContain(`document.getElementById("${secondRow}")`);
+    expect(compiled.html).toContain("opacity:0");
+  });
+
+  it("keeps two table.simple cues from colliding", () => {
+    const document = validContentDocument();
+    const input = {
+      data: {
+        columns: [{ key: "name", label: "項目", type: "text" }],
+        rows: [{ name: "a" }],
+      },
+    };
+    document.scenes[0]!.visualCues = [
+      cue({ id: "vc-table-a", template: { id: "table.simple", version: 1 }, layer: "overlay", order: 0, input }),
+      cue({ id: "vc-table-b", template: { id: "table.simple", version: 1 }, layer: "overlay", order: 1, input }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const a = cueScope("vc-table-a").id("row-0");
+    const b = cueScope("vc-table-b").id("row-0");
+    expect(a).not.toBe(b);
+    expect(compiled.html).toContain(`id="${a}"`);
+    expect(compiled.html).toContain(`id="${b}"`);
+  });
 });
 
 describe("visual theme", () => {
