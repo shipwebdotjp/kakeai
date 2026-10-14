@@ -2,10 +2,12 @@
 
 ## 目的と境界
 
-この文書は、VisualTemplateの見た目の既定値を提供する **Visual Theme** の基盤と、唯一の組み込みテーマ `soft-editorial@1` を定める。決定は [ADR 0040](../adr/0040-visual-theme-contract.md) を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md) を正とする。
+この文書は、VisualTemplateの見た目の既定値を提供する **Visual Theme** の基盤と、唯一の組み込みテーマ `soft-editorial@1` を定める。利用者編集可能なTheme、revision、draft、Font Face、選択UIは[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)を正とする。決定は[ADR 0049](../adr/0049-custom-visual-theme-revisions.md)を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md) を正とする。
+
+本書の「編集UI」およびrole対応範囲は、カスタマイズ機能を導入する前の基盤の記録である。前記仕様と矛盾するときは、Visual Theme カスタマイズ仕様を優先する。
 
 - Visual Theme は既定値であり、Cueの明示設定が常に優先する。`text.block@1` の入力契約と柔軟性は変えない。
-- 初回は `soft-editorial@1` を全作品で使い、テーマ選択UI・二つ目のテーマ・画像生成・新VisualTemplateは含めない。
+- 初回の組み込みThemeは `soft-editorial@1` である。Theme一覧・選択・利用者Themeの詳細は[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)で拡張する。
 - Web UIのライト／ダーク、および `scene.site-mockup@1` の `light`／`dark` はVisual Themeと別概念のままにする。
 
 ## 参照と解決
@@ -43,11 +45,11 @@
 | label | sans | 28 | `#4E5A6B` | 1.4 | bold |
 | code | mono | 34 | `#232B3D` | 1.6 | - |
 
-`label`・`code`・`artDirection` に対応する描画はまだなく、将来のテンプレート・画像生成が入るときに使う。
+基盤時点では`label`・`code`・`artDirection`に対応する描画はない。`label`の描画は[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)の`text.block@2`で追加する。
 
 ## テキストの解決順序
 
-`text.block` はプロパティ単位で次を適用する。`decoration.bold` なども個別にこの順で解決し、未指定の項目だけテーマを使う。roleは既存の5分類のままで増やさない。
+`text.block` はプロパティ単位で次を適用する。`decoration.bold` なども個別にこの順で解決し、未指定の項目だけテーマを使う。基盤の`text.block@1`は既存の5分類のままに保ち、role追加は[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)の新template versionで行う。
 
 1. Cueの明示値
 2. 選択中テーマのrole別既定値
@@ -84,7 +86,7 @@ Sceneは `accent`（旧 `accentColor`）を必須で持つ。
 
 ## 編集UI
 
-- テーマ選択は表示しない。全作品で `soft-editorial@1` を使う。
+- 基盤実装ではテーマ選択を表示せず、全作品で `soft-editorial@1` を使う。カスタマイズ機能では[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)に従う。
 - Sceneごとにテーマアクセント3色（プライマリ／セカンダリ／ターシャリ）または自由色を選ぶ。自由色が空の場合はテーマ既定（primary）で保存する。
 - Text Cueの既存スタイル入力は維持する。未指定項目はテーマのrole別スタイルで描画される旨をCue編集欄に表示する。
 

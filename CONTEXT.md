@@ -109,8 +109,20 @@ An instruction to display one Visual Template with specific inputs over a segmen
 _Avoid_: Asset, template
 
 **Visual Theme**:
-An app-managed, versioned set of default visual tokens (palette, text styles, surfaces, motion budget) fixed on a Script Version. Explicit cue inputs always override it.
+An app-managed visual identity whose selected Theme Revision supplies default visual tokens to a Script Version. Explicit cue inputs always override it.
 _Avoid_: UI theme, site mockup theme
+
+**Theme Revision**:
+An immutable published definition of one Visual Theme, identified by its theme id and version number. A Script Version may reference only a published revision.
+_Avoid_: Theme draft, theme update
+
+**Theme Draft**:
+A mutable, non-renderable working definition of a Visual Theme used only by the theme editor and its preview.
+_Avoid_: Theme Revision, Script Version
+
+**Font Face**:
+One selectable installed typeface face, including its family, weight, style, and platform-specific identifier. A Visual Theme uses it as a default while retaining a fallback when it is unavailable.
+_Avoid_: Font category, font file
 
 **Layer**:
 A named, ordered region of a Scene where Visual Cues are drawn (background, card, standing, overlay). It fixes the draw order independent of cue array order.
