@@ -21,6 +21,7 @@ import { processAssetIngest } from "../worker/asset-ingest.ts";
 import * as artifacts from "./artifacts.ts";
 import * as assets from "./assets.ts";
 import * as faceSets from "./face-sets.ts";
+import { FakeFontCatalogAdapter, FontCatalogService } from "./font-catalog.ts";
 import * as jobs from "./jobs.ts";
 import * as renderJobs from "./render-jobs.ts";
 import * as scriptVersions from "./script-versions.ts";
@@ -36,6 +37,7 @@ let prisma: ReturnType<typeof createPrismaClient>;
 let worker: ReturnType<typeof createWorker>;
 let ffmpegReady = false;
 const renderEnabled = process.env.KAKEAI_RENDER_TEST === "1";
+const testFontCatalog = new FontCatalogService(new FakeFontCatalogAdapter());
 
 async function generateFixtures(): Promise<void> {
   await execFileAsync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30", "-frames:v", "1", join(fixturesDir, "image.png")]);
@@ -151,7 +153,7 @@ describe("render job creation", () => {
     const image = await readyImage();
     const { work, saved } = await versionWithBackground(image.id);
 
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     expect(job.kind).toBe("render");
     expect(job.status).toBe("queued");
@@ -212,7 +214,7 @@ describe("render job creation", () => {
       content,
     });
 
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
     const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
     expect(snapshot.assets.map((asset) => asset.assetId)).toEqual([image.id]);
@@ -240,12 +242,12 @@ describe("render job creation", () => {
     const { saved } = await versionWithBackground(image.id);
 
     await prisma.asset.update({ where: { id: image.id }, data: { status: "processing" } });
-    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id)).rejects.toMatchObject({
+    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog)).rejects.toMatchObject({
       code: "ASSET_PROCESSING",
     });
 
     await prisma.asset.update({ where: { id: image.id }, data: { status: "failed" } });
-    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id)).rejects.toMatchObject({
+    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog)).rejects.toMatchObject({
       code: "ASSET_UNAVAILABLE",
     });
 
@@ -291,7 +293,7 @@ describe("render job creation", () => {
       content,
     });
     await expect(
-      renderJobs.createRenderJob(prisma, saved.scriptVersion.id),
+      renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog),
     ).rejects.toMatchObject({ code: "RENDER_INPUT_INVALID" });
   });
 
@@ -377,7 +379,7 @@ describe("render job creation", () => {
       sourceScriptVersionId: null,
       content,
     });
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
     const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
     expect(snapshot.faceSets.map((entry) => entry.id)).toEqual([faceSet.id]);
@@ -398,8 +400,8 @@ describe("render job polling and cancel", () => {
     }
     const image = await readyImage();
     const { work, saved } = await versionWithBackground(image.id);
-    const first = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
-    const second = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const first = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    const second = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     const history = await jobs.listWorkJobs(prisma, work.id);
     expect(history.map((job) => job.id)).toEqual([second.id, first.id]);
@@ -417,7 +419,7 @@ describe("render job polling and cancel", () => {
     }
     const image = await readyImage();
     const { saved } = await versionWithBackground(image.id);
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     const cancelled = await jobs.cancelJob(prisma, job.id);
     expect(cancelled.status).toBe("cancelled");
@@ -458,7 +460,7 @@ describe("render worker", () => {
     }
     const image = await readyImage();
     const { saved } = await versionWithBackground(image.id);
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     await drainWorker();
 
@@ -531,7 +533,7 @@ describe("render worker", () => {
       sourceScriptVersionId: null,
       content,
     });
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     await drainWorker();
 
     const finished = await jobs.getJob(prisma, job.id);
@@ -601,7 +603,7 @@ describe("render worker", () => {
       sourceScriptVersionId: null,
       content,
     });
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     await drainWorker();
 
     const finished = await jobs.getJob(prisma, job.id);
@@ -661,7 +663,7 @@ describe("render worker", () => {
       sourceScriptVersionId: null,
       content,
     });
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     await drainWorker();
 
     const finished = await jobs.getJob(prisma, job.id);

@@ -11,6 +11,7 @@ import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import { CompositionService } from "./compositions.ts";
 import { resolvePreviewCompositions } from "./script-versions.ts";
 import * as jobs from "./jobs.ts";
+import { FakeFontCatalogAdapter, FontCatalogService } from "./font-catalog.ts";
 import * as renderJobs from "./render-jobs.ts";
 import * as scriptVersions from "./script-versions.ts";
 import * as works from "./works.ts";
@@ -21,6 +22,7 @@ import { applySqlitePragmas } from "../db/pragmas.ts";
 import { loadConfig } from "../config.ts";
 
 describe("Composition Library Integration Tests", () => {
+  const testFontCatalog = new FontCatalogService(new FakeFontCatalogAdapter());
   let tmpDir: string;
   let db: any;
   let service: CompositionService;
@@ -263,7 +265,7 @@ describe("Composition Library Integration Tests", () => {
     expect(draft.compositions).toEqual(savedPreview.compositions);
     expect(draft.timeline).toEqual(savedPreview.timeline);
 
-    const job = await renderJobs.createRenderJob(db, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(db, saved.scriptVersion.id, testFontCatalog);
     const row = await db.job.findUniqueOrThrow({ where: { id: job.id } });
     const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
     expect(snapshot.compositionVersions).toHaveLength(1);

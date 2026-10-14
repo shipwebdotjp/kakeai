@@ -123,6 +123,7 @@ export class FakeFontCatalogAdapter implements FontCatalogAdapter {
 
 export class FontCatalogService {
   private cachedCatalog: FontCatalog | null = null;
+  private inFlightCatalog: Promise<FontCatalog> | null = null;
 
   constructor(private adapter: FontCatalogAdapter = new MacOsFontCatalogAdapter()) {}
 
@@ -130,6 +131,21 @@ export class FontCatalogService {
     if (this.cachedCatalog && !forceRefresh) {
       return this.cachedCatalog;
     }
+    if (this.inFlightCatalog === null) {
+      const pending = this.fetchAndCache();
+      this.inFlightCatalog = pending;
+      const clear = () => {
+        if (this.inFlightCatalog === pending) {
+          this.inFlightCatalog = null;
+        }
+      };
+      pending.then(clear, clear);
+      return pending;
+    }
+    return this.inFlightCatalog;
+  }
+
+  private async fetchAndCache(): Promise<FontCatalog> {
     const result = await this.adapter.getCatalog();
     this.cachedCatalog = {
       supported: result.supported,
@@ -166,4 +182,13 @@ export class FontCatalogService {
 
     return { missingFonts: Array.from(missingFonts) };
   }
+}
+
+let sharedFontCatalogService: FontCatalogService | undefined;
+
+export function getSharedFontCatalogService(): FontCatalogService {
+  if (sharedFontCatalogService === undefined) {
+    sharedFontCatalogService = new FontCatalogService();
+  }
+  return sharedFontCatalogService;
 }

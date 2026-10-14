@@ -29,7 +29,7 @@ import {
 } from "./script-versions.ts";
 import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
-import { FontCatalogService } from "./font-catalog.ts";
+import { FontCatalogService, getSharedFontCatalogService } from "./font-catalog.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -56,7 +56,7 @@ export function getProducerVersion(): string | undefined {
 export async function createRenderJob(
   prisma: PrismaClient,
   scriptVersionId: string,
-  fontCatalogService: FontCatalogService = new FontCatalogService(),
+  fontCatalogService: FontCatalogService = getSharedFontCatalogService(),
 ): Promise<JobDto> {
   const row = await prisma.scriptVersion.findUnique({
     where: { id: scriptVersionId },
