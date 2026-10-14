@@ -44,6 +44,7 @@ import { resourceNotFound, validationError, type ValidationIssue } from "../http
 import type { DataDirectories } from "../storage/paths.ts";
 import { resolveAssetContent } from "./assets.ts";
 import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
+import { ThemeResolver } from "./theme-resolver.ts";
 
 export interface SaveScriptVersionResult {
   scriptVersion: ScriptVersionDto;
@@ -577,6 +578,12 @@ export async function compilePreview(
     assertTakeDurations(content, assetById);
   }
 
+  const themeResolver = new ThemeResolver(prisma);
+  const resolvedTheme = await themeResolver.resolve(content.visualTheme.id, content.visualTheme.version);
+  if (!resolvedTheme) {
+    throw new ApiError(422, "PREVIEW_INPUT_INVALID", `Visual Themeが見つかりません: ${content.visualTheme.id}@${content.visualTheme.version}`);
+  }
+
   const renderContentUrl = (assetId: string): string =>
     `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/render-content`;
 
@@ -590,6 +597,7 @@ export async function compilePreview(
   try {
     compiled = compileDocument({
       document: content,
+      resolvedTheme,
       compositionResolver: (versionId) => {
         const found = compositionByVersionId.get(versionId);
         if (!found) {

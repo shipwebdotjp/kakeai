@@ -130,7 +130,10 @@ export interface SceneFormValue {
   standings: StandingFormValue[];
 }
 
+import type { VisualThemeRef } from "@kakeai/contracts";
+
 export interface DocumentFormValues {
+  visualTheme: VisualThemeRef;
   scenes: SceneFormValue[];
   bgm: BgmFormValue;
   characters: CharacterFormValue[];
@@ -438,6 +441,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
     (cue) => cue.role === "bgm" && cue.range.kind === "work",
   );
   return {
+    visualTheme: content.visualTheme,
     scenes: content.scenes.map((scene) => {
       const cues = scene.visualCues
         .filter((cue) => cue.template.id !== STANDING_TEMPLATE_ID)
@@ -989,6 +993,7 @@ export function buildContentDocument(
   }
   return {
     ...base,
+    visualTheme: values.visualTheme ?? base.visualTheme,
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
     speakers,
     characters,

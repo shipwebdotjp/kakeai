@@ -5,11 +5,14 @@ import {
   CHARACTER_LIBRARY_ROUTE_PATH,
   COMPOSITION_LIBRARY_ROUTE_PATH,
   FACE_SETS_ROUTE_PATH,
+  THEMES_ROUTE_PATH,
   VOICE_PROFILES_ROUTE_PATH,
 } from "./lib/routes";
 import { CharacterLibraryPage } from "./pages/CharacterLibraryPage";
 import { CompositionLibraryPage } from "./pages/CompositionLibraryPage";
 import { FaceSetPage } from "./pages/FaceSetPage";
+import { ThemesPage } from "./pages/ThemesPage";
+import { ThemeDetailPage } from "./pages/ThemeDetailPage";
 import { VoiceProfilesPage } from "./pages/VoiceProfilesPage";
 import { WorkEditPage } from "./pages/WorkEditPage";
 import { WorkListPage } from "./pages/WorkListPage";
@@ -52,6 +55,12 @@ function RootLayout() {
               className="text-inherit no-underline hover:underline"
             >
               コンポジション
+            </Link>
+            <Link
+              to={THEMES_ROUTE_PATH}
+              className="text-inherit no-underline hover:underline"
+            >
+              テーマ
             </Link>
           </nav>
         </div>
@@ -107,6 +116,14 @@ export const router = createBrowserRouter([
           {
             path: COMPOSITION_LIBRARY_ROUTE_PATH,
             element: <CompositionLibraryPage />,
+          },
+          {
+            path: THEMES_ROUTE_PATH,
+            element: <ThemesPage />,
+          },
+          {
+            path: `${THEMES_ROUTE_PATH}/:themeId`,
+            element: <ThemeDetailPage />,
           },
           {
             path: "*",

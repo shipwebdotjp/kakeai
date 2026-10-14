@@ -292,10 +292,14 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
-  it("rejects an unknown visual theme", () => {
+  it("validates visual theme ref shape and accepts arbitrary ref shape", () => {
     const doc = validContentDocument();
-    doc.visualTheme = { id: "unknown-theme", version: 1 };
+    doc.visualTheme = { id: "", version: 1 };
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+
+    const doc2 = validContentDocument();
+    doc2.visualTheme = { id: "unknown-theme", version: 1 };
+    expect(contentDocumentSchema.safeParse(doc2).success).toBe(true);
   });
 
   it("rejects a wrong scene composition", () => {

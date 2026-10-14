@@ -10,6 +10,7 @@ import {
   animationSpecSchema,
   type AnimationPolicy,
 } from "../content/animation";
+import { fontFaceSpecSchema, textSurfaceSchema } from "../content/theme";
 import {
   MAX_NESTED_VISUAL_DEPTH,
   fitSchema,
@@ -464,6 +465,66 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   sceneSiteMockupV1,
   compositionFullBleedV1,
 ];
+
+export const textRoleV2Schema = z.enum(["title", "subtitle", "heading", "body", "closing", "label"]);
+export type TextRoleV2 = z.infer<typeof textRoleV2Schema>;
+
+export const textBlockV2InputSchema = z.strictObject({
+  text: z.string(),
+  role: textRoleV2Schema,
+  anchor: textAnchorSchema.optional(),
+  verticalAlign: textVerticalAlignSchema.optional(),
+  font: textFontSchema.optional(),
+  fontSize: z.number().int().min(8).max(240).optional(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  lineHeight: z.number().min(1).max(3).optional(),
+  decoration: z
+    .strictObject({
+      bold: z.boolean().optional(),
+      italic: z.boolean().optional(),
+      outline: z.boolean().optional(),
+      shadow: z.boolean().optional(),
+    })
+    .optional(),
+  fontFace: fontFaceSpecSchema.optional(),
+  surface: textSurfaceSchema.optional(),
+});
+export type TextBlockV2Input = z.infer<typeof textBlockV2InputSchema>;
+
+const TEXT_ROLE_V2_OPTIONS = [
+  ...TEXT_ROLE_OPTIONS,
+  { value: "label", label: "ラベル" },
+] as const;
+
+export const textBlockV2: VisualTemplateDefinition = {
+  id: "text.block",
+  version: 2,
+  inputSchema: textBlockV2InputSchema,
+  layers: ["overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "テキスト", description: "見出し・本文・ラベルなどのテキスト", category: "text" },
+  inputFields: [
+    { kind: "text", key: "text", label: "テキスト" },
+    { kind: "select", key: "role", label: "役割", options: TEXT_ROLE_V2_OPTIONS },
+    { kind: "select", key: "anchor", label: "左右位置", options: ANCHOR_OPTIONS, optional: true },
+    {
+      kind: "select",
+      key: "verticalAlign",
+      label: "上下位置",
+      options: VERTICAL_ALIGN_OPTIONS,
+      optional: true,
+    },
+    { kind: "select", key: "font", label: "フォント", options: FONT_OPTIONS, optional: true },
+    { kind: "number", key: "fontSize", label: "フォントサイズ(px)", min: 8, max: 240, step: 1, optional: true },
+    { kind: "color", key: "color", label: "色", optional: true },
+    { kind: "boolean", key: "decoration.bold", label: "太字" },
+    { kind: "boolean", key: "decoration.italic", label: "斜体" },
+    { kind: "boolean", key: "decoration.outline", label: "縁取り" },
+    { kind: "boolean", key: "decoration.shadow", label: "影" },
+  ],
+  collectAssetRefs: () => [],
+};
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
 export { characterStandingV1, characterStandingV2, characterStandingV3, sceneDeviceFrameV1, sceneDeviceFrameV2 };

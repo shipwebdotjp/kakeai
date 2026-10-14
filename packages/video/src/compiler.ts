@@ -14,6 +14,7 @@ import {
   deviceFrameInputSchema,
   deviceFrameV2InputSchema,
   textBlockV1,
+  textBlockV2,
   type AnimationPreset,
   type ContentDocument,
   type CueLayer,
@@ -60,6 +61,8 @@ export interface CompileDocumentOptions {
   assetResolver: AssetResolver;
   compositionResolver?: CompositionVersionResolver;
   faceSetResolver?: FaceSetResolver;
+  themeResolver?: (id: string, version: number) => VisualThemeDefinition | undefined;
+  resolvedTheme?: VisualThemeDefinition;
 }
 
 export interface CompiledComposition {
@@ -425,6 +428,7 @@ function dispatchTemplate(
 ): RenderedCue & { compositionVersion?: CompositionVersionResolved } {
   switch (key) {
     case `${textBlockV1.id}@${textBlockV1.version}`:
+    case `${textBlockV2.id}@${textBlockV2.version}`:
       return { html: renderTextBlock(input, context.path, context.theme), assetIds: [], animation: [] };
     case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
       return renderMediaFullBleed(input, context);
@@ -720,7 +724,10 @@ function applySceneTransitions(
 
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
   const { document, assetResolver, compositionResolver, faceSetResolver } = options;
-  const theme = resolveVisualTheme(document);
+  const theme =
+    options.resolvedTheme ??
+    (options.themeResolver ? options.themeResolver(document.visualTheme.id, document.visualTheme.version) : undefined) ??
+    resolveVisualTheme(document);
   const timeline = resolveTimeline(document);
   const sceneById = new Map(document.scenes.map((scene) => [scene.id, scene]));
 

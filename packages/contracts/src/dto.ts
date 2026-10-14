@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, localeSchema, nonNegativeInt, positiveInt, timestampSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { visualThemeDefinitionSchema } from "./content/theme";
 import { assetTagsSchema } from "./asset";
 import { errorCodeSchema } from "./error";
 
@@ -303,3 +304,69 @@ export type PreviewTimeline = z.infer<typeof previewTimelineSchema>;
 export type ScriptVersionPreview = z.infer<typeof scriptVersionPreviewSchema>;
 export type DraftPreviewSource = z.infer<typeof draftPreviewSourceSchema>;
 export type DraftPreview = z.infer<typeof draftPreviewSchema>;
+
+export const fontFaceSchema = z.object({
+  platformId: z.string().min(1),
+  family: z.string().min(1),
+  displayName: z.string().min(1),
+  postScriptName: z.string().min(1),
+  weight: z.number().int(),
+  style: z.enum(["normal", "italic", "oblique"]),
+  stretch: z.string(),
+  variableAxes: z
+    .array(
+      z.object({
+        tag: z.string(),
+        min: z.number(),
+        max: z.number(),
+        default: z.number(),
+      }),
+    )
+    .optional(),
+  available: z.boolean(),
+});
+export type FontFace = z.infer<typeof fontFaceSchema>;
+
+export const fontCatalogSchema = z.object({
+  supported: z.boolean(),
+  faces: z.array(fontFaceSchema),
+  reason: z.string().nullable(),
+  updatedAt: timestampSchema,
+});
+export type FontCatalog = z.infer<typeof fontCatalogSchema>;
+
+export const themeRevisionSchema = z.object({
+  id: idSchema,
+  themeId: idSchema,
+  version: positiveInt,
+  definition: visualThemeDefinitionSchema,
+  createdAt: timestampSchema,
+});
+export type ThemeRevision = z.infer<typeof themeRevisionSchema>;
+
+export const themeDraftSchema = z.object({
+  id: idSchema,
+  themeId: idSchema,
+  definition: visualThemeDefinitionSchema,
+  updatedAt: timestampSchema,
+});
+export type ThemeDraft = z.infer<typeof themeDraftSchema>;
+
+export const themeSummarySchema = z.object({
+  id: idSchema,
+  isBuiltIn: z.boolean(),
+  name: z.string().min(1),
+  archivedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  latestRevision: themeRevisionSchema.nullable(),
+  hasDraft: z.boolean(),
+  missingFonts: z.array(z.string()).optional(),
+});
+export type ThemeSummary = z.infer<typeof themeSummarySchema>;
+
+export const themeDetailSchema = themeSummarySchema.extend({
+  revisions: z.array(themeRevisionSchema),
+  draft: themeDraftSchema.nullable(),
+});
+export type ThemeDetail = z.infer<typeof themeDetailSchema>;

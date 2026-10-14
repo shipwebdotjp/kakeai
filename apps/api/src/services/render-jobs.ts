@@ -28,6 +28,8 @@ import {
   renderSourceDurationMs,
 } from "./script-versions.ts";
 import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
+import { ThemeResolver } from "./theme-resolver.ts";
+import { FontCatalogService } from "./font-catalog.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -54,6 +56,7 @@ export function getProducerVersion(): string | undefined {
 export async function createRenderJob(
   prisma: PrismaClient,
   scriptVersionId: string,
+  fontCatalogService: FontCatalogService = new FontCatalogService(),
 ): Promise<JobDto> {
   const row = await prisma.scriptVersion.findUnique({
     where: { id: scriptVersionId },
@@ -68,6 +71,17 @@ export async function createRenderJob(
   } catch {
     throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
   }
+
+  const themeResolver = new ThemeResolver(prisma);
+  const resolvedThemeDefinition = await themeResolver.resolve(
+    content.visualTheme.id,
+    content.visualTheme.version,
+  );
+  if (!resolvedThemeDefinition) {
+    throw new ApiError(422, "RENDER_INPUT_INVALID", `Visual Themeが見つかりません: ${content.visualTheme.id}@${content.visualTheme.version}`);
+  }
+
+  const fontDiagnostics = await fontCatalogService.diagnoseTheme(resolvedThemeDefinition);
 
   const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
@@ -102,6 +116,7 @@ export async function createRenderJob(
   try {
     compileDocument({
       document: content,
+      resolvedTheme: resolvedThemeDefinition,
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);
         const kind = asset?.kind;
@@ -195,6 +210,8 @@ export async function createRenderJob(
     assets: snapshotAssets,
     compositionVersions: snapshotCompositions,
     faceSets: snapshotFaceSets,
+    themeDefinition: resolvedThemeDefinition,
+    fontDiagnostics,
     template: { id: content.template.id, version: content.template.version },
     output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
     renderer: {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 import { styleIdSchema } from "./voice-profile";
 import { assetTagsSchema } from "./asset";
 
@@ -102,3 +103,25 @@ export const publishCompositionRequestSchema = z.strictObject({
 });
 
 export type PublishCompositionRequest = z.infer<typeof publishCompositionRequestSchema>;
+
+export const createThemeRequestSchema = z.strictObject({
+  name: z.string().trim().min(1),
+  sourceThemeRef: visualThemeRefSchema.optional(),
+});
+export type CreateThemeRequest = z.infer<typeof createThemeRequestSchema>;
+
+export const updateThemeDraftRequestSchema = z.strictObject({
+  definition: visualThemeDefinitionSchema,
+});
+export type UpdateThemeDraftRequest = z.infer<typeof updateThemeDraftRequestSchema>;
+
+export const previewThemeDraftRequestSchema = z.strictObject({
+  definition: visualThemeDefinitionSchema,
+});
+export type PreviewThemeDraftRequest = z.infer<typeof previewThemeDraftRequestSchema>;
+
+export const publishThemeDraftRequestSchema = z.strictObject({});
+export type PublishThemeDraftRequest = z.infer<typeof publishThemeDraftRequestSchema>;
+
+export const refreshFontCatalogRequestSchema = z.strictObject({});
+export type RefreshFontCatalogRequest = z.infer<typeof refreshFontCatalogRequestSchema>;

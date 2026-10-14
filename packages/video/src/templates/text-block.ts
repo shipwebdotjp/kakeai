@@ -1,12 +1,15 @@
 import {
   textBlockInputSchema,
+  textBlockV2InputSchema,
   type TextRole,
   type ThemeFontCategory,
   type VisualThemeTextToken,
+  type TextSurface,
+  type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
-import { escapeHtmlText } from "../escape";
-import { THEME_FONT_STACKS } from "../theme";
+import { escapeCssFontFamily, escapeHtmlText } from "../escape";
+import { THEME_FONT_STACKS, hexToRgb } from "../theme";
 
 type TextAnchor = "left" | "center" | "right";
 type VerticalAlign = "top" | "middle" | "bottom";
@@ -28,7 +31,7 @@ interface RoleDefault {
   decoration: TextDecoration;
 }
 
-const ROLE_DEFAULTS: Record<TextRole, RoleDefault> = {
+const ROLE_DEFAULTS: Record<string, RoleDefault> = {
   title: {
     anchor: "center",
     verticalAlign: "middle",
@@ -74,6 +77,33 @@ const ROLE_DEFAULTS: Record<TextRole, RoleDefault> = {
     lineHeight: 1.4,
     decoration: { bold: true, italic: false, outline: false, shadow: false },
   },
+  caption: {
+    anchor: "center",
+    verticalAlign: "bottom",
+    font: "sans",
+    fontSize: 40,
+    color: "#FFFFFF",
+    lineHeight: 1.5,
+    decoration: { bold: false, italic: false, outline: false, shadow: true },
+  },
+  label: {
+    anchor: "left",
+    verticalAlign: "bottom",
+    font: "sans",
+    fontSize: 28,
+    color: "#4E5A6B",
+    lineHeight: 1.4,
+    decoration: { bold: true, italic: false, outline: false, shadow: false },
+  },
+  code: {
+    anchor: "left",
+    verticalAlign: "middle",
+    font: "mono",
+    fontSize: 34,
+    color: "#232B3D",
+    lineHeight: 1.6,
+    decoration: { bold: false, italic: false, outline: false, shadow: false },
+  },
 };
 
 const JUSTIFY: Record<TextAnchor, string> = {
@@ -103,42 +133,89 @@ function textShadow(decoration: TextDecoration): string {
   return parts.length === 0 ? "none" : parts.join(",");
 }
 
+function renderSurfaceStyle(surface: TextSurface | undefined): string {
+  if (!surface || !surface.enabled) {
+    return "";
+  }
+  const { r, g, b } = hexToRgb(surface.backgroundColor);
+  const bg = `rgba(${r},${g},${b},${surface.backgroundOpacity})`;
+  const styles = [
+    `background:${bg}`,
+    `padding:${surface.paddingVertical}px ${surface.paddingHorizontal}px`,
+    `border-radius:${surface.borderRadius}px`,
+  ];
+  if (surface.border) {
+    styles.push(`border:${surface.border.width}px solid ${surface.border.color}`);
+  }
+  return styles.join(";");
+}
+
 export function renderTextBlock(
   input: unknown,
   path: (string | number)[],
-  theme: { textRoles: Record<TextRole, VisualThemeTextToken> },
+  theme: VisualThemeDefinition,
 ): string {
-  const parsed = textBlockInputSchema.safeParse(input);
-  if (!parsed.success) {
+  const parsedV2 = textBlockV2InputSchema.safeParse(input);
+  const parsedV1 = !parsedV2.success ? textBlockInputSchema.safeParse(input) : null;
+
+  if (!parsedV2.success && (!parsedV1 || !parsedV1.success)) {
     throw new CompositionCompileError([
       { path, code: "invalid_input", message: "text.block の入力が不正です。" },
     ]);
   }
-  const { text, role } = parsed.data;
+
+  const data: {
+    text: string;
+    role: string;
+    anchor?: TextAnchor;
+    verticalAlign?: VerticalAlign;
+    font?: ThemeFontCategory;
+    fontSize?: number;
+    color?: string;
+    lineHeight?: number;
+    decoration?: Partial<TextDecoration>;
+    fontFace?: { family: string; platformId?: string };
+    surface?: TextSurface;
+  } = parsedV2.success
+    ? parsedV2.data
+    : (parsedV1!.data as any);
+
+  const { text, role } = data;
   if (text.trim().length === 0) {
     return "";
   }
-  const themeToken = theme.textRoles[role];
-  const fallback = ROLE_DEFAULTS[role];
-  const anchor = parsed.data.anchor ?? fallback.anchor;
-  const verticalAlign = parsed.data.verticalAlign ?? fallback.verticalAlign;
-  const font = parsed.data.font ?? themeToken.font ?? fallback.font;
-  const fontSize = parsed.data.fontSize ?? themeToken.fontSize ?? fallback.fontSize;
-  const color = (parsed.data.color ?? themeToken.color ?? fallback.color).toUpperCase();
-  const lineHeight = themeToken.lineHeight ?? fallback.lineHeight;
+
+  const themeToken = (theme.textRoles as Record<string, VisualThemeTextToken | undefined>)[role];
+  const fallback = ROLE_DEFAULTS[role] ?? ROLE_DEFAULTS.body;
+  const anchor = data.anchor ?? fallback.anchor;
+  const verticalAlign = data.verticalAlign ?? fallback.verticalAlign;
+  const font = data.font ?? themeToken?.font ?? fallback.font;
+  const fontSize = data.fontSize ?? themeToken?.fontSize ?? fallback.fontSize;
+  const color = (data.color ?? themeToken?.color ?? fallback.color).toUpperCase();
+  const lineHeight = ("lineHeight" in data && typeof data.lineHeight === "number")
+    ? data.lineHeight
+    : themeToken?.lineHeight ?? fallback.lineHeight;
+
+  const fontFaceSpec = "fontFace" in data ? data.fontFace : undefined;
+  const themeFontFace = themeToken?.fontFace;
+  const selectedFontFace = fontFaceSpec ?? themeFontFace;
+
+  let fontFamilyCss = THEME_FONT_STACKS[font];
+  if (selectedFontFace?.family) {
+    fontFamilyCss = `${escapeCssFontFamily(selectedFontFace.family)},${THEME_FONT_STACKS[font]}`;
+  }
+
   const decoration: TextDecoration = {
-    bold: parsed.data.decoration?.bold ?? themeToken.decoration.bold ?? fallback.decoration.bold,
-    italic:
-      parsed.data.decoration?.italic ?? themeToken.decoration.italic ?? fallback.decoration.italic,
-    outline:
-      parsed.data.decoration?.outline ??
-      themeToken.decoration.outline ??
-      fallback.decoration.outline,
-    shadow:
-      parsed.data.decoration?.shadow ??
-      themeToken.decoration.shadow ??
-      fallback.decoration.shadow,
+    bold: data.decoration?.bold ?? themeToken?.decoration.bold ?? fallback.decoration.bold,
+    italic: data.decoration?.italic ?? themeToken?.decoration.italic ?? fallback.decoration.italic,
+    outline: data.decoration?.outline ?? themeToken?.decoration.outline ?? fallback.decoration.outline,
+    shadow: data.decoration?.shadow ?? themeToken?.decoration.shadow ?? fallback.decoration.shadow,
   };
+
+  const surfaceFromCue = "surface" in data ? data.surface : undefined;
+  const surfaceFromTheme = role === "caption" ? theme.surfaces?.caption : role === "label" ? theme.surfaces?.label : undefined;
+  const surfaceToUse = surfaceFromCue ?? surfaceFromTheme;
+  const surfaceCss = renderSurfaceStyle(surfaceToUse);
 
   const wrapperStyle = [
     "position:absolute",
@@ -153,7 +230,7 @@ export function renderTextBlock(
   const textStyle = [
     "margin:0",
     "max-width:1600px",
-    `font-family:${THEME_FONT_STACKS[font]}`,
+    `font-family:${fontFamilyCss}`,
     `font-size:${fontSize}px`,
     `color:${color}`,
     `font-weight:${decoration.bold ? "700" : "400"}`,
@@ -162,7 +239,8 @@ export function renderTextBlock(
     "white-space:pre-line",
     `text-align:${anchor}`,
     `text-shadow:${textShadow(decoration)}`,
-  ].join(";");
+    surfaceCss,
+  ].filter((s) => s.length > 0).join(";");
 
   return `<div class="kakeai-textblock" style="${wrapperStyle}"><p class="kakeai-textblock-text" style="${textStyle}">${escapeHtmlText(text)}</p></div>`;
 }

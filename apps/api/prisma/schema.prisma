@@ -248,3 +248,32 @@ model CompositionVersion {
 
   @@unique([compositionId, versionNumber])
 }
+
+model Theme {
+  id         String          @id @default(cuid())
+  name       String
+  archivedAt DateTime?
+  draft      ThemeDraft?
+  revisions  ThemeRevision[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model ThemeDraft {
+  id             String   @id @default(cuid())
+  themeId        String   @unique
+  theme          Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  definitionJson String
+  updatedAt      DateTime @updatedAt
+}
+
+model ThemeRevision {
+  id             String   @id @default(cuid())
+  themeId        String
+  theme          Theme    @relation(fields: [themeId], references: [id], onDelete: Restrict)
+  versionNumber  Int
+  definitionJson String
+  createdAt      DateTime @default(now())
+
+  @@unique([themeId, versionNumber])
+}
