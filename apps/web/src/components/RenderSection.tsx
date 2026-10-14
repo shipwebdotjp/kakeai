@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { Job } from "@kakeai/contracts";
+import { scriptSubtitlesUrl } from "../api/client";
 import { useCancelJob, useCreateRenderJob, useWorkJobs } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
 import {
@@ -50,6 +51,9 @@ export const RenderSection = memo(function RenderSection({
         >
           MP4を出力
         </button>
+        <a href={scriptSubtitlesUrl(scriptVersionId)} download className={buttonNeutralClass}>
+          字幕をダウンロード
+        </a>
       </div>
       {createRenderJob.isError && (
         <p className={errorTextClass}>{errorMessage(createRenderJob.error)}</p>

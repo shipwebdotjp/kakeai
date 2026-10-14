@@ -11,6 +11,7 @@ export type {
   TimelineIssue,
 } from "./timeline";
 export { escapeHtmlAttribute, escapeHtmlText } from "./escape";
+export { buildSrt, formatSrtTimestamp } from "./subtitles";
 export { compileDocument, toSecondsText } from "./compiler";
 export type { CompileDocumentOptions, CompiledComposition } from "./compiler";
 export type { CompositionVersionResolver, CompositionVersionResolved } from "./composition-resolver";

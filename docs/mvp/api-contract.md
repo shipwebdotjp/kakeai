@@ -107,6 +107,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /compositions/:compositionId/publish | 201 / 200 | draftを検証し不変のCompositionVersionを公開。`?dryRun=true` ではversionを作らず検証のみ（200 `{ manifest }`）（AI authoring） |
 | GET | /compositions/versions/:compositionVersionId/content/*bundlePath | 200 / 206 | published bundleのentrypointまたは相対依存を配信。previewレスポンス内のURLだけを使用する |
 | GET | /script-versions/:scriptVersionId/preview | 200 | 信頼済みComposition HTMLと素材URLを取得 |
+| GET | /script-versions/:scriptVersionId/subtitles | 200 | 保存済み版の字幕（SRT）をダウンロード |
 | POST | /language-editions/:editionId/draft-preview | 200 | 未保存の台本案から書込みなしでドラフト・プレビューを合成 |
 | POST | /script-versions/:scriptVersionId/render-jobs | 202 | 入力スナップショットを持つRender Jobをキューへ追加 |
 | GET | /works/:workId/jobs | 200 | 作品のRender Job履歴を新しい順に取得 |
@@ -678,6 +679,18 @@ POST /jobs/:jobId/cancel は `status=queued` のJobだけを `cancelled` に遷�
 
 GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:artifactId/content は `format` に応じたMIME typeでファイルを配信し、動画にはRange requestをサポートする。このエンドポイントもメディアセッションCookieで認可されるため、`<video>` の再生・シークで利用できる。DELETE /artifacts/:artifactId はファイルとArtifact行を削除して204 No Contentを返す。対応するJobは履歴として残すが、artifactsは空配列となり、出力が削除済みであることをUIへ表示する。Assetへの自動昇格はMVPの対象外である。
 
+## 字幕エクスポート
+
+GET /script-versions/:scriptVersionId/subtitles は、保存済みの版からYouTubeへそのまま取り込めるSubRip（`.srt`）字幕ファイルを生成して返す。レンダーとは独立し、JobもArtifactも作らず、ダウンロードのたびに正本から作り直す。タイミング解決はレンダーと同じ `resolveTimeline` を使い、本文は `NarrationSegment.captionText` とする。詳細は [../subtitle-export/spec.md](../subtitle-export/spec.md) を正とする。
+
+~~~http
+GET /api/v1/script-versions/scr_003/subtitles
+~~~
+
+成功は200 OKとSRTバイト列を返す。`Content-Type` は `application/x-subrip; charset=utf-8`、`Content-Disposition: attachment` でファイル名（Workタイトル由来の `.srt`）を付ける。メディアセッションCookieは要求せず、既存の全リクエスト共通ガード（loopback・same-origin）で保護する。
+
+存在しない版は404 `RESOURCE_NOT_FOUND` とする。固定尺の選択音声合計超過など、タイミングを解決できない入力はレンダー投入時と同じ422 `RENDER_INPUT_INVALID` とする。
+
 ## エラー契約
 
 ### HTTPエラー
@@ -700,7 +713,7 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 422 | MEDIA_INSPECTION_FAILED | アップロード後にメディア情報を安全に取得できない | 任意 |
 | 422 | MEDIA_LIMIT_EXCEEDED | 長さまたは寸法がサーバー設定の上限を超える | measured, limits |
 | 422 | PREVIEW_INPUT_INVALID | 保存済み台本をCompositionへ変換できない | issues |
-| 422 | RENDER_INPUT_INVALID | レンダー投入時の音声尺超過など | issues |
+| 422 | RENDER_INPUT_INVALID | レンダー投入時の音声尺超過など。字幕エクスポートのタイミング解決失敗も同じcode | issues |
 | 422 | TTS_INPUT_INVALID | TTS生成要求の空本文・Speaker/Profile未設定・Profileのアダプター外の声・不正な話速 | issues |
 | 503 | TTS_ENGINE_UNAVAILABLE | TTSエンジン未起動または接続失敗 | 任意 |
 | 500 | INTERNAL_ERROR | 予期しないAPI内部エラー | requestIdのみ |

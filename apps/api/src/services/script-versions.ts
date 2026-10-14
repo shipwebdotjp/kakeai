@@ -2,6 +2,7 @@ import {
   COMPOSITION_ENGINE,
   COMPILER_VERSION,
   HYPERFRAMES_PLAYER_VERSION,
+  buildSrt,
   compileDocument,
   CompositionCompileError,
   collectTimelineIssues,
@@ -471,6 +472,55 @@ export async function getScriptVersion(
     throw resourceNotFound("script_version", scriptVersionId);
   }
   return toScriptVersion(row, deserializeContent(row.contentJson));
+}
+
+export interface ScriptVersionSubtitles {
+  filename: string;
+  srt: string;
+}
+
+function subtitleFilename(title: string): string {
+  const cleaned = title
+    .replace(/\s+/g, " ")
+    .replace(/[\\/:*?"<>|\p{C}]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const truncated = [...cleaned]
+    .slice(0, 80)
+    .join("")
+    .replace(/[.\s]+$/u, "")
+    .replace(/^\.+/u, "");
+  const base = truncated.length === 0 ? "subtitles" : truncated;
+  return `${base}.srt`;
+}
+
+export async function getScriptVersionSubtitles(
+  prisma: PrismaClient,
+  scriptVersionId: string,
+): Promise<ScriptVersionSubtitles> {
+  const row = await prisma.scriptVersion.findUnique({
+    where: { id: scriptVersionId },
+    include: { languageEdition: { include: { work: true } } },
+  });
+  if (row === null) {
+    throw resourceNotFound("script_version", scriptVersionId);
+  }
+  let content: ContentDocument;
+  try {
+    content = deserializeContent(row.contentJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
+  }
+  let srt: string;
+  try {
+    srt = buildSrt(content);
+  } catch (error) {
+    if (error instanceof CompositionCompileError) {
+      throw new ApiError(422, "RENDER_INPUT_INVALID", undefined, { issues: error.issues });
+    }
+    throw error;
+  }
+  return { filename: subtitleFilename(row.languageEdition.work.title), srt };
 }
 
 export function renderSourceDurationMs(asset: AssetWithRenditions): number | null {

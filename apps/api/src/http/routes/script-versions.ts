@@ -47,6 +47,21 @@ export function createScriptVersionsRouter(dependencies: ScriptVersionsRouterDep
     }),
   );
 
+  router.get(
+    "/script-versions/:scriptVersionId/subtitles",
+    asyncHandler(async (req, res) => {
+      const { filename, srt } = await scriptVersions.getScriptVersionSubtitles(
+        prisma,
+        pathParam(req, "scriptVersionId"),
+      );
+      res.attachment(filename);
+      res.setHeader("Content-Type", "application/x-subrip; charset=utf-8");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+      res.status(200).send(Buffer.from(srt, "utf8"));
+    }),
+  );
+
   router.post(
     "/script-versions/:scriptVersionId/render-jobs",
     asyncHandler(async (req, res) => {
