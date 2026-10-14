@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   DEFAULT_VOICE_ADAPTER_ID,
+  localeSchema,
+  voiceAdapterDescriptors,
   voiceAdapterIdSchema,
   type TtsVoice,
   type VoiceAdapterId,
+  type VoiceAdapterSummary,
   type VoiceProfile,
 } from "@kakeai/contracts";
 import {
@@ -11,10 +14,11 @@ import {
   useCreateVoiceProfile,
   useDeleteVoiceProfile,
   useUpdateVoiceProfile,
+  useVoiceAdapters,
   useVoiceProfiles,
 } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
-import { VOICE_ADAPTER_LABELS, adapterLabel } from "../lib/voiceAdapters";
+import { adapterLabel, voiceLocale } from "../lib/voiceAdapters";
 import {
   buttonDangerClass,
   buttonPrimaryClass,
@@ -23,17 +27,16 @@ import {
   textFieldClass,
 } from "../ui";
 
-const ADAPTER_IDS = voiceAdapterIdSchema.options;
-
 function findVoice(voices: TtsVoice[], voiceId: string): TtsVoice | undefined {
   return voices.find((voice) => voice.voiceId === voiceId);
 }
 
 interface ProfileFormProps {
   profile?: VoiceProfile;
+  adapters: VoiceAdapterSummary[];
 }
 
-function ProfileForm({ profile }: ProfileFormProps) {
+function ProfileForm({ profile, adapters }: ProfileFormProps) {
   const create = useCreateVoiceProfile();
   const update = useUpdateVoiceProfile();
   const remove = useDeleteVoiceProfile();
@@ -41,27 +44,24 @@ function ProfileForm({ profile }: ProfileFormProps) {
     profile?.adapterId ?? DEFAULT_VOICE_ADAPTER_ID,
   );
   const [name, setName] = useState(profile?.name ?? "");
-  const [voiceId, setVoiceId] = useState(profile?.settings.speakerUuid ?? "");
-  const [styleId, setStyleId] = useState<number | null>(profile?.settings.defaultStyleId ?? null);
+  const [voiceId, setVoiceId] = useState(profile?.voiceId ?? "");
 
   const activeAdapterId = profile?.adapterId ?? adapterId;
   const voicesQuery = useAdapterVoices(activeAdapterId);
   const voices = voicesQuery.data?.voices ?? [];
-  const adapterName = adapterLabel(activeAdapterId);
+  const adapterName = adapterLabel(activeAdapterId, adapters);
 
   useEffect(() => {
     if (profile !== undefined) {
       return;
     }
     setVoiceId("");
-    setStyleId(null);
   }, [adapterId, profile]);
 
   useEffect(() => {
     if (profile === undefined && voiceId.length === 0 && voices.length > 0) {
       const first = voices[0]!;
       setVoiceId(first.voiceId);
-      setStyleId(first.styles[0]?.styleId ?? null);
     }
   }, [profile, voiceId, voices]);
 
@@ -70,38 +70,37 @@ function ProfileForm({ profile }: ProfileFormProps) {
       return;
     }
     setName(profile.name);
-    setVoiceId(profile.settings.speakerUuid);
-    setStyleId(profile.settings.defaultStyleId);
+    setVoiceId(profile.voiceId);
   }, [profile?.id, profile?.updatedAt]);
 
   const voice = findVoice(voices, voiceId);
-  const styles = voice?.styles ?? [];
-  const staleVoice = voiceId.length > 0 && voices.length > 0 && voice === undefined;
-  const staleStyle =
-    styleId !== null && voice !== undefined && !styles.some((style) => style.styleId === styleId);
+  const voicesLoaded = voicesQuery.isSuccess;
+  const declaredLocale =
+    voice === undefined ? profile?.locale : voiceLocale(voice, activeAdapterId);
+  const locale = localeSchema.safeParse(declaredLocale).data ?? "";
+  const staleVoice = voicesLoaded && voiceId.length > 0 && voice === undefined;
   const mutation = profile === undefined ? create : update;
   const pending = mutation.isPending;
+  const voiceUnchanged = profile !== undefined && voiceId === profile.voiceId;
+  const saveBlocked =
+    pending ||
+    locale === "" ||
+    (voicesLoaded && staleVoice) ||
+    (!voicesLoaded && !voiceUnchanged);
 
   const save = () => {
     const trimmed = name.trim();
-    if (trimmed.length === 0 || voiceId.length === 0 || styleId === null) {
+    if (trimmed.length === 0 || voiceId.length === 0 || saveBlocked) {
       return;
     }
-    const settings = { speakerUuid: voiceId, defaultStyleId: styleId };
     if (profile === undefined) {
       create.mutate(
-        { name: trimmed, adapterId, settings },
+        { name: trimmed, adapterId, voiceId, locale, settings: {} },
         { onSuccess: () => setName("") },
       );
     } else {
-      update.mutate({ id: profile.id, input: { name: trimmed, settings } });
+      update.mutate({ id: profile.id, input: { name: trimmed, voiceId, locale, settings: {} } });
     }
-  };
-
-  const onVoiceChange = (nextVoiceId: string) => {
-    setVoiceId(nextVoiceId);
-    const next = findVoice(voices, nextVoiceId);
-    setStyleId(next?.styles[0]?.styleId ?? null);
   };
 
   return (
@@ -142,9 +141,9 @@ function ProfileForm({ profile }: ProfileFormProps) {
                 }
               }}
             >
-              {ADAPTER_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {VOICE_ADAPTER_LABELS[id]}
+              {adapters.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.label}
                 </option>
               ))}
             </select>
@@ -153,12 +152,12 @@ function ProfileForm({ profile }: ProfileFormProps) {
           )}
         </label>
         <label className="inline-flex items-center gap-1.5">
-          話者
+          声
           <select
             className={textFieldClass}
             value={voiceId}
             disabled={voices.length === 0}
-            onChange={(event) => onVoiceChange(event.target.value)}
+            onChange={(event) => setVoiceId(event.target.value)}
           >
             <option value="">選択してください</option>
             {voices.map((entry) => (
@@ -168,36 +167,13 @@ function ProfileForm({ profile }: ProfileFormProps) {
             ))}
           </select>
         </label>
-        <label className="inline-flex items-center gap-1.5">
-          既定スタイル
-          <select
-            className={textFieldClass}
-            value={styleId ?? ""}
-            disabled={styles.length === 0 && styleId === null}
-            onChange={(event) => {
-              if (event.target.value === "") {
-                setStyleId(null);
-                return;
-              }
-              const next = Number(event.target.value);
-              setStyleId(Number.isInteger(next) ? next : null);
-            }}
-          >
-            <option value="">未設定</option>
-            {styles.map((style) => (
-              <option key={style.styleId} value={style.styleId}>
-                {style.name}
-              </option>
-            ))}
-            {styleId !== null && !styles.some((style) => style.styleId === styleId) && (
-              <option value={styleId}>現在の設定（{styleId}）</option>
-            )}
-          </select>
-        </label>
+        <span className={metaTextClass}>
+          言語: {locale.length > 0 ? locale : "未確定（声を選んでください）"}
+        </span>
         <button
           type="button"
           className={buttonPrimaryClass}
-          disabled={pending || voices.length === 0}
+          disabled={saveBlocked}
           onClick={save}
         >
           {profile === undefined ? "追加" : "保存"}
@@ -210,21 +186,16 @@ function ProfileForm({ profile }: ProfileFormProps) {
         </p>
       )}
       {voicesQuery.isLoading && (
-        <p className={metaTextClass}>{adapterName} ENGINE から話者一覧を読み込み中…</p>
+        <p className={metaTextClass}>{adapterName} ENGINE から声の一覧を読み込み中…</p>
       )}
       {voicesQuery.isSuccess && voices.length === 0 && (
         <p className={errorTextClass}>
-          {adapterName} ENGINE に利用できる話者がありません。音声モデルを確認してください。
+          {adapterName} ENGINE に利用できる声がありません。音声モデルを確認してください。
         </p>
       )}
       {staleVoice && (
         <p className={errorTextClass}>
-          保存された話者が現在の {adapterName} ENGINE に見つかりません。話者を選び直してください。
-        </p>
-      )}
-      {staleStyle && (
-        <p className={errorTextClass}>
-          保存されたスタイルが現在の {adapterName} ENGINE に見つかりません。スタイルを選び直してください。
+          保存された声が現在の {adapterName} ENGINE に見つかりません。声を選び直してください。
         </p>
       )}
       {mutation.isError && <p className={errorTextClass}>{errorMessage(mutation.error)}</p>}
@@ -235,13 +206,17 @@ function ProfileForm({ profile }: ProfileFormProps) {
 
 export function VoiceProfilesPage() {
   const profiles = useVoiceProfiles();
+  const adapters = useVoiceAdapters();
+  const adapterOptions =
+    adapters.data?.adapters ??
+    voiceAdapterDescriptors.map((descriptor) => ({ id: descriptor.id, label: descriptor.label }));
 
   return (
     <section>
       <h1 className="my-3 text-2xl font-bold">音声プロファイル</h1>
       <p className={metaTextClass}>
-        別途起動した <strong>VOICEVOX ENGINE</strong> または <strong>AivisSpeech Engine</strong>
-        に接続し、台本の話者へ割り当てる声（話者と既定スタイル）を登録します。
+        別途起動したローカルTTSエンジンに接続し、台本の話者へ割り当てる声を登録します。
+        声には言語（locale）が付き、キャラクターの言語別割り当てに使います。
         <a
           href="https://voicevox.hiroshiba.jp/term/"
           target="_blank"
@@ -257,13 +232,13 @@ export function VoiceProfilesPage() {
       {profiles.isError && <p className={errorTextClass}>{errorMessage(profiles.error)}</p>}
 
       {profiles.data?.map((profile) => (
-        <ProfileForm key={profile.id} profile={profile} />
+        <ProfileForm key={profile.id} profile={profile} adapters={adapterOptions} />
       ))}
       {profiles.data !== undefined && profiles.data.length === 0 && (
         <p className={metaTextClass}>プロファイルがありません。下のフォームから追加してください。</p>
       )}
 
-      <ProfileForm />
+      <ProfileForm adapters={adapterOptions} />
     </section>
   );
 }

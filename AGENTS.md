@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Kakeai は、編集意図（正本JSON）をレンダー済みメディアから分離して保持する、個人用ローカル動画制作アプリ。macOS上で単一プロセス起動するWebアプリで、オフラインで日本語の解説動画をMP4出力する。
+Kakeai は、編集意図（正本JSON）をレンダー済みメディアから分離して保持する、個人用ローカル動画制作アプリ。macOS上で単一プロセス起動するWebアプリで、日本語の解説動画をMP4出力する。AI機能はネットワークや外部サービスを使える。
 
 ## 正となる文書
 
@@ -8,6 +8,7 @@ Kakeai は、編集意図（正本JSON）をレンダー済みメディアから
 
 - [docs/mvp/spec.md](docs/mvp/spec.md): 全体仕様・DBスキーマ・Job状態遷移
 - [docs/mvp/content-schema.md](docs/mvp/content-schema.md): 台本の正本JSON契約
+- [docs/mvp/content-schema-history.md](docs/mvp/content-schema-history.md): 正本JSONの破壊変更履歴
 - [docs/mvp/api-contract.md](docs/mvp/api-contract.md): HTTP API契約・DTO・エラー
 - [docs/mvp/todo.md](docs/mvp/todo.md): 実装フェーズ
 - [docs/adr/](docs/adr/): 決定記録。反転させる場合は新ADRを追加し、旧ADRに `superseded by` / `amended by` を付ける
@@ -42,7 +43,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 - **契約が先**: 型は原則 `z.infer` で導出し、`packages/contracts` に集約する。API入出力・ContentDocument・VisualTemplate入力をZodで検証し、無検証でレンダーへ渡さない。
 - **コメントを書かない**: コードにコメントを追加しない。意図は名前と型で表す。
 - **正本と派生**: 正本はSQLiteの不変 `ScriptVersion.contentJson`。Composition HTML・MP4・フレームは派生物とし、正本にしない。
-- **スキーマ版**: ContentDocument は `schemaVersion: 1` から開始。移行コードを先回りして持たない。破壊的変更時に版を上げて新ScriptVersionで移行する。JCS正規化や `contentHash` は持たない（キー順を安定させたJSON文字列で保存）。
+- **スキーマ版**: ContentDocument は `schemaVersion: 1` から開始。移行コードを先回りして持たない。破壊的変更時に版を上げて新ScriptVersionで移行する。破壊的変更時は [docs/mvp/content-schema-history.md](docs/mvp/content-schema-history.md) と移行コード、ADRを同じ変更で更新する。JCS正規化や `contentHash` は持たない（キー順を安定させたJSON文字列で保存）。
 - **ID**: `NarrationSegment` と Scene のIDは同一Workの版をまたいで安定させ、編集保存で作り直さない。
 - **素材**: 原本を保持し、原則そのまま使う。原本を直接レンダーに使えない場合だけ必要時に `AssetRendition` を作る。`storageKey` は内容ハッシュ由来。
 - **テンプレート**: `template.id@version` の意味を不変に保ち、変更は新版で行う。参照ゼロの版は削除可。VisualTemplate入力スキーマも版ごとに固定する。
@@ -78,6 +79,8 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 ## コーディングおよびテスト実行時注意事項
 
 - zshでは `===` や `--include=*.ts` のような未クォートの `=`・globを含む引数が展開・エラーになる（`zsh:1: == not found`、`no matches found`）。bashツールでは該当箇所をシングルクォートで囲うか、`rg --glob`・専用ツール（Grep/Glob）を使う。
+- 生成Prismaクライアントが古いと `npm run typecheck` が `src/generated` 由来の存在しないプロパティで失敗する。`npm run db:generate --workspace @kakeai/api` で再生成する。
+- `apps/api/src/services/render-flow.test.ts` と `composition-library.test.ts` の一部は ffmpeg/ブラウザ依存でこの環境ではタイムアウト失敗する（ベースラインで8件失敗）。変更と無関係な失敗は再実行で切り分け、該当ファイルだけを対象にしない。
 
 ## ユーザーガイド
 

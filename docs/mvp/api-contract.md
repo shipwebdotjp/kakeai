@@ -44,7 +44,7 @@ JSONエラーは次の形式にする。codeはUIの分岐・テストに使う�
         {
           "path": ["content", "locale"],
           "code": "invalid_value",
-          "message": "MVPで利用できる言語は ja-JP です。"
+          "message": "利用できる言語は ja-JP または en-US です。"
         }
       ]
     }
@@ -60,7 +60,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | --- | --- | --- |
 | WorkSummary | id, title, originalLocale, updatedAt, languageEditions | 作品一覧用。各Editionには現在の台本版と最新Render Jobの要約を含める。 |
 | Work | WorkSummaryのフィールド、createdAt, parentWorkId | 一覧と管理に使う作品名 `title` を持つ。動画内に表示するタイトルはContentDocument側のSceneスロットであり、こちらとは別である。 |
-| LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。MVPでは1 Workにつき1つのja-JP Editionだけを作る。 |
+| LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。`locale` は `ja-JP` または `en-US`。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt | contentはContentDocumentそのもの。保存後に更新しない。 |
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
 | Composition | id, runtimeCompositionId, name, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
@@ -68,10 +68,11 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | CompositionDraftFiles | entrypoint, files, binaryFiles | draftのentrypointと、bundle相対パスをキーにしたファイル内容のマップ。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列（存在する場合のみ）。seedとAIの更新内容を含む。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
-| VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は `voicevox` または `aivisspeech`（作成後は不変）、`settings` はアダプター専用で両者とも `speakerUuid` と `defaultStyleId`。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| TtsVoice | voiceId, name, styles | 接続中エンジンの話者。`styles` は `styleId` と表示名の配列。`styleId` は 32bit 符号付き整数。 |
+| VoiceProfile | id, name, adapterId, voiceId, locale, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は登録済みアダプター記述子の ID（作成後は不変）、`voiceId` はアダプター定義の不透明な声 ID、`settings` はアダプター固有の追加分。詳細は [../tts/spec.md](../tts/spec.md)。 |
+| VoiceAdapter | id, label | 登録済み TTS アダプター記述子。 |
+| TtsVoice | voiceId, name, locale? | 接続中エンジンの声。`voiceId` はアダプター定義の不透明な ID、`locale` は任意の申告言語。 |
 | BulkTtsJobsResult | jobs, excluded | 一括TTS生成の応答。`jobs` は `narrationSegmentId` と Job DTO の組、`excluded` は `narrationSegmentId`・エラーコード・安全な理由。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| CharacterLibraryEntry | id, name, voiceProfileId, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
+| CharacterLibraryEntry | id, name, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
 | FaceSet | id, name, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。
@@ -82,7 +83,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | --- | --- | --- | --- |
 | GET | /health | 200 | APIとローカルレンダーワーカーの稼働確認 |
 | GET | /works | 200 | 作品一覧 |
-| POST | /works | 201 | Work、ja-JP Edition、ContentDocument v3の初期ScriptVersionを作成 |
+| POST | /works | 201 | Work、初期言語 Edition、ContentDocument v8の初期ScriptVersionを作成 |
 | GET | /works/:workId | 200 | 作品とEditionの取得 |
 | PATCH | /works/:workId | 200 | 管理上の作品名を変更 |
 | POST | /works/:workId/clone | 201 | 元作品の現在版を複製した新しい子Workを作成 |
@@ -113,11 +114,12 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /artifacts/:artifactId | 200 | Artifactのメタデータを取得 |
 | GET | /artifacts/:artifactId/content | 200 / 206 | Artifactファイルを配信 |
 | DELETE | /artifacts/:artifactId | 204 | 生成済み出力を明示削除 |
+| GET | /voice-adapters | 200 | 登録済みアダプター記述子（`id`・表示名）を取得 |
 | GET | /voice-profiles | 200 | アプリ共通のVoice Profile一覧を取得 |
 | POST | /voice-profiles | 201 | Voice Profileを作成 |
-| PATCH | /voice-profiles/:voiceProfileId | 200 | Voice Profileの表示名と設定を更新 |
+| PATCH | /voice-profiles/:voiceProfileId | 200 | Voice Profileの表示名・声・言語・設定を更新 |
 | DELETE | /voice-profiles/:voiceProfileId | 204 | 未参照のVoice Profileを削除 |
-| GET | /voice-profiles/voices?adapterId=voicevox\|aivisspeech | 200 | 接続中エンジンの話者とスタイルを取得（[../tts/spec.md](../tts/spec.md)） |
+| GET | /voice-profiles/voices?adapterId=<id> | 200 | 接続中エンジンの声（`voiceId`・表示名・任意の `locale`）を取得（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/tts-jobs | 202 | 音声が未選択の要点セリフを一括でTTS Jobへ追加。投入Jobと除外セリフを返す（[../tts/spec.md](../tts/spec.md)） |
 | GET | /characters | 200 | キャラクターライブラリの一覧を取得（[../character-library/spec.md](../character-library/spec.md)） |
@@ -153,7 +155,7 @@ GET /health は起動確認とUIの初期診断に使う。レンダーワーカ
       "status": "ready"
     },
     "capabilities": {
-      "locales": ["ja-JP"],
+      "locales": ["ja-JP", "en-US"],
       "jobKinds": ["asset_ingest", "render"],
       "assetKinds": ["image", "video", "audio"]
     },
@@ -206,7 +208,7 @@ latestRenderJobはRender Jobがまだないときはnullとする。失敗した
 
 ### 作品作成と名称変更
 
-POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 7` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
+POST /works は、Work、`originalLocale` のLanguageEdition、`schemaVersion: 8` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
 
 ~~~http
 POST /api/v1/works
@@ -218,7 +220,7 @@ Content-Type: application/json
 }
 ~~~
 
-originalLocaleは将来の互換性のため必須とするが、MVPで受け付ける値はja-JPだけである。成功時は201 Createdと、作成した完全なWork DTOを返す。
+originalLocaleは必須とし、受け付ける値は `ja-JP` または `en-US` である。成功時は201 Createdと、作成した完全なWork DTOを返す。
 
 ~~~json
 {
@@ -291,13 +293,13 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
 
 ### 台本の保存
 
-POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 7` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
+POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 8` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
 
 ~~~jsonc
 {
   "sourceScriptVersionId": null,
   "content": {
-    "schemaVersion": 7,
+    "schemaVersion": 8,
     "locale": "ja-JP",
     "template": {
       "id": "explanation-scenes",
@@ -314,7 +316,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
 }
 ~~~
 
-上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、`faceSetId`／`expressionId` の参照整合、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。`faceSetId` は参照先 Face Set が存在し、その Face Layer が ready な画像 Asset を指し、ベース画像と寸法が一致すること、`normal` preset を含むことを検証する。`expressionId` は、話者（`Speaker.characterId`）に対応するキャラクターの、そのSceneで有効な Character Appearance が参照する Face Set 内に存在することを検証する。`speakerId` が `null` のラインに `expressionId` を指定できない（[../face-expression/spec.md](../face-expression/spec.md)）。`composition.full-bleed@1` はScene背景だけに置け、同じCompositionVersionを一つのContentDocument内で複数回参照できない。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
+上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、`faceSetId`／`expressionId` の参照整合、キャラクターの `voices`（`locale` 重複、話者の声との一致）、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。参照先 Voice Profile が欠けた台本も保存でき、生成時にだけ「未設定」として拒否する（[../tts/spec.md](../tts/spec.md)）。`faceSetId` は参照先 Face Set が存在し、その Face Layer が ready な画像 Asset を指し、ベース画像と寸法が一致すること、`normal` preset を含むことを検証する。`expressionId` は、話者（`Speaker.characterId`）に対応するキャラクターの、そのSceneで有効な Character Appearance が参照する Face Set 内に存在することを検証する。`speakerId` が `null` のラインに `expressionId` を指定できない（[../face-expression/spec.md](../face-expression/spec.md)）。`composition.full-bleed@1` はScene背景だけに置け、同じCompositionVersionを一つのContentDocument内で複数回参照できない。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
 
 成功時は201 Createdと、新しい完全なScriptVersion DTOを返す。
 
@@ -326,7 +328,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
     "versionNumber": 3,
     "contentSchemaVersion": 5,
     "content": {
-      "schemaVersion": 7,
+      "schemaVersion": 8,
       "locale": "ja-JP",
       "template": {
         "id": "explanation-scenes",
@@ -693,7 +695,7 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 422 | MEDIA_LIMIT_EXCEEDED | 長さまたは寸法がサーバー設定の上限を超える | measured, limits |
 | 422 | PREVIEW_INPUT_INVALID | 保存済み台本をCompositionへ変換できない | issues |
 | 422 | RENDER_INPUT_INVALID | レンダー投入時の音声尺超過など | issues |
-| 422 | TTS_INPUT_INVALID | TTS生成要求の空本文・Speaker/Profile未設定・無効スタイル・不正な話速 | issues |
+| 422 | TTS_INPUT_INVALID | TTS生成要求の空本文・Speaker/Profile未設定・Profileのアダプター外の声・不正な話速 | issues |
 | 503 | TTS_ENGINE_UNAVAILABLE | TTSエンジン未起動または接続失敗 | 任意 |
 | 500 | INTERNAL_ERROR | 予期しないAPI内部エラー | requestIdのみ |
 | 503 | DATABASE_BUSY | busy timeoutを超えるSQLite競合 | 任意のretryAfterMs |

@@ -1,10 +1,17 @@
-import type { TtsAdapter, VoiceAdapterId } from "@kakeai/contracts";
-import { aivisspeechAdapter } from "./aivisspeech.ts";
-import { voicevoxAdapter } from "./voicevox.ts";
+import { voiceAdapterDescriptorFor, type TtsAdapter, type VoiceAdapterId } from "@kakeai/contracts";
+import { createVoicevoxCompatibleAdapter } from "./voicevox-compatible.ts";
+
+function buildAdapter(id: VoiceAdapterId): TtsAdapter {
+  const descriptor = voiceAdapterDescriptorFor(id);
+  return createVoicevoxCompatibleAdapter({
+    id,
+    defaultLocale: descriptor.defaultLocale,
+  });
+}
 
 const ADAPTERS: Record<VoiceAdapterId, TtsAdapter> = {
-  voicevox: voicevoxAdapter,
-  aivisspeech: aivisspeechAdapter,
+  voicevox: buildAdapter("voicevox"),
+  aivisspeech: buildAdapter("aivisspeech"),
 };
 
 export function getTtsAdapter(id: VoiceAdapterId): TtsAdapter {

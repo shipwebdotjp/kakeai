@@ -181,6 +181,7 @@ describe("render job creation", () => {
       {
         id: "character-rin",
         name: "リン",
+        voices: [],
         appearances: [
           { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],
@@ -335,6 +336,7 @@ describe("render job creation", () => {
       {
         id: "character-rin",
         name: "リン",
+        voices: [],
         appearances: [
           { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
         ],
@@ -499,6 +501,7 @@ describe("render worker", () => {
       {
         id: "character-rin",
         name: "リン",
+        voices: [],
         appearances: [
           { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],

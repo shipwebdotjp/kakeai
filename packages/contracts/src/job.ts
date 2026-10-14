@@ -2,13 +2,13 @@ import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { migrateContentDocument } from "./content/migrate";
-import { styleIdSchema, voiceAdapterIdSchema } from "./voice-profile";
+import { voiceAdapterIdSchema, voiceIdSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 import { compositionManifestSchema } from "./composition";
 import { expressionPresetSchema, faceLayerSchema } from "./face-set";
 import { visualThemeDefinitionSchema } from "./content/theme";
 
-export const SNAPSHOT_SCHEMA_VERSION = 1 as const;
+export const SNAPSHOT_SCHEMA_VERSION = 2 as const;
 
 export const snapshotCompositionVersionRefSchema = z.object({
   id: idSchema,
@@ -90,10 +90,9 @@ export const ttsJobSnapshotSchema = z.object({
   voiceProfileId: idSchema,
   adapterId: voiceAdapterIdSchema,
   voice: z.object({
-    voiceId: z.string().min(1),
-    styleId: styleIdSchema,
+    voiceId: voiceIdSchema,
   }),
-  styleName: z.string().min(1).max(200).optional(),
+  voiceName: z.string().min(1).max(200).optional(),
   speedScale: z.number().finite().min(MIN_TTS_SPEED_SCALE).max(MAX_TTS_SPEED_SCALE),
   speechText: z.string().min(1),
   engineVersion: z.string().nullable(),

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
-import { styleIdSchema } from "./voice-profile";
+import { voiceIdSchema } from "./voice-profile";
 import { assetTagsSchema } from "./asset";
 
 export const createWorkRequestSchema = z.strictObject({
@@ -39,7 +39,7 @@ export const MAX_TTS_SPEED_SCALE = 2;
 export const MAX_TTS_SPEECH_TEXT_LENGTH = 1000;
 
 export const createTtsJobRequestSchema = z.strictObject({
-  styleId: styleIdSchema.optional(),
+  voiceId: voiceIdSchema.optional(),
   speechText: z.string().max(MAX_TTS_SPEECH_TEXT_LENGTH).optional(),
   speedScale: z
     .number()

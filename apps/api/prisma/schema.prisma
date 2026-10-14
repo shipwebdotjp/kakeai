@@ -94,24 +94,40 @@ model AssetRendition {
 }
 
 model VoiceProfile {
-  id           String   @id @default(cuid())
+  id           String           @id @default(cuid())
   name         String
   adapterId    String
+  voiceId      String           @default("")
+  locale       String           @default("ja-JP")
   settingsJson String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  voices       CharacterVoice[]
 
   @@index([adapterId])
 }
 
 model Character {
-  id             String                @id @default(cuid())
-  name           String
-  voiceProfileId String?
-  appearances    CharacterAppearance[]
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  id          String                @id @default(cuid())
+  name        String
+  appearances CharacterAppearance[]
+  voices      CharacterVoice[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
 
+model CharacterVoice {
+  id             String      @id @default(cuid())
+  characterId    String
+  character      Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  locale         String
+  voiceProfileId String
+  voiceProfile   VoiceProfile @relation(fields: [voiceProfileId], references: [id], onDelete: Restrict)
+  position       Int         @default(0)
+  createdAt      DateTime    @default(now())
+
+  @@unique([characterId, locale])
+  @@index([characterId])
   @@index([voiceProfileId])
 }
 

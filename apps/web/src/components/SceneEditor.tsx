@@ -518,10 +518,13 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
   const addCharacterFromLibrary = (entry: CharacterLibraryEntry) => {
     const characterId = newCharacterId();
+    const voiceProfileId =
+      entry.voices.find((voice) => voice.locale === base.locale)?.voiceProfileId ?? null;
     const character: CharacterFormValue = {
       id: characterId,
       name: entry.name,
-      voiceProfileId: entry.voiceProfileId,
+      voiceProfileId,
+      voices: entry.voices.map((voice) => ({ ...voice })),
       appearances: entry.appearances.map((appearance) => ({
         id: newAppearanceId(),
         assetId: appearance.assetId,
@@ -532,12 +535,12 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       })),
     };
     appendCharacter(character);
-    addSpeakerFor(characterId, entry.name, entry.voiceProfileId);
+    addSpeakerFor(characterId, entry.name, voiceProfileId);
   };
 
   const addVoiceOnlySpeaker = () => {
     const characterId = newCharacterId();
-    appendCharacter({ id: characterId, name: "ナレーター", voiceProfileId: null, appearances: [] });
+    appendCharacter({ id: characterId, name: "ナレーター", voiceProfileId: null, voices: [], appearances: [] });
     addSpeakerFor(characterId, "ナレーター", null);
   };
 

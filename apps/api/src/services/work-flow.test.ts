@@ -2,7 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInitialContentDocument, createPointScene } from "@kakeai/contracts";
+import {
+  SNAPSHOT_SCHEMA_VERSION,
+  createInitialContentDocument,
+  createPointScene,
+} from "@kakeai/contracts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
@@ -230,7 +234,7 @@ describe("work and script version flow", () => {
         workId: work.id,
         languageEditionId: edition.id,
         scriptVersionId: current.id,
-        snapshotSchemaVersion: 1,
+        snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
         inputSnapshotJson: "{}",
         progressPercent: 100,
         finishedAt: new Date(),

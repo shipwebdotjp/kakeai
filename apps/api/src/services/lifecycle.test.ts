@@ -7,6 +7,7 @@ import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
 import { applySqlitePragmas } from "../db/pragmas.ts";
 import { ensureDataDirectories, type DataDirectories } from "../storage/paths.ts";
+import { SNAPSHOT_SCHEMA_VERSION } from "@kakeai/contracts";
 import {
   cleanTmpDirectory,
   recoverInterruptedJobs,
@@ -45,7 +46,7 @@ describe("recoverInterruptedJobs", () => {
         status: "running",
         workId: work.id,
         languageEditionId: edition.id,
-        snapshotSchemaVersion: 1,
+        snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
         inputSnapshotJson: "{}",
         startedAt: new Date(),
       },
@@ -67,7 +68,7 @@ describe("recoverInterruptedJobs", () => {
         kind: "asset_ingest",
         status: "running",
         assetId: asset.id,
-        snapshotSchemaVersion: 1,
+        snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
         inputSnapshotJson: "{}",
         startedAt: new Date(),
       },
@@ -126,7 +127,7 @@ describe("removeOrphanFiles", () => {
         kind: "asset_ingest",
         status: "succeeded",
         assetId: asset.id,
-        snapshotSchemaVersion: 1,
+        snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
         inputSnapshotJson: "{}",
       },
     });

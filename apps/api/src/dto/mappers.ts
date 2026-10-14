@@ -13,7 +13,8 @@ import {
   localeSchema,
   ttsJobResultSchema,
   voiceAdapterIdSchema,
-  voiceProfileSettingsSchemaFor,
+  voiceIdSchema,
+  voiceProfileExtrasSchemaFor,
   type Artifact,
   type Asset,
   type CharacterLibraryEntry,
@@ -270,7 +271,7 @@ export function toVoiceProfile(row: VoiceProfileRow): VoiceProfile {
   } catch {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定を解釈できません。");
   }
-  const parsedSettings = voiceProfileSettingsSchemaFor(adapterId).safeParse(settings);
+  const parsedSettings = voiceProfileExtrasSchemaFor(adapterId).safeParse(settings);
   if (!parsedSettings.success) {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定が不正です。");
   }
@@ -278,19 +279,36 @@ export function toVoiceProfile(row: VoiceProfileRow): VoiceProfile {
     id: row.id,
     name: row.name,
     adapterId,
+    voiceId: parseEnum(voiceIdSchema, row.voiceId, "VoiceProfile.voiceId"),
+    locale: parseEnum(localeSchema, row.locale, "VoiceProfile.locale"),
     settings: parsedSettings.data,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };
 }
 
-export type CharacterWithAppearances = CharacterRow & { appearances: CharacterAppearanceRow[] };
+export type CharacterVoiceRow = {
+  locale: string;
+  voiceProfileId: string;
+  position: number;
+};
+
+export type CharacterWithAppearances = CharacterRow & {
+  appearances: CharacterAppearanceRow[];
+  voices: CharacterVoiceRow[];
+};
 
 export function toCharacterLibraryEntry(row: CharacterWithAppearances): CharacterLibraryEntry {
+  const voices = [...row.voices]
+    .sort((left, right) => left.position - right.position)
+    .map((voice) => ({
+      locale: parseEnum(localeSchema, voice.locale, "CharacterVoice.locale"),
+      voiceProfileId: voice.voiceProfileId,
+    }));
   return {
     id: row.id,
     name: row.name,
-    voiceProfileId: row.voiceProfileId,
+    voices,
     appearances: row.appearances.map((appearance) => ({
       id: appearance.id,
       assetId: appearance.assetId,

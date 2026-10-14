@@ -39,9 +39,15 @@ describe("createWorkRequestSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects an unsupported locale", () => {
+  it("accepts a supported non-default locale", () => {
     expect(
       createWorkRequestSchema.safeParse({ title: "作品", originalLocale: "en-US" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unsupported locale", () => {
+    expect(
+      createWorkRequestSchema.safeParse({ title: "作品", originalLocale: "fr-FR" }).success,
     ).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import { DEFAULT_VISUAL_THEME_REF } from "./theme";
 const V4_SCHEMA_VERSION = 4;
 const V5_SCHEMA_VERSION = 5;
 const V6_SCHEMA_VERSION = 6;
+const V7_SCHEMA_VERSION = 7;
 
 function defaultLabel(kind: unknown, pointOrdinal: number): string | null {
   switch (kind) {
@@ -141,19 +142,73 @@ function migrateV6ToV7(record: Record<string, unknown>): Record<string, unknown>
   };
 }
 
+function migrateSpeakerVoices(
+  characters: unknown,
+  speakers: unknown,
+  locale: unknown,
+): unknown {
+  if (!Array.isArray(characters)) {
+    return characters;
+  }
+  const speakerVoices = new Map<string, string>();
+  if (Array.isArray(speakers)) {
+    for (const speaker of speakers) {
+      if (typeof speaker !== "object" || speaker === null) {
+        continue;
+      }
+      const entry = speaker as Record<string, unknown>;
+      if (
+        typeof entry.characterId === "string" &&
+        typeof entry.voiceProfileId === "string" &&
+        !speakerVoices.has(entry.characterId)
+      ) {
+        speakerVoices.set(entry.characterId, entry.voiceProfileId);
+      }
+    }
+  }
+  return characters.map((character) => {
+    if (typeof character !== "object" || character === null) {
+      return character;
+    }
+    const record = character as Record<string, unknown>;
+    if (Array.isArray(record.voices)) {
+      return character;
+    }
+    const voiceProfileId = speakerVoices.get(record.id as string);
+    return {
+      ...record,
+      voices:
+        voiceProfileId === undefined || typeof locale !== "string"
+          ? []
+          : [{ locale, voiceProfileId }],
+    };
+  });
+}
+
+function migrateV7ToV8(record: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...record,
+    schemaVersion: CONTENT_SCHEMA_VERSION,
+    characters: migrateSpeakerVoices(record.characters, record.speakers, record.locale),
+  };
+}
+
 export function migrateContentDocument(input: unknown): unknown {
   if (typeof input !== "object" || input === null) {
     return input;
   }
   const record = input as Record<string, unknown>;
   if (record.schemaVersion === V4_SCHEMA_VERSION) {
-    return migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(record)));
+    return migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(record))));
   }
   if (record.schemaVersion === V5_SCHEMA_VERSION) {
-    return migrateV6ToV7(migrateV5ToV6(record));
+    return migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(record)));
   }
   if (record.schemaVersion === V6_SCHEMA_VERSION) {
-    return migrateV6ToV7(record);
+    return migrateV7ToV8(migrateV6ToV7(record));
+  }
+  if (record.schemaVersion === V7_SCHEMA_VERSION) {
+    return migrateV7ToV8(record);
   }
   return input;
 }

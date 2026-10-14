@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import type { CharacterLibraryEntry, VoiceProfile } from "@kakeai/contracts";
+import { SUPPORTED_LOCALES } from "@kakeai/contracts";
+import type { CharacterLibraryEntry, CharacterVoice, VoiceProfile } from "@kakeai/contracts";
 import {
   useCharacters,
   useCreateCharacter,
@@ -23,14 +24,14 @@ type AppearanceDraft = AppearanceFormValue;
 
 interface CharacterDraft {
   name: string;
-  voiceProfileId: string;
+  voices: CharacterVoice[];
   appearances: AppearanceDraft[];
 }
 
 function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
   return {
     name: entry.name,
-    voiceProfileId: entry.voiceProfileId ?? "",
+    voices: entry.voices.map((voice) => ({ ...voice })),
     appearances: entry.appearances.map((appearance) => ({
       id: appearance.id,
       assetId: appearance.assetId,
@@ -43,7 +44,7 @@ function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
 }
 
 function emptyDraft(): CharacterDraft {
-  return { name: "", voiceProfileId: "", appearances: [] };
+  return { name: "", voices: [], appearances: [] };
 }
 
 interface CharacterFormProps {
@@ -71,6 +72,39 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
     setDraft((current) => ({
       ...current,
       appearances: [...current.appearances, createEmptyAppearance()],
+    }));
+  };
+
+  const addVoice = () => {
+    setDraft((current) => {
+      if (current.voices.length >= SUPPORTED_LOCALES.length) {
+        return current;
+      }
+      const used = new Set(current.voices.map((voice) => voice.locale));
+      const next = SUPPORTED_LOCALES.find((locale) => !used.has(locale));
+      if (next === undefined) {
+        return current;
+      }
+      return {
+        ...current,
+        voices: [...current.voices, { locale: next, voiceProfileId: "" }],
+      };
+    });
+  };
+
+  const updateVoice = (index: number, patch: Partial<CharacterVoice>) => {
+    setDraft((current) => ({
+      ...current,
+      voices: current.voices.map((voice, voiceIndex) =>
+        voiceIndex === index ? { ...voice, ...patch } : voice,
+      ),
+    }));
+  };
+
+  const removeVoice = (index: number) => {
+    setDraft((current) => ({
+      ...current,
+      voices: current.voices.filter((_, voiceIndex) => voiceIndex !== index),
     }));
   };
 
@@ -103,7 +137,30 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
       setIssue(`外観 ${missing + 1} の画像を選んでください。`);
       return;
     }
+    const incompleteVoice = draft.voices.findIndex(
+      (voice) => voice.voiceProfileId.length === 0,
+    );
+    if (incompleteVoice !== -1) {
+      setIssue(`声 ${incompleteVoice + 1} の声プロファイルを選んでください。`);
+      return;
+    }
+    const seenLocales = new Set<string>();
+    const duplicateVoice = draft.voices.some((voice) => {
+      if (seenLocales.has(voice.locale)) {
+        return true;
+      }
+      seenLocales.add(voice.locale);
+      return false;
+    });
+    if (duplicateVoice) {
+      setIssue("同じ言語の声が重複しています。");
+      return;
+    }
     setIssue(null);
+    const voices = draft.voices.map((voice) => ({
+      locale: voice.locale,
+      voiceProfileId: voice.voiceProfileId,
+    }));
     const appearances = draft.appearances.map((appearance) => ({
       id: appearance.id,
       assetId: appearance.assetId ?? "",
@@ -114,7 +171,7 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
     }));
     const payload = {
       name,
-      voiceProfileId: draft.voiceProfileId.length === 0 ? null : draft.voiceProfileId,
+      voices,
       appearances,
     };
     if (entry === undefined) {
@@ -149,23 +206,54 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
         )}
       </div>
 
-      <label className="mt-2 flex flex-wrap items-center gap-1.5">
-        声プロファイル
-        <select
-          className={textFieldClass}
-          value={draft.voiceProfileId}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, voiceProfileId: event.target.value }))
-          }
-        >
-          <option value="">未設定</option>
-          {voiceProfiles.map((profile) => (
-            <option key={profile.id} value={profile.id}>
-              {profile.name || profile.id}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="mt-2">
+        <p className={metaTextClass}>言語別の声</p>
+        {draft.voices.map((voice, index) => (
+          <div key={`voice-${index}`} className="mt-1 flex flex-wrap items-center gap-1.5">
+            <select
+              className={textFieldClass}
+              value={voice.locale}
+              onChange={(event) => {
+                const next = event.target.value as CharacterVoice["locale"];
+                updateVoice(
+                  index,
+                  next === voice.locale ? { locale: next } : { locale: next, voiceProfileId: "" },
+                );
+              }}
+            >
+              {SUPPORTED_LOCALES.map((locale) => (
+                <option key={locale} value={locale}>
+                  {locale}
+                </option>
+              ))}
+            </select>
+            <select
+              className={textFieldClass}
+              value={voice.voiceProfileId}
+              onChange={(event) => updateVoice(index, { voiceProfileId: event.target.value })}
+            >
+              <option value="">選択してください</option>
+              {voiceProfiles
+                .filter((profile) => profile.locale === voice.locale)
+                .map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name || profile.id}（{profile.locale}）
+                  </option>
+                ))}
+            </select>
+            <button
+              type="button"
+              className={buttonDangerClass}
+              onClick={() => removeVoice(index)}
+            >
+              削除
+            </button>
+          </div>
+        ))}
+        <button type="button" className={buttonPrimaryClass} onClick={addVoice}>
+          声を追加
+        </button>
+      </div>
 
       <AppearanceFields
         appearances={draft.appearances}

@@ -32,7 +32,7 @@ function v5Json(): string {
 describe("deserializeContent", () => {
   it("migrates a stored v4 document to the current schema", () => {
     const content = deserializeContent(v4Json());
-    expect(content.schemaVersion).toBe(7);
+    expect(content.schemaVersion).toBe(8);
     expect(content.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
     expect(content.scenes.map((scene) => scene.label)).toEqual(["導入", "要点 1", "結び"]);
     for (const scene of content.scenes) {
@@ -42,7 +42,7 @@ describe("deserializeContent", () => {
 
   it("migrates a stored v5 document to the current schema", () => {
     const content = deserializeContent(v5Json());
-    expect(content.schemaVersion).toBe(7);
+    expect(content.schemaVersion).toBe(8);
     expect(content.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
     for (const scene of content.scenes) {
       expect(scene.accent).toEqual({ kind: "theme", token: "primary" });
@@ -51,6 +51,6 @@ describe("deserializeContent", () => {
 
   it("round-trips the current schema", () => {
     const content = deserializeContent(serializeContent(createInitialContentDocument()));
-    expect(content.schemaVersion).toBe(7);
+    expect(content.schemaVersion).toBe(8);
   });
 });

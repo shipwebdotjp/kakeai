@@ -10,7 +10,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 ```json
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "locale": "ja-JP",
   "template": {
     "id": "explanation-scenes",
@@ -28,14 +28,14 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
-- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。キャラクター表情の台詞属性と Face Set 参照の導入（[../face-expression/spec.md](../face-expression/spec.md)、[ADR-0047](../adr/0047-per-line-expression-id.md)）で `7` とする。新規作成・保存するDocumentは `7` とする。開発段階のため v3 以前の保存版は持たず、v4 は読み出し時に v5、v5 は読み出し時に v6、v6 は読み出し時に v7 へ移行する。
+- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。キャラクターの locale 別声対応の導入（[../multilingual-voice/spec.md](../multilingual-voice/spec.md)、[ADR-0052](../adr/0052-character-voices-per-locale.md)）で `8` とする。新規作成・保存するDocumentは `8` とする。破壊変更の履歴と読出し移行は [content-schema-history.md](content-schema-history.md) を正とする。
 - `visualTheme` は作品の見た目の既定値を固定する参照で、必須とする。MVPでは `soft-editorial@1` のみ。未知の参照は拒否する。詳細は [../visual-themes/spec.md](../visual-themes/spec.md) を正とする。
-- `locale` はBCP 47形式で保存する。MVPの有効値は `ja-JP` のみ。
+- `locale` はBCP 47形式で保存する。有効値は `ja-JP` と `en-US`。
 - `template` は構造と既定表現を決める。MVPでは `explanation-scenes@1` のみ。
 
 `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。
 
-`schemaVersion` は `7` とする。Sceneスロット廃止とシーン間トランジション追加（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)/[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)）で `4` に上げ、Scene Label の追加（[../scene-labels/spec.md](../scene-labels/spec.md)）で `5` に上げ、Visual Theme 基盤の導入（[../visual-themes/spec.md](../visual-themes/spec.md)、[ADR-0040](../adr/0040-visual-theme-contract.md)）で `6` に上げ、キャラクター表情の台詞属性と Face Set 参照の導入（[../face-expression/spec.md](../face-expression/spec.md)、[ADR-0045](../adr/0045-face-set-global-reference.md)/[ADR-0047](../adr/0047-per-line-expression-id.md)）で `7` に上げた。読み出し時は v4 の各Sceneへ従来表示名（`導入` / `要点 N` / `結び`）を補って v5 として解釈し、さらに v5 へ `visualTheme: soft-editorial@1` と全Sceneの `accent: { kind: "theme", token: "primary" }` を補って v6 として解釈し、さらに v6 の各 Character Appearance へ `faceSetId: null` を、各 `NarrationSegment` へ `expressionId: null` を補って v7 として解釈する。保存済みJSONは書き換えず、次回の保存で新しい v7 `ScriptVersion` を作る。v3 以前の保存版は削除し、読み出し解釈を持たない。正式リリース後は、スキーマを破壊的に変えるときに保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。編集画面・テキストモデル・シーン間トランジションの詳細は [../editor/spec.md](../editor/spec.md) を正とする。キャラクター表情の `faceSetId`/`expressionId`、Face Set、`character.standing@3` の詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。
+`schemaVersion` は `8` とする。各版の変更内容と読出し移行は [content-schema-history.md](content-schema-history.md) を正とする。保存済みJSONは書き換えず、次回の保存で新しい `ScriptVersion` を作る。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。正式リリース後は、スキーマを破壊的に変えるときに保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。編集画面・テキストモデル・シーン間トランジションの詳細は [../editor/spec.md](../editor/spec.md) を正とする。キャラクター表情の `faceSetId`/`expressionId`、Face Set、`character.standing@3` の詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。キャラクターの locale 別声対応の詳細は [../multilingual-voice/spec.md](../multilingual-voice/spec.md) を正とする。
 
 ## セリフと音声
 
@@ -84,6 +84,9 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 {
   "id": "character-rin",
   "name": "リン",
+  "voices": [
+    { "locale": "ja-JP", "voiceProfileId": "vp_1" }
+  ],
   "appearances": [
     {
       "id": "appearance-rin-smile-front",
@@ -95,6 +98,8 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
   ]
 }
 ```
+
+`voices` は locale 別の声の対応表である。同一キャラクター内の `locale` 重複は拒否する。`characterId` を持つ話者の `Speaker.voiceProfileId` は、document の `locale` に対応する `voices` の値と一致させなければならない。詳細は [../multilingual-voice/spec.md](../multilingual-voice/spec.md) を正とする。
 
 MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) で `faceSetId` と `NarrationSegment.expressionId` を追加し、`character.standing@3` で合成する。`faceSetId` が `null` の外観は表情を切り替えず、ベース画像をそのまま描く。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに `character.standing@3` を左右1体ずつ最大2体選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。ただし描画時は、立ち絵の `characterId` に対応する話者が話すセリフ区間だけ、その立ち絵がゆっくり上下にバウンドする。シーン内での立ち絵切替、口パクは後続フェーズで追加する。
 
@@ -274,7 +279,7 @@ BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset
 
 ## 実装上のルール
 
-- `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `label`（空白のみ拒否）、必須の `accent`（`theme` tokenまたは大文字 `#RRGGBB` の `custom`）、`timing: z.discriminatedUnion("mode", ...)`、任意の `transition` を持ち、NarrationSegmentの `selectedAudioTakeId` と `expressionId` は必須の `z.string().nullable()` とする。`expressionId` は `speakerId` が `null` ならば `null` に限る。`CharacterAppearance.faceSetId` も必須の `z.string().nullable()` とする。Documentは必須の `visualTheme` を持ち、未知のテーマ参照は拒否する。Sceneは型付きスロットを持たず、`VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
+- `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `label`（空白のみ拒否）、必須の `accent`（`theme` tokenまたは大文字 `#RRGGBB` の `custom`）、`timing: z.discriminatedUnion("mode", ...)`、任意の `transition` を持ち、NarrationSegmentの `selectedAudioTakeId` と `expressionId` は必須の `z.string().nullable()` とする。`expressionId` は `speakerId` が `null` ならば `null` に限る。`CharacterAppearance.faceSetId` も必須の `z.string().nullable()` とする。`Character` は必須の `voices`（`locale` 重複拒否）を持ち、`characterId` を持つ話者の声は document の `locale` に対応する `voices` の値と一致させる。Documentは必須の `visualTheme` を持ち、未知のテーマ参照は拒否する。Sceneは型付きスロットを持たず、`VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
 - 正本JSONにはローカルパス、フレーム番号、HyperFrames固有のDOM属性やHTMLを保存しない。Compositionを使うCueはpublish済み `CompositionVersion.id` だけを保存する。
 - 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・publish済みCompositionVersion参照・Sceneのアクセント・`scene.transition` の尺（`D <= min(先行Scene尺, 入場Scene尺)`）を検証する。`composition.full-bleed@1` はScene背景だけに置き、同じCompositionVersionの重複参照を拒否する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。`faceSetId` と `expressionId` はグローバルライブラリを参照するため、API サービスが Face Set を解決して、存在・`ready` な画像 Asset・ベース画像との寸法一致・Expression Preset の部位参照を保存時に検証する（[../face-expression/spec.md](../face-expression/spec.md)）。テキスト量の目安超過は拒否せず警告として返す。
 - Render Jobには、検証済みの正本JSON、選択AudioTake、使用するレンダー入力（Renditionまたは原本）の参照情報、CompositionVersionのID・bundle hash・manifest、解決済みFace Set、テンプレート版、出力設定を保存する。ワーカーはスナップショットJSONを実行時の信頼済みコンパイラでHTMLとchild file treeへ変換する。ツール更新後の同一MP4再現は要件にしない。

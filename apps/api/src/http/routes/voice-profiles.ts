@@ -21,6 +21,13 @@ export function createVoiceProfilesRouter(
   const router = Router();
 
   router.get(
+    "/voice-adapters",
+    asyncHandler(async (_req, res) => {
+      sendData(res, 200, voiceProfiles.listVoiceAdapters());
+    }),
+  );
+
+  router.get(
     "/voice-profiles/voices",
     asyncHandler(async (req, res) => {
       const raw = req.query.adapterId;

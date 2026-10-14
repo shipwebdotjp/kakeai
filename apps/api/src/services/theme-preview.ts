@@ -10,6 +10,7 @@ import {
   type CompiledComposition,
 } from "@kakeai/video";
 import {
+  CONTENT_SCHEMA_VERSION,
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   draftPreviewSchema,
@@ -24,7 +25,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
   const themeRef = { id: themeDefinition.id, version: themeDefinition.version };
 
   return {
-    schemaVersion: 7,
+    schemaVersion: CONTENT_SCHEMA_VERSION,
     locale: "ja-JP",
     visualTheme: themeRef,
     template: { id: "explanation-scenes", version: 1 },

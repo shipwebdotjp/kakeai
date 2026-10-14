@@ -66,7 +66,7 @@ export function buildTtsFilename(snapshot: TtsJobSnapshot): string {
     "tts",
     sanitizeFilenamePart(snapshot.adapterId, "adapter"),
     sanitizeFilenamePart(snapshot.speakerName ?? "", snapshot.speakerId),
-    sanitizeFilenamePart(snapshot.styleName ?? "", `style${snapshot.voice.styleId}`),
+    sanitizeFilenamePart(snapshot.voiceName ?? "", snapshot.voice.voiceId),
   ];
   if (snapshot.speedScale !== 1) {
     parts.push(`${String(snapshot.speedScale)}x`);
@@ -97,9 +97,9 @@ export async function processTtsJob(
     let audio: Uint8Array;
     try {
       audio = (
-        await adapter.synthesize(resolveVoiceBaseUrl(config, snapshot.adapterId), {
+        await adapter.synthesize({ baseUrl: resolveVoiceBaseUrl(config, snapshot.adapterId) }, {
           text: snapshot.speechText,
-          styleId: snapshot.voice.styleId,
+          voiceId: snapshot.voice.voiceId,
           speedScale: snapshot.speedScale,
         })
       ).data;
@@ -128,9 +128,8 @@ export async function processTtsJob(
     const provenance = {
       adapterId: snapshot.adapterId,
       voiceId: snapshot.voice.voiceId,
-      styleId: snapshot.voice.styleId,
       speakerName: snapshot.speakerName ?? null,
-      styleName: snapshot.styleName ?? null,
+      voiceName: snapshot.voiceName ?? null,
       speedScale: snapshot.speedScale,
       engineVersion: snapshot.engineVersion,
       voiceProfileId: snapshot.voiceProfileId,

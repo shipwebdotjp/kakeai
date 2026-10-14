@@ -4,7 +4,6 @@ import {
   SNAPSHOT_SCHEMA_VERSION,
   ttsJobSnapshotSchema,
   voiceAdapterIdSchema,
-  voiceProfileSettingsSchemaFor,
   type BulkTtsJobEntry,
   type BulkTtsJobExclusion,
   type BulkTtsJobsResult,
@@ -131,7 +130,7 @@ async function listVoicesCached(
   const adapter = getTtsAdapter(adapterId);
   let listing: TtsVoiceListing;
   try {
-    listing = await adapter.listVoices(resolveVoiceBaseUrl(config, adapterId));
+    listing = await adapter.listVoices({ baseUrl: resolveVoiceBaseUrl(config, adapterId) });
   } catch (error) {
     if (error instanceof TtsEngineUnavailableError) {
       const apiError = new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
@@ -181,31 +180,15 @@ async function prepareTtsJobSnapshot(
   if (!adapterId.success) {
     throw ttsInputIssue(["adapterId"], "未対応の音声アダプターです。");
   }
-  let settings: { speakerUuid: string; defaultStyleId: number };
-  let rawSettings: unknown;
-  try {
-    rawSettings = JSON.parse(profileRow.settingsJson);
-  } catch {
-    throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定を解釈できません。");
-  }
-  const parsedSettings = voiceProfileSettingsSchemaFor(adapterId.data).safeParse(rawSettings);
-  if (!parsedSettings.success) {
-    throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定が不正です。");
-  }
-  settings = parsedSettings.data;
 
-  const styleId = input.styleId ?? settings.defaultStyleId;
+  const voiceId = input.voiceId ?? profileRow.voiceId;
   const listing = await listVoicesCached(config, adapterId.data, caches);
-  const voice = findVoice(listing.voices, settings.speakerUuid);
+  const voice = findVoice(listing.voices, voiceId);
   if (voice === undefined) {
     throw ttsInputIssue(
       ["voiceProfileId"],
-      "選択した話者が現在のエンジンに見つかりません。声プロファイルを見直してください。",
+      "選択した声が現在のエンジンに見つかりません。声プロファイルを見直してください。",
     );
-  }
-  const selectedStyle = voice.styles.find((style) => style.styleId === styleId);
-  if (selectedStyle === undefined) {
-    throw ttsInputIssue(["styleId"], "この話者で使えないスタイルです。");
   }
 
   const snapshot = ttsJobSnapshotSchema.safeParse({
@@ -219,8 +202,8 @@ async function prepareTtsJobSnapshot(
     speakerName: truncateName(speaker.name),
     voiceProfileId: speaker.voiceProfileId,
     adapterId: adapterId.data,
-    voice: { voiceId: voice.voiceId, styleId },
-    styleName: truncateName(selectedStyle.name),
+    voice: { voiceId: voice.voiceId },
+    voiceName: truncateName(voice.name),
     speedScale: input.speedScale,
     speechText,
     engineVersion: listing.engineVersion,

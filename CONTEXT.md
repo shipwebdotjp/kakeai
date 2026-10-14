@@ -37,8 +37,12 @@ The voice identity for a Narration Segment, whether or not it appears on screen.
 _Avoid_: Character, narrator
 
 **Voice Profile**:
-An app-wide voice setting that maps a Speaker to a TTS adapter and its adapter-specific voice.
+An app-wide voice setting for one locale that maps a Speaker to a TTS adapter and its adapter-defined voice.
 _Avoid_: Speaker, TTS engine
+
+**Voice**:
+An adapter-defined selectable voice, identified by an opaque voice id and optionally declaring its locale.
+_Avoid_: Speaker, Voice Profile
 
 **TTS Adapter**:
 A registered local text-to-speech engine boundary, keyed by an immutable adapter id, that lists voices and synthesizes audio for a Voice Profile.

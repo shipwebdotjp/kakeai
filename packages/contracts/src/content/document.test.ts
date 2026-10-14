@@ -19,6 +19,45 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
+  it("rejects duplicate voice locales on a character", () => {
+    const doc = validContentDocument();
+    doc.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        voices: [
+          { locale: "ja-JP", voiceProfileId: "vp_1" },
+          { locale: "ja-JP", voiceProfileId: "vp_2" },
+        ],
+        appearances: [],
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects a speaker voice that differs from the character locale voice", () => {
+    const doc = validContentDocument();
+    doc.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        voices: [{ locale: "ja-JP", voiceProfileId: "vp_1" }],
+        appearances: [],
+      },
+    ];
+    const baseSpeakers = [...doc.speakers];
+    doc.speakers = [
+      ...baseSpeakers,
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: "vp_2" },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+    doc.speakers = [
+      ...baseSpeakers,
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: "vp_1" },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
   it("rejects a non-current schemaVersion", () => {
     const doc = { ...validContentDocument(), schemaVersion: 2 };
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
@@ -86,6 +125,7 @@ describe("contentDocumentSchema", () => {
     doc.characters.push({
       id: "character-rin",
       name: "リン",
+      voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
@@ -114,6 +154,7 @@ describe("contentDocumentSchema", () => {
     doc.characters.push({
       id: "character-rin",
       name: "リン",
+      voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
       ],
@@ -142,6 +183,7 @@ describe("contentDocumentSchema", () => {
     doc.characters.push({
       id: "character-rin",
       name: "リン",
+      voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
       ],

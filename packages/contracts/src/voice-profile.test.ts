@@ -1,44 +1,61 @@
 import { describe, expect, it } from "vitest";
 import {
   createVoiceProfileRequestSchema,
-  styleIdSchema,
+  ttsVoiceSchema,
+  voiceAdapterDescriptorFor,
+  voiceAdapterDescriptors,
+  voiceIdSchema,
+  voiceProfileExtrasSchema,
+  voiceProfileExtrasSchemaFor,
   voiceProfileSchema,
-  voiceProfileSettingsSchemaFor,
-  voiceProfileSettingsSchema,
 } from "./voice-profile";
 
-describe("styleIdSchema", () => {
-  it("accepts signed 32-bit integers", () => {
-    expect(styleIdSchema.safeParse(0).success).toBe(true);
-    expect(styleIdSchema.safeParse(2).success).toBe(true);
-    expect(styleIdSchema.safeParse(-1).success).toBe(true);
-    expect(styleIdSchema.safeParse(-2147483648).success).toBe(true);
-    expect(styleIdSchema.safeParse(2147483647).success).toBe(true);
+describe("voiceAdapterDescriptors", () => {
+  it("lists the registered adapters with loopback defaults", () => {
+    expect(voiceAdapterDescriptors.map((descriptor) => descriptor.id)).toEqual([
+      "voicevox",
+      "aivisspeech",
+    ]);
+    for (const descriptor of voiceAdapterDescriptors) {
+      expect(descriptor.defaultBaseUrl.startsWith("http://127.0.0.1:")).toBe(true);
+    }
   });
 
-  it("rejects non-integers and values outside 32 bits", () => {
-    expect(styleIdSchema.safeParse(1.5).success).toBe(false);
-    expect(styleIdSchema.safeParse(-2147483649).success).toBe(false);
-    expect(styleIdSchema.safeParse(2147483648).success).toBe(false);
+  it("resolves a descriptor by id and rejects unknown ids", () => {
+    expect(voiceAdapterDescriptorFor("voicevox").label).toBe("VOICEVOX");
+    expect(() => voiceAdapterDescriptorFor("other")).toThrow();
   });
 });
 
-describe("voiceProfileSettingsSchema", () => {
-  it("accepts the shared shape for both adapters", () => {
-    const settings = { speakerUuid: "uuid-1", defaultStyleId: -1 };
-    expect(voiceProfileSettingsSchema.safeParse(settings).success).toBe(true);
-    expect(voiceProfileSettingsSchemaFor("voicevox").safeParse(settings).success).toBe(true);
-    expect(voiceProfileSettingsSchemaFor("aivisspeech").safeParse(settings).success).toBe(true);
+describe("voiceIdSchema", () => {
+  it("accepts opaque adapter-defined voice ids", () => {
+    expect(voiceIdSchema.safeParse("uuid-1:2").success).toBe(true);
+  });
+
+  it("rejects empty ids", () => {
+    expect(voiceIdSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("voiceProfileExtrasSchema", () => {
+  it("accepts empty extras for both adapters", () => {
+    expect(voiceProfileExtrasSchema.safeParse({}).success).toBe(true);
+    expect(voiceProfileExtrasSchemaFor("voicevox").safeParse({}).success).toBe(true);
+    expect(voiceProfileExtrasSchemaFor("aivisspeech").safeParse({}).success).toBe(true);
   });
 
   it("rejects unknown keys", () => {
+    expect(voiceProfileExtrasSchema.safeParse({ extra: true }).success).toBe(false);
+  });
+});
+
+describe("ttsVoiceSchema", () => {
+  it("accepts a voice with an optional declared locale", () => {
     expect(
-      voiceProfileSettingsSchema.safeParse({
-        speakerUuid: "uuid-1",
-        defaultStyleId: 0,
-        extra: true,
-      }).success,
-    ).toBe(false);
+      ttsVoiceSchema.safeParse({ voiceId: "uuid-1:2", name: "めたん ノーマル", locale: "ja-JP" })
+        .success,
+    ).toBe(true);
+    expect(ttsVoiceSchema.safeParse({ voiceId: "uuid-1:2", name: "めたん" }).success).toBe(true);
   });
 });
 
@@ -48,14 +65,18 @@ describe("createVoiceProfileRequestSchema", () => {
       createVoiceProfileRequestSchema.safeParse({
         name: "めたん",
         adapterId: "voicevox",
-        settings: { speakerUuid: "uuid-1", defaultStyleId: 2 },
+        voiceId: "uuid-1:2",
+        locale: "ja-JP",
+        settings: {},
       }).success,
     ).toBe(true);
     expect(
       createVoiceProfileRequestSchema.safeParse({
         name: "Aivis",
         adapterId: "aivisspeech",
-        settings: { speakerUuid: "uuid-aivis", defaultStyleId: -1 },
+        voiceId: "uuid-aivis:-1",
+        locale: "ja-JP",
+        settings: {},
       }).success,
     ).toBe(true);
   });
@@ -65,7 +86,9 @@ describe("createVoiceProfileRequestSchema", () => {
       createVoiceProfileRequestSchema.safeParse({
         name: "x",
         adapterId: "other",
-        settings: { speakerUuid: "uuid-1", defaultStyleId: 0 },
+        voiceId: "uuid-1:0",
+        locale: "ja-JP",
+        settings: {},
       }).success,
     ).toBe(false);
   });
@@ -79,7 +102,9 @@ describe("voiceProfileSchema", () => {
           id: "vp_1",
           name: "ナレーター",
           adapterId,
-          settings: { speakerUuid: "uuid-1", defaultStyleId: -1 },
+          voiceId: "uuid-1:2",
+          locale: "ja-JP",
+          settings: {},
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
         }).success,

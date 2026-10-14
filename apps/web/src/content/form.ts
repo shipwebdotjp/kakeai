@@ -17,6 +17,7 @@ import {
   sceneDeviceFrameV1,
   type AnimationPreset,
   type Character,
+  type CharacterVoice,
   type ContentDocument,
   type CueLayer,
   type Scene,
@@ -68,6 +69,7 @@ export interface CharacterFormValue {
   id: string;
   name: string;
   voiceProfileId: string | null;
+  voices: CharacterVoice[];
   appearances: AppearanceFormValue[];
 }
 
@@ -313,10 +315,12 @@ function readStandings(scene: Scene): StandingFormValue[] {
 function readCharacters(content: ContentDocument): CharacterFormValue[] {
   return content.characters.map((character) => {
     const speaker = content.speakers.find((entry) => entry.characterId === character.id);
+    const localeVoice = character.voices.find((entry) => entry.locale === content.locale);
     return {
       id: character.id,
       name: character.name,
-      voiceProfileId: speaker?.voiceProfileId ?? null,
+      voiceProfileId: localeVoice?.voiceProfileId ?? speaker?.voiceProfileId ?? null,
+      voices: character.voices.map((entry) => ({ ...entry })),
       appearances: character.appearances.map((appearance) => ({
         id: appearance.id,
         assetId: appearance.assetId,
@@ -539,10 +543,27 @@ function standingReferencesMissing(
   return !appearanceIds.has(standing.appearanceId);
 }
 
-function buildCharacters(values: CharacterFormValue[]): Character[] {
+function mergeLocaleVoice(
+  voices: CharacterVoice[],
+  locale: CharacterVoice["locale"],
+  voiceProfileId: string | null,
+): CharacterVoice[] {
+  if (voiceProfileId === null) {
+    return voices.filter((entry) => entry.locale !== locale);
+  }
+  const merged = voices.map((entry) =>
+    entry.locale === locale ? { locale, voiceProfileId } : entry,
+  );
+  return merged.some((entry) => entry.locale === locale)
+    ? merged
+    : [...merged, { locale, voiceProfileId }];
+}
+
+function buildCharacters(values: CharacterFormValue[], locale: CharacterVoice["locale"]): Character[] {
   return values.map((character) => ({
     id: character.id,
     name: character.name,
+    voices: mergeLocaleVoice(character.voices, locale, character.voiceProfileId),
     appearances: character.appearances.map((appearance, appearanceIndex) => {
       if (appearance.assetId === null || appearance.assetId.length === 0) {
         const name = character.name.trim() || character.id;
@@ -908,7 +929,7 @@ export function buildContentDocument(
   base: ContentDocument,
   values: DocumentFormValues,
 ): ContentDocument {
-  const characters = buildCharacters(values.characters);
+  const characters = buildCharacters(values.characters, base.locale);
   const characterIds = new Set(characters.map((character) => character.id));
   const appearanceIdsByCharacter = new Map(
     characters.map((character) => [
@@ -1231,7 +1252,7 @@ export function newAppearanceId(): string {
 }
 
 export function createEmptyCharacter(): CharacterFormValue {
-  return { id: newCharacterId(), name: "", voiceProfileId: null, appearances: [] };
+  return { id: newCharacterId(), name: "", voiceProfileId: null, voices: [], appearances: [] };
 }
 
 export function createEmptyAppearance(): AppearanceFormValue {

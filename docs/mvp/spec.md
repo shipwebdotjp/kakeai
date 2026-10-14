@@ -10,7 +10,7 @@
 
 - 利用者は単一の個人。認証、共有、共同編集、テナント分離は対象外。
 - 開発者がMac上でローカル起動するWebアプリである。配布可能なデスクトップアプリ、インストーラ、自動更新、常駐起動はMVPの対象外とする。
-- ネットワークや外部AIサービスなしで動画を作成・出力できる。
+- 基本的な動画制作はローカルで完結する。AI機能はネットワークや外部サービスを使える。AIの出力は提案として扱い、人の明示的な採用なしに正本へ反映しない。
 - 素材、BGM、音声の利用許諾は利用者が確認する。
 
 ## MVPでできること
@@ -60,7 +60,7 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 | 用語 | 意味 |
 | --- | --- |
 | `Work` | 作品の親単位。原本言語、作品名、任意の親作品を持つ。 |
-| `LanguageEdition` | ある言語での制作版。MVPでは `ja-JP` のみ作成・出力できる。 |
+| `LanguageEdition` | ある言語での制作版。作成可能な `locale` は `ja-JP` と `en-US`。 |
 | `ScriptVersion` | シーンとセリフを持つ台本の不変版。編集保存時に新しい版を作る。 |
 | `NarrationSegment` | 読み上げる最小単位。字幕用文章、読み上げ用文章、話者、選択音声（または音声なし）を持つ。 |
 | `Speaker` | 音声上の話者。画面に出ないナレーターも表せる。 |
@@ -110,7 +110,7 @@ Prismaモデル名は以下のとおりとする。IDはアプリ生成の文字
 | モデル | 主な列 | 制約・用途 |
 | --- | --- | --- |
 | `Work` | `id`, `title`, `originalLocale`, `parentWorkId?`, `createdAt`, `updatedAt` | 親作品。`parentWorkId` は将来のショートなど派生Work用で、MVPでは通常NULL。子Workを持つWorkは削除できない。 |
-| `LanguageEdition` | `id`, `workId`, `locale`, `currentScriptVersionId?`, `createdAt`, `updatedAt` | 作品の言語別制作版。`@@unique([workId, locale])`。循環参照を避けるため作成途中だけNULLを許し、同一トランザクション内で初期ScriptVersionを作成後に必ず設定する。`currentScriptVersionId` が編集画面の現在版を明示し、最大版番号から推測しない。参照先は同じEditionでなければならない。MVPでは作成可能なlocaleは `ja-JP` のみ。 |
+| `LanguageEdition` | `id`, `workId`, `locale`, `currentScriptVersionId?`, `createdAt`, `updatedAt` | 作品の言語別制作版。`@@unique([workId, locale])`。循環参照を避けるため作成途中だけNULLを許し、同一トランザクション内で初期ScriptVersionを作成後に必ず設定する。`currentScriptVersionId` が編集画面の現在版を明示し、最大版番号から推測しない。参照先は同じEditionでなければならない。作成可能なlocaleは `ja-JP` と `en-US`。 |
 | `ScriptVersion` | `id`, `languageEditionId`, `versionNumber`, `contentSchemaVersion`, `contentJson`, `sourceScriptVersionId?`, `createdAt` | 不変の編集データ。`@@unique([languageEditionId, versionNumber])`。版番号は表示・並び替えのため単調増加させる。`sourceScriptVersionId` は手動復元、翻訳、下書きなどの派生元を示す。 |
 | `Asset` | `id`, `kind`, `origin`, `status`, `storageKey`, `originalFilename`, `mediaType`, `byteSize`, `sha256`, `durationMs?`, `widthPx?`, `heightPx?`, `tagsJson?`, `provenanceJson?`, `generatedByJobId?`, `createdAt` | 再利用可能な原本ファイル。`status` は `processing` / `ready` / `failed`。`kind` は `image` / `video` / `audio`、`origin` は `uploaded` / `generated`。`storageKey` と `sha256` はそれぞれ一意にし、同一バイト列の重複保存を避ける。`tagsJson` は利用者編集の分類タグで、取り込み後も更新されうる唯一のメタデータ。 |
 | `AssetRendition` | `id`, `assetId`, `purpose`, `storageKey`, `mediaType`, `sha256`, `byteSize`, `durationMs?`, `widthPx?`, `heightPx?`, `codecJson?`, `createdAt` | 原本をレンダーに直接使えない場合に必要時だけ作る、レンダー用の正規化派生物。MVPの `purpose` は `render`。画像は適用済みの向き、動画はH.264/AAC・CFR、音声はWAVへ正規化する。アルファ付き動画（VP8/VP9）は透過保持のため原本をそのまま使い、Renditionを作らない。`@@unique([assetId, purpose])`。 |
@@ -158,7 +158,7 @@ Render Jobを作る時点で、次を `inputSnapshotJson` に不変の値とし�
 
 ### 書込みとJob状態遷移
 
-1. **作品作成**：1つのWork、`ja-JP`のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accent`（`theme.primary`）・`label` を設定した導入、要点1件、結びを持ち、`visualTheme: soft-editorial@1` を固定した、`schemaVersion: 7` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
+1. **作品作成**：1つのWork、`originalLocale` のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accent`（`theme.primary`）・`label` を設定した導入、要点1件、結びを持ち、`visualTheme: soft-editorial@1` を固定した、`schemaVersion: 8` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
 2. **台本保存**：利用者は明示的に保存する（自動保存はしない）。フォーム値をZodで検証し、`ready` のAsset参照を確認して、新しいScriptVersionを追加する。過去の版は更新しない。テキスト量の目安を超える入力は保存を拒否せず、警告を返す。保存はlast-write-winsとし、クライアントは版番号を送らない。同一トランザクションで新しい版をcurrentへ進める。過去版の復元は、その内容を新しい版として保存し、復元元を `sourceScriptVersionId` に記録する。
 3. **素材取り込み**：アップロードで原本Assetを作成し、`asset_ingest` Jobをキューへ追加する。Jobは形式・長さ・寸法を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってAssetを `ready` にする。失敗時は `failed` にし、台本保存・プレビュー・レンダーでそのAssetを使わせない。
 4. **レンダー投入**：特定のScriptVersionとreadyなRenditionから、入力スナップショットを持つ `queued` Jobを追加する。MVPでは「現在版をレンダー」がUIの入口だが、Job自体は必ず版IDと素材Renditionを固定する。

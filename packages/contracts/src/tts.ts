@@ -1,8 +1,12 @@
 import type { TtsVoice, VoiceAdapterId } from "./voice-profile";
 
+export interface TtsAdapterContext {
+  readonly baseUrl: string;
+}
+
 export interface TtsSynthesisRequest {
   text: string;
-  styleId: number;
+  voiceId: string;
   speedScale: number;
 }
 
@@ -18,6 +22,6 @@ export interface TtsVoiceListing {
 
 export interface TtsAdapter {
   readonly id: VoiceAdapterId;
-  listVoices(baseUrl: string): Promise<TtsVoiceListing>;
-  synthesize(baseUrl: string, request: TtsSynthesisRequest): Promise<TtsSynthesisAudio>;
+  listVoices(context: TtsAdapterContext): Promise<TtsVoiceListing>;
+  synthesize(context: TtsAdapterContext, request: TtsSynthesisRequest): Promise<TtsSynthesisAudio>;
 }

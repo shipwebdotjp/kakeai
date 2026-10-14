@@ -22,6 +22,7 @@ import type {
   UpdateFaceSetRequest,
   UpdateVoiceProfileRequest,
   VoiceAdapterId,
+  VoiceAdapterList,
   VoiceList,
   VoiceProfile,
   Warning,
@@ -458,6 +459,14 @@ export function useDeleteVoiceProfile() {
   });
 }
 
+export function useVoiceAdapters() {
+  return useQuery({
+    queryKey: ["voice-adapters"],
+    staleTime: 60_000,
+    queryFn: async () => (await apiRequest<VoiceAdapterList>("/voice-adapters")).data,
+  });
+}
+
 export function useAdapterVoices(adapterId: VoiceAdapterId | undefined) {
   return useQuery({
     queryKey: ["adapter-voices", adapterId],
@@ -555,7 +564,7 @@ async function pollTtsJob(jobId: string): Promise<TtsJobResult> {
 
 export interface GenerateTtsInput {
   narrationSegmentId: string;
-  styleId: number;
+  voiceId: string;
   speedScale: number;
   speechText?: string;
 }
@@ -575,7 +584,7 @@ export function useGenerateTtsTake(scriptVersionId: string | undefined) {
           {
             method: "POST",
             body: {
-              styleId: input.styleId,
+              ...(input.voiceId.trim().length === 0 ? {} : { voiceId: input.voiceId }),
               speedScale: input.speedScale,
               ...(input.speechText === undefined || input.speechText.trim().length === 0
                 ? {}

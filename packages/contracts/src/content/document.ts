@@ -8,7 +8,7 @@ import { audioCueSchema } from "./audio";
 import { visualThemeRefSchema } from "./theme";
 import { characterStandingV1, characterStandingV2, characterStandingV3, compositionFullBleedInputSchema } from "../templates";
 
-export const CONTENT_SCHEMA_VERSION = 7 as const;
+export const CONTENT_SCHEMA_VERSION = 8 as const;
 
 export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;
@@ -268,7 +268,8 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
     }
   }
 
-  for (const speaker of doc.speakers) {
+  const characterById = new Map(doc.characters.map((character) => [character.id, character]));
+  doc.speakers.forEach((speaker, speakerIndex) => {
     if (speaker.characterId !== null && !characterIds.has(speaker.characterId)) {
       ctx.addIssue({
         code: "custom",
@@ -276,7 +277,19 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
         path: ["speakers"],
       });
     }
-  }
+    if (speaker.characterId === null || speaker.voiceProfileId === null) {
+      return;
+    }
+    const character = characterById.get(speaker.characterId);
+    const voice = character?.voices.find((entry) => entry.locale === doc.locale);
+    if (voice !== undefined && voice.voiceProfileId !== speaker.voiceProfileId) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Speaker ${speaker.id} の声がキャラクターの ${doc.locale} の声と一致しません`,
+        path: ["speakers", speakerIndex, "voiceProfileId"],
+      });
+    }
+  });
 
   const sceneIds = new Set(doc.scenes.map((scene) => scene.id));
   for (const cue of doc.audioCues) {

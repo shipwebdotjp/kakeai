@@ -237,7 +237,7 @@ function LineEditor({
 }: LineEditorProps) {
   const assets = useAssets();
   const generate = useGenerateTtsTake(scriptVersionId);
-  const [styleId, setStyleId] = useState<number | null>(null);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
   const [speedScale, setSpeedScale] = useState(1);
   const [autoPlayToken, setAutoPlayToken] = useState(0);
   const autoPlayTakeIdRef = useRef<string | null>(null);
@@ -264,31 +264,29 @@ function LineEditor({
   const profile = voiceProfiles.find((entry) => entry.id === profileId);
   const adapterState = profile === undefined ? undefined : adapterVoices[profile.adapterId];
   const adapterName = profile === undefined ? "" : adapterLabel(profile.adapterId);
-  const voice = adapterState?.voices?.find(
-    (entry) => entry.voiceId === profile?.settings.speakerUuid,
-  );
-  const styles = voice?.styles;
+  const listedVoices = adapterState?.voices;
+  const voices = listedVoices ?? [];
+  const effectiveVoiceId = voiceId ?? profile?.voiceId ?? null;
+  const voice = voices.find((entry) => entry.voiceId === effectiveVoiceId);
 
   useEffect(() => {
     if (profile === undefined) {
-      setStyleId(null);
+      setVoiceId(null);
       return;
     }
-    const available = styles ?? [];
-    setStyleId((previous) => {
-      if (previous !== null && available.some((style) => style.styleId === previous)) {
+    setVoiceId((previous) => {
+      if (previous !== null && voices.some((entry) => entry.voiceId === previous)) {
         return previous;
       }
-      const hasDefault = available.some(
-        (style) => style.styleId === profile.settings.defaultStyleId,
-      );
-      return hasDefault ? profile.settings.defaultStyleId : (available[0]?.styleId ?? null);
+      return voices.some((entry) => entry.voiceId === profile.voiceId)
+        ? profile.voiceId
+        : (voices[0]?.voiceId ?? null);
     });
-  }, [profile?.id, profile?.settings.defaultStyleId, voice?.voiceId, styles]);
+  }, [profile?.id, profile?.voiceId, listedVoices]);
 
   useEffect(() => {
     setSpeedScale(1);
-  }, [profile?.id, voice?.voiceId]);
+  }, [profile?.id, effectiveVoiceId]);
 
   const fileName = (assetId: string): string =>
     assets.data?.find((asset) => asset.id === assetId)?.originalFilename ?? assetId;
@@ -380,12 +378,12 @@ function LineEditor({
   };
 
   const onGenerate = () => {
-    if (styleId === null) {
+    if (effectiveVoiceId === null) {
       return;
     }
     const policy = generatedTakePolicy("individual");
     generate.mutate(
-      { narrationSegmentId: line.id, styleId, speedScale, speechText: line.speechText },
+      { narrationSegmentId: line.id, voiceId: effectiveVoiceId, speedScale, speechText: line.speechText },
       {
         onSuccess: (result) => {
           const takeId = addTake(result.assetId, result.durationMs, "tts", policy.select);
@@ -405,7 +403,7 @@ function LineEditor({
   const speechLength = line.speechText.trim().length;
   const speechReady = speechLength > 0 && speechLength <= MAX_TTS_SPEECH_TEXT_LENGTH;
   const ttsDisabled =
-    bulkRunning || generate.isPending || styleId === null || !voiceMatches || !speechReady;
+    bulkRunning || generate.isPending || effectiveVoiceId === null || !voiceMatches || !speechReady;
 
   return (
     <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">
@@ -574,27 +572,22 @@ function LineEditor({
           </p>
         ) : voice === undefined ? (
           <p className={errorTextClass}>
-            声プロファイルの話者が {adapterName} ENGINE に見つかりません。
+            声プロファイルの声が {adapterName} ENGINE に見つかりません。
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <label className="inline-flex items-center gap-1.5">
-              スタイル
+              声
               <select
                 className={textFieldClass}
-                value={styleId ?? ""}
+                value={effectiveVoiceId ?? ""}
                 onChange={(event) => {
-                  if (event.target.value === "") {
-                    setStyleId(null);
-                    return;
-                  }
-                  const next = Number(event.target.value);
-                  setStyleId(Number.isInteger(next) ? next : null);
+                  setVoiceId(event.target.value === "" ? null : event.target.value);
                 }}
               >
-                {(styles ?? []).map((style) => (
-                  <option key={style.styleId} value={style.styleId}>
-                    {style.name}
+                {voices.map((entry) => (
+                  <option key={entry.voiceId} value={entry.voiceId}>
+                    {entry.name}
                   </option>
                 ))}
               </select>
