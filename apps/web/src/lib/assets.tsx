@@ -11,6 +11,68 @@ export function assetLabel(asset: Asset): string {
   return `${asset.originalFilename}（${KIND_LABEL[asset.kind] ?? asset.kind}）`;
 }
 
+export function AssetTypeBadge({ kind }: { kind: Asset["kind"] }) {
+  return (
+    <span className="rounded border border-border bg-surface-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+      {KIND_LABEL[kind] ?? kind}
+    </span>
+  );
+}
+
+export function AssetTagChips({
+  tags,
+  max,
+  className,
+}: {
+  tags: readonly string[];
+  max?: number;
+  className?: string;
+}) {
+  if (tags.length === 0) {
+    return null;
+  }
+  const shown = max === undefined ? tags : tags.slice(0, max);
+  const rest = tags.length - shown.length;
+  return (
+    <span className={`inline-flex flex-wrap items-center gap-1 ${className ?? ""}`}>
+      {shown.map((tag) => (
+        <span
+          key={tag}
+          className="rounded-full border border-border px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+        >
+          {tag}
+        </span>
+      ))}
+      {rest > 0 && <span className="text-[10px] text-muted-foreground">+{rest}</span>}
+    </span>
+  );
+}
+
+export function AssetFavoriteButton({
+  favorited,
+  disabled,
+  onToggle,
+}: {
+  favorited: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`text-sm leading-none ${
+        favorited ? "text-amber-500" : "text-muted-foreground hover:text-foreground"
+      }`}
+      disabled={disabled}
+      aria-pressed={favorited}
+      aria-label={favorited ? "お気に入りを解除" : "お気に入りに追加"}
+      onClick={onToggle}
+    >
+      {favorited ? "★" : "☆"}
+    </button>
+  );
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`;

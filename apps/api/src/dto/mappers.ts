@@ -94,6 +94,8 @@ export function toAsset(row: AssetRow): Asset {
     widthPx: row.widthPx,
     heightPx: row.heightPx,
     tags: parseAssetTags(row.tagsJson),
+    favoritedAt: row.favoritedAt === null ? null : toIso(row.favoritedAt),
+    archivedAt: row.archivedAt === null ? null : toIso(row.archivedAt),
     createdAt: toIso(row.createdAt),
     contentUrl: `${API_BASE_PATH}/assets/${encodeURIComponent(row.id)}/content`,
   };

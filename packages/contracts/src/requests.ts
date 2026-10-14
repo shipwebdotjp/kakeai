@@ -29,9 +29,17 @@ export const draftPreviewRequestSchema = z.strictObject({
 
 export const createRenderJobRequestSchema = z.strictObject({});
 
-export const updateAssetRequestSchema = z.strictObject({
-  tags: assetTagsSchema,
-});
+export const updateAssetRequestSchema = z
+  .strictObject({
+    tags: assetTagsSchema.optional(),
+    favorited: z.boolean().optional(),
+    archived: z.boolean().optional(),
+  })
+  .refine(
+    (value) =>
+      value.tags !== undefined || value.favorited !== undefined || value.archived !== undefined,
+    { message: "tags / favorited / archived のいずれかを指定してください。" },
+  );
 
 export const DEFAULT_TTS_SPEED_SCALE = 1;
 export const MIN_TTS_SPEED_SCALE = 0.5;

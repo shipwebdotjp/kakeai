@@ -114,11 +114,16 @@ describe("updateAssetRequestSchema", () => {
     expect(updateAssetRequestSchema.parse({ tags: ["背景"] })).toEqual({ tags: ["背景"] });
   });
 
+  it("accepts favorite and archive flags", () => {
+    expect(updateAssetRequestSchema.parse({ favorited: true })).toEqual({ favorited: true });
+    expect(updateAssetRequestSchema.parse({ archived: false })).toEqual({ archived: false });
+  });
+
   it("rejects unknown fields", () => {
     expect(updateAssetRequestSchema.safeParse({ tags: [], extra: 1 }).success).toBe(false);
   });
 
-  it("rejects a missing tags field", () => {
+  it("rejects an empty patch", () => {
     expect(updateAssetRequestSchema.safeParse({}).success).toBe(false);
   });
 });

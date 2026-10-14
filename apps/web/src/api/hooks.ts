@@ -166,23 +166,44 @@ export function useDeleteAsset() {
   });
 }
 
-export function useUpdateAssetTags() {
+export type UpdateAssetPatch =
+  | { tags: string[]; favorited?: boolean; archived?: boolean }
+  | { tags?: string[]; favorited: boolean; archived?: boolean }
+  | { tags?: string[]; favorited?: boolean; archived: boolean };
+
+export type UpdateAssetInput = { assetId: string } & UpdateAssetPatch;
+
+function applyAssetPatch(asset: Asset, patch: UpdateAssetPatch): Asset {
+  const next = { ...asset };
+  if (patch.tags !== undefined) {
+    next.tags = [...patch.tags];
+  }
+  if (patch.favorited !== undefined) {
+    next.favoritedAt = patch.favorited ? new Date().toISOString() : null;
+  }
+  if (patch.archived !== undefined) {
+    next.archivedAt = patch.archived ? new Date().toISOString() : null;
+  }
+  return next;
+}
+
+export function useUpdateAsset() {
   const queryClient = useQueryClient();
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const mutation = useMutation({
-    mutationFn: async ({ assetId, tags }: { assetId: string; tags: string[] }) =>
+    mutationFn: async ({ assetId, ...patch }: UpdateAssetInput) =>
       (
         await apiRequest<Asset>(`/assets/${encodeURIComponent(assetId)}`, {
           method: "PATCH",
-          body: { tags },
+          body: patch,
         })
       ).data,
-    onMutate: async ({ assetId, tags }) => {
+    onMutate: async ({ assetId, ...patch }) => {
       await queryClient.cancelQueries({ queryKey: ["assets"] });
       setPendingIds((previous) => [...previous, assetId]);
       const previous = queryClient.getQueryData<Asset[]>(["assets"]);
       queryClient.setQueryData<Asset[]>(["assets"], (current) =>
-        current?.map((asset) => (asset.id === assetId ? { ...asset, tags } : asset)),
+        current?.map((asset) => (asset.id === assetId ? applyAssetPatch(asset, patch) : asset)),
       );
       return { previous };
     },

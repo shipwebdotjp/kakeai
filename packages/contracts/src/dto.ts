@@ -89,6 +89,8 @@ export const assetSchema = z.object({
   widthPx: positiveInt.nullable(),
   heightPx: positiveInt.nullable(),
   tags: assetTagsSchema,
+  favoritedAt: timestampSchema.nullable(),
+  archivedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
   contentUrl: z.string().min(1),
 });

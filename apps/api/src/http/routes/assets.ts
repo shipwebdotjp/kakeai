@@ -184,7 +184,7 @@ export function createAssetsRouter(dependencies: AssetsRouterDependencies): Rout
       sendData(
         res,
         200,
-        await assets.updateAssetTags(prisma, pathParam(req, "assetId"), input.tags),
+        await assets.updateAsset(prisma, pathParam(req, "assetId"), input),
       );
     }),
   );

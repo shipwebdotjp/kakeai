@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import type { AssetKindName } from "@kakeai/contracts";
+import { useEffect, useState } from "react";
+import type { Asset, AssetKindName } from "@kakeai/contracts";
 import { useAssets, useUploadAssets, type UploadAssetsResult } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
-import { AssetThumbnail, assetLabel } from "../lib/assets";
-import { useAssetTagFilter } from "../lib/useAssetTagFilter";
+import { AssetTagChips, AssetThumbnail, AssetTypeBadge } from "../lib/assets";
+import { useAssetBrowser } from "../lib/useAssetBrowser";
 import { errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { AssetFilterControls, type AssetView } from "./AssetControls";
 import { FileDropZone, filesFromInput } from "./FileDropZone";
 import { Modal } from "./Modal";
 import { TagFilter } from "./AssetTags";
@@ -17,6 +18,44 @@ interface MediaLibraryModalProps {
   onSelect: (assetId: string) => void;
 }
 
+function selectCardClass(selected: boolean): string {
+  return `flex w-full flex-col gap-1.5 rounded border p-1.5 text-left ${
+    selected ? "border-brand-500 bg-surface-muted" : "border-border hover:bg-surface-muted"
+  }`;
+}
+
+function selectRowClass(selected: boolean): string {
+  return `flex w-full items-center gap-2 rounded border px-1.5 py-1 text-left ${
+    selected ? "border-brand-500 bg-surface-muted" : "border-transparent hover:bg-surface-muted"
+  }`;
+}
+
+function FavoriteMark() {
+  return (
+    <span className="text-amber-500" aria-label="お気に入り">
+      ★
+    </span>
+  );
+}
+
+function ArchivedMark() {
+  return (
+    <span className="rounded border border-border px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+      アーカイブ
+    </span>
+  );
+}
+
+function emptyMessage(isFiltering: boolean, scopedCount: number): string {
+  if (isFiltering) {
+    return "一致する素材がありません。";
+  }
+  if (scopedCount > 0) {
+    return "表示できる素材がありません。「アーカイブ」を表示すると出る場合があります。";
+  }
+  return "選択できる素材がありません。アップロードしてください。";
+}
+
 export function MediaLibraryModal({
   open,
   onClose,
@@ -26,28 +65,39 @@ export function MediaLibraryModal({
 }: MediaLibraryModalProps) {
   const assets = useAssets();
   const upload = useUploadAssets();
-  const [query, setQuery] = useState("");
+  const [view, setView] = useState<AssetView>("grid");
   const [failures, setFailures] = useState<UploadAssetsResult["failed"]>([]);
-
-  const candidates = useMemo(
-    () => (assets.data ?? []).filter((asset) => asset.status === "ready" && kinds.includes(asset.kind)),
-    [assets.data, kinds],
-  );
-  const { allTags, matches, selectedTags, toggleTag, clearTags } = useAssetTagFilter(candidates);
+  const browser = useAssetBrowser(assets.data, { kinds, readyOnly: true });
+  const {
+    visible,
+    scopedCount,
+    allTags,
+    isFiltering,
+    query,
+    setQuery,
+    selectedTags,
+    toggleTag,
+    clearTags,
+    kind,
+    setKind,
+    favoritesOnly,
+    setFavoritesOnly,
+    showArchived,
+    setShowArchived,
+    sort,
+    setSort,
+    reset,
+  } = browser;
 
   useEffect(() => {
     if (open) {
-      setQuery("");
-      clearTags();
+      reset();
+      setView("grid");
       setFailures([]);
     }
-  }, [open, clearTags]);
+  }, [open, reset]);
 
   const accept = kinds.map((kind) => `${kind}/*`).join(",");
-  const keyword = query.trim().toLowerCase();
-  const selectable = matches.filter(
-    (asset) => keyword.length === 0 || asset.originalFilename.toLowerCase().includes(keyword),
-  );
 
   const onFiles = (files: File[]) => {
     if (files.length === 0 || upload.isPending) {
@@ -59,6 +109,11 @@ export function MediaLibraryModal({
         setFailures(result.failed);
       },
     });
+  };
+
+  const choose = (asset: Asset) => {
+    onSelect(asset.id);
+    onClose();
   };
 
   return (
@@ -90,6 +145,22 @@ export function MediaLibraryModal({
         <p className={metaTextClass}>ここにファイルをドラッグ&amp;ドロップでも追加できます。</p>
       </FileDropZone>
 
+      <div className="mt-2">
+        <AssetFilterControls
+          kind={kinds.length > 1 ? kind : undefined}
+          kindOptions={kinds.length > 1 ? kinds : undefined}
+          onKindChange={kinds.length > 1 ? setKind : undefined}
+          sort={sort}
+          onSortChange={setSort}
+          favoritesOnly={favoritesOnly}
+          onToggleFavorites={() => setFavoritesOnly((value) => !value)}
+          showArchived={showArchived}
+          onToggleArchived={() => setShowArchived((value) => !value)}
+          view={view}
+          onViewChange={setView}
+        />
+      </div>
+
       {allTags.length > 0 && (
         <div className="mt-2">
           <TagFilter
@@ -116,33 +187,55 @@ export function MediaLibraryModal({
 
       {assets.isLoading && <p className={metaTextClass}>読み込み中…</p>}
       {assets.isError && <p className={errorTextClass}>{errorMessage(assets.error)}</p>}
-      {!assets.isLoading && !assets.isError && selectable.length === 0 && (
-        <p className={metaTextClass}>
-          {keyword.length > 0 || selectedTags.length > 0
-            ? "一致する素材がありません。"
-            : "選択できる素材がありません。アップロードしてください。"}
-        </p>
+      {!assets.isLoading && !assets.isError && visible.length === 0 && (
+        <p className={metaTextClass}>{emptyMessage(isFiltering, scopedCount)}</p>
       )}
 
-      <ul className="mt-3 grid list-none grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2 p-0">
-        {selectable.map((asset) => (
-          <li key={asset.id}>
-            <button
-              type="button"
-              className={`flex w-full items-center gap-2 rounded border p-1.5 text-left ${
-                asset.id === selectedAssetId ? "border-brand-500 bg-surface-muted" : "border-border"
-              }`}
-              onClick={() => {
-                onSelect(asset.id);
-                onClose();
-              }}
-            >
-              <AssetThumbnail asset={asset} />
-              <span className="truncate text-xs">{assetLabel(asset)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {view === "grid" ? (
+        <ul className="mt-3 grid list-none grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2 p-0">
+          {visible.map((asset) => (
+            <li key={asset.id}>
+              <button
+                type="button"
+                className={selectCardClass(asset.id === selectedAssetId)}
+                onClick={() => choose(asset)}
+              >
+                <AssetThumbnail asset={asset} className="h-24 w-full" />
+                <span className="flex w-full items-center gap-1">
+                  <AssetTypeBadge kind={asset.kind} />
+                  {asset.favoritedAt !== null && <FavoriteMark />}
+                  {asset.archivedAt !== null && <ArchivedMark />}
+                  <AssetTagChips tags={asset.tags} max={2} className="min-w-0 overflow-hidden" />
+                </span>
+                <span className="w-full truncate text-xs" title={asset.originalFilename}>
+                  {asset.originalFilename}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul className="mt-3 list-none p-0">
+          {visible.map((asset) => (
+            <li key={asset.id}>
+              <button
+                type="button"
+                className={selectRowClass(asset.id === selectedAssetId)}
+                onClick={() => choose(asset)}
+              >
+                <AssetThumbnail asset={asset} className="h-8 w-12" />
+                <AssetTypeBadge kind={asset.kind} />
+                <span className="min-w-0 flex-1 truncate text-xs" title={asset.originalFilename}>
+                  {asset.originalFilename}
+                </span>
+                <AssetTagChips tags={asset.tags} max={3} />
+                {asset.archivedAt !== null && <ArchivedMark />}
+                {asset.favoritedAt !== null && <FavoriteMark />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </Modal>
   );
 }

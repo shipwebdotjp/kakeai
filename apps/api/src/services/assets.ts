@@ -215,17 +215,37 @@ export async function getAsset(prisma: PrismaClient, assetId: string): Promise<A
   return toAsset(row);
 }
 
-export async function updateAssetTags(
+export interface AssetMetadataPatch {
+  tags?: readonly string[];
+  favorited?: boolean;
+  archived?: boolean;
+}
+
+export async function updateAsset(
   prisma: PrismaClient,
   assetId: string,
-  tags: readonly string[],
+  patch: AssetMetadataPatch,
 ): Promise<Asset> {
-  const normalized = assetTagsSchema.parse([...tags]);
+  const data: Prisma.AssetUpdateInput = {};
+  if (patch.tags !== undefined) {
+    const normalized = assetTagsSchema.parse([...patch.tags]);
+    data.tagsJson = normalized.length === 0 ? null : JSON.stringify(normalized);
+  }
+  if (patch.favorited !== undefined) {
+    data.favoritedAt = patch.favorited ? new Date() : null;
+  }
+  if (patch.archived !== undefined) {
+    data.archivedAt = patch.archived ? new Date() : null;
+  }
+  if (Object.keys(data).length === 0) {
+    const row = await prisma.asset.findUnique({ where: { id: assetId } });
+    if (row === null) {
+      throw resourceNotFound("asset", assetId);
+    }
+    return toAsset(row);
+  }
   try {
-    const row = await prisma.asset.update({
-      where: { id: assetId },
-      data: { tagsJson: normalized.length === 0 ? null : JSON.stringify(normalized) },
-    });
+    const row = await prisma.asset.update({ where: { id: assetId }, data });
     return toAsset(row);
   } catch (error) {
     if (isPrismaCode(error, "P2025")) {
