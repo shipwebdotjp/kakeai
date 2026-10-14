@@ -80,10 +80,10 @@ function emptyDraft(): FaceSetDraft {
   };
 }
 
-function emptyLayer(): LayerDraft {
+function emptyLayer(part: LayerPart = "brow"): LayerDraft {
   return {
     id: `layer-${randomId()}`,
-    part: "brow",
+    part,
     assetId: null,
     blinkLayerId: null,
     speakingLayerId: null,
@@ -232,12 +232,64 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
     }
   };
 
-  const eyeLayers = draft.layers.filter((layer) => layer.part === "eye");
-  const mouthLayers = draft.layers.filter((layer) => layer.part === "mouth");
+  const layerIndexById = new Map(draft.layers.map((layer, index) => [layer.id, index]));
+  const layerById = new Map(draft.layers.map((layer) => [layer.id, layer]));
+  const describeLayer = (id: string): string => {
+    const index = layerIndexById.get(id);
+    const layer = layerById.get(id);
+    if (index === undefined || layer === undefined) {
+      return `不明なレイヤー (${id})`;
+    }
+    const assetName =
+      layer.assetId === null
+        ? "画像未指定"
+        : (byId.get(layer.assetId)?.originalFilename ?? "素材不明");
+    return `レイヤー ${index + 1} ${assetName}`;
+  };
+  const variantOptions = (part: LayerPart, excludeId: string) =>
+    draft.layers
+      .filter((layer) => layer.part === part && layer.id !== excludeId)
+      .map((layer) => ({ id: layer.id, label: describeLayer(layer.id) }));
   const layerOptions = (part: LayerPart) =>
     draft.layers
       .filter((layer) => layer.part === part)
-      .map((layer) => ({ id: layer.id, label: `${PART_LABELS[layer.part]}（${layer.id}）` }));
+      .map((layer) => ({ id: layer.id, label: describeLayer(layer.id) }));
+  const blinkTargets = new Set(
+    draft.layers.flatMap((layer) => (layer.blinkLayerId === null ? [] : [layer.blinkLayerId])),
+  );
+  const speakingTargets = new Set(
+    draft.layers.flatMap((layer) =>
+      layer.speakingLayerId === null ? [] : [layer.speakingLayerId],
+    ),
+  );
+  const presetNamesUsing = (layerId: string): string[] =>
+    draft.expressions
+      .filter(
+        (preset) =>
+          preset.browLayerId === layerId ||
+          preset.eyeLayerId === layerId ||
+          preset.mouthLayerId === layerId,
+      )
+      .map((preset) => preset.name.trim().length > 0 ? preset.name : preset.id);
+
+  const addVariantLayer = (baseId: string, part: LayerPart, key: "blinkLayerId" | "speakingLayerId") => {
+    const variant = emptyLayer(part);
+    setDraft((current) => {
+      const base = current.layers.find((layer) => layer.id === baseId);
+      if (base === undefined || base[key] !== null) {
+        return current;
+      }
+      return {
+        ...current,
+        layers: [
+          ...current.layers.map((layer) =>
+            layer.id === baseId ? { ...layer, [key]: variant.id } : layer,
+          ),
+          variant,
+        ],
+      };
+    });
+  };
 
   return (
     <section className="my-4 rounded-lg border border-border p-4">
@@ -266,6 +318,9 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
 
       <div className="mt-3 border-t border-dashed border-border pt-2">
         <p className="mb-1 text-sm font-medium">顔レイヤー（立ち絵と同じ寸法の透過画像）</p>
+        <p className={metaTextClass}>
+          閉眼・開口の画像も目・口レイヤーとして追加し、ふだん出す側の「閉眼」「開口」で相手先を指定します。閉眼・開口用は表情プリセットでは選ばず、開眼・閉口側に紐付けます。
+        </p>
         {draft.layers.map((layer, index) => (
           <div key={layer.id} className="my-2 rounded border border-border p-2">
             <MediaPicker
@@ -296,24 +351,40 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
                 </select>
               </label>
               {layer.part === "eye" && (
-                <LayerSelect
-                  label="閉眼"
-                  value={layer.blinkLayerId}
-                  options={eyeLayers
-                    .filter((candidate) => candidate.id !== layer.id)
-                    .map((candidate) => ({ id: candidate.id, label: candidate.id }))}
-                  onChange={(blinkLayerId) => patchLayer(layer.id, { blinkLayerId })}
-                />
+                <>
+                  <LayerSelect
+                    label="閉眼"
+                    value={layer.blinkLayerId}
+                    options={variantOptions("eye", layer.id)}
+                    onChange={(blinkLayerId) => patchLayer(layer.id, { blinkLayerId })}
+                  />
+                  <button
+                    type="button"
+                    className={buttonNeutralClass}
+                    disabled={layer.blinkLayerId !== null}
+                    onClick={() => addVariantLayer(layer.id, "eye", "blinkLayerId")}
+                  >
+                    閉眼用を追加して割当
+                  </button>
+                </>
               )}
               {layer.part === "mouth" && (
-                <LayerSelect
-                  label="開口"
-                  value={layer.speakingLayerId}
-                  options={mouthLayers
-                    .filter((candidate) => candidate.id !== layer.id)
-                    .map((candidate) => ({ id: candidate.id, label: candidate.id }))}
-                  onChange={(speakingLayerId) => patchLayer(layer.id, { speakingLayerId })}
-                />
+                <>
+                  <LayerSelect
+                    label="開口"
+                    value={layer.speakingLayerId}
+                    options={variantOptions("mouth", layer.id)}
+                    onChange={(speakingLayerId) => patchLayer(layer.id, { speakingLayerId })}
+                  />
+                  <button
+                    type="button"
+                    className={buttonNeutralClass}
+                    disabled={layer.speakingLayerId !== null}
+                    onClick={() => addVariantLayer(layer.id, "mouth", "speakingLayerId")}
+                  >
+                    開口用を追加して割当
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -342,6 +413,24 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
                 レイヤーを削除
               </button>
             </div>
+            <p className={metaTextClass}>
+              {[
+                blinkTargets.has(layer.id) ? "閉眼用として使用中" : null,
+                speakingTargets.has(layer.id) ? "開口用として使用中" : null,
+                layer.blinkLayerId !== null
+                  ? `瞬き先: ${describeLayer(layer.blinkLayerId)}`
+                  : null,
+                layer.speakingLayerId !== null
+                  ? `口パク先: ${describeLayer(layer.speakingLayerId)}`
+                  : null,
+                (() => {
+                  const names = presetNamesUsing(layer.id);
+                  return names.length > 0 ? `表情で使用: ${names.join("、")}` : "表情では未使用";
+                })(),
+              ]
+                .filter((text) => text !== null)
+                .join(" / ")}
+            </p>
           </div>
         ))}
         <button
@@ -405,6 +494,12 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
                 onChange={(mouthLayerId) => patchPreset(preset.id, { mouthLayerId })}
               />
             </div>
+            {(preset.eyeLayerId !== null && blinkTargets.has(preset.eyeLayerId)) ||
+            (preset.mouthLayerId !== null && speakingTargets.has(preset.mouthLayerId)) ? (
+              <p className={errorTextClass}>
+                閉眼・開口用として使うレイヤーを選んでいます。ふだん出す開眼・閉口側を選び直してください。閉眼・開口用は上の顔レイヤーの「閉眼」「開口」で紐付けます。
+              </p>
+            ) : null}
           </div>
         ))}
         <button
