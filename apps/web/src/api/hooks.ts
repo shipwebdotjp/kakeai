@@ -27,6 +27,12 @@ import type {
   Warning,
   Work,
   WorkSummary,
+  FontCatalog,
+  ThemeDetail,
+  ThemeSummary,
+  CreateThemeRequest,
+  VisualThemeDefinition,
+  DraftPreview,
 } from "@kakeai/contracts";
 import { type AdapterVoicesState } from "../lib/voiceAdapters";
 import { ApiError, apiRequest, apiUpload, type Envelope } from "./client";
@@ -738,5 +744,144 @@ export function useCompositions() {
   return useQuery({
     queryKey: ["compositions"],
     queryFn: async () => (await apiRequest<Composition[]>("/compositions")).data,
+  });
+}
+
+export function useThemes(includeArchived = false) {
+  return useQuery({
+    queryKey: ["themes", { includeArchived }],
+    queryFn: async () =>
+      (
+        await apiRequest<ThemeSummary[]>(
+          `/themes${includeArchived ? "?includeArchived=true" : ""}`,
+        )
+      ).data,
+  });
+}
+
+export function useTheme(themeId: string | undefined) {
+  return useQuery({
+    queryKey: ["theme", themeId],
+    enabled: themeId !== undefined && themeId.length > 0,
+    queryFn: async () =>
+      (await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId ?? "")}`)).data,
+  });
+}
+
+export function useCreateTheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateThemeRequest) =>
+      (await apiRequest<ThemeDetail>("/themes", { method: "POST", body: input })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["themes"] }),
+  });
+}
+
+export function useUpdateThemeDraft(themeId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (definition: VisualThemeDefinition) => {
+      if (themeId === undefined || themeId.length === 0) {
+        throw new Error("themeId がありません");
+      }
+      return (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/draft`, {
+          method: "PUT",
+          body: { definition },
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function useDiscardThemeDraft(themeId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (themeId === undefined || themeId.length === 0) {
+        throw new Error("themeId がありません");
+      }
+      return (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/draft`, {
+          method: "DELETE",
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function usePublishThemeDraft(themeId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (themeId === undefined || themeId.length === 0) {
+        throw new Error("themeId がありません");
+      }
+      return (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/publish`, {
+          method: "POST",
+          body: {},
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function useArchiveTheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (themeId: string) =>
+      (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/archive`, {
+          method: "POST",
+        })
+      ).data,
+    onSuccess: (_data, themeId) => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function useFontCatalog() {
+  return useQuery({
+    queryKey: ["font-catalog"],
+    staleTime: 60_000,
+    queryFn: async () => (await apiRequest<FontCatalog>("/fonts")).data,
+  });
+}
+
+export function useRefreshFontCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      (await apiRequest<FontCatalog>("/fonts/refresh", { method: "POST", body: {} })).data,
+    onSuccess: (catalog) => {
+      queryClient.setQueryData(["font-catalog"], catalog);
+    },
+  });
+}
+
+export function usePreviewThemeDraft() {
+  return useMutation({
+    mutationFn: async (definition: VisualThemeDefinition) =>
+      (
+        await apiRequest<DraftPreview>("/themes/preview", {
+          method: "POST",
+          body: { definition },
+        })
+      ).data,
   });
 }

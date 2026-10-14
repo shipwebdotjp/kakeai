@@ -128,6 +128,16 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /face-sets | 201 | Face Set（Face Layer と Expression Preset を含む）を作成 |
 | PATCH | /face-sets/:faceSetId | 200 | Face Set の名称・Face Layer・Expression Preset を更新 |
 | DELETE | /face-sets/:faceSetId | 204 | 未参照の Face Set を削除 |
+| GET | /themes | 200 | Theme 一覧（組み込み＋利用者テーマ）を取得（[../theme-customization/spec.md](../theme-customization/spec.md)） |
+| POST | /themes | 201 | Theme の作成・複製 |
+| POST | /themes/preview | 200 | 代表サンプルによる Theme Draft 非永続プレビューを合成 |
+| GET | /themes/:themeId | 200 | Theme 詳細と全 Revision / Draft を取得 |
+| PUT | /themes/:themeId/draft | 200 | Theme Draft を保存・更新 |
+| DELETE | /themes/:themeId/draft | 200 | Theme Draft を破棄 |
+| POST | /themes/:themeId/publish | 200 | Theme Draft を検証し、不変の Theme Revision として公開 |
+| POST | /themes/:themeId/archive | 200 | 利用者 Theme をアーカイブ |
+| GET | /fonts | 200 | Font Catalog を取得（[../theme-customization/spec.md](../theme-customization/spec.md)） |
+| POST | /fonts/refresh | 200 | Font Catalog を再検出・更新 |
 
 この一覧のパスはすべて /api/v1 を先頭に持つ。たとえば作品一覧は GET /api/v1/works である。
 

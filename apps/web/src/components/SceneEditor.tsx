@@ -28,6 +28,7 @@ import {
   useCharacters,
   useFaceSets,
   useSaveScriptVersion,
+  useThemes,
   useVoiceProfiles,
   type BulkTtsFailure,
 } from "../api/hooks";
@@ -219,6 +220,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const characterLibrary = useCharacters();
   const faceSets = useFaceSets();
   const adapterVoices = useAdapterVoicesMap();
+  const themesQuery = useThemes();
   const [diagnostics, setDiagnostics] = useState<{ errors: Diagnostic[]; warnings: Diagnostic[] }>({
     errors: [],
     warnings: [],
@@ -753,6 +755,41 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           )}
         </div>
       )}
+
+      <section className="my-4 rounded-lg border border-border p-4">
+        <h3 className="mt-0 mb-2 text-lg font-semibold">テーマ（Visual Theme）</h3>
+        <p className={metaTextClass}>
+          作品全体の文字デザイン・配色テーマを指定します。選択変更後に「保存」すると新しい台本版が作成されます。
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-1.5 text-sm">
+            選択中テーマ:
+            <select
+              className={textFieldClass}
+              value={`${getValues("visualTheme.id")}@${getValues("visualTheme.version")}`}
+              onChange={(e) => {
+                const [id, verStr] = e.target.value.split("@");
+                if (id && verStr) {
+                  setValue("visualTheme.id", id, { shouldDirty: true });
+                  setValue("visualTheme.version", Number(verStr), { shouldDirty: true });
+                }
+              }}
+            >
+              {(themesQuery.data ?? [])
+                .filter((t) => t.latestRevision !== null)
+                .map((t) => {
+                  const version = t.latestRevision!.version;
+                  const valueKey = `${t.id}@${version}`;
+                  return (
+                    <option key={valueKey} value={valueKey}>
+                      {t.name} (v{version}) {t.isBuiltIn ? "【組み込み】" : ""}
+                    </option>
+                  );
+                })}
+            </select>
+          </label>
+        </div>
+      </section>
 
       <section className="my-4 rounded-lg border border-border p-4">
         <h3 className="mt-0 mb-2 text-lg font-semibold">BGM（作品全体）</h3>

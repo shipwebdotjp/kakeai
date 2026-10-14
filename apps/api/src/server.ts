@@ -17,7 +17,11 @@ import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createVoiceProfilesRouter } from "./http/routes/voice-profiles.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
 import { createCompositionsRouter } from "./http/routes/compositions.ts";
+import { createThemesRouter } from "./http/routes/themes.ts";
+import { createFontsRouter } from "./http/routes/fonts.ts";
 import { CompositionService } from "./services/compositions.ts";
+import { ThemeService } from "./services/themes.ts";
+import { FontCatalogService } from "./services/font-catalog.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
 import {
   API_BASE_PATH,
@@ -112,6 +116,9 @@ export function createApp(dependencies: AppDependencies): Express {
 
   const mediaGuard = mediaAccessGuard(policy, dependencies.mediaSessionToken);
 
+  const fontCatalogService = new FontCatalogService();
+  const themeService = new ThemeService(dependencies.prisma, fontCatalogService);
+
   const api = express.Router();
   api.use(express.json({ limit: JSON_BODY_LIMIT }));
   api.use(
@@ -138,6 +145,7 @@ export function createApp(dependencies: AppDependencies): Express {
       prisma: dependencies.prisma,
       directories: dependencies.config.directories,
       config: dependencies.config,
+      fontCatalogService,
     }),
   );
   api.use(
@@ -170,6 +178,9 @@ export function createApp(dependencies: AppDependencies): Express {
     dataDir: dependencies.config.directories.root,
   });
   api.use("/compositions", createCompositionsRouter(compositionService, mediaGuard));
+
+  api.use("/themes", createThemesRouter(themeService));
+  api.use("/fonts", createFontsRouter(fontCatalogService));
 
   app.use(API_BASE_PATH, api);
   app.use(API_BASE_PATH, (_req, res) => {
