@@ -1,6 +1,7 @@
 import type {
-  AnimationPreset,
   ContentDocument,
+  FigureAction,
+  FigureEase,
   NestedVisual,
   VisualThemeDefinition,
 } from "@kakeai/contracts";
@@ -9,7 +10,9 @@ import type { RenderScope } from "./scope";
 
 export interface AnimationItem {
   targetId: string;
-  preset: AnimationPreset;
+  action: FigureAction;
+  axis?: "x" | "y";
+  ease?: FigureEase;
   startMs: number;
   durationMs: number;
 }

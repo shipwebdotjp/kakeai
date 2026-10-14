@@ -7,7 +7,7 @@
 ### [x] T1 契約
 
 - [x] `table.simple` の入力Zodスキーマ（caption / data / style / reveal）と `tableSimpleV1` 定義・登録
-- [x] `TemplateFieldSpec` に `table` 種別（key / label / maxColumns / maxRows）を追加
+- [x] `TemplateFieldSpec` に `grid` 種別（key / label / maxColumns / maxRows / emphasis）を追加
 - [x] 表のあふれ警告（セル文字数・行数の目安）を `computeContentWarnings` に追加
 - 完了条件: `isEditableTemplate("table.simple", 1)` が真で、不正入力が拒否されるテストが通る。
 

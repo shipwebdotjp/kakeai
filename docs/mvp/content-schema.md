@@ -222,7 +222,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `backgroundColor?` | 対応。端末枠内に画像・動画を表示する複合ビジュアル。背景・カードに置ける |
 | `scene.device-frame@2` | `@1` ＋ `animation?`（preset, durationMs） | 対応。画面要素の登場アニメーションを追加 |
 | `scene.site-mockup@1` | `variant`, `screen`(`NestedVisual`), `theme?`, `name?`/`handle?`/`url?`/`caption?`, `logo?`, `animation?` | 対応。有名サイト・ブラウザのガワに画像・動画を収める。card/overlay |
-| `chart.bar@1` | タイトル、系列、数値、単位 | 将来 |
+| `chart.bar@1` | タイトル、カテゴリ、系列、数値、向き、目盛り、登場 | 対応（[../chart-template/spec.md](../chart-template/spec.md)） |
 | `table.simple@1` | 見出し、列定義、行、強調セル、スタイル、登場 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |
 

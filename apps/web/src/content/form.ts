@@ -15,6 +15,7 @@ import {
   mediaFullBleedV1,
   pointSceneTextCues,
   sceneDeviceFrameV1,
+  chartDataSchema,
   tableDataSchema,
   type AnimationPreset,
   type Character,
@@ -366,9 +367,11 @@ function readCueFields(
       }
       case "text":
       case "optionalText":
-      case "color":
-        result[field.key] = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
+      case "color": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = typeof value === "string" ? value : "";
         break;
+      }
       case "number": {
         const value = getAtPath(input, field.key);
         result[field.key] = typeof value === "number" ? String(value) : "";
@@ -390,7 +393,7 @@ function readCueFields(
             : (field.options[0]?.value ?? "");
         break;
       }
-      case "table": {
+      case "grid": {
         const value = getAtPath(input, field.key);
         result[field.key] =
           typeof value === "object" && value !== null ? JSON.stringify(value) : "";
@@ -697,13 +700,13 @@ function buildCueInput(
         break;
       }
       case "text":
-        input[field.key] = raw;
+        setAtPath(input, field.key, raw);
         break;
       case "optionalText":
         if (raw.length > 0) {
-          input[field.key] = raw;
+          setAtPath(input, field.key, raw);
         } else {
-          delete input[field.key];
+          deleteAtPath(input, field.key);
         }
         break;
       case "select": {
@@ -717,21 +720,26 @@ function buildCueInput(
         }
         break;
       }
-      case "table": {
+      case "grid": {
         const trimmed = raw.trim();
         if (trimmed.length === 0) {
           deleteAtPath(input, field.key);
           break;
         }
         let parsedJson: unknown;
+        const isChart = field.emphasis === false;
+        const errorMessage = isChart
+          ? "グラフデータを正しく入力してください"
+          : "表データを正しく入力してください";
         try {
           parsedJson = JSON.parse(trimmed);
         } catch {
-          throw new Error("表データを正しく入力してください");
+          throw new Error(errorMessage);
         }
-        const validated = tableDataSchema.safeParse(parsedJson);
+        const schema = isChart ? chartDataSchema : tableDataSchema;
+        const validated = schema.safeParse(parsedJson);
         if (!validated.success) {
-          throw new Error("表データを正しく入力してください");
+          throw new Error(errorMessage);
         }
         setAtPath(input, field.key, validated.data);
         break;
@@ -1166,8 +1174,8 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
       case "boolean":
         fields[field.key] = "";
         break;
-      case "table":
-        fields[field.key] = defaultTableDataJson();
+      case "grid":
+        fields[field.key] = defaultGridDataJson();
         break;
       default:
         fields[field.key] = "";
@@ -1176,14 +1184,13 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
   return fields;
 }
 
-export function defaultTableDataJson(): string {
+export function defaultGridDataJson(): string {
   return JSON.stringify({
     columns: [
       { key: "col1", label: "項目", type: "text" },
       { key: "col2", label: "値", type: "number" },
     ],
     rows: [{ col1: "", col2: "" }],
-    emphasis: [],
   });
 }
 

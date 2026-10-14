@@ -34,7 +34,7 @@ import {
 import { PRESET_LABELS, buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { useCompositions } from "../api/hooks";
 import { MediaPicker } from "./MediaPicker";
-import { TableField } from "./TableField";
+import { DataGridField } from "./DataGridField";
 
 const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
 
@@ -469,15 +469,16 @@ function CueField({ field, values, setField, animationPresets }: CueFieldProps) 
           />
         </label>
       );
-    case "table":
+    case "grid":
       return (
-        <TableField
+        <DataGridField
           label={field.label}
           fieldKey={field.key}
           value={value}
           setField={setField}
           maxColumns={field.maxColumns}
           maxRows={field.maxRows}
+          emphasis={field.emphasis === true}
         />
       );
     case "boolean": {

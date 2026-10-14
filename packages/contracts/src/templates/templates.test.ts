@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  chartBarInputSchema,
   getTemplateInputFields,
   getVisualTemplate,
   isEditableTemplate,
@@ -76,7 +77,7 @@ describe("visual template metadata", () => {
     expect(definition?.layers).toEqual(["overlay"]);
     expect(isEditableTemplate("table.simple", 1)).toBe(true);
     const fields = getTemplateInputFields("table.simple", 1);
-    expect(fields?.some((field) => field.kind === "table" && field.key === "data")).toBe(true);
+    expect(fields?.some((field) => field.kind === "grid" && field.key === "data")).toBe(true);
   });
 
   it("accepts a minimal table.simple input", () => {
@@ -93,6 +94,100 @@ describe("visual template metadata", () => {
       },
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("registers chart.bar@1 as an editable overlay template with a grid field", () => {
+    const definition = getVisualTemplate("chart.bar", 1);
+    expect(definition?.layers).toEqual(["overlay"]);
+    expect(isEditableTemplate("chart.bar", 1)).toBe(true);
+    const fields = getTemplateInputFields("chart.bar", 1);
+    const grid = fields?.find((field) => field.kind === "grid");
+    expect(grid?.kind).toBe("grid");
+    if (grid?.kind === "grid") {
+      expect(grid.key).toBe("data");
+      expect(grid.emphasis).toBe(false);
+    }
+  });
+
+  it("accepts a multi-series chart.bar input", () => {
+    const parsed = chartBarInputSchema.safeParse({
+      title: "月別",
+      data: {
+        columns: [
+          { key: "month", label: "月", type: "text" },
+          { key: "sales", label: "売上", type: "number", format: "currency" },
+          { key: "cost", label: "費用", type: "number" },
+        ],
+        rows: [{ month: "1月", sales: 120, cost: 80 }],
+      },
+      reveal: { mode: "bars", preset: "bounce", durationMs: 600, staggerMs: 120 },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects chart.bar data whose first column is not a category or whose series is not numeric", () => {
+    expect(
+      chartBarInputSchema.safeParse({
+        data: {
+          columns: [
+            { key: "a", label: "A", type: "number" },
+            { key: "b", label: "B", type: "number" },
+          ],
+          rows: [{ a: 1, b: 2 }],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      chartBarInputSchema.safeParse({
+        data: {
+          columns: [
+            { key: "a", label: "A", type: "text" },
+            { key: "b", label: "B", type: "text" },
+          ],
+          rows: [{ a: "x", b: "y" }],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects chart.bar emphasis because the schema is strict", () => {
+    expect(
+      chartBarInputSchema.safeParse({
+        data: {
+          columns: [
+            { key: "a", label: "A", type: "text" },
+            { key: "b", label: "B", type: "number" },
+          ],
+          rows: [{ a: "x", b: 1 }],
+          emphasis: [],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-numeric strings in chart.bar series cells", () => {
+    expect(
+      chartBarInputSchema.safeParse({
+        data: {
+          columns: [
+            { key: "a", label: "A", type: "text" },
+            { key: "b", label: "B", type: "number" },
+          ],
+          rows: [{ a: "x", b: "abc" }],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      chartBarInputSchema.safeParse({
+        data: {
+          columns: [
+            { key: "a", label: "A", type: "text" },
+            { key: "b", label: "B", type: "number" },
+          ],
+          rows: [{ a: "x", b: "12" }],
+        },
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects duplicate column keys, unknown row keys, and out-of-range emphasis", () => {

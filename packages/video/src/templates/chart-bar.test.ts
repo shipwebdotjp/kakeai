@@ -1,0 +1,173 @@
+import { describe, expect, it } from "vitest";
+import { getVisualTheme } from "@kakeai/contracts";
+import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
+import type { RenderContext } from "../render-context";
+import { cueScope } from "../scope";
+import type { AssetResolver } from "../resolver";
+import { CompositionCompileError } from "../compile-error";
+import { renderChartBar } from "./chart-bar";
+
+const theme = getVisualTheme("soft-editorial", 1)!;
+
+const assetResolver: AssetResolver = (assetId) => ({
+  url: `/preview/${assetId}`,
+  kind: "image",
+});
+
+function context(): RenderContext {
+  return {
+    document: validContentDocument(),
+    theme,
+    assetResolver,
+    scope: cueScope("visual-chart-1"),
+    path: ["scenes", 1, "visualCues", 2, "input"],
+    renderNested: () => {
+      throw new Error("nested visuals are not used by chart.bar");
+    },
+  };
+}
+
+const singleSeries = {
+  title: "月別売上",
+  data: {
+    columns: [
+      { key: "month", label: "月", type: "text" },
+      { key: "sales", label: "売上", type: "number", format: "currency" },
+    ],
+    rows: [
+      { month: "1月", sales: 100 },
+      { month: "2月", sales: 200 },
+    ],
+  },
+};
+
+describe("renderChartBar", () => {
+  it("renders a title and formatted values", () => {
+    const rendered = renderChartBar(singleSeries, context());
+    expect(rendered.html).toContain("月別売上");
+    expect(rendered.html).toContain("￥200");
+    expect(rendered.html).toContain("kakeai-chartbar");
+  });
+
+  it("emits a grow action along the vertical axis by default", () => {
+    const rendered = renderChartBar(singleSeries, context());
+    expect(rendered.animation).toHaveLength(2);
+    expect(rendered.animation[0]).toMatchObject({
+      action: "grow",
+      axis: "y",
+      ease: "normal",
+      startMs: 0,
+    });
+    expect(rendered.animation[1]).toMatchObject({ startMs: 120 });
+  });
+
+  it("maps bounce to an overshoot ease", () => {
+    const rendered = renderChartBar(
+      { ...singleSeries, reveal: { mode: "bars", preset: "bounce", durationMs: 600, staggerMs: 120 } },
+      context(),
+    );
+    expect(rendered.animation.every((item) => item.ease === "overshoot")).toBe(true);
+  });
+
+  it("emits a horizontal grow action in horizontal orientation", () => {
+    const rendered = renderChartBar(
+      { ...singleSeries, style: { orientation: "horizontal", valueLabels: true } },
+      context(),
+    );
+    expect(rendered.animation.every((item) => item.axis === "x")).toBe(true);
+    expect(rendered.html).toContain("kakeai-chart-horizontal");
+  });
+
+  it("shows a legend and varies colors for multiple series", () => {
+    const rendered = renderChartBar(
+      {
+        data: {
+          columns: [
+            { key: "month", label: "月", type: "text" },
+            { key: "sales", label: "売上", type: "number" },
+            { key: "cost", label: "費用", type: "number" },
+          ],
+          rows: [{ month: "1月", sales: 100, cost: 80 }],
+        },
+      },
+      context(),
+    );
+    expect(rendered.html).toContain("kakeai-chartlegend");
+    expect(rendered.html).toContain("売上");
+    const colors = rendered.html.match(/background:#[0-9A-F]{6}/g) ?? [];
+    expect(new Set(colors).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("escapes category labels", () => {
+    const rendered = renderChartBar(
+      {
+        data: {
+          columns: [
+            { key: "name", label: "項目", type: "text" },
+            { key: "value", label: "値", type: "number" },
+          ],
+          rows: [{ name: "<b>x</b>", value: 1 }],
+        },
+      },
+      context(),
+    );
+    expect(rendered.html).toContain("&lt;b&gt;");
+    expect(rendered.html).not.toContain("<b>x</b>");
+  });
+
+  it("renders deterministically for the same input", () => {
+    const first = renderChartBar(singleSeries, context());
+    const second = renderChartBar(singleSeries, context());
+    expect(first.html).toBe(second.html);
+    expect(first.animation).toEqual(second.animation);
+  });
+
+  it("rejects invalid input", () => {
+    expect(() => renderChartBar({ data: { columns: [], rows: [] } }, context())).toThrow(
+      CompositionCompileError,
+    );
+  });
+
+  it("omits value labels when disabled and appends the axis unit to ticks", () => {
+    const rendered = renderChartBar(
+      {
+        ...singleSeries,
+        style: { preset: "clean", orientation: "vertical", valueLabels: false, axisUnit: "円" },
+      },
+      context(),
+    );
+    expect(rendered.html).not.toContain("kakeai-chartvalue");
+    expect(rendered.html).toContain("kakeai-charttick");
+    expect(rendered.html).toContain("円");
+  });
+
+  it("matches legend colors to category colors when colorBy is category", () => {
+    const rendered = renderChartBar(
+      {
+        data: {
+          columns: [
+            { key: "month", label: "月", type: "text" },
+            { key: "sales", label: "売上", type: "number" },
+            { key: "cost", label: "費用", type: "number" },
+          ],
+          rows: [
+            { month: "1月", sales: 100, cost: 80 },
+            { month: "2月", sales: 200, cost: 95 },
+          ],
+        },
+        style: { preset: "clean", orientation: "vertical", valueLabels: true, colorBy: "category" },
+      },
+      context(),
+    );
+    const swatches = rendered.html.match(/kakeai-chartswatch" style="background:(#[0-9A-F]{6})/g) ?? [];
+    expect(swatches).toHaveLength(2);
+    expect(rendered.html).toContain("1月");
+    expect(rendered.html).toContain("2月");
+  });
+
+  it("keeps two chart cues from colliding", () => {
+    const a = renderChartBar(singleSeries, { ...context(), scope: cueScope("vc-a") });
+    const b = renderChartBar(singleSeries, { ...context(), scope: cueScope("vc-b") });
+    expect(a.animation[0]!.targetId).not.toBe(b.animation[0]!.targetId);
+  });
+});

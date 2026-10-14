@@ -17,4 +17,6 @@
 ## Consequences
 
 - `table.simple@1` の入力Zodスキーマが正本の唯一の定義となる。版の意味は不変に保ち、変更は新版で行う。
-- `TemplateFieldSpec` に `table` 種別を追加し、列・行・強調・CSV貼り付けを汎用エディタで扱う。chart・flow追加時にこの部品を使い回す。
+- `TemplateFieldSpec` に `grid` 種別を追加し、列・行・強調・CSV貼り付けを汎用エディタで扱う。chart・flow追加時にこの部品を使い回す。強調の有無は `emphasis` で切り替える（`table.simple` は有効、`chart.bar` は無効）。
+
+<!-- amended by 0057: `table` 種別は `grid` に改名し、棒グラフと共有する。 -->

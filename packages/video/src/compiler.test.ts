@@ -844,6 +844,40 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain(`id="${a}"`);
     expect(compiled.html).toContain(`id="${b}"`);
   });
+
+  it("renders a chart.bar cue with growing bars", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-chart",
+        template: { id: "chart.bar", version: 1 },
+        layer: "overlay",
+        input: {
+          title: "月別売上",
+          data: {
+            columns: [
+              { key: "month", label: "月", type: "text" },
+              { key: "sales", label: "売上", type: "number", format: "currency" },
+            ],
+            rows: [
+              { month: "1月", sales: 100 },
+              { month: "2月", sales: 200 },
+            ],
+          },
+          reveal: { mode: "bars", preset: "bounce", durationMs: 600, staggerMs: 120 },
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const firstBar = cueScope("vc-chart").id("bar-0-0");
+    const secondBar = cueScope("vc-chart").id("bar-1-0");
+    expect(compiled.html).toContain("kakeai-chart");
+    expect(compiled.html).toContain("￥200");
+    expect(compiled.html).toContain(`document.getElementById("${firstBar}")`);
+    expect(compiled.html).toContain(`document.getElementById("${secondBar}")`);
+    expect(compiled.html).toContain("scaleY:0");
+    expect(compiled.html).toContain('ease:"back.out(1.6)"');
+  });
 });
 
 describe("visual theme", () => {

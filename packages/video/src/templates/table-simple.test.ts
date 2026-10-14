@@ -85,8 +85,8 @@ describe("renderTableSimple", () => {
       context(),
     );
     expect(rendered.animation).toHaveLength(2);
-    expect(rendered.animation[0]).toMatchObject({ preset: "fade", startMs: 0, durationMs: 400 });
-    expect(rendered.animation[1]).toMatchObject({ preset: "fade", startMs: 150, durationMs: 400 });
+    expect(rendered.animation[0]).toMatchObject({ action: "fade", startMs: 0, durationMs: 400 });
+    expect(rendered.animation[1]).toMatchObject({ action: "fade", startMs: 150, durationMs: 400 });
     expect(rendered.animation[0]!.targetId).not.toBe(rendered.animation[1]!.targetId);
   });
 

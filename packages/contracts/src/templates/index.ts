@@ -38,7 +38,7 @@ export type TemplateFieldSpec =
   | { kind: "color"; key: string; label: string; optional?: boolean }
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
   | { kind: "boolean"; key: string; label: string }
-  | { kind: "table"; key: string; label: string; maxColumns: number; maxRows: number }
+  | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; emphasis?: boolean }
   | { kind: "animation"; key: string; label: string };
 
 export interface VisualTemplateDefinition {
@@ -574,6 +574,39 @@ export const tableEmphasisSchema = z.strictObject({
 });
 export type TableEmphasis = z.infer<typeof tableEmphasisSchema>;
 
+interface FigureData {
+  columns: TableColumn[];
+  rows: TableRow[];
+}
+
+function refineFigureData(data: FigureData, ctx: z.RefinementCtx): void {
+  const keys = data.columns.map((column) => column.key);
+  if (new Set(keys).size !== keys.length) {
+    ctx.addIssue({ code: "custom", message: "列キーは一意にしてください", path: ["columns"] });
+  }
+  const known = new Set(keys);
+  data.rows.forEach((row, rowIndex) => {
+    for (const key of Object.keys(row)) {
+      if (!known.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `未定義の列キーです: ${key}`,
+          path: ["rows", rowIndex, key],
+        });
+      }
+    }
+  });
+  for (const [columnIndex, column] of data.columns.entries()) {
+    if (column.type === "text" && column.format !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: `format は number 列だけが持てます: ${column.key}`,
+        path: ["columns", columnIndex, "format"],
+      });
+    }
+  }
+}
+
 export const tableDataSchema = z
   .strictObject({
     columns: z.array(tableColumnSchema).min(1).max(TABLE_MAX_COLUMNS),
@@ -581,31 +614,8 @@ export const tableDataSchema = z
     emphasis: z.array(tableEmphasisSchema).optional(),
   })
   .superRefine((data, ctx) => {
-    const keys = data.columns.map((column) => column.key);
-    if (new Set(keys).size !== keys.length) {
-      ctx.addIssue({ code: "custom", message: "列キーは一意にしてください", path: ["columns"] });
-    }
-    const known = new Set(keys);
-    data.rows.forEach((row, rowIndex) => {
-      for (const key of Object.keys(row)) {
-        if (!known.has(key)) {
-          ctx.addIssue({
-            code: "custom",
-            message: `未定義の列キーです: ${key}`,
-            path: ["rows", rowIndex, key],
-          });
-        }
-      }
-    });
-    for (const [columnIndex, column] of data.columns.entries()) {
-      if (column.type === "text" && column.format !== undefined) {
-        ctx.addIssue({
-          code: "custom",
-          message: `format は number 列だけが持てます: ${column.key}`,
-          path: ["columns", columnIndex, "format"],
-        });
-      }
-    }
+    refineFigureData(data, ctx);
+    const known = new Set(data.columns.map((column) => column.key));
     (data.emphasis ?? []).forEach((entry, entryIndex) => {
       if (entry.row >= data.rows.length) {
         ctx.addIssue({
@@ -684,7 +694,14 @@ const tableSimpleV1: VisualTemplateDefinition = {
   display: { label: "表", description: "列定義・行・強調セルを持つ表", category: "data" },
   inputFields: [
     { kind: "optionalText", key: "caption", label: "見出し" },
-    { kind: "table", key: "data", label: "表データ", maxColumns: TABLE_MAX_COLUMNS, maxRows: TABLE_MAX_ROWS },
+    {
+      kind: "grid",
+      key: "data",
+      label: "表データ",
+      maxColumns: TABLE_MAX_COLUMNS,
+      maxRows: TABLE_MAX_ROWS,
+      emphasis: true,
+    },
     { kind: "select", key: "style.preset", label: "スタイル", options: TABLE_STYLE_PRESET_OPTIONS },
     {
       kind: "select",
@@ -716,6 +733,175 @@ const tableSimpleV1: VisualTemplateDefinition = {
   collectAssetRefs: () => [],
 };
 
+export const CHART_MAX_CATEGORIES = 8;
+export const CHART_MAX_SERIES = 4;
+export const CHART_MAX_COLUMNS = CHART_MAX_SERIES + 1;
+export const CHART_REVEAL_STAGGER_MAX_MS = 2000;
+export const CHART_REVEAL_DEFAULT_STAGGER_MS = 120;
+export const CHART_REVEAL_DEFAULT_DURATION_MS = 600;
+
+export const chartOrientationSchema = z.enum(["vertical", "horizontal"]);
+export type ChartOrientation = z.infer<typeof chartOrientationSchema>;
+
+export const chartColorBySchema = z.enum(["series", "category"]);
+export type ChartColorBy = z.infer<typeof chartColorBySchema>;
+
+export const chartStylePresetSchema = z.enum(["clean", "grid"]);
+export type ChartStylePreset = z.infer<typeof chartStylePresetSchema>;
+
+export const chartRevealModeSchema = z.enum(["bars", "none"]);
+export type ChartRevealMode = z.infer<typeof chartRevealModeSchema>;
+
+export const chartRevealPresetSchema = z.enum(["grow", "bounce", "fade"]);
+export type ChartRevealPreset = z.infer<typeof chartRevealPresetSchema>;
+
+export const chartDataSchema = z
+  .strictObject({
+    columns: z.array(tableColumnSchema).min(2).max(CHART_MAX_COLUMNS),
+    rows: z.array(tableRowSchema).min(1).max(CHART_MAX_CATEGORIES),
+  })
+  .superRefine((data, ctx) => {
+    refineFigureData(data, ctx);
+    if (data.columns[0]?.type !== "text") {
+      ctx.addIssue({
+        code: "custom",
+        message: "先頭の列はカテゴリ（文字列）にしてください",
+        path: ["columns", 0, "type"],
+      });
+    }
+    data.columns.slice(1).forEach((column, index) => {
+      if (column.type !== "number") {
+        ctx.addIssue({
+          code: "custom",
+          message: "2列目以降は系列（数値）にしてください",
+          path: ["columns", index + 1, "type"],
+        });
+        return;
+      }
+      data.rows.forEach((row, rowIndex) => {
+        const value = row[column.key];
+        if (value === undefined) {
+          return;
+        }
+        const numeric = typeof value === "number" ? value : Number(value);
+        if (typeof value === "string" && value.trim() !== "" && !Number.isFinite(numeric)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `系列「${column.label}」の値は数値にしてください`,
+            path: ["rows", rowIndex, column.key],
+          });
+        }
+      });
+    });
+  });
+export type ChartData = z.infer<typeof chartDataSchema>;
+
+export const chartStyleSchema = z.strictObject({
+  preset: chartStylePresetSchema.default("clean"),
+  orientation: chartOrientationSchema.default("vertical"),
+  valueLabels: z.boolean().default(true),
+  colorBy: chartColorBySchema.optional(),
+  axisUnit: z.string().max(8).optional(),
+});
+export type ChartStyle = z.infer<typeof chartStyleSchema>;
+
+export const chartRevealSchema = z.strictObject({
+  mode: chartRevealModeSchema.default("bars"),
+  preset: chartRevealPresetSchema.default("grow"),
+  durationMs: nonNegativeInt.max(DEFAULT_ANIMATION_POLICY.maxDurationMs).default(
+    CHART_REVEAL_DEFAULT_DURATION_MS,
+  ),
+  staggerMs: nonNegativeInt.max(CHART_REVEAL_STAGGER_MAX_MS).default(
+    CHART_REVEAL_DEFAULT_STAGGER_MS,
+  ),
+});
+export type ChartReveal = z.infer<typeof chartRevealSchema>;
+
+export const chartBarInputSchema = z.strictObject({
+  title: z.string().optional(),
+  data: chartDataSchema,
+  style: chartStyleSchema.optional(),
+  reveal: chartRevealSchema.optional(),
+});
+export type ChartBarInput = z.infer<typeof chartBarInputSchema>;
+
+const CHART_STYLE_PRESET_OPTIONS = [
+  { value: "clean", label: "シンプル" },
+  { value: "grid", label: "目盛り線" },
+] as const;
+
+const CHART_ORIENTATION_OPTIONS = [
+  { value: "vertical", label: "縦棒" },
+  { value: "horizontal", label: "横棒" },
+] as const;
+
+const CHART_COLOR_BY_OPTIONS = [
+  { value: "series", label: "系列ごと" },
+  { value: "category", label: "カテゴリごと" },
+] as const;
+
+const CHART_REVEAL_MODE_OPTIONS = [
+  { value: "bars", label: "棒ごと" },
+  { value: "none", label: "なし" },
+] as const;
+
+const CHART_REVEAL_PRESET_OPTIONS = [
+  { value: "grow", label: "伸ばす" },
+  { value: "bounce", label: "弾ませる" },
+  { value: "fade", label: "フェード" },
+] as const;
+
+const chartBarV1: VisualTemplateDefinition = {
+  id: "chart.bar",
+  version: 1,
+  inputSchema: chartBarInputSchema,
+  layers: ["overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "棒グラフ", description: "カテゴリと系列を持つ棒グラフ", category: "data" },
+  inputFields: [
+    { kind: "optionalText", key: "title", label: "タイトル" },
+    {
+      kind: "grid",
+      key: "data",
+      label: "グラフデータ",
+      maxColumns: CHART_MAX_COLUMNS,
+      maxRows: CHART_MAX_CATEGORIES,
+      emphasis: false,
+    },
+    { kind: "select", key: "style.preset", label: "目盛り線", options: CHART_STYLE_PRESET_OPTIONS },
+    { kind: "select", key: "style.orientation", label: "向き", options: CHART_ORIENTATION_OPTIONS },
+    {
+      kind: "select",
+      key: "style.colorBy",
+      label: "色分け",
+      options: CHART_COLOR_BY_OPTIONS,
+      optional: true,
+    },
+    { kind: "optionalText", key: "style.axisUnit", label: "軸の単位" },
+    { kind: "boolean", key: "style.valueLabels", label: "値ラベル" },
+    { kind: "select", key: "reveal.mode", label: "登場の仕方", options: CHART_REVEAL_MODE_OPTIONS },
+    { kind: "select", key: "reveal.preset", label: "登場のアニメーション", options: CHART_REVEAL_PRESET_OPTIONS },
+    {
+      kind: "number",
+      key: "reveal.durationMs",
+      label: "登場の尺(ms)",
+      min: 0,
+      max: DEFAULT_ANIMATION_POLICY.maxDurationMs,
+      step: 50,
+    },
+    {
+      kind: "number",
+      key: "reveal.staggerMs",
+      label: "登場のずれ(ms)",
+      min: 0,
+      max: CHART_REVEAL_STAGGER_MAX_MS,
+      step: 10,
+    },
+  ],
+  collectAssetRefs: () => [],
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   textBlockV2,
@@ -729,12 +915,14 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   sceneSiteMockupV1,
   compositionFullBleedV1,
   tableSimpleV1,
+  chartBarV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
 export { characterStandingV1, characterStandingV2, characterStandingV3, sceneDeviceFrameV1, sceneDeviceFrameV2 };
 export { sceneSiteMockupV1 };
 export { tableSimpleV1 };
+export { chartBarV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

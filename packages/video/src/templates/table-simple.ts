@@ -3,7 +3,6 @@ import {
   TABLE_REVEAL_DEFAULT_STAGGER_MS,
   tableSimpleInputSchema,
   type TableColumn,
-  type TableNumberFormat,
   type TableTone,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
@@ -11,31 +10,7 @@ import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 import type { AnimationItem, RenderedCue, RenderContext } from "../render-context";
 import { accentForegroundHex, mixHex } from "../theme";
-
-function formatNumber(value: number, format: TableNumberFormat | undefined): string {
-  switch (format) {
-    case "currency":
-      return new Intl.NumberFormat("ja-JP", {
-        style: "currency",
-        currency: "JPY",
-        maximumFractionDigits: 0,
-      }).format(value);
-    case "percent":
-      return new Intl.NumberFormat("ja-JP", {
-        style: "percent",
-        maximumFractionDigits: 1,
-      }).format(value);
-    case "integer":
-      return new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 }).format(value);
-    case "decimal":
-      return new Intl.NumberFormat("ja-JP", {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 2,
-      }).format(value);
-    default:
-      return String(value);
-  }
-}
+import { formatNumber } from "./table-format";
 
 function cellText(value: string | number, column: TableColumn): string {
   if (typeof value === "number" && column.type === "number") {
@@ -138,7 +113,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
           if (revealMode === "columns") {
             animation.push({
               targetId: cellId,
-              preset: revealPreset,
+              action: revealPreset,
               startMs: columnIndex * staggerMs,
               durationMs,
             });
@@ -149,7 +124,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
       if (revealMode === "rows") {
         animation.push({
           targetId: rowId,
-          preset: revealPreset,
+          action: revealPreset,
           startMs: rowIndex * staggerMs,
           durationMs,
         });

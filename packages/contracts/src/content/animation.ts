@@ -30,6 +30,12 @@ export const animationSpecSchema = z
   });
 export type AnimationSpec = z.infer<typeof animationSpecSchema>;
 
+export const figureActionSchema = z.enum([...animationPresetSchema.options, "grow"]);
+export type FigureAction = z.infer<typeof figureActionSchema>;
+
+export const figureEaseSchema = z.enum(["normal", "overshoot"]);
+export type FigureEase = z.infer<typeof figureEaseSchema>;
+
 export interface AnimationPolicy {
   presets: readonly AnimationPreset[];
   defaultDurationMs: number;

@@ -69,7 +69,7 @@
 | key | kind | 内容 |
 | --- | --- | --- |
 | `caption` | optionalText | 表の見出し |
-| `data` | table | 列・行・強調の一括編集。CSV貼り付けからの変換入口 |
+| `data` | grid | 列・行・強調の一括編集。CSV貼り付けからの変換入口 |
 | `style.preset` | select | clean / striped / bordered |
 | `style.headerAccent` | select（任意） | primary / secondary / tertiary |
 | `style.zebra` | boolean | ゼブラの上書き |
@@ -78,7 +78,7 @@
 | `reveal.durationMs` | number | 1要素の尺 |
 | `reveal.staggerMs` | number | 要素間のずれ |
 
-`table` フィールド種別は `{ kind: "table", key, label, maxColumns, maxRows }` とし、`data` オブジェクトを編集する。新規Cueには2列の雛形を入れる。
+`grid` フィールド種別は `{ kind: "grid", key, label, maxColumns, maxRows, emphasis? }` とし、`data` オブジェクトを編集する。表は `emphasis: true` で、行・セルの強調を編集する。棒グラフは `emphasis: false` で同じ部品を使い回す（[../chart-template/spec.md](../chart-template/spec.md)）。新規Cueには2列の雛形を入れる。
 
 ## CSV貼り付け
 

@@ -1436,3 +1436,78 @@ describe("table.simple form", () => {
     expect(parsed.rows).toHaveLength(1);
   });
 });
+
+describe("chart.bar form", () => {
+  const chartInput = {
+    title: "月別",
+    data: {
+      columns: [
+        { key: "month", label: "月", type: "text" },
+        { key: "sales", label: "売上", type: "number", format: "currency" },
+      ],
+      rows: [
+        { month: "1月", sales: 100 },
+        { month: "2月", sales: 200 },
+      ],
+    },
+    style: { preset: "grid", orientation: "vertical", valueLabels: true, colorBy: "category" },
+    reveal: { mode: "bars", preset: "grow", durationMs: 600, staggerMs: 120 },
+  };
+
+  it("round-trips chart data and nested fields", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-chart",
+        template: { id: "chart.bar", version: 1 },
+        layer: "overlay",
+        input: structuredClone(chartInput),
+      }),
+    ];
+    const values = toFormValues(base);
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(chartInput);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("reads grid data into a json field and writes it back", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-chart",
+        template: { id: "chart.bar", version: 1 },
+        layer: "overlay",
+        input: structuredClone(chartInput),
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = values.scenes[1]!.cues[0]!;
+    const parsed = JSON.parse(cue.fields.data ?? "") as { rows: unknown[] };
+    expect(parsed.rows).toHaveLength(2);
+    cue.fields["style.orientation"] = "horizontal";
+    const rebuilt = buildContentDocument(base, values);
+    expect(
+      (rebuilt.scenes[1]!.visualCues[0]!.input as { style: { orientation: string } }).style
+        .orientation,
+    ).toBe("horizontal");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("creates new chart cues with a valid starter grid", () => {
+    const cue = createCueFormValue({
+      sceneId: "scene-point-1",
+      templateId: "chart.bar",
+      templateVersion: 1,
+      layer: "overlay",
+      order: 0,
+    });
+    const parsed = JSON.parse(cue.fields.data ?? "") as {
+      columns: { type: string }[];
+      rows: unknown[];
+    };
+    expect(parsed.columns).toHaveLength(2);
+    expect(parsed.columns[0]!.type).toBe("text");
+    expect(parsed.columns[1]!.type).toBe("number");
+    expect(parsed.rows).toHaveLength(1);
+  });
+});

@@ -10,6 +10,7 @@ import {
   sceneDeviceFrameV2,
   sceneSiteMockupV1,
   tableSimpleV1,
+  chartBarV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
   deviceFrameInputSchema,
@@ -19,6 +20,8 @@ import {
   type AnimationPreset,
   type ContentDocument,
   type CueLayer,
+  type FigureAction,
+  type FigureEase,
   type NarrationSegment,
   type NestedVisual,
   type VisualCue,
@@ -54,6 +57,7 @@ import {
 } from "./templates/character-standing";
 import { renderDeviceFrame } from "./templates/device-frame";
 import { renderTableSimple } from "./templates/table-simple";
+import { renderChartBar } from "./templates/chart-bar";
 import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, resolveCueMedia } from "./templates/shared";
 
@@ -451,6 +455,8 @@ function dispatchTemplate(
       return renderSiteMockup(input, context);
     case `${tableSimpleV1.id}@${tableSimpleV1.version}`:
       return renderTableSimple(input, context);
+    case `${chartBarV1.id}@${chartBarV1.version}`:
+      return renderChartBar(input, context);
     case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
       return renderCompositionFullBleed(input, context, compositionResolver);
     default:
@@ -555,6 +561,34 @@ const STYLES = [
   ".kakeai-table-zebra .kakeai-tablerow:nth-child(even) .kakeai-tablecell{background:var(--kakeai-surface-muted);}",
   ".kakeai-table-bordered .kakeai-tablecell{border:2px solid var(--kakeai-border);}",
   ".kakeai-table-bordered .kakeai-tablehead{border:2px solid var(--kakeai-border);border-bottom:4px solid var(--kakeai-accent-primary);}",
+  ".kakeai-chartwrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px 160px;box-sizing:border-box;}",
+  ".kakeai-chartframe{background:var(--kakeai-surface);border-radius:var(--kakeai-radius-lg);box-shadow:0 12px 48px var(--kakeai-shadow);padding:40px 56px;}",
+  ".kakeai-charttitle{margin:0 0 12px;font-size:44px;font-weight:700;color:var(--kakeai-text);text-align:center;}",
+  ".kakeai-chartlegend{display:flex;flex-wrap:wrap;justify-content:center;gap:24px;margin-bottom:16px;font-size:26px;color:var(--kakeai-muted);}",
+  ".kakeai-chartlegenditem{display:inline-flex;align-items:center;gap:10px;}",
+  ".kakeai-chartswatch{width:28px;height:28px;border-radius:6px;display:inline-block;}",
+  ".kakeai-chartplot{position:relative;width:1280px;}",
+  ".kakeai-chartlines{position:absolute;left:0;right:0;}",
+  ".kakeai-chartline{position:absolute;left:0;right:0;border-top:1px solid var(--kakeai-border);opacity:.45;}",
+  ".kakeai-chart-grid .kakeai-chartline{opacity:1;}",
+  ".kakeai-charttick{position:absolute;left:0;width:120px;text-align:right;padding-right:12px;top:0;transform:translateY(-50%);font-size:24px;color:var(--kakeai-muted);}",
+  ".kakeai-chartcols{position:absolute;top:0;bottom:0;right:0;display:flex;align-items:stretch;gap:28px;}",
+  ".kakeai-chartcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;}",
+  ".kakeai-chartbars{flex:1;display:flex;align-items:flex-end;gap:10px;}",
+  ".kakeai-chartbar{position:relative;width:64px;border-radius:6px 6px 0 0;transform-origin:bottom center;}",
+  ".kakeai-chartvalue{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);padding-bottom:8px;font-size:24px;white-space:nowrap;color:var(--kakeai-text);}",
+  ".kakeai-chartcat{height:48px;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--kakeai-muted);}",
+  ".kakeai-chartplot-h{display:flex;flex-direction:column;gap:20px;padding:8px 0 44px;box-sizing:border-box;}",
+  ".kakeai-chartlines-h{position:absolute;top:0;bottom:44px;right:0;}",
+  ".kakeai-charthline{position:absolute;top:0;bottom:0;border-left:1px solid var(--kakeai-border);opacity:.45;}",
+  ".kakeai-chart-grid .kakeai-charthline{opacity:1;}",
+  ".kakeai-charthtick{position:absolute;bottom:-34px;left:0;transform:translateX(-50%);font-size:22px;color:var(--kakeai-muted);}",
+  ".kakeai-chartrows{display:flex;flex-direction:column;gap:20px;}",
+  ".kakeai-chartrow{display:flex;align-items:center;gap:16px;}",
+  ".kakeai-charthcat{width:220px;text-align:right;padding-right:16px;font-size:28px;color:var(--kakeai-muted);}",
+  ".kakeai-chartbars-h{flex:1;display:flex;flex-direction:column;gap:8px;}",
+  ".kakeai-chartbar-h{width:auto;height:34px;border-radius:0 6px 6px 0;transform-origin:left center;}",
+  ".kakeai-charthvalue{position:absolute;left:100%;top:50%;transform:translateY(-50%);padding-left:10px;font-size:24px;white-space:nowrap;color:var(--kakeai-text);}",
 ].join("\n");
 
 const FADE_START_EPSILON_MS = 1;
@@ -590,6 +624,36 @@ function presetVars(preset: AnimationPreset, phase: "enter" | "exit"): string | 
       ]);
     }
   }
+}
+
+function actionVars(action: FigureAction, axis: "x" | "y" | undefined): string | null {
+  switch (action) {
+    case "grow":
+      return axis === "x" ? "scaleX:0" : "scaleY:0";
+    case "none":
+    case "fade":
+    case "slide-up":
+    case "slide-down":
+    case "slide-left":
+    case "slide-right":
+    case "scale-in":
+    case "pulse":
+      return presetVars(action, "enter");
+    default: {
+      const exhaustive: never = action;
+      throw new CompositionCompileError([
+        {
+          path: [],
+          code: "unknown_action",
+          message: `未対応の図形アクションです: ${String(exhaustive)}`,
+        },
+      ]);
+    }
+  }
+}
+
+function actionEase(ease: FigureEase | undefined): string {
+  return ease === "overshoot" ? "back.out(1.6)" : "power1.out";
 }
 
 function gainToVolume(gainDb: number | undefined): string {
@@ -879,10 +943,10 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         if (item.durationMs <= 0) {
           continue;
         }
-        const vars = presetVars(item.preset, "enter");
+        const vars = actionVars(item.action, item.axis);
         if (vars !== null) {
           tweenLines.push(
-            `tl.from(document.getElementById("${item.targetId}"),{${vars},duration:${secondsText(item.durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,
+            `tl.from(document.getElementById("${item.targetId}"),{${vars},duration:${secondsText(item.durationMs / 1000)},ease:"${actionEase(item.ease)}",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,
           );
         }
       }

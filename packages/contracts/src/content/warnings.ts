@@ -1,10 +1,14 @@
 import type { Warning } from "../error";
 import type { ContentDocument } from "./document";
 import {
+  chartBarInputSchema,
+  chartBarV1,
   tableSimpleInputSchema,
   tableSimpleV1,
   textBlockInputSchema,
   textBlockV1,
+  type ChartData,
+  type ChartReveal,
   type TableData,
   type TableReveal,
   type TextRole,
@@ -29,6 +33,57 @@ export const TABLE_CELL_CHAR_GUIDELINE = 14;
 export const TABLE_ROW_GUIDELINE = 10;
 export const TABLE_COLUMN_GUIDELINE = 6;
 export const TABLE_REVEAL_TOTAL_GUIDELINE_MS = 4000;
+
+export const CHART_CATEGORY_GUIDELINE = 6;
+export const CHART_SERIES_GUIDELINE = 3;
+
+function chartWarnings(
+  data: ChartData,
+  reveal: ChartReveal | undefined,
+  basePath: (string | number)[],
+): Warning[] {
+  const warnings: Warning[] = [];
+  const categories = data.rows.length;
+  const series = Math.max(0, data.columns.length - 1);
+  if (categories > CHART_CATEGORY_GUIDELINE) {
+    warnings.push({
+      path: [...basePath, "data", "rows"],
+      code: "chart_categories_overflow",
+      message: `グラフのカテゴリ数が目安（最大${CHART_CATEGORY_GUIDELINE}件）を超えています。プレビューで確認してください。`,
+    });
+  }
+  if (series > CHART_SERIES_GUIDELINE) {
+    warnings.push({
+      path: [...basePath, "data", "columns"],
+      code: "chart_series_overflow",
+      message: `グラフの系列数が目安（最大${CHART_SERIES_GUIDELINE}本）を超えています。プレビューで確認してください。`,
+    });
+  }
+  data.columns.slice(1).forEach((column) => {
+    data.rows.forEach((row, rowIndex) => {
+      const value = row[column.key];
+      const numeric = typeof value === "number" ? value : Number(value);
+      if (Number.isFinite(numeric) && numeric < 0) {
+        warnings.push({
+          path: [...basePath, "data", "rows", rowIndex, column.key],
+          code: "chart_negative_value",
+          message: "棒グラフの負の値は0として描画されます。プレビューで確認してください。",
+        });
+      }
+    });
+  });
+  if (reveal !== undefined && reveal.mode !== "none") {
+    const totalMs = Math.max(0, categories - 1) * reveal.staggerMs + reveal.durationMs;
+    if (totalMs > TABLE_REVEAL_TOTAL_GUIDELINE_MS) {
+      warnings.push({
+        path: [...basePath, "reveal"],
+        code: "chart_reveal_overflow",
+        message: `グラフの登場演出が目安（${TABLE_REVEAL_TOTAL_GUIDELINE_MS / 1000}秒）を超えています。ずれ・尺を見直してください。`,
+      });
+    }
+  }
+  return warnings;
+}
 
 function tableWarnings(
   data: TableData,
@@ -114,6 +169,19 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
   const warnings: Warning[] = [];
   document.scenes.forEach((scene, sceneIndex) => {
     scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.template.id === chartBarV1.id && cue.template.version === chartBarV1.version) {
+        const parsed = chartBarInputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          warnings.push(
+            ...chartWarnings(
+              parsed.data.data,
+              parsed.data.reveal,
+              ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
+            ),
+          );
+        }
+        return;
+      }
       if (cue.template.id === tableSimpleV1.id && cue.template.version === tableSimpleV1.version) {
         const parsed = tableSimpleInputSchema.safeParse(cue.input);
         if (parsed.success) {

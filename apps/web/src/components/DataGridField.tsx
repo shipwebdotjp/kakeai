@@ -5,7 +5,7 @@ import {
   type TableData,
   type TableTone,
 } from "@kakeai/contracts";
-import { defaultTableDataJson } from "../content/form";
+import { defaultGridDataJson } from "../content/form";
 import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 
 const TONE_OPTIONS: readonly { value: string; label: string }[] = [
@@ -39,13 +39,14 @@ const FORMAT_OPTIONS: readonly { value: string; label: string }[] = [
   { value: "currency", label: "通貨" },
 ];
 
-interface TableFieldProps {
+interface DataGridFieldProps {
   label: string;
   fieldKey: string;
   value: string;
   setField: (key: string, value: string) => void;
   maxColumns: number;
   maxRows: number;
+  emphasis: boolean;
 }
 
 function parseTableData(value: string): TableData | null {
@@ -181,13 +182,26 @@ function ColumnKeyInput({ columnKey, onCommit }: { columnKey: string; onCommit: 
   );
 }
 
-export function TableField({ label, fieldKey, value, setField, maxColumns, maxRows }: TableFieldProps) {
+export function DataGridField({
+  label,
+  fieldKey,
+  value,
+  setField,
+  maxColumns,
+  maxRows,
+  emphasis,
+}: DataGridFieldProps) {
   const [csvText, setCsvText] = useState("");
   const [notice, setNotice] = useState("");
   const data = parseTableData(value);
 
   const commit = (next: TableData) => {
     setNotice("");
+    if (!emphasis) {
+      const { emphasis: _dropped, ...rest } = next;
+      setField(fieldKey, JSON.stringify(rest));
+      return;
+    }
     setField(fieldKey, JSON.stringify(next));
   };
 
@@ -199,7 +213,7 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
         <button
           type="button"
           className={buttonNeutralClass}
-          onClick={() => commit(JSON.parse(defaultTableDataJson()) as TableData)}
+          onClick={() => commit(JSON.parse(defaultGridDataJson()) as TableData)}
         >
           初期化
         </button>
@@ -235,10 +249,14 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
       const { [previous]: moved, ...rest } = row;
       return { ...rest, [key]: moved as string | number };
     });
-    const emphasis = (data.emphasis ?? []).map((entry) =>
+    if (!emphasis) {
+      commit({ ...data, columns, rows });
+      return;
+    }
+    const nextEmphasis = (data.emphasis ?? []).map((entry) =>
       entry.key === previous ? { ...entry, key } : entry,
     );
-    commit({ ...data, columns, rows, emphasis });
+    commit({ ...data, columns, rows, emphasis: nextEmphasis });
   };
 
   const changeColumnType = (index: number, type: "text" | "number") => {
@@ -276,15 +294,20 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
 
   const removeColumn = (index: number) => {
     const key = data.columns[index]!.key;
-    commit({
+    const next: TableData = {
       ...data,
       columns: data.columns.filter((_, columnIndex) => columnIndex !== index),
       rows: data.rows.map((row) => {
         const { [key]: _removed, ...rest } = row;
         return rest;
       }),
-      emphasis: (data.emphasis ?? []).filter((entry) => entry.key !== key),
-    });
+    };
+    if (emphasis) {
+      next.emphasis = (data.emphasis ?? []).filter((entry) => entry.key !== key);
+    } else {
+      delete next.emphasis;
+    }
+    commit(next);
   };
 
   const updateCell = (rowIndex: number, key: string, raw: string, type: "text" | "number") => {
@@ -308,10 +331,14 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
 
   const removeRow = (rowIndex: number) => {
     const rows = data.rows.filter((_, index) => index !== rowIndex);
-    const emphasis = (data.emphasis ?? [])
+    if (!emphasis) {
+      commit({ ...data, rows });
+      return;
+    }
+    const nextEmphasis = (data.emphasis ?? [])
       .filter((entry) => entry.row !== rowIndex)
       .map((entry) => (entry.row > rowIndex ? { ...entry, row: entry.row - 1 } : entry));
-    commit({ ...data, rows, emphasis });
+    commit({ ...data, rows, emphasis: nextEmphasis });
   };
 
   const cellTone = (rowIndex: number, key: string): string => {
@@ -383,7 +410,7 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
     }
     setNotice(parts.join("、"));
     setCsvText("");
-    setField(fieldKey, JSON.stringify({ columns, rows, emphasis: [] }));
+    setField(fieldKey, JSON.stringify(emphasis ? { columns, rows, emphasis: [] } : { columns, rows }));
   };
 
   return (
@@ -400,7 +427,7 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
         <table className="border-collapse">
           <thead>
             <tr>
-              <th className="border border-border p-1 text-xs">行の強調</th>
+              {emphasis && <th className="border border-border p-1 text-xs">行の強調</th>}
               {data.columns.map((column, columnIndex) => (
                 <th key={column.key} className="border border-border p-1">
                   <div className="flex flex-col gap-1">
@@ -484,19 +511,21 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
           <tbody>
             {data.rows.map((row, rowIndex) => (
               <tr key={rowIndex}>
-                <td className="border border-border p-1">
-                  <select
-                    className={textFieldClass}
-                    value={rowTone(rowIndex)}
-                    onChange={(event) => setRowTone(rowIndex, event.target.value)}
-                  >
-                    {TONE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
+                {emphasis && (
+                  <td className="border border-border p-1">
+                    <select
+                      className={textFieldClass}
+                      value={rowTone(rowIndex)}
+                      onChange={(event) => setRowTone(rowIndex, event.target.value)}
+                    >
+                      {TONE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                )}
                 {data.columns.map((column) => (
                   <td key={column.key} className="border border-border p-1">
                     <div className="flex items-center gap-1">
@@ -506,20 +535,22 @@ export function TableField({ label, fieldKey, value, setField, maxColumns, maxRo
                         columnType={column.type}
                         onCommit={(raw) => updateCell(rowIndex, column.key, raw, column.type)}
                       />
-                      <select
-                        className={textFieldClass}
-                        value={cellTone(rowIndex, column.key)}
-                        onChange={(event) =>
-                          setCellTone(rowIndex, column.key, event.target.value)
-                        }
-                        title="セルの強調"
-                      >
-                        {TONE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      {emphasis && (
+                        <select
+                          className={textFieldClass}
+                          value={cellTone(rowIndex, column.key)}
+                          onChange={(event) =>
+                            setCellTone(rowIndex, column.key, event.target.value)
+                          }
+                          title="セルの強調"
+                        >
+                          {TONE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   </td>
                 ))}
