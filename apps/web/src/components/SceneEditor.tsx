@@ -775,15 +775,17 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                 }
               }}
             >
-              {(themesQuery.data ?? []).map((t) => {
-                const version = t.latestRevision?.version ?? 1;
-                const valueKey = `${t.id}@${version}`;
-                return (
-                  <option key={valueKey} value={valueKey}>
-                    {t.name} (v{version}) {t.isBuiltIn ? "【組み込み】" : ""}
-                  </option>
-                );
-              })}
+              {(themesQuery.data ?? [])
+                .filter((t) => t.latestRevision !== null)
+                .map((t) => {
+                  const version = t.latestRevision!.version;
+                  const valueKey = `${t.id}@${version}`;
+                  return (
+                    <option key={valueKey} value={valueKey}>
+                      {t.name} (v{version}) {t.isBuiltIn ? "【組み込み】" : ""}
+                    </option>
+                  );
+                })}
             </select>
           </label>
         </div>

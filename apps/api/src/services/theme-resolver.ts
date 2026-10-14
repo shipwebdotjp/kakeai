@@ -4,10 +4,10 @@ import {
   visualThemeDefinitions,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
-import type { PrismaClient } from "../generated/prisma/client.ts";
+import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 
 export class ThemeResolver {
-  constructor(private db: PrismaClient) {}
+  constructor(private db: PrismaClient | Prisma.TransactionClient) {}
 
   async resolve(id: string, version: number): Promise<VisualThemeDefinition | undefined> {
     const builtIn = getVisualTheme(id, version);

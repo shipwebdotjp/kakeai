@@ -796,6 +796,20 @@ export async function saveScriptVersion(
   for (let attempt = 1; ; attempt += 1) {
     try {
       const created = await prisma.$transaction(async (tx) => {
+        const themeResolver = new ThemeResolver(tx);
+        const resolvedTheme = await themeResolver.resolve(
+          content.visualTheme.id,
+          content.visualTheme.version,
+        );
+        if (!resolvedTheme) {
+          throw validationError([
+            {
+              path: ["visualTheme"],
+              code: "invalid_value",
+              message: `Visual Themeが見つかりません: ${content.visualTheme.id}@${content.visualTheme.version}`,
+            },
+          ]);
+        }
         await validateAssetReferences(tx, content);
         const aggregate = await tx.scriptVersion.aggregate({
           where: { languageEditionId: editionId },

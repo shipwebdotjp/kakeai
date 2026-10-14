@@ -195,6 +195,7 @@ export async function processRenderJob(
     try {
       compiled = compileDocument({
         document: snapshot.content,
+        resolvedTheme: snapshot.themeDefinition,
         assetResolver: (assetId) => {
           const fileName = fileById.get(assetId);
           const asset = assets.find((entry) => entry.assetId === assetId);

@@ -116,6 +116,9 @@ export function createApp(dependencies: AppDependencies): Express {
 
   const mediaGuard = mediaAccessGuard(policy, dependencies.mediaSessionToken);
 
+  const fontCatalogService = new FontCatalogService();
+  const themeService = new ThemeService(dependencies.prisma, fontCatalogService);
+
   const api = express.Router();
   api.use(express.json({ limit: JSON_BODY_LIMIT }));
   api.use(
@@ -142,6 +145,7 @@ export function createApp(dependencies: AppDependencies): Express {
       prisma: dependencies.prisma,
       directories: dependencies.config.directories,
       config: dependencies.config,
+      fontCatalogService,
     }),
   );
   api.use(
@@ -175,8 +179,6 @@ export function createApp(dependencies: AppDependencies): Express {
   });
   api.use("/compositions", createCompositionsRouter(compositionService, mediaGuard));
 
-  const fontCatalogService = new FontCatalogService();
-  const themeService = new ThemeService(dependencies.prisma, fontCatalogService);
   api.use("/themes", createThemesRouter(themeService));
   api.use("/fonts", createFontsRouter(fontCatalogService));
 

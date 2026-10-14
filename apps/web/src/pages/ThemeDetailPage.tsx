@@ -183,12 +183,19 @@ export function ThemeDetailPage() {
     });
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!themeId) return;
     if (!window.confirm("新しいリビジョンとして公開しますか？")) return;
-    publishDraft.mutate(undefined, {
-      onSuccess: () => setDirty(false),
-    });
+    try {
+      if (dirty && formDef) {
+        await updateDraft.mutateAsync(formDef);
+      }
+      publishDraft.mutate(undefined, {
+        onSuccess: () => setDirty(false),
+      });
+    } catch {
+      // updateDraft mutation error handled by hook
+    }
   };
 
   const handleDuplicate = () => {
@@ -242,7 +249,7 @@ export function ThemeDetailPage() {
               type="button"
               className={buttonPrimaryClass}
               onClick={handleDuplicate}
-              disabled={createTheme.isPending}
+              disabled={createTheme.isPending || theme.latestRevision === null}
             >
               <Copy className="h-4 w-4 inline mr-1" />
               複製して編集
@@ -271,7 +278,7 @@ export function ThemeDetailPage() {
                 type="button"
                 className={buttonPrimaryClass}
                 onClick={handlePublish}
-                disabled={publishDraft.isPending}
+                disabled={publishDraft.isPending || (!theme.hasDraft && !dirty)}
               >
                 <Upload className="h-4 w-4 inline mr-1" />
                 公開 (Publish)
@@ -825,6 +832,7 @@ export function ThemeDetailPage() {
             {previewDraft.data?.compositionHtml ? (
               <iframe
                 className="h-full w-full border-0"
+                sandbox="allow-scripts"
                 srcDoc={previewDraft.data.compositionHtml}
                 title="Theme Preview"
               />

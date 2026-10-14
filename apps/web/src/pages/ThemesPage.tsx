@@ -124,11 +124,13 @@ export function ThemesPage() {
               onChange={(e) => setDuplicateSourceId(e.target.value)}
             >
               <option value="">（既定テーマから作成）</option>
-              {themesQuery.data?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} {t.isBuiltIn ? "（組み込み）" : ""}
-                </option>
-              ))}
+              {themesQuery.data
+                ?.filter((t) => t.latestRevision !== null)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} (v{t.latestRevision!.version}) {t.isBuiltIn ? "（組み込み）" : ""}
+                  </option>
+                ))}
             </select>
           </div>
           <div className="flex justify-end gap-2 pt-2">

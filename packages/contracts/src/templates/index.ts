@@ -453,19 +453,6 @@ export const compositionFullBleedV1: VisualTemplateDefinition = {
   collectAssetRefs: () => [],
 };
 
-export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
-  textBlockV1,
-  mediaFullBleedV1,
-  mediaCardV1,
-  characterStandingV1,
-  characterStandingV2,
-  characterStandingV3,
-  sceneDeviceFrameV1,
-  sceneDeviceFrameV2,
-  sceneSiteMockupV1,
-  compositionFullBleedV1,
-];
-
 export const textRoleV2Schema = z.enum(["title", "subtitle", "heading", "body", "closing", "label"]);
 export type TextRoleV2 = z.infer<typeof textRoleV2Schema>;
 
@@ -525,6 +512,20 @@ export const textBlockV2: VisualTemplateDefinition = {
   ],
   collectAssetRefs: () => [],
 };
+
+export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
+  textBlockV1,
+  textBlockV2,
+  mediaFullBleedV1,
+  mediaCardV1,
+  characterStandingV1,
+  characterStandingV2,
+  characterStandingV3,
+  sceneDeviceFrameV1,
+  sceneDeviceFrameV2,
+  sceneSiteMockupV1,
+  compositionFullBleedV1,
+];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
 export { characterStandingV1, characterStandingV2, characterStandingV3, sceneDeviceFrameV1, sceneDeviceFrameV2 };

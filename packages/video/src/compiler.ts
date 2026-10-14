@@ -25,8 +25,9 @@ import {
 } from "@kakeai/contracts";
 import type { CompositionVersionResolver, CompositionVersionResolved } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
-import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
+import { escapeCssFontFamily, escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
+import { hexToRgb } from "./theme";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
@@ -984,14 +985,35 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const captionText = line.captionText.trim();
       if (captionText.length > 0) {
         const captionToken = theme.textRoles.caption;
+        let fontFamily = THEME_FONT_STACKS[captionToken.font];
+        if (captionToken.fontFace?.family) {
+          fontFamily = `${escapeCssFontFamily(captionToken.fontFace.family)},${THEME_FONT_STACKS[captionToken.font]}`;
+        }
+
+        const captionSurface = theme.surfaces?.caption;
+        let surfaceBgStyle = `background:${overlayToRgba(theme.scrim)}`;
+        if (captionSurface?.enabled) {
+          const { r, g, b } = hexToRgb(captionSurface.backgroundColor);
+          const bg = `rgba(${r},${g},${b},${captionSurface.backgroundOpacity})`;
+          const surfaceParts = [
+            `background:${bg}`,
+            `padding:${captionSurface.paddingVertical}px ${captionSurface.paddingHorizontal}px`,
+            `border-radius:${captionSurface.borderRadius}px`,
+          ];
+          if (captionSurface.border) {
+            surfaceParts.push(`border:${captionSurface.border.width}px solid ${captionSurface.border.color}`);
+          }
+          surfaceBgStyle = surfaceParts.join(";");
+        }
+
         const captionStyle = [
-          `font-family:${THEME_FONT_STACKS[captionToken.font]}`,
+          `font-family:${fontFamily}`,
           `font-size:${captionToken.fontSize}px`,
           `color:${captionToken.color}`,
           `line-height:${captionToken.lineHeight}`,
           `font-weight:${captionToken.decoration.bold ? "700" : "400"}`,
           `font-style:${captionToken.decoration.italic ? "italic" : "normal"}`,
-          `background:${overlayToRgba(theme.scrim)}`,
+          surfaceBgStyle,
         ].join(";");
         sceneClips.push(
           `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="kakeai-caption"><p class="kakeai-captiontext" style="${captionStyle}">${escapeHtmlText(captionText)}</p></div></div>`,
