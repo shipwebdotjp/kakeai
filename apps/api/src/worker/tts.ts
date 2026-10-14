@@ -101,6 +101,7 @@ export async function processTtsJob(
           text: snapshot.speechText,
           voiceId: snapshot.voice.voiceId,
           speedScale: snapshot.speedScale,
+          settings: snapshot.settings,
         })
       ).data;
     } catch (error) {

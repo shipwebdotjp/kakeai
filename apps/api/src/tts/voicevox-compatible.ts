@@ -5,6 +5,7 @@ import type {
   TtsSynthesisRequest,
   TtsVoice,
   TtsVoiceListing,
+  TtsVoiceQuery,
   VoiceAdapterId,
 } from "@kakeai/contracts";
 import { TtsEngineUnavailableError, TtsInputRejectedError } from "./errors.ts";
@@ -114,7 +115,7 @@ export function createVoicevoxCompatibleAdapter(options: {
   return {
     id: options.id,
 
-    async listVoices(context: TtsAdapterContext): Promise<TtsVoiceListing> {
+    async listVoices(context: TtsAdapterContext, _query: TtsVoiceQuery): Promise<TtsVoiceListing> {
       const response = await request(`${context.baseUrl}/speakers`, { method: "GET" });
       if (!response.ok) {
         throw new TtsEngineUnavailableError();

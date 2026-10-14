@@ -3,7 +3,10 @@ import {
   MAX_TTS_SPEECH_TEXT_LENGTH,
   SNAPSHOT_SCHEMA_VERSION,
   ttsJobSnapshotSchema,
+  openAiAdapterExtrasSchema,
+  voiceAdapterDescriptorFor,
   voiceAdapterIdSchema,
+  voiceProfileExtrasSchemaFor,
   type BulkTtsJobEntry,
   type BulkTtsJobExclusion,
   type BulkTtsJobsResult,
@@ -15,6 +18,7 @@ import {
   type TtsVoice,
   type TtsVoiceListing,
   type VoiceAdapterId,
+  type VoiceProfileExtras,
 } from "@kakeai/contracts";
 import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
 import { deserializeContent } from "../domain/content-json.ts";
@@ -31,8 +35,14 @@ interface LoadedScriptVersion {
 }
 
 interface TtsJobCaches {
-  voiceListings: Map<VoiceAdapterId, TtsVoiceListing>;
-  voiceListingErrors: Map<VoiceAdapterId, ApiError>;
+  voiceListings: Map<string, TtsVoiceListing>;
+  voiceListingErrors: Map<string, ApiError>;
+}
+
+function voiceCacheKey(adapterId: VoiceAdapterId, settings: VoiceProfileExtras | null): string {
+  const parsedModel = settings === null ? null : openAiAdapterExtrasSchema.safeParse(settings);
+  const model = parsedModel !== null && parsedModel.success ? parsedModel.data.model.trim() : "";
+  return `${adapterId}\u0000${model}`;
 }
 
 function emptyCaches(): TtsJobCaches {
@@ -117,29 +127,34 @@ function exclusionMessage(error: ApiError): string {
 async function listVoicesCached(
   config: AppConfig,
   adapterId: VoiceAdapterId,
+  settings: VoiceProfileExtras | null,
   caches: TtsJobCaches,
 ): Promise<TtsVoiceListing> {
-  const cached = caches.voiceListings.get(adapterId);
+  const key = voiceCacheKey(adapterId, settings);
+  const cached = caches.voiceListings.get(key);
   if (cached !== undefined) {
     return cached;
   }
-  const cachedError = caches.voiceListingErrors.get(adapterId);
+  const cachedError = caches.voiceListingErrors.get(key);
   if (cachedError !== undefined) {
     throw cachedError;
   }
   const adapter = getTtsAdapter(adapterId);
   let listing: TtsVoiceListing;
   try {
-    listing = await adapter.listVoices({ baseUrl: resolveVoiceBaseUrl(config, adapterId) });
+    listing = await adapter.listVoices(
+      { baseUrl: resolveVoiceBaseUrl(config, adapterId) },
+      { settings },
+    );
   } catch (error) {
     if (error instanceof TtsEngineUnavailableError) {
       const apiError = new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
-      caches.voiceListingErrors.set(adapterId, apiError);
+      caches.voiceListingErrors.set(key, apiError);
       throw apiError;
     }
     throw error;
   }
-  caches.voiceListings.set(adapterId, listing);
+  caches.voiceListings.set(key, listing);
   return listing;
 }
 
@@ -181,10 +196,26 @@ async function prepareTtsJobSnapshot(
     throw ttsInputIssue(["adapterId"], "未対応の音声アダプターです。");
   }
 
-  const voiceId = input.voiceId ?? profileRow.voiceId;
-  const listing = await listVoicesCached(config, adapterId.data, caches);
+  let rawSettings: unknown;
+  try {
+    rawSettings = JSON.parse(profileRow.settingsJson);
+  } catch {
+    throw ttsInputIssue(["voiceProfileId"], "声プロファイルの設定を解釈できません。設定を見直してください。");
+  }
+  const parsedSettings = voiceProfileExtrasSchemaFor(adapterId.data).safeParse(rawSettings);
+  if (!parsedSettings.success) {
+    throw ttsInputIssue(["voiceProfileId"], "声プロファイルの設定が不正です。設定を見直してください。");
+  }
+  const settings = parsedSettings.data;
+
+  const descriptor = voiceAdapterDescriptorFor(adapterId.data);
+  const voiceId = (input.voiceId ?? profileRow.voiceId).trim();
+  if (voiceId.length === 0) {
+    throw ttsInputIssue(["voiceProfileId"], "声の指定が空です。");
+  }
+  const listing = await listVoicesCached(config, adapterId.data, settings, caches);
   const voice = findVoice(listing.voices, voiceId);
-  if (voice === undefined) {
+  if (voice === undefined && descriptor.voiceSelection !== "list-or-manual") {
     throw ttsInputIssue(
       ["voiceProfileId"],
       "選択した声が現在のエンジンに見つかりません。声プロファイルを見直してください。",
@@ -202,8 +233,9 @@ async function prepareTtsJobSnapshot(
     speakerName: truncateName(speaker.name),
     voiceProfileId: speaker.voiceProfileId,
     adapterId: adapterId.data,
-    voice: { voiceId: voice.voiceId },
-    voiceName: truncateName(voice.name),
+    voice: { voiceId },
+    voiceName: voice === undefined ? undefined : truncateName(voice.name),
+    settings,
     speedScale: input.speedScale,
     speechText,
     engineVersion: listing.engineVersion,

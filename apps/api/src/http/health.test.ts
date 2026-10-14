@@ -14,7 +14,11 @@ describe("buildHealthResponse", () => {
     expect(response.capabilities.locales).toEqual(["ja-JP", "en-US"]);
     expect(response.capabilities.jobKinds).toEqual(["asset_ingest", "render", "tts"]);
     expect(response.capabilities.assetKinds).toEqual(["image", "video", "audio"]);
-    expect(response.capabilities.voiceAdapters).toEqual(["voicevox", "aivisspeech"]);
+    expect(response.capabilities.voiceAdapters).toEqual([
+      "voicevox",
+      "aivisspeech",
+      "openai-compatible",
+    ]);
   });
 
   it("reports a warning storage status", () => {

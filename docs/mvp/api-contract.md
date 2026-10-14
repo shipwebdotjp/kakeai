@@ -68,8 +68,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | CompositionDraftFiles | entrypoint, files, binaryFiles | draftのentrypointと、bundle相対パスをキーにしたファイル内容のマップ。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列（存在する場合のみ）。seedとAIの更新内容を含む。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
-| VoiceProfile | id, name, adapterId, voiceId, locale, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は登録済みアダプター記述子の ID（作成後は不変）、`voiceId` はアダプター定義の不透明な声 ID、`settings` はアダプター固有の追加分。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| VoiceAdapter | id, label | 登録済み TTS アダプター記述子。 |
+| VoiceProfile | id, name, adapterId, voiceId, locale, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は登録済みアダプター記述子の ID（作成後は不変）、`voiceId` はアダプター定義の不透明な声 ID、`locale` は声の言語、`settings` はアダプター固有の追加分（OpenAI互換は `{ model }`）。詳細は [../tts/spec.md](../tts/spec.md)。 |
+| VoiceAdapter | id, label, defaultLocale, voiceSelection, modelSelection | 登録済み TTS アダプター記述子。`defaultLocale` は固定言語（無ければnull）、`voiceSelection` は `list` / `list-or-manual`、`modelSelection` はモデル指定の要否。 |
 | TtsVoice | voiceId, name, locale? | 接続中エンジンの声。`voiceId` はアダプター定義の不透明な ID、`locale` は任意の申告言語。 |
 | BulkTtsJobsResult | jobs, excluded | 一括TTS生成の応答。`jobs` は `narrationSegmentId` と Job DTO の組、`excluded` は `narrationSegmentId`・エラーコード・安全な理由。詳細は [../tts/spec.md](../tts/spec.md)。 |
 | CharacterLibraryEntry | id, name, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
@@ -114,12 +114,13 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /artifacts/:artifactId | 200 | Artifactのメタデータを取得 |
 | GET | /artifacts/:artifactId/content | 200 / 206 | Artifactファイルを配信 |
 | DELETE | /artifacts/:artifactId | 204 | 生成済み出力を明示削除 |
-| GET | /voice-adapters | 200 | 登録済みアダプター記述子（`id`・表示名）を取得 |
+| GET | /voice-adapters | 200 | 登録済みアダプター記述子（`id`・表示名・能力）を取得 |
 | GET | /voice-profiles | 200 | アプリ共通のVoice Profile一覧を取得 |
 | POST | /voice-profiles | 201 | Voice Profileを作成 |
 | PATCH | /voice-profiles/:voiceProfileId | 200 | Voice Profileの表示名・声・言語・設定を更新 |
 | DELETE | /voice-profiles/:voiceProfileId | 204 | 未参照のVoice Profileを削除 |
-| GET | /voice-profiles/voices?adapterId=<id> | 200 | 接続中エンジンの声（`voiceId`・表示名・任意の `locale`）を取得（[../tts/spec.md](../tts/spec.md)） |
+| GET | /voice-profiles/voices?adapterId=<id>[&model=<model>] | 200 | 接続中エンジンの声（`voiceId`・表示名・任意の `locale`）を取得。`model` は声がモデル依存のアダプターで使う（[../tts/spec.md](../tts/spec.md)） |
+| GET | /voice-profiles/models?adapterId=<id> | 200 | 接続中エンジンのモデル候補（`models`）を取得。非対応は空配列 |
 | POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/tts-jobs | 202 | 音声が未選択の要点セリフを一括でTTS Jobへ追加。投入Jobと除外セリフを返す（[../tts/spec.md](../tts/spec.md)） |
 | GET | /characters | 200 | キャラクターライブラリの一覧を取得（[../character-library/spec.md](../character-library/spec.md)） |

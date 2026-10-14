@@ -15,6 +15,7 @@ describe("voiceAdapterDescriptors", () => {
     expect(voiceAdapterDescriptors.map((descriptor) => descriptor.id)).toEqual([
       "voicevox",
       "aivisspeech",
+      "openai-compatible",
     ]);
     for (const descriptor of voiceAdapterDescriptors) {
       expect(descriptor.defaultBaseUrl.startsWith("http://127.0.0.1:")).toBe(true);
@@ -23,6 +24,8 @@ describe("voiceAdapterDescriptors", () => {
 
   it("resolves a descriptor by id and rejects unknown ids", () => {
     expect(voiceAdapterDescriptorFor("voicevox").label).toBe("VOICEVOX");
+    expect(voiceAdapterDescriptorFor("openai-compatible").voiceSelection).toBe("list-or-manual");
+    expect(voiceAdapterDescriptorFor("openai-compatible").defaultLocale).toBeNull();
     expect(() => voiceAdapterDescriptorFor("other")).toThrow();
   });
 });
@@ -38,10 +41,17 @@ describe("voiceIdSchema", () => {
 });
 
 describe("voiceProfileExtrasSchema", () => {
-  it("accepts empty extras for both adapters", () => {
+  it("accepts empty extras for the local adapters", () => {
     expect(voiceProfileExtrasSchema.safeParse({}).success).toBe(true);
     expect(voiceProfileExtrasSchemaFor("voicevox").safeParse({}).success).toBe(true);
     expect(voiceProfileExtrasSchemaFor("aivisspeech").safeParse({}).success).toBe(true);
+  });
+
+  it("requires a model for the openai-compatible adapter", () => {
+    expect(voiceProfileExtrasSchemaFor("openai-compatible").safeParse({ model: "kokoro" }).success).toBe(
+      true,
+    );
+    expect(voiceProfileExtrasSchemaFor("openai-compatible").safeParse({}).success).toBe(false);
   });
 
   it("rejects unknown keys", () => {
@@ -77,6 +87,15 @@ describe("createVoiceProfileRequestSchema", () => {
         voiceId: "uuid-aivis:-1",
         locale: "ja-JP",
         settings: {},
+      }).success,
+    ).toBe(true);
+    expect(
+      createVoiceProfileRequestSchema.safeParse({
+        name: "Kokoro",
+        adapterId: "openai-compatible",
+        voiceId: "af_heart",
+        locale: "en-US",
+        settings: { model: "kokoro" },
       }).success,
     ).toBe(true);
   });

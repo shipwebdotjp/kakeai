@@ -14,6 +14,7 @@ import type {
   CreateVoiceProfileRequest,
   FaceSet,
   Job,
+  ModelList,
   ScriptVersion,
   ScriptVersionPreview,
   ScriptVersionSummary,
@@ -467,16 +468,33 @@ export function useVoiceAdapters() {
   });
 }
 
-export function useAdapterVoices(adapterId: VoiceAdapterId | undefined) {
+export function useAdapterVoices(adapterId: VoiceAdapterId | undefined, model?: string) {
+  const normalizedModel = model === undefined || model.trim().length === 0 ? "" : model.trim();
   return useQuery({
-    queryKey: ["adapter-voices", adapterId],
+    queryKey: ["adapter-voices", adapterId, normalizedModel],
+    enabled: adapterId !== undefined,
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const params = new URLSearchParams({ adapterId: adapterId ?? "" });
+      if (normalizedModel.length > 0) {
+        params.set("model", normalizedModel);
+      }
+      return (await apiRequest<VoiceList>(`/voice-profiles/voices?${params.toString()}`)).data;
+    },
+  });
+}
+
+export function useVoiceModels(adapterId: VoiceAdapterId | undefined) {
+  return useQuery({
+    queryKey: ["adapter-models", adapterId],
     enabled: adapterId !== undefined,
     retry: false,
     staleTime: 60_000,
     queryFn: async () =>
       (
-        await apiRequest<VoiceList>(
-          `/voice-profiles/voices?adapterId=${encodeURIComponent(adapterId ?? "")}`,
+        await apiRequest<ModelList>(
+          `/voice-profiles/models?adapterId=${encodeURIComponent(adapterId ?? "")}`,
         )
       ).data,
   });
@@ -485,7 +503,7 @@ export function useAdapterVoices(adapterId: VoiceAdapterId | undefined) {
 export function useAdapterVoicesMap(): Record<VoiceAdapterId, AdapterVoicesState> {
   const results = useQueries({
     queries: voiceAdapterIdSchema.options.map((adapterId) => ({
-      queryKey: ["adapter-voices", adapterId],
+      queryKey: ["adapter-voices", adapterId, ""],
       retry: false,
       staleTime: 60_000,
       queryFn: async () =>

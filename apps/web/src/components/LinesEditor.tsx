@@ -11,6 +11,7 @@ import {
   MAX_TTS_SPEECH_TEXT_LENGTH,
   MAX_TTS_SPEED_SCALE,
   MIN_TTS_SPEED_SCALE,
+  voiceAdapterDescriptorFor,
   type FaceSet,
   type VoiceAdapterId,
   type VoiceProfile,
@@ -241,6 +242,7 @@ function LineEditor({
   const [speedScale, setSpeedScale] = useState(1);
   const [autoPlayToken, setAutoPlayToken] = useState(0);
   const autoPlayTakeIdRef = useRef<string | null>(null);
+  const manualProfileRef = useRef<string | null>(null);
 
   const speaker = speakers.find((entry) => entry.id === line.speakerId);
   const characterId = speaker?.characterId ?? null;
@@ -266,14 +268,26 @@ function LineEditor({
   const adapterName = profile === undefined ? "" : adapterLabel(profile.adapterId);
   const listedVoices = adapterState?.voices;
   const voices = listedVoices ?? [];
+  const manualVoice =
+    profile !== undefined &&
+    voiceAdapterDescriptorFor(profile.adapterId).voiceSelection === "list-or-manual";
   const effectiveVoiceId = voiceId ?? profile?.voiceId ?? null;
   const voice = voices.find((entry) => entry.voiceId === effectiveVoiceId);
 
   useEffect(() => {
     if (profile === undefined) {
+      manualProfileRef.current = null;
       setVoiceId(null);
       return;
     }
+    if (manualVoice) {
+      if (manualProfileRef.current !== profile.id) {
+        manualProfileRef.current = profile.id;
+        setVoiceId(profile.voiceId);
+      }
+      return;
+    }
+    manualProfileRef.current = null;
     setVoiceId((previous) => {
       if (previous !== null && voices.some((entry) => entry.voiceId === previous)) {
         return previous;
@@ -282,7 +296,7 @@ function LineEditor({
         ? profile.voiceId
         : (voices[0]?.voiceId ?? null);
     });
-  }, [profile?.id, profile?.voiceId, listedVoices]);
+  }, [profile?.id, profile?.voiceId, listedVoices, manualVoice]);
 
   useEffect(() => {
     setSpeedScale(1);
@@ -383,7 +397,12 @@ function LineEditor({
     }
     const policy = generatedTakePolicy("individual");
     generate.mutate(
-      { narrationSegmentId: line.id, voiceId: effectiveVoiceId, speedScale, speechText: line.speechText },
+      {
+        narrationSegmentId: line.id,
+        voiceId: effectiveVoiceId.trim(),
+        speedScale,
+        speechText: line.speechText,
+      },
       {
         onSuccess: (result) => {
           const takeId = addTake(result.assetId, result.durationMs, "tts", policy.select);
@@ -570,7 +589,7 @@ function LineEditor({
           <p className={errorTextClass}>
             {adapterName} ENGINE に接続できません。起動しているか確認してください。
           </p>
-        ) : voice === undefined ? (
+        ) : !manualVoice && voice === undefined ? (
           <p className={errorTextClass}>
             声プロファイルの声が {adapterName} ENGINE に見つかりません。
           </p>
@@ -578,19 +597,40 @@ function LineEditor({
           <div className="flex flex-wrap items-center gap-3">
             <label className="inline-flex items-center gap-1.5">
               声
-              <select
-                className={textFieldClass}
-                value={effectiveVoiceId ?? ""}
-                onChange={(event) => {
-                  setVoiceId(event.target.value === "" ? null : event.target.value);
-                }}
-              >
-                {voices.map((entry) => (
-                  <option key={entry.voiceId} value={entry.voiceId}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
+              {manualVoice ? (
+                <>
+                  <input
+                    className={textFieldClass}
+                    list={`line-voice-${line.id}`}
+                    value={effectiveVoiceId ?? ""}
+                    onChange={(event) => {
+                      const next = event.target.value.trim();
+                      setVoiceId(next.length === 0 ? null : next);
+                    }}
+                  />
+                  <datalist id={`line-voice-${line.id}`}>
+                    {voices.map((entry) => (
+                      <option key={entry.voiceId} value={entry.voiceId}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <select
+                  className={textFieldClass}
+                  value={effectiveVoiceId ?? ""}
+                  onChange={(event) => {
+                    setVoiceId(event.target.value === "" ? null : event.target.value);
+                  }}
+                >
+                  {voices.map((entry) => (
+                    <option key={entry.voiceId} value={entry.voiceId}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
             <label className="inline-flex items-center gap-1.5">
               話速

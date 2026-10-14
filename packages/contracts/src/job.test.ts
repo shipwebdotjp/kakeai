@@ -58,6 +58,7 @@ describe("jobInputSnapshotSchema", () => {
       voiceProfileId: "vp_1",
       adapterId: "voicevox",
       voice: { voiceId: "uuid-1:3" },
+      settings: {},
       speedScale: 1,
       speechText: "こんにちは",
       engineVersion: "0.19.0",
@@ -79,9 +80,30 @@ describe("jobInputSnapshotSchema", () => {
       adapterId: "aivisspeech",
       voice: { voiceId: "uuid-aivis:-1" },
       voiceName: "ノーマル",
+      settings: {},
       speedScale: 1,
       speechText: "こんにちは",
       engineVersion: "1.0.0",
+    };
+    expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
+  it("accepts an openai-compatible snapshot with model settings", () => {
+    const snapshot = {
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      kind: "tts",
+      scriptVersionId: "scr_001",
+      narrationSegmentId: "line-p1-1",
+      languageEditionId: "led_en",
+      workId: "wrk_1",
+      speakerId: "speaker-narrator",
+      voiceProfileId: "vp_1",
+      adapterId: "openai-compatible",
+      voice: { voiceId: "af_heart" },
+      settings: { model: "kokoro" },
+      speedScale: 1,
+      speechText: "Hello",
+      engineVersion: null,
     };
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });

@@ -14,6 +14,20 @@ export interface VoiceProfilesRouterDependencies {
   config: AppConfig;
 }
 
+function adapterIdQuery(raw: unknown): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== "string" || value.length === 0) {
+    throw validationError([
+      {
+        path: ["adapterId"],
+        code: "invalid_value",
+        message: "adapterId が必要です。",
+      },
+    ]);
+  }
+  return value;
+}
+
 export function createVoiceProfilesRouter(
   dependencies: VoiceProfilesRouterDependencies,
 ): Router {
@@ -30,18 +44,31 @@ export function createVoiceProfilesRouter(
   router.get(
     "/voice-profiles/voices",
     asyncHandler(async (req, res) => {
-      const raw = req.query.adapterId;
-      const value = Array.isArray(raw) ? raw[0] : raw;
-      if (typeof value !== "string" || value.length === 0) {
-        throw validationError([
-          {
-            path: ["adapterId"],
-            code: "invalid_value",
-            message: "adapterId が必要です。",
-          },
-        ]);
-      }
-      sendData(res, 200, await voiceProfiles.listAdapterVoices(config, voiceProfiles.parseAdapterId(value)));
+      const rawModel = req.query.model;
+      const model = Array.isArray(rawModel) ? rawModel[0] : rawModel;
+      sendData(
+        res,
+        200,
+        await voiceProfiles.listAdapterVoices(
+          config,
+          voiceProfiles.parseAdapterId(adapterIdQuery(req.query.adapterId)),
+          typeof model === "string" ? model : undefined,
+        ),
+      );
+    }),
+  );
+
+  router.get(
+    "/voice-profiles/models",
+    asyncHandler(async (req, res) => {
+      sendData(
+        res,
+        200,
+        await voiceProfiles.listAdapterModels(
+          config,
+          voiceProfiles.parseAdapterId(adapterIdQuery(req.query.adapterId)),
+        ),
+      );
     }),
   );
 

@@ -193,6 +193,16 @@ async function createAivisProfile(): Promise<VoiceProfile> {
   });
 }
 
+async function createOpenAiProfile(): Promise<VoiceProfile> {
+  return voiceProfiles.createVoiceProfile(prisma, {
+    name: "Kokoro",
+    adapterId: "openai-compatible",
+    voiceId: "af_heart",
+    locale: "en-US",
+    settings: { model: "kokoro" },
+  });
+}
+
 async function createLineVersion(voiceProfileId: string): Promise<string> {
   const work = await works.createWork(prisma, `TTS作品-${Date.now()}-${Math.random()}`, "ja-JP");
   const edition = work.languageEditions[0]!;
@@ -286,6 +296,7 @@ beforeAll(async () => {
     throw new Error("mock server did not bind");
   }
   config.voiceBaseUrls.voicevox = `http://127.0.0.1:${address.port}`;
+  config.voiceBaseUrls["openai-compatible"] = `http://127.0.0.1:${address.port}`;
 
   aivisServer = createServer(handleAivisMock);
   await new Promise<void>((resolve) => aivisServer.listen(0, "127.0.0.1", resolve));
@@ -325,8 +336,27 @@ describe("voice profiles", () => {
   it("lists the registered adapters", () => {
     expect(voiceProfiles.listVoiceAdapters()).toEqual({
       adapters: [
-        { id: "voicevox", label: "VOICEVOX" },
-        { id: "aivisspeech", label: "AivisSpeech" },
+        {
+          id: "voicevox",
+          label: "VOICEVOX",
+          defaultLocale: "ja-JP",
+          voiceSelection: "list",
+          modelSelection: false,
+        },
+        {
+          id: "aivisspeech",
+          label: "AivisSpeech",
+          defaultLocale: "ja-JP",
+          voiceSelection: "list",
+          modelSelection: false,
+        },
+        {
+          id: "openai-compatible",
+          label: "OpenAI互換",
+          defaultLocale: null,
+          voiceSelection: "list-or-manual",
+          modelSelection: true,
+        },
       ],
     });
   });
@@ -445,6 +475,27 @@ describe("tts job", () => {
     expect(asset.originalFilename).toBe(
       "tts-aivisspeech-ナレーター-Aivis話者（ノーマル）-1.25x-line-tts.wav",
     );
+  });
+
+  it("queues a manual voice for a list-or-manual adapter", async () => {
+    const profile = await createOpenAiProfile();
+    const scriptVersionId = await createLineVersion(profile.id);
+    const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
+      voiceId: "af_heart",
+      speedScale: SPEED,
+    });
+    expect(job.kind).toBe("tts");
+    expect(job.status).toBe("queued");
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = JSON.parse(row.inputSnapshotJson) as {
+      adapterId?: string;
+      settings?: unknown;
+      voice?: { voiceId?: string };
+    };
+    expect(snapshot.adapterId).toBe("openai-compatible");
+    expect(snapshot.settings).toEqual({ model: "kokoro" });
+    expect(snapshot.voice?.voiceId).toBe("af_heart");
+    await jobs.cancelJob(prisma, job.id);
   });
 
   it("reuses an existing asset for identical bytes", async () => {
@@ -757,6 +808,7 @@ describe("buildTtsFilename", () => {
     adapterId: "aivisspeech",
     voice: { voiceId: "uuid-1:-1" },
     voiceName: "ノーマル",
+    settings: {},
     speedScale: 1,
     speechText: "こんにちは",
     engineVersion: "1.0.0",

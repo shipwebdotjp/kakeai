@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   DEFAULT_VOICE_ADAPTER_ID,
+  SUPPORTED_LOCALES,
   localeSchema,
   voiceAdapterDescriptors,
   voiceAdapterIdSchema,
@@ -8,6 +9,7 @@ import {
   type VoiceAdapterId,
   type VoiceAdapterSummary,
   type VoiceProfile,
+  type VoiceProfileExtras,
 } from "@kakeai/contracts";
 import {
   useAdapterVoices,
@@ -15,10 +17,11 @@ import {
   useDeleteVoiceProfile,
   useUpdateVoiceProfile,
   useVoiceAdapters,
+  useVoiceModels,
   useVoiceProfiles,
 } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
-import { adapterLabel, voiceLocale } from "../lib/voiceAdapters";
+import { adapterLabel } from "../lib/voiceAdapters";
 import {
   buttonDangerClass,
   buttonPrimaryClass,
@@ -29,6 +32,14 @@ import {
 
 function findVoice(voices: TtsVoice[], voiceId: string): TtsVoice | undefined {
   return voices.find((voice) => voice.voiceId === voiceId);
+}
+
+function profileModel(profile: VoiceProfile | undefined): string {
+  if (profile === undefined) {
+    return "";
+  }
+  const settings = profile.settings as { model?: unknown };
+  return typeof settings.model === "string" ? settings.model : "";
 }
 
 interface ProfileFormProps {
@@ -45,25 +56,41 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
   );
   const [name, setName] = useState(profile?.name ?? "");
   const [voiceId, setVoiceId] = useState(profile?.voiceId ?? "");
+  const [model, setModel] = useState(profileModel(profile));
+  const [debouncedModel, setDebouncedModel] = useState(profileModel(profile));
+  const [locale, setLocale] = useState<string>(profile?.locale ?? SUPPORTED_LOCALES[0]);
 
   const activeAdapterId = profile?.adapterId ?? adapterId;
-  const voicesQuery = useAdapterVoices(activeAdapterId);
-  const voices = voicesQuery.data?.voices ?? [];
+  const descriptor = adapters.find((entry) => entry.id === activeAdapterId);
+  const modelSelection = descriptor?.modelSelection ?? false;
+  const manualVoice = descriptor?.voiceSelection === "list-or-manual";
   const adapterName = adapterLabel(activeAdapterId, adapters);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedModel(model), 400);
+    return () => clearTimeout(timer);
+  }, [model]);
+
+  const modelsQuery = useVoiceModels(modelSelection ? activeAdapterId : undefined);
+  const voicesQuery = useAdapterVoices(activeAdapterId, modelSelection ? debouncedModel : undefined);
+  const voices = voicesQuery.data?.voices ?? [];
+  const models = modelsQuery.data?.models ?? [];
 
   useEffect(() => {
     if (profile !== undefined) {
       return;
     }
     setVoiceId("");
+    setModel("");
+    setDebouncedModel("");
   }, [adapterId, profile]);
 
   useEffect(() => {
-    if (profile === undefined && voiceId.length === 0 && voices.length > 0) {
-      const first = voices[0]!;
-      setVoiceId(first.voiceId);
+    if (profile !== undefined || manualVoice || voiceId.length > 0 || voices.length === 0) {
+      return;
     }
-  }, [profile, voiceId, voices]);
+    setVoiceId(voices[0]!.voiceId);
+  }, [profile, manualVoice, voiceId, voices]);
 
   useEffect(() => {
     if (profile === undefined) {
@@ -71,37 +98,60 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
     }
     setName(profile.name);
     setVoiceId(profile.voiceId);
+    setModel(profileModel(profile));
+    setDebouncedModel(profileModel(profile));
+    setLocale(profile.locale);
   }, [profile?.id, profile?.updatedAt]);
 
   const voice = findVoice(voices, voiceId);
   const voicesLoaded = voicesQuery.isSuccess;
   const declaredLocale =
-    voice === undefined ? profile?.locale : voiceLocale(voice, activeAdapterId);
-  const locale = localeSchema.safeParse(declaredLocale).data ?? "";
-  const staleVoice = voicesLoaded && voiceId.length > 0 && voice === undefined;
+    voice?.locale ?? descriptor?.defaultLocale ?? (locale.length > 0 ? locale : undefined);
+  const effectiveLocale = localeSchema.safeParse(declaredLocale).data ?? "";
+  const localeLocked = descriptor?.defaultLocale !== null && descriptor?.defaultLocale !== undefined;
+  const staleVoice = !manualVoice && voicesLoaded && voiceId.length > 0 && voice === undefined;
   const mutation = profile === undefined ? create : update;
   const pending = mutation.isPending;
   const voiceUnchanged = profile !== undefined && voiceId === profile.voiceId;
+  const modelMissing = modelSelection && model.trim().length === 0;
+  const modelPending = modelSelection && model.trim() !== debouncedModel.trim();
   const saveBlocked =
     pending ||
-    locale === "" ||
+    effectiveLocale === "" ||
+    modelMissing ||
+    modelPending ||
     (voicesLoaded && staleVoice) ||
-    (!voicesLoaded && !voiceUnchanged);
+    (!manualVoice && !voicesLoaded && !voiceUnchanged);
 
   const save = () => {
     const trimmed = name.trim();
-    if (trimmed.length === 0 || voiceId.length === 0 || saveBlocked) {
+    if (trimmed.length === 0 || voiceId.trim().length === 0 || saveBlocked) {
       return;
     }
+    const settings: VoiceProfileExtras = modelSelection ? { model: model.trim() } : {};
+    const trimmedVoiceId = voiceId.trim();
     if (profile === undefined) {
       create.mutate(
-        { name: trimmed, adapterId, voiceId, locale, settings: {} },
+        {
+          name: trimmed,
+          adapterId,
+          voiceId: trimmedVoiceId,
+          locale: effectiveLocale,
+          settings,
+        },
         { onSuccess: () => setName("") },
       );
     } else {
-      update.mutate({ id: profile.id, input: { name: trimmed, voiceId, locale, settings: {} } });
+      update.mutate({
+        id: profile.id,
+        input: { name: trimmed, voiceId: trimmedVoiceId, locale: effectiveLocale, settings },
+      });
     }
   };
+
+  const instanceId = useId();
+  const voiceDatalistId = `voice-options-${activeAdapterId}-${instanceId}`;
+  const modelDatalistId = `model-options-${activeAdapterId}-${instanceId}`;
 
   return (
     <section className="my-4 rounded-lg border border-border p-4">
@@ -151,24 +201,76 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
             <span className={metaTextClass}>{adapterName}</span>
           )}
         </label>
+        {modelSelection && (
+          <label className="inline-flex items-center gap-1.5">
+            モデル
+            <input
+              value={model}
+              list={modelDatalistId}
+              placeholder="例: kokoro"
+              className={textFieldClass}
+              onChange={(event) => setModel(event.target.value)}
+            />
+            <datalist id={modelDatalistId}>
+              {models.map((entry) => (
+                <option key={entry} value={entry} />
+              ))}
+            </datalist>
+          </label>
+        )}
         <label className="inline-flex items-center gap-1.5">
           声
-          <select
-            className={textFieldClass}
-            value={voiceId}
-            disabled={voices.length === 0}
-            onChange={(event) => setVoiceId(event.target.value)}
-          >
-            <option value="">選択してください</option>
-            {voices.map((entry) => (
-              <option key={entry.voiceId} value={entry.voiceId}>
-                {entry.name}
-              </option>
-            ))}
-          </select>
+          {manualVoice ? (
+            <>
+              <input
+                value={voiceId}
+                list={voiceDatalistId}
+                placeholder="例: af_heart"
+                className={textFieldClass}
+                onChange={(event) => setVoiceId(event.target.value)}
+              />
+              <datalist id={voiceDatalistId}>
+                {voices.map((entry) => (
+                  <option key={entry.voiceId} value={entry.voiceId}>
+                    {entry.name}
+                  </option>
+                ))}
+              </datalist>
+            </>
+          ) : (
+            <select
+              className={textFieldClass}
+              value={voiceId}
+              disabled={voices.length === 0}
+              onChange={(event) => setVoiceId(event.target.value)}
+            >
+              <option value="">選択してください</option>
+              {voices.map((entry) => (
+                <option key={entry.voiceId} value={entry.voiceId}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
+        {!localeLocked && (
+          <label className="inline-flex items-center gap-1.5">
+            言語
+            <select
+              className={textFieldClass}
+              value={locale}
+              onChange={(event) => setLocale(event.target.value)}
+            >
+              {SUPPORTED_LOCALES.map((entry) => (
+                <option key={entry} value={entry}>
+                  {entry}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className={metaTextClass}>
-          言語: {locale.length > 0 ? locale : "未確定（声を選んでください）"}
+          言語: {effectiveLocale.length > 0 ? effectiveLocale : "未確定"}
         </span>
         <button
           type="button"
@@ -182,20 +284,26 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
       {profile !== undefined && <p className={metaTextClass}>{profile.id}</p>}
       {voicesQuery.isError && (
         <p className={errorTextClass}>
-          {adapterName} ENGINE に接続できません。起動しているか確認してください。
+          {adapterName} に接続できません。起動しているか確認してください。
         </p>
       )}
       {voicesQuery.isLoading && (
-        <p className={metaTextClass}>{adapterName} ENGINE から声の一覧を読み込み中…</p>
+        <p className={metaTextClass}>{adapterName} から声の一覧を読み込み中…</p>
       )}
-      {voicesQuery.isSuccess && voices.length === 0 && (
+      {!manualVoice && voicesQuery.isSuccess && voices.length === 0 && (
         <p className={errorTextClass}>
-          {adapterName} ENGINE に利用できる声がありません。音声モデルを確認してください。
+          {adapterName} に利用できる声がありません。音声モデルを確認してください。
         </p>
+      )}
+      {manualVoice && modelMissing && (
+        <p className={metaTextClass}>利用するモデルを入力してください。</p>
+      )}
+      {manualVoice && !modelMissing && voices.length === 0 && (
+        <p className={metaTextClass}>声の候補を取得できないため、声は直接入力してください。</p>
       )}
       {staleVoice && (
         <p className={errorTextClass}>
-          保存された声が現在の {adapterName} ENGINE に見つかりません。声を選び直してください。
+          保存された声が現在の {adapterName} に見つかりません。声を選び直してください。
         </p>
       )}
       {mutation.isError && <p className={errorTextClass}>{errorMessage(mutation.error)}</p>}
@@ -207,9 +315,15 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
 export function VoiceProfilesPage() {
   const profiles = useVoiceProfiles();
   const adapters = useVoiceAdapters();
-  const adapterOptions =
+  const adapterOptions: VoiceAdapterSummary[] =
     adapters.data?.adapters ??
-    voiceAdapterDescriptors.map((descriptor) => ({ id: descriptor.id, label: descriptor.label }));
+    voiceAdapterDescriptors.map((descriptor) => ({
+      id: descriptor.id,
+      label: descriptor.label,
+      defaultLocale: descriptor.defaultLocale,
+      voiceSelection: descriptor.voiceSelection,
+      modelSelection: descriptor.modelSelection,
+    }));
 
   return (
     <section>

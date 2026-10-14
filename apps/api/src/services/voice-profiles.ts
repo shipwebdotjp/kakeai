@@ -1,11 +1,13 @@
 import {
   localeSchema,
+  voiceAdapterDescriptorFor,
   voiceAdapterDescriptors,
   voiceAdapterIdSchema,
   voiceProfileExtrasSchemaFor,
   type ContentDocument,
   type CreateVoiceProfileRequest,
   type UpdateVoiceProfileRequest,
+  type ModelList,
   type VoiceAdapterId,
   type VoiceAdapterList,
   type VoiceList,
@@ -25,6 +27,9 @@ export function listVoiceAdapters(): VoiceAdapterList {
     adapters: voiceAdapterDescriptors.map((descriptor) => ({
       id: descriptor.id,
       label: descriptor.label,
+      defaultLocale: descriptor.defaultLocale,
+      voiceSelection: descriptor.voiceSelection,
+      modelSelection: descriptor.modelSelection,
     })),
   };
 }
@@ -190,14 +195,57 @@ export function parseAdapterId(value: string): VoiceAdapterId {
   return parsed.data;
 }
 
+function voiceQuerySettings(
+  adapterId: VoiceAdapterId,
+  model: string | undefined,
+): VoiceProfileExtras | null {
+  if (
+    model === undefined ||
+    model.trim().length === 0 ||
+    !voiceAdapterDescriptorFor(adapterId).modelSelection
+  ) {
+    return null;
+  }
+  const parsed = voiceProfileExtrasSchemaFor(adapterId).safeParse({ model: model.trim() });
+  if (!parsed.success) {
+    throw validationError([
+      { path: ["model"], code: "invalid_value", message: "model が不正です。" },
+    ]);
+  }
+  return parsed.data;
+}
+
 export async function listAdapterVoices(
   config: AppConfig,
   adapterId: VoiceAdapterId,
+  model?: string,
 ): Promise<VoiceList> {
   const adapter = getTtsAdapter(adapterId);
   try {
-    const listing = await adapter.listVoices({ baseUrl: resolveVoiceBaseUrl(config, adapterId) });
+    const listing = await adapter.listVoices(
+      { baseUrl: resolveVoiceBaseUrl(config, adapterId) },
+      { settings: voiceQuerySettings(adapterId, model) },
+    );
     return { adapterId, voices: listing.voices };
+  } catch (error) {
+    if (error instanceof TtsEngineUnavailableError) {
+      throw new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
+    }
+    throw error;
+  }
+}
+
+export async function listAdapterModels(
+  config: AppConfig,
+  adapterId: VoiceAdapterId,
+): Promise<ModelList> {
+  const adapter = getTtsAdapter(adapterId);
+  if (adapter.listModels === undefined) {
+    return { adapterId, models: [] };
+  }
+  try {
+    const models = await adapter.listModels({ baseUrl: resolveVoiceBaseUrl(config, adapterId) });
+    return { adapterId, models };
   } catch (error) {
     if (error instanceof TtsEngineUnavailableError) {
       throw new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
