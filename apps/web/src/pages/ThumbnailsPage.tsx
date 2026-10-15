@@ -206,7 +206,7 @@ function ThumbnailPreviewFrame({ html }: { html: string | null }) {
           ) : (
             <iframe
               title="サムネイルプレビュー"
-              sandbox=""
+              sandbox="allow-same-origin"
               srcDoc={html}
               className="h-[720px] w-[1280px] border-0"
             />

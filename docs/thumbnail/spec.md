@@ -61,7 +61,7 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 ## 描画
 
 - 描画は `packages/video` にサムネイル用コンパイラを追加し、サムネイル文書・テンプレート・Theme から静止画 HTML（1280x720）を生成する。レンダーと同様、検証済みJSONだけから HTML を派生させ、任意 HTML を実行しない。
-- プレビューは、未保存の編集中入力に対するコンパイル済み HTML をデバウンスして取得し、sandbox の iframe で表示する（テーマ編集のライブプレビューと同じ方式）。
+- プレビューは、未保存の編集中入力に対するコンパイル済み HTML をデバウンスして取得し、同一origin の `srcDoc` iframe で表示する。iframe は `sandbox="allow-same-origin"`（スクリプトは実行しない）とし、不透明originになる sandbox で実行しない。これにより HTML 内の写真（`/api/v1/assets/:id/render-content`）のリクエストが同一originとなり、メディアセッション Cookie で認可される（[../mvp/api-contract.md](../mvp/api-contract.md)）。
 - PNG（1280x720）は保存済み候補からオンデマンド生成する。管理下の Chrome とフォントでコンパイル済み HTML をラスタライズして返す。Job を作らない。
 - コンパイルや PNG 生成は、テンプレート未対応・入力不正・素材欠損・Theme未解決などの理由で失敗しうる。失敗は JSON エラー契約で返す。
 
