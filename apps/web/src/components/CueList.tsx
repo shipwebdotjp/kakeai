@@ -179,7 +179,7 @@ function CueRow({
       )}
 
       {styleFields.length > 0 && (
-        <Collapsible title="文字スタイル">
+        <Collapsible title="文字スタイル" storageKey={`cue-style-${cue.id}`}>
           <p className={metaTextClass}>
             未指定の項目はテーマ（{DEFAULT_VISUAL_THEME_REF.id}@{DEFAULT_VISUAL_THEME_REF.version}）の役割別スタイルで描画されます
           </p>
@@ -187,7 +187,7 @@ function CueRow({
         </Collapsible>
       )}
 
-      <Collapsible title="表示の詳細" summary={displaySummary}>
+      <Collapsible title="表示の詳細" summary={displaySummary} storageKey={`cue-display-${cue.id}`}>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5">
             レイヤー

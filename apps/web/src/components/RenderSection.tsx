@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect } from "react";
 import type { Job } from "@kakeai/contracts";
 import { scriptSubtitlesUrl } from "../api/client";
 import { useCancelJob, useCreateRenderJob, useWorkJobs } from "../api/hooks";
@@ -13,7 +13,7 @@ import {
   errorTextClass,
   metaTextClass,
 } from "../ui";
-import { Collapsible } from "./Collapsible";
+import { Collapsible, useStoredCollapsible } from "./Collapsible";
 
 const STATUS_BADGE_CLASS: Record<Job["status"], string> = {
   queued: badgeWarningClass,
@@ -51,13 +51,13 @@ export const RenderSection = memo(function RenderSection({
   const active = (jobs.data ?? []).some(
     (job) => job.status === "queued" || job.status === "running",
   );
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useStoredCollapsible("render-history", false);
 
   useEffect(() => {
     if (active) {
       setHistoryOpen(true);
     }
-  }, [active]);
+  }, [active, setHistoryOpen]);
 
   return (
     <section className="mt-8">

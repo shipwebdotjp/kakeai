@@ -27,6 +27,7 @@ interface StandingFieldsProps {
   register: UseFormRegister<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
+  sceneId: string;
   characters: CharacterFormValue[];
 }
 
@@ -37,6 +38,7 @@ export function StandingFields({
   register,
   setValue,
   sceneIndex,
+  sceneId,
   characters,
 }: StandingFieldsProps) {
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.standings` });
@@ -137,6 +139,7 @@ export function StandingFields({
               <Collapsible
                 title="表示の調整"
                 summary={`倍率 ${scale} / 入場 ${PRESET_LABELS[enterPreset] ?? enterPreset} / 退場 ${PRESET_LABELS[exitPreset] ?? exitPreset}`}
+                storageKey={`standing-${sceneId}-${side}`}
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="inline-flex items-center gap-1.5">

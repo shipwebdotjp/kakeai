@@ -48,7 +48,7 @@ import {
   metaTextClass,
   textFieldClass,
 } from "../ui";
-import { Collapsible } from "./Collapsible";
+import { Collapsible, useStoredCollapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { TakeAudioPlayer } from "./TakeAudioPlayer";
 
@@ -440,13 +440,13 @@ function LineEditor({
         adapterState.failed ||
         (!manualVoice && voice === undefined)));
   const audioSummary = takes.length === 0 ? "音声なし" : `候補 ${takes.length}件`;
-  const [audioOpen, setAudioOpen] = useState(false);
+  const [audioOpen, setAudioOpen] = useStoredCollapsible(`line-audio-${line.id}`, false);
 
   useEffect(() => {
     if (audioNeedsAttention) {
       setAudioOpen(true);
     }
-  }, [audioNeedsAttention]);
+  }, [audioNeedsAttention, setAudioOpen]);
 
   return (
     <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">

@@ -72,7 +72,7 @@ import {
   textFieldClass,
 } from "../ui";
 import { CharacterFields } from "./CharacterFields";
-import { Collapsible } from "./Collapsible";
+import { Collapsible, useStoredCollapsible } from "./Collapsible";
 import { CueList } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
@@ -297,13 +297,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     append: appendCharacter,
     remove: removeCharacter,
   } = useFieldArray({ control, name: "characters" });
-  const [charactersOpen, setCharactersOpen] = useState(characterFields.length === 0);
+  const [charactersOpen, setCharactersOpen] = useStoredCollapsible(
+    "characters",
+    characterFields.length === 0,
+  );
 
   useEffect(() => {
     if (characterFields.length === 0) {
       setCharactersOpen(true);
     }
-  }, [characterFields.length]);
+  }, [characterFields.length, setCharactersOpen]);
   const watchedScenesValue = useWatch({ control, name: "scenes" });
   const watchedScenes = useMemo(() => watchedScenesValue ?? [], [watchedScenesValue]);
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
@@ -804,6 +807,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
       <Collapsible
         title="テーマ（Visual Theme）"
+        storageKey="theme"
         summary={(() => {
           const themeId = allValues?.visualTheme?.id;
           const themeVersion = allValues?.visualTheme?.version;
@@ -851,6 +855,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
       <Collapsible
         title="BGM（作品全体）"
+        storageKey="bgm"
         summary={
           watchedBgm?.assetId === null || watchedBgm?.assetId === undefined
             ? "未設定"
@@ -1019,7 +1024,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               )}
             </div>
 
-            <Collapsible title="シーン設定" summary={sceneSettingsSummary(scene, sceneIndex)}>
+            <Collapsible title="シーン設定" summary={sceneSettingsSummary(scene, sceneIndex)} storageKey={`scene-settings-${scene.id}`}>
               <TimingFields
                 control={control}
                 register={register}
@@ -1028,7 +1033,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                 sceneKind={scene.kind}
               />
 
-              <Collapsible title="尺の内訳" className="mt-1 text-xs">
+              <Collapsible title="尺の内訳" className="mt-1 text-xs" storageKey={`scene-duration-${scene.id}`}>
                 {(() => {
                   const placement = placementBySceneId.get(scene.id);
                   if (placement === undefined) {
@@ -1070,6 +1075,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               register={register}
               setValue={setValue}
               sceneIndex={sceneIndex}
+              sceneId={scene.id}
               characters={watchedCharacters}
             />
 

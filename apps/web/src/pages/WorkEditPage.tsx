@@ -6,6 +6,7 @@ import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
+import { CollapsibleStateProvider } from "../components/Collapsible";
 import { errorMessage } from "../lib/errorMessage";
 import { PreviewControllerProvider, usePreviewActions } from "../lib/PreviewController";
 import { useDraftPreview, type UnsavedDocumentState } from "../lib/useDraftPreview";
@@ -346,15 +347,7 @@ export function WorkEditPage() {
   );
 }
 
-function WorkEditPanes({
-  workId,
-  editionId,
-  scriptVersionId,
-  current,
-  onSaved,
-  onDocumentChange,
-  onDirtyChange,
-}: {
+interface WorkEditPanesProps {
   workId: string | undefined;
   editionId: string | undefined;
   scriptVersionId: string | undefined;
@@ -362,7 +355,25 @@ function WorkEditPanes({
   onSaved: (scriptVersion: ScriptVersion) => void;
   onDocumentChange: (state: UnsavedDocumentState) => void;
   onDirtyChange?: (dirty: boolean) => void;
-}) {
+}
+
+function WorkEditPanes(props: WorkEditPanesProps) {
+  return (
+    <CollapsibleStateProvider resetKey={`${props.workId ?? ""}/${props.editionId ?? ""}`}>
+      <WorkEditPanesContent {...props} />
+    </CollapsibleStateProvider>
+  );
+}
+
+function WorkEditPanesContent({
+  workId,
+  editionId,
+  scriptVersionId,
+  current,
+  onSaved,
+  onDocumentChange,
+  onDirtyChange,
+}: WorkEditPanesProps) {
   const actions = usePreviewActions();
   const [formScenes, setFormScenes] = useState<SceneFormValue[] | null>(null);
   const [formSpeakers, setFormSpeakers] = useState<SpeakerFormValue[]>([]);
@@ -576,7 +587,7 @@ function WorkEditPanes({
   const showPreview = wide || view === "preview";
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col">
+      <div ref={containerRef} className="flex min-h-0 flex-1 flex-col">
       {!wide && (
         <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
           <button type="button" className={buttonNeutralClass} onClick={() => setDrawerOpen(true)}>
