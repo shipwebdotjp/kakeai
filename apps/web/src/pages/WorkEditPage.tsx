@@ -38,6 +38,11 @@ import {
   textFieldClass,
 } from "../ui";
 
+function renderDownloadName(title: string, versionNumber: number): string {
+  const base = title.trim().replace(/[\\/:*?"<>|]/g, "_");
+  return `${base.length > 0 ? base : "render"}_v${versionNumber}.mp4`;
+}
+
 function truncateHead(value: string, limit: number): string {
   const head = (value.split("\n")[0] ?? "").trim();
   const chars = Array.from(head);
@@ -337,6 +342,7 @@ export function WorkEditPage() {
         <WorkEditPanes
           workId={workId}
           editionId={editionId}
+          workTitle={title}
           scriptVersionId={scriptVersionId}
           current={current}
           onSaved={onSaved}
@@ -351,6 +357,7 @@ export function WorkEditPage() {
 interface WorkEditPanesProps {
   workId: string | undefined;
   editionId: string | undefined;
+  workTitle: string;
   scriptVersionId: string | undefined;
   current: UseQueryResult<ScriptVersion, Error>;
   onSaved: (scriptVersion: ScriptVersion) => void;
@@ -369,6 +376,7 @@ function WorkEditPanes(props: WorkEditPanesProps) {
 function WorkEditPanesContent({
   workId,
   editionId,
+  workTitle,
   scriptVersionId,
   current,
   onSaved,
@@ -733,7 +741,11 @@ function WorkEditPanesContent({
                   サムネイル
                 </Link>
               </p>
-              <RenderSection workId={workId} scriptVersionId={scriptVersionId ?? current.data.id} />
+              <RenderSection
+                workId={workId}
+                scriptVersionId={scriptVersionId ?? current.data.id}
+                downloadName={renderDownloadName(workTitle, current.data.versionNumber)}
+              />
             </>
           )}
         </aside>

@@ -67,7 +67,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | CompositionVersion | id, compositionId, versionNumber, bundleHash, storageKey, manifest, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、幅、高さ、既定尺、依存一覧を持つ。`contentHash` は任意。`storageKey` はアプリデータルート相対の内部キーであり、参照やURL生成に使わない（絶対パスは返さない）。 |
 | CompositionDraftFiles | entrypoint, files, binaryFiles | draftのentrypointと、bundle相対パスをキーにしたファイル内容のマップ。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列（存在する場合のみ）。seedとAIの更新内容を含む。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
-| Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
+| Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, videoCodec, audioCodec, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。videoCodecとaudioCodecはレンダー時のffprobe結果で、取得できない場合はnull。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
 | VoiceProfile | id, name, adapterId, voiceId, locale, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は登録済みアダプター記述子の ID（作成後は不変）、`voiceId` はアダプター定義の不透明な声 ID、`locale` は声の言語、`settings` はアダプター固有の追加分（OpenAI互換は `{ model }`）。詳細は [../tts/spec.md](../tts/spec.md)。 |
 | VoiceAdapter | id, label, defaultLocale, voiceSelection, modelSelection | 登録済み TTS アダプター記述子。`defaultLocale` は固定言語（無ければnull）、`voiceSelection` は `list` / `list-or-manual`、`modelSelection` はモデル指定の要否。 |
 | TtsVoice | voiceId, name, locale? | 接続中エンジンの声。`voiceId` はアダプター定義の不透明な ID、`locale` は任意の申告言語。 |
@@ -654,6 +654,8 @@ POST /jobs/:jobId/cancel は `status=queued` のJobだけを `cancelled` に遷�
         "widthPx": 1920,
         "heightPx": 1080,
         "fps": 30,
+        "videoCodec": "h264",
+        "audioCodec": "aac",
         "createdAt": "2026-10-08T03:36:14.000Z",
         "contentUrl": "/api/v1/artifacts/art_001/content"
       }

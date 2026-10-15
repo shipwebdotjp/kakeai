@@ -233,6 +233,8 @@ model Artifact {
   widthPx    Int?
   heightPx   Int?
   fps        Float?
+  videoCodec String?
+  audioCodec String?
   createdAt  DateTime @default(now())
 
   @@index([jobId])

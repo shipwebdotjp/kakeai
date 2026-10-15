@@ -252,7 +252,7 @@ export async function processRenderJob(
     let lastReportedPercent = 0;
     try {
       await executeRenderJob(renderJob, projectDir, outputTempPath, (renderState) => {
-        const percent = Math.max(0, Math.min(100, Math.floor(renderState.progress * 100)));
+        const percent = Math.max(0, Math.min(100, Math.round(renderState.progress)));
         if (percent > lastReportedPercent) {
           lastReportedPercent = percent;
           void prisma.job
@@ -293,6 +293,8 @@ export async function processRenderJob(
           widthPx: probe?.widthPx ?? snapshot.output.width,
           heightPx: probe?.heightPx ?? snapshot.output.height,
           fps: snapshot.output.fps,
+          videoCodec: probe?.codec ?? null,
+          audioCodec: probe?.audioCodec ?? null,
         },
       });
       await transaction.job.update({

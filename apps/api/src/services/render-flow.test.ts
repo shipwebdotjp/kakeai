@@ -472,6 +472,8 @@ describe("render worker", () => {
     expect(artifact.role).toBe("render");
     expect(artifact.format).toBe("mp4");
     expect(artifact.durationMs).toBeGreaterThan(0);
+    expect(artifact.videoCodec).not.toBeNull();
+    expect(artifact.audioCodec).not.toBeNull();
 
     const location = await artifacts.resolveArtifactContent(
       prisma,

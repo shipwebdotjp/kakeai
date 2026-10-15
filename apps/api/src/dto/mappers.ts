@@ -218,6 +218,8 @@ export function toArtifact(row: ArtifactRow): Artifact {
     widthPx: row.widthPx,
     heightPx: row.heightPx,
     fps: row.fps,
+    videoCodec: row.videoCodec,
+    audioCodec: row.audioCodec,
     createdAt: toIso(row.createdAt),
     contentUrl: `${API_BASE_PATH}/artifacts/${encodeURIComponent(row.id)}/content`,
   };

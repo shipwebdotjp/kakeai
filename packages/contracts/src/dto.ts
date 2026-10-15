@@ -106,6 +106,8 @@ export const artifactSchema = z.object({
   widthPx: positiveInt.nullable(),
   heightPx: positiveInt.nullable(),
   fps: z.number().finite().positive().nullable(),
+  videoCodec: z.string().min(1).nullable(),
+  audioCodec: z.string().min(1).nullable(),
   createdAt: timestampSchema,
   contentUrl: z.string().min(1),
 });

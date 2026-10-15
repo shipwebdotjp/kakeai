@@ -38,12 +38,85 @@ function JobError({ job }: { job: Job }) {
   return <p className={errorTextClass}>{job.error.message}</p>;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) {
+    return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+  }
+  if (bytes >= 1024 ** 2) {
+    return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+  return `${bytes} B`;
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function ProgressBar({ percent }: { percent: number }) {
+  return (
+    <div
+      className="mt-2 h-1.5 w-full max-w-2xl overflow-hidden rounded-full bg-surface-muted"
+      role="progressbar"
+      aria-valuenow={percent}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className="h-full rounded-full bg-brand-600 transition-all"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  );
+}
+
+function ArtifactMetadata({ artifact }: { artifact: Job["artifacts"][number] }) {
+  const entries: { label: string; value: string }[] = [];
+  if (artifact.widthPx !== null && artifact.heightPx !== null) {
+    entries.push({ label: "解像度", value: `${artifact.widthPx}×${artifact.heightPx}` });
+  }
+  entries.push({ label: "サイズ", value: formatBytes(artifact.byteSize) });
+  if (artifact.durationMs !== null) {
+    entries.push({ label: "長さ", value: formatDuration(artifact.durationMs) });
+  }
+  if (artifact.fps !== null) {
+    entries.push({ label: "フレームレート", value: `${artifact.fps} fps` });
+  }
+  entries.push({ label: "形式", value: artifact.format });
+  if (artifact.videoCodec !== null) {
+    entries.push({ label: "映像コーデック", value: artifact.videoCodec });
+  }
+  if (artifact.audioCodec !== null) {
+    entries.push({ label: "音声コーデック", value: artifact.audioCodec });
+  }
+  return (
+    <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+      {entries.map((entry) => (
+        <div key={entry.label} className="flex gap-1">
+          <dt>{entry.label}</dt>
+          <dd className="font-medium text-foreground">{entry.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export const RenderSection = memo(function RenderSection({
   workId,
   scriptVersionId,
+  downloadName,
 }: {
   workId: string;
   scriptVersionId: string;
+  downloadName: string;
 }) {
   const jobs = useWorkJobs(workId);
   const createRenderJob = useCreateRenderJob(scriptVersionId);
@@ -112,18 +185,30 @@ export const RenderSection = memo(function RenderSection({
                 )}
               </div>
               <JobError job={job} />
+              {job.status === "running" && <ProgressBar percent={job.progressPercent} />}
               {job.status === "succeeded" && job.artifacts.length === 0 && (
                 <p className={metaTextClass}>出力は削除済みです。</p>
               )}
               {job.status === "succeeded" &&
                 job.artifacts.map((artifact) => (
-                  <video
-                    key={artifact.id}
-                    src={artifact.contentUrl}
-                    controls
-                    preload="metadata"
-                    className="mt-2 aspect-video w-full max-w-2xl rounded border border-border bg-black"
-                  />
+                  <div key={artifact.id} className="mt-2 max-w-2xl">
+                    <video
+                      src={artifact.contentUrl}
+                      controls
+                      preload="metadata"
+                      className="aspect-video w-full rounded border border-border bg-black"
+                    />
+                    <ArtifactMetadata artifact={artifact} />
+                    <p className="mt-2">
+                      <a
+                        href={artifact.contentUrl}
+                        download={downloadName}
+                        className={buttonNeutralClass}
+                      >
+                        MP4をダウンロード
+                      </a>
+                    </p>
+                  </div>
                 ))}
             </li>
           ))}
