@@ -15,6 +15,7 @@ import {
   MAX_NESTED_VISUAL_DEPTH,
   fitSchema,
   focalPointSchema,
+  mediaZoomSchema,
   nestedMediaVisualSchema,
   nestedVisualSchema,
   type NestedVisual,
@@ -150,6 +151,7 @@ export const mediaFullBleedInputSchema = z.strictObject({
   assetId: idSchema,
   fit: fitSchema,
   focalPoint: focalPointSchema.optional(),
+  zoom: mediaZoomSchema.optional(),
 });
 
 const mediaFullBleedV1: VisualTemplateDefinition = {
@@ -163,7 +165,7 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
   inputFields: [
     { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
     { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
-    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置" },
+    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
   ],
   collectAssetRefs: (input, path) => {
     const parsed = mediaFullBleedInputSchema.safeParse(input);
@@ -187,6 +189,7 @@ export const mediaCardInputSchema = z.strictObject({
   heading: z.string(),
   caption: z.string().optional(),
   focalPoint: focalPointSchema.optional(),
+  zoom: mediaZoomSchema.optional(),
 });
 
 const mediaCardV1: VisualTemplateDefinition = {
@@ -207,7 +210,7 @@ const mediaCardV1: VisualTemplateDefinition = {
     },
     { kind: "text", key: "heading", label: "見出し" },
     { kind: "optionalText", key: "caption", label: "補足文" },
-    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置" },
+    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
   ],
   collectAssetRefs: (input, path) => {
     const parsed = mediaCardInputSchema.safeParse(input);

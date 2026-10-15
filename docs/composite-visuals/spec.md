@@ -68,8 +68,8 @@ NestedVisual =
 | --- | --- | --- | --- |
 | `text.title@1` | overlay | title, subtitle, anchor? | 対応（inputFieldsで編集） |
 | `text.body@1` | overlay | heading, body | 対応（inputFieldsで編集） |
-| `media.full-bleed@1` | background | assetId, fit, focalPoint? | 対応 |
-| `media.card@1` | card | assetId, heading, caption?, focalPoint? | 対応 |
+| `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom? | 対応 |
+| `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom? | 対応 |
 | `character.standing@1` | standing | characterId, appearanceId, x, y, scale | 読出しのみ |
 | `character.standing@2` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体） |
 | `character.standing@3` | standing | `@2` と同一 | [../face-expression/spec.md](../face-expression/spec.md) で追加。Face Set を持つ外観の表情合成（台詞区間ごと） |
@@ -88,7 +88,7 @@ type TemplateFieldSpec =
   | { kind: "optionalText"; key; label }             // 空なら key を削除
   | { kind: "select"; key; label; options }
   | { kind: "color"; key; label }                    // #RRGGBB を検証
-  | { kind: "mediaCrop"; key; label; zoomKey? }      // 焦点位置（将来は拡大率を併設）
+  | { kind: "mediaCrop"; key; label; zoomKey? }      // 焦点位置と拡大率
   | { kind: "animation"; key; label }                // preset と durationMs
 ```
 
@@ -109,7 +109,7 @@ type TemplateFieldSpec =
 
 - 各Sceneに **Cue一覧** を表示し、追加・削除・レイヤー・順序・表示区間・入場/退場を編集する。
 - テンプレート固有の入力は `inputFields` から生成する。素材はピッカーで画像・動画を選び、色・選択・数値・テキスト・アニメーションを編集する。
-- `mediaCrop` は焦点位置（横・縦）をスライダーで編集し、中央へ戻すと `focalPoint` を省略する。詳細は [../focal-point/spec.md](../focal-point/spec.md) を正とする。
+- `mediaCrop` は焦点位置（横・縦）をスライダーで編集し、中央へ戻すと `focalPoint` を省略する。`zoomKey` を持つ場合は拡大率も編集し、等倍に戻すと `zoom` を省略する。詳細は [../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) を正とする。
 - 「Cueを追加」は編集可能なテンプレート（背景・カード・デバイスフレーム・タイトル・本文）の最新版を提示する。
 - 立ち絵は一覧内に「左」「右」の固定2行として表示し、side一意・最大2の制約を保つ。
 - UI未対応のテンプレート・Cueは読み取り専用で非破壊に保持する。

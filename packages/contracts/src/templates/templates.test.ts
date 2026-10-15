@@ -6,6 +6,7 @@ import {
   isEditableTemplate,
   listVisualTemplateCatalog,
   mediaCardInputSchema,
+  mediaFullBleedInputSchema,
   tableSimpleInputSchema,
 } from "./index";
 
@@ -79,8 +80,21 @@ describe("visual template metadata", () => {
       expect(crop?.kind).toBe("mediaCrop");
       if (crop?.kind === "mediaCrop") {
         expect(crop.key).toBe("focalPoint");
+        expect(crop.zoomKey).toBe("zoom");
       }
     }
+  });
+
+  it("accepts an optional zoom on full-bleed and card inputs", () => {
+    expect(
+      mediaFullBleedInputSchema.safeParse({ assetId: "asset-1", fit: "cover", zoom: 1.5 }).success,
+    ).toBe(true);
+    expect(
+      mediaCardInputSchema.safeParse({ assetId: "asset-1", heading: "h", zoom: 0.5 }).success,
+    ).toBe(true);
+    expect(
+      mediaFullBleedInputSchema.safeParse({ assetId: "asset-1", fit: "cover", zoom: 4 }).success,
+    ).toBe(false);
   });
 
   it("registers table.simple@1 as an editable overlay template with a table field", () => {

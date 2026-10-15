@@ -2,7 +2,7 @@ import { mediaCardInputSchema } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "../escape";
 import type { RenderedCue, RenderContext } from "../render-context";
-import { focalPointStyle, resolveCueMedia } from "./shared";
+import { mediaCropStyle, resolveCueMedia } from "./shared";
 
 export function renderMediaCard(input: unknown, context: RenderContext): RenderedCue {
   const parsed = mediaCardInputSchema.safeParse(input);
@@ -11,15 +11,16 @@ export function renderMediaCard(input: unknown, context: RenderContext): Rendere
       { path: context.path, code: "invalid_input", message: "media.card の入力が不正です。" },
     ]);
   }
-  const { assetId, aspectRatio, heading, caption, focalPoint } = parsed.data;
+  const { assetId, aspectRatio, heading, caption, focalPoint, zoom } = parsed.data;
   const media = resolveCueMedia(assetId, context.assetResolver, context.path);
   const src = escapeHtmlAttribute(media.url);
-  const style = `${focalPointStyle(focalPoint)}aspect-ratio:${aspectRatio.replace(":", "/")};height:640px;width:auto;`;
+  const frameStyle = `aspect-ratio:${aspectRatio.replace(":", "/")};height:640px;width:auto;`;
+  const mediaStyle = mediaCropStyle(focalPoint, zoom);
   const id = context.scope.id("media");
   const mediaHtml =
     media.kind === "video"
-      ? `<video id="${id}" class="kakeai-cardmedia" src="${src}" style="${style}" muted playsinline preload="auto" data-media-start="0"></video>`
-      : `<img id="${id}" class="kakeai-cardmedia" src="${src}" style="${style}" alt="">`;
+      ? `<div class="kakeai-cardmedia-clip" style="${frameStyle}"><video id="${id}" class="kakeai-cardmedia" src="${src}" style="${mediaStyle}" muted playsinline preload="auto" data-media-start="0"></video></div>`
+      : `<div class="kakeai-cardmedia-clip" style="${frameStyle}"><img id="${id}" class="kakeai-cardmedia" src="${src}" style="${mediaStyle}" alt=""></div>`;
   const headingHtml =
     heading.length === 0 ? "" : `<h3 class="kakeai-cardheading">${escapeHtmlText(heading)}</h3>`;
   const captionHtml =

@@ -358,6 +358,61 @@ describe("buildContentDocument", () => {
     expect(() => buildContentDocument(base, values)).toThrow();
   });
 
+  it("reads and writes media zoom", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover", zoom: 1.5 },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = fullBleedCue(values);
+    expect(cue.fields["focalPoint__zoom"]).toBe("150");
+    const rebuilt = buildContentDocument(base, values);
+    expect((rebuilt.scenes[0]!.visualCues[0]!.input as { zoom?: unknown }).zoom).toBe(1.5);
+  });
+
+  it("omits zoom when unset and drops it when reset to 100%", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover", zoom: 2 },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = fullBleedCue(values);
+    cue.fields["focalPoint__zoom"] = "";
+    const rebuilt = buildContentDocument(base, values);
+    expect(
+      (rebuilt.scenes[0]!.visualCues[0]!.input as { zoom?: unknown }).zoom,
+    ).toBeUndefined();
+  });
+
+  it("keeps zoom independent from focalPoint and rejects out-of-range zoom", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover" },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = fullBleedCue(values);
+    cue.fields["focalPoint__zoom"] = "200";
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as { focalPoint?: unknown; zoom?: unknown };
+    expect(input.focalPoint).toBeUndefined();
+    expect(input.zoom).toBe(2);
+
+    cue.fields["focalPoint__zoom"] = "400";
+    expect(() => buildContentDocument(base, values)).toThrow();
+  });
+
   it("prunes orphaned takes and scene audio cues when a scene is deleted", () => {
     const base = createInitialContentDocument();
     const point = pointScenes(base)[0]!;

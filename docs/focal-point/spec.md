@@ -6,7 +6,7 @@
 
 - `focalPoint` は既存の正規化座標 `{ x, y }`（各 `0..1`）をそのまま編集する。新しいフィールドは追加しない。
 - 画像・動画とも同じ焦点位置を、そのCueの全表示区間へ適用する。
-- 拡大率（ズーム）は対象外とし、後続の別プランで `focalPoint` に併設する。本仕様のフィールド仕様は併設を前提にしておく。
+- 拡大率（ズーム）は [../media-zoom/spec.md](../media-zoom/spec.md) を正とし、同じコントロールに併設する。
 - `scene.device-frame@1`・`scene.site-mockup@1` などの `nestedMedia` は対象外（読み取り専用で非破壊に保持する）。
 
 ## データ
@@ -39,6 +39,6 @@
 編集画面はテンプレート定義の `inputFields` からフォームを生成する（[../composite-visuals/spec.md](../composite-visuals/spec.md)）。
 
 - `TemplateFieldSpec` に `{ kind: "mediaCrop"; key; label; zoomKey? }` を追加する。`key` は対象の入力プロパティ（`focalPoint`）。
-- `zoomKey` は将来の拡大率入力のプロパティ名を指す予約で、本仕様では設定しない。拡大率を追加するときは、同じコントロールにズーム用の操作を併設する。
-- フォーム内部キーは `${key}__x` / `${key}__y`（将来は `${key}__zoom`）を使い、保存値の `focalPoint` オブジェクトへ組み立てる。
+- `zoomKey` は拡大率入力のプロパティ名を指す（[../media-zoom/spec.md](../media-zoom/spec.md)）。
+- フォーム内部キーは `${key}__x` / `${key}__y`（拡大率は `${key}__zoom`）を使い、保存値の `focalPoint` オブジェクトへ組み立てる。
 - 所有テンプレートは `media.full-bleed@1` と `media.card@1`。`media.card@1` は `fit` 入力を持たず、CSSで `object-fit: cover` を固定する。

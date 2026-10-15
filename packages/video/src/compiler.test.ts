@@ -227,6 +227,27 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("object-position:10% 90%");
   });
 
+  it("applies media zoom as a transform anchored at the focal point", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-p1-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-image-1", fit: "cover", focalPoint: { x: 0.2, y: 0.8 }, zoom: 1.5 },
+      }),
+      cue({
+        id: "vc-p1-card",
+        template: { id: "media.card", version: 1 },
+        layer: "card",
+        input: { assetId: "asset-image-1", heading: "見出し", zoom: 2 },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("transform:scale(1.5);transform-origin:20% 80%");
+    expect(compiled.html).toContain("transform:scale(2);transform-origin:50% 50%");
+    expect(compiled.html).toContain('class="kakeai-cardmedia-clip"');
+  });
+
   it("omits the text frame when heading and caption are empty", () => {
     const document = validContentDocument();
     document.scenes[1]!.visualCues = [

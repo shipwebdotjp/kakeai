@@ -24,6 +24,6 @@
 - [x] `docs/mvp/spec.md`・`content-schema.md`・`roadmap.md`・`todo.md`、`docs/composite-visuals/spec.md`、ユーザーガイドを更新する
 - 完了条件: `npm run typecheck` と `npm test` が通り、文書が実装と一致する。
 
-## 後続（別プラン）
+## 後続
 
-- 拡大率（ズーム）。`mediaCrop` の `zoomKey` を使い、`transform: scale` とカードのクリップ枠を追加する。`1` 未満も許可する。
+- 拡大率（ズーム）は [../media-zoom/spec.md](../media-zoom/spec.md) で実装済み。`mediaCrop` の `zoomKey` を使い、`transform: scale` とカードのクリップ枠を追加し、`1` 未満も許可する。

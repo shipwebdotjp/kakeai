@@ -16,6 +16,11 @@ export const focalPointSchema = z.strictObject({
   y: z.number().min(0).max(1),
 });
 
+export const MEDIA_ZOOM_MIN = 0.5;
+export const MEDIA_ZOOM_MAX = 3;
+
+export const mediaZoomSchema = z.number().min(MEDIA_ZOOM_MIN).max(MEDIA_ZOOM_MAX);
+
 export const nestedMediaVisualSchema = z.strictObject({
   kind: z.literal("media"),
   assetId: idSchema,

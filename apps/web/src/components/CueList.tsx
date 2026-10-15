@@ -22,6 +22,9 @@ import {
   CROP_CENTER_PERCENT,
   CROP_X_SUFFIX,
   CROP_Y_SUFFIX,
+  CROP_ZOOM_MAX_PERCENT,
+  CROP_ZOOM_MIN_PERCENT,
+  CROP_ZOOM_SUFFIX,
   STANDING_TEMPLATE_ID,
   createCueFormValue,
   lineIndex,
@@ -404,11 +407,14 @@ function CueField({ field, values, setField, setFields, getFields, animationPres
     case "mediaCrop": {
       const xKey = `${field.key}${CROP_X_SUFFIX}`;
       const yKey = `${field.key}${CROP_Y_SUFFIX}`;
+      const zoomKey = `${field.key}${CROP_ZOOM_SUFFIX}`;
       const center = String(CROP_CENTER_PERCENT);
       const xValue = values[xKey] ?? "";
       const yValue = values[yKey] ?? "";
+      const zoomValue = values[zoomKey] ?? "";
       const xDisplay = xValue.length > 0 ? xValue : center;
       const yDisplay = yValue.length > 0 ? yValue : center;
+      const zoomDisplay = zoomValue.length > 0 ? zoomValue : "100";
       const isCentered = xValue.length === 0 && yValue.length === 0;
       const moveAxis = (axisKey: string, otherKey: string, next: string) => {
         const otherValue = getFields()[otherKey] ?? "";
@@ -456,6 +462,30 @@ function CueField({ field, values, setField, setFields, getFields, animationPres
               onChange={(event) => moveAxis(yKey, xKey, event.target.value)}
             />
           </label>
+          {field.zoomKey !== undefined && (
+            <label className="mt-1 flex items-center gap-2">
+              <span className="w-6 text-xs">倍率</span>
+              <input
+                type="range"
+                min={CROP_ZOOM_MIN_PERCENT}
+                max={CROP_ZOOM_MAX_PERCENT}
+                step={1}
+                className="w-48"
+                value={zoomDisplay}
+                onChange={(event) => setField(zoomKey, event.target.value)}
+              />
+              <span className={metaTextClass}>{zoomDisplay}%</span>
+              {zoomValue.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setField(zoomKey, "")}
+                >
+                  等倍に戻す
+                </button>
+              )}
+            </label>
+          )}
         </div>
       );
     }

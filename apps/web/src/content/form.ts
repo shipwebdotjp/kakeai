@@ -11,6 +11,8 @@ import {
   defaultPointLabel,
   getTemplateInputFields,
   getVisualTemplate,
+  MEDIA_ZOOM_MAX,
+  MEDIA_ZOOM_MIN,
   mediaCardV1,
   mediaFullBleedV1,
   pointSceneTextCues,
@@ -165,6 +167,8 @@ export const CROP_X_SUFFIX = "__x";
 export const CROP_Y_SUFFIX = "__y";
 export const CROP_ZOOM_SUFFIX = "__zoom";
 export const CROP_CENTER_PERCENT = 50;
+export const CROP_ZOOM_MIN_PERCENT = MEDIA_ZOOM_MIN * 100;
+export const CROP_ZOOM_MAX_PERCENT = MEDIA_ZOOM_MAX * 100;
 
 function readInputObject(cue: VisualCue | null): Record<string, unknown> {
   if (cue === null || typeof cue.input !== "object" || cue.input === null) {
@@ -380,6 +384,11 @@ function readCueFields(
           typeof point?.x === "number" ? String(Math.round(point.x * 100)) : "";
         result[`${field.key}${CROP_Y_SUFFIX}`] =
           typeof point?.y === "number" ? String(Math.round(point.y * 100)) : "";
+        if (field.zoomKey !== undefined) {
+          const zoom = input[field.zoomKey];
+          result[`${field.key}${CROP_ZOOM_SUFFIX}`] =
+            typeof zoom === "number" ? String(Math.round(zoom * 100)) : "";
+        }
         break;
       }
       case "text":
@@ -690,6 +699,24 @@ function parseCropPercent(value: string | undefined, label: string): number | nu
   return percent;
 }
 
+function parseCropZoomPercent(value: string | undefined, label: string): number | null {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const percent = Number(trimmed);
+  if (
+    !Number.isFinite(percent) ||
+    percent < CROP_ZOOM_MIN_PERCENT ||
+    percent > CROP_ZOOM_MAX_PERCENT
+  ) {
+    throw new Error(
+      `${label}の拡大率は ${CROP_ZOOM_MIN_PERCENT}〜${CROP_ZOOM_MAX_PERCENT}% の範囲で入力してください`,
+    );
+  }
+  return percent;
+}
+
 function buildCueInput(
   cue: CueFormValue,
   definition: VisualTemplateDefinition,
@@ -743,6 +770,17 @@ function buildCueInput(
           throw new Error(`${field.label}は横と縦の両方を指定してください`);
         } else {
           setAtPath(input, field.key, { x: xPercent / 100, y: yPercent / 100 });
+        }
+        if (field.zoomKey !== undefined) {
+          const zoomPercent = parseCropZoomPercent(
+            cue.fields[`${field.key}${CROP_ZOOM_SUFFIX}`],
+            field.label,
+          );
+          if (zoomPercent === null) {
+            deleteAtPath(input, field.zoomKey);
+          } else {
+            setAtPath(input, field.zoomKey, zoomPercent / 100);
+          }
         }
         break;
       }
@@ -1217,6 +1255,9 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
       case "mediaCrop":
         fields[`${field.key}${CROP_X_SUFFIX}`] = "";
         fields[`${field.key}${CROP_Y_SUFFIX}`] = "";
+        if (field.zoomKey !== undefined) {
+          fields[`${field.key}${CROP_ZOOM_SUFFIX}`] = "";
+        }
         break;
       case "animation":
         fields[field.key] = "none";

@@ -213,9 +213,9 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | VisualTemplate | 入力 | 初期対応 |
 | --- | --- | --- |
 | `text.block@1` | `text`, `role`(title/subtitle/heading/body/closing), 配置`anchor`/`verticalAlign`, `font`, `fontSize`, `color`, `decoration` | 対応。Sceneのテキストを表現する（[../editor/spec.md](../editor/spec.md)）。未指定時の既定スタイルはVisual Themeのrole別トークンを使う（[../visual-themes/spec.md](../visual-themes/spec.md)） |
-| `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?` | 対応 |
+| `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?`, `zoom?` | 対応 |
 | `composition.full-bleed@1` | `compositionVersionId` | Composition Library導入後に対応。`range: scene`、`layer: background`だけを許可し、同じCompositionVersionは一つのScriptVersion内で一度だけ参照できる。 |
-| `media.card@1` | `assetId`, アスペクト比(16:9/4:3/1:1/3:4/9:16、既定16:9), 見出し、補足文, `focalPoint?` | 対応。見出しと補足文が両方とも空のときはテキスト枠を描画しない |
+| `media.card@1` | `assetId`, アスペクト比(16:9/4:3/1:1/3:4/9:16、既定16:9), 見出し、補足文, `focalPoint?`, `zoom?` | 対応。見出しと補足文が両方とも空のときはテキスト枠を描画しない |
 | `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
 | `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
 | `character.standing@3` | `@2` と同一入力 | [../face-expression/spec.md](../face-expression/spec.md) で追加。外観が参照する Face Set のベース＋眉＋目＋口＋前景を合成し、台詞区間ごとに Expression Preset を切り替える。Face Set を持たない外観は `@2` と同じ見た目 |
@@ -232,7 +232,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 `VisualTemplate` の版は、正式リリース後は不変とする。`id@version` の意味とレイアウト規約を変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは原則削除せず、保存済み作品が参照する版を描画し続けられるようにする。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい。正式リリース（`1.0.0`）前の開発段階では、版を追加せず既存版を書き換えてよい（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
 
-`fit: cover` を使うテンプレートは、任意の正規化 `focalPoint: { x, y }` を受け取る。未指定時は中央 `{ "x": 0.5, "y": 0.5 }` とし、クロップ位置は出力ピクセルではなく正規化座標で指定する。編集画面は `media.full-bleed@1` と `media.card@1` の `focalPoint` を焦点位置コントロールで編集し、中央へ戻すと `focalPoint` を省略する。詳細は [../focal-point/spec.md](../focal-point/spec.md) を正とする。
+`fit: cover` を使うテンプレートは、任意の正規化 `focalPoint: { x, y }` と任意の拡大率 `zoom`（`0.5〜3`、省略時は等倍 `1`）を受け取る。未指定時は中央 `{ "x": 0.5, "y": 0.5 }` とし、クロップ位置は出力ピクセルではなく正規化座標で指定する。編集画面は `media.full-bleed@1` と `media.card@1` の `focalPoint` と `zoom` を焦点位置コントロールで編集し、中央へ戻すと `focalPoint` を、等倍に戻すと `zoom` を省略する。拡大率はメディアだけに適用し、カードの矩形とテキスト配置は変えない。詳細は [../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) を正とする。
 
 ### テキストの制約
 

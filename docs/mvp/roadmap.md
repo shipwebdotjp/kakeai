@@ -25,7 +25,7 @@
 
 - 背景・カードに画像・動画・アプリ管理の複合ビジュアル（Composite Visual Template）を置く基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) で実装済み（VisualCue v3 の `layer`/`order`/`transition`、`NestedVisual` 再帰、`scene.device-frame@1`/`@2`、Cue一覧UI、テンプレート `inputFields` による汎用エディタ、有限presetの `AnimationPlan`）。
 - AIが作る全画面・無音のHyperFrames projectを、Assetではなく不変のCompositionVersionとしてpublishし、Scene背景にnative nested compositionとして置くComposition Libraryを追加する。v1の詳細と将来のslot・複数instance・音声・外部project対応は [../composition-library/spec.md](../composition-library/spec.md) と [../composition-library/roadmap.md](../composition-library/roadmap.md) を正とする。
-- 背景とカードの正規化した焦点位置を編集する（[../focal-point/spec.md](../focal-point/spec.md) で実装済み。`focalPoint` の編集、中央リセット。拡大率は後続）。
+- 背景とカードの正規化した焦点位置と拡大率を編集する（[../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) で実装済み。`focalPoint` の編集・中央リセット、メディアの拡大率と等倍リセット）。
 - 1 Scene内の複数VisualCue、表示順、セリフ区間・offset区間を編集する。
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。
 - 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、口パクを追加する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) を正とする（グローバルな Face Set ライブラリ、`character.standing@3`、`NarrationSegment.expressionId`、`schemaVersion: 7`。再レンダー差異の許容は [ADR-0045](../adr/0045-face-set-global-reference.md)）。

@@ -29,3 +29,15 @@ export function focalPointStyle(focalPoint: { x: number; y: number } | undefined
   const point = focalPoint ?? { x: 0.5, y: 0.5 };
   return `object-position:${point.x * 100}% ${point.y * 100}%;`;
 }
+
+export function mediaCropStyle(
+  focalPoint: { x: number; y: number } | undefined,
+  zoom: number | undefined,
+): string {
+  const base = focalPointStyle(focalPoint);
+  if (zoom === undefined) {
+    return base;
+  }
+  const point = focalPoint ?? { x: 0.5, y: 0.5 };
+  return `${base}transform:scale(${zoom});transform-origin:${point.x * 100}% ${point.y * 100}%;`;
+}
