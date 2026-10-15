@@ -218,13 +218,16 @@ export function renderCharacterStandingV3(input: unknown, context: RenderContext
       return base.html;
     }
     track(variant.assetId);
-    const elementId = context.scope.id(`face-${groupIndex}-${part}`);
+    const baseElementId = context.scope.id(`face-${groupIndex}-${part}-base`);
+    const variantElementId = context.scope.id(`face-${groupIndex}-${part}`);
     if (part === "eye") {
-      target.eyeBlinkId = elementId;
+      target.eyeBlinkId = variantElementId;
+      target.eyeBaseId = baseElementId;
     } else {
-      target.mouthSpeakingId = elementId;
+      target.mouthSpeakingId = variantElementId;
+      target.mouthBaseId = baseElementId;
     }
-    return `${base.html}<img id="${elementId}" class="kakeai-face" src="${variant.src}" style="opacity:0;" alt="">`;
+    return `<img id="${baseElementId}" class="kakeai-face" src="${base.src}" alt=""><img id="${variantElementId}" class="kakeai-face" src="${variant.src}" style="opacity:0;" alt="">`;
   };
   const expressionTargets: ExpressionTarget[] = [];
   const groups = faceSet.expressions.map((preset, index) => {
