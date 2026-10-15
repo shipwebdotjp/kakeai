@@ -4,8 +4,12 @@ import {
   characterStandingV2InputSchema,
   characterStandingV3,
   characterStandingV3InputSchema,
+  mediaCardInputSchema,
   mediaCardV1,
+  mediaCardV2,
+  mediaFullBleedInputSchema,
   mediaFullBleedV1,
+  mediaFullBleedV2,
   sceneDeviceFrameV1,
   sceneDeviceFrameV2,
   sceneSiteMockupV1,
@@ -36,7 +40,7 @@ import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import { seededRandom } from "./random";
-import type { RenderedCue, ExpressionTarget, RenderContext } from "./render-context";
+import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming } from "./render-context";
 import {
   THEME_FONT_STACKS,
   mixHex,
@@ -59,7 +63,7 @@ import { renderDeviceFrame } from "./templates/device-frame";
 import { renderTableSimple } from "./templates/table-simple";
 import { renderChartBar } from "./templates/chart-bar";
 import { renderSiteMockup } from "./templates/site-mockup";
-import { focalPointStyle, resolveCueMedia } from "./templates/shared";
+import { focalPointStyle, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
 export const COMPOSITION_ID = "kakeai-main";
 
@@ -102,7 +106,7 @@ function applyCueTiming(html: string, startMs: number, spanMs: number): string {
   const start = toSecondsText(startMs);
   const duration = toSecondsText(spanMs);
   const withVideos = html.replace(
-    /<video\b/g,
+    /<video\b(?![^>]*\bdata-start=)/g,
     `<video data-start="${start}" data-duration="${duration}"`,
   );
   return withVideos.replace(
@@ -329,28 +333,48 @@ function faceVariantTweenLines(
       const entering = byPreset.get(interval.presetId);
       if (entering?.eyeBlinkId !== undefined) {
         setLine(entering.eyeBlinkId, false, interval.startMs);
+        if (entering.eyeBaseId !== undefined) {
+          setLine(entering.eyeBaseId, true, interval.startMs);
+        }
       }
       if (entering?.mouthSpeakingId !== undefined) {
         setLine(entering.mouthSpeakingId, false, interval.startMs);
+        if (entering.mouthBaseId !== undefined) {
+          setLine(entering.mouthBaseId, true, interval.startMs);
+        }
       }
     }
     previous = interval.presetId;
   }
   for (const blink of blinks) {
-    const blinkId = byPreset.get(activePresetAt(intervals, blink.startMs))?.eyeBlinkId;
-    if (blinkId === undefined) {
+    const target = byPreset.get(activePresetAt(intervals, blink.startMs));
+    const blinkId = target?.eyeBlinkId;
+    if (target === undefined || blinkId === undefined) {
       continue;
     }
     setLine(blinkId, true, blink.startMs);
+    if (target.eyeBaseId !== undefined) {
+      setLine(target.eyeBaseId, false, blink.startMs);
+    }
     setLine(blinkId, false, blink.endMs);
+    if (target.eyeBaseId !== undefined) {
+      setLine(target.eyeBaseId, true, blink.endMs);
+    }
   }
   for (const mouth of mouths) {
-    const speakingId = byPreset.get(activePresetAt(intervals, mouth.startMs))?.mouthSpeakingId;
-    if (speakingId === undefined) {
+    const target = byPreset.get(activePresetAt(intervals, mouth.startMs));
+    const speakingId = target?.mouthSpeakingId;
+    if (target === undefined || speakingId === undefined) {
       continue;
     }
     setLine(speakingId, true, mouth.startMs);
+    if (target.mouthBaseId !== undefined) {
+      setLine(target.mouthBaseId, false, mouth.startMs);
+    }
     setLine(speakingId, false, mouth.endMs);
+    if (target.mouthBaseId !== undefined) {
+      setLine(target.mouthBaseId, true, mouth.endMs);
+    }
   }
   return lines;
 }
@@ -438,8 +462,12 @@ function dispatchTemplate(
     case `${textBlockV2.id}@${textBlockV2.version}`:
       return { html: renderTextBlock(input, context.path, context.theme), assetIds: [], animation: [] };
     case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
+      return renderMediaFullBleed(input, context, mediaFullBleedInputSchema);
+    case `${mediaFullBleedV2.id}@${mediaFullBleedV2.version}`:
       return renderMediaFullBleed(input, context);
     case `${mediaCardV1.id}@${mediaCardV1.version}`:
+      return renderMediaCard(input, context, mediaCardInputSchema);
+    case `${mediaCardV2.id}@${mediaCardV2.version}`:
       return renderMediaCard(input, context);
     case `${characterStandingV1.id}@${characterStandingV1.version}`:
       return renderCharacterStandingV1(input, context);
@@ -477,6 +505,7 @@ function makeContext(
   scope: RenderScope,
   path: (string | number)[],
   faceSetResolver?: FaceSetResolver,
+  cueTiming?: CueTiming,
 ): RenderContext {
   const context: RenderContext = {
     document,
@@ -485,8 +514,9 @@ function makeContext(
     faceSetResolver,
     scope,
     path,
+    cueTiming,
     renderNested: (node, nestedScope, nestedPath) =>
-      renderNestedVisual(node, makeContext(document, theme, assetResolver, nestedScope, nestedPath, faceSetResolver)),
+      renderNestedVisual(node, makeContext(document, theme, assetResolver, nestedScope, nestedPath, faceSetResolver, cueTiming)),
   };
   return context;
 }
@@ -593,7 +623,6 @@ const STYLES = [
 ].join("\n");
 
 const FADE_START_EPSILON_MS = 1;
-const MAX_LOOP_COPIES = 1000;
 const PRESET_OFFSET_PX = 60;
 
 function presetVars(preset: AnimationPreset, phase: "enter" | "exit"): string | null {
@@ -720,9 +749,14 @@ function buildLoopAudios(options: {
 }
 
 function addClipDurationMs(html: string, extraMs: number): string {
-  return html.replace(/data-duration="([0-9.]+)"/g, (_match, value: string) => {
-    const totalMs = Math.round(Number(value) * 1000) + extraMs;
-    return `data-duration="${toSecondsText(totalMs)}"`;
+  return html.replace(/<[^>]+>/g, (tag) => {
+    if (tag.includes("data-kakeai-loop-segment=") && !tag.includes("data-kakeai-loop-segment-last=")) {
+      return tag;
+    }
+    return tag.replace(/data-duration="([0-9.]+)"/g, (_match, value: string) => {
+      const totalMs = Math.round(Number(value) * 1000) + extraMs;
+      return `data-duration="${toSecondsText(totalMs)}"`;
+    });
   });
 }
 
@@ -897,7 +931,10 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const absStartMs = placement.startMs + window.startMs;
       const absEndMs = placement.startMs + window.endMs;
       const scope = cueScope(cue.id);
-      const context = makeContext(document, theme, assetResolver, scope, cuePath, faceSetResolver);
+      const context = makeContext(document, theme, assetResolver, scope, cuePath, faceSetResolver, {
+        startMs: absStartMs,
+        spanMs: span,
+      });
       const rendered = dispatchTemplate(
         `${cue.template.id}@${cue.template.version}`,
         cue.input,

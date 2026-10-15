@@ -221,6 +221,69 @@ const mediaCardV1: VisualTemplateDefinition = {
   },
 };
 
+export const mediaFullBleedV2InputSchema = mediaFullBleedInputSchema.extend({
+  loop: z.boolean().optional(),
+});
+export type MediaFullBleedV2Input = z.infer<typeof mediaFullBleedV2InputSchema>;
+
+const mediaFullBleedV2: VisualTemplateDefinition = {
+  id: "media.full-bleed",
+  version: 2,
+  inputSchema: mediaFullBleedV2InputSchema,
+  layers: ["background"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "背景（全面）", description: "画像・動画を全面に敷く（動画はループ可）", category: "media" },
+  inputFields: [
+    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
+    { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
+    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
+    { kind: "boolean", key: "loop", label: "動画をループ再生" },
+  ],
+  collectAssetRefs: (input, path) => {
+    const parsed = mediaFullBleedV2InputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    return [{ assetId: parsed.data.assetId, allowedKinds: MEDIA_KINDS, path: [...path, "assetId"] }];
+  },
+};
+
+export const mediaCardV2InputSchema = mediaCardInputSchema.extend({
+  loop: z.boolean().optional(),
+});
+export type MediaCardV2Input = z.infer<typeof mediaCardV2InputSchema>;
+
+const mediaCardV2: VisualTemplateDefinition = {
+  id: "media.card",
+  version: 2,
+  inputSchema: mediaCardV2InputSchema,
+  layers: ["card"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "カード", description: "画像・動画を見出し付きカードで表示（動画はループ可）", category: "media" },
+  inputFields: [
+    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
+    {
+      kind: "select",
+      key: "aspectRatio",
+      label: "アスペクト比",
+      options: MEDIA_CARD_ASPECT_RATIO_OPTIONS,
+    },
+    { kind: "text", key: "heading", label: "見出し" },
+    { kind: "optionalText", key: "caption", label: "補足文" },
+    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
+    { kind: "boolean", key: "loop", label: "動画をループ再生" },
+  ],
+  collectAssetRefs: (input, path) => {
+    const parsed = mediaCardV2InputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    return [{ assetId: parsed.data.assetId, allowedKinds: MEDIA_KINDS, path: [...path, "assetId"] }];
+  },
+};
+
 export const characterStandingV1InputSchema = z.strictObject({
   characterId: idSchema,
   appearanceId: idSchema,
@@ -912,7 +975,9 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   textBlockV2,
   mediaFullBleedV1,
+  mediaFullBleedV2,
   mediaCardV1,
+  mediaCardV2,
   characterStandingV1,
   characterStandingV2,
   characterStandingV3,
@@ -925,6 +990,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
+export { mediaFullBleedV2, mediaCardV2 };
 export { characterStandingV1, characterStandingV2, characterStandingV3, sceneDeviceFrameV1, sceneDeviceFrameV2 };
 export { sceneSiteMockupV1 };
 export { tableSimpleV1 };

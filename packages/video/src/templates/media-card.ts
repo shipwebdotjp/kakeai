@@ -1,25 +1,47 @@
-import { mediaCardInputSchema } from "@kakeai/contracts";
+import { mediaCardV2InputSchema, type MediaCardV2Input } from "@kakeai/contracts";
+import type { z } from "zod";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "../escape";
 import type { RenderedCue, RenderContext } from "../render-context";
-import { mediaCropStyle, resolveCueMedia } from "./shared";
+import { mediaCropStyle, renderLoopVideoSegments, resolveCueMedia } from "./shared";
 
-export function renderMediaCard(input: unknown, context: RenderContext): RenderedCue {
-  const parsed = mediaCardInputSchema.safeParse(input);
+export function renderMediaCard(
+  input: unknown,
+  context: RenderContext,
+  schema: z.ZodTypeAny = mediaCardV2InputSchema,
+): RenderedCue {
+  const parsed = schema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
       { path: context.path, code: "invalid_input", message: "media.card の入力が不正です。" },
     ]);
   }
-  const { assetId, aspectRatio, heading, caption, focalPoint, zoom } = parsed.data;
+  const data = parsed.data as MediaCardV2Input;
+  const { assetId, aspectRatio, heading, caption, focalPoint, zoom } = data;
   const media = resolveCueMedia(assetId, context.assetResolver, context.path);
   const src = escapeHtmlAttribute(media.url);
-  const frameStyle = `aspect-ratio:${aspectRatio.replace(":", "/")};height:640px;width:auto;`;
+  const frameStyle = `aspect-ratio:${aspectRatio.replace(":", "/")};height:640px;width:auto;position:relative;`;
   const mediaStyle = mediaCropStyle(focalPoint, zoom);
   const id = context.scope.id("media");
+  const looped =
+    media.kind === "video" && data.loop === true && context.cueTiming !== undefined
+      ? renderLoopVideoSegments({
+          idPrefix: id,
+          url: media.url,
+          className: "kakeai-cardmedia",
+          style: `${mediaStyle}position:absolute;inset:0;`,
+          startMs: context.cueTiming.startMs,
+          spanMs: context.cueTiming.spanMs,
+          sourceDurationMs: media.durationMs,
+          path: context.path,
+        })
+      : null;
   const mediaHtml =
     media.kind === "video"
-      ? `<div class="kakeai-cardmedia-clip" style="${frameStyle}"><video id="${id}" class="kakeai-cardmedia" src="${src}" style="${mediaStyle}" muted playsinline preload="auto" data-media-start="0"></video></div>`
+      ? `<div class="kakeai-cardmedia-clip" style="${frameStyle}">${
+          looped ??
+          `<video id="${id}" class="kakeai-cardmedia" src="${src}" style="${mediaStyle}" muted playsinline preload="auto" data-media-start="0"></video>`
+        }</div>`
       : `<div class="kakeai-cardmedia-clip" style="${frameStyle}"><img id="${id}" class="kakeai-cardmedia" src="${src}" style="${mediaStyle}" alt=""></div>`;
   const headingHtml =
     heading.length === 0 ? "" : `<h3 class="kakeai-cardheading">${escapeHtmlText(heading)}</h3>`;

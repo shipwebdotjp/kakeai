@@ -214,8 +214,10 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | --- | --- | --- |
 | `text.block@1` | `text`, `role`(title/subtitle/heading/body/closing), 配置`anchor`/`verticalAlign`, `font`, `fontSize`, `color`, `decoration` | 対応。Sceneのテキストを表現する（[../editor/spec.md](../editor/spec.md)）。未指定時の既定スタイルはVisual Themeのrole別トークンを使う（[../visual-themes/spec.md](../visual-themes/spec.md)） |
 | `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?`, `zoom?` | 対応 |
+| `media.full-bleed@2` | `@1` ＋ `loop?` | 対応。`loop: true` の動画素材がCueの可視窓より短いとき、素材を窓いっぱいに連続配置してループ再生する（[../media-loop/spec.md](../media-loop/spec.md)） |
 | `composition.full-bleed@1` | `compositionVersionId` | Composition Library導入後に対応。`range: scene`、`layer: background`だけを許可し、同じCompositionVersionは一つのScriptVersion内で一度だけ参照できる。 |
 | `media.card@1` | `assetId`, アスペクト比(16:9/4:3/1:1/3:4/9:16、既定16:9), 見出し、補足文, `focalPoint?`, `zoom?` | 対応。見出しと補足文が両方とも空のときはテキスト枠を描画しない |
+| `media.card@2` | `@1` ＋ `loop?` | 対応。カード枠内の動画を `@2` と同じ規則でループ再生する（[../media-loop/spec.md](../media-loop/spec.md)） |
 | `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
 | `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
 | `character.standing@3` | `@2` と同一入力 | [../face-expression/spec.md](../face-expression/spec.md) で追加。外観が参照する Face Set のベース＋眉＋目＋口＋前景を合成し、台詞区間ごとに Expression Preset を切り替える。Face Set を持たない外観は `@2` と同じ見た目 |

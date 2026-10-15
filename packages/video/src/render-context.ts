@@ -21,7 +21,9 @@ export interface ExpressionTarget {
   presetId: string;
   elementId: string;
   eyeBlinkId?: string;
+  eyeBaseId?: string;
   mouthSpeakingId?: string;
+  mouthBaseId?: string;
 }
 
 export interface RenderedCue {
@@ -32,6 +34,11 @@ export interface RenderedCue {
   expressionTargets?: ExpressionTarget[];
 }
 
+export interface CueTiming {
+  startMs: number;
+  spanMs: number;
+}
+
 export interface RenderContext {
   document: ContentDocument;
   theme: VisualThemeDefinition;
@@ -39,5 +46,6 @@ export interface RenderContext {
   faceSetResolver?: FaceSetResolver;
   scope: RenderScope;
   path: (string | number)[];
+  cueTiming?: CueTiming;
   renderNested: (node: NestedVisual, scope: RenderScope, path: (string | number)[]) => RenderedCue;
 }

@@ -14,7 +14,9 @@ import {
   MEDIA_ZOOM_MAX,
   MEDIA_ZOOM_MIN,
   mediaCardV1,
+  mediaCardV2,
   mediaFullBleedV1,
+  mediaFullBleedV2,
   pointSceneTextCues,
   sceneDeviceFrameV1,
   chartDataSchema,
@@ -162,6 +164,19 @@ export const MEDIA_CARD_ID = mediaCardV1.id;
 export const DEVICE_FRAME_ID = sceneDeviceFrameV1.id;
 export const STANDING_TEMPLATE_ID = characterStandingV1.id;
 export const STANDING_TRANSITION_POLICY: TransitionPolicy = characterStandingV2.transitionPolicy;
+
+function upgradeCueTemplate(
+  templateId: string,
+  templateVersion: number,
+): { id: string; version: number } {
+  if (templateId === MEDIA_FULL_BLEED_ID && templateVersion === mediaFullBleedV1.version) {
+    return { id: templateId, version: mediaFullBleedV2.version };
+  }
+  if (templateId === MEDIA_CARD_ID && templateVersion === mediaCardV1.version) {
+    return { id: templateId, version: mediaCardV2.version };
+  }
+  return { id: templateId, version: templateVersion };
+}
 
 export const CROP_X_SUFFIX = "__x";
 export const CROP_Y_SUFFIX = "__y";
@@ -449,13 +464,14 @@ function readCueFields(
 
 function toCueFormValue(cue: VisualCue): CueFormValue {
   const input = readInputObject(cue);
-  const definition = getVisualTemplate(cue.template.id, cue.template.version);
+  const upgraded = upgradeCueTemplate(cue.template.id, cue.template.version);
+  const definition = getVisualTemplate(upgraded.id, upgraded.version);
   const range = cue.range;
   return {
     id: cue.id,
     baseCue: cue,
-    templateId: cue.template.id,
-    templateVersion: cue.template.version,
+    templateId: upgraded.id,
+    templateVersion: upgraded.version,
     layer: cue.layer,
     order: cue.order,
     rangeKind: range.kind,

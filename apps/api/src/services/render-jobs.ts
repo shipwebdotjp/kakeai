@@ -135,7 +135,7 @@ export async function createRenderJob(
         return {
           url: "",
           kind: kind as ResolvedAssetKind,
-          durationMs: kind === "audio" ? renderSourceDurationMs(asset) : null,
+          durationMs: kind === "image" ? null : renderSourceDurationMs(asset),
         };
       },
       compositionResolver: (versionId) => {

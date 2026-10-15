@@ -6,7 +6,9 @@ import {
   isEditableTemplate,
   listVisualTemplateCatalog,
   mediaCardInputSchema,
+  mediaCardV2InputSchema,
   mediaFullBleedInputSchema,
+  mediaFullBleedV2InputSchema,
   tableSimpleInputSchema,
 } from "./index";
 
@@ -94,6 +96,36 @@ describe("visual template metadata", () => {
     ).toBe(true);
     expect(
       mediaFullBleedInputSchema.safeParse({ assetId: "asset-1", fit: "cover", zoom: 4 }).success,
+    ).toBe(false);
+  });
+
+  it("accepts an optional loop on full-bleed and card v2 inputs", () => {
+    expect(
+      mediaFullBleedV2InputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: true })
+        .success,
+    ).toBe(true);
+    expect(
+      mediaCardV2InputSchema.safeParse({ assetId: "asset-1", heading: "h", loop: false }).success,
+    ).toBe(true);
+    expect(
+      mediaFullBleedV2InputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: "yes" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("registers a loop field on the v2 media templates only", () => {
+    for (const id of ["media.full-bleed", "media.card"]) {
+      expect(getTemplateInputFields(id, 2)?.some((field) => field.key === "loop")).toBe(true);
+      expect(getTemplateInputFields(id, 1)?.some((field) => field.key === "loop")).toBe(false);
+    }
+  });
+
+  it("keeps the v1 media inputs free of a loop key", () => {
+    expect(
+      mediaFullBleedInputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: true }).success,
+    ).toBe(false);
+    expect(
+      mediaCardInputSchema.safeParse({ assetId: "asset-1", heading: "h", loop: true }).success,
     ).toBe(false);
   });
 

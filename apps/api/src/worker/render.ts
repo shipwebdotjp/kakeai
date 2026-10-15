@@ -210,7 +210,7 @@ export async function processRenderJob(
           return {
             url: `assets/${fileName}`,
             kind,
-            durationMs: kind === "audio" ? asset.durationMs : null,
+            durationMs: kind === "image" ? null : asset.durationMs,
           };
         },
         compositionResolver: (versionId) => {

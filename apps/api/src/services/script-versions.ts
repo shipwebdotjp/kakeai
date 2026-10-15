@@ -687,7 +687,7 @@ export async function compilePreview(
         return {
           url: renderContentUrl(assetId),
           kind: kind as ResolvedAssetKind,
-          durationMs: kind === "audio" ? renderSourceDurationMs(asset) : null,
+          durationMs: kind === "image" ? null : renderSourceDurationMs(asset),
         };
       },
     });

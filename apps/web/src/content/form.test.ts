@@ -142,6 +142,45 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("upgrades a v1 media cue to v2 and round-trips the loop flag", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover" },
+      }),
+    ];
+
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues.find((entry) => entry.id === "vc-bg")!;
+    expect(cue.templateVersion).toBe(2);
+    expect(cue.fields.loop).toBe("");
+    cue.fields.loop = "true";
+
+    const rebuilt = buildContentDocument(base, values);
+    const rebuiltCue = rebuilt.scenes[0]!.visualCues.find((entry) => entry.id === "vc-bg")!;
+    expect(rebuiltCue.template).toEqual({ id: "media.full-bleed", version: 2 });
+    expect((rebuiltCue.input as { loop?: boolean }).loop).toBe(true);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("omits the loop key when the toggle is left at default", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover" },
+      }),
+    ];
+
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    const rebuiltCue = rebuilt.scenes[0]!.visualCues.find((entry) => entry.id === "vc-bg")!;
+    expect(rebuiltCue.template).toEqual({ id: "media.full-bleed", version: 2 });
+    expect("loop" in (rebuiltCue.input as Record<string, unknown>)).toBe(false);
+  });
+
   it("dissolves a cue when its asset selection is cleared", () => {
     const base = createInitialContentDocument();
     base.scenes[0]!.visualCues = [

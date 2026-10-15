@@ -15,6 +15,21 @@ const resolver: AssetResolver = (assetId) => {
   return { url: `/preview/${assetId}`, kind: assetId.includes("video") ? "video" : "image" };
 };
 
+const videoResolver: AssetResolver = videoResolverWithDuration(2000);
+
+function videoResolverWithDuration(durationMs: number): AssetResolver {
+  return (assetId) => {
+    if (assetId.includes("audio") || assetId.includes("bgm")) {
+      return { url: `/preview/${assetId}`, kind: "audio", durationMs: 3000 };
+    }
+    return {
+      url: `/preview/${assetId}`,
+      kind: assetId.includes("video") ? "video" : "image",
+      durationMs: assetId.includes("video") ? durationMs : null,
+    };
+  };
+}
+
 const compositionResolver: CompositionVersionResolver = (versionId) => ({
   id: versionId,
   runtimeCompositionId: "cmp.test",
@@ -264,6 +279,93 @@ describe("compileDocument", () => {
     expect(compiled.html).not.toContain('<h3 class="kakeai-cardheading">');
   });
 
+  it("repeats a looping video across the cue window", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-loop-bg",
+        template: { id: "media.full-bleed", version: 2 },
+        input: { assetId: "asset-video-1", fit: "cover", loop: true },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: videoResolver });
+    const mediaId = cueScope("vc-loop-bg").id("media");
+    expect(compiled.html).toContain(
+      `<video id="${mediaId}-0" class="kakeai-fullbleed"`,
+    );
+    expect(compiled.html).toContain(
+      `data-media-start="0" data-start="4" data-duration="2"`,
+    );
+    expect(compiled.html).toContain(
+      `data-media-start="0" data-start="6" data-duration="2"`,
+    );
+  });
+
+  it("does not repeat a looping video when the source fills the window", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-loop-bg",
+        template: { id: "media.full-bleed", version: 2 },
+        input: { assetId: "asset-video-1", fit: "cover", loop: true },
+      }),
+    ];
+    const longResolver: AssetResolver = videoResolverWithDuration(5000);
+    const compiled = compileDocument({ document, assetResolver: longResolver });
+    expect(compiled.html).not.toContain(`id="${cueScope("vc-loop-bg").id("media")}-1"`);
+    expect(compiled.html).toContain('<video data-start="4" data-duration="4"');
+  });
+
+  it("does not repeat video when loop is off", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-no-loop-bg",
+        template: { id: "media.full-bleed", version: 2 },
+        input: { assetId: "asset-video-1", fit: "cover" },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: videoResolver });
+    expect(compiled.html).not.toContain(`id="${cueScope("vc-no-loop-bg").id("media")}-1"`);
+    expect(compiled.html).toContain('<video data-start="4" data-duration="4"');
+  });
+
+  it("rejects a looping video that would require too many copies", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-loop-bg",
+        template: { id: "media.full-bleed", version: 2 },
+        input: { assetId: "asset-video-1", fit: "cover", loop: true },
+      }),
+    ];
+    const tinyResolver: AssetResolver = videoResolverWithDuration(3);
+    try {
+      compileDocument({ document, assetResolver: tinyResolver });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe("loop_span_too_long");
+    }
+  });
+
+  it("repeats a looping card video inside the card frame", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-loop-card",
+        template: { id: "media.card", version: 2 },
+        layer: "card",
+        input: { assetId: "asset-video-1", heading: "見出し", loop: true },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: videoResolver });
+    const mediaId = cueScope("vc-loop-card").id("media");
+    expect(compiled.html).toContain('class="kakeai-cardmedia-clip"');
+    expect(compiled.html).toContain(`<video id="${mediaId}-0" class="kakeai-cardmedia"`);
+    expect(compiled.html).toContain(`<video id="${mediaId}-1" class="kakeai-cardmedia"`);
+  });
+
   it("stamps the cue window onto a composition host", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [
@@ -298,6 +400,29 @@ describe("compileDocument", () => {
       `id="${clipId("vc-intro-video")}" class="clip" data-start="0" data-duration="4.3"`,
     );
     expect(compiled.html).toContain('<video data-start="0" data-duration="4.3"');
+  });
+
+  it("extends only the last loop segment when a crossfade stretches the previous scene", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-intro-loop",
+        template: { id: "media.full-bleed", version: 2 },
+        layer: "background",
+        input: { assetId: "asset-video-1", fit: "cover", loop: true },
+      }),
+    ];
+    document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 300 } };
+    const compiled = compileDocument({ document, assetResolver: videoResolver });
+    expect(compiled.html).toContain(
+      `id="${clipId("vc-intro-loop")}" class="clip" data-start="0" data-duration="4.3"`,
+    );
+    expect(compiled.html).toContain(
+      `data-media-start="0" data-start="0" data-duration="2" data-kakeai-loop-segment="true">`,
+    );
+    expect(compiled.html).toContain(
+      `data-media-start="0" data-start="2" data-duration="2.3" data-kakeai-loop-segment="true" data-kakeai-loop-segment-last="true">`,
+    );
   });
 
   it("escapes slot text", () => {
@@ -1288,11 +1413,17 @@ describe("visual theme", () => {
         const eyeBlinkIds = new Set(
           [0, 1].map((index) => cueScope("vc-face").id(`face-${index}-eye`)),
         );
+        const eyeBaseIds = new Set(
+          [0, 1].map((index) => cueScope("vc-face").id(`face-${index}-eye-base`)),
+        );
         const mouthSpeakingIds = new Set(
           [0, 1].map((index) => cueScope("vc-face").id(`face-${index}-mouth`)),
         );
         const blinks = setEvents(compiled.html).filter((event) =>
           eyeBlinkIds.has(event.elementId),
+        );
+        const eyeBases = setEvents(compiled.html).filter((event) =>
+          eyeBaseIds.has(event.elementId),
         );
         const mouths = setEvents(compiled.html).filter((event) =>
           mouthSpeakingIds.has(event.elementId),
@@ -1312,6 +1443,17 @@ describe("visual theme", () => {
           );
           expect(off).toBeDefined();
           expect(off!.at - on.at).toBeLessThanOrEqual(0.2);
+          const baseId = on.elementId.replace(/-eye$/, "-eye-base");
+          expect(
+            eyeBases.some(
+              (candidate) => candidate.elementId === baseId && !candidate.visible && candidate.at === on.at,
+            ),
+          ).toBe(true);
+          expect(
+            eyeBases.some(
+              (candidate) => candidate.elementId === baseId && candidate.visible && candidate.at === off!.at,
+            ),
+          ).toBe(true);
         }
         for (const event of mouths.filter((candidate) => candidate.visible)) {
           expect(event.at).toBeGreaterThanOrEqual(4.5);
