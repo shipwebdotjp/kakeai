@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Ellipsis, Play } from "lucide-react";
 import {
   useFieldArray,
   useWatch,
@@ -39,12 +40,15 @@ import {
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
 import {
+  buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
+  iconButtonClass,
   metaTextClass,
   textFieldClass,
 } from "../ui";
+import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { TakeAudioPlayer } from "./TakeAudioPlayer";
 
@@ -100,6 +104,9 @@ interface LineActionsMenuProps {
 const MENU_ITEM_CLASS =
   "block w-full whitespace-nowrap rounded px-2 py-1 text-left text-sm hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40";
 
+const MENU_DANGER_ITEM_CLASS =
+  "block w-full whitespace-nowrap rounded px-2 py-1 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-300 dark:hover:bg-red-950";
+
 function LineActionsMenu({
   canMoveUp,
   canMoveDown,
@@ -147,10 +154,10 @@ function LineActionsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="セリフ操作"
-        className={buttonNeutralClass}
+        className={iconButtonClass}
         onClick={() => setOpen((previous) => !previous)}
       >
-        …
+        <Ellipsis aria-hidden="true" className="h-4 w-4" />
       </button>
       {open && (
         <div
@@ -196,7 +203,7 @@ function LineActionsMenu({
           <button
             type="button"
             role="menuitem"
-            className={MENU_ITEM_CLASS}
+            className={MENU_DANGER_ITEM_CLASS}
             onClick={() => run(onDelete)}
           >
             削除
@@ -423,6 +430,23 @@ function LineEditor({
   const speechReady = speechLength > 0 && speechLength <= MAX_TTS_SPEECH_TEXT_LENGTH;
   const ttsDisabled =
     bulkRunning || generate.isPending || effectiveVoiceId === null || !voiceMatches || !speechReady;
+  const audioNeedsAttention =
+    staleExpression ||
+    generate.isError ||
+    (profileId !== null && profile === undefined) ||
+    (profile !== undefined &&
+      adapterState?.loading !== true &&
+      (adapterState === undefined ||
+        adapterState.failed ||
+        (!manualVoice && voice === undefined)));
+  const audioSummary = takes.length === 0 ? "音声なし" : `候補 ${takes.length}件`;
+  const [audioOpen, setAudioOpen] = useState(false);
+
+  useEffect(() => {
+    if (audioNeedsAttention) {
+      setAudioOpen(true);
+    }
+  }, [audioNeedsAttention]);
 
   return (
     <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">
@@ -434,12 +458,12 @@ function LineEditor({
           {onJumpToLine !== undefined && (
             <button
               type="button"
-              className={buttonNeutralClass}
+              className={iconButtonClass}
               title="プレビューをこのセリフへ移動"
               aria-label="プレビューをこのセリフへ移動"
               onClick={() => onJumpToLine(line.id)}
             >
-              ▶
+              <Play aria-hidden="true" className="h-4 w-4" />
             </button>
           )}
           <LineActionsMenu
@@ -480,6 +504,12 @@ function LineEditor({
           ))}
         </select>
       </label>
+      <Collapsible
+        title="音声詳細"
+        summary={audioNeedsAttention ? `要確認・${audioSummary}` : audioSummary}
+        open={audioOpen}
+        onOpenChange={setAudioOpen}
+      >
       {staleExpression ? (
         <p className={metaTextClass}>
           表情「{line.expressionId}」は参照先の立ち絵・表情セットにありません。
@@ -542,7 +572,7 @@ function LineEditor({
                 />
                 <button
                   type="button"
-                  className={buttonNeutralClass}
+                  className={buttonDangerClass}
                   onClick={() => deleteTake(take.id)}
                 >
                   削除
@@ -573,7 +603,7 @@ function LineEditor({
         />
       </div>
 
-      <div className="mt-1 border-t border-dashed border-border pt-2">
+      <div className="mt-2">
         <p className={metaTextClass}>TTS生成</p>
         {profileId === null ? (
           <p className={metaTextClass}>
@@ -678,6 +708,7 @@ function LineEditor({
         )}
         {generate.isError && <p className={errorTextClass}>{generate.error.message}</p>}
       </div>
+      </Collapsible>
     </div>
   );
 }

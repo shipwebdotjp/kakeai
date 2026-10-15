@@ -37,8 +37,9 @@ import {
   type LineFormValue,
   type SpeakerFormValue,
 } from "../content/form";
-import { PRESET_LABELS, buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { PRESET_LABELS, badgeNeutralClass, buttonDangerClass, buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
 import { useCompositions } from "../api/hooks";
+import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { DataGridField } from "./DataGridField";
 
@@ -50,6 +51,14 @@ const LAYER_LABELS: Record<CueLayer, string> = {
   standing: "立ち絵",
   overlay: "オーバーレイ",
 };
+
+const RANGE_LABELS: Record<string, string> = {
+  scene: "Scene全体",
+  lines: "セリフ区間",
+  offset: "オフセット",
+};
+
+const TEXT_BLOCK_PRIMARY_KEYS: ReadonlySet<string> = new Set(["text", "role"]);
 
 interface AddableTemplate {
   id: string;
@@ -126,167 +135,39 @@ function CueRow({
   const endIndex = lineIndex(lines, cue.endLineId);
   const endCandidates = lineRangeEndCandidates(lines, cue.startLineId);
 
+  const isTextBlock = cue.templateId === textBlockV1.id && cue.templateVersion === textBlockV1.version;
+  const contentFields = fields ?? [];
+  const primaryFields = isTextBlock
+    ? contentFields.filter((field) => TEXT_BLOCK_PRIMARY_KEYS.has(field.key))
+    : contentFields;
+  const styleFields = isTextBlock
+    ? contentFields.filter((field) => !TEXT_BLOCK_PRIMARY_KEYS.has(field.key))
+    : [];
+  const displaySummary = `${LAYER_LABELS[cue.layer] ?? cue.layer} / 順序 ${cue.order} / ${
+    RANGE_LABELS[cue.rangeKind] ?? cue.rangeKind
+  }`;
+  const renderCueField = (field: TemplateFieldSpec) => (
+    <CueField
+      key={field.key}
+      field={field}
+      values={cue.fields}
+      setField={setField}
+      setFields={setFields}
+      getFields={getFields}
+      multiline={isTextBlock && field.key === "text"}
+      animationPresets={definition?.animationPolicy.presets ?? ANIMATION_PRESETS}
+    />
+  );
+
   return (
     <div id={`cue-${cue.id}`} className="mt-2 rounded border border-border p-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">
+        <span className={badgeNeutralClass}>
           {definition?.display.label ?? cue.templateId}@{cue.templateVersion}
         </span>
-        <label className="inline-flex items-center gap-1.5">
-          レイヤー
-          <select className={textFieldClass} {...register(`${base}.layer`)}>
-            {layerOptions.map((layer) => (
-              <option key={layer} value={layer}>
-                {LAYER_LABELS[layer] ?? layer}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="inline-flex items-center gap-1.5">
-          順序
-          <input
-            type="number"
-            min={0}
-            className={`w-20 ${textFieldClass}`}
-            {...register(`${base}.order`, { valueAsNumber: true })}
-          />
-        </label>
-        <button type="button" className={`ml-auto ${buttonNeutralClass}`} onClick={onRemove}>
+        <button type="button" className={`ml-auto ${buttonDangerClass}`} onClick={onRemove}>
           削除
         </button>
-      </div>
-      {cue.templateId === textBlockV1.id && cue.templateVersion === textBlockV1.version && (
-        <p className={metaTextClass}>
-          未指定の項目はテーマ（{DEFAULT_VISUAL_THEME_REF.id}@{DEFAULT_VISUAL_THEME_REF.version}）の役割別スタイルで描画されます
-        </p>
-      )}
-
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-1.5">
-          表示区間
-          <select className={textFieldClass} {...register(`${base}.rangeKind`)}>
-            <option value="scene">Scene全体</option>
-            <option value="lines">セリフ区間</option>
-            <option value="offset">オフセット</option>
-          </select>
-        </label>
-        {cue.rangeKind === "lines" && (
-          <>
-            <label className="inline-flex items-center gap-1.5">
-              開始
-              <select
-                className={textFieldClass}
-                value={cue.startLineId}
-                onChange={(event) => {
-                  const nextId = event.target.value;
-                  setValue(`${base}.startLineId`, nextId, { shouldDirty: true });
-                  setValue(`${base}.endLineId`, nextEndLineId(lines, nextId, cue.endLineId), {
-                    shouldDirty: true,
-                  });
-                }}
-              >
-                <option value="">選択</option>
-                {lines.map((line, index) => (
-                  <option key={line.id} value={line.id}>
-                    {lineOptionLabel(lines, index, speakers)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="inline-flex items-center gap-1.5">
-              終了
-              <select
-                className={textFieldClass}
-                value={cue.endLineId}
-                onChange={(event) =>
-                  setValue(`${base}.endLineId`, event.target.value, { shouldDirty: true })
-                }
-              >
-                <option value="">選択</option>
-                {endCandidates.map((line) => (
-                  <option key={line.id} value={line.id}>
-                    {lineOptionLabel(lines, lineIndex(lines, line.id), speakers)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        )}
-        {cue.rangeKind === "offset" && (
-          <>
-            <label className="inline-flex items-center gap-1.5">
-              開始(ms)
-              <input
-                type="number"
-                min={0}
-                className={`w-24 ${textFieldClass}`}
-                {...register(`${base}.startMs`, { valueAsNumber: true })}
-              />
-            </label>
-            <label className="inline-flex items-center gap-1.5">
-              終了(ms)
-              <input
-                type="number"
-                min={0}
-                className={`w-24 ${textFieldClass}`}
-                {...register(`${base}.endMs`, { valueAsNumber: true })}
-              />
-            </label>
-          </>
-        )}
-      </div>
-
-      {cue.rangeKind === "lines" && (cue.startLineId !== "" || cue.endLineId !== "") && (
-        <p className={`mt-1 ${metaTextClass}`}>
-          開始: {startIndex === -1 ? "未選択" : lineSummary(lines[startIndex]!, speakers)}
-          {" / "}
-          終了: {endIndex === -1 ? "未選択" : lineSummary(lines[endIndex]!, speakers)}
-        </p>
-      )}
-
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-1.5">
-          入場
-          <select className={textFieldClass} {...register(`${base}.enterPreset`)}>
-            {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
-              <option key={preset} value={preset}>
-                {PRESET_LABELS[preset] ?? preset}
-              </option>
-            ))}
-          </select>
-        </label>
-        {cue.enterPreset !== "none" && (
-          <label className="inline-flex items-center gap-1.5">
-            尺(ms)
-            <input
-              type="number"
-              min={0}
-              className={`w-20 ${textFieldClass}`}
-              {...register(`${base}.enterDurationMs`, { valueAsNumber: true })}
-            />
-          </label>
-        )}
-        <label className="inline-flex items-center gap-1.5">
-          退場
-          <select className={textFieldClass} {...register(`${base}.exitPreset`)}>
-            {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
-              <option key={preset} value={preset}>
-                {PRESET_LABELS[preset] ?? preset}
-              </option>
-            ))}
-          </select>
-        </label>
-        {cue.exitPreset !== "none" && (
-          <label className="inline-flex items-center gap-1.5">
-            尺(ms)
-            <input
-              type="number"
-              min={0}
-              className={`w-20 ${textFieldClass}`}
-              {...register(`${base}.exitDurationMs`, { valueAsNumber: true })}
-            />
-          </label>
-        )}
       </div>
 
       {fields === undefined || fields.length === 0 ? (
@@ -294,20 +175,169 @@ function CueRow({
           このテンプレートはUI未対応のため、内容は非破壊で保持されます。
         </p>
       ) : (
-        <div className="mt-2 border-t border-dashed border-border pt-2">
-          {fields.map((field) => (
-            <CueField
-              key={field.key}
-              field={field}
-              values={cue.fields}
-              setField={setField}
-              setFields={setFields}
-              getFields={getFields}
-              animationPresets={definition?.animationPolicy.presets ?? ANIMATION_PRESETS}
-            />
-          ))}
-        </div>
+        <div className="mt-1">{primaryFields.map(renderCueField)}</div>
       )}
+
+      {styleFields.length > 0 && (
+        <Collapsible title="文字スタイル">
+          <p className={metaTextClass}>
+            未指定の項目はテーマ（{DEFAULT_VISUAL_THEME_REF.id}@{DEFAULT_VISUAL_THEME_REF.version}）の役割別スタイルで描画されます
+          </p>
+          {styleFields.map(renderCueField)}
+        </Collapsible>
+      )}
+
+      <Collapsible title="表示の詳細" summary={displaySummary}>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5">
+            レイヤー
+            <select className={textFieldClass} {...register(`${base}.layer`)}>
+              {layerOptions.map((layer) => (
+                <option key={layer} value={layer}>
+                  {LAYER_LABELS[layer] ?? layer}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            順序
+            <input
+              type="number"
+              min={0}
+              className={`w-20 ${textFieldClass}`}
+              {...register(`${base}.order`, { valueAsNumber: true })}
+            />
+          </label>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5">
+            表示区間
+            <select className={textFieldClass} {...register(`${base}.rangeKind`)}>
+              <option value="scene">Scene全体</option>
+              <option value="lines">セリフ区間</option>
+              <option value="offset">オフセット</option>
+            </select>
+          </label>
+          {cue.rangeKind === "lines" && (
+            <>
+              <label className="inline-flex items-center gap-1.5">
+                開始
+                <select
+                  className={textFieldClass}
+                  value={cue.startLineId}
+                  onChange={(event) => {
+                    const nextId = event.target.value;
+                    setValue(`${base}.startLineId`, nextId, { shouldDirty: true });
+                    setValue(`${base}.endLineId`, nextEndLineId(lines, nextId, cue.endLineId), {
+                      shouldDirty: true,
+                    });
+                  }}
+                >
+                  <option value="">選択</option>
+                  {lines.map((line, index) => (
+                    <option key={line.id} value={line.id}>
+                      {lineOptionLabel(lines, index, speakers)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                終了
+                <select
+                  className={textFieldClass}
+                  value={cue.endLineId}
+                  onChange={(event) =>
+                    setValue(`${base}.endLineId`, event.target.value, { shouldDirty: true })
+                  }
+                >
+                  <option value="">選択</option>
+                  {endCandidates.map((line) => (
+                    <option key={line.id} value={line.id}>
+                      {lineOptionLabel(lines, lineIndex(lines, line.id), speakers)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+          {cue.rangeKind === "offset" && (
+            <>
+              <label className="inline-flex items-center gap-1.5">
+                開始(ms)
+                <input
+                  type="number"
+                  min={0}
+                  className={`w-24 ${textFieldClass}`}
+                  {...register(`${base}.startMs`, { valueAsNumber: true })}
+                />
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                終了(ms)
+                <input
+                  type="number"
+                  min={0}
+                  className={`w-24 ${textFieldClass}`}
+                  {...register(`${base}.endMs`, { valueAsNumber: true })}
+                />
+              </label>
+            </>
+          )}
+        </div>
+
+        {cue.rangeKind === "lines" && (cue.startLineId !== "" || cue.endLineId !== "") && (
+          <p className={`mt-1 ${metaTextClass}`}>
+            開始: {startIndex === -1 ? "未選択" : lineSummary(lines[startIndex]!, speakers)}
+            {" / "}
+            終了: {endIndex === -1 ? "未選択" : lineSummary(lines[endIndex]!, speakers)}
+          </p>
+        )}
+
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5">
+            入場
+            <select className={textFieldClass} {...register(`${base}.enterPreset`)}>
+              {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
+                <option key={preset} value={preset}>
+                  {PRESET_LABELS[preset] ?? preset}
+                </option>
+              ))}
+            </select>
+          </label>
+          {cue.enterPreset !== "none" && (
+            <label className="inline-flex items-center gap-1.5">
+              尺(ms)
+              <input
+                type="number"
+                min={0}
+                className={`w-20 ${textFieldClass}`}
+                {...register(`${base}.enterDurationMs`, { valueAsNumber: true })}
+              />
+            </label>
+          )}
+          <label className="inline-flex items-center gap-1.5">
+            退場
+            <select className={textFieldClass} {...register(`${base}.exitPreset`)}>
+              {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
+                <option key={preset} value={preset}>
+                  {PRESET_LABELS[preset] ?? preset}
+                </option>
+              ))}
+            </select>
+          </label>
+          {cue.exitPreset !== "none" && (
+            <label className="inline-flex items-center gap-1.5">
+              尺(ms)
+              <input
+                type="number"
+                min={0}
+                className={`w-20 ${textFieldClass}`}
+                {...register(`${base}.exitDurationMs`, { valueAsNumber: true })}
+              />
+            </label>
+          )}
+        </div>
+      </Collapsible>
     </div>
   );
 }
@@ -318,6 +348,7 @@ interface CueFieldProps {
   setField: (key: string, value: string) => void;
   setFields: (patch: Record<string, string>) => void;
   getFields: () => Record<string, string>;
+  multiline?: boolean;
   animationPresets: readonly AnimationPreset[];
 }
 
@@ -366,7 +397,7 @@ function CompositionVersionField({ label, value, setField, fieldKey }: Compositi
   );
 }
 
-function CueField({ field, values, setField, setFields, getFields, animationPresets }: CueFieldProps) {
+function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
     return (
@@ -494,11 +525,20 @@ function CueField({ field, values, setField, setFields, getFields, animationPres
       return (
         <label className="my-2 block">
           {field.label}
-          <input
-            className={`mt-1 block w-full ${textFieldClass}`}
-            value={value}
-            onChange={(event) => setField(field.key, event.target.value)}
-          />
+          {multiline ? (
+            <textarea
+              rows={3}
+              className={`mt-1 block w-full ${textFieldClass}`}
+              value={value}
+              onChange={(event) => setField(field.key, event.target.value)}
+            />
+          ) : (
+            <input
+              className={`mt-1 block w-full ${textFieldClass}`}
+              value={value}
+              onChange={(event) => setField(field.key, event.target.value)}
+            />
+          )}
         </label>
       );
     case "select":
@@ -681,7 +721,7 @@ export function CueList({
 
   return (
     <div className="mt-3 border-t border-dashed border-border pt-2">
-      <span className="text-sm font-medium">Cue</span>
+      <h4 className="text-sm font-semibold">Cue</h4>
       {fields.map((field, cueIndex) => {
         const cue = watched[cueIndex];
         if (cue === undefined) {

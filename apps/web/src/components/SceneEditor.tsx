@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { OctagonAlert, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, OctagonAlert, TriangleAlert } from "lucide-react";
 import {
   useFieldArray,
   useForm,
@@ -52,12 +52,27 @@ import {
   type DocumentFormValues,
   type SceneAccentKind,
   type SceneFormValue,
+  type SpeakerFormValue,
 } from "../content/form";
 import { SCENE_LABELS } from "../content/labels";
 import { errorMessage } from "../lib/errorMessage";
 import type { UnsavedDocumentState } from "../lib/useDraftPreview";
-import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  badgeInfoClass,
+  badgeNeutralClass,
+  buttonDangerClass,
+  buttonNeutralClass,
+  buttonPrimaryClass,
+  errorTextClass,
+  iconButtonClass,
+  metaTextClass,
+  sectionCardClass,
+  sectionSummaryClass,
+  sectionTitleClass,
+  textFieldClass,
+} from "../ui";
 import { CharacterFields } from "./CharacterFields";
+import { Collapsible } from "./Collapsible";
 import { CueList } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
@@ -71,7 +86,7 @@ interface SceneEditorProps {
   editionId: string;
   scriptVersionId: string;
   onSaved?: (scriptVersion: ScriptVersion) => void;
-  onValuesChange?: (scenes: SceneFormValue[]) => void;
+  onValuesChange?: (scenes: SceneFormValue[], speakers: SpeakerFormValue[]) => void;
   onJumpToLine?: (lineId: string) => void;
   onJumpToTarget?: (targetId: string, seek: DiagnosticTarget["seek"]) => void;
   onDocumentChange?: (state: UnsavedDocumentState) => void;
@@ -214,6 +229,21 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
   );
 }
 
+const SCENE_TRANSITION_LABELS: Record<string, string> = {
+  cut: "カット",
+  fade: "フェード",
+  crossfade: "クロスフェード",
+};
+
+function sceneSettingsSummary(scene: SceneFormValue, sceneIndex: number): string {
+  const parts = [scene.accentKind === "custom" ? "自由色" : "テーマ色"];
+  parts.push(scene.timingMode === "fixed" ? `固定 ${scene.durationMs}ms` : "自動");
+  if (sceneIndex > 0) {
+    parts.push(SCENE_TRANSITION_LABELS[scene.transitionPreset] ?? scene.transitionPreset);
+  }
+  return parts.join(" / ");
+}
+
 export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onJumpToTarget, onDocumentChange, onDirtyChange }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
@@ -267,6 +297,13 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     append: appendCharacter,
     remove: removeCharacter,
   } = useFieldArray({ control, name: "characters" });
+  const [charactersOpen, setCharactersOpen] = useState(characterFields.length === 0);
+
+  useEffect(() => {
+    if (characterFields.length === 0) {
+      setCharactersOpen(true);
+    }
+  }, [characterFields.length]);
   const watchedScenesValue = useWatch({ control, name: "scenes" });
   const watchedScenes = useMemo(() => watchedScenesValue ?? [], [watchedScenesValue]);
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
@@ -274,8 +311,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
   const navProjection = useMemo(
     () =>
-      JSON.stringify(
-        watchedScenes.map((scene) => ({
+      JSON.stringify({
+        scenes: watchedScenes.map((scene) => ({
           id: scene?.id,
           kind: scene?.kind,
           label: scene?.label,
@@ -284,6 +321,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             templateId: cue?.templateId,
             templateVersion: cue?.templateVersion,
             role: cue?.fields?.role ?? "",
+            text: cue?.fields?.text ?? "",
           })),
           lines: (scene?.lines ?? []).map((line) => ({
             id: line?.id,
@@ -291,8 +329,12 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             captionText: line?.captionText,
           })),
         })),
-      ),
-    [watchedScenes],
+        speakers: (watchedSpeakers ?? []).map((speaker) => ({
+          id: speaker?.id,
+          name: speaker?.name,
+        })),
+      }),
+    [watchedScenes, watchedSpeakers],
   );
   const lastEmittedNavProjection = useRef<string | null>(null);
 
@@ -301,15 +343,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       return;
     }
     const snapshot = [...watchedScenes];
+    const speakerSnapshot = [...(watchedSpeakers ?? [])];
     const timer = setTimeout(() => {
       if (navProjection === lastEmittedNavProjection.current) {
         return;
       }
       lastEmittedNavProjection.current = navProjection;
-      onValuesChange?.(snapshot);
+      onValuesChange?.(snapshot, speakerSnapshot);
     }, 150);
     return () => clearTimeout(timer);
-  }, [watchedScenes, navProjection, onValuesChange]);
+  }, [watchedScenes, watchedSpeakers, navProjection, onValuesChange]);
   const savedVoiceByLineId = useMemo(() => {
     const speakerById = new Map(base.speakers.map((speaker) => [speaker.id, speaker]));
     const map = new Map<string, string | null>();
@@ -759,9 +802,21 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         </div>
       )}
 
-      <section className="my-4 rounded-lg border border-border p-4">
-        <h3 className="mt-0 mb-2 text-lg font-semibold">テーマ（Visual Theme）</h3>
-        <p className={metaTextClass}>
+      <Collapsible
+        title="テーマ（Visual Theme）"
+        summary={(() => {
+          const themeId = allValues?.visualTheme?.id;
+          const themeVersion = allValues?.visualTheme?.version;
+          const theme = (themesQuery.data ?? []).find((entry) => entry.id === themeId);
+          if (theme === undefined || themeId === undefined || themeVersion === undefined) {
+            return "未選択";
+          }
+          return `${theme.name} (v${themeVersion})`;
+        })()}
+        className={sectionCardClass}
+      >
+        <h3 className={sectionTitleClass}>テーマ（Visual Theme）</h3>
+        <p className={sectionSummaryClass}>
           作品全体の文字デザイン・配色テーマを指定します。選択変更後に「保存」すると新しい台本版が作成されます。
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -792,10 +847,18 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             </select>
           </label>
         </div>
-      </section>
+      </Collapsible>
 
-      <section className="my-4 rounded-lg border border-border p-4">
-        <h3 className="mt-0 mb-2 text-lg font-semibold">BGM（作品全体）</h3>
+      <Collapsible
+        title="BGM（作品全体）"
+        summary={
+          watchedBgm?.assetId === null || watchedBgm?.assetId === undefined
+            ? "未設定"
+            : `設定あり（ループ${watchedBgm.loop ? "あり" : "なし"}・${watchedBgm.gainDb}dB）`
+        }
+        className={sectionCardClass}
+      >
+        <h3 className={sectionTitleClass}>BGM（作品全体）</h3>
         <MediaPicker
           label="BGM"
           kinds={["audio"]}
@@ -825,11 +888,17 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             </label>
           </div>
         )}
-      </section>
+      </Collapsible>
 
-      <section className="my-4 rounded-lg border border-border p-4">
-        <h3 className="mt-0 mb-2 text-lg font-semibold">キャラクター</h3>
-        <p className={metaTextClass}>
+      <Collapsible
+        title="キャラクター"
+        summary={characterFields.length === 0 ? "未登録" : `${characterFields.length}件`}
+        open={charactersOpen}
+        onOpenChange={setCharactersOpen}
+        className={sectionCardClass}
+      >
+        <h3 className={sectionTitleClass}>キャラクター</h3>
+        <p className={sectionSummaryClass}>
           この作品で使うキャラクターです。声プロファイルを割り当てると、そのキャラクターのセリフをTTSで生成できます。外観はライブラリから取り込んだ後に、この作品内で追加・編集できます。
         </p>
         {voiceProfiles.isError && (
@@ -887,7 +956,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             キャラクターがありません。「ライブラリから追加」で追加してください。
           </p>
         )}
-      </section>
+      </Collapsible>
 
       {fields.map((field, sceneIndex) => {
         const scene = watchedScenes[sceneIndex];
@@ -898,19 +967,19 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           <section
             key={field.id}
             id={`scene-${scene.id}`}
-            className="my-4 rounded-lg border border-border p-4"
+            className={sectionCardClass}
           >
             <div className="mt-0 mb-2 flex flex-wrap items-center gap-2">
               <input
                 aria-label="シーン名"
                 placeholder="シーン名"
-                className={`min-w-[160px] font-semibold ${textFieldClass}`}
+                className={`min-w-[160px] flex-1 font-semibold ${textFieldClass}`}
                 {...register(`scenes.${sceneIndex}.label`)}
               />
-              <span className="text-xs font-normal text-muted-foreground">
+              <span className={scene.kind === "point" ? badgeInfoClass : badgeNeutralClass}>
                 {SCENE_LABELS[scene.kind] ?? scene.kind}
               </span>
-              <span className="text-xs font-normal text-muted-foreground">{scene.id}</span>
+              <span className="font-mono text-xs text-muted-foreground">{scene.id}</span>
               {scene.kind === "point" && (
                 <span className="ml-auto flex gap-1">
                   <button
@@ -923,23 +992,25 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   </button>
                   <button
                     type="button"
-                    className={buttonNeutralClass}
+                    className={iconButtonClass}
+                    aria-label="上へ移動"
                     disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
                     onClick={() => onMove(sceneIndex, -1)}
                   >
-                    ↑
+                    <ChevronUp aria-hidden="true" className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    className={buttonNeutralClass}
+                    className={iconButtonClass}
+                    aria-label="下へ移動"
                     disabled={watchedScenes[sceneIndex + 1]?.kind !== "point"}
                     onClick={() => onMove(sceneIndex, 1)}
                   >
-                    ↓
+                    <ChevronDown aria-hidden="true" className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    className={buttonNeutralClass}
+                    className={buttonDangerClass}
                     onClick={() => remove(sceneIndex)}
                   >
                     削除
@@ -948,19 +1019,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               )}
             </div>
 
-            <TimingFields
-              control={control}
-              register={register}
-              setValue={setValue}
-              sceneIndex={sceneIndex}
-              sceneKind={scene.kind}
-            />
+            <Collapsible title="シーン設定" summary={sceneSettingsSummary(scene, sceneIndex)}>
+              <TimingFields
+                control={control}
+                register={register}
+                setValue={setValue}
+                sceneIndex={sceneIndex}
+                sceneKind={scene.kind}
+              />
 
-            <details className={`mt-1 text-xs ${metaTextClass}`}>
-              <summary className="cursor-pointer text-muted-foreground select-none">
-                尺を表示
-              </summary>
-              <div className="mt-1">
+              <Collapsible title="尺の内訳" className="mt-1 text-xs">
                 {(() => {
                   const placement = placementBySceneId.get(scene.id);
                   if (placement === undefined) {
@@ -983,8 +1051,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                     </>
                   );
                 })()}
-              </div>
-            </details>
+              </Collapsible>
+            </Collapsible>
 
             <CueList
               control={control}
