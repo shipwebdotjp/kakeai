@@ -31,6 +31,7 @@
 - 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、口パクを追加する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) を正とする（グローバルな Face Set ライブラリ、`character.standing@3`、`NarrationSegment.expressionId`、`schemaVersion: 7`。再レンダー差異の許容は [ADR-0045](../adr/0045-face-set-global-reference.md)）。
 - 有名な投稿サイト・技術サイト・ブラウザのガワに画像・動画を収めるサイトモックアップ（フレーム型）は [../site-mockup/spec.md](../site-mockup/spec.md) で実装済み（`scene.site-mockup@1`、variantの加算的追加を許容、汎用スタイル＋利用者ロゴ）。
 - 見た目の既定値を提供するVisual Theme基盤は [../visual-themes/spec.md](../visual-themes/spec.md) で実装済み（`soft-editorial@1` を全作品で固定、`schemaVersion: 6`、Sceneアクセントのテーマ3色／自由色、Cue明示値が常に優先）。二つ目のテーマとWorkごとの選択UIは将来のテーマ追加時に導入する。
+- YouTube 投稿用のサムネイルを、同梱テンプレートに文字と素材を差し込んで作成・管理する（言語エディション単位・複数候補・選択中を1枚、PNGはオンデマンド生成、ブランドは Visual Theme を共有）。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。Phase 2 の画像生成によるサムネイル候補とは別機能で、テンプレート方式を正とする。
 - 編集画面の構成とテキストモデルを再設計する（[../editor/spec.md](../editor/spec.md)）。Sceneスロットを廃止しテキストをVisualCueへ統一（統合テキストテンプレート、配置・フォント・サイズ・色・装飾）、3ペイン化と静的ジャンプメニュー、プレビューの再生コントロールとScene・セリフ間ナビゲーション、シーン間トランジション（カット／フェード／クロスフェード）、立ち絵の前Sceneコピーを含む。テキスト統一とシーン間トランジションは `schemaVersion: 4` の破壊的変更を伴う。
 - `table.simple@1` と、その列定義、行、強調セルの構造化入力を編集可能にする（[表テンプレート](../table-template/spec.md)で対応済み）。続けてchart、flow系VisualTemplateを追加する。`chart.bar@1`（カテゴリ・複数系列・値軸・grow/bounce登場）は [棒グラフテンプレート](../chart-template/spec.md) で対応済み。サイトモックアップの後に着手する。
 

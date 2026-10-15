@@ -163,3 +163,11 @@ _Avoid_: form schema, zod
 **Audio Cue**:
 An instruction to place an audio Asset, such as background music, over a range of a work.
 _Avoid_: BGM asset, narration segment
+
+**Thumbnail**:
+A YouTube-facing image candidate for one Language Edition, held as a mutable small document that references a Thumbnail Template. Multiple candidates may exist, with one selected for upload.
+_Avoid_: cover image, render, Artifact, Script Version
+
+**Thumbnail Template**:
+A trusted reusable thumbnail layout with a defined input contract, separate from a Visual Template.
+_Avoid_: Visual Template, scene, Visual Cue
