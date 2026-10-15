@@ -1,13 +1,19 @@
 import { memo, useEffect } from "react";
 import type { Job } from "@kakeai/contracts";
 import { scriptSubtitlesUrl } from "../api/client";
-import { useCancelJob, useCreateRenderJob, useWorkJobs } from "../api/hooks";
+import {
+  useCancelJob,
+  useCreateRenderJob,
+  useDeleteArtifact,
+  useWorkJobs,
+} from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
 import {
   badgeDangerClass,
   badgeNeutralClass,
   badgeSuccessClass,
   badgeWarningClass,
+  buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
@@ -121,6 +127,7 @@ export const RenderSection = memo(function RenderSection({
   const jobs = useWorkJobs(workId);
   const createRenderJob = useCreateRenderJob(scriptVersionId);
   const cancelJob = useCancelJob(workId);
+  const deleteArtifact = useDeleteArtifact(workId);
   const active = (jobs.data ?? []).some(
     (job) => job.status === "queued" || job.status === "running",
   );
@@ -199,7 +206,7 @@ export const RenderSection = memo(function RenderSection({
                       className="aspect-video w-full rounded border border-border bg-black"
                     />
                     <ArtifactMetadata artifact={artifact} />
-                    <p className="mt-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <a
                         href={artifact.contentUrl}
                         download={downloadName}
@@ -207,7 +214,23 @@ export const RenderSection = memo(function RenderSection({
                       >
                         MP4をダウンロード
                       </a>
-                    </p>
+                      <button
+                        type="button"
+                        className={buttonDangerClass}
+                        disabled={deleteArtifact.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "この出力を削除しますか？削除すると元に戻せません。",
+                            )
+                          ) {
+                            deleteArtifact.mutate(artifact.id);
+                          }
+                        }}
+                      >
+                        削除
+                      </button>
+                    </div>
                   </div>
                 ))}
             </li>
@@ -218,6 +241,9 @@ export const RenderSection = memo(function RenderSection({
         )}
       </Collapsible>
       {cancelJob.isError && <p className={errorTextClass}>{errorMessage(cancelJob.error)}</p>}
+      {deleteArtifact.isError && (
+        <p className={errorTextClass}>{errorMessage(deleteArtifact.error)}</p>
+      )}
     </section>
   );
 });

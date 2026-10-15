@@ -446,6 +446,16 @@ export function useCancelJob(workId: string | undefined) {
   });
 }
 
+export function useDeleteArtifact(workId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (artifactId: string) => {
+      await apiRequest(`/artifacts/${encodeURIComponent(artifactId)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["work-jobs", workId] }),
+  });
+}
+
 export function useVoiceProfiles() {
   return useQuery({
     queryKey: ["voice-profiles"],
