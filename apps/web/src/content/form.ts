@@ -161,6 +161,11 @@ export const DEVICE_FRAME_ID = sceneDeviceFrameV1.id;
 export const STANDING_TEMPLATE_ID = characterStandingV1.id;
 export const STANDING_TRANSITION_POLICY: TransitionPolicy = characterStandingV2.transitionPolicy;
 
+export const CROP_X_SUFFIX = "__x";
+export const CROP_Y_SUFFIX = "__y";
+export const CROP_ZOOM_SUFFIX = "__zoom";
+export const CROP_CENTER_PERCENT = 50;
+
 function readInputObject(cue: VisualCue | null): Record<string, unknown> {
   if (cue === null || typeof cue.input !== "object" || cue.input === null) {
     return {};
@@ -363,6 +368,18 @@ function readCueFields(
             : null;
         result[field.key] = typeof media?.assetId === "string" ? media.assetId : "";
         result[`${field.key}__fit`] = media?.fit === "contain" ? "contain" : "cover";
+        break;
+      }
+      case "mediaCrop": {
+        const value = input[field.key];
+        const point =
+          typeof value === "object" && value !== null
+            ? (value as { x?: unknown; y?: unknown })
+            : null;
+        result[`${field.key}${CROP_X_SUFFIX}`] =
+          typeof point?.x === "number" ? String(Math.round(point.x * 100)) : "";
+        result[`${field.key}${CROP_Y_SUFFIX}`] =
+          typeof point?.y === "number" ? String(Math.round(point.y * 100)) : "";
         break;
       }
       case "text":
@@ -661,6 +678,18 @@ function buildRange(cue: CueFormValue): VisualCue["range"] {
   return { kind: "scene" };
 }
 
+function parseCropPercent(value: string | undefined, label: string): number | null {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const percent = Number(trimmed);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    throw new Error(`${label}は 0〜100% の範囲で入力してください`);
+  }
+  return percent;
+}
+
 function buildCueInput(
   cue: CueFormValue,
   definition: VisualTemplateDefinition,
@@ -696,6 +725,24 @@ function buildCueInput(
         } else {
           const fit = cue.fields[`${field.key}__fit`] === "contain" ? "contain" : "cover";
           input[field.key] = { kind: "media", assetId: raw, fit };
+        }
+        break;
+      }
+      case "mediaCrop": {
+        const xPercent = parseCropPercent(
+          cue.fields[`${field.key}${CROP_X_SUFFIX}`],
+          field.label,
+        );
+        const yPercent = parseCropPercent(
+          cue.fields[`${field.key}${CROP_Y_SUFFIX}`],
+          field.label,
+        );
+        if (xPercent === null && yPercent === null) {
+          deleteAtPath(input, field.key);
+        } else if (xPercent === null || yPercent === null) {
+          throw new Error(`${field.label}は横と縦の両方を指定してください`);
+        } else {
+          setAtPath(input, field.key, { x: xPercent / 100, y: yPercent / 100 });
         }
         break;
       }
@@ -1166,6 +1213,10 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
       case "nestedMedia":
         fields[field.key] = "";
         fields[`${field.key}__fit`] = "cover";
+        break;
+      case "mediaCrop":
+        fields[`${field.key}${CROP_X_SUFFIX}`] = "";
+        fields[`${field.key}${CROP_Y_SUFFIX}`] = "";
         break;
       case "animation":
         fields[field.key] = "none";

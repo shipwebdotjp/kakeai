@@ -72,6 +72,17 @@ describe("visual template metadata", () => {
     expect(getTemplateInputFields("scene.device-frame", 99)).toBeUndefined();
   });
 
+  it("registers a mediaCrop field for focalPoint on full-bleed and card templates", () => {
+    for (const id of ["media.full-bleed", "media.card"]) {
+      const fields = getTemplateInputFields(id, 1);
+      const crop = fields?.find((field) => field.kind === "mediaCrop");
+      expect(crop?.kind).toBe("mediaCrop");
+      if (crop?.kind === "mediaCrop") {
+        expect(crop.key).toBe("focalPoint");
+      }
+    }
+  });
+
   it("registers table.simple@1 as an editable overlay template with a table field", () => {
     const definition = getVisualTemplate("table.simple", 1);
     expect(definition?.layers).toEqual(["overlay"]);

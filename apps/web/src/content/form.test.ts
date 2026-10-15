@@ -268,6 +268,96 @@ describe("buildContentDocument", () => {
     expect((cue.input as { focalPoint?: unknown }).focalPoint).toEqual({ x: 0.2, y: 0.8 });
   });
 
+  function fullBleedCue(values: ReturnType<typeof toFormValues>) {
+    const cue = values.scenes[0]!.cues.find((entry) => entry.templateId === "media.full-bleed");
+    if (cue === undefined) {
+      throw new Error("media.full-bleed cue not found");
+    }
+    return cue;
+  }
+
+  it("reads focalPoint into mediaCrop form fields as percentages", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover", focalPoint: { x: 0.25, y: 0.6 } },
+      }),
+    ];
+    const cue = fullBleedCue(toFormValues(base));
+    expect(cue.fields["focalPoint__x"]).toBe("25");
+    expect(cue.fields["focalPoint__y"]).toBe("60");
+  });
+
+  it("omits focalPoint when both axes are unset", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover" },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = fullBleedCue(values);
+    expect(cue.fields["focalPoint__x"]).toBe("");
+    expect(cue.fields["focalPoint__y"]).toBe("");
+    const rebuilt = buildContentDocument(base, values);
+    expect(
+      (rebuilt.scenes[0]!.visualCues[0]!.input as { focalPoint?: unknown }).focalPoint,
+    ).toBeUndefined();
+  });
+
+  it("drops focalPoint when both axes are reset to center", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover", focalPoint: { x: 0.2, y: 0.8 } },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = fullBleedCue(values);
+    cue.fields["focalPoint__x"] = "";
+    cue.fields["focalPoint__y"] = "";
+    const rebuilt = buildContentDocument(base, values);
+    expect(
+      (rebuilt.scenes[0]!.visualCues[0]!.input as { focalPoint?: unknown }).focalPoint,
+    ).toBeUndefined();
+  });
+
+  it("rejects a focalPoint with only one axis", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover" },
+      }),
+    ];
+    const values = toFormValues(base);
+    fullBleedCue(values).fields["focalPoint__x"] = "10";
+    expect(() => buildContentDocument(base, values)).toThrow();
+  });
+
+  it("rejects a focalPoint percent outside 0-100", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-bg", fit: "cover" },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = fullBleedCue(values);
+    cue.fields["focalPoint__x"] = "120";
+    cue.fields["focalPoint__y"] = "50";
+    expect(() => buildContentDocument(base, values)).toThrow();
+  });
+
   it("prunes orphaned takes and scene audio cues when a scene is deleted", () => {
     const base = createInitialContentDocument();
     const point = pointScenes(base)[0]!;

@@ -207,6 +207,26 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("aspect-ratio:9/16");
   });
 
+  it("maps focalPoint to object-position on full-bleed and card media", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-p1-bg",
+        template: { id: "media.full-bleed", version: 1 },
+        input: { assetId: "asset-image-1", fit: "cover", focalPoint: { x: 0.2, y: 0.8 } },
+      }),
+      cue({
+        id: "vc-p1-card",
+        template: { id: "media.card", version: 1 },
+        layer: "card",
+        input: { assetId: "asset-image-1", heading: "見出し", focalPoint: { x: 0.1, y: 0.9 } },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("object-position:20% 80%");
+    expect(compiled.html).toContain("object-position:10% 90%");
+  });
+
   it("omits the text frame when heading and caption are empty", () => {
     const document = validContentDocument();
     document.scenes[1]!.visualCues = [

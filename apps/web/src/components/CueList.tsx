@@ -19,6 +19,9 @@ import {
   type TemplateFieldSpec,
 } from "@kakeai/contracts";
 import {
+  CROP_CENTER_PERCENT,
+  CROP_X_SUFFIX,
+  CROP_Y_SUFFIX,
   STANDING_TEMPLATE_ID,
   createCueFormValue,
   lineIndex,
@@ -110,10 +113,12 @@ function CueRow({
   const layerOptions = definition?.layers ?? ["background"];
   const fields = definition?.inputFields;
   const fieldsPath = `${base}.fields` as const;
-  const setField = (key: string, value: string) => {
+  const getFields = (): Record<string, string> => getValues(fieldsPath) ?? {};
+  const setFields = (patch: Record<string, string>) => {
     const current = getValues(fieldsPath) ?? {};
-    setValue(fieldsPath, { ...current, [key]: value }, { shouldDirty: true });
+    setValue(fieldsPath, { ...current, ...patch }, { shouldDirty: true });
   };
+  const setField = (key: string, value: string) => setFields({ [key]: value });
   const startIndex = lineIndex(lines, cue.startLineId);
   const endIndex = lineIndex(lines, cue.endLineId);
   const endCandidates = lineRangeEndCandidates(lines, cue.startLineId);
@@ -293,6 +298,8 @@ function CueRow({
               field={field}
               values={cue.fields}
               setField={setField}
+              setFields={setFields}
+              getFields={getFields}
               animationPresets={definition?.animationPolicy.presets ?? ANIMATION_PRESETS}
             />
           ))}
@@ -306,6 +313,8 @@ interface CueFieldProps {
   field: TemplateFieldSpec;
   values: Record<string, string>;
   setField: (key: string, value: string) => void;
+  setFields: (patch: Record<string, string>) => void;
+  getFields: () => Record<string, string>;
   animationPresets: readonly AnimationPreset[];
 }
 
@@ -354,7 +363,7 @@ function CompositionVersionField({ label, value, setField, fieldKey }: Compositi
   );
 }
 
-function CueField({ field, values, setField, animationPresets }: CueFieldProps) {
+function CueField({ field, values, setField, setFields, getFields, animationPresets }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
     return (
@@ -392,6 +401,64 @@ function CueField({ field, values, setField, animationPresets }: CueFieldProps) 
           )}
         </div>
       );
+    case "mediaCrop": {
+      const xKey = `${field.key}${CROP_X_SUFFIX}`;
+      const yKey = `${field.key}${CROP_Y_SUFFIX}`;
+      const center = String(CROP_CENTER_PERCENT);
+      const xValue = values[xKey] ?? "";
+      const yValue = values[yKey] ?? "";
+      const xDisplay = xValue.length > 0 ? xValue : center;
+      const yDisplay = yValue.length > 0 ? yValue : center;
+      const isCentered = xValue.length === 0 && yValue.length === 0;
+      const moveAxis = (axisKey: string, otherKey: string, next: string) => {
+        const otherValue = getFields()[otherKey] ?? "";
+        setFields(
+          otherValue.length === 0 ? { [axisKey]: next, [otherKey]: center } : { [axisKey]: next },
+        );
+      };
+      return (
+        <div className="my-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{field.label}</span>
+            <span className={metaTextClass}>
+              横 {xDisplay}% / 縦 {yDisplay}%
+            </span>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+              disabled={isCentered}
+              onClick={() => setFields({ [xKey]: "", [yKey]: "" })}
+            >
+              中央に戻す
+            </button>
+          </div>
+          <label className="mt-1 flex items-center gap-2">
+            <span className="w-6 text-xs">横</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              className="w-48"
+              value={xDisplay}
+              onChange={(event) => moveAxis(xKey, yKey, event.target.value)}
+            />
+          </label>
+          <label className="mt-1 flex items-center gap-2">
+            <span className="w-6 text-xs">縦</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              className="w-48"
+              value={yDisplay}
+              onChange={(event) => moveAxis(yKey, xKey, event.target.value)}
+            />
+          </label>
+        </div>
+      );
+    }
     case "text":
     case "optionalText":
       return (

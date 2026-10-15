@@ -37,6 +37,7 @@ export type TemplateFieldSpec =
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
   | { kind: "color"; key: string; label: string; optional?: boolean }
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
+  | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; emphasis?: boolean }
   | { kind: "animation"; key: string; label: string };
@@ -162,6 +163,7 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
   inputFields: [
     { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
     { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
+    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置" },
   ],
   collectAssetRefs: (input, path) => {
     const parsed = mediaFullBleedInputSchema.safeParse(input);
@@ -205,6 +207,7 @@ const mediaCardV1: VisualTemplateDefinition = {
     },
     { kind: "text", key: "heading", label: "見出し" },
     { kind: "optionalText", key: "caption", label: "補足文" },
+    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置" },
   ],
   collectAssetRefs: (input, path) => {
     const parsed = mediaCardInputSchema.safeParse(input);

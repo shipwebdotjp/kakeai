@@ -66,7 +66,7 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 - [x] Web UI: 要点Sceneの追加・削除・並べ替え。追加時だけIDを発行し、保存・移動では既存IDを維持する
 - [x] Web UI: 各SceneにScene全体の背景とカードを各1件選択・解除する。背景は最背面、カードはその上とする
 - [x] Web UI: 画像・動画の素材ピッカーとピッカー内アップロード。`ready`以外の素材は選択不可にする
-- [x] Web UI: カードの見出し・補足文を編集する。背景クロップは中央固定とする
+- [x] Web UI: カードの見出し・補足文を編集する。背景クロップは中央固定とする（のちに [焦点位置](../focal-point/spec.md) で編集対応）
 - [x] UI未対応の複数Cue、`lines`／`offset`範囲、他のVisualTemplateを非破壊で保持する
 - 完了条件: 要点数を変え、背景・カードを選択して保存、プレビュー、レンダーできる。未対応Cueを含むContentDocumentを保存しても値を失わない。
 
@@ -101,6 +101,6 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 
 - [Visual Theme基盤](../visual-themes/spec.md)（`soft-editorial@1`、`schemaVersion: 6`）: [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張) の一部として実装済み。詳細と完了条件は [../visual-themes/todo.md](../visual-themes/todo.md) を正とする
 
-- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 複合ビジュアル基盤（VisualCue v3、NestedVisual、`scene.device-frame@1`、Cue一覧UI、transition）は [複合ビジュアル](../composite-visuals/spec.md) で実装済み。残りは 背景・カードの焦点位置、複数VisualCueの拡張、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、chart(line/pie)/flow系VisualTemplate。うち複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で、`table.simple@1`（列定義、行、強調セル、CSV貼り付け）は [表テンプレート](../table-template/spec.md) で、`chart.bar@1`（カテゴリ・複数系列・値軸・grow/bounce）は [棒グラフテンプレート](../chart-template/spec.md) で実装済み
+- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 複合ビジュアル基盤（VisualCue v3、NestedVisual、`scene.device-frame@1`、Cue一覧UI、transition）は [複合ビジュアル](../composite-visuals/spec.md) で実装済み。残りは 複数VisualCueの拡張、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、chart(line/pie)/flow系VisualTemplate。うち背景・カードの焦点位置は [焦点位置](../focal-point/spec.md) で、複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で、`table.simple@1`（列定義、行、強調セル、CSV貼り付け）は [表テンプレート](../table-template/spec.md) で、`chart.bar@1`（カテゴリ・複数系列・値軸・grow/bounce）は [棒グラフテンプレート](../chart-template/spec.md) で実装済み
 - [ロードマップ Phase 5](./roadmap.md#phase-5-派生コンテンツと制作運用): progressPercentに依存した詳細進捗表示、実行中Jobのキャンセル、複数worker、自動再試行、contentHash/JCS、Jobリース、楽観ロック、同一SHA復旧の厳密化
 - `health.storage.status` の容量警告: 管理領域の使用量から80GiB閾値で `warning` を返し、UIとhealthに表示する（[spec.md](./spec.md) のリソース上限）。現状は常に `ok`。
