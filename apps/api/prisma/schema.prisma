@@ -29,6 +29,9 @@ model LanguageEdition {
   currentScriptVersionId String?         @unique
   currentScriptVersion   ScriptVersion?  @relation("EditionCurrent", fields: [currentScriptVersionId], references: [id], onDelete: Restrict)
   scriptVersions         ScriptVersion[] @relation("EditionVersions")
+  thumbnails             Thumbnail[]     @relation("EditionThumbnails")
+  primaryThumbnailId     String?         @unique
+  primaryThumbnail       Thumbnail?      @relation("EditionPrimaryThumbnail", fields: [primaryThumbnailId], references: [id], onDelete: SetNull)
   jobs                   Job[]
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
@@ -294,4 +297,20 @@ model ThemeRevision {
   createdAt      DateTime @default(now())
 
   @@unique([themeId, versionNumber])
+}
+
+model Thumbnail {
+  id                String          @id @default(cuid())
+  languageEditionId String
+  languageEdition   LanguageEdition @relation("EditionThumbnails", fields: [languageEditionId], references: [id], onDelete: Restrict)
+  primaryForEdition LanguageEdition? @relation("EditionPrimaryThumbnail")
+  label             String
+  schemaVersion     Int
+  templateId        String
+  templateVersion   Int
+  inputJson         String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([languageEditionId])
 }

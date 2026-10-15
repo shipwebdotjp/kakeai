@@ -20,6 +20,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   MEDIA_LIMIT_EXCEEDED: "素材の長さまたは寸法が上限を超えています。",
   PREVIEW_INPUT_INVALID: "プレビューを生成できません。",
   RENDER_INPUT_INVALID: "レンダー入力を確認してください。",
+  THUMBNAIL_INPUT_INVALID: "サムネイルを生成できません。",
   VOICE_PROFILE_IN_USE: "この声プロファイルは使用中のため削除できません。",
   FACE_SET_IN_USE: "この表情セットは使用中のため削除できません。",
   TTS_INPUT_INVALID: "音声生成の入力を確認してください。",

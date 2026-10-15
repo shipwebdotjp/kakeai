@@ -8,6 +8,10 @@ export function workRoute(workId: string): string {
   return `/works/${encodeURIComponent(workId)}`;
 }
 
+export function thumbnailsRoute(workId: string, editionId: string): string {
+  return `/works/${encodeURIComponent(workId)}/editions/${encodeURIComponent(editionId)}/thumbnails`;
+}
+
 export function themeDetailRoute(themeId: string): string {
   return `/themes/${encodeURIComponent(themeId)}`;
 }

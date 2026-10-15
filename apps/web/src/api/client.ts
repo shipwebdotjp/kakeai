@@ -100,3 +100,7 @@ export function renderContentUrl(assetId: string): string {
 export function assetContentUrl(assetId: string): string {
   return buildApiUrl(`/assets/${encodeURIComponent(assetId)}/content`);
 }
+
+export function thumbnailImageUrl(thumbnailId: string): string {
+  return buildApiUrl(`/thumbnails/${encodeURIComponent(thumbnailId)}/image`);
+}

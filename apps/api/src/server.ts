@@ -19,6 +19,8 @@ import { createWorksRouter } from "./http/routes/works.ts";
 import { createCompositionsRouter } from "./http/routes/compositions.ts";
 import { createThemesRouter } from "./http/routes/themes.ts";
 import { createFontsRouter } from "./http/routes/fonts.ts";
+import { createThumbnailsRouter } from "./http/routes/thumbnails.ts";
+import type { Rasterizer } from "./media/rasterize.ts";
 import { CompositionService } from "./services/compositions.ts";
 import { ThemeService } from "./services/themes.ts";
 import { getSharedFontCatalogService, type FontCatalogService } from "./services/font-catalog.ts";
@@ -40,6 +42,7 @@ export interface AppDependencies {
   fontCatalogService?: FontCatalogService;
   getWorkerStatus: () => WorkerStatus;
   getStorageStatus?: () => StorageStatus;
+  rasterizer?: Rasterizer;
 }
 
 interface BodyParserError {
@@ -152,6 +155,14 @@ export function createApp(dependencies: AppDependencies): Express {
       directories: dependencies.config.directories,
       config: dependencies.config,
       fontCatalogService,
+    }),
+  );
+  api.use(
+    createThumbnailsRouter({
+      prisma: dependencies.prisma,
+      directories: dependencies.config.directories,
+      mediaGuard,
+      rasterizer: dependencies.rasterizer,
     }),
   );
   api.use(

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { templateRefSchema } from "./content/nested";
 import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 import { voiceIdSchema } from "./voice-profile";
 import { assetTagsSchema } from "./asset";
@@ -133,3 +134,30 @@ export type PublishThemeDraftRequest = z.infer<typeof publishThemeDraftRequestSc
 
 export const refreshFontCatalogRequestSchema = z.strictObject({});
 export type RefreshFontCatalogRequest = z.infer<typeof refreshFontCatalogRequestSchema>;
+
+export const thumbnailLabelSchema = z.string().trim().min(1).max(80);
+
+export const createThumbnailRequestSchema = z.strictObject({
+  label: thumbnailLabelSchema,
+  template: templateRefSchema,
+  input: z.unknown(),
+});
+export type CreateThumbnailRequest = z.infer<typeof createThumbnailRequestSchema>;
+
+export const saveThumbnailRequestSchema = z.strictObject({
+  label: thumbnailLabelSchema,
+  template: templateRefSchema,
+  input: z.unknown(),
+});
+export type SaveThumbnailRequest = z.infer<typeof saveThumbnailRequestSchema>;
+
+export const setPrimaryThumbnailRequestSchema = z.strictObject({
+  thumbnailId: idSchema.nullable(),
+});
+export type SetPrimaryThumbnailRequest = z.infer<typeof setPrimaryThumbnailRequestSchema>;
+
+export const thumbnailPreviewRequestSchema = z.strictObject({
+  template: templateRefSchema,
+  input: z.unknown(),
+});
+export type ThumbnailPreviewRequest = z.infer<typeof thumbnailPreviewRequestSchema>;

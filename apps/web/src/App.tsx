@@ -16,6 +16,7 @@ import { ThemeDetailPage } from "./pages/ThemeDetailPage";
 import { VoiceProfilesPage } from "./pages/VoiceProfilesPage";
 import { WorkEditPage } from "./pages/WorkEditPage";
 import { WorkListPage } from "./pages/WorkListPage";
+import { ThumbnailsPage } from "./pages/ThumbnailsPage";
 
 function RootLayout() {
   return (
@@ -89,6 +90,10 @@ export const router = createBrowserRouter([
       {
         path: "works/:workId",
         element: <WorkEditPage />,
+      },
+      {
+        path: "works/:workId/editions/:editionId/thumbnails",
+        element: <ThumbnailsPage />,
       },
       {
         element: <PageLayout />,

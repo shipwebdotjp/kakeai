@@ -17,6 +17,7 @@ export * from "./content/migrate";
 export * from "./content/warnings";
 export * from "./content/asset-refs";
 export * from "./templates";
+export * from "./thumbnail";
 export * from "./voice-profile";
 export * from "./character-library";
 export * from "./face-set";

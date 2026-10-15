@@ -72,6 +72,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | VoiceAdapter | id, label, defaultLocale, voiceSelection, modelSelection | 登録済み TTS アダプター記述子。`defaultLocale` は固定言語（無ければnull）、`voiceSelection` は `list` / `list-or-manual`、`modelSelection` はモデル指定の要否。 |
 | TtsVoice | voiceId, name, locale? | 接続中エンジンの声。`voiceId` はアダプター定義の不透明な ID、`locale` は任意の申告言語。 |
 | BulkTtsJobsResult | jobs, excluded | 一括TTS生成の応答。`jobs` は `narrationSegmentId` と Job DTO の組、`excluded` は `narrationSegmentId`・エラーコード・安全な理由。詳細は [../tts/spec.md](../tts/spec.md)。 |
+| Thumbnail | id, languageEditionId, label, schemaVersion, template, input, isPrimary, createdAt, updatedAt | 言語版のサムネイル候補。`template` は `{ id, version }`、`input` はテンプレート固有のJSON。複数候補を持ち、`isPrimary` が投稿に使う1枚。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
+| ThumbnailPreview | html, width, height | 未保存のサムネイル入力をコンパイルした静止画HTML（1280x720）。DBへ書かない。 |
 | CharacterLibraryEntry | id, name, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
 | FaceSet | id, name, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
 
@@ -109,6 +111,14 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /script-versions/:scriptVersionId/preview | 200 | 信頼済みComposition HTMLと素材URLを取得 |
 | GET | /script-versions/:scriptVersionId/subtitles | 200 | 保存済み版の字幕（SRT）をダウンロード |
 | POST | /language-editions/:editionId/draft-preview | 200 | 未保存の台本案から書込みなしでドラフト・プレビューを合成 |
+| GET | /language-editions/:editionId/thumbnails | 200 | 言語版のサムネイル候補一覧を取得（[../thumbnail/spec.md](../thumbnail/spec.md)） |
+| POST | /language-editions/:editionId/thumbnails | 201 | サムネイル候補を作成 |
+| PUT | /language-editions/:editionId/primary-thumbnail | 200 | 投稿に使うサムネイル候補を選択 |
+| POST | /language-editions/:editionId/thumbnail-preview | 200 | 未保存のサムネイル入力を書込みなしでプレビュー |
+| GET | /thumbnails/:thumbnailId | 200 | サムネイル候補を取得 |
+| PUT | /thumbnails/:thumbnailId | 200 | サムネイル候補を明示保存（上書き） |
+| DELETE | /thumbnails/:thumbnailId | 204 | サムネイル候補を削除 |
+| GET | /thumbnails/:thumbnailId/image | 200 | 候補のPNGをオンデマンド生成して配信 |
 | POST | /script-versions/:scriptVersionId/render-jobs | 202 | 入力スナップショットを持つRender Jobをキューへ追加 |
 | GET | /works/:workId/jobs | 200 | 作品のRender Job履歴を新しい順に取得 |
 | GET | /jobs/:jobId | 200 | Render Jobの状態をポーリング |
@@ -691,6 +701,20 @@ GET /api/v1/script-versions/scr_003/subtitles
 
 存在しない版は404 `RESOURCE_NOT_FOUND` とする。固定尺の選択音声合計超過など、タイミングを解決できない入力はレンダー投入時と同じ422 `RENDER_INPUT_INVALID` とする。
 
+## サムネイル
+
+言語版ごとにYouTube投稿用のサムネイル候補を作成・管理する。候補は動画の台本とは別の可変な正本で、明示保存で上書きし、版履歴を持たない。ブランドはその言語版の現行ScriptVersionのVisual Themeを共有する。詳細は [../thumbnail/spec.md](../thumbnail/spec.md) を正とする。
+
+- GET /language-editions/:editionId/thumbnails は候補一覧を返す。各候補に `isPrimary` を含める。
+- POST /language-editions/:editionId/thumbnails は `{ label, template, input }` から候補を作成する。最初の候補は自動的に投稿用になる。
+- PUT /language-editions/:editionId/primary-thumbnail は `{ thumbnailId }`（解除は null）で投稿用の候補を切り替える。
+- PUT /thumbnails/:thumbnailId は `{ label, template, input }` で候補を明示保存（上書き）する。
+- DELETE /thumbnails/:thumbnailId は候補を削除する。投稿用を削除した場合は別の候補へ付け替えるか null にする。
+- POST /language-editions/:editionId/thumbnail-preview は `{ template, input }` のコンパイル済みHTMLを返す。DBへ書かない。
+- GET /thumbnails/:thumbnailId/image は 1280x720 のPNGをオンデマンド生成して返す。JobもArtifactも作らない。
+
+未知のテンプレート参照・入力不整合・素材種別違反は 422 `VALIDATION_ERROR`、静止画へ変換できない場合は 422 `THUMBNAIL_INPUT_INVALID` を返す。存在しない候補・言語版は 404 `RESOURCE_NOT_FOUND`（候補のPNGは `Content-Disposition: attachment` と `Cache-Control: private, max-age=0, must-revalidate` を付け、メディアセッションCookieで認可する）。
+
 ## エラー契約
 
 ### HTTPエラー
@@ -714,6 +738,7 @@ GET /api/v1/script-versions/scr_003/subtitles
 | 422 | MEDIA_LIMIT_EXCEEDED | 長さまたは寸法がサーバー設定の上限を超える | measured, limits |
 | 422 | PREVIEW_INPUT_INVALID | 保存済み台本をCompositionへ変換できない | issues |
 | 422 | RENDER_INPUT_INVALID | レンダー投入時の音声尺超過など。字幕エクスポートのタイミング解決失敗も同じcode | issues |
+| 422 | THUMBNAIL_INPUT_INVALID | 保存済みまたは編集中のサムネイル入力を静止画へ変換できない | issues |
 | 422 | TTS_INPUT_INVALID | TTS生成要求の空本文・Speaker/Profile未設定・Profileのアダプター外の声・不正な話速 | issues |
 | 503 | TTS_ENGINE_UNAVAILABLE | TTSエンジン未起動または接続失敗 | 任意 |
 | 500 | INTERNAL_ERROR | 予期しないAPI内部エラー | requestIdのみ |

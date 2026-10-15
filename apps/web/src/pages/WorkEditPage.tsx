@@ -27,6 +27,7 @@ import {
   type LayoutStorage,
 } from "../lib/editorLayout";
 import { EDITOR_WIDE_MEDIA_QUERY, useMediaQuery } from "../lib/useMediaQuery";
+import { thumbnailsRoute } from "../lib/routes";
 import {
   badgeInfoClass,
   badgeNeutralClass,
@@ -727,6 +728,11 @@ function WorkEditPanesContent({
           {current.data && editionId !== undefined && workId !== undefined && (
             <>
               <PreviewSection sceneLabels={sceneLabels} />
+              <p className="px-1">
+                <Link className={buttonNeutralClass} to={thumbnailsRoute(workId, editionId)}>
+                  サムネイル
+                </Link>
+              </p>
               <RenderSection workId={workId} scriptVersionId={scriptVersionId ?? current.data.id} />
             </>
           )}

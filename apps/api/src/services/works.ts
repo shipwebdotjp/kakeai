@@ -242,6 +242,11 @@ export async function deleteWork(
       data: { sourceScriptVersionId: null },
     });
     await tx.scriptVersion.deleteMany({ where: { languageEditionId: { in: editionIds } } });
+    await tx.languageEdition.updateMany({
+      where: { workId },
+      data: { primaryThumbnailId: null },
+    });
+    await tx.thumbnail.deleteMany({ where: { languageEditionId: { in: editionIds } } });
     await tx.languageEdition.deleteMany({ where: { workId } });
     await tx.work.delete({ where: { id: workId } });
     return removedArtifactKeys;

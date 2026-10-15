@@ -11,6 +11,7 @@ import {
   jobKindSchema,
   jobStatusSchema,
   localeSchema,
+  thumbnailDocumentSchema,
   ttsJobResultSchema,
   voiceAdapterIdSchema,
   voiceIdSchema,
@@ -23,6 +24,7 @@ import {
   type LanguageEditionSummary,
   type ScriptVersion,
   type ScriptVersionSummary,
+  type Thumbnail,
   type TtsJobResult,
   type VoiceProfile,
   type Work,
@@ -39,6 +41,7 @@ import type {
   Job as JobRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
+  Thumbnail as ThumbnailRow,
   VoiceProfile as VoiceProfileRow,
   Work as WorkRow,
 } from "../generated/prisma/client.ts";
@@ -347,6 +350,30 @@ export function toFaceSet(row: FaceSetWithDetails): FaceSet {
       eyeLayerId: preset.eyeLayerId,
       mouthLayerId: preset.mouthLayerId,
     })),
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export function toThumbnail(row: ThumbnailRow, isPrimary: boolean): Thumbnail {
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(row.inputJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", `サムネイルの入力を解釈できません: ${row.id}`);
+  }
+  const document = thumbnailDocumentSchema.safeParse(parsedJson);
+  if (!document.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", `サムネイルの入力が不正です: ${row.id}`);
+  }
+  return {
+    id: row.id,
+    languageEditionId: row.languageEditionId,
+    label: row.label,
+    schemaVersion: document.data.schemaVersion,
+    template: document.data.template,
+    input: document.data.input,
+    isPrimary,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };

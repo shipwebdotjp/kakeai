@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema, localeSchema, nonNegativeInt, positiveInt, timestampSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { templateRefSchema } from "./content/nested";
 import { visualThemeDefinitionSchema } from "./content/theme";
 import { assetTagsSchema } from "./asset";
 import { errorCodeSchema } from "./error";
@@ -372,3 +373,23 @@ export const themeDetailSchema = themeSummarySchema.extend({
   draft: themeDraftSchema.nullable(),
 });
 export type ThemeDetail = z.infer<typeof themeDetailSchema>;
+
+export const thumbnailSchema = z.object({
+  id: idSchema,
+  languageEditionId: idSchema,
+  label: z.string(),
+  schemaVersion: positiveInt,
+  template: templateRefSchema,
+  input: z.unknown(),
+  isPrimary: z.boolean(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+export type Thumbnail = z.infer<typeof thumbnailSchema>;
+
+export const thumbnailPreviewSchema = z.object({
+  html: z.string().min(1),
+  width: positiveInt,
+  height: positiveInt,
+});
+export type ThumbnailPreview = z.infer<typeof thumbnailPreviewSchema>;
