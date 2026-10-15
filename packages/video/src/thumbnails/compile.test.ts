@@ -63,6 +63,85 @@ describe("compileThumbnail", () => {
     expect(compiled.html).toContain("文字だけ");
   });
 
+  it("renders a layered thumbnail with background, main, and character", () => {
+    const compiled = compileThumbnail({
+      document: {
+        schemaVersion: 1,
+        template: { id: "thumbnail.layered", version: 1 },
+        input: {
+          headline: "重ね見出し",
+          subline: "補足",
+          backgroundAssetId: "ast_bg",
+          mainAssetId: "ast_main",
+          characterAssetId: "ast_char",
+        },
+      },
+      theme,
+      assetResolver,
+    });
+    expect(compiled.width).toBe(THUMBNAIL_OUTPUT_WIDTH);
+    expect(compiled.height).toBe(THUMBNAIL_OUTPUT_HEIGHT);
+    expect(compiled.html).toContain("/preview/ast_bg");
+    expect(compiled.html).toContain("/preview/ast_main");
+    expect(compiled.html).toContain("/preview/ast_char");
+    expect(compiled.html).toContain("重ね見出し");
+    expect(compiled.assetIds).toEqual(["ast_bg", "ast_main", "ast_char"]);
+  });
+
+  it("renders a layered thumbnail without any image", () => {
+    const compiled = compileThumbnail({
+      document: {
+        schemaVersion: 1,
+        template: { id: "thumbnail.layered", version: 1 },
+        input: { headline: "文字だけ" },
+      },
+      theme,
+      assetResolver,
+    });
+    expect(compiled.assetIds).toEqual([]);
+    expect(compiled.html).toContain("文字だけ");
+  });
+
+  it("changes the stacking order with the stack variant", () => {
+    const base = {
+      schemaVersion: 1 as const,
+      template: { id: "thumbnail.layered", version: 1 },
+      input: { headline: "x", mainAssetId: "ast_main", characterAssetId: "ast_char" },
+    };
+    const front = compileThumbnail({
+      document: { ...base, input: { ...base.input, stack: "text-character-main" } },
+      theme,
+      assetResolver,
+    });
+    const back = compileThumbnail({
+      document: { ...base, input: { ...base.input, stack: "character-main-text" } },
+      theme,
+      assetResolver,
+    });
+    expect(front.html).not.toBe(back.html);
+  });
+
+  it("renders the layered thumbnail deterministically", () => {
+    const build = (): string =>
+      compileThumbnail({
+        document: {
+          schemaVersion: 1,
+          template: { id: "thumbnail.layered", version: 1 },
+          input: {
+            headline: "見出し",
+            subline: "補足",
+            backgroundAssetId: "ast_bg",
+            mainAssetId: "ast_main",
+            characterAssetId: "ast_char",
+            characterPosition: "left",
+          },
+        },
+        theme,
+        assetResolver,
+      }).html;
+    expect(build()).toBe(build());
+  });
+
   it("fails on an unknown template", () => {
     expect(() =>
       compileThumbnail({

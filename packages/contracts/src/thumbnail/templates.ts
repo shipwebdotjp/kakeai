@@ -102,6 +102,103 @@ const photoCoverV1: ThumbnailTemplateDefinition = {
   },
 };
 
+export const THUMBNAIL_LAYERED_STACK_VALUES = [
+  "text-character-main",
+  "character-text-main",
+  "character-main-text",
+  "main-character-text",
+] as const;
+
+export const thumbnailLayeredStackSchema = z.enum(THUMBNAIL_LAYERED_STACK_VALUES);
+
+export const thumbnailLayeredPositionSchema = z.enum(["left", "center", "right"]);
+
+export const thumbnailLayeredInputSchema = z.strictObject({
+  headline: z.string(),
+  subline: z.string().optional(),
+  backgroundAssetId: idSchema.optional(),
+  backgroundFocalPoint: focalPointSchema.optional(),
+  backgroundZoom: mediaZoomSchema.optional(),
+  mainAssetId: idSchema.optional(),
+  mainFocalPoint: focalPointSchema.optional(),
+  mainZoom: mediaZoomSchema.optional(),
+  characterAssetId: idSchema.optional(),
+  characterPosition: thumbnailLayeredPositionSchema.default("right"),
+  characterScale: z.number().min(0.5).max(2).optional(),
+  stack: thumbnailLayeredStackSchema.default("text-character-main"),
+});
+export type ThumbnailLayeredInput = z.infer<typeof thumbnailLayeredInputSchema>;
+
+const STACK_OPTIONS = [
+  { value: "text-character-main", label: "テキスト ＞ キャラ ＞ メイン" },
+  { value: "character-text-main", label: "キャラ ＞ テキスト ＞ メイン" },
+  { value: "character-main-text", label: "キャラ ＞ メイン ＞ テキスト" },
+  { value: "main-character-text", label: "メイン ＞ キャラ ＞ テキスト" },
+] as const;
+
+const CHARACTER_POSITION_OPTIONS = [
+  { value: "left", label: "左" },
+  { value: "center", label: "中央" },
+  { value: "right", label: "右" },
+] as const;
+
+const layeredV1: ThumbnailTemplateDefinition = {
+  id: "thumbnail.layered",
+  version: 1,
+  inputSchema: thumbnailLayeredInputSchema,
+  display: {
+    label: "重ね合わせ（背景＋メイン＋キャラ）",
+    description: "背景・メインビジュアル・キャラクターを重ね、見出しを上・補足文を下に置く",
+    category: "thumbnail",
+  },
+  inputFields: [
+    { kind: "text", key: "headline", label: "見出し" },
+    { kind: "optionalText", key: "subline", label: "補足文" },
+    { kind: "media", key: "backgroundAssetId", label: "背景画像", assetKinds: THUMBNAIL_MEDIA_KINDS },
+    {
+      kind: "mediaCrop",
+      key: "backgroundFocalPoint",
+      label: "背景の切り出し位置",
+      zoomKey: "backgroundZoom",
+    },
+    { kind: "media", key: "mainAssetId", label: "メインビジュアル", assetKinds: THUMBNAIL_MEDIA_KINDS },
+    {
+      kind: "mediaCrop",
+      key: "mainFocalPoint",
+      label: "メインビジュアルの切り出し位置",
+      zoomKey: "mainZoom",
+    },
+    { kind: "media", key: "characterAssetId", label: "キャラクター画像", assetKinds: THUMBNAIL_MEDIA_KINDS },
+    { kind: "select", key: "characterPosition", label: "キャラクターの位置", options: CHARACTER_POSITION_OPTIONS },
+    {
+      kind: "number",
+      key: "characterScale",
+      label: "キャラクターの拡大",
+      min: 0.5,
+      max: 2,
+      step: 0.05,
+      optional: true,
+    },
+    { kind: "select", key: "stack", label: "重なり順", options: STACK_OPTIONS },
+  ],
+  collectAssetRefs: (input, path) => {
+    const parsed = thumbnailLayeredInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    const references: AssetReference[] = [];
+    const push = (assetId: string | undefined, key: string): void => {
+      if (assetId !== undefined) {
+        references.push({ assetId, allowedKinds: THUMBNAIL_MEDIA_KINDS, path: [...path, key] });
+      }
+    };
+    push(parsed.data.backgroundAssetId, "backgroundAssetId");
+    push(parsed.data.mainAssetId, "mainAssetId");
+    push(parsed.data.characterAssetId, "characterAssetId");
+    return references;
+  },
+};
+
 export const thumbnailTextInputSchema = z.strictObject({
   headline: z.string(),
   subline: z.string().optional(),
@@ -132,6 +229,7 @@ export const thumbnailTemplateDefinitions: readonly ThumbnailTemplateDefinition[
   headlinePhotoV1,
   photoCoverV1,
   textV1,
+  layeredV1,
 ];
 
 export const thumbnailTemplateRegistry: ReadonlyMap<string, ThumbnailTemplateDefinition> = new Map(

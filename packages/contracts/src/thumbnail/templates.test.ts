@@ -4,6 +4,7 @@ import {
   getThumbnailTemplate,
   listThumbnailTemplateCatalog,
   thumbnailHeadlinePhotoInputSchema,
+  thumbnailLayeredInputSchema,
   thumbnailTextInputSchema,
 } from "./templates";
 import { thumbnailDocumentSchema } from "./document";
@@ -58,6 +59,41 @@ describe("thumbnail templates", () => {
       input: { headline: "タイトル" },
     });
     expect(refs).toEqual([]);
+  });
+
+  it("exposes the layered template with the stack and character position selects", () => {
+    const definition = getThumbnailTemplate("thumbnail.layered", 1);
+    expect(definition).toBeDefined();
+    const stack = definition?.inputFields?.find((field) => field.key === "stack");
+    expect(stack?.kind).toBe("select");
+    if (stack?.kind === "select") {
+      expect(stack.options.map((option) => option.value)).toEqual([
+        "text-character-main",
+        "character-text-main",
+        "character-main-text",
+        "main-character-text",
+      ]);
+    }
+    const position = definition?.inputFields?.find((field) => field.key === "characterPosition");
+    expect(position?.kind).toBe("select");
+  });
+
+  it("applies the layered defaults", () => {
+    const parsed = thumbnailLayeredInputSchema.parse({ headline: "タイトル" });
+    expect(parsed.stack).toBe("text-character-main");
+    expect(parsed.characterPosition).toBe("right");
+  });
+
+  it("collects layered image references from provided slots only", () => {
+    const refs = collectThumbnailAssetRefs({
+      schemaVersion: 1,
+      template: { id: "thumbnail.layered", version: 1 },
+      input: { headline: "タイトル", mainAssetId: "ast_main", characterAssetId: "ast_char" },
+    });
+    expect(refs).toEqual([
+      { assetId: "ast_main", allowedKinds: ["image"], path: ["input", "mainAssetId"] },
+      { assetId: "ast_char", allowedKinds: ["image"], path: ["input", "characterAssetId"] },
+    ]);
   });
 
   it("validates the thumbnail document shape and rejects unknown versions", () => {

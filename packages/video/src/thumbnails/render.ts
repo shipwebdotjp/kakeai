@@ -1,5 +1,6 @@
 import {
   type ThumbnailHeadlinePhotoInput,
+  type ThumbnailLayeredInput,
   type ThumbnailPhotoCoverInput,
   type ThumbnailTextInput,
   type VisualThemeDefinition,
@@ -93,12 +94,12 @@ function toneHeadlineColor(theme: VisualThemeDefinition, tone: "accent" | "canva
   return tone === "accent" ? theme.onMedia : theme.textRoles.title.color;
 }
 
-function resolvePhoto(context: ThumbnailRenderContext, assetId: string): string {
-  const media = resolveCueMedia(assetId, context.assetResolver, context.path);
+function resolvePhoto(context: ThumbnailRenderContext, assetId: string, key = "assetId"): string {
+  const media = resolveCueMedia(assetId, context.assetResolver, [...context.path, key]);
   if (media.kind !== "image") {
     throw new CompositionCompileError([
       {
-        path: [...context.path, "assetId"],
+        path: [...context.path, key],
         code: "invalid_asset_kind",
         message: "画像を指定してください。",
       },
@@ -220,6 +221,166 @@ export function renderPhotoCover(
   ].join("");
 
   return { html, assetIds: [data.assetId] };
+}
+
+type LayeredLayerKey = "main" | "character" | "text";
+
+const LAYERED_STACK_ORDER: Record<ThumbnailLayeredInput["stack"], readonly LayeredLayerKey[]> = {
+  "text-character-main": ["main", "character", "text"],
+  "character-text-main": ["main", "text", "character"],
+  "character-main-text": ["text", "main", "character"],
+  "main-character-text": ["text", "character", "main"],
+};
+
+const LAYERED_Z_BASE = 10;
+
+function layeredZIndex(stack: ThumbnailLayeredInput["stack"]): Record<LayeredLayerKey, number> {
+  const zIndex: Record<LayeredLayerKey, number> = { main: 0, character: 0, text: 0 };
+  LAYERED_STACK_ORDER[stack].forEach((key, index) => {
+    zIndex[key] = LAYERED_Z_BASE + index;
+  });
+  return zIndex;
+}
+
+function layeredTextColors(
+  theme: VisualThemeDefinition,
+  hasBackground: boolean,
+): { headline: string; subline: string } {
+  if (hasBackground) {
+    return { headline: theme.onMedia, subline: theme.onMedia };
+  }
+  return {
+    headline: theme.textRoles.title.color,
+    subline: mixHex(theme.textRoles.title.color, theme.canvas.base, 0.2),
+  };
+}
+
+function layeredScrim(theme: VisualThemeDefinition): string {
+  const edge = overlayToRgba({ color: theme.scrim.color, opacity: PHOTO_COVER_MIN_SCRIM });
+  return [
+    "position:absolute",
+    "inset:0",
+    `background:linear-gradient(180deg, ${edge} 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 72%, ${edge} 100%)`,
+  ].join(";");
+}
+
+function layeredBackgroundHtml(
+  data: ThumbnailLayeredInput,
+  context: ThumbnailRenderContext,
+  assetIds: string[],
+): string {
+  if (data.backgroundAssetId === undefined) {
+    return "";
+  }
+  const url = resolvePhoto(context, data.backgroundAssetId, "backgroundAssetId");
+  assetIds.push(data.backgroundAssetId);
+  const crop = mediaCropStyle(data.backgroundFocalPoint, data.backgroundZoom);
+  return `<img class="kakeai-thumb-bg" src="${url}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;${crop}">`;
+}
+
+function layeredMainHtml(
+  data: ThumbnailLayeredInput,
+  context: ThumbnailRenderContext,
+  assetIds: string[],
+  zIndex: number,
+): string {
+  if (data.mainAssetId === undefined) {
+    return "";
+  }
+  const url = resolvePhoto(context, data.mainAssetId, "mainAssetId");
+  assetIds.push(data.mainAssetId);
+  const crop = mediaCropStyle(data.mainFocalPoint, data.mainZoom);
+  const style = [
+    "position:absolute",
+    "top:18%",
+    "bottom:24%",
+    "left:12%",
+    "right:12%",
+    "object-fit:cover",
+    `border-radius:${context.theme.radius.md}px`,
+    `z-index:${zIndex}`,
+    crop,
+  ].join(";");
+  return `<img class="kakeai-thumb-main" src="${url}" alt="" style="${style}">`;
+}
+
+const CHARACTER_PLACEMENT: Record<
+  ThumbnailLayeredInput["characterPosition"],
+  { horizontal: string; transform: string }
+> = {
+  left: { horizontal: "left:6%", transform: "" },
+  center: { horizontal: "left:50%", transform: "transform:translateX(-50%)" },
+  right: { horizontal: "right:6%", transform: "" },
+};
+
+function layeredCharacterHtml(
+  data: ThumbnailLayeredInput,
+  context: ThumbnailRenderContext,
+  assetIds: string[],
+  zIndex: number,
+): string {
+  if (data.characterAssetId === undefined) {
+    return "";
+  }
+  const url = resolvePhoto(context, data.characterAssetId, "characterAssetId");
+  assetIds.push(data.characterAssetId);
+  const scale = data.characterScale ?? 1;
+  const heightPercent = Math.round(72 * scale);
+  const placement = CHARACTER_PLACEMENT[data.characterPosition];
+  const style = [
+    "position:absolute",
+    "bottom:0",
+    placement.horizontal,
+    `height:${heightPercent}%`,
+    "width:auto",
+    "object-fit:contain",
+    `z-index:${zIndex}`,
+    placement.transform,
+  ]
+    .filter((segment) => segment.length > 0)
+    .join(";");
+  return `<img class="kakeai-thumb-character" src="${url}" alt="" style="${style}">`;
+}
+
+function layeredTextHtml(
+  data: ThumbnailLayeredInput,
+  context: ThumbnailRenderContext,
+  zIndex: number,
+): string {
+  const hasBackground = data.backgroundAssetId !== undefined;
+  const colors = layeredTextColors(context.theme, hasBackground);
+  const headline = textCss(context.theme.textRoles.title, 1.5, colors.headline);
+  const subline = textCss(context.theme.textRoles.heading, 1.1, colors.subline);
+  const headlineStyle =
+    "position:absolute;top:0;left:0;right:0;padding:44px 64px;text-align:center";
+  const sublineStyle =
+    "position:absolute;bottom:0;left:0;right:0;padding:36px 64px;text-align:center";
+  return [
+    `<div class="kakeai-thumb-text-layer" style="position:absolute;inset:0;z-index:${zIndex};pointer-events:none">`,
+    hasBackground ? `<div class="kakeai-thumb-scrim" style="${layeredScrim(context.theme)}"></div>` : "",
+    `<p style="${textStyle(headline, headlineStyle)}">${escapeHtmlText(data.headline)}</p>`,
+    data.subline !== undefined && data.subline.trim().length > 0
+      ? `<p style="${textStyle(subline, sublineStyle)}">${escapeHtmlText(data.subline)}</p>`
+      : "",
+    "</div>",
+  ].join("");
+}
+
+export function renderLayered(
+  data: ThumbnailLayeredInput,
+  context: ThumbnailRenderContext,
+): RenderedThumbnail {
+  const assetIds: string[] = [];
+  const zIndex = layeredZIndex(data.stack);
+  const html = [
+    `<div class="kakeai-thumb" style="position:absolute;inset:0;background:${context.theme.canvas.base};overflow:hidden">`,
+    layeredBackgroundHtml(data, context, assetIds),
+    layeredMainHtml(data, context, assetIds, zIndex.main),
+    layeredCharacterHtml(data, context, assetIds, zIndex.character),
+    layeredTextHtml(data, context, zIndex.text),
+    "</div>",
+  ].join("");
+  return { html, assetIds };
 }
 
 export function renderTextOnly(

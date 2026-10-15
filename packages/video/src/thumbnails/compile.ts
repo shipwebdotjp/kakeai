@@ -2,6 +2,7 @@ import {
   getThumbnailTemplate,
   type ThumbnailDocument,
   type ThumbnailHeadlinePhotoInput,
+  type ThumbnailLayeredInput,
   type ThumbnailPhotoCoverInput,
   type ThumbnailTextInput,
   type VisualThemeDefinition,
@@ -11,6 +12,7 @@ import { THUMBNAIL_OUTPUT_HEIGHT, THUMBNAIL_OUTPUT_WIDTH } from "../meta";
 import type { AssetResolver } from "../resolver";
 import {
   renderHeadlinePhoto,
+  renderLayered,
   renderPhotoCover,
   renderTextOnly,
   type RenderedThumbnail,
@@ -48,6 +50,8 @@ function dispatch(
       return renderPhotoCover(input as ThumbnailPhotoCoverInput, context);
     case "thumbnail.text@1":
       return renderTextOnly(input as ThumbnailTextInput, context);
+    case "thumbnail.layered@1":
+      return renderLayered(input as ThumbnailLayeredInput, context);
     default:
       throw new CompositionCompileError([
         {
