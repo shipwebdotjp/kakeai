@@ -10,6 +10,8 @@ import {
 import {
   buildContentDocument,
   cloneSceneFormValue,
+  collectLineIds,
+  collectSceneIds,
   countAppearanceReferences,
   countCharacterReferences,
   createCueFormValue,
@@ -284,7 +286,11 @@ describe("buildContentDocument", () => {
     const base = createInitialContentDocument();
     const values = toFormValues(base);
     const outroIndex = values.scenes.findIndex((scene) => scene.kind === "outro");
-    values.scenes.splice(outroIndex, 0, createPointSceneFormValue("要点 2"));
+    values.scenes.splice(
+      outroIndex,
+      0,
+      createPointSceneFormValue("要点 2", collectSceneIds(values.scenes)),
+    );
 
     const rebuilt = buildContentDocument(base, values);
     expect(pointScenes(rebuilt)).toHaveLength(2);
@@ -1422,7 +1428,7 @@ describe("buildContentDocument", () => {
     source.accentColor = "#123456";
     source.transitionPreset = "fade";
     source.transitionDurationMs = 250;
-    const sourceLine = createEmptyLine(source.id);
+    const sourceLine = createEmptyLine(source.id, collectLineIds(values.scenes));
     sourceLine.captionText = "元のセリフ";
     source.lines = [sourceLine];
     source.cues[0]!.rangeKind = "lines";
@@ -1431,7 +1437,7 @@ describe("buildContentDocument", () => {
 
     const copy = cloneSceneFormValue(
       source as SceneFormValue & { kind: "point" },
-      newSceneId(),
+      newSceneId(collectSceneIds(values.scenes)),
       "要点 2",
     );
     expect(copy.kind).toBe("point");

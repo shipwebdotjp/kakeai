@@ -70,7 +70,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 正本JSONは、次を検証済みの不変条件として満たす。衝突すると視覚演出やレンダータイミングが不定になるため、すべて `packages/contracts` のスキーマで強制する。
 
-- `line`（`NarrationSegment`）とSceneのIDは、同一Workの版をまたいで一意かつ安定とする。編集保存のたびに作り直さない。VisualCueの `range` がラインIDで区間を指し、将来の翻訳・派生WorkはこのIDで対応付ける。
+- `line`（`NarrationSegment`）とSceneのIDは、同一Workの版をまたいで一意かつ安定とする。編集保存のたびに作り直さない。VisualCueの `range` がラインIDで区間を指し、将来の翻訳・派生WorkはこのIDで対応付ける。新規に採番するIDは短い16進トークンで衝突を避けながら生成し、`line` のIDは所属Sceneの短縮トークンを含む（例: `scene-point-a3f`、`line-a3f-9c2`）。
 - `selectedAudioTakeId` がnullでない場合、そのTakeは `audioTakes` に存在し、その `narrationSegmentId` が当該ラインのIDと一致しなければならない。nullのラインはAudioTakeを参照しない。
 - `line.speakerId` はnullでない場合 `speakers` に存在し、`speaker.characterId` はnullでない場合 `characters` に存在しなければならない。`character.standing` のVisualCue入力が指す `characterId` と `appearanceId` も `characters` とその `appearances` に存在しなければならない。存在しないIDを参照するライン、話者、VisualCueは拒否する。
 - `line.expressionId` はnullでない場合、`line.speakerId` がnullであってはならない。`expressionId` の実在（話者キャラクターの有効な Character Appearance が参照する Face Set 内の Expression Preset）はグローバルライブラリを参照するため `contentJson` のスキーマでは検証できない。保存時に API サービスが解決して検証する（[../face-expression/spec.md](../face-expression/spec.md)）。`characterAppearance.faceSetId` についても同様に、存在と素材の整合を保存時に検証する。

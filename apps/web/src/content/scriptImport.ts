@@ -134,10 +134,14 @@ export function unresolvedSpeakerNames(
 function buildChapterScene(
   chapter: ScriptChapter,
   assignments: SpeakerAssignmentMap,
+  usedSceneIds: Set<string>,
+  usedLineIds: Set<string>,
 ): SceneFormValue {
-  const scene = createPointSceneFormValue(chapter.heading.trim());
+  const scene = createPointSceneFormValue(chapter.heading.trim(), usedSceneIds);
+  usedSceneIds.add(scene.id);
   scene.lines = chapter.lines.map((line) => {
-    const value = createEmptyLine(scene.id);
+    const value = createEmptyLine(scene.id, usedLineIds);
+    usedLineIds.add(value.id);
     value.captionText = line.text;
     value.speechText = line.text;
     value.speakerId = Object.prototype.hasOwnProperty.call(assignments, line.speakerName)
@@ -212,6 +216,12 @@ export function buildImportedScenes(options: BuildImportedScenesOptions): SceneF
   if (unresolved.length > 0) {
     throw new Error(`話者「${unresolved.join("、")}」の割り当てを選択してください。`);
   }
-  const generated = script.chapters.map((chapter) => buildChapterScene(chapter, assignments));
+  const usedSceneIds = new Set(existingScenes.map((scene) => scene.id));
+  const usedLineIds = new Set(
+    existingScenes.flatMap((scene) => scene.lines.map((line) => line.id)),
+  );
+  const generated = script.chapters.map((chapter) =>
+    buildChapterScene(chapter, assignments, usedSceneIds, usedLineIds),
+  );
   return mergeImportedScenes(existingScenes, generated, mode);
 }

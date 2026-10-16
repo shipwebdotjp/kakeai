@@ -9,7 +9,7 @@ import {
 } from "./form";
 
 function makeLine(partial: Partial<LineFormValue> = {}): LineFormValue {
-  return { ...createEmptyLine("scene-1"), ...partial };
+  return { ...createEmptyLine("scene-1", new Set()), ...partial };
 }
 
 describe("mergeTake", () => {

@@ -27,6 +27,7 @@ import type {
 } from "../content/form";
 import {
   countLineCueReferences,
+  collectLineIds,
   createEmptyLine,
   duplicateLineFormValue,
   generatedTakePolicy,
@@ -757,7 +758,10 @@ export function LinesEditor({
     if (line === undefined) {
       return;
     }
-    insert(lineIndex + 1, duplicateLineFormValue(line, sceneId));
+    insert(
+      lineIndex + 1,
+      duplicateLineFormValue(line, sceneId, collectLineIds(getValues("scenes"))),
+    );
   };
 
   const removeLine = (lineIndex: number) => {
@@ -820,7 +824,7 @@ export function LinesEditor({
       <button
         type="button"
         className={buttonNeutralClass}
-        onClick={() => append(createEmptyLine(sceneId))}
+        onClick={() => append(createEmptyLine(sceneId, collectLineIds(getValues("scenes"))))}
       >
         セリフを追加
       </button>

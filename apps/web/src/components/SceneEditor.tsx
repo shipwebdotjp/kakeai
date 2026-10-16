@@ -36,6 +36,7 @@ import {
   buildContentDocument,
   bulkTtsCandidateLineIds,
   cloneSceneFormValue,
+  collectSceneIds,
   countCharacterFormUsage,
   createPointSceneFormValue,
   generatedTakePolicy,
@@ -451,7 +452,10 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     const scenes = getValues("scenes");
     const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
     const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
-    insert(insertIndex, createPointSceneFormValue(nextPointLabel(scenes, insertIndex)));
+    insert(
+      insertIndex,
+      createPointSceneFormValue(nextPointLabel(scenes, insertIndex), collectSceneIds(scenes)),
+    );
   };
 
   const onClonePrevious = (index: number) => {
@@ -464,7 +468,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       index,
       cloneSceneFormValue(
         previous as SceneFormValue & { kind: "point" },
-        newSceneId(),
+        newSceneId(collectSceneIds(scenes)),
         nextPointLabel(scenes, index),
       ),
     );
@@ -487,7 +491,12 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     }
     let result: ReturnType<typeof splitPointScene>;
     try {
-      result = splitPointScene(scene, lineIndex, nextPointLabel(scenes, sceneIndex + 1));
+      result = splitPointScene(
+        scene,
+        lineIndex,
+        nextPointLabel(scenes, sceneIndex + 1),
+        collectSceneIds(scenes),
+      );
     } catch (error) {
       setDiagnostics((prev) => ({ ...prev, errors: [{ message: errorMessage(error) }] }));
       setOpenKind("error");

@@ -1160,16 +1160,14 @@ export function buildContentDocument(
   };
 }
 
-let lineCounter = 0;
-
-export function newLineId(sceneId: string): string {
-  lineCounter += 1;
-  return `line-${sceneId}-${Date.now()}-${lineCounter}`;
+export function newLineId(sceneId: string, existing: ReadonlySet<string>): string {
+  const sceneToken = idTail(sceneId);
+  return uniqueShortId((token) => `line-${sceneToken}-${token}`, existing);
 }
 
-export function createEmptyLine(sceneId: string): LineFormValue {
+export function createEmptyLine(sceneId: string, existing: ReadonlySet<string>): LineFormValue {
   return {
-    id: newLineId(sceneId),
+    id: newLineId(sceneId, existing),
     speakerId: null,
     captionText: "",
     speechText: "",
@@ -1242,8 +1240,63 @@ export function bulkTtsCandidateLineIds(content: ContentDocument): string[] {
   return ids;
 }
 
-export function newSceneId(): string {
-  return `scene-point-${randomId()}`;
+const SHORT_ID_LENGTH = 3;
+const SHORT_ID_ATTEMPTS = 32;
+const HEX_ALPHABET = "0123456789abcdef";
+
+function randomHexToken(length: number): string {
+  const bytes = new Uint8Array(length);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  let token = "";
+  for (const value of bytes) {
+    token += HEX_ALPHABET[value & 0x0f];
+  }
+  return token;
+}
+
+function uniqueShortId(
+  build: (token: string) => string,
+  existing: ReadonlySet<string>,
+): string {
+  for (let length = SHORT_ID_LENGTH; ; length += 1) {
+    for (let attempt = 0; attempt < SHORT_ID_ATTEMPTS; attempt += 1) {
+      const candidate = build(randomHexToken(length));
+      if (!existing.has(candidate)) {
+        return candidate;
+      }
+    }
+  }
+}
+
+function idTail(id: string): string {
+  const index = id.lastIndexOf("-");
+  return index === -1 ? id : id.slice(index + 1);
+}
+
+export function newSceneId(existing: ReadonlySet<string>): string {
+  return uniqueShortId((token) => `scene-point-${token}`, existing);
+}
+
+export function collectSceneIds(scenes: readonly { id: string }[]): ReadonlySet<string> {
+  return new Set(scenes.map((scene) => scene.id));
+}
+
+export function collectLineIds(
+  scenes: readonly { lines: readonly { id: string }[] }[],
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const scene of scenes) {
+    for (const line of scene.lines) {
+      ids.add(line.id);
+    }
+  }
+  return ids;
 }
 
 export function randomId(): string {
@@ -1342,8 +1395,11 @@ export function nextPointLabel(
   return defaultPointLabel(ordinal);
 }
 
-export function createPointSceneFormValue(label: string): SceneFormValue {
-  const id = newSceneId();
+export function createPointSceneFormValue(
+  label: string,
+  existingSceneIds: ReadonlySet<string>,
+): SceneFormValue {
+  const id = newSceneId(existingSceneIds);
   return {
     id,
     kind: "point",
@@ -1593,8 +1649,12 @@ export function nextEndLineId(
   return currentEndLineId;
 }
 
-export function duplicateLineFormValue(line: LineFormValue, sceneId: string): LineFormValue {
-  const copy = createEmptyLine(sceneId);
+export function duplicateLineFormValue(
+  line: LineFormValue,
+  sceneId: string,
+  existing: ReadonlySet<string>,
+): LineFormValue {
+  const copy = createEmptyLine(sceneId, existing);
   copy.speakerId = line.speakerId;
   copy.captionText = line.captionText;
   copy.speechText = line.speechText;
@@ -1699,13 +1759,14 @@ export function splitPointScene(
   scene: SceneFormValue,
   splitAt: number,
   secondLabel: string,
+  existingSceneIds: ReadonlySet<string>,
 ): SplitSceneResult {
   if (scene.kind !== "point" || splitAt <= 0 || splitAt >= scene.lines.length) {
     throw new Error("この位置ではシーンを分割できません。");
   }
   const lines = scene.lines;
   const indexById = new Map(lines.map((line, index) => [line.id, index]));
-  const second = createPointSceneFormValue(secondLabel);
+  const second = createPointSceneFormValue(secondLabel, existingSceneIds);
   const firstCues: CueFormValue[] = [];
   const secondCues: CueFormValue[] = [...second.cues];
   for (const cue of scene.cues) {

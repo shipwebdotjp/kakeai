@@ -28,7 +28,7 @@ describe("diagnosticTarget", () => {
       standings: [],
     },
     {
-      ...createPointSceneFormValue("要点1"),
+      ...createPointSceneFormValue("要点1", new Set()),
       id: "scene-point-1",
       cues: [
         createCueFormValue({
