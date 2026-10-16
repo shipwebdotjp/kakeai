@@ -673,6 +673,15 @@ const tableSimpleV1: VisualTemplateDefinition = {
     },
   ],
   collectAssetRefs: () => [],
+  collectLineRefs: (input, path) => {
+    const parsed = tableSimpleInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    return (parsed.data.effects ?? []).flatMap((entry, index) =>
+      collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
+    );
+  },
 };
 
 export const CHART_MAX_CATEGORIES = 8;
@@ -880,6 +889,89 @@ const chartBarV1: VisualTemplateDefinition = {
     },
   ],
   collectAssetRefs: () => [],
+  collectLineRefs: (input, path) => {
+    const parsed = chartBarInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    return (parsed.data.effects ?? []).flatMap((entry, index) =>
+      collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
+    );
+  },
+};
+
+export const LIST_CALLOUT_MAX_ITEMS = 8;
+
+export const listCalloutItemSchema = z
+  .strictObject({
+    text: z.string(),
+    trigger: lineTriggerSchema.optional(),
+    effect: cueEffectSchema.optional(),
+  })
+  .superRefine((item, ctx) => {
+    if ((item.trigger === undefined) !== (item.effect === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "trigger と effect は同時に指定してください",
+        path: ["trigger"],
+      });
+    }
+  });
+export type ListCalloutItem = z.infer<typeof listCalloutItemSchema>;
+
+export const listCalloutAppearSchema = z.strictObject({
+  trigger: lineTriggerSchema,
+  effect: appearEffectSchema,
+});
+export type ListCalloutAppear = z.infer<typeof listCalloutAppearSchema>;
+
+export const listCalloutInputSchema = z.strictObject({
+  title: z.string().optional(),
+  items: z.array(listCalloutItemSchema).min(1).max(LIST_CALLOUT_MAX_ITEMS),
+  appear: listCalloutAppearSchema.optional(),
+});
+export type ListCalloutInput = z.infer<typeof listCalloutInputSchema>;
+
+function collectTriggerLineRefs(
+  trigger: unknown,
+  path: (string | number)[],
+): LineReference[] {
+  const parsed = lineTriggerSchema.safeParse(trigger);
+  if (!parsed.success || parsed.data.kind !== "lines") {
+    return [];
+  }
+  return [
+    { lineId: parsed.data.startLineId, path: [...path, "startLineId"] },
+    { lineId: parsed.data.endLineId, path: [...path, "endLineId"] },
+  ];
+}
+
+const listCalloutV1: VisualTemplateDefinition = {
+  id: "list.callout",
+  version: 1,
+  inputSchema: listCalloutInputSchema,
+  layers: ["overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: {
+    label: "ポイント",
+    description: "セリフに同期して強調する箇条書き",
+    category: "text",
+  },
+  collectAssetRefs: () => [],
+  collectLineRefs: (input, path) => {
+    const parsed = listCalloutInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    const refs = parsed.data.items.flatMap((item, index) =>
+      collectTriggerLineRefs(item.trigger, [...path, "items", index, "trigger"]),
+    );
+    if (parsed.data.appear !== undefined) {
+      refs.push(...collectTriggerLineRefs(parsed.data.appear.trigger, [...path, "appear", "trigger"]));
+    }
+    return refs;
+  },
 };
 
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
@@ -892,6 +984,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   compositionFullBleedV1,
   tableSimpleV1,
   chartBarV1,
+  listCalloutV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
@@ -899,6 +992,7 @@ export { characterStandingV1, sceneDeviceFrameV1 };
 export { sceneSiteMockupV1 };
 export { tableSimpleV1 };
 export { chartBarV1 };
+export { listCalloutV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

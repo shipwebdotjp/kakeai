@@ -1178,6 +1178,32 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain(`id="${b}"`);
   });
 
+  it("renders a list.callout cue with line-triggered emphasis", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-callout",
+        template: { id: "list.callout", version: 1 },
+        layer: "overlay",
+        input: {
+          items: [
+            {
+              text: "再利用できる",
+              trigger: { kind: "lines", startLineId: "line-p1-1", endLineId: "line-p1-1" },
+              effect: { kind: "emphasize", style: "frame", tone: "primary" },
+            },
+            { text: "常時表示" },
+          ],
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("再利用できる");
+    const item = cueScope("vc-callout").id("item-0");
+    expect(compiled.html).toContain(`document.getElementById("${item}")`);
+    expect(compiled.html).toContain("boxShadow");
+  });
+
   it("renders a chart.bar cue with growing bars", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [

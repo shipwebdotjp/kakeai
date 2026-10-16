@@ -4,6 +4,7 @@ import {
   getTemplateInputFields,
   getVisualTemplate,
   isEditableTemplate,
+  listCalloutInputSchema,
   listVisualTemplateCatalog,
   mediaCardInputSchema,
   mediaFullBleedInputSchema,
@@ -332,8 +333,7 @@ describe("visual template metadata", () => {
     ).toBe(false);
   });
 
-  it("accepts chart.bar appear effects and rejects out-of-range or non-appear effects", () => {
-    const data = {
+  it("accepts chart.bar appear effects and rejects out-of-range or non-appear effects", () => {    const data = {
       columns: [
         { key: "m", label: "月", type: "text" },
         { key: "s", label: "売上", type: "number" },
@@ -376,5 +376,30 @@ describe("visual template metadata", () => {
         ],
       }).success,
     ).toBe(false);
+  });
+
+  it("registers list.callout@1 as a non-editable overlay template", () => {
+    const definition = getVisualTemplate("list.callout", 1);
+    expect(definition?.layers).toEqual(["overlay"]);
+    expect(isEditableTemplate("list.callout", 1)).toBe(false);
+  });
+
+  it("accepts a list.callout input and rejects mismatched trigger/effect", () => {
+    expect(
+      listCalloutInputSchema.safeParse({
+        items: [
+          {
+            text: "a",
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 100 },
+          },
+          { text: "b" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      listCalloutInputSchema.safeParse({ items: [{ text: "a", trigger: { kind: "cue" } }] }).success,
+    ).toBe(false);
+    expect(listCalloutInputSchema.safeParse({ items: [] }).success).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ import {
   sceneSiteMockupV1,
   tableSimpleV1,
   chartBarV1,
+  listCalloutV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
   deviceFrameInputSchema,
@@ -52,6 +53,7 @@ import {
 import { renderDeviceFrame } from "./templates/device-frame";
 import { renderTableSimple } from "./templates/table-simple";
 import { renderChartBar } from "./templates/chart-bar";
+import { renderListCallout } from "./templates/list-callout";
 import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
@@ -501,6 +503,8 @@ function dispatchTemplate(
       return renderTableSimple(input, context);
     case `${chartBarV1.id}@${chartBarV1.version}`:
       return renderChartBar(input, context);
+    case `${listCalloutV1.id}@${listCalloutV1.version}`:
+      return renderListCallout(input, context);
     case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
       return renderCompositionFullBleed(input, context, compositionResolver);
     default:
@@ -733,6 +737,10 @@ const STYLES = [
   ".kakeai-chartbars-h{flex:1;display:flex;flex-direction:column;gap:8px;}",
   ".kakeai-chartbar-h{width:auto;height:34px;border-radius:0 6px 6px 0;transform-origin:left center;}",
   ".kakeai-charthvalue{position:absolute;left:100%;top:50%;transform:translateY(-50%);padding-left:10px;font-size:24px;white-space:nowrap;color:var(--kakeai-text);}",
+  ".kakeai-calloutwrap{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:120px 200px;box-sizing:border-box;}",
+  ".kakeai-callouttitle{font-size:52px;font-weight:700;color:var(--kakeai-text);}",
+  ".kakeai-calloutlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:20px;width:100%;max-width:1400px;}",
+  ".kakeai-calloutitem{background:var(--kakeai-surface);border-radius:var(--kakeai-radius-lg);padding:24px 36px;font-size:40px;line-height:1.3;color:var(--kakeai-text);box-shadow:0 8px 32px var(--kakeai-shadow);}",
 ].join("\n");
 
 const FADE_START_EPSILON_MS = 1;

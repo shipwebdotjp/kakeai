@@ -32,11 +32,15 @@
 
 ## Phase 4: `list.callout@1`
 
-- [ ] `list.callout@1` の入力スキーマ・定義・登録・`inputFields` を追加する
-- [ ] `packages/video` に `list.callout` のレンダラを追加し、`dispatchTemplate` に登録する
-- [ ] ポイント列の描画（アイテムの並び、枠、背景）と `items[].trigger`/`items[].effect`、列全体の `appear` を実装する
-- [ ] 同一テンプレートの複数配置・入れ子で衝突しないことをコンパイラテストで確認する
-- 完了条件: 3つのポイントを常時表示し、各行区間で個別に強調・解除できる動画を保存→プレビュー→レンダーできる。
+`inputFields`（編集UI）は、effects 編集部品が要るため Phase 5 に回す。Phase 4 は契約・レンダラまで。
+
+- [x] `list.callout@1` の入力スキーマ・定義・登録を追加する
+- [x] `packages/video` に `list.callout` のレンダラを追加し、`dispatchTemplate` に登録する
+- [x] ポイント列の描画（アイテムの並び、枠、背景）と `items[].trigger`/`items[].effect`、列全体の `appear` を実装する
+- [x] `collectLineRefs` を実装する（Phase 5 の remap で使う）
+- [x] 同一テンプレートの複数配置・入れ子で衝突しないことをコンパイラテストで確認する
+- [ ] `inputFields` を追加する（Phase 5）
+- 完了条件: 3つのポイントを常時表示し、各行区間で個別に強調・解除できる入力を、プレビューとMP4で一致して再現できる（エディタ対応は Phase 5）。
 
 ## Phase 5: 二重表現の解消とエディタ
 
