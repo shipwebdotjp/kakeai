@@ -6,7 +6,7 @@ import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
 import { visualThemeRefSchema } from "./theme";
-import { characterStandingV1, compositionFullBleedInputSchema } from "../templates";
+import { characterStandingV1 } from "../templates";
 
 export const CONTENT_SCHEMA_VERSION = 1 as const;
 
@@ -108,7 +108,6 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
     }
   }
 
-  const compositionVersionIdsInDoc = new Set<string>();
   for (const [sIdx, scene] of doc.scenes.entries()) {
     for (const [cIdx, cue] of scene.visualCues.entries()) {
       if (cue.template.id === "composition.full-bleed") {
@@ -118,19 +117,6 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
             message: "composition.full-bleed は background 層にのみ配置できます",
             path: ["scenes", sIdx, "visualCues", cIdx],
           });
-        }
-        const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
-        if (parsedInput.success) {
-          const compositionVersionId = parsedInput.data.compositionVersionId;
-          if (compositionVersionIdsInDoc.has(compositionVersionId)) {
-            ctx.addIssue({
-              code: "custom",
-              message: `同一 CompositionVersion (${compositionVersionId}) は 1 ScriptVersion 内で 1 度しか参照できません`,
-              path: ["scenes", sIdx, "visualCues", cIdx, "input", "compositionVersionId"],
-            });
-          } else {
-            compositionVersionIdsInDoc.add(compositionVersionId);
-          }
         }
       }
     }

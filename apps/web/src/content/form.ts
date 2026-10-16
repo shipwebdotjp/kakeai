@@ -168,6 +168,16 @@ export const CROP_CENTER_PERCENT = 50;
 export const CROP_ZOOM_MIN_PERCENT = MEDIA_ZOOM_MIN * 100;
 export const CROP_ZOOM_MAX_PERCENT = MEDIA_ZOOM_MAX * 100;
 
+export const NESTED_MODE_SUFFIX = "__mode";
+export const NESTED_MEDIA_FIT_SUFFIX = "__fit";
+export const NESTED_COMPOSITION_VERSION_SUFFIX = "__compver";
+export const NESTED_COMPOSITION_FIT_SUFFIX = "__compfit";
+export const NESTED_COMPOSITION_ZOOM_SUFFIX = "__compzoom";
+export const NESTED_COMPOSITION_POS_X_SUFFIX = "__compposx";
+export const NESTED_COMPOSITION_POS_Y_SUFFIX = "__compposy";
+export const NESTED_MODE_MEDIA = "media";
+export const NESTED_MODE_COMPOSITION = "composition";
+
 function readInputObject(cue: VisualCue | null): Record<string, unknown> {
   if (cue === null || typeof cue.input !== "object" || cue.input === null) {
     return {};
@@ -345,12 +355,47 @@ function readCueFields(
         break;
       case "nestedMedia": {
         const value = input[field.key];
+        if (
+          field.allowComposition === true &&
+          typeof value === "object" &&
+          value !== null &&
+          (value as { kind?: unknown }).kind === "composition"
+        ) {
+          const composition = value as {
+            compositionVersionId?: unknown;
+            fit?: unknown;
+            zoom?: unknown;
+            position?: unknown;
+          };
+          const position =
+            typeof composition.position === "object" && composition.position !== null
+              ? (composition.position as { x?: unknown; y?: unknown })
+              : null;
+          result[field.key] = "";
+          result[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_COMPOSITION;
+          result[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] =
+            typeof composition.compositionVersionId === "string"
+              ? composition.compositionVersionId
+              : "";
+          result[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] =
+            composition.fit === "cover" ? "cover" : "contain";
+          result[`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`] =
+            typeof composition.zoom === "number"
+              ? String(Math.round(composition.zoom * 100))
+              : "";
+          result[`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`] =
+            typeof position?.x === "number" ? String(Math.round(position.x * 100)) : "";
+          result[`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`] =
+            typeof position?.y === "number" ? String(Math.round(position.y * 100)) : "";
+          break;
+        }
         const media =
           typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "media"
             ? (value as { assetId?: unknown; fit?: unknown })
             : null;
         result[field.key] = typeof media?.assetId === "string" ? media.assetId : "";
-        result[`${field.key}__fit`] = media?.fit === "contain" ? "contain" : "cover";
+        result[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] = media?.fit === "contain" ? "contain" : "cover";
+        result[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_MEDIA;
         break;
       }
       case "mediaCrop": {
@@ -715,6 +760,45 @@ function buildCueInput(
         }
         break;
       case "nestedMedia": {
+        const mode = cue.fields[`${field.key}${NESTED_MODE_SUFFIX}`] ?? NESTED_MODE_MEDIA;
+        if (mode === NESTED_MODE_COMPOSITION && field.allowComposition === true) {
+          const versionId = cue.fields[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] ?? "";
+          if (versionId.length === 0) {
+            hasMedia = false;
+            break;
+          }
+          const fit =
+            cue.fields[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] === "cover"
+              ? "cover"
+              : "contain";
+          const zoomPercent = parseCropZoomPercent(
+            cue.fields[`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`],
+            field.label,
+          );
+          const posXPercent = parseCropPercent(
+            cue.fields[`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`],
+            field.label,
+          );
+          const posYPercent = parseCropPercent(
+            cue.fields[`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`],
+            field.label,
+          );
+          const node: Record<string, unknown> = {
+            kind: "composition",
+            compositionVersionId: versionId,
+            fit,
+          };
+          if (zoomPercent !== null) {
+            node.zoom = zoomPercent / 100;
+          }
+          if (posXPercent !== null && posYPercent !== null) {
+            node.position = { x: posXPercent / 100, y: posYPercent / 100 };
+          } else if (posXPercent !== null || posYPercent !== null) {
+            throw new Error(`${field.label}の位置は横と縦の両方を指定してください`);
+          }
+          input[field.key] = node;
+          break;
+        }
         if (raw.length === 0) {
           const baseValue = base[field.key];
           const baseIsMedia =
@@ -729,7 +813,7 @@ function buildCueInput(
             }
           }
         } else {
-          const fit = cue.fields[`${field.key}__fit`] === "contain" ? "contain" : "cover";
+          const fit = cue.fields[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] === "contain" ? "contain" : "cover";
           input[field.key] = { kind: "media", assetId: raw, fit };
         }
         break;
@@ -1282,7 +1366,15 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         break;
       case "nestedMedia":
         fields[field.key] = "";
-        fields[`${field.key}__fit`] = "cover";
+        fields[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] = "cover";
+        fields[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_MEDIA;
+        if (field.allowComposition) {
+          fields[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] = "";
+          fields[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] = "contain";
+          fields[`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`] = "";
+          fields[`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`] = "";
+          fields[`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`] = "";
+        }
         break;
       case "mediaCrop":
         fields[`${field.key}${CROP_X_SUFFIX}`] = "";

@@ -240,6 +240,31 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
+  it("allows the same CompositionVersion on multiple background cues", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.visualCues = [
+      {
+        id: "vc-composition-a",
+        template: { id: "composition.full-bleed", version: 1 },
+        range: { kind: "scene" },
+        layer: "background",
+        order: 0,
+        transition,
+        input: { compositionVersionId: "cmpver_001" },
+      },
+      {
+        id: "vc-composition-b",
+        template: { id: "composition.full-bleed", version: 1 },
+        range: { kind: "scene" },
+        layer: "background",
+        order: 1,
+        transition,
+        input: { compositionVersionId: "cmpver_001" },
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
   it("accepts an expressionId on a line that has a speaker", () => {
     const doc = validContentDocument();
     doc.scenes[1]!.lines[0]!.expressionId = "happy";

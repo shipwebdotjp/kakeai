@@ -34,11 +34,27 @@ export const nestedTemplateVisualSchema = z.strictObject({
   input: z.unknown(),
 });
 
+export const nestedCompositionPositionSchema = z.strictObject({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+export type NestedCompositionPosition = z.infer<typeof nestedCompositionPositionSchema>;
+
+export const nestedCompositionVisualSchema = z.strictObject({
+  kind: z.literal("composition"),
+  compositionVersionId: idSchema,
+  fit: fitSchema,
+  zoom: mediaZoomSchema.optional(),
+  position: nestedCompositionPositionSchema.optional(),
+});
+
 export const nestedVisualSchema = z.discriminatedUnion("kind", [
   nestedMediaVisualSchema,
   nestedTemplateVisualSchema,
+  nestedCompositionVisualSchema,
 ]);
 
 export type NestedVisual = z.infer<typeof nestedVisualSchema>;
 export type NestedMediaVisual = z.infer<typeof nestedMediaVisualSchema>;
 export type NestedTemplateVisual = z.infer<typeof nestedTemplateVisualSchema>;
+export type NestedCompositionVisual = z.infer<typeof nestedCompositionVisualSchema>;

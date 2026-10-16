@@ -14,6 +14,8 @@ import {
   compositionDraftFilesSchema,
   compositionFullBleedInputSchema,
   compositionManifestSchema,
+  collectNestedCompositionVersionIds,
+  getVisualTemplate,
 } from "@kakeai/contracts";
 import { dataDirectories } from "../storage/paths.ts";
 import { computeDirectoryHashAndFiles } from "../storage/composition-store.ts";
@@ -252,12 +254,23 @@ export function collectCompositionVersionIds(content: ContentDocument): string[]
   const ids = new Set<string>();
   for (const scene of content.scenes) {
     for (const cue of scene.visualCues) {
-      if (cue.template.id !== "composition.full-bleed") {
+      if (cue.template.id === "composition.full-bleed") {
+        const parsed = compositionFullBleedInputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          ids.add(parsed.data.compositionVersionId);
+        }
         continue;
       }
-      const parsed = compositionFullBleedInputSchema.safeParse(cue.input);
-      if (parsed.success) {
-        ids.add(parsed.data.compositionVersionId);
+      const definition = getVisualTemplate(cue.template.id, cue.template.version);
+      if (definition === undefined) {
+        continue;
+      }
+      const parsed = definition.inputSchema.safeParse(cue.input);
+      if (!parsed.success) {
+        continue;
+      }
+      for (const versionId of collectNestedCompositionVersionIds(parsed.data)) {
+        ids.add(versionId);
       }
     }
   }

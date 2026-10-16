@@ -52,3 +52,19 @@
 - [x] 現行機能を template `@1` と ContentDocument `schemaVersion: 1` に再基準化し、旧版 decoder・migration・旧版昇格を削除する
 - [x] [ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) を追加し、ADR-0009/0018/0034 に `amended by` を追記する
 - [x] 完了条件: line / offset range の Composition 背景を保存・プレビュー・MP4出力でき、旧 `@2/@3` と `schemaVersion != 1` を拒否する
+
+## R2 複数 instance
+
+- [x] ContentDocument の「同一 CompositionVersion は一文書内で一度だけ」制約を外す
+- [x] compiler・preview・snapshot が同一 version の複数配置を重複排除しつつ複数ホストを許容することを確認する
+- [x] 同一 version を複数 screen／background に置いても ID・timeline が衝突しない回帰テストを追加する
+- [x] HyperFrames の native nested composition 分離（runtime composition ID・CSS・DOM・timeline・SVG id のスコープ）を仕様へ記録する
+
+## R3 端末画面への Native Composition 埋め込み
+
+- [x] `NestedVisual` に `kind: "composition"`（`compositionVersionId`、必須 `fit`、任意 `zoom`・`position`）を追加し、再帰検証・再帰的な Composition 参照収集へ対応する
+- [x] `scene.device-frame@1` の screen を素材／Composition で選べるようにし、公開 version selector と fit・zoom・位置編集を追加する
+- [x] compiler が slot の content box を基準に `contain`／`cover`＋zoom＋position を適用し、`container-type: size` と `cqw`/`cqh`・`tan(atan2())` で frame 非依存に倍率を求める
+- [x] preview の content URL 解決、render snapshot、bundle materialize を入れ子参照へ対応する
+- [x] テスト: Zod 契約、laptop／phone の contain・cover、zoom・position、child 終端での非表示、preview URL、snapshot 固定、R2 回帰、UI form の round-trip・非破壊保存
+- [x] 完了条件: 端末画面に publish 済み Composition を埋め込み、保存・プレビュー・MP4出力できる

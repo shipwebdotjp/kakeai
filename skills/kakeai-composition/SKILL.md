@@ -238,11 +238,19 @@ Add one visual cue per Scene background:
 ```
 
 Rules enforced at script save: `layer` must be `background` (`scene` / `lines` / `offset`
-ranges are all allowed), and the same CompositionVersion ID may appear only once per ScriptVersion.
+ranges are all allowed). The same CompositionVersion may be referenced any number of times
+in one ScriptVersion: HyperFrames scopes each nested-composition instance (runtime composition
+ID, CSS, DOM lookups, timeline registration, SVG ids), so there is no one-reference limit.
 
-- **Placement is background-only.** You cannot put a composition on `card`/`overlay`/`standing`
-  layers — script save rejects it. Other layers and multiple instances are future roadmap items
-  (R3/R2).
+- **Background placement is background-only.** You cannot put a `composition.full-bleed` cue on
+  `card`/`overlay`/`standing` layers — script save rejects it. To place a composition inside a
+  device screen, use `scene.device-frame@1` and set its `screen` to
+  `{ "kind": "composition", "compositionVersionId": "<id>", "fit": "contain" | "cover",
+  "zoom"?: 0.5..3, "position"?: { "x": 0..1, "y": 0..1 } }`. Other composite templates (site
+  mockup, TV, custom bezels) can gain a composition slot later.
+- **Nested device-screen composition timing.** The child plays from 0 at the cue start and is
+  hidden at its own `durationMs` (no last-frame hold, no loop). Cue/Scene crossfade only changes
+  the parent device frame's visibility; the child clock is not reset.
 - **Effective window is `min(range, manifest.durationMs)`.** A cue longer than the child is cut off
   at the child end (no last-frame hold, no loop). Cue transitions must fit inside the effective
   window. If a Scene crossfade needs a longer window than the child, save and render reject it —

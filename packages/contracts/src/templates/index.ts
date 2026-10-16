@@ -16,7 +16,9 @@ import {
   fitSchema,
   focalPointSchema,
   mediaZoomSchema,
+  nestedCompositionVisualSchema,
   nestedMediaVisualSchema,
+  nestedTemplateVisualSchema,
   nestedVisualSchema,
   type NestedVisual,
 } from "../content/nested";
@@ -32,7 +34,7 @@ export interface TemplateDisplay {
 
 export type TemplateFieldSpec =
   | { kind: "media"; key: string; label: string; assetKinds: readonly AssetKindName[] }
-  | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[]; optional?: boolean }
+  | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[]; optional?: boolean; allowComposition?: boolean }
   | { kind: "text"; key: string; label: string }
   | { kind: "optionalText"; key: string; label: string }
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
@@ -263,7 +265,7 @@ export const deviceFrameInputSchema = z.strictObject({
 });
 
 const DEVICE_FRAME_FIELDS: readonly TemplateFieldSpec[] = [
-  { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS },
+  { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS, allowComposition: true },
   { kind: "select", key: "frame", label: "フレーム", options: DEVICE_FRAME_OPTIONS },
   { kind: "color", key: "backgroundColor", label: "背景色" },
   { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
@@ -856,11 +858,50 @@ export function collectNestedAssetRefs(
   if (node.kind === "media") {
     return [{ assetId: node.assetId, allowedKinds: MEDIA_KINDS, path: [...path, "assetId"] }];
   }
+  if (node.kind === "composition") {
+    return [];
+  }
   const definition = getVisualTemplate(node.template.id, node.template.version);
   if (!definition) {
     return [];
   }
   return definition.collectAssetRefs(node.input, [...path, "input"], depth + 1);
+}
+
+const MAX_COMPOSITION_REF_WALK_DEPTH = 64;
+
+export function collectNestedCompositionVersionIds(
+  value: unknown,
+  depth = 0,
+): string[] {
+  if (depth > MAX_COMPOSITION_REF_WALK_DEPTH) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectNestedCompositionVersionIds(entry, depth + 1));
+  }
+  if (typeof value !== "object" || value === null) {
+    return [];
+  }
+  const composition = nestedCompositionVisualSchema.safeParse(value);
+  if (composition.success) {
+    return [composition.data.compositionVersionId];
+  }
+  const template = nestedTemplateVisualSchema.safeParse(value);
+  if (template.success) {
+    const definition = getVisualTemplate(template.data.template.id, template.data.template.version);
+    if (definition === undefined) {
+      return [];
+    }
+    const parsed = definition.inputSchema.safeParse(template.data.input);
+    if (!parsed.success) {
+      return [];
+    }
+    return collectNestedCompositionVersionIds(parsed.data, depth + 1);
+  }
+  return Object.values(value).flatMap((entry) =>
+    collectNestedCompositionVersionIds(entry, depth + 1),
+  );
 }
 
 export interface VisualTemplateCatalogEntry extends TemplateDisplay {

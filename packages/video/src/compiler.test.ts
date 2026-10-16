@@ -872,6 +872,151 @@ describe("compileDocument", () => {
     }
   });
 
+  it("renders a nested composition in a device-frame screen with contain fit", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-comp",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "composition", compositionVersionId: "ver-nested", fit: "contain" },
+        },
+      }),
+    ];
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver,
+    });
+    const zoomId = cueScope("vc-device-comp").child("screen").id("compzoom");
+    expect(compiled.html).toContain("kakeai-compslot");
+    expect(compiled.html).toContain(`id="${zoomId}"`);
+    expect(compiled.html).toContain(
+      "--kakeai-s:min(tan(atan2(100cqw,1920px)),tan(atan2(100cqh,1080px)))",
+    );
+    expect(compiled.html).toContain('data-composition-src="/preview/composition"');
+    expect(compiled.compositionVersions).toHaveLength(1);
+    expect(compiled.compositionVersions[0]!.id).toBe("ver-nested");
+  });
+
+  it("applies cover fit, zoom and position to a nested composition", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-comp-cover",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "phone",
+          screen: {
+            kind: "composition",
+            compositionVersionId: "ver-nested",
+            fit: "cover",
+            zoom: 1.5,
+            position: { x: 0.2, y: 0.8 },
+          },
+        },
+      }),
+    ];
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver,
+    });
+    expect(compiled.html).toContain(
+      "--kakeai-s:calc(max(tan(atan2(100cqw,1920px)),tan(atan2(100cqh,1080px))) * 1.5)",
+    );
+    expect(compiled.html).toContain("--kakeai-posx:0.2");
+    expect(compiled.html).toContain("--kakeai-posy:0.8");
+  });
+
+  it("hides a nested composition at its own end when shorter than the cue", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-comp-short",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "composition", compositionVersionId: "ver-nested", fit: "contain" },
+        },
+      }),
+    ];
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver: compositionResolverWithDuration(1000),
+    });
+    const zoomId = cueScope("vc-device-comp-short").child("screen").id("compzoom");
+    expect(compiled.html).toContain(
+      `tl.set(document.getElementById("${zoomId}"),{opacity:0},1);`,
+    );
+  });
+
+  it("does not hide a nested composition that covers the whole cue", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-comp-full",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "composition", compositionVersionId: "ver-nested", fit: "contain" },
+        },
+      }),
+    ];
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver: compositionResolverWithDuration(5000),
+    });
+    const zoomId = cueScope("vc-device-comp-full").child("screen").id("compzoom");
+    expect(compiled.html).not.toContain(
+      `tl.set(document.getElementById("${zoomId}"),{opacity:0}`,
+    );
+  });
+
+  it("places the same CompositionVersion in two device screens (R2)", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-screen-a",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        order: 0,
+        input: {
+          frame: "laptop",
+          screen: { kind: "composition", compositionVersionId: "ver-nested", fit: "contain" },
+        },
+      }),
+      cue({
+        id: "vc-screen-b",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        order: 1,
+        input: {
+          frame: "phone",
+          screen: { kind: "composition", compositionVersionId: "ver-nested", fit: "cover" },
+        },
+      }),
+    ];
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver,
+    });
+    const hostA = cueScope("vc-screen-a").child("screen").id("comp-host");
+    const hostB = cueScope("vc-screen-b").child("screen").id("comp-host");
+    expect(compiled.html).toContain(`id="${hostA}"`);
+    expect(compiled.html).toContain(`id="${hostB}"`);
+    expect(hostA).not.toBe(hostB);
+    expect(compiled.compositionVersions).toHaveLength(1);
+  });
+
   it("applies non-fade cue transition presets", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues[0]!.transition = {

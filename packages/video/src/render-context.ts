@@ -6,6 +6,7 @@ import type {
   VisualThemeDefinition,
 } from "@kakeai/contracts";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
+import type { CompositionVersionResolved, CompositionVersionResolver } from "./composition-resolver";
 import type { RenderScope } from "./scope";
 
 export interface AnimationItem {
@@ -32,6 +33,12 @@ export interface RenderedCue {
   animation: AnimationItem[];
   motionTargetId?: string;
   expressionTargets?: ExpressionTarget[];
+  nestedCompositionWindows?: NestedCompositionWindow[];
+}
+
+export interface NestedCompositionWindow {
+  targetId: string;
+  durationMs: number;
 }
 
 export interface CueTiming {
@@ -44,6 +51,8 @@ export interface RenderContext {
   theme: VisualThemeDefinition;
   assetResolver: AssetResolver;
   faceSetResolver?: FaceSetResolver;
+  compositionResolver?: CompositionVersionResolver;
+  collectComposition?: (resolved: CompositionVersionResolved) => void;
   scope: RenderScope;
   path: (string | number)[];
   cueTiming?: CueTiming;

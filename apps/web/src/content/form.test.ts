@@ -19,6 +19,13 @@ import {
   createPointSceneFormValue,
   newSceneId,
   toFormValues,
+  NESTED_COMPOSITION_FIT_SUFFIX,
+  NESTED_COMPOSITION_POS_X_SUFFIX,
+  NESTED_COMPOSITION_POS_Y_SUFFIX,
+  NESTED_COMPOSITION_VERSION_SUFFIX,
+  NESTED_COMPOSITION_ZOOM_SUFFIX,
+  NESTED_MODE_COMPOSITION,
+  NESTED_MODE_SUFFIX,
   type SceneFormValue,
 } from "./form";
 
@@ -264,6 +271,98 @@ describe("buildContentDocument", () => {
     expect(input.frame).toBe("phone");
     expect(input.screen.kind).toBe("template");
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("round-trips a device-frame composition screen with fit, zoom and position", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-device-comp",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: {
+            kind: "composition",
+            compositionVersionId: "cmpver_001",
+            fit: "contain",
+            zoom: 1.5,
+            position: { x: 0.2, y: 0.8 },
+          },
+        },
+      }),
+    ];
+
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.fields[`screen${NESTED_MODE_SUFFIX}`]).toBe(NESTED_MODE_COMPOSITION);
+    expect(cue.fields[`screen${NESTED_COMPOSITION_VERSION_SUFFIX}`]).toBe("cmpver_001");
+    expect(cue.fields[`screen${NESTED_COMPOSITION_FIT_SUFFIX}`]).toBe("contain");
+    expect(cue.fields[`screen${NESTED_COMPOSITION_ZOOM_SUFFIX}`]).toBe("150");
+    expect(cue.fields[`screen${NESTED_COMPOSITION_POS_X_SUFFIX}`]).toBe("20");
+    expect(cue.fields[`screen${NESTED_COMPOSITION_POS_Y_SUFFIX}`]).toBe("80");
+
+    cue.fields[`screen${NESTED_COMPOSITION_ZOOM_SUFFIX}`] = "200";
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
+      frame: string;
+      screen: {
+        kind: string;
+        compositionVersionId: string;
+        fit: string;
+        zoom: number;
+        position: { x: number; y: number };
+      };
+    };
+    expect(input.screen.kind).toBe("composition");
+    expect(input.screen.compositionVersionId).toBe("cmpver_001");
+    expect(input.screen.fit).toBe("contain");
+    expect(input.screen.zoom).toBe(2);
+    expect(input.screen.position).toEqual({ x: 0.2, y: 0.8 });
+    expect(input.frame).toBe("laptop");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("switches a media device screen to a composition", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-device",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "card",
+        input: { frame: "phone", screen: { kind: "media", assetId: "asset-screen", fit: "cover" } },
+      }),
+    ];
+
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    cue.fields[`screen${NESTED_MODE_SUFFIX}`] = NESTED_MODE_COMPOSITION;
+    cue.fields[`screen${NESTED_COMPOSITION_VERSION_SUFFIX}`] = "cmpver_002";
+    cue.fields[`screen${NESTED_COMPOSITION_FIT_SUFFIX}`] = "cover";
+
+    const rebuilt = buildContentDocument(base, values);
+    const input = rebuilt.scenes[0]!.visualCues[0]!.input as {
+      screen: { kind: string; compositionVersionId: string; fit: string };
+    };
+    expect(input.screen.kind).toBe("composition");
+    expect(input.screen.compositionVersionId).toBe("cmpver_002");
+    expect(input.screen.fit).toBe("cover");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("rejects a new device screen in composition mode without a selected version", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const cue = createCueFormValue({
+      sceneId: values.scenes[0]!.id,
+      templateId: "scene.device-frame",
+      templateVersion: 1,
+      layer: "background",
+      order: 0,
+    });
+    cue.fields[`screen${NESTED_MODE_SUFFIX}`] = NESTED_MODE_COMPOSITION;
+    values.scenes[0]!.cues = [cue];
+    expect(() => buildContentDocument(base, values)).toThrow();
   });
 
   it("rejects a newly added cue with no selected media", () => {

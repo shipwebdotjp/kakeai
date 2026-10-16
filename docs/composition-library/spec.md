@@ -59,7 +59,7 @@ v1 は 1920×1080 の全画面モーションだけを受け入れる。外部 U
 
 bundle と draft はアプリデータ領域の `compositions/` 配下に置く。`Composition` 作成時に `drafts/<compositionId>/`（seed の entry と `manifest.json`）が即時作成され、draft 更新のたびに指定ファイルが上書きされる。publish 時に `bundles/<contentHash>/<versionId>/` が作られ、以後書き換えない。`drafts/` と `bundles/` はサーバ管理であり、利用者や AI が直接編集しない。
 
-同一 CompositionVersion は一つの ScriptVersion 内で一度だけ参照できる。HyperFrames の sub-composition は組み立て後の DOM、CSS、timeline ID を共有するため、この制約により AI が生成した project を書き換えずに ID 衝突を防ぐ。異なる Composition には異なる runtime composition ID を割り当てる。
+同一 CompositionVersion は一つの ScriptVersion 内で複数回参照できる。HyperFrames の native nested composition が、重複した sub-composition ホストへ instance ごとの runtime composition ID を割り当て、CSS・DOM 参照・timeline 登録・SVG id を instance ごとにスコープする。この仕組みにより、AI が生成した project を書き換えずに複数配置の ID 衝突を防ぐ。異なる Composition には異なる runtime composition ID を割り当てる。
 
 ## ContentDocument と表示
 
@@ -74,15 +74,43 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 }
 ```
 
-- `layer` は `background` とし、`range` は `scene` / `lines` / `offset` の全てを許可する（共通 Cue range 解決を使う）。`background` 以外のレイヤーへの配置は ContentDocument 検証が拒否する（他レイヤーへの配置は [roadmap](./roadmap.md) の R3、複数 instance は R2）。
+- `layer` は `background` とし、`range` は `scene` / `lines` / `offset` の全てを許可する（共通 Cue range 解決を使う）。`background` 以外のレイヤーへの配置は ContentDocument 検証が拒否する。同一 version の複数配置は許可する（R2）。
 - **尺**: Composition host の実効表示窓は `min(range 尺, manifest.durationMs)` とする。range 尺より child が短い Cue は child 終端で非表示にし、末フレーム保持・ループはしない。Cue transition は実効表示窓内に収まることを検証する。Scene crossfade により必要となる表示窓が child 尺を超える Composition 背景は、保存時とレンダー投入時に明示エラーにする。
-- 音声、利用時の text/color/media slot、端末枠など Composite Visual Template 内への配置は v1 では持たない。
+- 音声、利用時の text/color/media slot は持たない。
+
+### 端末画面への埋め込み（R3）
+
+`scene.device-frame@1` の `screen` は `NestedVisual` であり、`kind: "composition"` の子として CompositionVersion を端末画面枠内に置ける。
+
+```json
+{
+  "template": { "id": "scene.device-frame", "version": 1 },
+  "range": { "kind": "scene" },
+  "layer": "background",
+  "input": {
+    "frame": "laptop",
+    "screen": {
+      "kind": "composition",
+      "compositionVersionId": "cmpver_001",
+      "fit": "contain",
+      "zoom": 1.5,
+      "position": { "x": 0.5, "y": 0.5 }
+    }
+  }
+}
+```
+
+- `fit` は必須で `contain` / `cover`。`zoom` は任意（`0.5..3`、省略時 `1`）、`position` は任意（`x`/`y` を `0..1`、省略時は中央）。
+- 子は Cue 開始から 0 秒で再生し、child 尺で非表示にする。freeze と loop は持たない。Cue／Scene crossfade は親 device frame の可視性だけを変え、child の時計はリセットしない。
+- 子の配置は slot の content box を基準に fit → zoom → position（object-position 相当の crop）で決める。親 screen は既存の角丸・枠・`overflow:hidden` で最終 clip を所有し、`contain` の余白は既存の黒背景を見せる。
+- 配置は frame ごとの px 定数を持たず、**slot 要素を CSS `container-type: size` にする**ことで成立する。コンパイラは `cqw`/`cqh` と `tan(atan2())` から無単位の倍率を求め、固定 1920×1080 の子を `transform: scale()` で拡縮する。trusted template が Composition slot を設けるときは、その要素を `container-type: size` にする（独自ベゼル・将来の TV／site mockup も同じ契約）。
+- 現行 canvas は 1920×1080 固定。phone では `contain` の余白または `cover` の crop を選ぶ。
 
 ScriptVersion の保存、プレビュー、Render Job の作成時に CompositionVersion の存在と bundle 完全性を確認する。draft、削除済み version、破損した bundle は参照できない。
 
 ## プレビューとレンダー
 
-コンパイラは単一の HTML 文字列ではなく、親 `index.html` と参照 CompositionVersion の file tree からなる render project を組み立てる。親は `data-composition-src` で version 固有の entrypoint を参照し、HyperFrames が child timeline を独立して seek する。
+コンパイラは単一の HTML 文字列ではなく、親 `index.html` と参照 CompositionVersion の file tree からなる render project を組み立てる。親は `data-composition-src` で version 固有の entrypoint を参照し、HyperFrames が child timeline を独立して seek する。参照追跡は入れ子と複数 instance に対応し、preview の content URL 解決、render snapshot、bundle materialize も再帰的に参照を集める。
 
 プレビューでは、published bundle の entrypoint と依存ファイルを同一 origin の読み取り専用 content URL で配信する。URL は media session cookie と厳密な path 検証で保護し、draft やアプリデータの絶対パスを公開しない。
 
@@ -92,5 +120,5 @@ ScriptVersion の保存、プレビュー、Render Job の作成時に Compositi
 
 - 任意の外部 HyperFrames / HTML project の import と実行。
 - HTML/CSS/JavaScript の利用者向け編集 UI。
-- 同一 CompositionVersion の複数 instance、可変 slot、音声、Composite Visual Template 内への配置。
+- 可変 slot、音声、任意 mask・透視変形。
 - CompositionVersion を video Asset に自動変換して保存すること。透過 WebM へ bake する既存の通常 video Asset workflow は別物として維持する。

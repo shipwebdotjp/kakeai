@@ -104,7 +104,7 @@ describe("Composition Library Integration Tests", () => {
     });
   });
 
-  it("test 2: ContentDocument reference validation (Background constraint & single reference)", () => {
+  it("test 2: ContentDocument reference validation (Background constraint & multiple instances)", () => {
     const doc = validContentDocument();
     doc.scenes[0]!.visualCues.push({
       id: "cue-comp-1",
@@ -122,14 +122,27 @@ describe("Composition Library Integration Tests", () => {
     docDup.scenes[0]!.visualCues.push({
       id: "cue-comp-2",
       range: { kind: "scene" },
-      layer: "overlay",
+      layer: "background",
       order: 2,
       transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
       template: { id: "composition.full-bleed", version: 1 },
       input: { compositionVersionId: "cmpver_001" },
     });
 
-    expect(() => parseContentDocument(docDup)).toThrow();
+    expect(() => parseContentDocument(docDup)).not.toThrow();
+
+    const docOverlay = JSON.parse(JSON.stringify(doc));
+    docOverlay.scenes[0]!.visualCues.push({
+      id: "cue-comp-3",
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 3,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      template: { id: "composition.full-bleed", version: 1 },
+      input: { compositionVersionId: "cmpver_001" },
+    });
+
+    expect(() => parseContentDocument(docOverlay)).toThrow();
   });
 
   it("test 2b: save rejects a composition background starved by scene crossfade", async () => {
@@ -191,6 +204,37 @@ describe("Composition Library Integration Tests", () => {
       order: 0,
       transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
       input: { compositionVersionId: "cmpver_missing" },
+    });
+    await expect(
+      scriptVersions.saveScriptVersion(db, edition.id, {
+        sourceScriptVersionId: null,
+        content: doc,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: "invalid_value" }),
+        ]),
+      },
+    });
+  });
+
+  it("test 2d: save rejects a device screen with an unknown nested composition version", async () => {
+    const work = await works.createWork(db, "unknown nested", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const doc = createInitialContentDocument();
+    doc.scenes[0]!.visualCues.push({
+      id: "cue-screen-missing",
+      template: { id: "scene.device-frame", version: 1 },
+      range: { kind: "scene" },
+      layer: "card",
+      order: 0,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      input: {
+        frame: "laptop",
+        screen: { kind: "composition", compositionVersionId: "cmpver_missing", fit: "contain" },
+      },
     });
     await expect(
       scriptVersions.saveScriptVersion(db, edition.id, {
@@ -347,6 +391,76 @@ describe("Composition Library Integration Tests", () => {
     expect(snapshot.compositionVersions[0]!.id).toBe(v1.id);
     expect(snapshot.compositionVersions[0]!.bundleHash).toBe(v1.bundleHash);
     expect(snapshot.compositionVersions[0]!.manifest).toEqual(v1.manifest);
+
+    await jobs.cancelJob(db, job.id);
+  });
+
+  it("test 5b: nested Composition in device screens resolves, previews and pins (R2)", async () => {
+    const comp = await service.createComposition({
+      name: "Nested Screen",
+      runtimeCompositionId: "cmp.test.nested-screen",
+    });
+    const v1 = await service.publish(comp.id, {});
+    const directories = dataDirectories(tmpDir);
+
+    const work = await works.createWork(db, "nested screen", "ja-JP");
+    const edition = work.languageEditions[0]!;
+
+    const content = createInitialContentDocument();
+    const intro = content.scenes[0]!;
+    const noTransition = {
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
+    } as const;
+    intro.visualCues.push({
+      id: "cue-screen-a",
+      template: { id: "scene.device-frame", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: noTransition,
+      input: {
+        frame: "laptop",
+        screen: { kind: "composition", compositionVersionId: v1.id, fit: "contain" },
+      },
+    });
+    intro.visualCues.push({
+      id: "cue-screen-b",
+      template: { id: "scene.device-frame", version: 1 },
+      range: { kind: "scene" },
+      layer: "card",
+      order: 0,
+      transition: noTransition,
+      input: {
+        frame: "phone",
+        screen: { kind: "composition", compositionVersionId: v1.id, fit: "cover", zoom: 1.5 },
+      },
+    });
+
+    const saved = await scriptVersions.saveScriptVersion(db, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+
+    const preview = await scriptVersions.getScriptVersionPreview(
+      db,
+      directories,
+      saved.scriptVersion.id,
+    );
+    expect(preview.compositions).toHaveLength(1);
+    expect(preview.compositions[0]!.compositionVersionId).toBe(v1.id);
+    expect(preview.compositionHtml).toContain("kakeai-compslot");
+    expect(preview.compositionHtml).toContain("kakeai-compzoom");
+    expect(preview.compositionHtml).toContain(
+      `/api/v1/compositions/versions/${v1.id}/content/index.html`,
+    );
+
+    const job = await renderJobs.createRenderJob(db, saved.scriptVersion.id, testFontCatalog);
+    const row = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
+    expect(snapshot.compositionVersions).toHaveLength(1);
+    expect(snapshot.compositionVersions[0]!.id).toBe(v1.id);
+    expect(snapshot.compositionVersions[0]!.bundleHash).toBe(v1.bundleHash);
 
     await jobs.cancelJob(db, job.id);
   });

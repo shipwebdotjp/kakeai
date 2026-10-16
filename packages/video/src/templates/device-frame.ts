@@ -43,5 +43,6 @@ export function renderDeviceFrame(
     html: `<div class="kakeai-deviceframe kakeai-deviceframe-${frame}" style="background:${background}"><div id="${screenId}" class="kakeai-deviceframe-screen">${screenRendered.html}</div></div>`,
     assetIds: screenRendered.assetIds,
     animation: [...screenRendered.animation, ...animationItems],
+    nestedCompositionWindows: screenRendered.nestedCompositionWindows,
   };
 }

@@ -25,6 +25,15 @@ import {
   CROP_ZOOM_MAX_PERCENT,
   CROP_ZOOM_MIN_PERCENT,
   CROP_ZOOM_SUFFIX,
+  NESTED_MEDIA_FIT_SUFFIX,
+  NESTED_COMPOSITION_FIT_SUFFIX,
+  NESTED_COMPOSITION_POS_X_SUFFIX,
+  NESTED_COMPOSITION_POS_Y_SUFFIX,
+  NESTED_COMPOSITION_VERSION_SUFFIX,
+  NESTED_COMPOSITION_ZOOM_SUFFIX,
+  NESTED_MODE_COMPOSITION,
+  NESTED_MODE_MEDIA,
+  NESTED_MODE_SUFFIX,
   STANDING_TEMPLATE_ID,
   createCueFormValue,
   lineIndex,
@@ -44,6 +53,7 @@ import { MediaPicker } from "./MediaPicker";
 import { DataGridField } from "./DataGridField";
 
 const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
+const IDENTITY_ZOOM_PERCENT = "100";
 
 const LAYER_LABELS: Record<CueLayer, string> = {
   background: "背景",
@@ -421,6 +431,199 @@ function CompositionVersionField({ label, value, setField, fieldKey }: Compositi
   );
 }
 
+function PositionZoomControls({
+  label,
+  xKey,
+  yKey,
+  zoomKey,
+  values,
+  setField,
+  setFields,
+  getFields,
+}: {
+  label?: string;
+  xKey: string;
+  yKey: string;
+  zoomKey?: string;
+  values: Record<string, string>;
+  setField: (key: string, value: string) => void;
+  setFields: (values: Record<string, string>) => void;
+  getFields: () => Record<string, string>;
+}) {
+  const center = String(CROP_CENTER_PERCENT);
+  const xValue = values[xKey] ?? "";
+  const yValue = values[yKey] ?? "";
+  const zoomValue = zoomKey !== undefined ? (values[zoomKey] ?? "") : "";
+  const xDisplay = xValue.length > 0 ? xValue : center;
+  const yDisplay = yValue.length > 0 ? yValue : center;
+  const zoomDisplay = zoomValue.length > 0 ? zoomValue : IDENTITY_ZOOM_PERCENT;
+  const isCentered = xValue.length === 0 && yValue.length === 0;
+  const moveAxis = (axisKey: string, otherKey: string, next: string) => {
+    const otherValue = getFields()[otherKey] ?? "";
+    setFields(
+      otherValue.length === 0 ? { [axisKey]: next, [otherKey]: center } : { [axisKey]: next },
+    );
+  };
+  return (
+    <div className="my-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {label !== undefined && <span>{label}</span>}
+        <span className={metaTextClass}>
+          横 {xDisplay}% / 縦 {yDisplay}%
+        </span>
+        <button
+          type="button"
+          className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+          disabled={isCentered}
+          onClick={() => setFields({ [xKey]: "", [yKey]: "" })}
+        >
+          中央に戻す
+        </button>
+      </div>
+      <label className="mt-1 flex items-center gap-2">
+        <span className="w-6 text-xs">横</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          className="w-48"
+          value={xDisplay}
+          onChange={(event) => moveAxis(xKey, yKey, event.target.value)}
+        />
+      </label>
+      <label className="mt-1 flex items-center gap-2">
+        <span className="w-6 text-xs">縦</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          className="w-48"
+          value={yDisplay}
+          onChange={(event) => moveAxis(yKey, xKey, event.target.value)}
+        />
+      </label>
+      {zoomKey !== undefined && (
+        <label className="mt-1 flex items-center gap-2">
+          <span className="w-6 text-xs">倍率</span>
+          <input
+            type="range"
+            min={CROP_ZOOM_MIN_PERCENT}
+            max={CROP_ZOOM_MAX_PERCENT}
+            step={1}
+            className="w-48"
+            value={zoomDisplay}
+            onChange={(event) => setField(zoomKey, event.target.value)}
+          />
+          <span className={metaTextClass}>{zoomDisplay}%</span>
+          {zoomValue.length > 0 && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setField(zoomKey, "")}
+            >
+              等倍に戻す
+            </button>
+          )}
+        </label>
+      )}
+    </div>
+  );
+}
+
+function NestedScreenField({
+  field,
+  values,
+  setField,
+  setFields,
+  getFields,
+}: {
+  field: Extract<TemplateFieldSpec, { kind: "nestedMedia" }>;
+  values: Record<string, string>;
+  setField: (key: string, value: string) => void;
+  setFields: (values: Record<string, string>) => void;
+  getFields: () => Record<string, string>;
+}) {
+  const mode = values[`${field.key}${NESTED_MODE_SUFFIX}`] ?? NESTED_MODE_MEDIA;
+  const isComposition = mode === NESTED_MODE_COMPOSITION;
+  return (
+    <div>
+      <div className="my-2 flex flex-wrap items-center gap-2">
+        <span>{field.label}</span>
+        <div className="inline-flex overflow-hidden rounded border border-border">
+          <button
+            type="button"
+            aria-pressed={!isComposition}
+            className={`px-2 py-0.5 text-xs ${isComposition ? "text-muted-foreground" : "bg-muted font-semibold"}`}
+            onClick={() => setField(`${field.key}${NESTED_MODE_SUFFIX}`, NESTED_MODE_MEDIA)}
+          >
+            素材
+          </button>
+          <button
+            type="button"
+            aria-pressed={isComposition}
+            className={`px-2 py-0.5 text-xs ${isComposition ? "bg-muted font-semibold" : "text-muted-foreground"}`}
+            onClick={() => setField(`${field.key}${NESTED_MODE_SUFFIX}`, NESTED_MODE_COMPOSITION)}
+          >
+            Composition
+          </button>
+        </div>
+      </div>
+      {isComposition ? (
+        <div>
+          <CompositionVersionField
+            label="Composition"
+            value={values[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] ?? ""}
+            setField={setField}
+            fieldKey={`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`}
+          />
+          <label className="my-2 inline-flex items-center gap-1.5">
+            表示方法
+            <select
+              className={textFieldClass}
+              value={values[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] ?? "contain"}
+              onChange={(event) => setField(`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`, event.target.value)}
+            >
+              <option value="contain">全体を収める</option>
+              <option value="cover">全体を覆う（切り抜き）</option>
+            </select>
+          </label>
+          <PositionZoomControls
+            xKey={`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`}
+            yKey={`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`}
+            zoomKey={`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`}
+            values={values}
+            setField={setField}
+            setFields={setFields}
+            getFields={getFields}
+          />
+        </div>
+      ) : (
+        <div>
+          <MediaPicker
+            label={field.label}
+            kinds={field.assetKinds}
+            selectedAssetId={(values[field.key] ?? "").length > 0 ? (values[field.key] ?? "") : null}
+            onSelect={(assetId) => setField(field.key, assetId ?? "")}
+          />
+          <label className="my-2 inline-flex items-center gap-1.5">
+            表示方法
+            <select
+              className={textFieldClass}
+              value={values[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] ?? "cover"}
+              onChange={(event) => setField(`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`, event.target.value)}
+            >
+              <option value="cover">全体を覆う（切り抜き）</option>
+              <option value="contain">全体を収める</option>
+            </select>
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
@@ -435,7 +638,6 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
   }
   switch (field.kind) {
     case "media":
-    case "nestedMedia":
       return (
         <div>
           <MediaPicker
@@ -444,104 +646,53 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             selectedAssetId={value.length > 0 ? value : null}
             onSelect={(assetId) => setField(field.key, assetId ?? "")}
           />
-          {field.kind === "nestedMedia" && (
-            <label className="my-2 inline-flex items-center gap-1.5">
-              表示方法
-              <select
-                className={textFieldClass}
-                value={values[`${field.key}__fit`] ?? "cover"}
-                onChange={(event) => setField(`${field.key}__fit`, event.target.value)}
-              >
-                <option value="cover">全体を覆う（切り抜き）</option>
-                <option value="contain">全体を収める</option>
-              </select>
-            </label>
-          )}
+        </div>
+      );
+    case "nestedMedia":
+      if (field.allowComposition) {
+        return (
+          <NestedScreenField
+            field={field}
+            values={values}
+            setField={setField}
+            setFields={setFields}
+            getFields={getFields}
+          />
+        );
+      }
+      return (
+        <div>
+          <MediaPicker
+            label={field.label}
+            kinds={field.assetKinds}
+            selectedAssetId={value.length > 0 ? value : null}
+            onSelect={(assetId) => setField(field.key, assetId ?? "")}
+          />
+          <label className="my-2 inline-flex items-center gap-1.5">
+            表示方法
+            <select
+              className={textFieldClass}
+              value={values[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] ?? "cover"}
+              onChange={(event) => setField(`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`, event.target.value)}
+            >
+              <option value="cover">全体を覆う（切り抜き）</option>
+              <option value="contain">全体を収める</option>
+            </select>
+          </label>
         </div>
       );
     case "mediaCrop": {
-      const xKey = `${field.key}${CROP_X_SUFFIX}`;
-      const yKey = `${field.key}${CROP_Y_SUFFIX}`;
-      const zoomKey = `${field.key}${CROP_ZOOM_SUFFIX}`;
-      const center = String(CROP_CENTER_PERCENT);
-      const xValue = values[xKey] ?? "";
-      const yValue = values[yKey] ?? "";
-      const zoomValue = values[zoomKey] ?? "";
-      const xDisplay = xValue.length > 0 ? xValue : center;
-      const yDisplay = yValue.length > 0 ? yValue : center;
-      const zoomDisplay = zoomValue.length > 0 ? zoomValue : "100";
-      const isCentered = xValue.length === 0 && yValue.length === 0;
-      const moveAxis = (axisKey: string, otherKey: string, next: string) => {
-        const otherValue = getFields()[otherKey] ?? "";
-        setFields(
-          otherValue.length === 0 ? { [axisKey]: next, [otherKey]: center } : { [axisKey]: next },
-        );
-      };
       return (
-        <div className="my-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span>{field.label}</span>
-            <span className={metaTextClass}>
-              横 {xDisplay}% / 縦 {yDisplay}%
-            </span>
-            <button
-              type="button"
-              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
-              disabled={isCentered}
-              onClick={() => setFields({ [xKey]: "", [yKey]: "" })}
-            >
-              中央に戻す
-            </button>
-          </div>
-          <label className="mt-1 flex items-center gap-2">
-            <span className="w-6 text-xs">横</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              className="w-48"
-              value={xDisplay}
-              onChange={(event) => moveAxis(xKey, yKey, event.target.value)}
-            />
-          </label>
-          <label className="mt-1 flex items-center gap-2">
-            <span className="w-6 text-xs">縦</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              className="w-48"
-              value={yDisplay}
-              onChange={(event) => moveAxis(yKey, xKey, event.target.value)}
-            />
-          </label>
-          {field.zoomKey !== undefined && (
-            <label className="mt-1 flex items-center gap-2">
-              <span className="w-6 text-xs">倍率</span>
-              <input
-                type="range"
-                min={CROP_ZOOM_MIN_PERCENT}
-                max={CROP_ZOOM_MAX_PERCENT}
-                step={1}
-                className="w-48"
-                value={zoomDisplay}
-                onChange={(event) => setField(zoomKey, event.target.value)}
-              />
-              <span className={metaTextClass}>{zoomDisplay}%</span>
-              {zoomValue.length > 0 && (
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setField(zoomKey, "")}
-                >
-                  等倍に戻す
-                </button>
-              )}
-            </label>
-          )}
-        </div>
+        <PositionZoomControls
+          label={field.label}
+          xKey={`${field.key}${CROP_X_SUFFIX}`}
+          yKey={`${field.key}${CROP_Y_SUFFIX}`}
+          zoomKey={field.zoomKey !== undefined ? `${field.key}${CROP_ZOOM_SUFFIX}` : undefined}
+          values={values}
+          setField={setField}
+          setFields={setFields}
+          getFields={getFields}
+        />
       );
     }
     case "text":

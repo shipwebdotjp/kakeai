@@ -485,26 +485,117 @@ function makeContext(
   path: (string | number)[],
   faceSetResolver?: FaceSetResolver,
   cueTiming?: CueTiming,
+  compositionResolver?: CompositionVersionResolver,
+  collectComposition?: (resolved: CompositionVersionResolved) => void,
 ): RenderContext {
   const context: RenderContext = {
     document,
     theme,
     assetResolver,
     faceSetResolver,
+    compositionResolver,
+    collectComposition,
     scope,
     path,
     cueTiming,
     renderNested: (node, nestedScope, nestedPath) =>
-      renderNestedVisual(node, makeContext(document, theme, assetResolver, nestedScope, nestedPath, faceSetResolver, cueTiming)),
+      renderNestedVisual(
+        node,
+        makeContext(
+          document,
+          theme,
+          assetResolver,
+          nestedScope,
+          nestedPath,
+          faceSetResolver,
+          cueTiming,
+          compositionResolver,
+          collectComposition,
+        ),
+      ),
   };
   return context;
+}
+
+function renderNestedComposition(
+  node: NestedVisual & { kind: "composition" },
+  context: RenderContext,
+): RenderedCue & { compositionVersion?: CompositionVersionResolved } {
+  if (!context.compositionResolver) {
+    throw new CompositionCompileError([
+      {
+        path: context.path,
+        code: "missing_composition_resolver",
+        message: "CompositionVersionResolver が設定されていません",
+      },
+    ]);
+  }
+  let resolved: CompositionVersionResolved;
+  try {
+    resolved = context.compositionResolver(node.compositionVersionId);
+  } catch (err) {
+    throw new CompositionCompileError([
+      {
+        path: [...context.path, "compositionVersionId"],
+        code: "unknown_composition_version",
+        message: `CompositionVersion を解釈できません: ${(err as Error).message}`,
+      },
+    ]);
+  }
+  context.collectComposition?.(resolved);
+  const width = resolved.manifest.width;
+  const height = resolved.manifest.height;
+  const durationMs = resolved.manifest.durationMs;
+  if (
+    !Number.isFinite(width) ||
+    width <= 0 ||
+    !Number.isFinite(height) ||
+    height <= 0 ||
+    !Number.isFinite(durationMs) ||
+    durationMs <= 0
+  ) {
+    throw new CompositionCompileError([
+      {
+        path: [...context.path, "compositionVersionId"],
+        code: "invalid_composition_manifest",
+        message: "CompositionVersion の寸法または尺が不正です",
+      },
+    ]);
+  }
+  const zoom = node.zoom ?? 1;
+  const posX = node.position?.x ?? 0.5;
+  const posY = node.position?.y ?? 0.5;
+  const base =
+    node.fit === "contain"
+      ? `min(tan(atan2(100cqw,${width}px)),tan(atan2(100cqh,${height}px)))`
+      : `max(tan(atan2(100cqw,${width}px)),tan(atan2(100cqh,${height}px)))`;
+  const scale = zoom === 1 ? base : `calc(${base} * ${zoom})`;
+  const slotId = context.scope.id("compslot");
+  const zoomId = context.scope.id("compzoom");
+  const hostId = context.scope.id("comp-host");
+  const src = resolved.previewUrl ?? resolved.entrypoint;
+  return {
+    html: `<div id="${slotId}" class="kakeai-compslot" style="--kakeai-cw:${width}px;--kakeai-ch:${height}px;--kakeai-s:${scale};--kakeai-posx:${posX};--kakeai-posy:${posY}"><div id="${zoomId}" class="kakeai-compzoom"><div id="${hostId}" class="kakeai-compchild" data-composition-id="${escapeHtmlAttribute(resolved.runtimeCompositionId)}" data-composition-src="${escapeHtmlAttribute(src)}" data-width="${width}" data-height="${height}"></div></div></div>`,
+    assetIds: [],
+    animation: [],
+    compositionVersion: resolved,
+    nestedCompositionWindows: [{ targetId: zoomId, durationMs }],
+  };
 }
 
 function renderNestedVisual(node: NestedVisual, context: RenderContext): RenderedCue {
   if (node.kind === "media") {
     return renderNestedMedia(node, context);
   }
-  return dispatchTemplate(`${node.template.id}@${node.template.version}`, node.input, context);
+  if (node.kind === "composition") {
+    return renderNestedComposition(node, context);
+  }
+  return dispatchTemplate(
+    `${node.template.id}@${node.template.version}`,
+    node.input,
+    context,
+    context.compositionResolver,
+  );
 }
 
 const STYLES = [
@@ -527,8 +618,11 @@ const STYLES = [
   ".kakeai-facegroup{position:absolute;inset:0;}",
   ".kakeai-face{position:absolute;left:0;top:0;width:100%;height:100%;}",
   ".kakeai-nestedmedia{display:block;width:100%;height:100%;}",
+  ".kakeai-compslot{position:absolute;inset:0;overflow:hidden;}",
+  ".kakeai-compzoom{position:absolute;left:0;top:0;width:var(--kakeai-cw,1920px);height:var(--kakeai-ch,1080px);transform-origin:top left;transform:translate(calc((100cqw - var(--kakeai-cw,1920px) * var(--kakeai-s,1)) * var(--kakeai-posx,0.5)),calc((100cqh - var(--kakeai-ch,1080px) * var(--kakeai-s,1)) * var(--kakeai-posy,0.5))) scale(var(--kakeai-s,1));}",
+  ".kakeai-compchild{position:absolute;inset:0;width:100%;height:100%;}",
   ".kakeai-deviceframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
-  ".kakeai-deviceframe-screen{overflow:hidden;background:#000;box-shadow:0 24px 60px var(--kakeai-shadow);}",
+  ".kakeai-deviceframe-screen{overflow:hidden;background:#000;box-shadow:0 24px 60px var(--kakeai-shadow);container-type:size;}",
   ".kakeai-deviceframe-laptop .kakeai-deviceframe-screen{width:72%;aspect-ratio:16/9;border-radius:18px;border:24px solid var(--kakeai-ink);}",
   ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/19.5;border-radius:36px;border:18px solid var(--kakeai-ink);}",
   ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
@@ -885,6 +979,13 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     }
   };
 
+  const recordComposition = (resolved: CompositionVersionResolved): void => {
+    if (!seenCompositionVersionIds.has(resolved.id)) {
+      seenCompositionVersionIds.add(resolved.id);
+      compositionVersions.push(resolved);
+    }
+  };
+
   const takeById = new Map(document.audioTakes.map((take) => [take.id, take]));
   const characterIdBySpeakerId = new Map(
     document.speakers.map((speaker) => [speaker.id, speaker.characterId]),
@@ -947,10 +1048,20 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const span = window.endMs - window.startMs;
       const absStartMs = placement.startMs + window.startMs;
       const scope = cueScope(cue.id);
-      const context = makeContext(document, theme, assetResolver, scope, cuePath, faceSetResolver, {
-        startMs: absStartMs,
-        spanMs: span,
-      });
+      const context = makeContext(
+        document,
+        theme,
+        assetResolver,
+        scope,
+        cuePath,
+        faceSetResolver,
+        {
+          startMs: absStartMs,
+          spanMs: span,
+        },
+        compositionResolver,
+        recordComposition,
+      );
       const rendered = dispatchTemplate(
         `${cue.template.id}@${cue.template.version}`,
         cue.input,
@@ -974,10 +1085,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       }
       const absEndMs = absStartMs + effectiveSpanMs;
       if (rendered.compositionVersion) {
-        if (!seenCompositionVersionIds.has(rendered.compositionVersion.id)) {
-          seenCompositionVersionIds.add(rendered.compositionVersion.id);
-          compositionVersions.push(rendered.compositionVersion);
-        }
+        recordComposition(rendered.compositionVersion);
       }
       if (rendered.html.length === 0) {
         return;
@@ -1018,6 +1126,14 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         if (vars !== null) {
           tweenLines.push(
             `tl.from(document.getElementById("${item.targetId}"),{${vars},duration:${secondsText(item.durationMs / 1000)},ease:"${actionEase(item.ease)}",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,
+          );
+        }
+      }
+
+      for (const nested of rendered.nestedCompositionWindows ?? []) {
+        if (nested.durationMs > 0 && nested.durationMs < span) {
+          tweenLines.push(
+            `tl.set(document.getElementById("${nested.targetId}"),{opacity:0},${toSecondsText(absStartMs + nested.durationMs)});`,
           );
         }
       }

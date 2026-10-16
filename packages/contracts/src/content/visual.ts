@@ -129,7 +129,7 @@ function validateNestedVisuals(
       });
       return;
     }
-    if (nested.data.kind === "media") {
+    if (nested.data.kind === "media" || nested.data.kind === "composition") {
       return;
     }
     budget.depth += 1;
