@@ -77,3 +77,12 @@
 - [x] `EffectsField`・`CalloutItemsField` に spotlight と onset 編集（`OnsetField`）を追加し、chart の効果に「強調」を出す
 - [x] 契約・レンダラ・フォームのテストを追加する
 - 完了条件: `emphasize` の onset/spotlight がプレビューのシークとMP4で一致し、既存の `appear`・`emphasize` の挙動が回帰しない。
+
+## Phase 8: 保存時検証と remap の collectLineRefs 一本化
+
+- [x] `collectLineReferences(document)` 文書ウォーカーを `packages/contracts` に追加する（`asset-refs` と同型）
+- [x] `validateContentDocument` で効果トリガーの lineId が同一Sceneに実在するかを検証する
+- [x] `collectLineRefs` の各実装を trigger 部分スキーマの `safeParse` に変え、部分入力を許容する
+- [x] web の remap（`removeLineInScene`・`splitPointScene`・`countLineCueReferences`）を `collectLineRefs` に一本化する（未知テンプレートは非破壊保持）
+- [x] 契約・web のテストを追加・更新する
+- 完了条件: 別Scene・不存在の効果トリガーを保存時に拒否し、行削除・分割後も参照が破綻しない。

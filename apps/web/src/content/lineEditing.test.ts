@@ -273,7 +273,7 @@ describe("removeLineInScene", () => {
     ).toBe(true);
   });
 
-  it("scans fields for an unknown template when dropping deleted-line triggers", () => {
+  it("preserves effect fields for an unknown template when dropping deleted-line triggers", () => {
     const effects = JSON.stringify([
       {
         target: { kind: "row", index: 0 },
@@ -286,7 +286,37 @@ describe("removeLineInScene", () => {
       [cue("vc", { templateId: "unknown.template", fields: { effects } })],
     );
     const next = removeLineInScene(scene, 1);
-    expect(JSON.parse(next.cues[0]!.fields.effects!)).toEqual([]);
+    expect(next.cues[0]!.fields.effects).toBe(effects);
+  });
+
+  it("drops a non-editable appear trigger held in baseCue when its line is removed", () => {
+    const baseCue: VisualCue = {
+      id: "vc-callout",
+      template: { id: "list.callout", version: 1 },
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        items: [{ text: "a" }],
+        appear: {
+          trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400 },
+        },
+      },
+    };
+    const items = JSON.stringify([{ text: "a" }]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc", { templateId: "list.callout", baseCue, fields: { items } })],
+    );
+    const next = removeLineInScene(scene, 1);
+    const input = next.cues[0]!.baseCue!.input as { appear?: unknown; items: unknown };
+    expect(input.appear).toBeUndefined();
+    expect(input.items).toEqual([{ text: "a" }]);
   });
 });
 

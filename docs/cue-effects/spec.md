@@ -74,7 +74,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - `packages/contracts` に `lineTriggerSchema`・`effectSchema`・`timedEffectSchema` と各テンプレートの入力スキーマを置く。テンプレート入力は無検証でレンダーへ渡さない。
 - `RenderContext` に `lineIntervals: { lineId, startMs, endMs }[]`（Cue相対）を追加する。コンパイラが `resolveTimeline` の `placement.lines` から算出する。
 - `RenderedCue` に `stateIntervals: { targetId, intervals: { startMs, endMs }[], on, off }[]` を追加する。コンパイラだけが `tl.set` を生成する。
-- `VisualTemplateDefinition` に `collectLineRefs(input, path)` を追加する。保存時の行ID実在検証と、行編集時の参照remapに使う。`collectAssetRefs` と同じ規律で、テンプレート定義へ集約する。
+- `VisualTemplateDefinition` に `collectLineRefs(input, path)` を追加する。`collectAssetRefs` と同じ規律でテンプレート定義へ集約し、`packages/contracts` の文書ウォーカー `collectLineReferences(document)` が全Cueの行参照を収集する。`validateContentDocument` が同一Scene実在検証に、web が行編集時の remap に使う。
 - プレビューはレンダーと同じ `compileDocument` を通るため、解決ロジックは `packages/video` に置き、web側で再実装しない。
 
 ## エディタ
@@ -138,7 +138,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - [x] onset（発火の一発演出）: 「枠が一周して光って、そのまま強調が残る」。`emphasize` に `onset: { preset, durationMs }` を足し、`stateIntervals` の開始と別サブ要素（走査線）で当てる。追加のみなので版は据え置き。preset は `sweep | flash | pop`。
 - offset トリガー: lineTriggerSchema に { kind: "offset", startMs, endMs } を追加。セリフに紐づかない尺指定の演出（BGM連動・固定尺シーンの見せ場）に効く。
 - list.callout の appear を編集UIに出す: レンダラは列全体の登場に対応済みだが inputFields に無い。appear 編集を出せば「列が順に現れる」も可能。
-- 保存時検証の穴を塞ぐ: 効果トリガーの lineId が同一Sceneに実在するかは今コンパイル時まで検証されない（別Sceneの行を指してもプレビューまで気づかない）。collectLineRefs を API サービス（faceSet 解決と同様の層）で実在検証＋行の削除/分割時の remap に一本化する。
+- [x] 保存時検証の穴を塞ぐ: `collectLineRefs` を文書ウォーカー `collectLineReferences` に集約し、`contentDocumentSchema` の `validateContentDocument`（内部参照の既存規律）で効果トリガーの lineId が同一Sceneに実在するかを検証する。行の削除/分割時の remap も web 側で `collectLineRefs` に一本化する。
 - list.callout の警告: 文言の行数目安など meta.warnings 未対応。テキスト系の目安を揃える。
 効果の語彙（パターン）を増やす
 - [x] spotlight（他を暗く）: 対象を強調しつつ兄弟を減光。表・グラフ・ポイントで一番「分かった感」が出る。`emphasize` の style 追加（`style: "spotlight"`）で実装。
@@ -161,6 +161,6 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - emphasize の見た目プリセット（現状 style 3種 + tone 7色）: 影・下線・拡大など小さな有限setを足す。
 おすすめの進め方
 1. [x] onset + spotlight（体感価値が最も大きく、emphasize の拡張で追加のみ）
-2. 保存時検証と remap の collectLineRefs 一本化（正本性・壊れにくさ。地味だが効く）
+2. [x] 保存時検証と remap の collectLineRefs 一本化（正本性・壊れにくさ。地味だが効く）
 3. flow.horizontal or steps（行トリガーが映える新テンプレート）
 4. count-up + stat（見せ場づくり）

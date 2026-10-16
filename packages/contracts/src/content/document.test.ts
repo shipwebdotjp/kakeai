@@ -224,6 +224,86 @@ describe("contentDocumentSchema", () => {
     }
   });
 
+  it("accepts an effect trigger that references a line in the same scene", () => {
+    const doc = validContentDocument();
+    const lineId = doc.scenes[1]!.lines[0]!.id;
+    doc.scenes[1]!.visualCues.push({
+      id: "vc-table",
+      template: { id: "table.simple", version: 1 },
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 5,
+      transition,
+      input: {
+        data: {
+          columns: [{ key: "a", label: "A", type: "text" }],
+          rows: [{ a: "x" }],
+        },
+        effects: [
+          {
+            target: { kind: "row", index: 0 },
+            trigger: { kind: "lines", startLineId: lineId, endLineId: lineId },
+            effect: { kind: "emphasize", style: "frame", tone: "primary" },
+          },
+        ],
+      },
+    });
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects an effect trigger that references a line in another scene", () => {
+    const doc = validContentDocument();
+    const lineId = doc.scenes[1]!.lines[0]!.id;
+    doc.scenes[2]!.visualCues.push({
+      id: "vc-table",
+      template: { id: "table.simple", version: 1 },
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 5,
+      transition,
+      input: {
+        data: {
+          columns: [{ key: "a", label: "A", type: "text" }],
+          rows: [{ a: "x" }],
+        },
+        effects: [
+          {
+            target: { kind: "row", index: 0 },
+            trigger: { kind: "lines", startLineId: lineId, endLineId: lineId },
+            effect: { kind: "emphasize", style: "frame", tone: "primary" },
+          },
+        ],
+      },
+    });
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an effect trigger that references a missing line", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.visualCues.push({
+      id: "vc-table",
+      template: { id: "table.simple", version: 1 },
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 5,
+      transition,
+      input: {
+        data: {
+          columns: [{ key: "a", label: "A", type: "text" }],
+          rows: [{ a: "x" }],
+        },
+        effects: [
+          {
+            target: { kind: "row", index: 0 },
+            trigger: { kind: "lines", startLineId: "line-missing", endLineId: "line-missing" },
+            effect: { kind: "emphasize", style: "frame", tone: "primary" },
+          },
+        ],
+      },
+    });
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
   it("rejects composition.full-bleed@1 outside the background layer", () => {
     const doc = validContentDocument();
     doc.scenes[1]!.visualCues = [

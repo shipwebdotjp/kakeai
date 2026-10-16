@@ -7,6 +7,7 @@ import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
 import { visualThemeRefSchema } from "./theme";
 import { characterStandingV1 } from "../templates";
+import { collectLineReferences } from "./line-refs";
 
 export const CONTENT_SCHEMA_VERSION = 1 as const;
 
@@ -270,6 +271,20 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
         code: "custom",
         message: `AudioCue ${cue.id} の sceneId が存在しません: ${cue.range.sceneId}`,
         path: ["audioCues"],
+      });
+    }
+  }
+
+  const lineIdsBySceneId = new Map(
+    doc.scenes.map((scene) => [scene.id, new Set(scene.lines.map((line) => line.id))]),
+  );
+  for (const reference of collectLineReferences(doc)) {
+    const localLineIds = lineIdsBySceneId.get(reference.sceneId);
+    if (localLineIds === undefined || !localLineIds.has(reference.lineId)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `効果の行トリガーが同一Scene内のラインを指していません: ${reference.lineId}`,
+        path: reference.path,
       });
     }
   }

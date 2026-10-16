@@ -18,6 +18,7 @@ export * from "./content/defaults";
 
 export * from "./content/warnings";
 export * from "./content/asset-refs";
+export * from "./content/line-refs";
 export * from "./templates";
 export * from "./thumbnail";
 export * from "./voice-profile";

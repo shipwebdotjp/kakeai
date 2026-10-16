@@ -609,11 +609,11 @@ const tableSimpleV1: VisualTemplateDefinition = {
   ],
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
-    const parsed = tableSimpleInputSchema.safeParse(input);
+    const parsed = tableEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
     if (!parsed.success) {
       return [];
     }
-    return (parsed.data.effects ?? []).flatMap((entry, index) =>
+    return parsed.data.flatMap((entry, index) =>
       collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
     );
   },
@@ -802,11 +802,11 @@ const chartBarV1: VisualTemplateDefinition = {
   ],
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
-    const parsed = chartBarInputSchema.safeParse(input);
+    const parsed = chartEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
     if (!parsed.success) {
       return [];
     }
-    return (parsed.data.effects ?? []).flatMap((entry, index) =>
+    return parsed.data.flatMap((entry, index) =>
       collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
     );
   },
@@ -863,6 +863,13 @@ function collectTriggerLineRefs(
   ];
 }
 
+function readTriggerField(input: unknown, key: string): unknown {
+  if (typeof input !== "object" || input === null) {
+    return undefined;
+  }
+  return (input as Record<string, unknown>)[key];
+}
+
 const listCalloutV1: VisualTemplateDefinition = {
   id: "list.callout",
   version: 1,
@@ -881,15 +888,15 @@ const listCalloutV1: VisualTemplateDefinition = {
   ],
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
-    const parsed = listCalloutInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return [];
-    }
-    const refs = parsed.data.items.flatMap((item, index) =>
-      collectTriggerLineRefs(item.trigger, [...path, "items", index, "trigger"]),
-    );
-    if (parsed.data.appear !== undefined) {
-      refs.push(...collectTriggerLineRefs(parsed.data.appear.trigger, [...path, "appear", "trigger"]));
+    const items = listCalloutItemsSchema.safeParse(readTriggerField(input, "items") ?? []);
+    const refs = items.success
+      ? items.data.flatMap((item, index) =>
+          collectTriggerLineRefs(item.trigger, [...path, "items", index, "trigger"]),
+        )
+      : [];
+    const appear = listCalloutAppearSchema.safeParse(readTriggerField(input, "appear"));
+    if (appear.success) {
+      refs.push(...collectTriggerLineRefs(appear.data.trigger, [...path, "appear", "trigger"]));
     }
     return refs;
   },

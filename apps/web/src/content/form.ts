@@ -1880,10 +1880,17 @@ export function removeLineInScene(scene: SceneFormValue, lineIndex: number): Sce
     lines: nextLines,
     cues: cues.map((cue) => ({
       ...cue,
-      fields: dropDeletedLineTriggers(
+      fields: pruneCueEffectFields(
+        cue.templateId,
+        cue.templateVersion,
         cue.fields,
-        deletedId,
-        effectFieldKeys(cue.templateId, cue.templateVersion),
+        (lineId) => lineId === deletedId,
+      ),
+      baseCue: pruneCueBaseCueTriggers(
+        cue.baseCue,
+        cue.templateId,
+        cue.templateVersion,
+        (lineId) => lineId === deletedId,
       ),
     })),
   };
@@ -1902,45 +1909,134 @@ function effectFieldKeys(
     .map((field) => field.key);
 }
 
-function triggerReferencesLine(entry: unknown, lineId: string): boolean {
-  if (typeof entry !== "object" || entry === null) {
-    return false;
+function pruneLineContainers(
+  definition: VisualTemplateDefinition,
+  input: unknown,
+  isRemoved: (lineId: string) => boolean,
+): unknown {
+  if (
+    definition.collectLineRefs === undefined ||
+    typeof input !== "object" ||
+    input === null ||
+    Array.isArray(input)
+  ) {
+    return input;
   }
-  const trigger = (entry as { trigger?: unknown }).trigger;
-  if (typeof trigger !== "object" || trigger === null) {
-    return false;
+  const refs = definition.collectLineRefs(input, []);
+  if (refs.length === 0) {
+    return input;
   }
-  const value = trigger as { kind?: unknown; startLineId?: unknown; endLineId?: unknown };
-  return (
-    value.kind === "lines" &&
-    (value.startLineId === lineId || value.endLineId === lineId)
-  );
+  const removedKeys = new Set<string>();
+  const removedIndices = new Map<string, Set<number>>();
+  for (const ref of refs) {
+    if (!isRemoved(ref.lineId)) {
+      continue;
+    }
+    const key = ref.path[0];
+    if (typeof key !== "string") {
+      continue;
+    }
+    const second = ref.path[1];
+    if (typeof second === "number") {
+      const indices = removedIndices.get(key) ?? new Set<number>();
+      indices.add(second);
+      removedIndices.set(key, indices);
+    } else {
+      removedKeys.add(key);
+    }
+  }
+  if (removedKeys.size === 0 && removedIndices.size === 0) {
+    return input;
+  }
+  const source = input as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...source };
+  for (const key of removedKeys) {
+    delete next[key];
+  }
+  for (const [key, indices] of removedIndices) {
+    const value = source[key];
+    if (Array.isArray(value)) {
+      next[key] = value.filter((_entry, index) => !indices.has(index));
+    }
+  }
+  return next;
 }
 
-function fieldReferencesLine(value: string | undefined, lineId: string): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return false;
-  }
-  return (
-    Array.isArray(parsed) &&
-    parsed.some((entry) => triggerReferencesLine(entry, lineId))
-  );
-}
-
-function dropDeletedLineTriggers(
+function pruneCueEffectFields(
+  templateId: string,
+  templateVersion: number,
   fields: Record<string, string>,
+  isRemoved: (lineId: string) => boolean,
+): Record<string, string> {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  if (definition?.collectLineRefs === undefined) {
+    return fields;
+  }
+  const keys = effectFieldKeys(templateId, templateVersion) ?? [];
+  let changed = false;
+  const next: Record<string, string> = { ...fields };
+  for (const key of keys) {
+    const value = fields[key];
+    if (value === undefined) {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      continue;
+    }
+    const pruned = pruneLineContainers(definition, { [key]: parsed }, isRemoved);
+    if (pruned === null || typeof pruned !== "object") {
+      continue;
+    }
+    const prunedValue = (pruned as Record<string, unknown>)[key];
+    if (prunedValue !== parsed) {
+      next[key] = JSON.stringify(prunedValue);
+      changed = true;
+    }
+  }
+  return changed ? next : fields;
+}
+
+function pruneCueBaseCueTriggers(
+  baseCue: VisualCue | null,
+  templateId: string,
+  templateVersion: number,
+  isRemoved: (lineId: string) => boolean,
+): VisualCue | null {
+  if (baseCue === null) {
+    return baseCue;
+  }
+  const definition = getVisualTemplate(templateId, templateVersion);
+  if (definition?.collectLineRefs === undefined) {
+    return baseCue;
+  }
+  const pruned = pruneLineContainers(definition, baseCue.input, isRemoved);
+  if (pruned === baseCue.input) {
+    return baseCue;
+  }
+  return { ...baseCue, input: pruned };
+}
+
+function cueEffectReferencesLine(
+  templateId: string,
+  templateVersion: number,
+  fields: Record<string, string>,
+  baseCue: VisualCue | null,
   lineId: string,
-  effectKeys: readonly string[] | null,
-): Record<string, string> {
-  const keys = effectKeys ?? Object.keys(fields);
-  let changed = false;
-  const next: Record<string, string> = { ...fields };
+): boolean {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  if (definition?.collectLineRefs === undefined) {
+    return false;
+  }
+  if (
+    baseCue !== null &&
+    definition.collectLineRefs(baseCue.input, []).some((ref) => ref.lineId === lineId)
+  ) {
+    return true;
+  }
+  const keys = effectFieldKeys(templateId, templateVersion) ?? [];
   for (const key of keys) {
     const value = fields[key];
     if (value === undefined) {
@@ -1955,59 +2051,11 @@ function dropDeletedLineTriggers(
     if (!Array.isArray(parsed)) {
       continue;
     }
-    const filtered = parsed.filter((entry) => !triggerReferencesLine(entry, lineId));
-    if (filtered.length !== parsed.length) {
-      next[key] = JSON.stringify(filtered);
-      changed = true;
+    if (definition.collectLineRefs({ [key]: parsed }, []).some((ref) => ref.lineId === lineId)) {
+      return true;
     }
   }
-  return changed ? next : fields;
-}
-
-function shouldDropTrigger(entry: unknown, allowed: ReadonlySet<string>): boolean {
-  if (typeof entry !== "object" || entry === null) {
-    return false;
-  }
-  const trigger = (entry as { trigger?: unknown }).trigger;
-  if (typeof trigger !== "object" || trigger === null) {
-    return false;
-  }
-  const value = trigger as { kind?: unknown; startLineId?: unknown; endLineId?: unknown };
-  if (value.kind !== "lines") {
-    return false;
-  }
-  return !(allowed.has(String(value.startLineId)) && allowed.has(String(value.endLineId)));
-}
-
-function filterTriggersToLines(
-  fields: Record<string, string>,
-  allowed: ReadonlySet<string>,
-  effectKeys: readonly string[] | null,
-): Record<string, string> {
-  const keys = effectKeys ?? Object.keys(fields);
-  let changed = false;
-  const next: Record<string, string> = { ...fields };
-  for (const key of keys) {
-    const value = fields[key];
-    if (value === undefined) {
-      continue;
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(value);
-    } catch {
-      continue;
-    }
-    if (!Array.isArray(parsed)) {
-      continue;
-    }
-    const filtered = parsed.filter((entry) => !shouldDropTrigger(entry, allowed));
-    if (filtered.length !== parsed.length) {
-      next[key] = JSON.stringify(filtered);
-      changed = true;
-    }
-  }
-  return changed ? next : fields;
+  return false;
 }
 
 export function countLineCueReferences(scene: SceneFormValue, lineId: string): number {
@@ -2015,8 +2063,13 @@ export function countLineCueReferences(scene: SceneFormValue, lineId: string): n
     if (cue.rangeKind === "lines" && (cue.startLineId === lineId || cue.endLineId === lineId)) {
       return true;
     }
-    const keys = effectFieldKeys(cue.templateId, cue.templateVersion) ?? Object.keys(cue.fields);
-    return keys.some((key) => fieldReferencesLine(cue.fields[key], lineId));
+    return cueEffectReferencesLine(
+      cue.templateId,
+      cue.templateVersion,
+      cue.fields,
+      cue.baseCue,
+      lineId,
+    );
   }).length;
 }
 
@@ -2140,10 +2193,17 @@ export function splitPointScene(
     lines: targetLines,
     cues: targetCues.map((cue) => ({
       ...cue,
-      fields: filterTriggersToLines(
+      fields: pruneCueEffectFields(
+        cue.templateId,
+        cue.templateVersion,
         cue.fields,
-        allowed,
-        effectFieldKeys(cue.templateId, cue.templateVersion),
+        (lineId) => !allowed.has(lineId),
+      ),
+      baseCue: pruneCueBaseCueTriggers(
+        cue.baseCue,
+        cue.templateId,
+        cue.templateVersion,
+        (lineId) => !allowed.has(lineId),
       ),
     })),
   });
