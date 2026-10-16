@@ -15,7 +15,7 @@ V1は次を提供する。
 - 背景、surface、アクセント、字幕、テキストroleごとのフォント・色・装飾・囲み背景を調整するテーマ編集画面とライブプレビュー。
 - macOSで現在利用可能なFont Faceの検索・選択、欠落フォントの警告とfallback描画。
 - 公開Theme RevisionをWork編集画面で選択し、通常の明示台本保存によって新しいScript Versionへ固定する操作。
-- `text.block@2` の映像用 `label` role。これは各Sceneに利用者が任意の文言で手動配置する小チャプターラベル用である。
+- `text.block@1` の映像用 `label` role。これは各Sceneに利用者が任意の文言で手動配置する小チャプターラベル用である。
 
 V1で扱わないものは、Theme Draftによる実Workのプレビュー、テーマ／作品の共有・インポート・エクスポート、フォントファイルの取込み・埋込み、任意CSS、Sceneごとのテーマ切替、テーマの自動追従、複数label variant、カード・表・グラフなどテンプレート固有の編集項目である。
 
@@ -59,9 +59,9 @@ Theme RevisionとTheme Draftの定義JSONは`themeDefinitionSchemaVersion`を持
 - **Text Style**: Font Face参照、サイズ、色、行間、太字、イタリック、縁取り、影。
 - **Text Surface**: 背景なしまたは単色背景、背景色と不透明度、水平・垂直余白、角丸、枠線。
 
-すべてのtext roleはText Styleを持つ。Text Surfaceはroleごとの既定値として持て、V1では少なくともcaptionとlabelの設定を編集画面で公開する。他roleのText Surfaceは定義上サポートし、UI公開は将来追加できる。字幕は固定層だが`caption`のText StyleとText Surfaceを使う。`label`は`text.block@2`のCueが使い、Scene Labelとは一切連動しない。
+すべてのtext roleはText Styleを持つ。Text Surfaceはroleごとの既定値として持て、V1では少なくともcaptionとlabelの設定を編集画面で公開する。他roleのText Surfaceは定義上サポートし、UI公開は将来追加できる。字幕は固定層だが`caption`のText StyleとText Surfaceを使う。`label`は`text.block@1`のCueが使い、Scene Labelとは一切連動しない。
 
-`text.block@1`の既存入力契約は不変に保つ。`text.block@2`は`label` roleを追加し、個別Cueの文字上書きが必要なときにFont Face参照とText Styleの上書きを受け取れるようにする。旧`font: sans | serif | mono`指定は`text.block@1`の描画互換のため残し、選択ThemeのFont Face既定より優先する。新しいText Cueは`text.block@2`を使う。
+`text.block@1`は`label` roleを追加し、個別Cueの文字上書きが必要なときにFont Face参照とText Styleの上書きを受け取れるようにする（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `@2` から `@1` へ再基準化）。旧`font: sans | serif | mono`指定は描画互換のため残し、選択ThemeのFont Face既定より優先する。
 
 値の解決順はプロパティ単位で次のとおりとする。
 
@@ -106,14 +106,14 @@ Web UIはグローバルナビゲーションに「テーマ」を追加し、Th
 
 `soft-editorial@1`と既存Script Versionはそのまま有効である。組み込みThemeをDBへ移す必要はない。現行の`visualThemeRefSchema`が組み込みThemeだけを静的に拒否している検証を、形状検証とResolver検証へ分離する。ContentDocumentの既存JSON形状、既存Theme Ref、Cueの明示値、Render Jobの旧snapshotは保持する。
 
-`text.block@2`を追加しても`text.block@1`の意味を変更しない。新規に作るlabel Cueだけがv2を必要とする。既存Text Cueを自動変換しない。
+`text.block@1`のlabel・Font Face・surface拡張は再解釈を伴わないため同じ版で行い、既存Text Cueを自動変換しない。
 
 ## 検証
 
 - Theme Revision／Draftの不変性、公開連番、複製、アーカイブ、参照保護。
 - 組み込みとDB Themeの解決、未知Theme拒否、旧`soft-editorial@1`互換。
 - Theme更新が既存Script Versionを変更せず、明示保存だけが新しいScript Versionを作ること。
-- Text Style、Text Surface、caption、`text.block@2`のlabel、Cue上書き／既定復帰の解決順。
+- Text Style、Text Surface、caption、`text.block@1`のlabel、Cue上書き／既定復帰の解決順。
 - Font Catalog DTO、未解決Font Faceの警告、CSS値の安全なエスケープ、fallback描画。
 - Theme Draft代表プレビューが永続データもJobも作らず、Draft定義を反映すること。
 - Render Job snapshotがTheme Revision定義を固定し、後のDraft変更・Theme archiveで変化しないこと。

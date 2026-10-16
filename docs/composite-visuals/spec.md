@@ -6,7 +6,7 @@
 
 - 「Composition」はアプリが管理する信頼済み `VisualTemplate` の合成を意味する。利用者・外部AIが生成した任意の HyperFrames/HTML/JavaScript を Work に保存・実行しない。HyperFrames の外部HTMLサブComposition読込は使わない。
 - AIの将来入力も、信頼済みテンプレートの入力Zodスキーマに適合するパラメータJSONだけを受け入れる。
-- 保存済み `ScriptVersion` が存在しない前提で ContentDocument を `schemaVersion: 3` へ切り替える。v1/v2 の読出し・移行コードは持たない。着手前に保存済み版が無いことを確認し、存在した場合は本基盤ではなく移行計画へ戻す。
+- 保存済み `ScriptVersion` が存在しない前提で ContentDocument を切り替える。旧版の読出し・移行コードは持たない（現行は `schemaVersion: 1` の基準契約に含まれる）。
 
 ## VisualCue v3
 
@@ -66,15 +66,11 @@ NestedVisual =
 
 | VisualTemplate | layer | 入力 | 状態 |
 | --- | --- | --- | --- |
-| `text.title@1` | overlay | title, subtitle, anchor? | 対応（inputFieldsで編集） |
-| `text.body@1` | overlay | heading, body | 対応（inputFieldsで編集） |
-| `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom? | 対応 |
-| `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom? | 対応 |
-| `character.standing@1` | standing | characterId, appearanceId, x, y, scale | 読出しのみ |
-| `character.standing@2` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体） |
-| `character.standing@3` | standing | `@2` と同一 | [../face-expression/spec.md](../face-expression/spec.md) で追加。Face Set を持つ外観の表情合成（台詞区間ごと） |
-| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor? | 対応（複合ビジュアル） |
-| `scene.device-frame@2` | background, card | `@1` ＋ animation? | 対応（画面の登場アニメーション） |
+| `text.block@1` | overlay | text, role, 配置, font, decoration ほか | 対応（inputFieldsで編集） |
+| `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom?, loop? | 対応 |
+| `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom?, loop? | 対応 |
+| `character.standing@1` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体）。Face Set を持つ外観の表情合成（台詞区間ごと）は [../face-expression/spec.md](../face-expression/spec.md) |
+| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor?, animation? | 対応（複合ビジュアル、画面の登場アニメーション） |
 
 ## テンプレート入力メタデータと汎用エディタ
 
@@ -103,7 +99,7 @@ type TemplateFieldSpec =
 - preset: `none` / `fade` / `slide-up` / `slide-down` / `slide-left` / `slide-right` / `scale-in`（入退場）、加えて内部用に `pulse`。
 - 入退場は `transitionPolicy`（許可preset・既定値・最大尺）に照合し、`enter + exit <= Cue範囲` を共通タイムライン解決器で検証する。
 - テンプレート内部アニメーションは `animationPolicy`（許可preset・既定尺・最大尺）に照合し、テンプレート入力を経由して `AnimationPlan`（対象要素ID・preset・ローカル時刻・尺）としてコンパイラへ渡す。コンパイラだけがGSAPタイムラインを生成する。
-- `scene.device-frame@2` は任意の `animation` を画面要素に適用する。`@1` はアニメーションを持たず、描画を変えない。
+- `scene.device-frame@1` は任意の `animation` を画面要素に適用する。
 
 ## 編集UI
 

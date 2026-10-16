@@ -2,12 +2,12 @@
 
 ## 目的と境界
 
-この文書は、背景 `media.full-bleed@2` とカード `media.card@2` に置いた**動画素材**を、Cueの可視窓いっぱいにループ再生する `loop` の正とする。焦点位置・拡大率は [../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) を正とし、本仕様はその入力にループ指定を併設する。台本の正本JSON契約は [../mvp/content-schema.md](../mvp/content-schema.md) を正とする。
+この文書は、背景 `media.full-bleed@1` とカード `media.card@1` に置いた**動画素材**を、Cueの可視窓いっぱいにループ再生する `loop` の正とする。焦点位置・拡大率は [../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) を正とし、本仕様はその入力にループ指定を併設する。台本の正本JSON契約は [../mvp/content-schema.md](../mvp/content-schema.md) を正とする。
 
-- 対象は `media.full-bleed@2` と `media.card@2` の動画Cueだけとする。`scene.device-frame`・`scene.site-mockup` などの `nestedMedia`、画像素材、`composition.full-bleed` は対象外。
+- 対象は `media.full-bleed@1` と `media.card@1` の動画Cueだけとする。`scene.device-frame`・`scene.site-mockup` などの `nestedMedia`、画像素材、`composition.full-bleed` は対象外。
 - ループは**明示指定**（`loop: true`）のときだけ効く。既定は無効。
 - 動画素材が可視窓より短いときだけ意味を持つ。素材が窓以上に長い場合は従来どおり窓尺でトリムし、ループしない。
-- 契約は任意フィールドの追加であり、既存の保存済みJSONはそのまま満たす。`schemaVersion` は上げず、テンプレート版（`@2`）で意味を分ける（[../adr/0009-template-version-immutability.md](../adr/0009-template-version-immutability.md)）。
+- 契約は任意フィールドの追加であり、再解釈を伴わないため同じ `@1` で行う（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
 
 ## データ
 
@@ -22,7 +22,6 @@
 ```
 
 - `loop` は `assetId` が動画のときだけ意味を持つ。画像に指定しても描画は変わらない。
-- `@1` の入力スキーマは `loop` を受け付けない（`strictObject`）。保存済み `@1` Cueは編集画面が読込時に `@2` へ昇格し、保存時に `@2` として書き出す。
 
 ## レンダリング
 

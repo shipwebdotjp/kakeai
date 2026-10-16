@@ -237,17 +237,16 @@ Add one visual cue per Scene background:
 }
 ```
 
-Rules enforced at script save: `range` must be `scene`, `layer` must be `background`,
-and the same CompositionVersion ID may appear only once per ScriptVersion.
+Rules enforced at script save: `layer` must be `background` (`scene` / `lines` / `offset`
+ranges are all allowed), and the same CompositionVersion ID may appear only once per ScriptVersion.
 
-- **Placement is v1-limited.** You cannot put a composition on a `lines`/`offset` range or on
-  `card`/`overlay`/`standing` layers — script save rejects it (`composition.full-bleed は Scene
-  背景 ... にのみ配置できます`). Other placements and multiple instances are future roadmap items
-  (R3/R2); a full-screen composition is a Scene background.
-- **Duration is the child's own.** Playback length comes from the composition's own
-  `window.__timelines[id].duration()` / `manifest.durationMs`, not the Scene. The compiler does not
-  emit `data-duration` on the host, so it does not clip the child to the Scene or hold its last
-  frame. Keep the composition's duration aligned with the Scene (or use a fixed-duration intro/outro)
+- **Placement is background-only.** You cannot put a composition on `card`/`overlay`/`standing`
+  layers — script save rejects it. Other layers and multiple instances are future roadmap items
+  (R3/R2).
+- **Effective window is `min(range, manifest.durationMs)`.** A cue longer than the child is cut off
+  at the child end (no last-frame hold, no loop). Cue transitions must fit inside the effective
+  window. If a Scene crossfade needs a longer window than the child, save and render reject it —
+  make the composition longer or the crossfade shorter.
   to avoid drift; don't assume the Scene length trims it.
 
 ## 7. Verify end to end

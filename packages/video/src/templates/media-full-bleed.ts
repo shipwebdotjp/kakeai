@@ -1,4 +1,4 @@
-import { mediaFullBleedV2InputSchema, type MediaFullBleedV2Input } from "@kakeai/contracts";
+import { mediaFullBleedInputSchema, type MediaFullBleedInput } from "@kakeai/contracts";
 import type { z } from "zod";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
@@ -8,7 +8,7 @@ import { mediaCropStyle, renderLoopVideoSegments, resolveCueMedia } from "./shar
 export function renderMediaFullBleed(
   input: unknown,
   context: RenderContext,
-  schema: z.ZodTypeAny = mediaFullBleedV2InputSchema,
+  schema: z.ZodTypeAny = mediaFullBleedInputSchema,
 ): RenderedCue {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
@@ -16,7 +16,7 @@ export function renderMediaFullBleed(
       { path: context.path, code: "invalid_input", message: "media.full-bleed の入力が不正です。" },
     ]);
   }
-  const data = parsed.data as MediaFullBleedV2Input;
+  const data = parsed.data as MediaFullBleedInput;
   const { assetId, fit, focalPoint, zoom } = data;
   const media = resolveCueMedia(assetId, context.assetResolver, context.path);
   const src = escapeHtmlAttribute(media.url);

@@ -1,7 +1,7 @@
 export { COMPOSITION_ENGINE, COMPILER_VERSION, HYPERFRAMES_PLAYER_VERSION, OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH, THUMBNAIL_OUTPUT_HEIGHT, THUMBNAIL_OUTPUT_WIDTH } from "./meta";
 export { CompositionCompileError } from "./compile-error";
 export type { AssetResolver, FaceSetResolver, ResolvedAsset, ResolvedAssetKind } from "./resolver";
-export { resolveTimeline, resolveCueWindow, collectCueTransitionIssues, collectOffsetRangeWarnings, collectSceneTransitionIssues, collectTimelineIssues, sceneTransitionOf } from "./timeline";
+export { resolveTimeline, resolveCueWindow, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE, collectCompositionWindowIssues, collectCueTransitionIssues, collectOffsetRangeWarnings, collectSceneTransitionIssues, collectTimelineIssues, compositionClipReachesSceneEnd, compositionCrossfadeExceedsChild, compositionTransitionOverflowMessage, sceneTransitionOf } from "./timeline";
 export type { ResolvedSceneTransition } from "./timeline";
 export type {
   CueWindow,

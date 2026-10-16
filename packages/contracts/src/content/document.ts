@@ -6,9 +6,9 @@ import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
 import { visualThemeRefSchema } from "./theme";
-import { characterStandingV1, characterStandingV2, characterStandingV3, compositionFullBleedInputSchema } from "../templates";
+import { characterStandingV1, compositionFullBleedInputSchema } from "../templates";
 
-export const CONTENT_SCHEMA_VERSION = 8 as const;
+export const CONTENT_SCHEMA_VERSION = 1 as const;
 
 export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;
@@ -112,10 +112,10 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
   for (const [sIdx, scene] of doc.scenes.entries()) {
     for (const [cIdx, cue] of scene.visualCues.entries()) {
       if (cue.template.id === "composition.full-bleed") {
-        if (cue.range.kind !== "scene" || cue.layer !== "background") {
+        if (cue.layer !== "background") {
           ctx.addIssue({
             code: "custom",
-            message: "composition.full-bleed は Scene 背景 (range: scene, layer: background) にのみ配置できます",
+            message: "composition.full-bleed は background 層にのみ配置できます",
             path: ["scenes", sIdx, "visualCues", cIdx],
           });
         }
@@ -225,26 +225,12 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
         });
       }
 
-      if (cue.template.id === characterStandingV1.id) {
-        let standingDefinition:
-          | typeof characterStandingV1
-          | typeof characterStandingV2
-          | typeof characterStandingV3
-          | undefined;
-        if (cue.template.version === characterStandingV1.version) {
-          standingDefinition = characterStandingV1;
-        } else if (cue.template.version === characterStandingV2.version) {
-          standingDefinition = characterStandingV2;
-        } else if (cue.template.version === characterStandingV3.version) {
-          standingDefinition = characterStandingV3;
-        } else {
-          standingDefinition = undefined;
-        }
-        const parsed =
-          standingDefinition === undefined
-            ? undefined
-            : standingDefinition.inputSchema.safeParse(cue.input);
-        if (parsed !== undefined && parsed.success) {
+      if (
+        cue.template.id === characterStandingV1.id &&
+        cue.template.version === characterStandingV1.version
+      ) {
+        const parsed = characterStandingV1.inputSchema.safeParse(cue.input);
+        if (parsed.success) {
           const { characterId, appearanceId } = parsed.data as {
             characterId: string;
             appearanceId: string;

@@ -20,9 +20,9 @@
 - ライブラリから台本へ「追加」でコピーするときは `voices` をそのまま引き継ぐ。
 - `characterId` を持たない話者（声だけのナレーター）は従来どおり `Speaker.voiceProfileId` を直接持つ。
 
-## ContentDocument v8
+## ContentDocument の声対応
 
-`schemaVersion` は `8` とする。v7 の各 Character について、対応する話者（`characterId` 一致かつ `voiceProfileId` 非null）の声があれば document の `locale` と組にして `voices` の1件とし、なければ `voices: []` として v8 として解釈する。`locale` は `ja-JP` のみに加えて `en-US` などを許容する。
+`schemaVersion` は `1` とする（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で v8 から `1` へ再基準化）。各 Character は、対応する話者（`characterId` 一致かつ `voiceProfileId` 非null）の声があれば document の `locale` と組にして `voices` の1件とし、なければ `voices: []` とする。`locale` は `ja-JP` のみに加えて `en-US` などを許容する。
 
 ## TTSアダプター基盤
 

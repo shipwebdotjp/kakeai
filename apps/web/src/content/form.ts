@@ -6,17 +6,13 @@ import {
   TEMPLATE_VERSION,
   THEME_ACCENT_TOKENS,
   characterStandingV1,
-  characterStandingV2,
-  characterStandingV3,
   defaultPointLabel,
   getTemplateInputFields,
   getVisualTemplate,
   MEDIA_ZOOM_MAX,
   MEDIA_ZOOM_MIN,
   mediaCardV1,
-  mediaCardV2,
   mediaFullBleedV1,
-  mediaFullBleedV2,
   pointSceneTextCues,
   sceneDeviceFrameV1,
   chartDataSchema,
@@ -163,20 +159,7 @@ export const MEDIA_FULL_BLEED_ID = mediaFullBleedV1.id;
 export const MEDIA_CARD_ID = mediaCardV1.id;
 export const DEVICE_FRAME_ID = sceneDeviceFrameV1.id;
 export const STANDING_TEMPLATE_ID = characterStandingV1.id;
-export const STANDING_TRANSITION_POLICY: TransitionPolicy = characterStandingV2.transitionPolicy;
-
-function upgradeCueTemplate(
-  templateId: string,
-  templateVersion: number,
-): { id: string; version: number } {
-  if (templateId === MEDIA_FULL_BLEED_ID && templateVersion === mediaFullBleedV1.version) {
-    return { id: templateId, version: mediaFullBleedV2.version };
-  }
-  if (templateId === MEDIA_CARD_ID && templateVersion === mediaCardV1.version) {
-    return { id: templateId, version: mediaCardV2.version };
-  }
-  return { id: templateId, version: templateVersion };
-}
+export const STANDING_TRANSITION_POLICY: TransitionPolicy = characterStandingV1.transitionPolicy;
 
 export const CROP_X_SUFFIX = "__x";
 export const CROP_Y_SUFFIX = "__y";
@@ -244,27 +227,8 @@ export interface StandingCueInput {
 }
 
 function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
-  if (cue === undefined) {
-    return null;
-  }
   if (
-    cue.template.id === characterStandingV2.id &&
-    (cue.template.version === characterStandingV2.version ||
-      cue.template.version === characterStandingV3.version)
-  ) {
-    const parsed = characterStandingV2.inputSchema.safeParse(cue.input);
-    if (!parsed.success) {
-      return null;
-    }
-    const data = parsed.data as StandingCueInput;
-    return {
-      characterId: data.characterId,
-      appearanceId: data.appearanceId,
-      side: data.side,
-      scale: data.scale,
-    };
-  }
-  if (
+    cue === undefined ||
     cue.template.id !== characterStandingV1.id ||
     cue.template.version !== characterStandingV1.version
   ) {
@@ -274,11 +238,11 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
   if (!parsed.success) {
     return null;
   }
-  const data = parsed.data as { characterId: string; appearanceId: string; x: number; scale: number };
+  const data = parsed.data as StandingCueInput;
   return {
     characterId: data.characterId,
     appearanceId: data.appearanceId,
-    side: data.x < 0.5 ? "left" : "right",
+    side: data.side,
     scale: data.scale,
   };
 }
@@ -464,14 +428,13 @@ function readCueFields(
 
 function toCueFormValue(cue: VisualCue): CueFormValue {
   const input = readInputObject(cue);
-  const upgraded = upgradeCueTemplate(cue.template.id, cue.template.version);
-  const definition = getVisualTemplate(upgraded.id, upgraded.version);
+  const definition = getVisualTemplate(cue.template.id, cue.template.version);
   const range = cue.range;
   return {
     id: cue.id,
     baseCue: cue,
-    templateId: upgraded.id,
-    templateVersion: upgraded.version,
+    templateId: cue.template.id,
+    templateVersion: cue.template.version,
     layer: cue.layer,
     order: cue.order,
     rangeKind: range.kind,
@@ -995,7 +958,7 @@ function buildStandingCues(
     emittedSides.add(standing.side);
     cues.push({
       id: standing.cueId ?? newVisualCueId(sceneValue.id, `standing-${standing.side}`),
-      template: { id: characterStandingV3.id, version: characterStandingV3.version },
+      template: { id: characterStandingV1.id, version: characterStandingV1.version },
       range: { kind: "scene" },
       layer: "standing",
       order,

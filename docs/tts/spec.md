@@ -12,7 +12,7 @@
 
 ## ContentDocument v3
 
-`Speaker` は必須の `voiceProfileId: string | null` を持ち、ContentDocument の `schemaVersion` は `5` である。`voiceProfileId` はアプリ共通の Voice Profile を参照し、`null` は TTS に使う声が未設定であることを表す。JSON ではこのキーを省略しない。
+`Speaker` は必須の `voiceProfileId: string | null` を持ち、ContentDocument の `schemaVersion` は `1` である。`voiceProfileId` はアプリ共通の Voice Profile を参照し、`null` は TTS に使う声が未設定であることを表す。JSON ではこのキーを省略しない。
 
 - アダプター固有の値（VOICEVOX のキャラクター UUID やスタイル ID）は Voice Profile 側にだけ保持し、ContentDocument へ持ち込まない。
 - v3 は [ContentDocument v3](../mvp/content-schema.md) と [複合ビジュアル](../composite-visuals/spec.md) を正とする。保存済み `ScriptVersion` が無い前提のため、v1/v2 の読出し正規化や移行コードは持たない。

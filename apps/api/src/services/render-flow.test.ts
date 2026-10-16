@@ -203,8 +203,7 @@ describe("render job creation", () => {
         input: {
           characterId: "character-rin",
           appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
+          side: "right",
           scale: 1,
         },
       },
@@ -360,7 +359,7 @@ describe("render job creation", () => {
     ];
     point.visualCues.push({
       id: "vc-standing",
-      template: { id: "character.standing", version: 3 },
+      template: { id: "character.standing", version: 1 },
       range: { kind: "scene" },
       layer: "standing",
       order: 0,
@@ -525,8 +524,7 @@ describe("render worker", () => {
         input: {
           characterId: "character-rin",
           appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
+          side: "right",
           scale: 1,
         },
       },

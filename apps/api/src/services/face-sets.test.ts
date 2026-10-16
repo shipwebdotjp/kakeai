@@ -245,7 +245,7 @@ describe("face set library", () => {
     ];
     point.visualCues.push({
       id: "vc-standing",
-      template: { id: "character.standing", version: 3 },
+      template: { id: "character.standing", version: 1 },
       range: { kind: "scene" },
       layer: "standing",
       order: 0,

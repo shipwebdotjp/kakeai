@@ -221,7 +221,7 @@ latestRenderJobはRender Jobがまだないときはnullとする。失敗した
 
 ### 作品作成と名称変更
 
-POST /works は、Work、`originalLocale` のLanguageEdition、`schemaVersion: 8` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
+POST /works は、Work、`originalLocale` のLanguageEdition、`schemaVersion: 1` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
 
 ~~~http
 POST /api/v1/works
@@ -306,13 +306,13 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
 
 ### 台本の保存
 
-POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 8` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
+POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 1` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
 
 ~~~jsonc
 {
   "sourceScriptVersionId": null,
   "content": {
-    "schemaVersion": 8,
+    "schemaVersion": 1,
     "locale": "ja-JP",
     "template": {
       "id": "explanation-scenes",
@@ -329,7 +329,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
 }
 ~~~
 
-上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、`faceSetId`／`expressionId` の参照整合、キャラクターの `voices`（`locale` 重複、話者の声との一致）、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。参照先 Voice Profile が欠けた台本も保存でき、生成時にだけ「未設定」として拒否する（[../tts/spec.md](../tts/spec.md)）。`faceSetId` は参照先 Face Set が存在し、その Face Layer が ready な画像 Asset を指し、ベース画像と寸法が一致すること、`normal` preset を含むことを検証する。`expressionId` は、話者（`Speaker.characterId`）に対応するキャラクターの、そのSceneで有効な Character Appearance が参照する Face Set 内に存在することを検証する。`speakerId` が `null` のラインに `expressionId` を指定できない（[../face-expression/spec.md](../face-expression/spec.md)）。`composition.full-bleed@1` はScene背景だけに置け、同じCompositionVersionを一つのContentDocument内で複数回参照できない。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
+上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、`faceSetId`／`expressionId` の参照整合、キャラクターの `voices`（`locale` 重複、話者の声との一致）、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。参照先 Voice Profile が欠けた台本も保存でき、生成時にだけ「未設定」として拒否する（[../tts/spec.md](../tts/spec.md)）。`faceSetId` は参照先 Face Set が存在し、その Face Layer が ready な画像 Asset を指し、ベース画像と寸法が一致すること、`normal` preset を含むことを検証する。`expressionId` は、話者（`Speaker.characterId`）に対応するキャラクターの、そのSceneで有効な Character Appearance が参照する Face Set 内に存在することを検証する。`speakerId` が `null` のラインに `expressionId` を指定できない（[../face-expression/spec.md](../face-expression/spec.md)）。`composition.full-bleed@1` はbackground層だけに置け、`scene` / `lines` / `offset` の全 range を使える。同じCompositionVersionを一つのContentDocument内で複数回参照できない。実効表示窓は `min(range 尺, manifest.durationMs)` とし、Cue transition は実効表示窓内に収め、Scene crossfade で必要窓が child 尺を超える場合は保存・レンダー投入時に422で拒否する。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
 
 成功時は201 Createdと、新しい完全なScriptVersion DTOを返す。
 
@@ -339,9 +339,9 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
     "id": "scr_003",
     "languageEditionId": "led_ja_123",
     "versionNumber": 3,
-    "contentSchemaVersion": 5,
+    "contentSchemaVersion": 1,
     "content": {
-      "schemaVersion": 8,
+      "schemaVersion": 1,
       "locale": "ja-JP",
       "template": {
         "id": "explanation-scenes",
@@ -772,7 +772,7 @@ RENDER_INPUT_INVALIDはキュー投入前の422であり、Job error codeでは�
 - APIはJSON APIとmultipartアップロードで厳密な `Host` と `Origin` を検証する（独自ヘッダ・起動時トークンは用いない）。同一originのUIシェルおよびAPIのGET応答はプロセスごとにランダムな `HttpOnly; SameSite=Strict; Path=/api/v1/` のメディアセッションCookieを発行する。素材・Artifactのcontent配信は、そのCookieとHost（および存在する場合のOrigin／Fetch Site）を検証して、通常のブラウザsubresource・Range requestを許可する。JSON APIはCookieだけを資格情報として受け入れない。
 - 素材とArtifactのstorageKeyは内容ハッシュ由来のパスとし、`originalFilename` をパス生成に使わない。
 - アプリ管理データのルートはOS提供のアプリデータディレクトリ（macOSではApplication Support配下）とし、特定OSの絶対パスをコードへ埋め込まない。開発時は環境変数 `KAKEAI_DATA_DIR` で差し替える。`db/`、`assets/`、`artifacts/`、`tmp/` を分け、`storageKey` はルート相対で解決する。
-- APIがScriptVersionを返すときはDBのcontentJsonを復元・検証してcontentとして返す。現行版は `schemaVersion: 7` とし、v4/v5/v6 は読み出し時に v7 へ移行する（[../scene-labels/spec.md](../scene-labels/spec.md)、[../face-expression/spec.md](../face-expression/spec.md)）。v3 以前の読出し解釈は持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
+- APIがScriptVersionを返すときはDBのcontentJsonを復元・検証してcontentとして返す。現行版は `schemaVersion: 1` とし、旧版の読出し解釈や移行コードは持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
 - Assetの取り込みは、一時領域への保存、ハッシュ計算とメディア検査、既存SHA-256行とそのstorageKeyの確認、アプリ管理領域への確定、Asset行とasset_ingest Jobの作成の順に行う。workerは原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってからAssetをreadyにする。既存Assetの実体が欠損・破損している場合は、内容ハッシュ由来の同じstorageKeyを上書きして取り込み直す。競合アップロードは一意制約で直列化し、失敗時の一時ファイルは清掃する。
 - すべての書込みはDBトランザクションの単位を [spec.md](./spec.md) の「書込みとJob状態遷移」に合わせる。ファイルシステム操作と完全な原子性は持てないため、確定前のファイルを公開せず、確定に失敗した孤立ファイルは起動時に清掃する。削除時はDBから参照を切った後に実体を隔離し、隔離ファイルは起動時に清掃する。
 - プレビューとレンダーは同じコンパイラと信頼済みVisualTemplateを使い、Asset解決だけを `assetResolver` の注入で切り替えて生成する。render時は正本JSON、Rendition（無ければ原本）、テンプレート版、出力設定をJobスナップショットへ固定し、ワーカーはそのJSONを実行時にコンパイルする。実行ツールの版は診断用に記録するが、完全な再現性は保証しない。

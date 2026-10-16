@@ -97,7 +97,7 @@ Scene の境界に、カット／フェードイン・フェードアウト／�
 - **検証**：共通タイムライン解決器で `D <= min(先行Scene尺, 入場Scene尺)` を検証し、はみ出す入力を保存・レンダー投入前に拒否する（`RENDER_INPUT_INVALID`）。
 - **実装**：先行Sceneのclip延長は描画時導出であり正本JSONに表れない。導出規則を解決器に一元化し、プレビューとレンダーで同一にする。
 
-本仕様確定に合わせて `schemaVersion` を `4` に上げる（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md) と同一の破壊的変更にまとめる）。開発環境に残る v3 の保存版は削除し、移行関数は持たない（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
+本仕様の破壊的変更は `schemaVersion: 1` の基準契約に含まれる（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で再基準化）。旧版の移行関数は持たない。
 
 ## シーンの複製（前のSceneのまるごと複製）
 

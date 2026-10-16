@@ -5,6 +5,7 @@ import {
   buildSrt,
   compileDocument,
   CompositionCompileError,
+  collectCompositionWindowIssues,
   collectOffsetRangeWarnings,
   collectTimelineIssues,
   resolveCueWindow,
@@ -18,9 +19,8 @@ import {
 import {
   RENDITION_PURPOSE,
   characterStandingV1InputSchema,
-  characterStandingV2InputSchema,
-  characterStandingV3InputSchema,
   collectAssetReferences,
+  compositionFullBleedInputSchema,
   computeContentWarnings,
   draftPreviewSchema,
   scriptVersionPreviewSchema,
@@ -45,7 +45,11 @@ import { API_BASE_PATH } from "../http/security.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 import type { DataDirectories } from "../storage/paths.ts";
 import { resolveAssetContent } from "./assets.ts";
-import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
+import {
+  collectCompositionVersionIds,
+  CompositionService,
+  getCompositionDurationsByVersionId,
+} from "./compositions.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
 
 export interface SaveScriptVersionResult {
@@ -195,15 +199,9 @@ function standingCueTarget(cue: VisualCue): { characterId: string; appearanceId:
   if (cue.template.id !== "character.standing") {
     return undefined;
   }
-  for (const schema of [
-    characterStandingV3InputSchema,
-    characterStandingV2InputSchema,
-    characterStandingV1InputSchema,
-  ]) {
-    const parsed = schema.safeParse(cue.input);
-    if (parsed.success) {
-      return { characterId: parsed.data.characterId, appearanceId: parsed.data.appearanceId };
-    }
+  const parsed = characterStandingV1InputSchema.safeParse(cue.input);
+  if (parsed.success) {
+    return { characterId: parsed.data.characterId, appearanceId: parsed.data.appearanceId };
   }
   return undefined;
 }
@@ -821,6 +819,62 @@ export async function saveScriptVersion(
   if (transitionIssues.length > 0) {
     throw validationError(
       transitionIssues.map((issue) => ({
+        path: issue.path,
+        code: issue.code,
+        message: issue.message,
+      })),
+    );
+  }
+
+  const compositionVersionIds = collectCompositionVersionIds(content);
+  const compositionDurations = await getCompositionDurationsByVersionId(
+    prisma,
+    compositionVersionIds,
+  );
+  const missingCompositionVersionIds = compositionVersionIds.filter(
+    (versionId) => !compositionDurations.has(versionId),
+  );
+  if (missingCompositionVersionIds.length > 0) {
+    const cuePathByVersionId = new Map<string, (string | number)[]>();
+    content.scenes.forEach((scene, sceneIndex) => {
+      scene.visualCues.forEach((cue, cueIndex) => {
+        if (cue.template.id !== "composition.full-bleed") {
+          return;
+        }
+        const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
+        if (!parsedInput.success) {
+          return;
+        }
+        const versionId = parsedInput.data.compositionVersionId;
+        if (!cuePathByVersionId.has(versionId)) {
+          cuePathByVersionId.set(versionId, [
+            "scenes",
+            sceneIndex,
+            "visualCues",
+            cueIndex,
+            "input",
+            "compositionVersionId",
+          ]);
+        }
+      });
+    });
+    throw validationError(
+      missingCompositionVersionIds.map((versionId) => ({
+        path: cuePathByVersionId.get(versionId) ?? ["compositions", versionId],
+        code: "invalid_value",
+        message: `CompositionVersionが見つかりません: ${versionId}`,
+      })),
+    );
+  }
+  let compositionWindowIssues: ReturnType<typeof collectCompositionWindowIssues> = [];
+  try {
+    compositionWindowIssues = collectCompositionWindowIssues(content, compositionDurations);
+  } catch (error) {
+    throwIfFatalTimelineError(error);
+  }
+  if (compositionWindowIssues.length > 0) {
+    throw validationError(
+      compositionWindowIssues.map((issue) => ({
         path: issue.path,
         code: issue.code,
         message: issue.message,

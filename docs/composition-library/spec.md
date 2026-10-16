@@ -63,7 +63,7 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 
 ## ContentDocument と表示
 
-`composition.full-bleed@1` は CompositionVersion を Scene 背景として置く信頼済み VisualTemplate である。
+`composition.full-bleed@1` は CompositionVersion を Composition 背景として置く信頼済み VisualTemplate である。
 
 ```json
 {
@@ -74,8 +74,8 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 }
 ```
 
-- `range` は `scene`、`layer` は `background`、`order` はその Scene の背景で一意とする。v1 では `range` が `lines` / `offset` の Cue や `background` 以外のレイヤーには配置できず、ContentDocument 検証が拒否する（他レイヤーへの配置は [roadmap](./roadmap.md) の R3、複数 instance は R2）。
-- **尺**: composition の再生尺は child 自身（manifest の `durationMs` と child の `window.__timelines[id].duration()`）で決まる。コンパイラは host に `data-duration` を出力せず、Scene 尺は親 clip の表示窓としてのみ与えられる。そのため「child が短ければ最後のフレームを保持し、長ければ Scene の終端で切る」ことはコンパイラが保証しない。Scene 尺と composition 尺を揃えるか、導入・結びなど固定尺の Scene を使うのが安全である。
+- `layer` は `background` とし、`range` は `scene` / `lines` / `offset` の全てを許可する（共通 Cue range 解決を使う）。`background` 以外のレイヤーへの配置は ContentDocument 検証が拒否する（他レイヤーへの配置は [roadmap](./roadmap.md) の R3、複数 instance は R2）。
+- **尺**: Composition host の実効表示窓は `min(range 尺, manifest.durationMs)` とする。range 尺より child が短い Cue は child 終端で非表示にし、末フレーム保持・ループはしない。Cue transition は実効表示窓内に収まることを検証する。Scene crossfade により必要となる表示窓が child 尺を超える Composition 背景は、保存時とレンダー投入時に明示エラーにする。
 - 音声、利用時の text/color/media slot、端末枠など Composite Visual Template 内への配置は v1 では持たない。
 
 ScriptVersion の保存、プレビュー、Render Job の作成時に CompositionVersion の存在と bundle 完全性を確認する。draft、削除済み version、破損した bundle は参照できない。

@@ -34,7 +34,7 @@ NarrationSegment.expressionId ──> ExpressionPreset (話者キャラの外観
 
 ### 外観と Face Set
 
-- Sceneは構図・背景・登場状態の単位であり、表情変更では分割しない。立ち絵は `character.standing@3` の左右1体ずつ最大2体という既存の制約を変えない。
+- Sceneは構図・背景・登場状態の単位であり、表情変更では分割しない。立ち絵は `character.standing@1` の左右1体ずつ最大2体という既存の制約を変えない。
 - Character Appearance は任意で1つの Face Set を `faceSetId` で参照する。服装だけを変え、顔位置・向き・縮尺が同じなら同じ Face Set を共有できる。
 - 横顔、顔の向き、顔位置、頭身が異なる外観は別 Face Set を使う。見た目だけ似ていても、互換性を推測して自動共有しない。
 - Face Set はグローバルライブラリに置く。作品の ScriptVersion は Face Set を `faceSetId` で参照し、内容はコピーしない（[ADR-0045](../adr/0045-face-set-global-reference.md)）。ライブラリ側の変更は次回のプレビュー／レンダーへ反映され、保存済み作品の再レンダー結果が変わり得る。
@@ -90,9 +90,8 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 
 ## schemaVersion と移行
 
-- `faceSetId` と `expressionId` を含む ContentDocument は `schemaVersion: 7` とする（[ADR-0047](../adr/0047-per-line-expression-id.md)）。
-- 読み出し時、v6 の各 appearance へ `faceSetId: null` を、各 line へ `expressionId: null` を補って v7 として解釈する。保存済みJSONは書き換えず、次回の保存で新しい v7 `ScriptVersion` を作る。v4 → v5 → v6 の既存の読出し移行は維持する。
-- v7 の appearance は既存の `expression` / `pose` 文字列タグを引き続き持つ。これらは表示名（`label`）の補助であり、`expressionId` とは別物である。
+- `faceSetId` と `expressionId` を含む ContentDocument は `schemaVersion: 1` の基準契約に含まれる（[ADR-0047](../adr/0047-per-line-expression-id.md)、[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で v7 から `1` へ再基準化）。旧版の読出し移行は持たない。
+- appearance は既存の `expression` / `pose` 文字列タグを引き続き持つ。これらは表示名（`label`）の補助であり、`expressionId` とは別物である。
 
 ## 参照整合性と削除
 

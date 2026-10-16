@@ -9,7 +9,7 @@
 - [x] Web UI: Cue一覧・追加・削除・レイヤー・順序・表示区間・transition編集。立ち絵は固定2行
 - [x] テンプレート `inputFields` メタデータと汎用Cue入力UI（テンプレート追加でエディタを増やさない）
 - [x] `AnimationPlan` と有限preset（fade/slide/scale/pulse）。入退場presetを拡張
-- [x] `scene.device-frame@2`（画面の登場アニメーション、`@1` は不変）
+- [x] `scene.device-frame@1` へ画面の登場アニメーションを統合する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `@2` から `@1` へ再基準化）
 - [x] `docs/composite-visuals/` を正本として追加し、ADR 0029/0030/0031/0032 を記録、ADR 0013/0007 を改訂
 - [x] `CONTEXT.md`・MVP文書・`docs/tts/spec.md` を v3へ同期
 - 完了条件: device-frame の画像・動画を背景/カードで保存→プレビュー→MP4レンダーできる（達成）

@@ -6,7 +6,7 @@
 
 - [x] `Composition`、`CompositionDraft`、`CompositionVersion` のZod契約、DTO、Prismaモデル、bundle manifest を追加する
 - [x] app data root に draft / immutable bundle の保存領域を追加し、相対 storage key と content hash を検証する
-- [x] `composition.full-bleed@1` の入力、Scene背景限定、同一 version の一 ScriptVersion 内一参照を ContentDocument 検証へ追加する
+- [x] `composition.full-bleed@1` の入力、background層限定（`scene` / `lines` / `offset` の全 range を許可）、同一 version の一 ScriptVersion 内一参照を ContentDocument 検証へ追加する
 - [x] 完了条件: publish 済み version だけが台本から参照でき、旧 version と bundle は変更されない
 
 ## C2 AI draft と publish
@@ -26,7 +26,7 @@
 
 ## C4 UI・検証・文書
 
-- [x] Composition Library の一覧、AI の draft / publish 状態、Scene背景への published version 選択を追加する
+- [x] Composition Library の一覧、AI の draft / publish 状態、Composition背景への published version 選択（line / offset range を含む）を追加する
 - [x] テスト: version 不変性、参照検証、bundle 欠損、同一 version の重複参照、preview URL の path 制約、snapshot 固定、nested render の実写 fixture
 - [x] [仕様](./spec.md)、[ロードマップ](./roadmap.md)、MVP契約、ADR、CONTEXT、ユーザーガイドを同期する
 - [x] 完了条件: AI が作った全画面・無音 composition を publish し、背景として保存、プレビュー、MP4出力できる
@@ -44,3 +44,11 @@
 - [x] publish時に返却・保存する manifest の `contentHash` を実ハッシュに設定する
 - [x] スキルにバイナリ資産・HyperFramesとの関係・lint escape hatch・保存レイアウト・複数composition運用を追記する
 - [x] スターターテンプレート（`skills/kakeai-composition/templates/starter/`）を同梱する
+
+## C6 Composition range 解禁と pre-1.0 互換整理
+
+- [x] `composition.full-bleed@1` を `layer: background` のまま `scene` / `lines` / `offset` の全 range へ解禁し、`@2` は追加しない
+- [x] 実効表示窓 `min(range 尺, manifest.durationMs)`、child 終端での打ち切り、Cue transition の実効窓検証、crossfade 尺不足の保存・レンダー投入時エラーを追加する
+- [x] 現行機能を template `@1` と ContentDocument `schemaVersion: 1` に再基準化し、旧版 decoder・migration・旧版昇格を削除する
+- [x] [ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) を追加し、ADR-0009/0018/0034 に `amended by` を追記する
+- [x] 完了条件: line / offset range の Composition 背景を保存・プレビュー・MP4出力でき、旧 `@2/@3` と `schemaVersion != 1` を拒否する

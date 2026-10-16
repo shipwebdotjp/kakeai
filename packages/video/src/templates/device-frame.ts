@@ -1,14 +1,14 @@
-import { DEFAULT_ANIMATION_POLICY, deviceFrameV2InputSchema } from "@kakeai/contracts";
+import { DEFAULT_ANIMATION_POLICY, deviceFrameInputSchema } from "@kakeai/contracts";
 import type { z } from "zod";
 import { CompositionCompileError } from "../compile-error";
 import type { AnimationItem, RenderedCue, RenderContext } from "../render-context";
 
-type DeviceFrameV2Input = z.infer<typeof deviceFrameV2InputSchema>;
+type DeviceFrameInput = z.infer<typeof deviceFrameInputSchema>;
 
 export function renderDeviceFrame(
   input: unknown,
   context: RenderContext,
-  schema: z.ZodTypeAny = deviceFrameV2InputSchema,
+  schema: z.ZodTypeAny = deviceFrameInputSchema,
 ): RenderedCue {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
@@ -16,7 +16,7 @@ export function renderDeviceFrame(
       { path: context.path, code: "invalid_input", message: "scene.device-frame の入力が不正です。" },
     ]);
   }
-  const { screen, frame, backgroundColor, animation } = parsed.data as DeviceFrameV2Input;
+  const { screen, frame, backgroundColor, animation } = parsed.data as DeviceFrameInput;
   const screenRendered = context.renderNested(
     screen,
     context.scope.child("screen"),

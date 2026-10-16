@@ -7,8 +7,8 @@
 - [x] 表情をSceneではなく台詞の発話区間に属させる（`NarrationSegment.expressionId`）。
 - [x] Character Appearance と Face Set を分け、表情を眉・目・口の同寸透過レイヤーから合成する。
 - [x] Face Set をグローバルライブラリ参照とし、再レンダー差異を許容する（[ADR-0045](../adr/0045-face-set-global-reference.md)）。
-- [x] `character.standing@3` を追加する（[ADR-0046](../adr/0046-character-standing-v3-face-composite.md)）。
-- [x] 台詞属性 `expressionId` と `schemaVersion: 7` を決定する（[ADR-0047](../adr/0047-per-line-expression-id.md)）。
+- [x] 立ち絵の表情合成を `character.standing@1` に統合する（[ADR-0046](../adr/0046-character-standing-v3-face-composite.md)、[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `@3` から `@1` へ再基準化）。
+- [x] 台詞属性 `expressionId` を `schemaVersion: 1` の基準契約に含める（[ADR-0047](../adr/0047-per-line-expression-id.md)、[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
 - [x] 素材保存、台詞保存、レンダー、削除の操作シナリオ契約を記録する。
 
 ## 契約 (packages/contracts)
@@ -16,8 +16,8 @@
 - [x] `faceSet` / `faceLayer` / `expressionPreset` の形を定義し、`FaceSet`・`FaceLayer` の CRUD リクエスト DTO を追加する。`normal` preset を必須とする。
 - [x] `characterAppearanceSchema` に `faceSetId: idSchema.nullable()` を追加する。
 - [x] `narrationSegmentSchema` に `expressionId: idSchema.nullable()` を追加し、`speakerId` が `null` なら `expressionId` も `null` であることを検証する。
-- [x] `character.standing@3`（入力は `@2` と同一）を追加し、`character.standing@2` の描画を不変に保つ。
-- [x] `ContentDocument` を `schemaVersion: 7` に上げ、v6 → v7 の読出し移行（`faceSetId: null` / `expressionId: null` の補完）を追加する。v4 → v5 → v6 は維持する。
+- [x] 表情合成を含む `character.standing@1`（`side`、`scale`）を唯一の立ち絵版とする。
+- [x] `faceSetId` / `expressionId` を `schemaVersion: 1` の基準契約に含め、旧版の読出し移行を削除する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
 - 完了条件: `npm run typecheck` と契約テストが通り、v6 の保存済みJSONが v7 として読め、未知参照を拒否する。
 
 ## 永続化とサービス (apps/api)
@@ -33,10 +33,10 @@
 ## レンダリング (packages/video)
 
 - [x] `faceSetResolver` を `CompileDocumentOptions` に追加し、コンパイラは解決済み Face Set だけを描画に使う。
-- [x] `character.standing@3` の描画で、ベース＋眉＋目＋口＋前景を単一 wrapper に合成し、位置写像・ドロップシャドウ・発話中バウンドを wrapper に共有適用する。
+- [x] `character.standing@1` の描画で、ベース＋眉＋目＋口＋前景を単一 wrapper に合成し、位置写像・ドロップシャドウ・発話中バウンドを wrapper に共有適用する。
 - [x] 台詞区間ごとに Expression Preset を切り替え、区間外・未指定は `normal` を描画する。話者に対応する立ち絵が無い場合は影響させない。
 - [x] 無効な appearance / Face Set / preset / `assetId` 参照は、出力ファイルを作る前にエラーとして停止する。
-- 完了条件: 同じScene内の連続台詞で表情が切り替わり、`@1`/`@2` と Face Set を持たない外観の描画が変わらない。
+- 完了条件: 同じScene内の連続台詞で表情が切り替わり、Face Set を持たない外観の描画が変わらない。
 
 ## 素材登録と編集 (apps/web)
 
@@ -49,8 +49,8 @@
 
 ## 検証と運用
 
-- [x] 契約テスト：v7スキーマ、`character.standing@3`、`expressionId` と話者なしの制約、未知参照の拒否。
-- [x] コンパイラテスト：ベース＋部位の合成、台詞区間ごとの切替、`@2` 不変、決定性。
+- [x] 契約テスト：`schemaVersion: 1`、`character.standing@1`、`expressionId` と話者なしの制約、未知参照の拒否。
+- [x] コンパイラテスト：ベース＋部位の合成、台詞区間ごとの切替、決定性。
 - [x] API・結合テスト：Face Set CRUD、外観割当、保存検証（寸法一致・表情実在）、削除ガード、Render Job スナップショットの Face Set 固定。
 - [ ] 影響画面を手動確認する。ブラウザ E2E は追加しない。
 - [x] 実装時は `npm run typecheck` と `npm test` を通し、OCR review には本仕様の操作シナリオ、素材書込み、`assetId` / `faceSetId` 境界、無効参照時の停止条件を渡す。

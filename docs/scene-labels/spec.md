@@ -32,11 +32,9 @@
 
 ## schemaVersion と移行
 
-`label` の追加は既存の正本JSON契約を変えるため、`schemaVersion` を `5` に上げる。開発段階では保存済み v4 を読み出し時に移行する。
+`label` は `schemaVersion: 1` の基準契約に含まれる（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で v5 から `1` へ再基準化）。旧版の読出し移行は持たない。
 
-- 読み出し時に v4 の各Sceneへ従来表示名（`導入` / `要点 N` / `結び`）を補い、v5として解釈する。
-- 保存済みJSONは書き換えない。次回の保存で新しい v5 `ScriptVersion` を作る。
-- 読み出し時の移行のため、DTOの `contentSchemaVersion`（保存カラム）は v4 のままでも、返す `content.schemaVersion` は `5` になり得る。
+- 保存済みJSONは書き換えない。次回の保存で新しい `ScriptVersion` を作る。
 
 ## 非ゴール
 

@@ -25,6 +25,7 @@ export const TEXT_CONSTRAINTS: Record<TextRole, TextConstraint> = {
   heading: { maxLines: 2, charsPerLine: 16 },
   body: { maxLines: 6, charsPerLine: 28 },
   closing: { maxLines: 2, charsPerLine: 20 },
+  label: { maxLines: 1, charsPerLine: 24 },
 };
 
 export const CAPTION_CONSTRAINT: TextConstraint = { maxLines: 2, charsPerLine: 20 };
@@ -136,6 +137,7 @@ const ROLE_LABELS: Record<TextRole, string> = {
   heading: "見出し",
   body: "本文",
   closing: "結びの文言",
+  label: "ラベル",
 };
 
 function estimateLineCount(text: string, charsPerLine: number): number {

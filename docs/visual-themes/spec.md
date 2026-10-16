@@ -12,7 +12,7 @@
 
 ## 参照と解決
 
-- ContentDocument は直下に必須の `visualTheme: { id: "soft-editorial", version: 1 }` を持つ（`schemaVersion: 6` で導入し、キャラクター表情の `7` でも維持する）。
+- ContentDocument は直下に必須の `visualTheme: { id: "soft-editorial", version: 1 }` を持つ（`schemaVersion: 1` の基準契約に含まれる）。
 - テーマ定義は `packages/contracts` の版付きレジストリ（`id@version`）に置く。参照スキーマは `{ id, version }` で、未知の参照はDocument検証で拒否する。コンパイラも未知テーマを `unknown_theme` で失敗させる。
 - テーマ定義自体の形状はZodスキーマで検証し、組込み定義の妥当性をテストする。
 
@@ -45,11 +45,11 @@
 | label | sans | 28 | `#4E5A6B` | 1.4 | bold |
 | code | mono | 34 | `#232B3D` | 1.6 | - |
 
-基盤時点では`label`・`code`・`artDirection`に対応する描画はない。`label`の描画は[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)の`text.block@2`で追加する。
+基盤時点では`label`・`code`・`artDirection`に対応する描画はない。`label`の描画は[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)の`text.block@1`で追加する。
 
 ## テキストの解決順序
 
-`text.block` はプロパティ単位で次を適用する。`decoration.bold` なども個別にこの順で解決し、未指定の項目だけテーマを使う。基盤の`text.block@1`は既存の5分類のままに保ち、role追加は[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)の新template versionで行う。
+`text.block` はプロパティ単位で次を適用する。`decoration.bold` なども個別にこの順で解決し、未指定の項目だけテーマを使う。`text.block@1` は `label` を含む6分類を描画する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
 
 1. Cueの明示値
 2. 選択中テーマのrole別既定値
@@ -75,14 +75,14 @@ Sceneは `accent`（旧 `accentColor`）を必須で持つ。
 コンパイラはDocumentからテーマを解決し、`RenderContext` を通じて各テンプレートへ渡す。
 
 - Text Cue・字幕：上記の解決順序とトークンを使う。
-- カード・端末枠・立ち絵・Nested Visual：汎用のsurface・文字・scrim・影・角丸をテーマから取る。`scene.device-frame@1/@2` の `backgroundColor` 未指定時の既定は `surfaceMuted` とする。
+- カード・端末枠・立ち絵・Nested Visual：汎用のsurface・文字・scrim・影・角丸をテーマから取る。`scene.device-frame@1` の `backgroundColor` 未指定時の既定は `surfaceMuted` とする。
 - サイトモックアップ：実在サービス固有のアクセントバーは維持する。テーマは外側の汎用surface・文字・影だけへ適用し、入力の `theme`（`light`/`dark`）の意味は変えない。
 
 ## 移行
 
-- v4 → v5 の読出し移行（Scene Label）を残し、v5 → v6 で `visualTheme: soft-editorial@1` と全Sceneの `accent: { kind: "theme", token: "primary" }` を補う。v4入力は両方を通す。保存済みJSONは更新せず、保存操作時だけv6の新しいScript Versionを作る。
-- Text Cueの `font`・`fontSize`・`color`・`decoration` は移行でも値を保持する。
-- Render Jobの既存v5スナップショットも読出し移行を通して実行できる。新規Jobはv6のContentDocumentを固定する。DB migration・HTTPエンドポイント・snapshot schema versionは変更しない。
+- 旧版の読出し移行は持たない（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `schemaVersion: 1` へ再基準化）。
+- Text Cueの `font`・`fontSize`・`color`・`decoration` の明示値は保持する。
+- Render Jobのsnapshot schema versionは変更しない。
 
 ## 編集UI
 
@@ -92,7 +92,7 @@ Sceneは `accent`（旧 `accentColor`）を必須で持つ。
 
 ## 検証
 
-- 契約テスト：テーマ参照、アクセントunion、v4/v5 → v6読出し、未知テーマ拒否、Text Cueの明示スタイル保持。
+- 契約テスト：テーマ参照、アクセントunion、未知テーマ拒否、Text Cueの明示スタイル保持。
 - コンパイラテスト：theme既定値の適用、Cue単位の各上書き、custom accent、既存VisualTemplateとNested Visualへの伝播、サイト固有色の維持。
 - API/統合テスト：旧v5台本・旧Render Job snapshotの取得・保存・プレビュー・レンダー、新規Workのv6初期Document。
 - Webテスト：アクセント選択の往復、テーマ既定、明示Textスタイルの保持。

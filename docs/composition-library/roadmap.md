@@ -12,7 +12,7 @@ Composition manifest に text、color、number、enum、Kakeai Asset を型付�
 
 ## R3: 配置と Composite Visual Template
 
-CompositionVersion を full-screen background 以外にも置けるようにする。端末フレーム、サイトモックアップ、カードなどの `NestedVisual` に対応し、canvas 比率、crop、mask、親子 timeline の表示区間を明示した契約にする。
+CompositionVersion を full-screen background 以外にも置けるようにする。端末フレーム、サイトモックアップ、カードなどの `NestedVisual` に対応し、canvas 比率、crop、mask、親子 timeline の表示区間を明示した契約にする。カード・端末枠への埋め込みは、background range 解禁とは別の埋め込み契約として後続で設計する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
 
 ## R4: 音声と派生 cache
 

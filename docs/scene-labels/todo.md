@@ -2,7 +2,7 @@
 
 - [x] `docs/scene-labels/spec.md` と `todo.md` を追加する。
 - [x] `CONTEXT.md` のScene定義に Scene Label を加える。
-- [x] contracts: `Scene.label` を追加し、`schemaVersion` を5へ上げる。
+- [x] contracts: `Scene.label` を追加する（`schemaVersion: 1` の基準契約に含まれる）。
 - [x] contracts: 初期生成を導入 / 要点 1 / 結び の3 Sceneにする。要点2・3の既定IDと色を削除する。
 - [x] contracts: v4→v5 の読み出し移行（従来表示名の補完）を追加する。
 - [x] web: `SceneFormValue`・`toFormValues`・`buildContentDocument` に `label` を通す。

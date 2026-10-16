@@ -1,13 +1,13 @@
 # 編集画面とテキストモデル再設計 実装TODO
 
-仕様は [spec.md](./spec.md) を正とする。Phase 1（編集表現の拡張）の一部として、上から順に進める。E1・E2 は同一の `schemaVersion: 4` の破壊的変更にまとめる。開発段階のため移行コードは持たない（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
+仕様は [spec.md](./spec.md) を正とする。Phase 1（編集表現の拡張）の一部として、上から順に進める。E1・E2 の破壊的変更は `schemaVersion: 1` の基準契約に含まれる（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で再基準化）。
 
 ## E1 テキストモデル統一
 
-- [x] `text.title@1`・`text.body@1` を統合テキストテンプレート `text.block@1` に置き換える（`text`・`role`・`anchor`・`verticalAlign`・`font`・`fontSize`・`color`・`decoration`。`role` は `title`/`subtitle`/`heading`/`body`/`closing` のみで字幕は含めない）
+- [x] `text.title@1`・`text.body@1` を統合テキストテンプレート `text.block@1` に置き換える（`text`・`role`・`anchor`・`verticalAlign`・`font`・`fontSize`・`color`・`lineHeight`・`decoration`・`fontFace`・`surface`。`role` は `title`/`subtitle`/`heading`/`body`/`closing`/`label`）
 - [x] `font` は**非同梱のシステムフォント**の有限enum（`sans`/`serif`/`mono`）とし、レンダー側で固定スタック名へマップする。`decoration` は真偽のみ。任意CSS/keyframe/easingを持ち込まない
 - [x] Sceneから `slots` を撤去し、`kind`・`accentColor`・`timing`・`lines`・`visualCues` は維持する（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)）。テキストCueは既存の `overlay` 層を使い、コンパイラの固定「Scene本文」層（`kakeai-slotframe`）を廃止する
-- [x] `schemaVersion` を `3` → `4` に上げ、v3の読出し・移行コードを持たない。**開発環境に残る v3 の保存版は削除する**
+- [x] 破壊的変更を `schemaVersion: 1` の基準契約に含め、旧版の読出し・移行コードを持たない（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で再基準化）
 - [x] 新規作品の初期Sceneに、`role` 別の既定統合テキストCueを生成する
 - [x] テキストの最大行数・最小フォントサイズの目安を `role` 別のテンプレート契約に移し、超過は `meta.warnings`（JSON Pointer は `scenes[i].visualCues[j].input.*`）で返す
 - [x] 同期箇所: `packages/contracts`（`content/scene.ts`・`content/defaults.ts`・`content/warnings.ts`・`content/document.ts`・`templates/*`）、`packages/video`（`compiler.ts`・`templates/text-block.ts`）、`apps/web`（`content/form.ts`・`components/SceneEditor.tsx`・`components/CueList.tsx`）

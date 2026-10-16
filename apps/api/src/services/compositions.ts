@@ -939,4 +939,32 @@ export class CompositionService {
       createdAt: v.createdAt.toISOString(),
     };
   }
+
+  async getDurationsByVersionId(versionIds: string[]): Promise<Map<string, number>> {
+    return getCompositionDurationsByVersionId(this.db, versionIds);
+  }
+}
+
+export async function getCompositionDurationsByVersionId(
+  db: PrismaClient,
+  versionIds: string[],
+): Promise<Map<string, number>> {
+  const uniqueIds = [...new Set(versionIds)];
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+  const rows = await db.compositionVersion.findMany({ where: { id: { in: uniqueIds } } });
+  const durations = new Map<string, number>();
+  for (const row of rows) {
+    let durationMs: unknown;
+    try {
+      durationMs = (JSON.parse(row.manifestJson) as { durationMs?: unknown }).durationMs;
+    } catch {
+      continue;
+    }
+    if (typeof durationMs === "number" && Number.isFinite(durationMs)) {
+      durations.set(row.id, durationMs);
+    }
+  }
+  return durations;
 }

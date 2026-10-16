@@ -4,9 +4,9 @@
 
 - [x] `packages/contracts` にVisual Themeの版付きレジストリ、参照スキーマ、トークン型を追加する（`src/content/theme.ts`）
 - [x] `soft-editorial@1` を定義する（canvas・accents・surface系・scrim/shadow・radius・motion・semantic・categoryColors・role別文字トークン・artDirection）
-- [x] ContentDocument を `schemaVersion: 6` に上げ、必須 `visualTheme` を追加し、未知参照を拒否する
+- [x] ContentDocument の `schemaVersion: 1` の基準契約に必須 `visualTheme` を含め、未知参照を拒否する
 - [x] `Scene.accentColor` を `accent` union（`{kind:"theme",token}`/`{kind:"custom",color}`）へ置換する
-- [x] v5 → v6 読出し移行（`soft-editorial@1` と全Sceneの `theme.primary` を補い、Text Cueの明示スタイルを保持）。v4入力は v4→v5→v6 を通す
+- [x] 旧版の読出し移行を削除する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）
 - [x] `packages/video` でテーマ解決（root CSS変数・`RenderContext`）、Scene背景・字幕・Text Cue・カード・端末枠・立ち絵・Nested Visualへ適用する。サイト固有色は維持する
 - [x] `text.block` を `Cue明示値 → theme role既定 → template fallback` の順にプロパティ単位で解決する
 - [x] Render Jobの既存v5スナップショットを読出し移行で実行できるようにする（snapshot schema versionは変更しない）

@@ -186,7 +186,7 @@ describe("buildCueMap scene and lines ranges", () => {
     const cue = makeCue({
       sceneId: "p1",
       templateId: "media.full-bleed",
-      templateVersion: 2,
+      templateVersion: 1,
       layer: "background",
       order: 0,
       rangeKind: "scene",
@@ -256,7 +256,7 @@ describe("buildCueMap draw order and lanes", () => {
         makeCue({
           sceneId: "p1",
           templateId: "media.full-bleed",
-          templateVersion: 2,
+          templateVersion: 1,
           layer: "background",
           order: 0,
           rangeKind: "scene",
@@ -264,7 +264,7 @@ describe("buildCueMap draw order and lanes", () => {
         makeCue({
           sceneId: "p1",
           templateId: "media.card",
-          templateVersion: 2,
+          templateVersion: 1,
           layer: "card",
           order: 0,
           rangeKind: "scene",
@@ -355,7 +355,7 @@ describe("buildCueMap offset ranges", () => {
       makeCue({
         sceneId: "p1",
         templateId: "media.card",
-        templateVersion: 2,
+        templateVersion: 1,
         layer: "card",
         order: 0,
         rangeKind: "offset",
@@ -399,7 +399,7 @@ describe("buildCueMap offset ranges", () => {
         makeCue({
           sceneId: "p1",
           templateId: "media.card",
-          templateVersion: 2,
+          templateVersion: 1,
           layer: "card",
           order: 0,
           rangeKind: "offset",
@@ -409,7 +409,7 @@ describe("buildCueMap offset ranges", () => {
         makeCue({
           sceneId: "p1",
           templateId: "media.card",
-          templateVersion: 2,
+          templateVersion: 1,
           layer: "card",
           order: 1,
           rangeKind: "offset",
@@ -489,7 +489,7 @@ describe("buildCueMap standings and representative media", () => {
     const cue = makeCue({
       sceneId: "p1",
       templateId: "media.card",
-      templateVersion: 2,
+      templateVersion: 1,
       layer: "card",
       order: 0,
       rangeKind: "scene",
@@ -544,7 +544,7 @@ describe("buildCueMap overflow and promotion", () => {
         makeCue({
           sceneId: "p1",
           templateId: "media.full-bleed",
-          templateVersion: 2,
+          templateVersion: 1,
           layer: "background",
           order: 0,
           rangeKind: "scene",
@@ -552,7 +552,7 @@ describe("buildCueMap overflow and promotion", () => {
         makeCue({
           sceneId: "p1",
           templateId: "media.card",
-          templateVersion: 2,
+          templateVersion: 1,
           layer: "card",
           order: 0,
           rangeKind: "scene",

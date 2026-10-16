@@ -23,16 +23,16 @@
 
 ## Phase 1: 編集表現の拡張
 
-- 背景・カードに画像・動画・アプリ管理の複合ビジュアル（Composite Visual Template）を置く基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) で実装済み（VisualCue v3 の `layer`/`order`/`transition`、`NestedVisual` 再帰、`scene.device-frame@1`/`@2`、Cue一覧UI、テンプレート `inputFields` による汎用エディタ、有限presetの `AnimationPlan`）。
-- AIが作る全画面・無音のHyperFrames projectを、Assetではなく不変のCompositionVersionとしてpublishし、Scene背景にnative nested compositionとして置くComposition Libraryを追加する。v1の詳細と将来のslot・複数instance・音声・外部project対応は [../composition-library/spec.md](../composition-library/spec.md) と [../composition-library/roadmap.md](../composition-library/roadmap.md) を正とする。
+- 背景・カードに画像・動画・アプリ管理の複合ビジュアル（Composite Visual Template）を置く基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) で実装済み（VisualCue の `layer`/`order`/`transition`、`NestedVisual` 再帰、`scene.device-frame@1`、Cue一覧UI、テンプレート `inputFields` による汎用エディタ、有限presetの `AnimationPlan`）。
+- AIが作る全画面・無音のHyperFrames projectを、Assetではなく不変のCompositionVersionとしてpublishし、Composition背景にnative nested compositionとして置くComposition Libraryを追加する。v1の詳細と将来のslot・複数instance・音声・外部project対応は [../composition-library/spec.md](../composition-library/spec.md) と [../composition-library/roadmap.md](../composition-library/roadmap.md) を正とする。
 - 背景とカードの正規化した焦点位置と拡大率を編集する（[../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) で実装済み。`focalPoint` の編集・中央リセット、メディアの拡大率と等倍リセット）。
 - 1 Scene内の複数VisualCue、表示順、セリフ区間・offset区間を編集する。
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。
-- 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、口パクを追加する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) を正とする（グローバルな Face Set ライブラリ、`character.standing@3`、`NarrationSegment.expressionId`、`schemaVersion: 7`。再レンダー差異の許容は [ADR-0045](../adr/0045-face-set-global-reference.md)）。
+- 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、口パクを追加する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) を正とする（グローバルな Face Set ライブラリ、`character.standing@1`、`NarrationSegment.expressionId`。再レンダー差異の許容は [ADR-0045](../adr/0045-face-set-global-reference.md)）。
 - 有名な投稿サイト・技術サイト・ブラウザのガワに画像・動画を収めるサイトモックアップ（フレーム型）は [../site-mockup/spec.md](../site-mockup/spec.md) で実装済み（`scene.site-mockup@1`、variantの加算的追加を許容、汎用スタイル＋利用者ロゴ）。
-- 見た目の既定値を提供するVisual Theme基盤は [../visual-themes/spec.md](../visual-themes/spec.md) で実装済み（`soft-editorial@1` を全作品で固定、`schemaVersion: 6`、Sceneアクセントのテーマ3色／自由色、Cue明示値が常に優先）。二つ目のテーマとWorkごとの選択UIは将来のテーマ追加時に導入する。
+- 見た目の既定値を提供するVisual Theme基盤は [../visual-themes/spec.md](../visual-themes/spec.md) で実装済み（`soft-editorial@1` を全作品で固定、Sceneアクセントのテーマ3色／自由色、Cue明示値が常に優先）。二つ目のテーマとWorkごとの選択UIは将来のテーマ追加時に導入する。
 - YouTube 投稿用のサムネイルを、同梱テンプレートに文字と素材を差し込んで作成・管理する（言語エディション単位・複数候補・選択中を1枚、PNGはオンデマンド生成、ブランドは Visual Theme を共有）。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。Phase 2 の画像生成によるサムネイル候補とは別機能で、テンプレート方式を正とする。
-- 編集画面の構成とテキストモデルを再設計する（[../editor/spec.md](../editor/spec.md)）。Sceneスロットを廃止しテキストをVisualCueへ統一（統合テキストテンプレート、配置・フォント・サイズ・色・装飾）、3ペイン化と静的ジャンプメニュー、プレビューの再生コントロールとScene・セリフ間ナビゲーション、シーン間トランジション（カット／フェード／クロスフェード）、立ち絵の前Sceneコピーを含む。テキスト統一とシーン間トランジションは `schemaVersion: 4` の破壊的変更を伴う。
+- 編集画面の構成とテキストモデルを再設計する（[../editor/spec.md](../editor/spec.md)）。Sceneスロットを廃止しテキストをVisualCueへ統一（統合テキストテンプレート、配置・フォント・サイズ・色・装飾）、3ペイン化と静的ジャンプメニュー、プレビューの再生コントロールとScene・セリフ間ナビゲーション、シーン間トランジション（カット／フェード／クロスフェード）、立ち絵の前Sceneコピーを含む。テキスト統一とシーン間トランジションは `schemaVersion: 1` の基準契約に含まれる（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で再基準化）。
 - `table.simple@1` と、その列定義、行、強調セルの構造化入力を編集可能にする（[表テンプレート](../table-template/spec.md)で対応済み）。続けてchart、flow系VisualTemplateを追加する。`chart.bar@1`（カテゴリ・複数系列・値軸・grow/bounce登場）は [棒グラフテンプレート](../chart-template/spec.md) で対応済み。サイトモックアップの後に着手する。
 
 完了条件：固定のフォーム範囲を超える視覚・音声表現を、正本JSONを壊さずに編集、プレビュー、レンダーできる。

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
+import type { VisualCue } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import {
+  collectCompositionWindowIssues,
   collectOffsetRangeWarnings,
   collectSceneTransitionIssues,
   resolveTimeline,
@@ -167,5 +169,60 @@ describe("scene transitions", () => {
     const document = validContentDocument();
     document.scenes[0]!.transition = { enter: { preset: "crossfade", durationMs: 5000 } };
     expect(collectSceneTransitionIssues(document)).toEqual([]);
+  });
+});
+
+describe("collectCompositionWindowIssues", () => {
+  function compositionCue(
+    id: string,
+    range: VisualCue["range"],
+    transition: VisualCue["transition"] = {
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
+    },
+  ): VisualCue {
+    return {
+      id,
+      template: { id: "composition.full-bleed", version: 1 },
+      range,
+      layer: "background",
+      order: 0,
+      transition,
+      input: { compositionVersionId: "ver-1" },
+    };
+  }
+
+  it("accepts a composition window covered by the child duration", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [compositionCue("vc-comp", { kind: "scene" })];
+    expect(collectCompositionWindowIssues(document, new Map([["ver-1", 5000]]))).toEqual([]);
+  });
+
+  it("flags a transition that exceeds the effective window", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      compositionCue("vc-comp", { kind: "scene" }, {
+        enter: { preset: "fade", durationMs: 300 },
+        exit: { preset: "none", durationMs: 0 },
+      }),
+    ];
+    const issues = collectCompositionWindowIssues(document, new Map([["ver-1", 200]]));
+    expect(issues.map((issue) => issue.code)).toEqual(["transition_range_overflow"]);
+  });
+
+  it("flags a crossfade that needs a longer window than the child", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [compositionCue("vc-comp", { kind: "scene" })];
+    document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 1000 } };
+    const issues = collectCompositionWindowIssues(document, new Map([["ver-1", 4000]]));
+    expect(issues.map((issue) => issue.code)).toEqual([
+      "composition_crossfade_window_insufficient",
+    ]);
+  });
+
+  it("ignores cues whose composition version cannot be resolved", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [compositionCue("vc-comp", { kind: "scene" })];
+    expect(collectCompositionWindowIssues(document, new Map())).toEqual([]);
   });
 });

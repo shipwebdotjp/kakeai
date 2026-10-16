@@ -10,7 +10,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 ```json
 {
-  "schemaVersion": 8,
+  "schemaVersion": 1,
   "locale": "ja-JP",
   "template": {
     "id": "explanation-scenes",
@@ -28,14 +28,14 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
-- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。キャラクターの locale 別声対応の導入（[../multilingual-voice/spec.md](../multilingual-voice/spec.md)、[ADR-0052](../adr/0052-character-voices-per-locale.md)）で `8` とする。新規作成・保存するDocumentは `8` とする。破壊変更の履歴と読出し移行は [content-schema-history.md](content-schema-history.md) を正とする。
+- `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。新規作成・保存するDocumentは `1` とする。破壊変更の履歴は [content-schema-history.md](content-schema-history.md) を正とする。
 - `visualTheme` は作品の見た目の既定値を固定する参照で、必須とする。MVPでは `soft-editorial@1` のみ。未知の参照は拒否する。詳細は [../visual-themes/spec.md](../visual-themes/spec.md) を正とする。
 - `locale` はBCP 47形式で保存する。有効値は `ja-JP` と `en-US`。
 - `template` は構造と既定表現を決める。MVPでは `explanation-scenes@1` のみ。
 
 `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。
 
-`schemaVersion` は `8` とする。各版の変更内容と読出し移行は [content-schema-history.md](content-schema-history.md) を正とする。保存済みJSONは書き換えず、次回の保存で新しい `ScriptVersion` を作る。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。正式リリース後は、スキーマを破壊的に変えるときに保存済みの版を書き換えずに新しい `ScriptVersion` を作る移行関数を追加する。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。編集画面・テキストモデル・シーン間トランジションの詳細は [../editor/spec.md](../editor/spec.md) を正とする。キャラクター表情の `faceSetId`/`expressionId`、Face Set、`character.standing@3` の詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。キャラクターの locale 別声対応の詳細は [../multilingual-voice/spec.md](../multilingual-voice/spec.md) を正とする。
+`schemaVersion` は `1` とする。各版の変更内容は [content-schema-history.md](content-schema-history.md) を正とする。`schemaVersion != 1` の読出しは拒否し、移行コードは持たない。保存済みJSONは書き換えず、次回の保存で新しい `ScriptVersion` を作る。読出し時に保存済みJSONやそのハッシュを書き換えてはならない。スキーマを破壊的に変えるときは版を上げ、そのとき移行関数を追加する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。VisualCue の `layer`/`order`/`transition`、`NestedVisual`、`Composite Visual Template` の詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。編集画面・テキストモデル・シーン間トランジションの詳細は [../editor/spec.md](../editor/spec.md) を正とする。キャラクター表情の `faceSetId`/`expressionId`、Face Set、`character.standing@1` の詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。キャラクターの locale 別声対応の詳細は [../multilingual-voice/spec.md](../multilingual-voice/spec.md) を正とする。
 
 ## セリフと音声
 
@@ -101,7 +101,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 `voices` は locale 別の声の対応表である。同一キャラクター内の `locale` 重複は拒否する。`characterId` を持つ話者の `Speaker.voiceProfileId` は、document の `locale` に対応する `voices` の値と一致させなければならない。詳細は [../multilingual-voice/spec.md](../multilingual-voice/spec.md) を正とする。
 
-MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) で `faceSetId` と `NarrationSegment.expressionId` を追加し、`character.standing@3` で合成する。`faceSetId` が `null` の外観は表情を切り替えず、ベース画像をそのまま描く。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに `character.standing@3` を左右1体ずつ最大2体選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。ただし描画時は、立ち絵の `characterId` に対応する話者が話すセリフ区間だけ、その立ち絵がゆっくり上下にバウンドする。シーン内での立ち絵切替、口パクは後続フェーズで追加する。
+MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) で `faceSetId` と `NarrationSegment.expressionId` を追加し、`character.standing@1` で合成する。`faceSetId` が `null` の外観は表情を切り替えず、ベース画像をそのまま描く。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに `character.standing@1` を左右1体ずつ最大2体選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。ただし描画時は、立ち絵の `characterId` に対応する話者が話すセリフ区間だけ、その立ち絵がゆっくり上下にバウンドする。シーン内での立ち絵切替、口パクは後続フェーズで追加する。
 
 ## シーンとVisualCue
 
@@ -197,7 +197,7 @@ Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`�
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
 - `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。Scene尺に収まらない区間は表示範囲を切り詰め、窓が空になるときは保存時に `meta.warnings`（`offset_range_out_of_scene`）で返す。
 
-MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。Composition Library導入後は、publish済みの全画面・無音CompositionVersionだけを `composition.full-bleed@1` のScene背景として選べる。立ち絵は一覧内の「左」「右」固定2行で `character.standing@3` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → caption → overlay` で固定する（Scene本文の固定層は廃止し、テキストは `overlay` のCueとして描画する）。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@3` を書き出す。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) と [../composition-library/spec.md](../composition-library/spec.md) を正とする。
+MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。Composition Library導入後は、publish済みの全画面・無音CompositionVersionだけを `composition.full-bleed@1` のComposition背景として選べる（`scene` / `lines` / `offset` の全 range と絶対開始時刻に対応し、実効表示窓は `min(range 尺, manifest.durationMs)`）。立ち絵は一覧内の「左」「右」固定2行で `character.standing@1` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → caption → overlay` で固定する（Scene本文の固定層は廃止し、テキストは `overlay` のCueとして描画する）。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) と [../composition-library/spec.md](../composition-library/spec.md) を正とする。
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
@@ -212,17 +212,12 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 | VisualTemplate | 入力 | 初期対応 |
 | --- | --- | --- |
-| `text.block@1` | `text`, `role`(title/subtitle/heading/body/closing), 配置`anchor`/`verticalAlign`, `font`, `fontSize`, `color`, `decoration` | 対応。Sceneのテキストを表現する（[../editor/spec.md](../editor/spec.md)）。未指定時の既定スタイルはVisual Themeのrole別トークンを使う（[../visual-themes/spec.md](../visual-themes/spec.md)） |
-| `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?`, `zoom?` | 対応 |
-| `media.full-bleed@2` | `@1` ＋ `loop?` | 対応。`loop: true` の動画素材がCueの可視窓より短いとき、素材を窓いっぱいに連続配置してループ再生する（[../media-loop/spec.md](../media-loop/spec.md)） |
-| `composition.full-bleed@1` | `compositionVersionId` | Composition Library導入後に対応。`range: scene`、`layer: background`だけを許可し、同じCompositionVersionは一つのScriptVersion内で一度だけ参照できる。 |
-| `media.card@1` | `assetId`, アスペクト比(16:9/4:3/1:1/3:4/9:16、既定16:9), 見出し、補足文, `focalPoint?`, `zoom?` | 対応。見出しと補足文が両方とも空のときはテキスト枠を描画しない |
-| `media.card@2` | `@1` ＋ `loop?` | 対応。カード枠内の動画を `@2` と同じ規則でループ再生する（[../media-loop/spec.md](../media-loop/spec.md)） |
-| `character.standing@1` | `characterId`, `appearanceId`, 正規化座標`x`/`y`、倍率 | 対応（保存済み版の描画のみ。`@2` へ移行） |
-| `character.standing@2` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド |
-| `character.standing@3` | `@2` と同一入力 | [../face-expression/spec.md](../face-expression/spec.md) で追加。外観が参照する Face Set のベース＋眉＋目＋口＋前景を合成し、台詞区間ごとに Expression Preset を切り替える。Face Set を持たない外観は `@2` と同じ見た目 |
-| `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `backgroundColor?` | 対応。端末枠内に画像・動画を表示する複合ビジュアル。背景・カードに置ける |
-| `scene.device-frame@2` | `@1` ＋ `animation?`（preset, durationMs） | 対応。画面要素の登場アニメーションを追加 |
+| `text.block@1` | `text`, `role`(title/subtitle/heading/body/closing/label), 配置`anchor`/`verticalAlign`, `font`, `fontSize`, `color`, `lineHeight?`, `decoration`, `fontFace?`, `surface?` | 対応。Sceneのテキストを表現する（[../editor/spec.md](../editor/spec.md)）。未指定時の既定スタイルはVisual Themeのrole別トークンを使う（[../visual-themes/spec.md](../visual-themes/spec.md)） |
+| `media.full-bleed@1` | `assetId`, `fit`, `focalPoint?`, `zoom?`, `loop?` | 対応。`loop: true` の動画素材がCueの可視窓より短いとき、素材を窓いっぱいに連続配置してループ再生する（[../media-loop/spec.md](../media-loop/spec.md)） |
+| `composition.full-bleed@1` | `compositionVersionId` | Composition Library導入後に対応。`layer: background` に置き、`scene` / `lines` / `offset` の全 range を許可する。同じCompositionVersionは一つのScriptVersion内で一度だけ参照できる。実効表示窓は `min(range 尺, manifest.durationMs)` で、child 終端で打ち切る（末フレーム保持・ループなし）。Cue transition は実効表示窓内に収め、Scene crossfade で必要窓が child 尺を超える場合は保存・レンダー投入時に拒否する。 |
+| `media.card@1` | `assetId`, アスペクト比(16:9/4:3/1:1/3:4/9:16、既定16:9), 見出し、補足文, `focalPoint?`, `zoom?`, `loop?` | 対応。見出しと補足文が両方とも空のときはテキスト枠を描画しない。カード枠内の動画を背景と同じ規則でループ再生する（[../media-loop/spec.md](../media-loop/spec.md)） |
+| `character.standing@1` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド。[../face-expression/spec.md](../face-expression/spec.md) の表情対応を含み、外観が参照する Face Set のベース＋眉＋目＋口＋前景を合成し、台詞区間ごとに Expression Preset を切り替える。Face Set を持たない外観は単体画像と同じ見た目 |
+| `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `backgroundColor?`, `animation?`（preset, durationMs） | 対応。端末枠内に画像・動画を表示する複合ビジュアル。背景・カードに置ける。画面要素の登場アニメーションを追加できる |
 | `scene.site-mockup@1` | `variant`, `screen`(`NestedVisual`), `theme?`, `name?`/`handle?`/`url?`/`caption?`, `logo?`, `animation?` | 対応。有名サイト・ブラウザのガワに画像・動画を収める。card/overlay |
 | `chart.bar@1` | タイトル、カテゴリ、系列、数値、向き、目盛り、登場 | 対応（[../chart-template/spec.md](../chart-template/spec.md)） |
 | `table.simple@1` | 見出し、列定義、行、強調セル、スタイル、登場 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
@@ -232,7 +227,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。例外として、Kakeai管理下でAIが作成し不変bundleとしてpublishしたCompositionVersionは、`composition.full-bleed@1` のID入力を通じてnative nested compositionとして参照できる。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
 
-`VisualTemplate` の版は、正式リリース後は不変とする。`id@version` の意味とレイアウト規約を変える場合は同じ版を書き換えず、新しい版（例 `@2`）を追加する。過去の版の描画コードは原則削除せず、保存済み作品が参照する版を描画し続けられるようにする。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい。正式リリース（`1.0.0`）前の開発段階では、版を追加せず既存版を書き換えてよい（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
+`VisualTemplate` の版は「保存済みの有効入力を再解釈しない境界」であり、既存の有効データの意味・レイアウト・検証結果を変える場合だけ版を上げる（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。再解釈を伴わない拡張は同じ版を書き換えてよい。未知の `id@version` は拒否する。参照ゼロの版は削除してよい。
 
 `fit: cover` を使うテンプレートは、任意の正規化 `focalPoint: { x, y }` と任意の拡大率 `zoom`（`0.5〜3`、省略時は等倍 `1`）を受け取る。未指定時は中央 `{ "x": 0.5, "y": 0.5 }` とし、クロップ位置は出力ピクセルではなく正規化座標で指定する。編集画面は `media.full-bleed@1` と `media.card@1` の `focalPoint` と `zoom` を焦点位置コントロールで編集し、中央へ戻すと `focalPoint` を、等倍に戻すと `zoom` を省略する。拡大率はメディアだけに適用し、カードの矩形とテキスト配置は変えない。詳細は [../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) を正とする。
 
@@ -264,7 +259,7 @@ Characterなど位置を持つテンプレートは、出力ピクセルでは�
 }
 ```
 
-これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。`character.standing@2`/`@3` は `side` と倍率を正規化座標へ写像する。半幅 `0.125×scale` を用い、左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86` とする（外端の余白を一定に保つ）。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
+これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。`character.standing@1` は `side` と倍率を正規化座標へ写像する。半幅 `0.125×scale` を用い、左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86` とする（外端の余白を一定に保つ）。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
 
 BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset自体を「BGM型」に固定せず、同じ音声素材をナレーション以外の用途にも利用可能にする。`AudioCue.range` も `kind` による判別union（`work` / `scene`）とする。MVPの編集画面は `role: "bgm"` と `{ "kind": "work" }` のAudioCueを1件だけ編集し、既定値は `gainDb: -18`、`loop: true` とする。Scene別・複数BGM・SFXの編集はMVP後とし、既存のAudioCue値は保持する。
 
@@ -283,7 +278,7 @@ BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset
 
 - `packages/contracts` にこのJSONのZodスキーマとVisualTemplate入力スキーマを置く。Sceneは必須の `label`（空白のみ拒否）、必須の `accent`（`theme` tokenまたは大文字 `#RRGGBB` の `custom`）、`timing: z.discriminatedUnion("mode", ...)`、任意の `transition` を持ち、NarrationSegmentの `selectedAudioTakeId` と `expressionId` は必須の `z.string().nullable()` とする。`expressionId` は `speakerId` が `null` ならば `null` に限る。`CharacterAppearance.faceSetId` も必須の `z.string().nullable()` とする。`Character` は必須の `voices`（`locale` 重複拒否）を持ち、`characterId` を持つ話者の声は document の `locale` に対応する `voices` の値と一致させる。Documentは必須の `visualTheme` を持ち、未知のテーマ参照は拒否する。Sceneは型付きスロットを持たず、`VisualCue.range` は `kind` による判別unionとして定義し、未知の `kind` は拒否する。
 - 正本JSONにはローカルパス、フレーム番号、HyperFrames固有のDOM属性やHTMLを保存しない。Compositionを使うCueはpublish済み `CompositionVersion.id` だけを保存する。
-- 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・publish済みCompositionVersion参照・Sceneのアクセント・`scene.transition` の尺（`D <= min(先行Scene尺, 入場Scene尺)`）を検証する。`composition.full-bleed@1` はScene背景だけに置き、同じCompositionVersionの重複参照を拒否する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。`faceSetId` と `expressionId` はグローバルライブラリを参照するため、API サービスが Face Set を解決して、存在・`ready` な画像 Asset・ベース画像との寸法一致・Expression Preset の部位参照を保存時に検証する（[../face-expression/spec.md](../face-expression/spec.md)）。テキスト量の目安超過は拒否せず警告として返す。
+- 保存前に、ID一意性（同一Workの版をまたいだ安定ID）・Take参照・readyなAsset参照・publish済みCompositionVersion参照・Sceneのアクセント・`scene.transition` の尺（`D <= min(先行Scene尺, 入場Scene尺)`）を検証する。`composition.full-bleed@1` はbackground層だけに置き、同じCompositionVersionの重複参照を拒否する。Composition背景の実効表示窓は `min(range 尺, manifest.durationMs)` とし、Cue transition は実効表示窓内に収める。Scene crossfade により必要となる表示窓が child 尺を超える場合は保存・レンダー投入時に拒否する。Assetの尺を必要とする音声配置規則は、保存前とレンダー投入前に検証する。`faceSetId` と `expressionId` はグローバルライブラリを参照するため、API サービスが Face Set を解決して、存在・`ready` な画像 Asset・ベース画像との寸法一致・Expression Preset の部位参照を保存時に検証する（[../face-expression/spec.md](../face-expression/spec.md)）。テキスト量の目安超過は拒否せず警告として返す。
 - Render Jobには、検証済みの正本JSON、選択AudioTake、使用するレンダー入力（Renditionまたは原本）の参照情報、CompositionVersionのID・bundle hash・manifest、解決済みFace Set、テンプレート版、出力設定を保存する。ワーカーはスナップショットJSONを実行時の信頼済みコンパイラでHTMLとchild file treeへ変換する。ツール更新後の同一MP4再現は要件にしない。
 - Composition HTMLは、アプリが管理するVisualTemplateと検証済み入力からだけ生成する。利用者入力や外部AI出力をHTML/JavaScriptとして直接実行しない。Kakeai管理下でAIが作成しpublish済みのCompositionVersionだけは、検証済みmanifestとbundleを用いるnative nested compositionとして実行できる。Asset IDの表示参照への変換はコンパイラに注入する `assetResolver` が担う。
 - `contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化や `contentHash` は持たない。スキーマを破壊的に変えるときは `schemaVersion` を上げ、保存済みの版を書き換えずに新しい `ScriptVersion` を作って移行する。移行関数は実際に版を上げる時点で `packages/contracts` に追加し、先回りして持たない。

@@ -44,7 +44,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
         visualCues: [
           {
             id: "vc-title",
-            template: { id: "text.block", version: 2 },
+            template: { id: "text.block", version: 1 },
             range: { kind: "scene" },
             layer: "overlay",
             order: 0,
@@ -60,7 +60,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
           },
           {
             id: "vc-subtitle",
-            template: { id: "text.block", version: 2 },
+            template: { id: "text.block", version: 1 },
             range: { kind: "scene" },
             layer: "overlay",
             order: 1,
@@ -95,7 +95,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
         visualCues: [
           {
             id: "vc-heading",
-            template: { id: "text.block", version: 2 },
+            template: { id: "text.block", version: 1 },
             range: { kind: "scene" },
             layer: "overlay",
             order: 0,
@@ -111,7 +111,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
           },
           {
             id: "vc-body",
-            template: { id: "text.block", version: 2 },
+            template: { id: "text.block", version: 1 },
             range: { kind: "scene" },
             layer: "overlay",
             order: 1,
@@ -127,7 +127,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
           },
           {
             id: "vc-label",
-            template: { id: "text.block", version: 2 },
+            template: { id: "text.block", version: 1 },
             range: { kind: "scene" },
             layer: "overlay",
             order: 2,
@@ -154,7 +154,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
         visualCues: [
           {
             id: "vc-closing",
-            template: { id: "text.block", version: 2 },
+            template: { id: "text.block", version: 1 },
             range: { kind: "scene" },
             layer: "overlay",
             order: 0,

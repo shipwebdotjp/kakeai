@@ -1,26 +1,18 @@
 import {
   characterStandingV1,
-  characterStandingV2,
-  characterStandingV2InputSchema,
-  characterStandingV3,
-  characterStandingV3InputSchema,
+  characterStandingV1InputSchema,
   mediaCardInputSchema,
   mediaCardV1,
-  mediaCardV2,
   mediaFullBleedInputSchema,
   mediaFullBleedV1,
-  mediaFullBleedV2,
   sceneDeviceFrameV1,
-  sceneDeviceFrameV2,
   sceneSiteMockupV1,
   tableSimpleV1,
   chartBarV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
   deviceFrameInputSchema,
-  deviceFrameV2InputSchema,
   textBlockV1,
-  textBlockV2,
   type AnimationPreset,
   type ContentDocument,
   type CueLayer,
@@ -50,14 +42,12 @@ import {
   sceneAccentStyle,
   themeRootStyle,
 } from "./theme";
-import { cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type LinePlacement, type ResolvedTimeline } from "./timeline";
+import { COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE, compositionClipReachesSceneEnd, compositionCrossfadeExceedsChild, compositionTransitionOverflowMessage, cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type LinePlacement, type ResolvedTimeline } from "./timeline";
 import { renderTextBlock } from "./templates/text-block";
 import { renderMediaFullBleed } from "./templates/media-full-bleed";
 import { renderMediaCard } from "./templates/media-card";
 import {
-  renderCharacterStandingV1,
-  renderCharacterStandingV2,
-  renderCharacterStandingV3,
+  renderCharacterStanding,
 } from "./templates/character-standing";
 import { renderDeviceFrame } from "./templates/device-frame";
 import { renderTableSimple } from "./templates/table-simple";
@@ -459,26 +449,15 @@ function dispatchTemplate(
 ): RenderedCue & { compositionVersion?: CompositionVersionResolved } {
   switch (key) {
     case `${textBlockV1.id}@${textBlockV1.version}`:
-    case `${textBlockV2.id}@${textBlockV2.version}`:
       return { html: renderTextBlock(input, context.path, context.theme), assetIds: [], animation: [] };
     case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
       return renderMediaFullBleed(input, context, mediaFullBleedInputSchema);
-    case `${mediaFullBleedV2.id}@${mediaFullBleedV2.version}`:
-      return renderMediaFullBleed(input, context);
     case `${mediaCardV1.id}@${mediaCardV1.version}`:
       return renderMediaCard(input, context, mediaCardInputSchema);
-    case `${mediaCardV2.id}@${mediaCardV2.version}`:
-      return renderMediaCard(input, context);
     case `${characterStandingV1.id}@${characterStandingV1.version}`:
-      return renderCharacterStandingV1(input, context);
-    case `${characterStandingV2.id}@${characterStandingV2.version}`:
-      return renderCharacterStandingV2(input, context);
-    case `${characterStandingV3.id}@${characterStandingV3.version}`:
-      return renderCharacterStandingV3(input, context);
+      return renderCharacterStanding(input, context);
     case `${sceneDeviceFrameV1.id}@${sceneDeviceFrameV1.version}`:
       return renderDeviceFrame(input, context, deviceFrameInputSchema);
-    case `${sceneDeviceFrameV2.id}@${sceneDeviceFrameV2.version}`:
-      return renderDeviceFrame(input, context, deviceFrameV2InputSchema);
     case `${sceneSiteMockupV1.id}@${sceneSiteMockupV1.version}`:
       return renderSiteMockup(input, context);
     case `${tableSimpleV1.id}@${tableSimpleV1.version}`:
@@ -770,6 +749,45 @@ function clipEndsAtSceneEnd(html: string, sceneEndMs: number): boolean {
   return endMs >= sceneEndMs;
 }
 
+function assertCompositionCrossfadeWindow(
+  html: string,
+  extraMs: number,
+  sceneIndex: number,
+  sceneStartMs: number,
+  sceneDurationMs: number,
+): void {
+  const openTag = html.match(/^<div[^>]*>/);
+  if (openTag === null) {
+    return;
+  }
+  const tag = openTag[0];
+  const child = tag.match(/data-composition-duration-ms="([0-9.]+)"/);
+  const start = tag.match(/data-start="([0-9.]+)"/);
+  const duration = tag.match(/data-duration="([0-9.]+)"/);
+  if (child === null || start === null || duration === null) {
+    return;
+  }
+  const startMs = Math.round(Number(start[1]) * 1000);
+  const spanMs = Math.round(Number(duration[1]) * 1000);
+  const childMs = Math.round(Number(child[1]));
+  if (!Number.isFinite(startMs) || !Number.isFinite(spanMs) || !Number.isFinite(childMs)) {
+    return;
+  }
+  const windowStartMs = startMs - sceneStartMs;
+  if (
+    compositionClipReachesSceneEnd(windowStartMs, spanMs, sceneDurationMs) &&
+    compositionCrossfadeExceedsChild(spanMs, extraMs, childMs)
+  ) {
+    throw new CompositionCompileError([
+      {
+        path: ["scenes", sceneIndex, "transition", "enter", "durationMs"],
+        code: COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE,
+        message: COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE,
+      },
+    ]);
+  }
+}
+
 function applySceneTransitions(
   document: ContentDocument,
   theme: VisualThemeDefinition,
@@ -801,11 +819,19 @@ function applySceneTransitions(
     const wrapId = `kakeai-scene-${placement.sceneIndex}`;
     if (preset === "crossfade") {
       const previousEndMs = previous.startMs + previous.durationMs;
-      extendedGroups[index - 1] = extendedGroups[index - 1]!.map((clip) =>
-        !clip.includes("kakeai-caption") && clipEndsAtSceneEnd(clip, previousEndMs)
-          ? addClipDurationMs(clip, durationMs)
-          : clip,
-      );
+      extendedGroups[index - 1] = extendedGroups[index - 1]!.map((clip) => {
+        if (clip.includes("kakeai-caption") || !clipEndsAtSceneEnd(clip, previousEndMs)) {
+          return clip;
+        }
+        assertCompositionCrossfadeWindow(
+          clip,
+          durationMs,
+          placement.sceneIndex,
+          previous.startMs,
+          previous.durationMs,
+        );
+        return addClipDurationMs(clip, durationMs);
+      });
       tweenLines.push(
         `tl.from(document.getElementById("${wrapId}"),{opacity:0,duration:${secondsText(durationMs / 1000)},ease:"power1.out",immediateRender:false},${toSecondsText(placement.startMs)});`,
       );
@@ -919,17 +945,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         return;
       }
       const span = window.endMs - window.startMs;
-      if (cueTransitionTotalMs(cue) > span) {
-        throw new CompositionCompileError([
-          {
-            path: cuePath,
-            code: "transition_range_overflow",
-            message: `transition の合計尺がCue範囲（${span}ms）を超えています。`,
-          },
-        ]);
-      }
       const absStartMs = placement.startMs + window.startMs;
-      const absEndMs = placement.startMs + window.endMs;
       const scope = cueScope(cue.id);
       const context = makeContext(document, theme, assetResolver, scope, cuePath, faceSetResolver, {
         startMs: absStartMs,
@@ -944,6 +960,19 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       for (const assetId of rendered.assetIds) {
         trackAsset(assetId);
       }
+      const childDurationMs = rendered.compositionVersion?.manifest.durationMs;
+      const effectiveSpanMs =
+        childDurationMs === undefined ? span : Math.min(span, childDurationMs);
+      if (cueTransitionTotalMs(cue) > effectiveSpanMs) {
+        throw new CompositionCompileError([
+          {
+            path: cuePath,
+            code: "transition_range_overflow",
+            message: compositionTransitionOverflowMessage(effectiveSpanMs),
+          },
+        ]);
+      }
+      const absEndMs = absStartMs + effectiveSpanMs;
       if (rendered.compositionVersion) {
         if (!seenCompositionVersionIds.has(rendered.compositionVersion.id)) {
           seenCompositionVersionIds.add(rendered.compositionVersion.id);
@@ -953,11 +982,15 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       if (rendered.html.length === 0) {
         return;
       }
-      const cueHtml = applyCueTiming(rendered.html, absStartMs, span);
+      const cueHtml = applyCueTiming(rendered.html, absStartMs, effectiveSpanMs);
       const clipId = scope.id("clip");
       const bodyId = scope.id("body");
+      const compositionWindowAttr =
+        childDurationMs === undefined
+          ? ""
+          : ` data-composition-duration-ms="${childDurationMs}"`;
       sceneClips.push(
-        `<div id="${clipId}" class="clip" data-start="${toSecondsText(absStartMs)}" data-duration="${toSecondsText(span)}"><div id="${bodyId}" class="kakeai-cuebody">${cueHtml}</div></div>`,
+        `<div id="${clipId}" class="clip" data-start="${toSecondsText(absStartMs)}" data-duration="${toSecondsText(effectiveSpanMs)}"${compositionWindowAttr}><div id="${bodyId}" class="kakeai-cuebody">${cueHtml}</div></div>`,
       );
 
       if (cue.transition.enter.durationMs > 0) {
@@ -991,11 +1024,10 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
 
       if (
         rendered.motionTargetId !== undefined &&
-        (cue.template.id === characterStandingV2.id || cue.template.id === characterStandingV3.id) &&
-        (cue.template.version === characterStandingV2.version ||
-          cue.template.version === characterStandingV3.version)
+        cue.template.id === characterStandingV1.id &&
+        cue.template.version === characterStandingV1.version
       ) {
-        const parsed = characterStandingV2InputSchema.safeParse(cue.input);
+        const parsed = characterStandingV1InputSchema.safeParse(cue.input);
         if (parsed.success) {
           const intervals = speakingIntervalsByCharacter.get(parsed.data.characterId);
           if (intervals !== undefined) {
@@ -1015,10 +1047,10 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       if (
         rendered.expressionTargets !== undefined &&
         rendered.expressionTargets.length > 0 &&
-        cue.template.id === characterStandingV3.id &&
-        cue.template.version === characterStandingV3.version
+        cue.template.id === characterStandingV1.id &&
+        cue.template.version === characterStandingV1.version
       ) {
-        const parsed = characterStandingV3InputSchema.safeParse(cue.input);
+        const parsed = characterStandingV1InputSchema.safeParse(cue.input);
         if (parsed.success) {
           const knownPresets = new Set(
             rendered.expressionTargets.map((target) => target.presetId),

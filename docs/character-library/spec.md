@@ -5,7 +5,7 @@
 この文書は、作品をまたいで再利用するキャラクター（人物・アバター）の管理と、台本への取り込みの正とする。台本の正本JSON契約は [../mvp/content-schema.md](../mvp/content-schema.md)、HTTP契約は [../mvp/api-contract.md](../mvp/api-contract.md) を正とする。
 
 - キャラクターはアプリ全体で共有する**ライブラリ**として登録する。作品をまたいで同じキャラクターを使える。
-- 台本へは「ライブラリから追加」で**コピー**する。台本内のキャラクター実体は従来どおり ContentDocument に保持し、`schemaVersion` は `2` のまま変更しない（[ADR 0026](../adr/0026-character-library-copy-semantics.md)）。
+- 台本へは「ライブラリから追加」で**コピー**する。台本内のキャラクター実体は従来どおり ContentDocument に保持し、`schemaVersion: 1` の基準契約に従う（[ADR 0026](../adr/0026-character-library-copy-semantics.md)）。
 - ライブラリ側の変更は既存台本のコピーへ波及しない。作品ごとに調整したい場合は、その作品のコピーを編集するか、外観を分けてライブラリに登録する。
 - 外観（`CharacterAppearance`）は任意の表示名 `label`（例「夏服」「冬服」）を持つ。表情・ポーズのタグに加えて、バリエーションを名前で選べるようにする。
 - 外観は任意で1つの Face Set を `faceSetId` で参照できる。Face Set は台本へコピーせず、アプリ共通のグローバルライブラリの実体を参照する（[../face-expression/spec.md](../face-expression/spec.md)、[ADR-0045](../adr/0045-face-set-global-reference.md)）。台本へ「ライブラリから追加」でコピーするときも `faceSetId` は参照のまま引き継ぎ、Face Set の内容はコピーしない。したがって Face Set の更新は、その外観を使う全作品の次回プレビュー／レンダーへ反映される。

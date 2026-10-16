@@ -6,7 +6,7 @@
 
 - [x] `packages/contracts`にTheme、Theme Revision、Theme Draft、Text Style、Text Surface、Font Face、Font CatalogのZod契約とDTOを追加する
 - [x] Theme Refの形状検証を組み込みThemeレジストリの実在検証から分離する
-- [x] `text.block@2`を追加し、`label` roleとFont Faceを含む個別Text Style上書きを定義する。`text.block@1`は変更しない
+- [x] `text.block@1`へ`label` roleとFont Faceを含む個別Text Style上書きを統合する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `@2` から `@1` へ再基準化）
 - [x] Prismaに利用者Theme、Theme Revision、Theme Draft、アーカイブ状態を追加する
 - [x] Render Job snapshotへ解決済みTheme Revision定義とFont診断を追加し、旧snapshotを壊さない読み出し規則を定義する
 
@@ -22,7 +22,7 @@
 ## コンパイラ
 
 - [x] Theme定義のText StyleとText SurfaceをコンパイラとRenderContextへ接続する
-- [x] 字幕、`text.block@1`、`text.block@2`、label Cueへ解決順を適用する
+- [x] 字幕、`text.block@1`、label Cueへ解決順を適用する
 - [x] Font Resolverが返す安全なCSS値だけをHTMLへ出力し、欠落時のfallbackと診断を出す
 - [x] `soft-editorial@1`を新しい定義契約へ適合させ、既存の見た目とテストを保つ
 

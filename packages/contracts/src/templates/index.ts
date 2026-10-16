@@ -73,7 +73,7 @@ const DEVICE_FRAME_OPTIONS = [
   { value: "phone", label: "スマートフォン" },
 ] as const;
 
-export const textRoleSchema = z.enum(["title", "subtitle", "heading", "body", "closing"]);
+export const textRoleSchema = z.enum(["title", "subtitle", "heading", "body", "closing", "label"]);
 export type TextRole = z.infer<typeof textRoleSchema>;
 
 export const textVerticalAlignSchema = z.enum(["top", "middle", "bottom"]);
@@ -87,6 +87,7 @@ export const textBlockInputSchema = z.strictObject({
   font: textFontSchema.optional(),
   fontSize: z.number().int().min(8).max(240).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  lineHeight: z.number().min(1).max(3).optional(),
   decoration: z
     .strictObject({
       bold: z.boolean().optional(),
@@ -95,7 +96,10 @@ export const textBlockInputSchema = z.strictObject({
       shadow: z.boolean().optional(),
     })
     .optional(),
+  fontFace: fontFaceSpecSchema.optional(),
+  surface: textSurfaceSchema.optional(),
 });
+export type TextBlockInput = z.infer<typeof textBlockInputSchema>;
 
 const TEXT_ROLE_OPTIONS = [
   { value: "body", label: "本文" },
@@ -103,6 +107,7 @@ const TEXT_ROLE_OPTIONS = [
   { value: "title", label: "タイトル" },
   { value: "subtitle", label: "サブタイトル" },
   { value: "closing", label: "結びの文言" },
+  { value: "label", label: "ラベル" },
 ] as const;
 
 const VERTICAL_ALIGN_OPTIONS = [
@@ -124,7 +129,7 @@ const textBlockV1: VisualTemplateDefinition = {
   layers: ["overlay"],
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "テキスト", description: "見出し・本文などのテキスト", category: "text" },
+  display: { label: "テキスト", description: "見出し・本文・ラベルなどのテキスト", category: "text" },
   inputFields: [
     { kind: "text", key: "text", label: "テキスト" },
     { kind: "select", key: "role", label: "役割", options: TEXT_ROLE_OPTIONS },
@@ -152,7 +157,9 @@ export const mediaFullBleedInputSchema = z.strictObject({
   fit: fitSchema,
   focalPoint: focalPointSchema.optional(),
   zoom: mediaZoomSchema.optional(),
+  loop: z.boolean().optional(),
 });
+export type MediaFullBleedInput = z.infer<typeof mediaFullBleedInputSchema>;
 
 const mediaFullBleedV1: VisualTemplateDefinition = {
   id: "media.full-bleed",
@@ -161,11 +168,12 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
   layers: ["background"],
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "背景（全面）", description: "画像・動画を全面に敷く", category: "media" },
+  display: { label: "背景（全面）", description: "画像・動画を全面に敷く（動画はループ可）", category: "media" },
   inputFields: [
     { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
     { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
     { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
+    { kind: "boolean", key: "loop", label: "動画をループ再生" },
   ],
   collectAssetRefs: (input, path) => {
     const parsed = mediaFullBleedInputSchema.safeParse(input);
@@ -190,74 +198,14 @@ export const mediaCardInputSchema = z.strictObject({
   caption: z.string().optional(),
   focalPoint: focalPointSchema.optional(),
   zoom: mediaZoomSchema.optional(),
+  loop: z.boolean().optional(),
 });
+export type MediaCardInput = z.infer<typeof mediaCardInputSchema>;
 
 const mediaCardV1: VisualTemplateDefinition = {
   id: "media.card",
   version: 1,
   inputSchema: mediaCardInputSchema,
-  layers: ["card"],
-  transitionPolicy: DEFAULT_TRANSITION_POLICY,
-  animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "カード", description: "画像・動画を見出し付きカードで表示", category: "media" },
-  inputFields: [
-    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
-    {
-      kind: "select",
-      key: "aspectRatio",
-      label: "アスペクト比",
-      options: MEDIA_CARD_ASPECT_RATIO_OPTIONS,
-    },
-    { kind: "text", key: "heading", label: "見出し" },
-    { kind: "optionalText", key: "caption", label: "補足文" },
-    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
-  ],
-  collectAssetRefs: (input, path) => {
-    const parsed = mediaCardInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return [];
-    }
-    return [{ assetId: parsed.data.assetId, allowedKinds: MEDIA_KINDS, path: [...path, "assetId"] }];
-  },
-};
-
-export const mediaFullBleedV2InputSchema = mediaFullBleedInputSchema.extend({
-  loop: z.boolean().optional(),
-});
-export type MediaFullBleedV2Input = z.infer<typeof mediaFullBleedV2InputSchema>;
-
-const mediaFullBleedV2: VisualTemplateDefinition = {
-  id: "media.full-bleed",
-  version: 2,
-  inputSchema: mediaFullBleedV2InputSchema,
-  layers: ["background"],
-  transitionPolicy: DEFAULT_TRANSITION_POLICY,
-  animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "背景（全面）", description: "画像・動画を全面に敷く（動画はループ可）", category: "media" },
-  inputFields: [
-    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
-    { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
-    { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
-    { kind: "boolean", key: "loop", label: "動画をループ再生" },
-  ],
-  collectAssetRefs: (input, path) => {
-    const parsed = mediaFullBleedV2InputSchema.safeParse(input);
-    if (!parsed.success) {
-      return [];
-    }
-    return [{ assetId: parsed.data.assetId, allowedKinds: MEDIA_KINDS, path: [...path, "assetId"] }];
-  },
-};
-
-export const mediaCardV2InputSchema = mediaCardInputSchema.extend({
-  loop: z.boolean().optional(),
-});
-export type MediaCardV2Input = z.infer<typeof mediaCardV2InputSchema>;
-
-const mediaCardV2: VisualTemplateDefinition = {
-  id: "media.card",
-  version: 2,
-  inputSchema: mediaCardV2InputSchema,
   layers: ["card"],
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
@@ -276,7 +224,7 @@ const mediaCardV2: VisualTemplateDefinition = {
     { kind: "boolean", key: "loop", label: "動画をループ再生" },
   ],
   collectAssetRefs: (input, path) => {
-    const parsed = mediaCardV2InputSchema.safeParse(input);
+    const parsed = mediaCardInputSchema.safeParse(input);
     if (!parsed.success) {
       return [];
     }
@@ -284,11 +232,12 @@ const mediaCardV2: VisualTemplateDefinition = {
   },
 };
 
+export const standingSideSchema = z.enum(["left", "right"]);
+
 export const characterStandingV1InputSchema = z.strictObject({
   characterId: idSchema,
   appearanceId: idSchema,
-  x: z.number().min(0).max(1),
-  y: z.number().min(0).max(1),
+  side: standingSideSchema,
   scale: z.number().positive(),
 });
 
@@ -299,40 +248,7 @@ const characterStandingV1: VisualTemplateDefinition = {
   layers: ["standing"],
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "立ち絵（旧）", description: "保存済み版の描画用", category: "character" },
-  collectAssetRefs: () => [],
-};
-
-export const standingSideSchema = z.enum(["left", "right"]);
-
-export const characterStandingV2InputSchema = z.strictObject({
-  characterId: idSchema,
-  appearanceId: idSchema,
-  side: standingSideSchema,
-  scale: z.number().positive(),
-});
-
-const characterStandingV2: VisualTemplateDefinition = {
-  id: "character.standing",
-  version: 2,
-  inputSchema: characterStandingV2InputSchema,
-  layers: ["standing"],
-  transitionPolicy: DEFAULT_TRANSITION_POLICY,
-  animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "立ち絵", description: "左右1体ずつ立ち絵を表示", category: "character" },
-  collectAssetRefs: () => [],
-};
-
-export const characterStandingV3InputSchema = characterStandingV2InputSchema;
-
-const characterStandingV3: VisualTemplateDefinition = {
-  id: "character.standing",
-  version: 3,
-  inputSchema: characterStandingV3InputSchema,
-  layers: ["standing"],
-  transitionPolicy: DEFAULT_TRANSITION_POLICY,
-  animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "立ち絵（表情）", description: "左右1体ずつ立ち絵を表示し表情を切り替える", category: "character" },
+  display: { label: "立ち絵", description: "左右1体ずつ立ち絵を表示し表情を切り替える", category: "character" },
   collectAssetRefs: () => [],
 };
 
@@ -343,28 +259,14 @@ export const deviceFrameInputSchema = z.strictObject({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
-});
-
-export const deviceFrameV2InputSchema = z.strictObject({
-  screen: nestedVisualSchema,
-  frame: z.enum(["laptop", "phone"]),
-  backgroundColor: z
-    .string()
-    .regex(/^#[0-9A-Fa-f]{6}$/)
-    .optional(),
   animation: animationSpecSchema.optional(),
 });
-
-const DEVICE_FRAME_DISPLAY: TemplateDisplay = {
-  label: "デバイスフレーム",
-  description: "端末枠内に画像・動画を表示するコンポジション",
-  category: "composition",
-};
 
 const DEVICE_FRAME_FIELDS: readonly TemplateFieldSpec[] = [
   { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS },
   { kind: "select", key: "frame", label: "フレーム", options: DEVICE_FRAME_OPTIONS },
   { kind: "color", key: "backgroundColor", label: "背景色" },
+  { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
 ];
 
 function collectDeviceFrameRefs(
@@ -391,26 +293,14 @@ const sceneDeviceFrameV1: VisualTemplateDefinition = {
   layers: ["background", "card"],
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { ...DEVICE_FRAME_DISPLAY, label: "デバイスフレーム（旧）" },
+  display: {
+    label: "デバイスフレーム",
+    description: "端末枠内に画像・動画を表示するコンポジション",
+    category: "composition",
+  },
   inputFields: DEVICE_FRAME_FIELDS,
   collectAssetRefs: (input, path, depth = 0) =>
     collectDeviceFrameRefs(deviceFrameInputSchema, input, path, depth),
-};
-
-const sceneDeviceFrameV2: VisualTemplateDefinition = {
-  id: "scene.device-frame",
-  version: 2,
-  inputSchema: deviceFrameV2InputSchema,
-  layers: ["background", "card"],
-  transitionPolicy: DEFAULT_TRANSITION_POLICY,
-  animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: DEVICE_FRAME_DISPLAY,
-  inputFields: [
-    ...DEVICE_FRAME_FIELDS,
-    { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
-  ],
-  collectAssetRefs: (input, path, depth = 0) =>
-    collectDeviceFrameRefs(deviceFrameV2InputSchema, input, path, depth),
 };
 
 export const siteMockupVariantSchema = z.enum([
@@ -519,66 +409,6 @@ export const compositionFullBleedV1: VisualTemplateDefinition = {
   },
   inputFields: [
     { kind: "text", key: "compositionVersionId", label: "Composition バージョン" },
-  ],
-  collectAssetRefs: () => [],
-};
-
-export const textRoleV2Schema = z.enum(["title", "subtitle", "heading", "body", "closing", "label"]);
-export type TextRoleV2 = z.infer<typeof textRoleV2Schema>;
-
-export const textBlockV2InputSchema = z.strictObject({
-  text: z.string(),
-  role: textRoleV2Schema,
-  anchor: textAnchorSchema.optional(),
-  verticalAlign: textVerticalAlignSchema.optional(),
-  font: textFontSchema.optional(),
-  fontSize: z.number().int().min(8).max(240).optional(),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
-  lineHeight: z.number().min(1).max(3).optional(),
-  decoration: z
-    .strictObject({
-      bold: z.boolean().optional(),
-      italic: z.boolean().optional(),
-      outline: z.boolean().optional(),
-      shadow: z.boolean().optional(),
-    })
-    .optional(),
-  fontFace: fontFaceSpecSchema.optional(),
-  surface: textSurfaceSchema.optional(),
-});
-export type TextBlockV2Input = z.infer<typeof textBlockV2InputSchema>;
-
-const TEXT_ROLE_V2_OPTIONS = [
-  ...TEXT_ROLE_OPTIONS,
-  { value: "label", label: "ラベル" },
-] as const;
-
-export const textBlockV2: VisualTemplateDefinition = {
-  id: "text.block",
-  version: 2,
-  inputSchema: textBlockV2InputSchema,
-  layers: ["overlay"],
-  transitionPolicy: DEFAULT_TRANSITION_POLICY,
-  animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "テキスト", description: "見出し・本文・ラベルなどのテキスト", category: "text" },
-  inputFields: [
-    { kind: "text", key: "text", label: "テキスト" },
-    { kind: "select", key: "role", label: "役割", options: TEXT_ROLE_V2_OPTIONS },
-    { kind: "select", key: "anchor", label: "左右位置", options: ANCHOR_OPTIONS, optional: true },
-    {
-      kind: "select",
-      key: "verticalAlign",
-      label: "上下位置",
-      options: VERTICAL_ALIGN_OPTIONS,
-      optional: true,
-    },
-    { kind: "select", key: "font", label: "フォント", options: FONT_OPTIONS, optional: true },
-    { kind: "number", key: "fontSize", label: "フォントサイズ(px)", min: 8, max: 240, step: 1, optional: true },
-    { kind: "color", key: "color", label: "色", optional: true },
-    { kind: "boolean", key: "decoration.bold", label: "太字" },
-    { kind: "boolean", key: "decoration.italic", label: "斜体" },
-    { kind: "boolean", key: "decoration.outline", label: "縁取り" },
-    { kind: "boolean", key: "decoration.shadow", label: "影" },
   ],
   collectAssetRefs: () => [],
 };
@@ -973,16 +803,10 @@ const chartBarV1: VisualTemplateDefinition = {
 
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
-  textBlockV2,
   mediaFullBleedV1,
-  mediaFullBleedV2,
   mediaCardV1,
-  mediaCardV2,
   characterStandingV1,
-  characterStandingV2,
-  characterStandingV3,
   sceneDeviceFrameV1,
-  sceneDeviceFrameV2,
   sceneSiteMockupV1,
   compositionFullBleedV1,
   tableSimpleV1,
@@ -990,8 +814,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
-export { mediaFullBleedV2, mediaCardV2 };
-export { characterStandingV1, characterStandingV2, characterStandingV3, sceneDeviceFrameV1, sceneDeviceFrameV2 };
+export { characterStandingV1, sceneDeviceFrameV1 };
 export { sceneSiteMockupV1 };
 export { tableSimpleV1 };
 export { chartBarV1 };

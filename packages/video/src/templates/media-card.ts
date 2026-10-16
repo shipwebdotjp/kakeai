@@ -1,4 +1,4 @@
-import { mediaCardV2InputSchema, type MediaCardV2Input } from "@kakeai/contracts";
+import { mediaCardInputSchema, type MediaCardInput } from "@kakeai/contracts";
 import type { z } from "zod";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "../escape";
@@ -8,7 +8,7 @@ import { mediaCropStyle, renderLoopVideoSegments, resolveCueMedia } from "./shar
 export function renderMediaCard(
   input: unknown,
   context: RenderContext,
-  schema: z.ZodTypeAny = mediaCardV2InputSchema,
+  schema: z.ZodTypeAny = mediaCardInputSchema,
 ): RenderedCue {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
@@ -16,7 +16,7 @@ export function renderMediaCard(
       { path: context.path, code: "invalid_input", message: "media.card の入力が不正です。" },
     ]);
   }
-  const data = parsed.data as MediaCardV2Input;
+  const data = parsed.data as MediaCardInput;
   const { assetId, aspectRatio, heading, caption, focalPoint, zoom } = data;
   const media = resolveCueMedia(assetId, context.assetResolver, context.path);
   const src = escapeHtmlAttribute(media.url);

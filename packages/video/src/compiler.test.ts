@@ -30,22 +30,26 @@ function videoResolverWithDuration(durationMs: number): AssetResolver {
   };
 }
 
-const compositionResolver: CompositionVersionResolver = (versionId) => ({
-  id: versionId,
-  runtimeCompositionId: "cmp.test",
-  entrypoint: "index.html",
-  bundleHash: "bundle-hash",
-  storageKey: "compositions/test",
-  previewUrl: "/preview/composition",
-  manifest: {
-    entrypoint: "index.html",
+const compositionResolver: CompositionVersionResolver = compositionResolverWithDuration(5000);
+
+function compositionResolverWithDuration(durationMs: number): CompositionVersionResolver {
+  return (versionId) => ({
+    id: versionId,
     runtimeCompositionId: "cmp.test",
-    width: 1920,
-    height: 1080,
-    durationMs: 5000,
-    dependencies: [],
-  },
-});
+    entrypoint: "index.html",
+    bundleHash: "bundle-hash",
+    storageKey: "compositions/test",
+    previewUrl: "/preview/composition",
+    manifest: {
+      entrypoint: "index.html",
+      runtimeCompositionId: "cmp.test",
+      width: 1920,
+      height: 1080,
+      durationMs,
+      dependencies: [],
+    },
+  });
+}
 
 const transition = {
   enter: { preset: "fade", durationMs: 350 },
@@ -284,7 +288,7 @@ describe("compileDocument", () => {
     document.scenes[1]!.visualCues = [
       cue({
         id: "vc-loop-bg",
-        template: { id: "media.full-bleed", version: 2 },
+        template: { id: "media.full-bleed", version: 1 },
         input: { assetId: "asset-video-1", fit: "cover", loop: true },
       }),
     ];
@@ -306,7 +310,7 @@ describe("compileDocument", () => {
     document.scenes[1]!.visualCues = [
       cue({
         id: "vc-loop-bg",
-        template: { id: "media.full-bleed", version: 2 },
+        template: { id: "media.full-bleed", version: 1 },
         input: { assetId: "asset-video-1", fit: "cover", loop: true },
       }),
     ];
@@ -321,7 +325,7 @@ describe("compileDocument", () => {
     document.scenes[1]!.visualCues = [
       cue({
         id: "vc-no-loop-bg",
-        template: { id: "media.full-bleed", version: 2 },
+        template: { id: "media.full-bleed", version: 1 },
         input: { assetId: "asset-video-1", fit: "cover" },
       }),
     ];
@@ -335,7 +339,7 @@ describe("compileDocument", () => {
     document.scenes[1]!.visualCues = [
       cue({
         id: "vc-loop-bg",
-        template: { id: "media.full-bleed", version: 2 },
+        template: { id: "media.full-bleed", version: 1 },
         input: { assetId: "asset-video-1", fit: "cover", loop: true },
       }),
     ];
@@ -354,7 +358,7 @@ describe("compileDocument", () => {
     document.scenes[1]!.visualCues = [
       cue({
         id: "vc-loop-card",
-        template: { id: "media.card", version: 2 },
+        template: { id: "media.card", version: 1 },
         layer: "card",
         input: { assetId: "asset-video-1", heading: "見出し", loop: true },
       }),
@@ -384,6 +388,101 @@ describe("compileDocument", () => {
     expect(compiled.compositionVersions).toHaveLength(1);
   });
 
+  it("resolves a lines range to an absolute composition window", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-point-comp",
+        template: { id: "composition.full-bleed", version: 1 },
+        layer: "background",
+        range: { kind: "lines", startLineId: "line-p1-1", endLineId: "line-p1-1" },
+        input: { compositionVersionId: "ver-1" },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver, compositionResolver });
+    expect(compiled.html).toContain(
+      `<div data-start="4.5" data-duration="3" id="${cueScope("vc-point-comp").id("comp-host")}"`,
+    );
+  });
+
+  it("truncates a composition host at the child duration", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-intro-comp",
+        template: { id: "composition.full-bleed", version: 1 },
+        layer: "background",
+        range: { kind: "offset", startMs: 0, endMs: 4000 },
+        input: { compositionVersionId: "ver-1" },
+      }),
+    ];
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver: compositionResolverWithDuration(2000),
+    });
+    expect(compiled.html).toContain(
+      `<div data-start="0" data-duration="2" id="${cueScope("vc-intro-comp").id("comp-host")}"`,
+    );
+  });
+
+  it("rejects a composition transition that exceeds the effective window", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-intro-comp",
+        template: { id: "composition.full-bleed", version: 1 },
+        layer: "background",
+        input: { compositionVersionId: "ver-1" },
+      }),
+    ];
+    try {
+      compileDocument({
+        document,
+        assetResolver: resolver,
+        compositionResolver: compositionResolverWithDuration(300),
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe("transition_range_overflow");
+    }
+  });
+
+  it("rejects a composition background when a crossfade needs a longer window than the child", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-intro-comp",
+        template: { id: "composition.full-bleed", version: 1 },
+        layer: "background",
+        input: { compositionVersionId: "ver-1" },
+      }),
+    ];
+    document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 1000 } };
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver: compositionResolverWithDuration(5000),
+    });
+    expect(compiled.html).toContain(
+      `id="${clipId("vc-intro-comp")}" class="clip" data-start="0" data-duration="5"`,
+    );
+    try {
+      compileDocument({
+        document,
+        assetResolver: resolver,
+        compositionResolver: compositionResolverWithDuration(4999),
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe(
+        "composition_crossfade_window_insufficient",
+      );
+    }
+  });
+
   it("extends media timing when a crossfade stretches the previous scene", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [
@@ -407,7 +506,7 @@ describe("compileDocument", () => {
     document.scenes[0]!.visualCues = [
       cue({
         id: "vc-intro-loop",
-        template: { id: "media.full-bleed", version: 2 },
+        template: { id: "media.full-bleed", version: 1 },
         layer: "background",
         input: { assetId: "asset-video-1", fit: "cover", loop: true },
       }),
@@ -466,6 +565,25 @@ describe("compileDocument", () => {
     expect(compiled.html).not.toContain("kakeai-textblock");
   });
 
+  it("renders a text.block@1 label role with a custom font face", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-label",
+        template: { id: "text.block", version: 1 },
+        layer: "overlay",
+        input: {
+          text: "ラベル",
+          role: "label",
+          fontFace: { family: "Custom Font" },
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("ラベル");
+    expect(compiled.html).toContain("Custom Font");
+  });
+
   it("crossfades by extending the previous scene and fading in the entering scene", () => {
     const document = validContentDocument();
     document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 300 } };
@@ -519,7 +637,7 @@ describe("compileDocument", () => {
         id: "vc-standing",
         template: { id: "character.standing", version: 1 },
         layer: "standing",
-        input: { characterId: "character-rin", appearanceId: "appearance-smile", x: 0.8, y: 0.8, scale: 1 },
+        input: { characterId: "character-rin", appearanceId: "appearance-smile", side: "right", scale: 1 },
       }),
     );
     const videoResolver: AssetResolver = (assetId) => ({
@@ -587,38 +705,7 @@ describe("compileDocument", () => {
     expect(bPosition).toBeGreaterThan(aPosition);
   });
 
-  it("renders a standing appearance with normalized position and scale", () => {
-    const document = validContentDocument();
-    document.characters.push({
-      id: "character-rin",
-      name: "リン",
-      voices: [],
-      appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
-      ],
-    });
-    document.scenes[1]!.visualCues.push(
-      cue({
-        id: "vc-standing",
-        template: { id: "character.standing", version: 1 },
-        layer: "standing",
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
-          scale: 1.5,
-        },
-      }),
-    );
-    const compiled = compileDocument({ document, assetResolver: resolver });
-    expect(compiled.assetIds).toContain("asset-rin");
-    expect(compiled.html).toContain('class="kakeai-standing"');
-    expect(compiled.html).toContain('src="/preview/asset-rin"');
-    expect(compiled.html).toContain("left:85%;top:85%;width:720px;");
-  });
-
-  it("renders character.standing@2 at the selected side", () => {
+  it("renders character.standing@1 at the selected side", () => {
     const document = validContentDocument();
     document.characters.push({
       id: "character-rin",
@@ -631,7 +718,7 @@ describe("compileDocument", () => {
     document.scenes[1]!.visualCues.push(
       cue({
         id: "vc-standing-right",
-        template: { id: "character.standing", version: 2 },
+        template: { id: "character.standing", version: 1 },
         layer: "standing",
         input: {
           characterId: "character-rin",
@@ -662,7 +749,7 @@ describe("compileDocument", () => {
     document.scenes[1]!.visualCues.push(
       cue({
         id: "vc-standing-left",
-        template: { id: "character.standing", version: 2 },
+        template: { id: "character.standing", version: 1 },
         layer: "standing",
         order: 0,
         input: {
@@ -674,7 +761,7 @@ describe("compileDocument", () => {
       }),
       cue({
         id: "vc-standing-right",
-        template: { id: "character.standing", version: 2 },
+        template: { id: "character.standing", version: 1 },
         layer: "standing",
         order: 1,
         input: {
@@ -728,7 +815,7 @@ describe("compileDocument", () => {
     scene.visualCues = [
       cue({
         id: "vc-left",
-        template: { id: "character.standing", version: 2 },
+        template: { id: "character.standing", version: 1 },
         layer: "standing",
         order: 0,
         input: {
@@ -740,7 +827,7 @@ describe("compileDocument", () => {
       }),
       cue({
         id: "vc-right",
-        template: { id: "character.standing", version: 2 },
+        template: { id: "character.standing", version: 1 },
         layer: "standing",
         order: 1,
         input: {
@@ -757,52 +844,6 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain(`document.getElementById("${rightImg}")`);
     expect(compiled.html).toContain("y:-20");
     expect(compiled.html).not.toContain(`document.getElementById("${leftImg}")`);
-  });
-
-  it("does not schedule a bounce for character.standing@1", () => {
-    const document = validContentDocument();
-    document.characters.push({
-      id: "character-rin",
-      name: "リン",
-      voices: [],
-      appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
-      ],
-    });
-    document.speakers.push({
-      id: "speaker-rin",
-      name: "リン",
-      characterId: "character-rin",
-      voiceProfileId: null,
-    });
-    const scene = document.scenes[1]!;
-    scene.lines = [
-      {
-        id: "line-rin",
-        speakerId: "speaker-rin",
-        captionText: "リンです。",
-        speechText: "りんです。",
-        selectedAudioTakeId: null,
-        expressionId: null,
-      },
-    ];
-    scene.visualCues = [
-      cue({
-        id: "vc-standing",
-        template: { id: "character.standing", version: 1 },
-        layer: "standing",
-        input: {
-          characterId: "character-rin",
-          appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
-          scale: 1,
-        },
-      }),
-    ];
-    const compiled = compileDocument({ document, assetResolver: resolver });
-    expect(compiled.html).toContain('class="kakeai-standing"');
-    expect(compiled.html).not.toContain("y:-20");
   });
 
   it("renders a device-frame composition with nested media at background and card", () => {
@@ -841,12 +882,12 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("y:60");
   });
 
-  it("animates the device-frame screen for scene.device-frame@2", () => {
+  it("animates the device-frame screen for scene.device-frame@1", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [
       cue({
         id: "vc-device2",
-        template: { id: "scene.device-frame", version: 2 },
+        template: { id: "scene.device-frame", version: 1 },
         layer: "background",
         input: {
           frame: "laptop",
@@ -859,25 +900,6 @@ describe("compileDocument", () => {
     const screenId = cueScope("vc-device2").id("screen");
     expect(compiled.html).toContain(`document.getElementById("${screenId}")`);
     expect(compiled.html).toContain("scale:0.9");
-  });
-
-  it("rejects an animation field on scene.device-frame@1", () => {
-    const document = validContentDocument();
-    document.scenes[0]!.visualCues = [
-      cue({
-        id: "vc-device1",
-        template: { id: "scene.device-frame", version: 1 },
-        layer: "background",
-        input: {
-          frame: "laptop",
-          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
-          animation: { preset: "fade", durationMs: 300 },
-        },
-      }),
-    ];
-    expect(() => compileDocument({ document, assetResolver: resolver })).toThrow(
-      CompositionCompileError,
-    );
   });
 
   it("renders a site-mockup with chrome, nested media and logo", () => {
@@ -1228,7 +1250,7 @@ describe("visual theme", () => {
       scene.visualCues = [
         cue({
           id: "vc-face",
-          template: { id: "character.standing", version: 3 },
+          template: { id: "character.standing", version: 1 },
           layer: "standing",
           order: 0,
           input: {

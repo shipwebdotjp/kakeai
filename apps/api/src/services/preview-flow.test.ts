@@ -147,7 +147,7 @@ describe("script version preview", () => {
     expect(preview.timeline.scenes[0]!.cues).toContainEqual({ cueId: "vc-intro-bg", startMs: 0 });
   });
 
-  it("renders a character.standing@3 expression switch in the preview", async () => {
+  it("renders a character.standing@1 expression switch in the preview", async () => {
     if (!ffmpegReady) {
       return;
     }
@@ -207,7 +207,7 @@ describe("script version preview", () => {
     ];
     point.visualCues.push({
       id: "vc-standing",
-      template: { id: "character.standing", version: 3 },
+      template: { id: "character.standing", version: 1 },
       range: { kind: "scene" },
       layer: "standing",
       order: 0,
@@ -271,8 +271,7 @@ describe("script version preview", () => {
       input: {
         characterId: "character-rin",
         appearanceId: "appearance-smile",
-        x: 0.85,
-        y: 0.85,
+        side: "right",
         scale: 1,
       },
     });
@@ -287,8 +286,9 @@ describe("script version preview", () => {
       saved.scriptVersion.id,
     );
 
-    expect(preview.compositionHtml).toContain('class="kakeai-standing"');
-    expect(preview.compositionHtml).toContain("left:85%;top:85%;width:480px;");
+    expect(preview.compositionHtml).toContain('class="kakeai-standingv2"');
+    expect(preview.compositionHtml).toContain("left:84.5%;top:86%;");
+    expect(preview.compositionHtml).toContain("width:480px;");
     expect(preview.compositionHtml).toContain(
       `/api/v1/assets/${encodeURIComponent(image.id)}/render-content`,
     );

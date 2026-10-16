@@ -120,7 +120,7 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
-  it("accepts a character.standing@2 cue that references an existing appearance", () => {
+  it("accepts a character.standing@1 cue that references an existing appearance", () => {
     const doc = validContentDocument();
     doc.characters.push({
       id: "character-rin",
@@ -133,7 +133,7 @@ describe("contentDocumentSchema", () => {
     doc.scenes[1]!.visualCues = [
       {
         id: "vc-standing-left",
-        template: { id: "character.standing", version: 2 },
+        template: { id: "character.standing", version: 1 },
         range: { kind: "scene" },
         layer: "standing",
         order: 0,
@@ -149,7 +149,7 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
   });
 
-  it("rejects a character.standing@2 cue that references a missing appearance", () => {
+  it("rejects a character.standing@1 cue that references a missing appearance", () => {
     const doc = validContentDocument();
     doc.characters.push({
       id: "character-rin",
@@ -162,7 +162,7 @@ describe("contentDocumentSchema", () => {
     doc.scenes[1]!.visualCues = [
       {
         id: "vc-standing-left",
-        template: { id: "character.standing", version: 2 },
+        template: { id: "character.standing", version: 1 },
         range: { kind: "scene" },
         layer: "standing",
         order: 0,
@@ -178,20 +178,12 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
-  it("accepts a character.standing@3 cue that references an existing appearance", () => {
+  it("rejects retired template versions", () => {
     const doc = validContentDocument();
-    doc.characters.push({
-      id: "character-rin",
-      name: "リン",
-      voices: [],
-      appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
-      ],
-    });
     doc.scenes[1]!.visualCues = [
       {
-        id: "vc-standing-left",
-        template: { id: "character.standing", version: 3 },
+        id: "vc-old",
+        template: { id: "character.standing", version: 2 },
         range: { kind: "scene" },
         layer: "standing",
         order: 0,
@@ -204,7 +196,48 @@ describe("contentDocumentSchema", () => {
         },
       },
     ];
-    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("allows composition.full-bleed@1 on scene, lines and offset ranges in the background layer", () => {
+    const base = validContentDocument();
+    const lineIds = base.scenes[1]!.lines.map((line) => line.id);
+    const ranges = [
+      { kind: "scene" },
+      { kind: "lines", startLineId: lineIds[0], endLineId: lineIds[lineIds.length - 1] },
+      { kind: "offset", startMs: 0, endMs: 1000 },
+    ] as const;
+    for (const range of ranges) {
+      const doc = validContentDocument();
+      doc.scenes[1]!.visualCues = [
+        {
+          id: "vc-composition-bg",
+          template: { id: "composition.full-bleed", version: 1 },
+          range,
+          layer: "background",
+          order: 0,
+          transition,
+          input: { compositionVersionId: "cmpver_001" },
+        },
+      ];
+      expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+    }
+  });
+
+  it("rejects composition.full-bleed@1 outside the background layer", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.visualCues = [
+      {
+        id: "vc-composition-card",
+        template: { id: "composition.full-bleed", version: 1 },
+        range: { kind: "scene" },
+        layer: "card",
+        order: 0,
+        transition,
+        input: { compositionVersionId: "cmpver_001" },
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
   it("accepts an expressionId on a line that has a speaker", () => {

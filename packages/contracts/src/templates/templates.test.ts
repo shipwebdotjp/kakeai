@@ -6,22 +6,15 @@ import {
   isEditableTemplate,
   listVisualTemplateCatalog,
   mediaCardInputSchema,
-  mediaCardV2InputSchema,
   mediaFullBleedInputSchema,
-  mediaFullBleedV2InputSchema,
   tableSimpleInputSchema,
 } from "./index";
 
 describe("visual template metadata", () => {
-  it("registers scene.device-frame@2 with an animation field", () => {
-    const fields = getTemplateInputFields("scene.device-frame", 2);
-    expect(fields?.some((field) => field.kind === "animation")).toBe(true);
-    expect(isEditableTemplate("scene.device-frame", 2)).toBe(true);
-  });
-
-  it("keeps scene.device-frame@1 free of an animation field", () => {
+  it("registers scene.device-frame@1 with an animation field", () => {
     const fields = getTemplateInputFields("scene.device-frame", 1);
-    expect(fields?.some((field) => field.kind === "animation")).toBe(false);
+    expect(fields?.some((field) => field.kind === "animation")).toBe(true);
+    expect(isEditableTemplate("scene.device-frame", 1)).toBe(true);
   });
 
   it("marks the unified text template as editable via generic fields", () => {
@@ -45,7 +38,7 @@ describe("visual template metadata", () => {
     const standing = catalog.find((entry) => entry.id === "character.standing");
     expect(standing?.editable).toBe(false);
     const deviceFrame = catalog.find(
-      (entry) => entry.id === "scene.device-frame" && entry.version === 2,
+      (entry) => entry.id === "scene.device-frame" && entry.version === 1,
     );
     expect(deviceFrame?.editable).toBe(true);
   });
@@ -99,34 +92,25 @@ describe("visual template metadata", () => {
     ).toBe(false);
   });
 
-  it("accepts an optional loop on full-bleed and card v2 inputs", () => {
+  it("accepts an optional loop on full-bleed and card @1 inputs", () => {
     expect(
-      mediaFullBleedV2InputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: true })
+      mediaFullBleedInputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: true })
         .success,
     ).toBe(true);
     expect(
-      mediaCardV2InputSchema.safeParse({ assetId: "asset-1", heading: "h", loop: false }).success,
+      mediaCardInputSchema.safeParse({ assetId: "asset-1", heading: "h", loop: false }).success,
     ).toBe(true);
     expect(
-      mediaFullBleedV2InputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: "yes" })
+      mediaFullBleedInputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: "yes" })
         .success,
     ).toBe(false);
   });
 
-  it("registers a loop field on the v2 media templates only", () => {
+  it("registers a loop field on the @1 media templates", () => {
     for (const id of ["media.full-bleed", "media.card"]) {
-      expect(getTemplateInputFields(id, 2)?.some((field) => field.key === "loop")).toBe(true);
-      expect(getTemplateInputFields(id, 1)?.some((field) => field.key === "loop")).toBe(false);
+      expect(getTemplateInputFields(id, 1)?.some((field) => field.key === "loop")).toBe(true);
+      expect(getVisualTemplate(id, 2)).toBeUndefined();
     }
-  });
-
-  it("keeps the v1 media inputs free of a loop key", () => {
-    expect(
-      mediaFullBleedInputSchema.safeParse({ assetId: "asset-1", fit: "cover", loop: true }).success,
-    ).toBe(false);
-    expect(
-      mediaCardInputSchema.safeParse({ assetId: "asset-1", heading: "h", loop: true }).success,
-    ).toBe(false);
   });
 
   it("registers table.simple@1 as an editable overlay template with a table field", () => {

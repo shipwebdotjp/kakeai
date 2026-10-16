@@ -132,6 +132,81 @@ describe("Composition Library Integration Tests", () => {
     expect(() => parseContentDocument(docDup)).toThrow();
   });
 
+  it("test 2b: save rejects a composition background starved by scene crossfade", async () => {
+    const comp = await service.createComposition({
+      name: "Crossfade Window",
+      runtimeCompositionId: "cmp.test.crossfade-window",
+    });
+    await service.updateDraft(comp.id, { manifest: { durationMs: 4500, dependencies: [] } });
+    const v1 = await service.publish(comp.id, {});
+    const work = await works.createWork(db, "crossfade window", "ja-JP");
+    const edition = work.languageEditions[0]!;
+
+    const backgroundCue = {
+      id: "cue-comp-bg",
+      template: { id: "composition.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      input: { compositionVersionId: v1.id },
+    } as const;
+
+    const starved = createInitialContentDocument();
+    starved.scenes[0]!.visualCues.push({ ...backgroundCue });
+    starved.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 1000 } };
+    await expect(
+      scriptVersions.saveScriptVersion(db, edition.id, {
+        sourceScriptVersionId: null,
+        content: starved,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: "composition_crossfade_window_insufficient" }),
+        ]),
+      },
+    });
+
+    const covered = createInitialContentDocument();
+    covered.scenes[0]!.visualCues.push({ ...backgroundCue });
+    covered.scenes[1]!.transition = { enter: { preset: "cut", durationMs: 0 } };
+    const saved = await scriptVersions.saveScriptVersion(db, edition.id, {
+      sourceScriptVersionId: null,
+      content: covered,
+    });
+    expect(saved.scriptVersion.content.scenes[0]!.visualCues).toHaveLength(3);
+  });
+
+  it("test 2c: save rejects an unknown composition version", async () => {
+    const work = await works.createWork(db, "unknown composition", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const doc = createInitialContentDocument();
+    doc.scenes[0]!.visualCues.push({
+      id: "cue-comp-missing",
+      template: { id: "composition.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      input: { compositionVersionId: "cmpver_missing" },
+    });
+    await expect(
+      scriptVersions.saveScriptVersion(db, edition.id, {
+        sourceScriptVersionId: null,
+        content: doc,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: "invalid_value" }),
+        ]),
+      },
+    });
+  });
+
   it("test 3: Compiler output data-composition-src", () => {
     const doc = validContentDocument();
     doc.scenes[0]!.visualCues.push({

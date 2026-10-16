@@ -8,4 +8,4 @@
 | [todo.md](todo.md) | 実装順の ToDo と受入確認 |
 
 Status: Proposed。現時点では設計のみで、動画／シーン実装、DB schema、公開 API は未実装です。
-グローバル参照と再レンダー差異の許容は [ADR-0045](../adr/0045-face-set-global-reference.md)、立ち絵テンプレート版は [ADR-0046](../adr/0046-character-standing-v3-face-composite.md)、台詞属性と `schemaVersion: 7` は [ADR-0047](../adr/0047-per-line-expression-id.md) に記録します。
+グローバル参照と再レンダー差異の許容は [ADR-0045](../adr/0045-face-set-global-reference.md)、立ち絵テンプレート版は [ADR-0046](../adr/0046-character-standing-v3-face-composite.md)、台詞属性は [ADR-0047](../adr/0047-per-line-expression-id.md) に記録します（いずれも [ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `schemaVersion: 1`・`character.standing@1` へ再基準化）。

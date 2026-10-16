@@ -47,7 +47,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 - **スキーマ版**: ContentDocument は `schemaVersion: 1` から開始。移行コードを先回りして持たない。破壊的変更時に版を上げて新ScriptVersionで移行する。破壊的変更時は [docs/mvp/content-schema-history.md](docs/mvp/content-schema-history.md) と移行コード、ADRを同じ変更で更新する。JCS正規化や `contentHash` は持たない（キー順を安定させたJSON文字列で保存）。
 - **ID**: `NarrationSegment` と Scene のIDは同一Workの版をまたいで安定させ、編集保存で作り直さない。
 - **素材**: 原本を保持し、原則そのまま使う。原本を直接レンダーに使えない場合だけ必要時に `AssetRendition` を作る。`storageKey` は内容ハッシュ由来。
-- **テンプレート**: `template.id@version` の意味を不変に保ち、変更は新版で行う。参照ゼロの版は削除可。VisualTemplate入力スキーマも版ごとに固定する。
+- **テンプレート**: `template.id@version` の版は「保存済みの有効入力を再解釈しない境界」であり、既存の有効データの意味・レイアウト・検証結果を変える場合だけ版を上げる。再解釈を伴わない拡張は同じ版を書き換えてよい。参照ゼロの版は削除可。VisualTemplate入力スキーマも版ごとに固定する（[ADR-0061](docs/adr/0061-template-version-as-reinterpretation-boundary.md)）。
 - **Job**: 単一worker、`queued → running → succeeded|failed` と `queued → cancelled` のみ。リースは持たず、起動時に `running` を `WORKER_INTERRUPTED` で掃除する。二重取得は `updateMany` のbest-effortで足りる。
 - **台本保存**: 明示保存（自動保存なし）。last-write-wins。テキストあふれは拒否せず `meta.warnings` で返す。
 - **保護**: ループバックに束縛し、JSON/アップロードは厳密な `Host`/`Origin` 検証、content配信は `HttpOnly; SameSite=Strict` のメディアセッションCookie。独自ヘッダや起動トークンは使わない。

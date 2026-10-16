@@ -1,6 +1,5 @@
 import {
   contentDocumentSchema,
-  migrateContentDocument,
   parseContentDocument,
   type ContentDocument,
 } from "@kakeai/contracts";
@@ -23,5 +22,5 @@ export function serializeContent(content: ContentDocument): string {
 }
 
 export function deserializeContent(contentJson: string): ContentDocument {
-  return parseContentDocument(migrateContentDocument(JSON.parse(contentJson)));
+  return parseContentDocument(JSON.parse(contentJson));
 }

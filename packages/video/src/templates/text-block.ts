@@ -1,6 +1,5 @@
 import {
   textBlockInputSchema,
-  textBlockV2InputSchema,
   type TextRole,
   type ThemeFontCategory,
   type VisualThemeTextToken,
@@ -155,10 +154,9 @@ export function renderTextBlock(
   path: (string | number)[],
   theme: VisualThemeDefinition,
 ): string {
-  const parsedV2 = textBlockV2InputSchema.safeParse(input);
-  const parsedV1 = !parsedV2.success ? textBlockInputSchema.safeParse(input) : null;
+  const parsed = textBlockInputSchema.safeParse(input);
 
-  if (!parsedV2.success && (!parsedV1 || !parsedV1.success)) {
+  if (!parsed.success) {
     throw new CompositionCompileError([
       { path, code: "invalid_input", message: "text.block の入力が不正です。" },
     ]);
@@ -176,9 +174,7 @@ export function renderTextBlock(
     decoration?: Partial<TextDecoration>;
     fontFace?: { family: string; platformId?: string };
     surface?: TextSurface;
-  } = parsedV2.success
-    ? parsedV2.data
-    : (parsedV1!.data as any);
+  } = parsed.data;
 
   const { text, role } = data;
   if (text.trim().length === 0) {

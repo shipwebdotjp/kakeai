@@ -1,7 +1,5 @@
 import {
   characterStandingV1InputSchema,
-  characterStandingV2InputSchema,
-  characterStandingV3InputSchema,
   type ContentDocument,
   type SnapshotFaceSet,
 } from "@kakeai/contracts";
@@ -51,57 +49,7 @@ function resolveStandingAppearance(
   return { src: escapeHtmlAttribute(media.url), assetId: appearance.assetId };
 }
 
-export function renderCharacterStandingV1(input: unknown, context: RenderContext): RenderedCue {
-  const parsed = characterStandingV1InputSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new CompositionCompileError([
-      { path: context.path, code: "invalid_input", message: "character.standing の入力が不正です。" },
-    ]);
-  }
-  const { characterId, appearanceId, x, y, scale } = parsed.data;
-  const { src, assetId } = resolveStandingAppearance(
-    characterId,
-    appearanceId,
-    context.document,
-    context.path,
-    context.assetResolver,
-  );
-  const id = context.scope.id("img");
-  const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale);
-  return {
-    html: `<img id="${id}" class="kakeai-standing" src="${src}" style="left:${x * 100}%;top:${y * 100}%;width:${widthPx}px;" alt="">`,
-    assetIds: [assetId],
-    animation: [],
-  };
-}
 
-export function renderCharacterStandingV2(input: unknown, context: RenderContext): RenderedCue {
-  const parsed = characterStandingV2InputSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new CompositionCompileError([
-      { path: context.path, code: "invalid_input", message: "character.standing の入力が不正です。" },
-    ]);
-  }
-  const { characterId, appearanceId, side, scale } = parsed.data;
-  const { src, assetId } = resolveStandingAppearance(
-    characterId,
-    appearanceId,
-    context.document,
-    context.path,
-    context.assetResolver,
-  );
-  const layout = standingPosition(side, scale);
-  const id = context.scope.id("img");
-  const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale);
-  const leftPercent = Math.round(layout.x * 10000) / 100;
-  const topPercent = Math.round(layout.y * 10000) / 100;
-  return {
-    html: `<div class="kakeai-standingv2" style="left:${leftPercent}%;top:${topPercent}%;"><img id="${id}" class="kakeai-standingimg" src="${src}" style="width:${widthPx}px;" alt=""></div>`,
-    assetIds: [assetId],
-    animation: [],
-    motionTargetId: id,
-  };
-}
 
 function resolveFaceLayerImage(
   faceSet: SnapshotFaceSet,
@@ -130,8 +78,8 @@ function resolveFaceLayerImage(
   };
 }
 
-export function renderCharacterStandingV3(input: unknown, context: RenderContext): RenderedCue {
-  const parsed = characterStandingV3InputSchema.safeParse(input);
+export function renderCharacterStanding(input: unknown, context: RenderContext): RenderedCue {
+  const parsed = characterStandingV1InputSchema.safeParse(input);
   if (!parsed.success) {
     throw new CompositionCompileError([
       { path: context.path, code: "invalid_input", message: "character.standing の入力が不正です。" },

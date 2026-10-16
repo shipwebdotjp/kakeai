@@ -14,4 +14,5 @@ export const TEXT_ROLE_LABELS: Record<TextRole, string> = {
   heading: "見出し",
   body: "本文",
   closing: "結び",
+  label: "ラベル",
 };

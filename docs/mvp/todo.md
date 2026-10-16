@@ -84,7 +84,7 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 ### [x] P6c 立ち絵
 
 - [x] Characterと画像のCharacter Appearanceを手動で登録・編集する。SpeakerとCharacterの対応は任意とし、表示を音声選択へ暗黙連動させない
-- [x] Web UI: 各Sceneに `character.standing@1` を最大1件、`{ "kind": "scene" }` で選択・解除する。立ち絵は位置と倍率を編集できる
+- [x] Web UI: 各Sceneに `character.standing@1` を固定の左右2枠で選択・解除する。立ち絵はキャラクター・外観・倍率を編集できる
 - [x] 立ち絵はreadyな画像素材だけを使い、背景→カード→立ち絵→Scene本文・字幕の順で描画する
 - [x] UI未対応の複数立ち絵、`lines`／`offset`範囲、他のVisualTemplateを非破壊で保持する
 - [x] 表情自動切替・口パクは追加しない
@@ -99,8 +99,8 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 
 ## MVP後（ロードマップへ記載済み）
 
-- [Visual Theme基盤](../visual-themes/spec.md)（`soft-editorial@1`、`schemaVersion: 6`）: [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張) の一部として実装済み。詳細と完了条件は [../visual-themes/todo.md](../visual-themes/todo.md) を正とする
+- [Visual Theme基盤](../visual-themes/spec.md)（`soft-editorial@1`）: [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張) の一部として実装済み。詳細と完了条件は [../visual-themes/todo.md](../visual-themes/todo.md) を正とする
 
-- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 複合ビジュアル基盤（VisualCue v3、NestedVisual、`scene.device-frame@1`、Cue一覧UI、transition）は [複合ビジュアル](../composite-visuals/spec.md) で実装済み。残りは 複数VisualCueの拡張、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、chart(line/pie)/flow系VisualTemplate。うち背景・カードの焦点位置は [焦点位置](../focal-point/spec.md)、拡大率は [拡大率](../media-zoom/spec.md) で、複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で、`table.simple@1`（列定義、行、強調セル、CSV貼り付け）は [表テンプレート](../table-template/spec.md) で、`chart.bar@1`（カテゴリ・複数系列・値軸・grow/bounce）は [棒グラフテンプレート](../chart-template/spec.md) で実装済み
+- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 複合ビジュアル基盤（VisualCue、NestedVisual、`scene.device-frame@1`、Cue一覧UI、transition）は [複合ビジュアル](../composite-visuals/spec.md) で実装済み。残りは 複数VisualCueの拡張、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、chart(line/pie)/flow系VisualTemplate。うち背景・カードの焦点位置は [焦点位置](../focal-point/spec.md)、拡大率は [拡大率](../media-zoom/spec.md) で、複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で、`table.simple@1`（列定義、行、強調セル、CSV貼り付け）は [表テンプレート](../table-template/spec.md) で、`chart.bar@1`（カテゴリ・複数系列・値軸・grow/bounce）は [棒グラフテンプレート](../chart-template/spec.md) で実装済み
 - [ロードマップ Phase 5](./roadmap.md#phase-5-派生コンテンツと制作運用): progressPercentに依存した詳細進捗表示、実行中Jobのキャンセル、複数worker、自動再試行、contentHash/JCS、Jobリース、楽観ロック、同一SHA復旧の厳密化
 - `health.storage.status` の容量警告: 管理領域の使用量から80GiB閾値で `warning` を返し、UIとhealthに表示する（[spec.md](./spec.md) のリソース上限）。現状は常に `ok`。

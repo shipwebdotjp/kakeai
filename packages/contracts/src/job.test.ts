@@ -147,29 +147,14 @@ describe("parseRenderJobSnapshot", () => {
     };
   }
 
-  it("migrates v5 snapshot content to the current version", () => {
-    const v5 = validContentDocument() as unknown as Record<string, unknown>;
-    v5.schemaVersion = 5;
-    delete v5.visualTheme;
-    v5.scenes = (v5.scenes as Record<string, unknown>[]).map((scene) => {
-      const copy = { ...scene };
-      copy.accentColor = "#2563EB";
-      delete copy.accent;
-      return copy;
-    });
-    const parsed = parseRenderJobSnapshot(renderSnapshotWith(v5));
-    expect(parsed.content.schemaVersion).toBe(8);
-    expect(parsed.content.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
-    for (const scene of parsed.content.scenes) {
-      expect(scene.accent).toEqual({ kind: "theme", token: "primary" });
-      for (const line of scene.lines) {
-        expect(line.expressionId).toBeNull();
-      }
-    }
+  it("rejects snapshot content with a non-current schemaVersion", () => {
+    const stale = validContentDocument() as unknown as Record<string, unknown>;
+    stale.schemaVersion = 8;
+    expect(() => parseRenderJobSnapshot(renderSnapshotWith(stale))).toThrow();
   });
 
   it("parses a current snapshot unchanged", () => {
     const parsed = parseRenderJobSnapshot(renderSnapshotWith(validContentDocument()));
-    expect(parsed.content.schemaVersion).toBe(8);
+    expect(parsed.content.schemaVersion).toBe(1);
   });
 });
