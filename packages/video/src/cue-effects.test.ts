@@ -51,7 +51,11 @@ describe("resolveTriggerWindow", () => {
 describe("planAppearEffect", () => {
   it("staggers appearance and hides later targets until their turn", () => {
     const plan = planAppearEffect({
-      targetIds: ["a", "b", "c"],
+      targets: [
+        { id: "a", step: 0 },
+        { id: "b", step: 1 },
+        { id: "c", step: 2 },
+      ],
       trigger: { kind: "cue" },
       effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 200 },
       lineIntervals: intervals,
@@ -71,7 +75,7 @@ describe("planAppearEffect", () => {
 
   it("starts a line-triggered appearance at the line and hides until then", () => {
     const plan = planAppearEffect({
-      targetIds: ["a"],
+      targets: [{ id: "a", step: 0 }],
       trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
       effect: { kind: "appear", preset: "slide-up", durationMs: 300 },
       lineIntervals: intervals,
@@ -88,7 +92,10 @@ describe("planAppearEffect", () => {
 
   it("clamps the duration to the trigger window and drops targets pushed past it", () => {
     const plan = planAppearEffect({
-      targetIds: ["a", "b"],
+      targets: [
+        { id: "a", step: 0 },
+        { id: "b", step: 1 },
+      ],
       trigger: { kind: "cue" },
       effect: { kind: "appear", preset: "scale-in", durationMs: 5000, staggerMs: 1200 },
       lineIntervals: intervals,
@@ -103,7 +110,7 @@ describe("planAppearEffect", () => {
 
   it("returns an empty plan for a reversed range", () => {
     const plan = planAppearEffect({
-      targetIds: ["a"],
+      targets: [{ id: "a", step: 0 }],
       trigger: { kind: "lines", startLineId: "l3", endLineId: "l1" },
       effect: { kind: "appear", preset: "fade", durationMs: 300 },
       lineIntervals: intervals,

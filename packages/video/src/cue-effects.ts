@@ -34,8 +34,13 @@ export interface CueEffectPlan {
   stateIntervals: StateInterval[];
 }
 
+export interface AppearTarget {
+  id: string;
+  step: number;
+}
+
 export function planAppearEffect(options: {
-  targetIds: readonly string[];
+  targets: readonly AppearTarget[];
   trigger: LineTrigger;
   effect: AppearEffect;
   lineIntervals: readonly LineInterval[];
@@ -55,16 +60,16 @@ export function planAppearEffect(options: {
   const staggerMs = options.effect.staggerMs ?? 0;
   const animation: AnimationItem[] = [];
   const stateIntervals: StateInterval[] = [];
-  options.targetIds.forEach((targetId, index) => {
-    const startMs = window.startMs + index * staggerMs;
+  options.targets.forEach((target) => {
+    const startMs = window.startMs + target.step * staggerMs;
     if (startMs >= options.spanMs || startMs >= window.endMs) {
       return;
     }
     const durationMs = Math.max(0, Math.min(maxDurationMs, window.endMs - startMs));
-    animation.push({ targetId, action: options.effect.preset, startMs, durationMs });
+    animation.push({ targetId: target.id, action: options.effect.preset, startMs, durationMs });
     if (startMs > 0) {
       stateIntervals.push({
-        targetId,
+        targetId: target.id,
         intervals: [{ startMs: 0, endMs: startMs }],
         on: { opacity: 0 },
         off: { opacity: 1 },

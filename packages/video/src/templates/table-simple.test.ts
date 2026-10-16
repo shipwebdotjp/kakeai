@@ -161,3 +161,104 @@ describe("renderTableSimple", () => {
     expect(first.animation).toEqual(second.animation);
   });
 });
+
+describe("renderTableSimple effects", () => {
+  function timedContext(): RenderContext {
+    return {
+      ...context(),
+      cueTiming: { startMs: 0, spanMs: 9000 },
+      lineIntervals: [
+        { lineId: "l1", startMs: 500, endMs: 1500 },
+        { lineId: "l2", startMs: 1500, endMs: 2500 },
+      ],
+    };
+  }
+
+  it("appears rows at their line and hides them until then", () => {
+    const rendered = renderTableSimple(
+      {
+        ...baseInput,
+        effects: [
+          {
+            target: { kind: "rows" },
+            trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+            effect: { kind: "appear", preset: "fade", durationMs: 300, staggerMs: 100 },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    const scope = cueScope("visual-table-1");
+    const row0 = scope.id("row-0");
+    const row1 = scope.id("row-1");
+    expect(rendered.animation).toContainEqual({
+      targetId: row0,
+      action: "fade",
+      startMs: 1500,
+      durationMs: 300,
+    });
+    expect(rendered.animation).toContainEqual({
+      targetId: row1,
+      action: "fade",
+      startMs: 1600,
+      durationMs: 300,
+    });
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: row0,
+      intervals: [{ startMs: 0, endMs: 1500 }],
+      on: { opacity: 0 },
+      off: { opacity: 1 },
+    });
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: row1,
+      intervals: [{ startMs: 0, endMs: 1600 }],
+      on: { opacity: 0 },
+      off: { opacity: 1 },
+    });
+  });
+
+  it("highlights a row during its line range and restores it after", () => {
+    const rendered = renderTableSimple(
+      {
+        ...baseInput,
+        effects: [
+          {
+            target: { kind: "row", index: 1 },
+            trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+            effect: { kind: "emphasize", style: "background", tone: "primary" },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    const row1 = cueScope("visual-table-1").id("row-1");
+    const state = rendered.stateIntervals?.find((entry) => entry.targetId === row1);
+    expect(state?.intervals).toEqual([{ startMs: 1500, endMs: 2500 }]);
+    expect(state?.on).toMatchObject({ backgroundColor: expect.any(String) });
+    expect(state?.off).toMatchObject({ color: "inherit" });
+  });
+
+  it("starts a cue-triggered appearance at the cue and leaves it visible", () => {
+    const rendered = renderTableSimple(
+      {
+        ...baseInput,
+        effects: [
+          {
+            target: { kind: "row", index: 0 },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "slide-up", durationMs: 400 },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    const row0 = cueScope("visual-table-1").id("row-0");
+    expect(rendered.animation).toContainEqual({
+      targetId: row0,
+      action: "slide-up",
+      startMs: 0,
+      durationMs: 400,
+    });
+    expect(rendered.stateIntervals).toEqual([]);
+  });
+});

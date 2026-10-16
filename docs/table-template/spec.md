@@ -54,7 +54,7 @@
 - `reveal` の中身（staggerの具体的な動き）はコード側が持ち、JSONは名前と数値だけを保存する。`durationMs` は `animationPolicy.maxDurationMs` でクランプし、`staggerMs` の上限は `2000` とする。登場の合計（`(要素数−1)×staggerMs＋durationMs`）が目安（4秒）を超えると警告を返す。
 - 列数は最大 `8`、行数は最大 `12` をスキーマで強制する。フォントサイズはテンプレート契約として固定し、行数超過で描画時に黙って縮小しない。超過の目安は警告（`meta.warnings`）で返す。
 
-**行トリガー付き効果への移行**: `data.emphasis`（静的強調）と `reveal`（一括登場）は、行トリガー付き効果の共通単位（`effects`）へ統合する。target は行・セル・グループを指し、静的強調は `trigger: { "kind": "cue" }`、一括登場はグループtarget＋`staggerMs` で表す。形状変更は保存済み参照の有無で `@1` 書き換えか `@2` 追加かを決める。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+**行トリガー付き効果**: `effects` に行区間トリガー付きの `appear`／`emphasize` を追加できる。target は行・セル・グループ（`rows`/`columns`）を指す。既存の `reveal`（一括登場）と `data.emphasis`（静的強調）は当面残し、`effects` と併存する。二重表現の解消（`reveal`・`emphasis` の削除）と `effects` 編集UIは後続で行う。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 ## テンプレート定義
 

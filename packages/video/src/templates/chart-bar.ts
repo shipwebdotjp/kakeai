@@ -4,13 +4,15 @@ import {
   CHART_REVEAL_DEFAULT_STAGGER_MS,
   chartBarInputSchema,
   type ChartColorBy,
+  type ChartEffect,
   type ChartRevealPreset,
   type TableColumn,
   type TableRow,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
-import type { AnimationItem, RenderedCue, RenderContext } from "../render-context";
+import type { AnimationItem, RenderedCue, RenderContext, StateInterval } from "../render-context";
+import { planAppearEffect, type AppearTarget } from "../cue-effects";
 import { formatNumber } from "./table-format";
 
 const PLOT_HEIGHT_PX = 560;
@@ -248,6 +250,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   const body = orientation === "horizontal" ? renderHorizontal(args) : renderVertical(args);
 
   const animation: AnimationItem[] = [];
+  const stateIntervals: StateInterval[] = [];
   if (revealMode === "bars") {
     const { action, ease } = actionForPreset(preset);
     rows.forEach((_row, categoryIndex) => {
@@ -263,6 +266,19 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
       });
     });
   }
+
+  applyChartEffects({
+    effects: parsed.data.effects ?? [],
+    barId: (categoryIndex, seriesIndex) =>
+      context.scope.id(`bar-${categoryIndex}-${seriesIndex}`),
+    categoryCount: rows.length,
+    seriesCount,
+    lineIntervals: context.lineIntervals ?? [],
+    spanMs: context.cueTiming?.spanMs ?? 0,
+    path: context.path,
+    animation,
+    stateIntervals,
+  });
 
   const titleHtml =
     title === undefined || title.trim().length === 0
@@ -283,5 +299,75 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
     html: `<figure class="kakeai-chartwrap"><div class="kakeai-chartframe${gridClass}${orientationClass}">${titleHtml}${legendHtml}${body}</div></figure>`,
     assetIds: [],
     animation,
+    stateIntervals,
   };
+}
+
+function resolveChartEffectTargets(
+  effect: ChartEffect,
+  barId: (categoryIndex: number, seriesIndex: number) => string,
+  categoryCount: number,
+  seriesCount: number,
+): AppearTarget[] {
+  const target = effect.target;
+  switch (target.kind) {
+    case "bars": {
+      const targets: AppearTarget[] = [];
+      for (let categoryIndex = 0; categoryIndex < categoryCount; categoryIndex += 1) {
+        for (let seriesIndex = 0; seriesIndex < seriesCount; seriesIndex += 1) {
+          targets.push({ id: barId(categoryIndex, seriesIndex), step: categoryIndex });
+        }
+      }
+      return targets;
+    }
+    case "category": {
+      const targets: AppearTarget[] = [];
+      for (let seriesIndex = 0; seriesIndex < seriesCount; seriesIndex += 1) {
+        targets.push({ id: barId(target.index, seriesIndex), step: 0 });
+      }
+      return targets;
+    }
+    case "series": {
+      const targets: AppearTarget[] = [];
+      for (let categoryIndex = 0; categoryIndex < categoryCount; categoryIndex += 1) {
+        targets.push({ id: barId(categoryIndex, target.index), step: 0 });
+      }
+      return targets;
+    }
+  }
+}
+
+function applyChartEffects(options: {
+  effects: readonly ChartEffect[];
+  barId: (categoryIndex: number, seriesIndex: number) => string;
+  categoryCount: number;
+  seriesCount: number;
+  lineIntervals: RenderContext["lineIntervals"];
+  spanMs: number;
+  path: (string | number)[];
+  animation: AnimationItem[];
+  stateIntervals: StateInterval[];
+}): void {
+  const lineIntervals = options.lineIntervals ?? [];
+  options.effects.forEach((entry, effectIndex) => {
+    const targets = resolveChartEffectTargets(
+      entry,
+      options.barId,
+      options.categoryCount,
+      options.seriesCount,
+    );
+    if (targets.length === 0) {
+      return;
+    }
+    const plan = planAppearEffect({
+      targets,
+      trigger: entry.trigger,
+      effect: entry.effect,
+      lineIntervals,
+      spanMs: options.spanMs,
+      path: [...options.path, "effects", effectIndex],
+    });
+    options.animation.push(...plan.animation);
+    options.stateIntervals.push(...plan.stateIntervals);
+  });
 }

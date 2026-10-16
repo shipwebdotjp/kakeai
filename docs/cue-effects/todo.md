@@ -20,17 +20,15 @@
 
 > Phase 2 は共通ヘルパと型・ユニットテストまで。実素材での end-to-end 一致確認は、効果を使うテンプレートが入る Phase 3・Phase 4 で行う。
 
-## Phase 3: `table.simple@1` / `chart.bar@1` の移行
+## Phase 3: `table.simple@1` / `chart.bar@1` に `effects` を追加（追加型）
 
-契約・レンダラ・warnings・web フォームを同じ変更で更新する（契約だけ先に変えるとビルドが壊れるため）。
+二重表現の解消（`reveal`・`emphasis` の削除）は、`effects` 編集UIが要るため Phase 5 に回す。Phase 3 は壊さずに足す。
 
-- [ ] 保存済みScriptVersionの参照を確認し、参照ゼロなら `@1` を書き換え、参照があれば `@2` を切る
-- [ ] `table.simple`・`chart.bar` の入力スキーマを `effects` へ移行する（target union、`data.emphasis`・`reveal` の統合）
-- [ ] `packages/video` の `table-simple.ts`・`chart-bar.ts` を `effects` 前提へ移行する
-- [ ] `packages/contracts` の `warnings.ts` の `reveal` 依存を `effects` へ移行する
-- [ ] `apps/web` のフォーム（`DataGridField`・`form.ts`）を `effects` 前提へ移行する
-- [ ] コンパイラテストを `effects` 前提へ更新する
-- 完了条件: 一括登場・静的強調・`grow`/`bounce` が移行前と同一の見た目で、プレビューとMP4が一致する。
+- [x] `table.simple`・`chart.bar` の入力に任意の `effects` を追加する（target union、行ID不在・範囲外の検証）
+- [x] `packages/video` の `table-simple.ts`・`chart-bar.ts` で `effects` を描画する（`appear` は共通ヘルパ、`emphasize` は `stateIntervals`）
+- [x] `reveal`・`emphasis`・エディタは変更しない（追加のみ。既存入力を再解釈しないため版は据え置き）
+- [x] 契約・レンダラのテストを追加する
+- 完了条件: `effects` を持つ表・グラフがプレビューとMP4で一致し、既存の `reveal`・`emphasis` の挙動が回帰しない。
 
 ## Phase 4: `list.callout@1`
 
@@ -40,13 +38,14 @@
 - [ ] 同一テンプレートの複数配置・入れ子で衝突しないことをコンパイラテストで確認する
 - 完了条件: 3つのポイントを常時表示し、各行区間で個別に強調・解除できる動画を保存→プレビュー→レンダーできる。
 
-## Phase 5: エディタ
+## Phase 5: 二重表現の解消とエディタ
 
+- [ ] `table.simple`・`chart.bar` から `reveal`・`emphasis` を削除し `effects` へ一本化する（保存済み参照の有無で `@1` 書き換えか `@2` かを決める）
+- [ ] `effects`（target/trigger/effect）を行ピッカー付きで編集する `TemplateFieldSpec` 種別と部品を実装する
 - [ ] 行の並べ替え・削除・分割で、`collectLineRefs` を使ってTrigger参照をremapする
-- [ ] 行区間の選択UIを行ピッカーで実装する
-- [ ] `effects` 配列・`items` の編集を汎用リピータ部品で実装する（必要な `TemplateFieldSpec` 種別を追加する）
+- [ ] `list.callout` の `items` 編集を実装する
 - [ ] UI未対応のTrigger・Effectを読み取り専用で非破壊に保持する
-- 完了条件: エディタでTriggerを設定し、行を並べ替えても参照が保たれ、保存・プレビューできる。
+- 完了条件: エディタでTriggerを設定・整理でき、行を並べ替えても参照が保たれ、保存・プレビューできる。
 
 ## Phase 6: 文書同期
 

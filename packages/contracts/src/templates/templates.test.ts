@@ -278,4 +278,103 @@ describe("visual template metadata", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("accepts line-triggered effects on table.simple", () => {
+    const parsed = tableSimpleInputSchema.safeParse({
+      data: {
+        columns: [{ key: "name", label: "項目", type: "text" }],
+        rows: [{ name: "a" }, { name: "b" }],
+      },
+      effects: [
+        {
+          target: { kind: "rows" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 150 },
+        },
+        {
+          target: { kind: "row", index: 1 },
+          trigger: { kind: "lines", startLineId: "l1", endLineId: "l2" },
+          effect: { kind: "emphasize", style: "frame", tone: "primary" },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects table.simple effects with out-of-range targets", () => {
+    const data = {
+      columns: [{ key: "a", label: "A", type: "text" }],
+      rows: [{ a: "x" }],
+    };
+    expect(
+      tableSimpleInputSchema.safeParse({
+        data,
+        effects: [
+          {
+            target: { kind: "row", index: 5 },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 100 },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      tableSimpleInputSchema.safeParse({
+        data,
+        effects: [
+          {
+            target: { kind: "cell", row: 0, key: "missing" },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 100 },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts chart.bar appear effects and rejects out-of-range or non-appear effects", () => {
+    const data = {
+      columns: [
+        { key: "m", label: "月", type: "text" },
+        { key: "s", label: "売上", type: "number" },
+      ],
+      rows: [{ m: "1月", s: 1 }],
+    };
+    expect(
+      chartBarInputSchema.safeParse({
+        data,
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 100, staggerMs: 100 },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      chartBarInputSchema.safeParse({
+        data,
+        effects: [
+          {
+            target: { kind: "series", index: 3 },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 100 },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      chartBarInputSchema.safeParse({
+        data,
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "emphasize", style: "frame", tone: "primary" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
 });

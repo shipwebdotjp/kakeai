@@ -171,3 +171,68 @@ describe("renderChartBar", () => {
     expect(a.animation[0]!.targetId).not.toBe(b.animation[0]!.targetId);
   });
 });
+
+describe("renderChartBar effects", () => {
+  it("appears bars at their line and hides them until then", () => {
+    const scope = cueScope("visual-chart-1");
+    const rendered = renderChartBar(
+      {
+        ...singleSeries,
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+            effect: { kind: "appear", preset: "fade", durationMs: 200, staggerMs: 50 },
+          },
+        ],
+      },
+      {
+        ...context(),
+        cueTiming: { startMs: 0, spanMs: 9000 },
+        lineIntervals: [{ lineId: "l2", startMs: 1500, endMs: 2500 }],
+      },
+    );
+    expect(rendered.animation).toContainEqual({
+      targetId: scope.id("bar-0-0"),
+      action: "fade",
+      startMs: 1500,
+      durationMs: 200,
+    });
+    expect(rendered.animation).toContainEqual({
+      targetId: scope.id("bar-1-0"),
+      action: "fade",
+      startMs: 1550,
+      durationMs: 200,
+    });
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: scope.id("bar-0-0"),
+      intervals: [{ startMs: 0, endMs: 1500 }],
+      on: { opacity: 0 },
+      off: { opacity: 1 },
+    });
+  });
+
+  it("appears only the bars of a category", () => {
+    const scope = cueScope("visual-chart-1");
+    const rendered = renderChartBar(
+      {
+        ...singleSeries,
+        effects: [
+          {
+            target: { kind: "category", index: 1 },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "scale-in", durationMs: 300 },
+          },
+        ],
+      },
+      { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
+    );
+    expect(rendered.animation).toContainEqual({
+      targetId: scope.id("bar-1-0"),
+      action: "scale-in",
+      startMs: 0,
+      durationMs: 300,
+    });
+    expect(rendered.stateIntervals).toEqual([]);
+  });
+});

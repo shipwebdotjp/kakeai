@@ -12,6 +12,7 @@ import {
 } from "../content/animation";
 import { fontFaceSpecSchema, textSurfaceSchema, themeAccentTokenSchema } from "../content/theme";
 import { tableToneSchema } from "../content/tone";
+import { appearEffectSchema, cueEffectSchema, lineTriggerSchema } from "../content/cue-effect";
 import {
   MAX_NESTED_VISUAL_DEPTH,
   fitSchema,
@@ -545,12 +546,60 @@ export const tableRevealSchema = z.strictObject({
 });
 export type TableReveal = z.infer<typeof tableRevealSchema>;
 
-export const tableSimpleInputSchema = z.strictObject({
-  caption: z.string().optional(),
-  data: tableDataSchema,
-  style: tableStyleSchema.optional(),
-  reveal: tableRevealSchema.optional(),
+export const tableEffectTargetSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("row"), index: nonNegativeInt }),
+  z.strictObject({ kind: z.literal("cell"), row: nonNegativeInt, key: z.string().min(1).max(64) }),
+  z.strictObject({ kind: z.literal("rows") }),
+  z.strictObject({ kind: z.literal("columns") }),
+]);
+export type TableEffectTarget = z.infer<typeof tableEffectTargetSchema>;
+
+export const tableEffectSchema = z.strictObject({
+  target: tableEffectTargetSchema,
+  trigger: lineTriggerSchema,
+  effect: cueEffectSchema,
 });
+export type TableEffect = z.infer<typeof tableEffectSchema>;
+
+export const tableSimpleInputSchema = z
+  .strictObject({
+    caption: z.string().optional(),
+    data: tableDataSchema,
+    style: tableStyleSchema.optional(),
+    reveal: tableRevealSchema.optional(),
+    effects: z.array(tableEffectSchema).max(32).optional(),
+  })
+  .superRefine((input, ctx) => {
+    const known = new Set(input.data.columns.map((column) => column.key));
+    (input.effects ?? []).forEach((entry, index) => {
+      if (
+        entry.target.kind === "row" &&
+        entry.target.index >= input.data.rows.length
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: `効果の行番号が行数を超えています: ${entry.target.index}`,
+          path: ["effects", index, "target", "index"],
+        });
+      }
+      if (entry.target.kind === "cell") {
+        if (entry.target.row >= input.data.rows.length) {
+          ctx.addIssue({
+            code: "custom",
+            message: `効果の行番号が行数を超えています: ${entry.target.row}`,
+            path: ["effects", index, "target", "row"],
+          });
+        }
+        if (!known.has(entry.target.key)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `効果の列キーが未定義です: ${entry.target.key}`,
+            path: ["effects", index, "target", "key"],
+          });
+        }
+      }
+    });
+  });
 export type TableSimpleInput = z.infer<typeof tableSimpleInputSchema>;
 
 const TABLE_STYLE_PRESET_OPTIONS = [
@@ -710,12 +759,50 @@ export const chartRevealSchema = z.strictObject({
 });
 export type ChartReveal = z.infer<typeof chartRevealSchema>;
 
-export const chartBarInputSchema = z.strictObject({
-  title: z.string().optional(),
-  data: chartDataSchema,
-  style: chartStyleSchema.optional(),
-  reveal: chartRevealSchema.optional(),
+export const chartEffectTargetSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("category"), index: nonNegativeInt }),
+  z.strictObject({ kind: z.literal("series"), index: nonNegativeInt }),
+  z.strictObject({ kind: z.literal("bars") }),
+]);
+export type ChartEffectTarget = z.infer<typeof chartEffectTargetSchema>;
+
+export const chartEffectSchema = z.strictObject({
+  target: chartEffectTargetSchema,
+  trigger: lineTriggerSchema,
+  effect: appearEffectSchema,
 });
+export type ChartEffect = z.infer<typeof chartEffectSchema>;
+
+export const chartBarInputSchema = z
+  .strictObject({
+    title: z.string().optional(),
+    data: chartDataSchema,
+    style: chartStyleSchema.optional(),
+    reveal: chartRevealSchema.optional(),
+    effects: z.array(chartEffectSchema).max(32).optional(),
+  })
+  .superRefine((input, ctx) => {
+    const seriesCount = Math.max(0, input.data.columns.length - 1);
+    (input.effects ?? []).forEach((entry, index) => {
+      if (
+        entry.target.kind === "category" &&
+        entry.target.index >= input.data.rows.length
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: `効果のカテゴリ番号が範囲外です: ${entry.target.index}`,
+          path: ["effects", index, "target", "index"],
+        });
+      }
+      if (entry.target.kind === "series" && entry.target.index >= seriesCount) {
+        ctx.addIssue({
+          code: "custom",
+          message: `効果の系列番号が範囲外です: ${entry.target.index}`,
+          path: ["effects", index, "target", "index"],
+        });
+      }
+    });
+  });
 export type ChartBarInput = z.infer<typeof chartBarInputSchema>;
 
 const CHART_STYLE_PRESET_OPTIONS = [

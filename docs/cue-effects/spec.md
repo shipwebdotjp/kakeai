@@ -80,13 +80,13 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 ## 各テンプレートへの適用
 
-### `table.simple@1` / `chart.bar@1` の移行
+### `table.simple@1` / `chart.bar@1` への追加（追加型で開始）
 
-`reveal`・`emphasis` を本単位へ寄せる。
+まずは既存を壊さない追加型で `effects` を導入し、二重表現の解消は後続で行う。
 
-- `table.simple`: `data.emphasis`（静的強調）と `reveal` を廃し、トップレベル `effects` へ統合する。targetは `{ "kind": "row", "index" } | { "kind": "cell", "row", "key" } | { "kind": "rows" } | { "kind": "columns" }`。静的強調は `trigger: { "kind": "cue" }` で表す。従来の一括登場はグループtarget＋`staggerMs` で表す。
-- `chart.bar`: `reveal` を `effects` へ統合する。targetは `{ "kind": "category", "index" } | { "kind": "series", "index" } | { "kind": "bars" }`。`grow`/`bounce` は `appear` の内容として保持し、`axis` は描画側が `style.orientation` から決める。
-- これは保存済み有効入力の再解釈を伴う。保存済み参照がゼロなら `@1` を書き換え、参照があれば `@2` を切る（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)・[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
+- `table.simple`: 任意の `effects` を追加する。targetは `{ "kind": "row", "index" } | { "kind": "cell", "row", "key" } | { "kind": "rows" } | { "kind": "columns" }`。`appear` は共通ヘルパ、`emphasize` は `stateIntervals` で描画する。既存の `data.emphasis` と `reveal` は当面残す。
+- `chart.bar`: 任意の `effects`（`appear` のみ）を追加する。targetは `{ "kind": "category", "index" } | { "kind": "series", "index" } | { "kind": "bars" }`。既存の `reveal` は当面残す（`grow`/`bounce` は `reveal` 側に残る）。
+- 追加のみで既存の有効入力の解釈を変えないため、版は据え置く（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。`reveal`・`emphasis` の削除は保存済み参照の有無で `@1` 書き換えか `@2` かを決める（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
 
 ### `list.callout@1`（新規）
 

@@ -47,7 +47,7 @@
 - 負値は0として描画し、警告（`chart_negative_value`）を返す。保存は拒否しない。
 - `reveal` の合計尺（`(カテゴリ数−1)×staggerMs＋durationMs`）が目安（4秒）を超えると警告を返す。`durationMs` は `animationPolicy.maxDurationMs` でクランプする。
 
-**行トリガー付き効果への移行**: `reveal` は行トリガー付き効果の共通単位（`effects`）へ統合する。target はカテゴリ・系列・グループを指し、登場（`grow`/`bounce`/`fade`）は `appear` の内容として保持し、`axis` は描画側が `style.orientation` から決める。形状変更は保存済み参照の有無で `@1` 書き換えか `@2` 追加かを決める。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+**行トリガー付き効果**: `effects` に行区間トリガー付きの `appear` を追加できる（target はカテゴリ・系列・グループ）。既存の `reveal`（`grow`/`bounce`/`fade`）は当面残し、`effects` と併存する。二重表現の解消と `effects` 編集UIは後続で行う。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 ## 図形アクション
 
