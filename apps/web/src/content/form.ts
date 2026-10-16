@@ -1760,6 +1760,7 @@ export function splitPointScene(
   splitAt: number,
   secondLabel: string,
   existingSceneIds: ReadonlySet<string>,
+  splitOffsetMs: number | null,
 ): SplitSceneResult {
   if (scene.kind !== "point" || splitAt <= 0 || splitAt >= scene.lines.length) {
     throw new Error("この位置ではシーンを分割できません。");
@@ -1770,8 +1771,37 @@ export function splitPointScene(
   const firstCues: CueFormValue[] = [];
   const secondCues: CueFormValue[] = [...second.cues];
   for (const cue of scene.cues) {
-    if (cue.rangeKind !== "lines") {
+    if (cue.rangeKind === "scene") {
       firstCues.push(cue);
+      continue;
+    }
+    if (cue.rangeKind === "offset") {
+      if (splitOffsetMs === null || !Number.isFinite(splitOffsetMs) || splitOffsetMs < 0) {
+        firstCues.push(cue);
+        continue;
+      }
+      if (cue.endMs <= splitOffsetMs) {
+        firstCues.push(cue);
+        continue;
+      }
+      if (cue.startMs >= splitOffsetMs) {
+        secondCues.push({
+          ...cue,
+          startMs: cue.startMs - splitOffsetMs,
+          endMs: cue.endMs - splitOffsetMs,
+        });
+        continue;
+      }
+      const secondCueId = newVisualCueId(second.id, cue.templateId.replace(/\W/g, "-"));
+      firstCues.push({ ...cue, endMs: splitOffsetMs });
+      secondCues.push({
+        ...cue,
+        id: secondCueId,
+        fields: { ...cue.fields },
+        baseCue: cue.baseCue === null ? null : { ...structuredClone(cue.baseCue), id: secondCueId },
+        startMs: 0,
+        endMs: cue.endMs - splitOffsetMs,
+      });
       continue;
     }
     const start = indexById.get(cue.startLineId);

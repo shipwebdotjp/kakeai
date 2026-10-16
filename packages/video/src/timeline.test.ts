@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import { CompositionCompileError } from "./compile-error";
-import { collectSceneTransitionIssues, resolveTimeline, sceneTransitionOf } from "./timeline";
+import {
+  collectOffsetRangeWarnings,
+  collectSceneTransitionIssues,
+  resolveTimeline,
+  sceneTransitionOf,
+} from "./timeline";
 
 describe("resolveTimeline", () => {
   it("resolves scene starts and total duration for the default document", () => {
@@ -95,6 +100,45 @@ describe("resolveTimeline", () => {
       expect(error).toBeInstanceOf(CompositionCompileError);
       expect((error as CompositionCompileError).issues[0]?.code).toBe("unknown_take");
     }
+  });
+});
+
+describe("offset range warnings", () => {
+  function withOffsetCue(startMs: number, endMs: number) {
+    const document = validContentDocument();
+    const base = document.scenes[1]!.visualCues[0]!;
+    document.scenes[1]!.visualCues.push({
+      ...base,
+      id: "vc-p1-offset",
+      range: { kind: "offset", startMs, endMs },
+    });
+    return document;
+  }
+
+  it("returns no warnings for cues inside the scene", () => {
+    expect(collectOffsetRangeWarnings(withOffsetCue(500, 3500))).toEqual([]);
+    expect(collectOffsetRangeWarnings(validContentDocument())).toEqual([]);
+  });
+
+  it("warns when the offset end exceeds the scene duration", () => {
+    const warnings = collectOffsetRangeWarnings(withOffsetCue(500, 5000));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]!.code).toBe("offset_range_clamped");
+    expect(warnings[0]!.path).toEqual(["scenes", 1, "visualCues", 2, "range", "endMs"]);
+  });
+
+  it("warns when the offset window is outside the scene", () => {
+    const warnings = collectOffsetRangeWarnings(withOffsetCue(4500, 5000));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]!.code).toBe("offset_range_out_of_scene");
+    expect(warnings[0]!.path).toEqual(["scenes", 1, "visualCues", 2]);
+  });
+
+  it("warns when the offset window is empty", () => {
+    const warnings = collectOffsetRangeWarnings(withOffsetCue(1000, 1000));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]!.code).toBe("offset_range_out_of_scene");
+    expect(warnings[0]!.path).toEqual(["scenes", 1, "visualCues", 2]);
   });
 });
 

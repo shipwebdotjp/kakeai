@@ -5,6 +5,7 @@ import {
   buildSrt,
   compileDocument,
   CompositionCompileError,
+  collectOffsetRangeWarnings,
   collectTimelineIssues,
   resolveCueWindow,
   resolveTimeline,
@@ -777,6 +778,22 @@ export async function createDraftPreview(
   return parsed.data;
 }
 
+function throwIfFatalTimelineError(error: unknown): void {
+  if (!(error instanceof CompositionCompileError)) {
+    throw error;
+  }
+  const fatal = error.issues.filter((issue) => issue.code !== "fixed_duration_overflow");
+  if (fatal.length > 0) {
+    throw validationError(
+      fatal.map((issue) => ({
+        path: issue.path,
+        code: issue.code,
+        message: issue.message,
+      })),
+    );
+  }
+}
+
 export async function saveScriptVersion(
   prisma: PrismaClient,
   editionId: string,
@@ -799,19 +816,7 @@ export async function saveScriptVersion(
   try {
     transitionIssues = collectTimelineIssues(content);
   } catch (error) {
-    if (!(error instanceof CompositionCompileError)) {
-      throw error;
-    }
-    const fatal = error.issues.filter((issue) => issue.code !== "fixed_duration_overflow");
-    if (fatal.length > 0) {
-      throw validationError(
-        fatal.map((issue) => ({
-          path: issue.path,
-          code: issue.code,
-          message: issue.message,
-        })),
-      );
-    }
+    throwIfFatalTimelineError(error);
   }
   if (transitionIssues.length > 0) {
     throw validationError(
@@ -839,7 +844,13 @@ export async function saveScriptVersion(
     }
   }
 
-  const warnings = computeContentWarnings(content);
+  let offsetWarnings: Warning[] = [];
+  try {
+    offsetWarnings = collectOffsetRangeWarnings(content);
+  } catch (error) {
+    throwIfFatalTimelineError(error);
+  }
+  const warnings = [...computeContentWarnings(content), ...offsetWarnings];
   const contentJson = serializeContent(content);
 
   const maxAttempts = 5;

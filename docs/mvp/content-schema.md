@@ -195,7 +195,7 @@ Sceneの境界演出は、入場するScene側の `scene.transition`（`enter`�
 
 - `{ "kind": "scene" }`: Scene全体。ラインを持たない導入・結びの背景やタイトルに使う。
 - `{ "kind": "lines", "startLineId", "endLineId" }`: 同じScene内のセリフ区間。
-- `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。
+- `{ "kind": "offset", "startMs", "endMs" }`: Scene先頭からのミリ秒区間。Scene尺に収まらない区間は表示範囲を切り詰め、窓が空になるときは保存時に `meta.warnings`（`offset_range_out_of_scene`）で返す。
 
 MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・削除・ `layer`・`order`・表示区間・`transition` を編集する。背景・カードは `media.full-bleed@1`・`media.card@1`・`scene.device-frame@1` から選び、画像・動画を素材ピッカーで指定する。Composition Library導入後は、publish済みの全画面・無音CompositionVersionだけを `composition.full-bleed@1` のScene背景として選べる。立ち絵は一覧内の「左」「右」固定2行で `character.standing@3` を左右1体ずつ最大2体編集し、位置はテンプレートが `side` と倍率から正規化座標へ写像し、外端の余白を固定する（左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86`）。描画順は `background → card → standing → caption → overlay` で固定する（Scene本文の固定層は廃止し、テキストは `overlay` のCueとして描画する）。ContentDocumentとAPIは複数Cue、`lines`、`offset`、複合ビジュアル（`NestedVisual` を含む `scene.device-frame@1` など）と他の対応VisualTemplateを検証・保持する。編集UIで扱えないCueは保存時に削除または変更してはならない。既存の `character.standing@1` は読み込み時に `side` を導出して取り込み、保存時に `@3` を書き出す。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) と [../composition-library/spec.md](../composition-library/spec.md) を正とする。
 

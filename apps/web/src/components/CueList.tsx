@@ -95,6 +95,7 @@ interface CueListProps {
   sceneId: string;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
+  sceneDurationMs: number | null;
 }
 
 interface CueRowProps {
@@ -106,6 +107,7 @@ interface CueRowProps {
   cue: CueFormValue;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
+  sceneDurationMs: number | null;
   onRemove: () => void;
 }
 
@@ -118,6 +120,7 @@ function CueRow({
   cue,
   lines,
   speakers,
+  sceneDurationMs,
   onRemove,
 }: CueRowProps) {
   const base = `scenes.${sceneIndex}.cues.${cueIndex}` as const;
@@ -134,6 +137,18 @@ function CueRow({
   const startIndex = lineIndex(lines, cue.startLineId);
   const endIndex = lineIndex(lines, cue.endLineId);
   const endCandidates = lineRangeEndCandidates(lines, cue.startLineId);
+  const offsetStartMs = Number(cue.startMs);
+  const offsetEndMs = Number(cue.endMs);
+  const offsetOutOfScene =
+    cue.rangeKind === "offset" &&
+    sceneDurationMs !== null &&
+    Number.isFinite(offsetStartMs) &&
+    Number.isFinite(offsetEndMs) &&
+    (offsetStartMs < 0 ||
+      offsetEndMs < 0 ||
+      offsetStartMs >= offsetEndMs ||
+      offsetStartMs >= sceneDurationMs ||
+      offsetEndMs > sceneDurationMs);
 
   const isTextBlock = cue.templateId === textBlockV1.id && cue.templateVersion === textBlockV1.version;
   const contentFields = fields ?? [];
@@ -268,6 +283,7 @@ function CueRow({
                 <input
                   type="number"
                   min={0}
+                  max={sceneDurationMs ?? undefined}
                   className={`w-24 ${textFieldClass}`}
                   {...register(`${base}.startMs`, { valueAsNumber: true })}
                 />
@@ -277,6 +293,7 @@ function CueRow({
                 <input
                   type="number"
                   min={0}
+                  max={sceneDurationMs ?? undefined}
                   className={`w-24 ${textFieldClass}`}
                   {...register(`${base}.endMs`, { valueAsNumber: true })}
                 />
@@ -284,6 +301,13 @@ function CueRow({
             </>
           )}
         </div>
+
+        {cue.rangeKind === "offset" && sceneDurationMs !== null && (
+          <p className={`mt-1 ${offsetOutOfScene ? errorTextClass : metaTextClass}`}>
+            シーン尺 {sceneDurationMs}ms
+            {offsetOutOfScene && " — 区間がシーンに収まらないため、保存時に警告されます"}
+          </p>
+        )}
 
         {cue.rangeKind === "lines" && (cue.startLineId !== "" || cue.endLineId !== "") && (
           <p className={`mt-1 ${metaTextClass}`}>
@@ -691,6 +715,7 @@ export function CueList({
   sceneId,
   lines,
   speakers,
+  sceneDurationMs,
 }: CueListProps) {
   const { fields, append, remove } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.cues` }) ?? [];
@@ -738,6 +763,7 @@ export function CueList({
             cue={cue}
             lines={lines}
             speakers={speakers}
+            sceneDurationMs={sceneDurationMs}
             onRemove={() => remove(cueIndex)}
           />
         );

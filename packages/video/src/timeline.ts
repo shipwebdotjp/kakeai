@@ -5,6 +5,7 @@ import {
   type Scene,
   type SceneTransitionPreset,
   type VisualCue,
+  type Warning,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 
@@ -309,6 +310,41 @@ export function collectCueTransitionIssues(
   timeline: ResolvedTimeline = resolveTimeline(document),
 ): TimelineIssue[] {
   return cueTransitionIssues(document, timeline);
+}
+
+export function collectOffsetRangeWarnings(
+  document: ContentDocument,
+  timeline: ResolvedTimeline = resolveTimeline(document),
+): Warning[] {
+  const warnings: Warning[] = [];
+  for (const placement of timeline.scenes) {
+    const scene = document.scenes[placement.sceneIndex];
+    if (scene === undefined) {
+      continue;
+    }
+    scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.range.kind !== "offset") {
+        return;
+      }
+      const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
+      if (cue.range.startMs >= placement.durationMs || cue.range.startMs >= cue.range.endMs) {
+        warnings.push({
+          path: cuePath,
+          code: "offset_range_out_of_scene",
+          message: `オフセット表示区間がシーン尺（${placement.durationMs}ms）に収まらないため、このCueは表示されません。`,
+        });
+        return;
+      }
+      if (cue.range.endMs > placement.durationMs) {
+        warnings.push({
+          path: [...cuePath, "range", "endMs"],
+          code: "offset_range_clamped",
+          message: `オフセット表示区間の終了がシーン尺（${placement.durationMs}ms）を超えているため、シーン末尾で切り詰められます。`,
+        });
+      }
+    });
+  }
+  return warnings;
 }
 
 export function collectTimelineIssues(document: ContentDocument): TimelineIssue[] {

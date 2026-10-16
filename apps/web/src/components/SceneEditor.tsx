@@ -498,6 +498,19 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     if (scene === undefined || scene.kind !== "point") {
       return;
     }
+    const placement = placementBySceneId.get(scene.id);
+    const splitLineId = scene.lines[lineIndex]?.id;
+    const splitLineStartMs = placement?.lines.find(
+      (line) => line.lineId === splitLineId,
+    )?.startMs;
+    const rawSplitOffsetMs =
+      placement !== undefined && splitLineStartMs !== undefined
+        ? splitLineStartMs - placement.startMs
+        : null;
+    const splitOffsetMs =
+      rawSplitOffsetMs !== null && Number.isFinite(rawSplitOffsetMs) && rawSplitOffsetMs >= 0
+        ? rawSplitOffsetMs
+        : null;
     let result: ReturnType<typeof splitPointScene>;
     try {
       result = splitPointScene(
@@ -505,6 +518,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         lineIndex,
         nextPointLabel(scenes, sceneIndex + 1),
         collectSceneIds(scenes),
+        splitOffsetMs,
       );
     } catch (error) {
       setDiagnostics((prev) => ({ ...prev, errors: [{ message: errorMessage(error) }] }));
@@ -1086,6 +1100,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               sceneId={scene.id}
               lines={scene.lines}
               speakers={watchedSpeakers}
+              sceneDurationMs={placementBySceneId.get(scene.id)?.durationMs ?? null}
             />
 
             <StandingFields
