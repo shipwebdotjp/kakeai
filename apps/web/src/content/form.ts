@@ -21,6 +21,7 @@ import {
   flowDiagramSchema,
   flowEffectsSchema,
   listCalloutItemsSchema,
+  statEffectsSchema,
   tableDataSchema,
   tableEffectsSchema,
   type AnimationPreset,
@@ -372,18 +373,20 @@ function normalizeChartEffect(entry: unknown): unknown {
   return { ...entry, effect: { ...effect, preset: CHART_PRESET_FALLBACK[preset] ?? "grow" } };
 }
 
-function effectsSchemaForVariant(variant: "table" | "chart" | "flow") {
+function effectsSchemaForVariant(variant: "table" | "chart" | "flow" | "stat") {
   switch (variant) {
     case "chart":
       return chartEffectsSchema;
     case "flow":
       return flowEffectsSchema;
+    case "stat":
+      return statEffectsSchema;
     case "table":
       return tableEffectsSchema;
   }
 }
 
-function defaultEffectsForVariant(variant: "table" | "chart" | "flow"): unknown[] {
+function defaultEffectsForVariant(variant: "table" | "chart" | "flow" | "stat"): unknown[] {
   switch (variant) {
     case "chart":
       return [
@@ -399,6 +402,13 @@ function defaultEffectsForVariant(variant: "table" | "chart" | "flow"): unknown[
           target: { kind: "nodes" },
           trigger: { kind: "cue" },
           effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 120 },
+        },
+      ];
+    case "stat":
+      return [
+        {
+          trigger: { kind: "cue" },
+          effect: { kind: "value", durationMs: 1000 },
         },
       ];
     case "table":
@@ -493,6 +503,11 @@ function readCueFields(
         break;
       }
       case "number": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = typeof value === "number" ? String(value) : "";
+        break;
+      }
+      case "decimal": {
         const value = getAtPath(input, field.key);
         result[field.key] = typeof value === "number" ? String(value) : "";
         break;
@@ -1077,6 +1092,31 @@ function buildCueInput(
         }
         break;
       }
+      case "decimal": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          if (field.optional) {
+            deleteAtPath(input, field.key);
+          } else {
+            setAtPath(input, field.key, 0);
+          }
+        } else {
+          const value = Number(trimmed);
+          if (!Number.isFinite(value)) {
+            throw new Error(`${field.label}は数値で入力してください`);
+          }
+          if (
+            (field.min !== undefined && value < field.min) ||
+            (field.max !== undefined && value > field.max)
+          ) {
+            throw new Error(
+              `${field.label}は ${field.min ?? ""}〜${field.max ?? ""} の範囲で入力してください`,
+            );
+          }
+          setAtPath(input, field.key, value);
+        }
+        break;
+      }
       case "boolean": {
         if (raw === "") {
           deleteAtPath(input, field.key);
@@ -1544,6 +1584,9 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         break;
       case "grid":
         fields[field.key] = defaultGridDataJson();
+        break;
+      case "decimal":
+        fields[field.key] = "0";
         break;
       case "flow":
         fields[field.key] = JSON.stringify({

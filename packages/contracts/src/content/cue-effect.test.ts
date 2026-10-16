@@ -4,8 +4,10 @@ import {
   cueEffectSchema,
   emphasizeEffectSchema,
   lineTriggerSchema,
+  numericEffectSchema,
   onsetSpecSchema,
   timedEffectSchema,
+  valueEffectSchema,
 } from "./cue-effect";
 import { tableToneSchema } from "./tone";
 
@@ -103,6 +105,28 @@ describe("emphasizeEffectSchema", () => {
         onset: { preset: "sweep", durationMs: 600, extra: 1 },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("valueEffectSchema", () => {
+  it("accepts an optional from and duration", () => {
+    expect(valueEffectSchema.safeParse({ kind: "value" }).success).toBe(true);
+    expect(
+      valueEffectSchema.safeParse({ kind: "value", from: 10, durationMs: 800 }).success,
+    ).toBe(true);
+  });
+
+  it("rejects unknown keys and negative durations", () => {
+    expect(valueEffectSchema.safeParse({ kind: "value", extra: 1 }).success).toBe(false);
+    expect(valueEffectSchema.safeParse({ kind: "value", durationMs: -1 }).success).toBe(false);
+  });
+
+  it("is part of the numeric effect union but not the base cue effect union", () => {
+    expect(numericEffectSchema.safeParse({ kind: "value" }).success).toBe(true);
+    expect(
+      numericEffectSchema.safeParse({ kind: "appear", preset: "fade", durationMs: 100 }).success,
+    ).toBe(true);
+    expect(cueEffectSchema.safeParse({ kind: "value" }).success).toBe(false);
   });
 });
 

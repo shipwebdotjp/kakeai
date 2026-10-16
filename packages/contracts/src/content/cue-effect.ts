@@ -62,11 +62,25 @@ export const emphasizeEffectSchema = z.strictObject({
 });
 export type EmphasizeEffect = z.infer<typeof emphasizeEffectSchema>;
 
+export const valueEffectSchema = z.strictObject({
+  kind: z.literal("value"),
+  from: z.number().finite().optional(),
+  durationMs: nonNegativeInt.optional(),
+});
+export type ValueEffect = z.infer<typeof valueEffectSchema>;
+
 export const cueEffectSchema = z.discriminatedUnion("kind", [
   appearEffectSchema,
   emphasizeEffectSchema,
 ]);
 export type CueEffect = z.infer<typeof cueEffectSchema>;
+
+export const numericEffectSchema = z.discriminatedUnion("kind", [
+  appearEffectSchema,
+  emphasizeEffectSchema,
+  valueEffectSchema,
+]);
+export type NumericEffect = z.infer<typeof numericEffectSchema>;
 
 export const timedEffectSchema = z.strictObject({
   trigger: lineTriggerSchema,

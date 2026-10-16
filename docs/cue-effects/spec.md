@@ -8,7 +8,7 @@
 - セリフ行の実時刻は選択済みAudioTakeの尺から派生する。入力にミリ秒を直書きせず、行IDを参照して共通解決器で解決する。
 - 効果は有限enumの語彙と尺だけで表す。任意CSS・keyframe・easing文字列・スクリプトは正本へ持ち込まない（[ADR-0031](../adr/0031-cue-transition-and-animation-ownership.md)）。
 - 表示窓・入退場はVisualCue側（`range`・`transition`）のままとし、Cue効果は内部演出だけを担う。両者を混ぜない。
-- `appear`（一発で現れる）と `emphasize`（区間中ずっと強調する）を第一弾とする。`emphasize` は発火時の一発演出（`onset`）と、対象以外を減光する `spotlight` を任意で持てる。
+- 効果は `appear`（一発で現れる）と `emphasize`（区間中ずっと強調する）、`value`（区間中で数値が進行する）とする。`emphasize` は発火時の一発演出（`onset`）と、対象以外を減光する `spotlight` を任意で持てる。`value` は数値を持つテンプレートに限る。
 
 ## 用語
 
@@ -17,6 +17,7 @@
 - **発火（onset）**: 一発で完結する変化。`AnimationPlan`（`tl.from`）で表す。
 - **持続状態（sustained state）**: 区間中ずっと続き、区間末で解除される状態。`stateIntervals` で表す。
 - **spotlight（兄弟減光）**: `emphasize` の `style` の一つ。対象をリングで強調しつつ、兄弟要素を減光する。
+- **value（カウント）**: 区間中で数値が `from` から対象の値へ進行する効果。`stateIntervals` では表せないため、`valueAnimations` としてコンパイラが値のトゥイーンを生成する。
 
 ## 共通単位の入力契約
 
@@ -36,6 +37,9 @@ Effectは有限enumとする。
 // 区間中ずっと強調する。style は枠・背景・スポットライト、tone はテーマのトーン。
 // onset は発火時に一度だけ走る演出（任意）。
 { "kind": "emphasize", "style": "spotlight", "tone": "primary", "onset": { "preset": "sweep", "durationMs": 600 } }
+
+// 区間中で数値が進行する（数値を持つテンプレートのみ）。from は省略時0。
+{ "kind": "value", "from": 0, "durationMs": 1000 }
 ```
 
 - `appear.preset` は `fade | slide-up | slide-down | slide-left | slide-right | scale-in`。
@@ -44,6 +48,7 @@ Effectは有限enumとする。
 - `emphasize.style` は `background | frame | spotlight`。`frame` は枠を太くする、`background` は背景色を付ける、`spotlight` は対象をリングで強調し兄弟を減光する。
 - `emphasize.tone` は `primary | secondary | tertiary | success | warning | error | info` とし、レンダー時にテーマから解決する（`table.simple` の強調と同じ語彙）。
 - `emphasize.onset` は任意で `{ preset: "sweep" | "flash" | "pop", durationMs }`。発火の尺は `animationPolicy.maxDurationMs` とTrigger区間でクランプする。
+- `value` は `from`（任意・既定0）と `durationMs`（任意・省略時はTrigger区間長）を持つ。尺は `animationPolicy.maxDurationMs` とTrigger区間でクランプする。書式は対象が持つ書式（`table.simple` は数値列、`chart.bar` は系列、`stat` は自身の `format`）を使う。
 - `chart.bar` の強調は棒の色を上書きしないよう `frame | spotlight` に限る（`background` は保存時に拒否する）。
 
 共通単位は `TimedEffect { trigger, effect }` とする。targetの束ね方はテンプレート固有で、テンプレートは次を使い分ける。
@@ -66,7 +71,8 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - `emphasize` は `stateIntervals` として対象のON区間を返す。ONで強調の見た目、OFFで元に戻す。ON/OFFは `tl.set` で切り替え、補間しない。
 - `emphasize.onset` は対象内の一時サブ要素（走査線など）に `AnimationPlan`（`startMs` はTrigger開始）として当て、持続の `stateIntervals` とは別要素・別プロパティにする。`sweep`/`flash`/`pop` は有限enumのvideoローカルなactionで、コンパイラが対応するCSSプロパティ・カスタムプロパティの開始値へ写像する。`<tr>` に子要素を置けないため、行targetのonsetは各セルへオーバーレイする。
 - `emphasize.style: "spotlight"` は対象にリングの `stateIntervals` を返し、加えて兄弟要素を `filter` で減光する `stateIntervals` を返す。兄弟要素はテンプレートが解決する（`appear` の非表示が `opacity` を使うため、減光は `opacity` ではなく `filter` を使い競合を避ける）。
-- 発火と持続は別サブ要素に割り当て、同じ要素の同じプロパティを取り合わない（[ADR-0063](../adr/0063-animation-onset-and-sustained-state.md)）。
+- `value` は `valueAnimations: { targetId, from, to, format, startMs, durationMs }[]` を返す。コンパイラだけがプロキシオブジェクトの `fromTo` を生成し、`onUpdate` で対象のテキストを書式化して書き換える。発火前は `from`、区間中は補間、区間後は `to` を表示する。
+- 発火と持続は別サブ要素に割り当て、同じ要素の同じプロパティを取り合わない（[ADR-0063](../adr/0063-animation-onset-and-sustained-state.md)）。`value` はテキストだけを書き換え、`emphasize` の枠・背景とは競合しない。
 - 効果の尺とTrigger区間の尺は別の時計として扱う。
 
 ## コンパイラと契約
@@ -74,6 +80,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - `packages/contracts` に `lineTriggerSchema`・`effectSchema`・`timedEffectSchema` と各テンプレートの入力スキーマを置く。テンプレート入力は無検証でレンダーへ渡さない。
 - `RenderContext` に `lineIntervals: { lineId, startMs, endMs }[]`（Cue相対）を追加する。コンパイラが `resolveTimeline` の `placement.lines` から算出する。
 - `RenderedCue` に `stateIntervals: { targetId, intervals: { startMs, endMs }[], on, off }[]` を追加する。コンパイラだけが `tl.set` を生成する。
+- `RenderedCue` に `valueAnimations: { targetId, from, to, format, startMs, durationMs }[]` を追加する。コンパイラだけが値のトゥイーン（プロキシ＋`onUpdate`＋`Intl.NumberFormat`）を生成する。
 - `VisualTemplateDefinition` に `collectLineRefs(input, path)` を追加する。`collectAssetRefs` と同じ規律でテンプレート定義へ集約し、`packages/contracts` の文書ウォーカー `collectLineReferences(document)` が全Cueの行参照を収集する。`validateContentDocument` が同一Scene実在検証に、web が行編集時の remap に使う。
 - プレビューはレンダーと同じ `compileDocument` を通るため、解決ロジックは `packages/video` に置き、web側で再実装しない。
 
@@ -90,9 +97,13 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 `effects` を唯一の内部演出とし、`reveal`・`emphasis` は廃止する。
 
-- `table.simple`: `effects` のみを持つ。targetは `{ "kind": "row", "index" } | { "kind": "cell", "row", "key" } | { "kind": "rows" } | { "kind": "columns" }`。`appear` は共通ヘルパ、`emphasize` は `stateIntervals` で描画する。旧 `data.emphasis`（静的強調）は `trigger: { "kind": "cue" }` の `emphasize`、旧 `reveal`（一括登場）はグループtarget＋`staggerMs` の `appear` で表す。
-- `chart.bar`: `effects` を持ち、`appear`（preset は `grow`／`bounce`／`fade`）と `emphasize`（`style` は `frame | spotlight`、`onset` 可）を扱う。targetは `{ "kind": "category", "index" } | { "kind": "series", "index" } | { "kind": "bars" }`。`grow`／`bounce`／`fade` は `appear` の preset として保持し、`axis` は描画側が `style.orientation` から決める。`spotlight` の兄弟は同じ棒グラフ内の他の棒。
+- `table.simple`: `effects` のみを持つ。targetは `{ "kind": "row", "index" } | { "kind": "cell", "row", "key" } | { "kind": "rows" } | { "kind": "columns" }`。`appear` は共通ヘルパ、`emphasize` は `stateIntervals` で描画する。`value`（数値カウント）は数値列のセルだけを対象とする。旧 `data.emphasis`（静的強調）は `trigger: { "kind": "cue" }` の `emphasize`、旧 `reveal`（一括登場）はグループtarget＋`staggerMs` の `appear` で表す。
+- `chart.bar`: `effects` を持ち、`appear`（preset は `grow`／`bounce`／`fade`）と `emphasize`（`style` は `frame | spotlight`、`onset` 可）、`value`（値ラベルのカウント）を扱う。targetは `{ "kind": "category", "index" } | { "kind": "series", "index" } | { "kind": "bars" }`。`grow`／`bounce`／`fade` は `appear` の preset として保持し、`axis` は描画側が `style.orientation` から決める。`spotlight` の兄弟は同じ棒グラフ内の他の棒。`value` は値ラベルが有効なときだけ効果を出し、書式は系列の `format` を使う。
 - `reveal`・`emphasis` の削除は保存済み有効入力の再解釈を伴う。`@1` を書き換えた（正式リリース前の破壊的変更。[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。新規Cueには既定の `effects`（表は全行フェード、グラフは全棒grow）を入れる。
+
+### `stat@1`
+
+1つの大きな数値とラベルを強調表示するテンプレート。`effects` は `{ trigger, effect }`（targetなし）で、`value`（`value` 入力へのカウント）・`emphasize`（数値への枠・背景）・`appear`（カード）を扱う。書式は `format`（`integer` / `decimal` / `percent` / `currency`）を使う。詳細は [../stat-template/spec.md](../stat-template/spec.md) を正とする。
 
 ### `list.callout@1`（新規）
 
@@ -116,7 +127,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 - 新規テンプレート（`list.callout@1`）は `@1` から開始する。
 - 既存テンプレートの入力形状変更は、保存済み参照の有無で `@1` 書き換えか `@2` 追加かを決める。`table.simple@1`・`chart.bar@1` の `reveal`・`emphasis` 削除は、正式リリース前の破壊的変更として `@1` を書き換えた（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
-- 効果語彙の追加は、保存済み有効入力の解釈を変えない限り同じ版を書き換えてよい（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。`spotlight`・`onset` の追加と `chart.bar` の `emphasize` 追加は、いずれも追加のみのため `@1` を据え置いた。
+- 効果語彙の追加は、保存済み有効入力の解釈を変えない限り同じ版を書き換えてよい（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。`spotlight`・`onset`・`value` の追加と `chart.bar` の `emphasize` 追加は、いずれも追加のみのため `@1` を据え置いた。
 
 ## 非ゴール
 
@@ -142,14 +153,14 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - list.callout の警告: 文言の行数目安など meta.warnings 未対応。テキスト系の目安を揃える。
 効果の語彙（パターン）を増やす
 - [x] spotlight（他を暗く）: 対象を強調しつつ兄弟を減光。表・グラフ・ポイントで一番「分かった感」が出る。`emphasize` の style 追加（`style: "spotlight"`）で実装。
-- count-up（数値のカウント）: 行区間で数値を0→値へ。chart/table の数値や「stat（大数字）」テンプレートと好相性。持続状態ではなく「区間で進行する値」なので新しい effect 種別 value を足す形。
+- [x] count-up（数値のカウント）: 行区間で数値を0→値へ。chart/table の数値や「stat（大数字）」テンプレートと好相性。持続状態ではなく「区間で進行する値」なので新しい effect 種別 `value` を足し、`valueAnimations` としてコンパイラがトゥイーンを生成する（[ADR-0065](../adr/0065-count-up-value-effect.md)、[../stat-template/spec.md](../stat-template/spec.md)）。
 - marker/underline（蛍光ペン）: 発火で線が走る onset 系。onset の preset として追加すると語彙が自然に増える。
 - pulse（繰り返し強調）: 「ずっと点滅」。既に pulse preset はあるので emphasize の繰り返しオプションとして。
 - カメラ/画像注釈: 画像の一部へ寄る/丸で囲む（hyperframes-keyframes 相当）。ただし任意keyframeは不可なので、有限プリセット（zoom-to, circle, arrow）に閉じる。
 追加すると効くテンプレート
 - [x] flow.diagram@1: 工程・フロー図。縦横を `style.orientation` で切替える単一テンプレート。各ノードがそのセリフでハイライトするのは行トリガーと最も相性が良い（[../flow-template/spec.md](../flow-template/spec.md)）。
 - steps / timeline@1: 番号付き縦ステップ。list.callout の親戚で実装部品を流用可。
-- stat@1（大きな数値＋ラベル）: count-up とセット。導入・結びの締めに。
+- [x] stat@1（大きな数値＋ラベル）: `value` 効果でカウントする（[../stat-template/spec.md](../stat-template/spec.md)）。
 - quote@1: 引用カード。著者・出典付き。行トリガーで強調。
 - image.callout@1（画像注釈）: 画像にポイント/矢印/丸を重ね、行ごとに切替。解説動画の主力。
 - code.block@1: 行番号付きコードで、ナレーションに合わせて該当行をハイライト。技術解説向け。
@@ -163,4 +174,4 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 1. [x] onset + spotlight（体感価値が最も大きく、emphasize の拡張で追加のみ）
 2. [x] 保存時検証と remap の collectLineRefs 一本化（正本性・壊れにくさ。地味だが効く）
 3. [x] flow.diagram（縦横、行トリガーが映える新テンプレート）
-4. count-up + stat（見せ場づくり）
+4. [x] count-up + stat（見せ場づくり）

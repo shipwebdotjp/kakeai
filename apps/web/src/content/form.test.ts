@@ -1949,3 +1949,73 @@ describe("flow.diagram form", () => {
     expect(parsed.edges).toHaveLength(1);
   });
 });
+
+describe("stat form", () => {
+  const statInput = {
+    value: 1200,
+    label: "導入社数",
+    format: "integer",
+    style: { tone: "primary", preset: "card" },
+    effects: [{ trigger: { kind: "cue" }, effect: { kind: "value", durationMs: 1000 } }],
+  };
+
+  it("round-trips the stat value, format, and count-up effect", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-stat",
+        template: { id: "stat", version: 1 },
+        layer: "overlay",
+        input: structuredClone(statInput),
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(statInput);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("creates new stat cues with a starter value and count-up effect", () => {
+    const cue = createCueFormValue({
+      sceneId: "scene-point-1",
+      templateId: "stat",
+      templateVersion: 1,
+      layer: "overlay",
+      order: 0,
+    });
+    expect(cue.fields.value).toBe("0");
+    const effects = JSON.parse(cue.fields.effects ?? "") as { effect: { kind: string } }[];
+    expect(effects[0]!.effect.kind).toBe("value");
+  });
+
+  it("round-trips a count-up value effect on a numeric table cell", () => {
+    const base = createInitialContentDocument();
+    const input = {
+      data: {
+        columns: [
+          { key: "name", label: "項目", type: "text" },
+          { key: "count", label: "件数", type: "number" },
+        ],
+        rows: [{ name: "a", count: 120 }],
+      },
+      style: { preset: "clean" },
+      effects: [
+        {
+          target: { kind: "cell", row: 0, key: "count" },
+          trigger: { kind: "cue" },
+          effect: { kind: "value", durationMs: 800 },
+        },
+      ],
+    };
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-table",
+        template: { id: "table.simple", version: 1 },
+        layer: "overlay",
+        input,
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(input);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+});

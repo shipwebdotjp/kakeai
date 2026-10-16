@@ -87,6 +87,28 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('window.__timelines["kakeai-main"]');
   });
 
+  it("emits a count-up tween for a stat value effect", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-stat",
+        template: { id: "stat", version: 1 },
+        layer: "overlay",
+        input: {
+          value: 1200,
+          format: "integer",
+          effects: [{ trigger: { kind: "cue" }, effect: { kind: "value" } }],
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const valueId = cueScope("vc-stat").id("value-text");
+    expect(compiled.html).toContain(`document.getElementById("${valueId}")`);
+    expect(compiled.html).toContain("_o={v:0}");
+    expect(compiled.html).toContain("v:1200");
+    expect(compiled.html).toContain("el.textContent=_fmt(");
+  });
+
   it("applies cue enter and exit transitions to the cue frame", () => {
     const document = validContentDocument();
     const scene = document.scenes[0]!;

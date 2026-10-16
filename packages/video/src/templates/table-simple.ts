@@ -13,14 +13,17 @@ import type {
   RenderedCue,
   RenderContext,
   StateInterval,
+  ValueAnimation,
 } from "../render-context";
 import {
   onsetOverlayId,
   planAppearEffect,
   planOnsetEffect,
+  planValueAnimation,
   resolveTriggerWindow,
   SPOTLIGHT_DIM_OFF,
   SPOTLIGHT_DIM_ON,
+  tableNumberFormatToValueFormat,
   type AppearTarget,
 } from "../cue-effects";
 import { accentForegroundHex } from "../theme";
@@ -67,6 +70,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
 
   const animation: AnimationItem[] = [];
   const stateIntervals: StateInterval[] = [];
+  const valueAnimations: ValueAnimation[] = [];
   const onsets = new Map<string, TableOnset>();
 
   const rowIdOf = (rowIndex: number): string => context.scope.id(`row-${rowIndex}`);
@@ -101,6 +105,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
     path: context.path,
     animation,
     stateIntervals,
+    valueAnimations,
     onsets,
   });
 
@@ -114,7 +119,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
             onset === undefined
               ? ""
               : `<span id="${onsetOverlayId(cellId)}" class="kakeai-onsetoverlay kakeai-onset-${onset.preset}" style="--kakeai-onset-color:${onset.color}"></span>`;
-          return `<td id="${cellId}" class="kakeai-tablecell" style="text-align:${columnAlign(column)};">${escapeHtmlText(cellText(row[column.key] ?? "", column))}${overlay}</td>`;
+          return `<td id="${cellId}" class="kakeai-tablecell" style="text-align:${columnAlign(column)};"><span id="${cellId}-text">${escapeHtmlText(cellText(row[column.key] ?? "", column))}</span>${overlay}</td>`;
         })
         .join("");
       return `<tr id="${rowIdOf(rowIndex)}" class="kakeai-tablerow">${cellsHtml}</tr>`;
@@ -130,6 +135,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
     assetIds: [],
     animation,
     stateIntervals,
+    valueAnimations,
   };
 }
 
@@ -249,6 +255,7 @@ function applyTableEffects(options: {
   path: (string | number)[];
   animation: AnimationItem[];
   stateIntervals: StateInterval[];
+  valueAnimations: ValueAnimation[];
   onsets: Map<string, TableOnset>;
 }): void {
   const lineIntervals = options.lineIntervals ?? [];
@@ -276,6 +283,38 @@ function applyTableEffects(options: {
       });
       options.animation.push(...plan.animation);
       options.stateIntervals.push(...plan.stateIntervals);
+      return;
+    }
+    if (entry.effect.kind === "value") {
+      const target = entry.target;
+      if (target.kind !== "cell") {
+        return;
+      }
+      const targetId = options.cellIds.get(`${target.row}:${target.key}`);
+      const column = options.columns.find((item) => item.key === target.key);
+      if (targetId === undefined || column === undefined || column.type !== "number") {
+        return;
+      }
+      const raw = (options.rows[target.row] as Record<string, unknown> | undefined)?.[column.key];
+      if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        return;
+      }
+      const numeric = raw;
+      const valueWindow = resolveTriggerWindow(entry.trigger, lineIntervals, options.spanMs, path);
+      if (valueWindow === null) {
+        return;
+      }
+      const plan = planValueAnimation({
+        targetId: `${targetId}-text`,
+        to: numeric,
+        format: tableNumberFormatToValueFormat(column.format),
+        effect: entry.effect,
+        window: valueWindow,
+        spanMs: options.spanMs,
+      });
+      if (plan !== null) {
+        options.valueAnimations.push(plan);
+      }
       return;
     }
     const window = resolveTriggerWindow(entry.trigger, lineIntervals, options.spanMs, path);

@@ -46,7 +46,7 @@
 - 値ラベルは系列の `format`（`integer | decimal | percent | currency`）で整形する。目盛りは、全系列の `format` が同じときはその `format`、異なるときはそのまま表示し、`axisUnit` を末尾に付ける。
 - `colorBy` が `series` のとき系列ごと、`category` のときカテゴリごとに `VisualTheme.categoryColors` を巡回して割り当てる。
 - 負値は0として描画し、警告（`chart_negative_value`）を返す。保存は拒否しない。
-- `effects` は行トリガー付きの `appear`（`grow`／`bounce`／`fade`）と `emphasize`（`frame`／`spotlight`、任意の `onset`）を持つ。target は `category`（カテゴリ番号）・`series`（系列番号）・`bars`（全棒）を指す。`durationMs` は `animationPolicy.maxDurationMs` でクランプし、ずらしはカテゴリ単位とする。棒の色を上書きしないよう `emphasize.style: background` は保存時に拒否する。`spotlight` の兄弟は同じ棒グラフ内の他の棒。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+- `effects` は行トリガー付きの `appear`（`grow`／`bounce`／`fade`）と `emphasize`（`frame`／`spotlight`、任意の `onset`）、`value`（値ラベルのカウント）を持つ。target は `category`（カテゴリ番号）・`series`（系列番号）・`bars`（全棒）を指す。`durationMs` は `animationPolicy.maxDurationMs` でクランプし、ずらしはカテゴリ単位とする。棒の色を上書きしないよう `emphasize.style: background` は保存時に拒否する。`spotlight` の兄弟は同じ棒グラフ内の他の棒。`value` は値ラベルが有効なときだけ効果を出し、書式は系列の `format` を使う。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 ## 図形アクション
 
@@ -61,6 +61,7 @@
 - `grow` の軸は `style.orientation` に従い、縦棒は `scaleY`、横棒は `scaleX`。`transform-origin` はテンプレートCSSが持つ。
 - `bars` target のずらしはカテゴリ単位（`startMs = カテゴリindex × staggerMs`）。同一カテゴリの系列は同時に伸びる。
 - `emphasize` は対象の棒にリング（`stateIntervals`）を付け、`spotlight` では他の棒を `filter` で減光する。`onset` は対象の棒内の一時オーバーレイに発火を当てる。
+- `value` は各棒の値ラベルを `from`（既定0）から値へカウントする。書式は系列の `format` を使う。
 - 効果がなければ内部アニメを返さない。
 
 ## 値軸と凡例
@@ -89,7 +90,7 @@
 | `style.colorBy` | select（任意） | series / category |
 | `style.axisUnit` | optionalText | 軸の単位 |
 | `style.valueLabels` | boolean | 値ラベル |
-| `effects` | effects | 行トリガー付きの登場・強調（`variant: "chart"`） |
+| `effects` | effects | 行トリガー付きの登場・強調・数値カウント（`variant: "chart"`） |
 
 新規Cueには、全棒を伸ばす既定効果を入れる。
 
@@ -98,6 +99,7 @@
 - カテゴリ・系列・値を持つ棒グラフを保存し、プレビューでシークし、MP4をレンダーできる。
 - 系列ごとに色が分かれ、複数系列では凡例が出る。値ラベル・目盛りが系列の書式で整形される。
 - `grow`・`bounce`・`fade` の登場が、プレビューのシークとMP4で一致する。
+- `value` の値ラベルカウントが、プレビューのシークとMP4で一致する。
 - `emphasize`（`frame`／`spotlight`）と `onset` が、プレビューのシークとMP4で一致する。`background` 強調は保存時に拒否する。
 - 先頭列がカテゴリでない、系列が数値でない、範囲外の効果 target、上限超過の場合を拒否する。
 - 負値・カテゴリ/系列の目安超過を `meta.warnings` で返す（拒否しない）。

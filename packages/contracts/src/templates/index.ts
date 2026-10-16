@@ -11,11 +11,14 @@ import {
   type AnimationPolicy,
 } from "../content/animation";
 import { fontFaceSpecSchema, textSurfaceSchema, themeAccentTokenSchema } from "../content/theme";
+import { tableToneSchema } from "../content/tone";
 import {
   appearEffectSchema,
   cueEffectSchema,
   emphasizeEffectSchema,
   lineTriggerSchema,
+  numericEffectSchema,
+  valueEffectSchema,
 } from "../content/cue-effect";
 import {
   MAX_NESTED_VISUAL_DEPTH,
@@ -47,11 +50,12 @@ export type TemplateFieldSpec =
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
   | { kind: "color"; key: string; label: string; optional?: boolean }
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
+  | { kind: "decimal"; key: string; label: string; min?: number; max?: number; optional?: boolean }
   | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }
   | { kind: "flow"; key: string; label: string; maxNodes: number; maxEdges: number }
-  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" }
+  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" | "stat" }
   | { kind: "calloutItems"; key: string; label: string }
   | { kind: "animation"; key: string; label: string };
 
@@ -521,7 +525,7 @@ export type TableEffectTarget = z.infer<typeof tableEffectTargetSchema>;
 export const tableEffectSchema = z.strictObject({
   target: tableEffectTargetSchema,
   trigger: lineTriggerSchema,
-  effect: cueEffectSchema,
+  effect: numericEffectSchema,
 });
 export type TableEffect = z.infer<typeof tableEffectSchema>;
 
@@ -561,6 +565,25 @@ export const tableSimpleInputSchema = z
             message: `効果の列キーが未定義です: ${entry.target.key}`,
             path: ["effects", index, "target", "key"],
           });
+        }
+      }
+      if (entry.effect.kind === "value") {
+        const target = entry.target;
+        if (target.kind !== "cell") {
+          ctx.addIssue({
+            code: "custom",
+            message: "数値のカウントはセルを対象にしてください",
+            path: ["effects", index, "target"],
+          });
+        } else {
+          const column = input.data.columns.find((item) => item.key === target.key);
+          if (column !== undefined && column.type !== "number") {
+            ctx.addIssue({
+              code: "custom",
+              message: `数値のカウントは数値列にだけ指定できます: ${column.key}`,
+              path: ["effects", index, "target", "key"],
+            });
+          }
         }
       }
     });
@@ -705,6 +728,7 @@ export type ChartAppearEffect = z.infer<typeof chartAppearEffectSchema>;
 export const chartCueEffectSchema = z.discriminatedUnion("kind", [
   chartAppearEffectSchema,
   emphasizeEffectSchema,
+  valueEffectSchema,
 ]);
 export type ChartCueEffect = z.infer<typeof chartCueEffectSchema>;
 
@@ -749,6 +773,13 @@ export const chartBarInputSchema = z
           code: "custom",
           message: "棒グラフの強調は frame か spotlight を指定してください",
           path: ["effects", index, "effect", "style"],
+        });
+      }
+      if (entry.effect.kind === "value" && (input.style?.valueLabels ?? true) === false) {
+        ctx.addIssue({
+          code: "custom",
+          message: "数値のカウントには値ラベルを有効にしてください",
+          path: ["effects", index, "effect"],
         });
       }
     });
@@ -1044,6 +1075,88 @@ const flowDiagramV1: VisualTemplateDefinition = {
   },
 };
 
+export const STAT_FORMATS = ["integer", "decimal", "percent", "currency"] as const;
+export const statFormatSchema = z.enum(STAT_FORMATS);
+export type StatFormat = z.infer<typeof statFormatSchema>;
+
+export const statStylePresetSchema = z.enum(["plain", "card"]);
+export type StatStylePreset = z.infer<typeof statStylePresetSchema>;
+
+export const statStyleSchema = z.strictObject({
+  tone: tableToneSchema.default("primary"),
+  preset: statStylePresetSchema.default("plain"),
+});
+export type StatStyle = z.infer<typeof statStyleSchema>;
+
+export const statEffectSchema = z.strictObject({
+  trigger: lineTriggerSchema,
+  effect: numericEffectSchema,
+});
+export type StatEffect = z.infer<typeof statEffectSchema>;
+
+export const statEffectsSchema = z.array(statEffectSchema).max(16);
+
+export const statInputSchema = z.strictObject({
+  value: z.number().finite(),
+  label: z.string().optional(),
+  caption: z.string().optional(),
+  format: statFormatSchema.default("integer"),
+  style: statStyleSchema.optional(),
+  effects: statEffectsSchema.optional(),
+});
+export type StatInput = z.infer<typeof statInputSchema>;
+
+const STAT_FORMAT_OPTIONS = [
+  { value: "integer", label: "整数" },
+  { value: "decimal", label: "小数" },
+  { value: "percent", label: "パーセント" },
+  { value: "currency", label: "金額" },
+] as const;
+
+const STAT_TONE_OPTIONS = [
+  { value: "primary", label: "プライマリ" },
+  { value: "secondary", label: "セカンダリ" },
+  { value: "tertiary", label: "ターシャリ" },
+  { value: "success", label: "成功" },
+  { value: "warning", label: "警告" },
+  { value: "error", label: "エラー" },
+  { value: "info", label: "情報" },
+] as const;
+
+const STAT_STYLE_PRESET_OPTIONS = [
+  { value: "plain", label: "シンプル" },
+  { value: "card", label: "カード" },
+] as const;
+
+const statV1: VisualTemplateDefinition = {
+  id: "stat",
+  version: 1,
+  inputSchema: statInputSchema,
+  layers: ["overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "数値", description: "大きな数値とラベルの1点強調", category: "data" },
+  inputFields: [
+    { kind: "decimal", key: "value", label: "数値" },
+    { kind: "optionalText", key: "label", label: "ラベル" },
+    { kind: "optionalText", key: "caption", label: "補足" },
+    { kind: "select", key: "format", label: "書式", options: STAT_FORMAT_OPTIONS },
+    { kind: "select", key: "style.tone", label: "色", options: STAT_TONE_OPTIONS },
+    { kind: "select", key: "style.preset", label: "スタイル", options: STAT_STYLE_PRESET_OPTIONS },
+    { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "stat" },
+  ],
+  collectAssetRefs: () => [],
+  collectLineRefs: (input, path) => {
+    const parsed = statEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
+    if (!parsed.success) {
+      return [];
+    }
+    return parsed.data.flatMap((entry, index) =>
+      collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
+    );
+  },
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   mediaFullBleedV1,
@@ -1056,6 +1169,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   chartBarV1,
   listCalloutV1,
   flowDiagramV1,
+  statV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
@@ -1065,6 +1179,7 @@ export { tableSimpleV1 };
 export { chartBarV1 };
 export { listCalloutV1 };
 export { flowDiagramV1 };
+export { statV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

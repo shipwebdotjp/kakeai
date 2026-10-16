@@ -13,13 +13,21 @@ import {
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
-import type { AnimationItem, RenderedCue, RenderContext, StateInterval } from "../render-context";
+import type {
+  AnimationItem,
+  RenderedCue,
+  RenderContext,
+  StateInterval,
+  ValueAnimation,
+} from "../render-context";
 import {
   onsetOverlayId,
   planOnsetEffect,
+  planValueAnimation,
   resolveTriggerWindow,
   SPOTLIGHT_DIM_OFF,
   SPOTLIGHT_DIM_ON,
+  tableNumberFormatToValueFormat,
 } from "../cue-effects";
 import { formatNumber } from "./table-format";
 import { toneHex } from "./tone";
@@ -109,6 +117,7 @@ interface RenderArgs {
   categoryColumn: TableColumn;
   colorFor: (categoryIndex: number, seriesIndex: number) => string;
   onsetFor: (categoryIndex: number, seriesIndex: number) => ChartOnset | undefined;
+  labelId: (categoryIndex: number, seriesIndex: number) => string;
   valueLabels: boolean;
   axisUnit: string;
   axisFormat: TableColumn | undefined;
@@ -132,7 +141,7 @@ function axisTickLabel(tick: number, column: TableColumn | undefined, unit: stri
 }
 
 function renderVertical(args: RenderArgs): string {
-  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, valueLabels, axisUnit, axisFormat } = args;
+  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, labelId, valueLabels, axisUnit, axisFormat } = args;
   const available = PLOT_HEIGHT_PX - CATEGORY_BAND_PX;
   const availableWidth = PLOT_WIDTH_PX - ROW_LABEL_WIDTH_PX;
   const bandWidth = rows.length === 0 ? availableWidth : availableWidth / rows.length;
@@ -151,7 +160,7 @@ function renderVertical(args: RenderArgs): string {
           const height = stats.max === 0 ? 0 : (value / stats.max) * available;
           const id = context.scope.id(`bar-${categoryIndex}-${seriesIndex}`);
           const label = valueLabels
-            ? `<span class="kakeai-chartvalue">${valueLabel(value, column)}</span>`
+            ? `<span id="${labelId(categoryIndex, seriesIndex)}" class="kakeai-chartvalue">${valueLabel(value, column)}</span>`
             : "";
           const overlay = barOverlayHtml(onsetFor(categoryIndex, seriesIndex), onsetOverlayId(id));
           return `<div id="${id}" class="kakeai-chartbar" style="width:${width}px;height:${roundPx(height)}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}${overlay}</div>`;
@@ -164,7 +173,7 @@ function renderVertical(args: RenderArgs): string {
 }
 
 function renderHorizontal(args: RenderArgs): string {
-  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, valueLabels, axisUnit, axisFormat } = args;
+  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, labelId, valueLabels, axisUnit, axisFormat } = args;
   const available = PLOT_WIDTH_PX - ROW_LABEL_WIDTH_PX;
   const availableHeight = PLOT_HEIGHT_PX;
   const rowHeight =
@@ -186,7 +195,7 @@ function renderHorizontal(args: RenderArgs): string {
           const width = stats.max === 0 ? 0 : (value / stats.max) * available;
           const id = context.scope.id(`bar-${categoryIndex}-${seriesIndex}`);
           const label = valueLabels
-            ? `<span class="kakeai-charthvalue">${valueLabel(value, column)}</span>`
+            ? `<span id="${labelId(categoryIndex, seriesIndex)}" class="kakeai-charthvalue">${valueLabel(value, column)}</span>`
             : "";
           const overlay = barOverlayHtml(onsetFor(categoryIndex, seriesIndex), onsetOverlayId(id));
           return `<div id="${id}" class="kakeai-chartbar kakeai-chartbar-h" style="width:${roundPx(width)}px;height:${height}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}${overlay}</div>`;
@@ -251,12 +260,15 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
 
   const barId = (categoryIndex: number, seriesIndex: number): string =>
     context.scope.id(`bar-${categoryIndex}-${seriesIndex}`);
+  const labelId = (categoryIndex: number, seriesIndex: number): string =>
+    context.scope.id(`val-${categoryIndex}-${seriesIndex}`);
   const barIdsByCategory = rows.map((_row, categoryIndex) =>
     seriesColumns.map((_column, seriesIndex) => barId(categoryIndex, seriesIndex)),
   );
 
   const animation: AnimationItem[] = [];
   const stateIntervals: StateInterval[] = [];
+  const valueAnimations: ValueAnimation[] = [];
   const onsets = new Map<string, ChartOnset>();
 
   applyChartEffects({
@@ -265,6 +277,10 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
     theme: context.theme,
     barId,
     barIdsByCategory,
+    labelId,
+    values,
+    seriesColumns,
+    valueLabels: style?.valueLabels ?? true,
     categoryCount: rows.length,
     seriesCount,
     lineIntervals: context.lineIntervals ?? [],
@@ -272,6 +288,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
     path: context.path,
     animation,
     stateIntervals,
+    valueAnimations,
     onsets,
   });
 
@@ -284,6 +301,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
     categoryColumn,
     colorFor,
     onsetFor: (categoryIndex, seriesIndex) => onsets.get(barId(categoryIndex, seriesIndex)),
+    labelId,
     valueLabels: style?.valueLabels ?? true,
     axisUnit: style?.axisUnit ?? "",
     axisFormat:
@@ -313,6 +331,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
     assetIds: [],
     animation,
     stateIntervals,
+    valueAnimations,
   };
 }
 
@@ -387,12 +406,37 @@ function chartEmphasizeOffVars(): Record<string, string | number> {
   return { boxShadow: "none" };
 }
 
+function resolveChartValueTargets(
+  effect: ChartEffect,
+  categoryCount: number,
+  seriesCount: number,
+): { categoryIndex: number; seriesIndex: number }[] {
+  const target = effect.target;
+  const refs: { categoryIndex: number; seriesIndex: number }[] = [];
+  for (let categoryIndex = 0; categoryIndex < categoryCount; categoryIndex += 1) {
+    for (let seriesIndex = 0; seriesIndex < seriesCount; seriesIndex += 1) {
+      if (
+        target.kind === "bars" ||
+        (target.kind === "category" && target.index === categoryIndex) ||
+        (target.kind === "series" && target.index === seriesIndex)
+      ) {
+        refs.push({ categoryIndex, seriesIndex });
+      }
+    }
+  }
+  return refs;
+}
+
 function applyChartEffects(options: {
   effects: readonly ChartEffect[];
   orientation: "vertical" | "horizontal";
   theme: VisualThemeDefinition;
   barId: (categoryIndex: number, seriesIndex: number) => string;
   barIdsByCategory: readonly (readonly string[])[];
+  labelId: (categoryIndex: number, seriesIndex: number) => string;
+  values: readonly (readonly number[])[];
+  seriesColumns: readonly TableColumn[];
+  valueLabels: boolean;
   categoryCount: number;
   seriesCount: number;
   lineIntervals: RenderContext["lineIntervals"];
@@ -400,6 +444,7 @@ function applyChartEffects(options: {
   path: (string | number)[];
   animation: AnimationItem[];
   stateIntervals: StateInterval[];
+  valueAnimations: ValueAnimation[];
   onsets: Map<string, ChartOnset>;
 }): void {
   const lineIntervals = options.lineIntervals ?? [];
@@ -417,6 +462,30 @@ function applyChartEffects(options: {
     const path = [...options.path, "effects", effectIndex];
     const window = resolveTriggerWindow(entry.trigger, lineIntervals, options.spanMs, path);
     if (window === null) {
+      return;
+    }
+    if (entry.effect.kind === "value") {
+      if (!options.valueLabels) {
+        return;
+      }
+      for (const ref of resolveChartValueTargets(entry, options.categoryCount, options.seriesCount)) {
+        const numeric = options.values[ref.categoryIndex]?.[ref.seriesIndex];
+        const column = options.seriesColumns[ref.seriesIndex];
+        if (numeric === undefined || column === undefined) {
+          continue;
+        }
+        const plan = planValueAnimation({
+          targetId: options.labelId(ref.categoryIndex, ref.seriesIndex),
+          to: numeric,
+          format: tableNumberFormatToValueFormat(column.format),
+          effect: entry.effect,
+          window,
+          spanMs: options.spanMs,
+        });
+        if (plan !== null) {
+          options.valueAnimations.push(plan);
+        }
+      }
       return;
     }
     if (entry.effect.kind === "emphasize") {

@@ -11,6 +11,7 @@ import {
   chartBarV1,
   listCalloutV1,
   flowDiagramV1,
+  statV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
   deviceFrameInputSchema,
@@ -33,7 +34,7 @@ import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import { seededRandom } from "./random";
-import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval, RenderAnimationAction } from "./render-context";
+import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval, RenderAnimationAction, ValueAnimation } from "./render-context";
 import {
   THEME_FONT_STACKS,
   mixHex,
@@ -55,6 +56,7 @@ import { renderTableSimple } from "./templates/table-simple";
 import { renderChartBar } from "./templates/chart-bar";
 import { renderListCallout } from "./templates/list-callout";
 import { renderFlowDiagram } from "./templates/flow-diagram";
+import { renderStat } from "./templates/stat";
 import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
@@ -508,6 +510,8 @@ function dispatchTemplate(
       return renderListCallout(input, context);
     case `${flowDiagramV1.id}@${flowDiagramV1.version}`:
       return renderFlowDiagram(input, context);
+    case `${statV1.id}@${statV1.version}`:
+      return renderStat(input, context);
     case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
       return renderCompositionFullBleed(input, context, compositionResolver);
     default:
@@ -755,6 +759,12 @@ const STYLES = [
   ".kakeai-flow-boxed .kakeai-flownode{border:3px solid var(--kakeai-border);}",
   ".kakeai-flownode-label{font-size:30px;font-weight:700;line-height:1.3;color:var(--kakeai-text);word-break:break-word;}",
   ".kakeai-flownode-caption{font-size:22px;line-height:1.3;color:var(--kakeai-muted);word-break:break-word;}",
+  ".kakeai-statwrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:120px 200px;box-sizing:border-box;}",
+  ".kakeai-statcard{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:48px 80px;border-radius:var(--kakeai-radius-lg);}",
+  ".kakeai-stat-card{background:var(--kakeai-surface);box-shadow:0 12px 48px var(--kakeai-shadow);}",
+  ".kakeai-statvalue{position:relative;font-size:180px;font-weight:800;line-height:1.05;color:var(--kakeai-accent-primary);}",
+  ".kakeai-statlabel{margin:0;font-size:52px;font-weight:700;color:var(--kakeai-text);}",
+  ".kakeai-statcaption{margin:0;font-size:32px;color:var(--kakeai-muted);}",
   ".kakeai-onsetoverlay{position:absolute;inset:0;pointer-events:none;opacity:0;display:block;}",
   ".kakeai-onsetsweep{--kakeai-onset-progress:1;border-radius:inherit;padding:6px;background:conic-gradient(from calc(var(--kakeai-onset-progress,0) * 360deg),transparent 0deg,var(--kakeai-onset-color,#fff) 45deg,transparent 110deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;}",
   ".kakeai-onsetflash{border-radius:inherit;background:var(--kakeai-onset-color,#fff);}",
@@ -829,6 +839,31 @@ function actionVars(action: RenderAnimationAction, axis: "x" | "y" | undefined):
 
 function actionEase(ease: FigureEase | undefined): string {
   return ease === "overshoot" ? "back.out(1.6)" : "power1.out";
+}
+
+function valueFormatterExpr(format: ValueAnimation["format"]): string {
+  switch (format) {
+    case "integer":
+      return `(function(){var f=new Intl.NumberFormat("ja-JP",{maximumFractionDigits:0});return function(v){return f.format(v);};})()`;
+    case "decimal":
+      return `(function(){var f=new Intl.NumberFormat("ja-JP",{minimumFractionDigits:1,maximumFractionDigits:2});return function(v){return f.format(v);};})()`;
+    case "percent":
+      return `(function(){var f=new Intl.NumberFormat("ja-JP",{style:"percent",maximumFractionDigits:1});return function(v){return f.format(v);};})()`;
+    case "currency":
+      return `(function(){var f=new Intl.NumberFormat("ja-JP",{style:"currency",currency:"JPY",maximumFractionDigits:0});return function(v){return f.format(v);};})()`;
+    case "raw":
+      return `function(v){return String(v);}`;
+  }
+}
+
+function valueTweenLine(item: ValueAnimation, absStartMs: number): string | null {
+  if (item.durationMs <= 0 || !Number.isFinite(item.from) || !Number.isFinite(item.to)) {
+    return null;
+  }
+  const formatter = valueFormatterExpr(item.format);
+  const startMs = absStartMs + item.startMs;
+  const targetId = JSON.stringify(item.targetId);
+  return `(function(){var _fmt=${formatter};var _o={v:${item.from}};tl.fromTo(_o,{v:${item.from}},{v:${item.to},duration:${secondsText(item.durationMs / 1000)},ease:"power1.out",immediateRender:true,onUpdate:function(){var el=document.getElementById(${targetId});if(el){el.textContent=_fmt(this.targets()[0].v);}}},${toSecondsText(startMs)});})();`;
 }
 
 function gainToVolume(gainDb: number | undefined): string {
@@ -1213,6 +1248,13 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
           tweenLines.push(
             `tl.from(document.getElementById("${item.targetId}"),{${vars},duration:${secondsText(item.durationMs / 1000)},ease:"${actionEase(item.ease)}",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,
           );
+        }
+      }
+
+      for (const item of rendered.valueAnimations ?? []) {
+        const valueLine = valueTweenLine(item, absStartMs);
+        if (valueLine !== null) {
+          tweenLines.push(valueLine);
         }
       }
 

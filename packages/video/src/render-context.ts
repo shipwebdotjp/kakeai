@@ -43,6 +43,17 @@ export interface StateInterval {
   off?: Record<string, string | number>;
 }
 
+export type ValueFormat = "integer" | "decimal" | "percent" | "currency" | "raw";
+
+export interface ValueAnimation {
+  targetId: string;
+  from: number;
+  to: number;
+  format: ValueFormat;
+  startMs: number;
+  durationMs: number;
+}
+
 export interface RenderedCue {
   html: string;
   assetIds: string[];
@@ -51,6 +62,7 @@ export interface RenderedCue {
   expressionTargets?: ExpressionTarget[];
   nestedCompositionWindows?: NestedCompositionWindow[];
   stateIntervals?: StateInterval[];
+  valueAnimations?: ValueAnimation[];
 }
 
 export interface NestedCompositionWindow {

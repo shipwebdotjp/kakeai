@@ -343,4 +343,45 @@ describe("renderChartBar effects", () => {
     });
     expect(rendered.html).toContain("kakeai-onset-pop");
   });
+
+  it("counts up bar value labels and skips when labels are disabled", () => {
+    const scope = cueScope("visual-chart-1");
+    const rendered = renderChartBar(
+      {
+        ...singleSeries,
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "value" },
+          },
+        ],
+      },
+      { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
+    );
+    expect(rendered.valueAnimations).toContainEqual({
+      targetId: scope.id("val-0-0"),
+      from: 0,
+      to: 100,
+      format: "currency",
+      startMs: 0,
+      durationMs: 2000,
+    });
+    expect(() =>
+      renderChartBar(
+        {
+          ...singleSeries,
+          style: { preset: "clean", orientation: "vertical", valueLabels: false },
+          effects: [
+            {
+              target: { kind: "bars" },
+              trigger: { kind: "cue" },
+              effect: { kind: "value" },
+            },
+          ],
+        },
+        { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
+      ),
+    ).toThrow(CompositionCompileError);
+  });
 });

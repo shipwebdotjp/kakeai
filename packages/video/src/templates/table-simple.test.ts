@@ -234,6 +234,30 @@ describe("renderTableSimple effects", () => {
     ).toBe(false);
   });
 
+  it("counts a numeric cell up over its line range", () => {
+    const rendered = renderTableSimple(
+      {
+        ...baseInput,
+        effects: [
+          {
+            target: { kind: "cell", row: 1, key: "price" },
+            trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+            effect: { kind: "value" },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    expect(rendered.valueAnimations).toContainEqual({
+      targetId: cueScope("visual-table-1").id("cell-1-1-text"),
+      from: 0,
+      to: 1500,
+      format: "currency",
+      startMs: 1500,
+      durationMs: 1000,
+    });
+  });
+
   it("sweeps the onset overlay on every cell of a highlighted row", () => {
     const rendered = renderTableSimple(
       {

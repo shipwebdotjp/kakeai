@@ -9,6 +9,7 @@ import {
   listVisualTemplateCatalog,
   mediaCardInputSchema,
   mediaFullBleedInputSchema,
+  statInputSchema,
   tableSimpleInputSchema,
 } from "./index";
 
@@ -472,5 +473,127 @@ describe("flow.diagram@1", () => {
         ],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("count-up value effects", () => {
+  const tableData = {
+    columns: [
+      { key: "name", label: "項目", type: "text" },
+      { key: "count", label: "件数", type: "number" },
+    ],
+    rows: [{ name: "a", count: 120 }],
+  };
+
+  it("accepts a value effect on a numeric table cell", () => {
+    expect(
+      tableSimpleInputSchema.safeParse({
+        data: tableData,
+        effects: [
+          {
+            target: { kind: "cell", row: 0, key: "count" },
+            trigger: { kind: "cue" },
+            effect: { kind: "value", durationMs: 1000 },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a value effect on a non-cell or non-numeric target", () => {
+    expect(
+      tableSimpleInputSchema.safeParse({
+        data: tableData,
+        effects: [
+          {
+            target: { kind: "rows" },
+            trigger: { kind: "cue" },
+            effect: { kind: "value" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      tableSimpleInputSchema.safeParse({
+        data: tableData,
+        effects: [
+          {
+            target: { kind: "cell", row: 0, key: "name" },
+            trigger: { kind: "cue" },
+            effect: { kind: "value" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a value effect on chart.bar", () => {
+    expect(
+      chartBarInputSchema.safeParse({
+        data: {
+          columns: [
+            { key: "m", label: "月", type: "text" },
+            { key: "s", label: "売上", type: "number" },
+          ],
+          rows: [{ m: "1月", s: 100 }],
+        },
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "value", durationMs: 800 },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a chart.bar value effect when value labels are disabled", () => {
+    expect(
+      chartBarInputSchema.safeParse({
+        data: {
+          columns: [
+            { key: "m", label: "月", type: "text" },
+            { key: "s", label: "売上", type: "number" },
+          ],
+          rows: [{ m: "1月", s: 100 }],
+        },
+        style: { preset: "clean", orientation: "vertical", valueLabels: false },
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "value" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("stat@1", () => {
+  it("registers stat@1 as an editable overlay template with a decimal field", () => {
+    const definition = getVisualTemplate("stat", 1);
+    expect(definition?.layers).toEqual(["overlay"]);
+    expect(isEditableTemplate("stat", 1)).toBe(true);
+    const fields = getTemplateInputFields("stat", 1);
+    expect(fields?.some((field) => field.kind === "decimal")).toBe(true);
+    expect(fields?.some((field) => field.kind === "effects")).toBe(true);
+  });
+
+  it("accepts a value, label, format, and a count-up effect", () => {
+    expect(
+      statInputSchema.safeParse({
+        value: 1200,
+        label: "導入社数",
+        format: "integer",
+        effects: [{ trigger: { kind: "cue" }, effect: { kind: "value", durationMs: 1000 } }],
+      }).success,
+    ).toBe(true);
+    expect(statInputSchema.safeParse({ value: 1, format: "percent" }).success).toBe(true);
+  });
+
+  it("rejects an unknown format", () => {
+    expect(statInputSchema.safeParse({ value: 1, format: "ratio" }).success).toBe(false);
   });
 });

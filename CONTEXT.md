@@ -188,6 +188,10 @@ _Avoid_: keyframe, intro animation
 An emphasis style that highlights a target while dimming its sibling elements for the range. Siblings are resolved by the template.
 _Avoid_: dim, mute, focus
 
+**Value Animation**:
+A cue effect that progresses a numeric target from a start value to its value over a trigger range, formatted as static display. The compiler alone turns it into a value tween.
+_Avoid_: timer, counter script
+
 **Template Field**:
 A declarative input-field spec (`inputFields`) on a Visual Template that drives the generic Cue editor, so adding a template needs no editor code.
 _Avoid_: form schema, zod

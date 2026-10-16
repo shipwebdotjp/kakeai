@@ -222,11 +222,12 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `chart.bar@1` | タイトル、カテゴリ、系列、数値、向き、目盛り、効果 | 対応（[../chart-template/spec.md](../chart-template/spec.md)） |
 | `table.simple@1` | 見出し、列定義、行、スタイル、効果 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
 | `list.callout@1` | 見出し、ポイント列、行トリガー付き効果 | 対応（[../cue-effects/spec.md](../cue-effects/spec.md)） |
+| `stat@1` | 数値、ラベル、補足、書式、トーン、効果 | 対応。大きな数値を行トリガーでカウントする（[../stat-template/spec.md](../stat-template/spec.md)） |
 | `flow.diagram@1` | タイトル、ノード、辺、向き、スタイル、効果 | 対応。縦横を `style.orientation` で切替える。行トリガーでノードを強調する（[../flow-template/spec.md](../flow-template/spec.md)） |
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
-テンプレート内部の演出は、Cue Trigger（行区間またはCue窓）と Cue Effect（`appear` / `emphasize`）の共通単位で表せる。`emphasize` は `style`（`background` / `frame` / `spotlight`）と、任意の `onset`（発火の一発演出。`sweep` / `flash` / `pop`）を持つ。Triggerは行IDを参照し、実時刻はコンパイラが音声尺から解決する。targetの束ね方はテンプレート固有で、データ駆動テンプレートは `effects` 配列、著者アイテム型は各アイテムのインラインとする。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+テンプレート内部の演出は、Cue Trigger（行区間またはCue窓）と Cue Effect（`appear` / `emphasize` / `value`）の共通単位で表せる。`emphasize` は `style`（`background` / `frame` / `spotlight`）と、任意の `onset`（発火の一発演出。`sweep` / `flash` / `pop`）を持つ。`value` は数値に限り、区間中で数値をカウントする。Triggerは行IDを参照し、実時刻はコンパイラが音声尺から解決する。targetの束ね方はテンプレート固有で、データ駆動テンプレートは `effects` 配列、著者アイテム型は各アイテムのインラインとする。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。例外として、Kakeai管理下でAIが作成し不変bundleとしてpublishしたCompositionVersionは、`composition.full-bleed@1` のID入力、または `NestedVisual` の `kind: "composition"`（端末画面など）を通じてnative nested compositionとして参照できる。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
 

@@ -3,9 +3,16 @@ import {
   type AppearEffect,
   type EmphasizeEffect,
   type LineTrigger,
+  type ValueEffect,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
-import type { AnimationItem, LineInterval, StateInterval } from "./render-context";
+import type {
+  AnimationItem,
+  LineInterval,
+  StateInterval,
+  ValueAnimation,
+  ValueFormat,
+} from "./render-context";
 
 export interface CueEffectWindow {
   startMs: number;
@@ -89,6 +96,58 @@ export const SPOTLIGHT_DIM_OFF: Record<string, string | number> = { filter: "non
 
 export function onsetOverlayId(elementId: string): string {
   return `${elementId}-onset`;
+}
+
+export function tableNumberFormatToValueFormat(format: string | undefined): ValueFormat {
+  switch (format) {
+    case "currency":
+      return "currency";
+    case "percent":
+      return "percent";
+    case "integer":
+      return "integer";
+    case "decimal":
+      return "decimal";
+    default:
+      return "raw";
+  }
+}
+
+export function planValueAnimation(options: {
+  targetId: string;
+  to: number;
+  format: ValueFormat;
+  effect: ValueEffect;
+  window: CueEffectWindow;
+  spanMs: number;
+}): ValueAnimation | null {
+  const windowMs = options.window.endMs - options.window.startMs;
+  const durationMs = Math.max(
+    0,
+    Math.min(
+      options.effect.durationMs ?? windowMs,
+      windowMs,
+      DEFAULT_ANIMATION_POLICY.maxDurationMs,
+    ),
+  );
+  const startMs = options.window.startMs;
+  const from = options.effect.from ?? 0;
+  if (
+    durationMs <= 0 ||
+    startMs >= options.spanMs ||
+    !Number.isFinite(from) ||
+    !Number.isFinite(options.to)
+  ) {
+    return null;
+  }
+  return {
+    targetId: options.targetId,
+    from,
+    to: options.to,
+    format: options.format,
+    startMs,
+    durationMs,
+  };
 }
 
 export function planOnsetEffect(options: {

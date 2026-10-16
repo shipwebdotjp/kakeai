@@ -10,20 +10,22 @@ import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
 
+type EffectVariant = "table" | "chart" | "flow" | "stat";
+
 interface EffectsFieldProps {
   label: string;
   fieldKey: string;
-  variant: "table" | "chart" | "flow";
+  variant: EffectVariant;
   value: string;
   setField: (key: string, value: string) => void;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
 }
 
-const TARGET_OPTIONS: Record<"table" | "chart" | "flow", readonly { value: string; label: string }[]> = {
+const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: string }[]> = {
   table: [
-    { value: "row", label: "行" },
     { value: "cell", label: "セル" },
+    { value: "row", label: "行" },
     { value: "rows", label: "全行" },
     { value: "columns", label: "全列" },
   ],
@@ -36,12 +38,35 @@ const TARGET_OPTIONS: Record<"table" | "chart" | "flow", readonly { value: strin
     { value: "node", label: "ノード" },
     { value: "nodes", label: "全ノード" },
   ],
+  stat: [],
 };
 
 const TRIGGER_OPTIONS = [
   { value: "cue", label: "Cue全体" },
   { value: "lines", label: "セリフ区間" },
 ] as const;
+
+const EFFECT_OPTIONS: Record<EffectVariant, readonly { value: string; label: string }[]> = {
+  table: [
+    { value: "appear", label: "登場" },
+    { value: "emphasize", label: "強調" },
+    { value: "value", label: "数値カウント" },
+  ],
+  chart: [
+    { value: "appear", label: "登場" },
+    { value: "emphasize", label: "強調" },
+    { value: "value", label: "数値カウント" },
+  ],
+  flow: [
+    { value: "appear", label: "登場" },
+    { value: "emphasize", label: "強調" },
+  ],
+  stat: [
+    { value: "value", label: "数値カウント" },
+    { value: "emphasize", label: "強調" },
+    { value: "appear", label: "登場" },
+  ],
+};
 
 const APPEAR_PRESET_LABELS: Record<string, string> = {
   fade: "フェード",
@@ -92,7 +117,20 @@ function normalizeTarget(kind: string, previous: Json): Json {
   return { kind };
 }
 
-function defaultEntry(variant: "table" | "chart" | "flow"): Json {
+function makeEffect(kind: string): Json {
+  if (kind === "emphasize") {
+    return { kind: "emphasize", style: "frame", tone: "primary" };
+  }
+  if (kind === "value") {
+    return { kind: "value" };
+  }
+  return { kind: "appear", preset: "fade", durationMs: 400 };
+}
+
+function defaultEntry(variant: EffectVariant): Json {
+  if (variant === "stat") {
+    return { trigger: { kind: "cue" }, effect: { kind: "value" } };
+  }
   return {
     target: normalizeTarget(TARGET_OPTIONS[variant][0]!.value, {}),
     trigger: { kind: "cue" },
@@ -113,10 +151,7 @@ export function EffectsField({
   speakers,
 }: EffectsFieldProps) {
   const entries = parseEntries(value);
-  const effectOptions = [
-    { value: "appear", label: "登場" },
-    { value: "emphasize", label: "強調" },
-  ];
+  const targetless = variant === "stat";
   const emphasizeStyles =
     variant === "chart"
       ? EMPHASIZE_STYLES.filter((style) => style !== "background")
@@ -138,7 +173,13 @@ export function EffectsField({
   }
 
   const commit = (next: Json[]) => {
-    setField(fieldKey, JSON.stringify(next));
+    const cleaned = targetless
+      ? next.map((entry) => {
+          const { target: _target, ...rest } = entry;
+          return rest;
+        })
+      : next;
+    setField(fieldKey, JSON.stringify(cleaned));
   };
   const update = (index: number, patch: Json) => {
     commit(entries.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)));
@@ -154,7 +195,7 @@ export function EffectsField({
     <div className="my-2">
       <span>{label}</span>
       <p className={metaTextClass}>
-        セリフ区間を契機に、対象を登場させたり強調したりします。
+        セリフ区間を契機に、対象を登場・強調・数値カウントします。
       </p>
       {entries.map((entry, index) => {
         const target = targetOf(entry);
@@ -170,71 +211,75 @@ export function EffectsField({
         return (
           <div key={index} className="mt-2 rounded border border-border p-2">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="inline-flex items-center gap-1.5">
-                対象
-                <select
-                  className={textFieldClass}
-                  value={targetKind}
-                  onChange={(event) => {
-                    const kind = event.target.value;
-                    update(index, { target: normalizeTarget(kind, target) });
-                  }}
-                >
-                  {TARGET_OPTIONS[variant].map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {hasIndex && (
-                <label className="inline-flex items-center gap-1.5">
-                  番号
-                  <input
-                    type="number"
-                    min={0}
-                    className={`w-16 ${textFieldClass}`}
-                    value={String(target.index ?? 0)}
-                    onChange={(event) =>
-                      update(index, {
-                        target: {
-                          ...target,
-                          index: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                        },
-                      })
-                    }
-                  />
-                </label>
-              )}
-              {isCell && (
+              {!targetless && (
                 <>
                   <label className="inline-flex items-center gap-1.5">
-                    行
-                    <input
-                      type="number"
-                      min={0}
-                      className={`w-16 ${textFieldClass}`}
-                      value={String(target.row ?? 0)}
-                      onChange={(event) =>
-                        update(index, {
-                          target: {
-                            ...target,
-                            row: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                          },
-                        })
-                      }
-                    />
+                    対象
+                    <select
+                      className={textFieldClass}
+                      value={targetKind}
+                      onChange={(event) => {
+                        const kind = event.target.value;
+                        update(index, { target: normalizeTarget(kind, target) });
+                      }}
+                    >
+                      {TARGET_OPTIONS[variant].map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
-                  <label className="inline-flex items-center gap-1.5">
-                    列キー
-                    <input
-                      className={`w-24 ${textFieldClass}`}
-                      value={String(target.key ?? "")}
-                      onChange={(event) =>
-                        update(index, { target: { ...target, key: event.target.value } })
-                      }
-                    />
-                  </label>
+                  {hasIndex && (
+                    <label className="inline-flex items-center gap-1.5">
+                      番号
+                      <input
+                        type="number"
+                        min={0}
+                        className={`w-16 ${textFieldClass}`}
+                        value={String(target.index ?? 0)}
+                        onChange={(event) =>
+                          update(index, {
+                            target: {
+                              ...target,
+                              index: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  )}
+                  {isCell && (
+                    <>
+                      <label className="inline-flex items-center gap-1.5">
+                        行
+                        <input
+                          type="number"
+                          min={0}
+                          className={`w-16 ${textFieldClass}`}
+                          value={String(target.row ?? 0)}
+                          onChange={(event) =>
+                            update(index, {
+                              target: {
+                                ...target,
+                                row: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="inline-flex items-center gap-1.5">
+                        列キー
+                        <input
+                          className={`w-24 ${textFieldClass}`}
+                          value={String(target.key ?? "")}
+                          onChange={(event) =>
+                            update(index, { target: { ...target, key: event.target.value } })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
                 </>
               )}
               <button
@@ -328,16 +373,9 @@ export function EffectsField({
                 <select
                   className={textFieldClass}
                   value={String(effect.kind ?? "appear")}
-                  onChange={(event) =>
-                    update(index, {
-                      effect:
-                        event.target.value === "emphasize"
-                          ? { kind: "emphasize", style: "frame", tone: "primary" }
-                          : { kind: "appear", preset: "fade", durationMs: 400 },
-                    })
-                  }
+                  onChange={(event) => update(index, { effect: makeEffect(event.target.value) })}
                 >
-                  {effectOptions.map((option) => (
+                  {EFFECT_OPTIONS[variant].map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -382,6 +420,44 @@ export function EffectsField({
                     effect={effect}
                     onChange={(next) => update(index, { effect: next })}
                   />
+                </>
+              ) : effect.kind === "value" ? (
+                <>
+                  <label className="inline-flex items-center gap-1.5">
+                    開始値
+                    <input
+                      type="number"
+                      className={`w-24 ${textFieldClass}`}
+                      value={effect.from === undefined ? "" : String(effect.from)}
+                      onChange={(event) => {
+                        const next = { ...effect };
+                        if (event.target.value === "") {
+                          delete next.from;
+                        } else {
+                          next.from = Number(event.target.value) || 0;
+                        }
+                        update(index, { effect: next });
+                      }}
+                    />
+                  </label>
+                  <label className="inline-flex items-center gap-1.5">
+                    尺(ms)
+                    <input
+                      type="number"
+                      min={0}
+                      className={`w-20 ${textFieldClass}`}
+                      value={effect.durationMs === undefined ? "" : String(effect.durationMs)}
+                      onChange={(event) => {
+                        const next = { ...effect };
+                        if (event.target.value === "") {
+                          delete next.durationMs;
+                        } else {
+                          next.durationMs = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                        }
+                        update(index, { effect: next });
+                      }}
+                    />
+                  </label>
                 </>
               ) : (
                 <>
