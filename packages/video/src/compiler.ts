@@ -10,6 +10,7 @@ import {
   tableSimpleV1,
   chartBarV1,
   listCalloutV1,
+  flowDiagramV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
   deviceFrameInputSchema,
@@ -53,6 +54,7 @@ import { renderDeviceFrame } from "./templates/device-frame";
 import { renderTableSimple } from "./templates/table-simple";
 import { renderChartBar } from "./templates/chart-bar";
 import { renderListCallout } from "./templates/list-callout";
+import { renderFlowDiagram } from "./templates/flow-diagram";
 import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
@@ -504,6 +506,8 @@ function dispatchTemplate(
       return renderChartBar(input, context);
     case `${listCalloutV1.id}@${listCalloutV1.version}`:
       return renderListCallout(input, context);
+    case `${flowDiagramV1.id}@${flowDiagramV1.version}`:
+      return renderFlowDiagram(input, context);
     case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
       return renderCompositionFullBleed(input, context, compositionResolver);
     default:
@@ -741,6 +745,16 @@ const STYLES = [
   ".kakeai-callouttitle{font-size:52px;font-weight:700;color:var(--kakeai-text);}",
   ".kakeai-calloutlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:20px;width:100%;max-width:1400px;}",
   ".kakeai-calloutitem{position:relative;background:var(--kakeai-surface);border-radius:var(--kakeai-radius-lg);padding:24px 36px;font-size:40px;line-height:1.3;color:var(--kakeai-text);box-shadow:0 8px 32px var(--kakeai-shadow);}",
+  ".kakeai-flowwrap{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:70px 100px;box-sizing:border-box;}",
+  ".kakeai-flowtitle{margin:0;font-size:44px;font-weight:700;color:var(--kakeai-text);text-align:center;}",
+  ".kakeai-flowplot{position:relative;}",
+  ".kakeai-flowsvg{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;}",
+  ".kakeai-flowered{fill:none;stroke:var(--kakeai-muted);stroke-width:3;}",
+  ".kakeai-flowedgelabel{fill:var(--kakeai-muted);font-size:22px;font-family:var(--kakeai-font-sans);text-anchor:middle;dominant-baseline:middle;}",
+  ".kakeai-flownode{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;overflow:hidden;background:var(--kakeai-surface);border-radius:var(--kakeai-radius-lg);box-shadow:0 8px 28px var(--kakeai-shadow);padding:8px 16px;box-sizing:border-box;}",
+  ".kakeai-flow-boxed .kakeai-flownode{border:3px solid var(--kakeai-border);}",
+  ".kakeai-flownode-label{font-size:30px;font-weight:700;line-height:1.3;color:var(--kakeai-text);word-break:break-word;}",
+  ".kakeai-flownode-caption{font-size:22px;line-height:1.3;color:var(--kakeai-muted);word-break:break-word;}",
   ".kakeai-onsetoverlay{position:absolute;inset:0;pointer-events:none;opacity:0;display:block;}",
   ".kakeai-onsetsweep{--kakeai-onset-progress:1;border-radius:inherit;padding:6px;background:conic-gradient(from calc(var(--kakeai-onset-progress,0) * 360deg),transparent 0deg,var(--kakeai-onset-color,#fff) 45deg,transparent 110deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;}",
   ".kakeai-onsetflash{border-radius:inherit;background:var(--kakeai-onset-color,#fff);}",

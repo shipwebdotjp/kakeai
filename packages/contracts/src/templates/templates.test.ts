@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chartBarInputSchema,
+  flowDiagramInputSchema,
   getTemplateInputFields,
   getVisualTemplate,
   isEditableTemplate,
@@ -403,5 +404,73 @@ describe("visual template metadata", () => {
       listCalloutInputSchema.safeParse({ items: [{ text: "a", trigger: { kind: "cue" } }] }).success,
     ).toBe(false);
     expect(listCalloutInputSchema.safeParse({ items: [] }).success).toBe(false);
+  });
+});
+
+describe("flow.diagram@1", () => {
+  const base = {
+    diagram: {
+      nodes: [{ label: "開始" }, { label: "審査", caption: "窓口" }, { label: "完了" }],
+      edges: [
+        { from: 0, to: 1, label: "書類" },
+        { from: 1, to: 2 },
+      ],
+    },
+  };
+
+  it("registers flow.diagram@1 as an editable overlay template with a flow field", () => {
+    const definition = getVisualTemplate("flow.diagram", 1);
+    expect(definition?.layers).toEqual(["overlay"]);
+    expect(isEditableTemplate("flow.diagram", 1)).toBe(true);
+    const fields = getTemplateInputFields("flow.diagram", 1);
+    expect(fields?.some((field) => field.kind === "flow")).toBe(true);
+    expect(fields?.some((field) => field.kind === "effects")).toBe(true);
+  });
+
+  it("accepts nodes, edges, style, and line-triggered effects", () => {
+    const parsed = flowDiagramInputSchema.safeParse({
+      ...base,
+      title: "処理の流れ",
+      style: { orientation: "vertical", preset: "boxed" },
+      effects: [
+        {
+          target: { kind: "node", index: 1 },
+          trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+          effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects out-of-range, self-looping, and empty diagrams", () => {
+    expect(
+      flowDiagramInputSchema.safeParse({
+        diagram: { nodes: [{ label: "a" }], edges: [{ from: 0, to: 3 }] },
+      }).success,
+    ).toBe(false);
+    expect(
+      flowDiagramInputSchema.safeParse({
+        diagram: { nodes: [{ label: "a" }, { label: "b" }], edges: [{ from: 1, to: 1 }] },
+      }).success,
+    ).toBe(false);
+    expect(flowDiagramInputSchema.safeParse({ diagram: { nodes: [], edges: [] } }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects an effect targeting a node past the diagram", () => {
+    expect(
+      flowDiagramInputSchema.safeParse({
+        ...base,
+        effects: [
+          {
+            target: { kind: "node", index: 5 },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 400 },
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 });

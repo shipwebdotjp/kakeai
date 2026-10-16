@@ -147,7 +147,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - pulse（繰り返し強調）: 「ずっと点滅」。既に pulse preset はあるので emphasize の繰り返しオプションとして。
 - カメラ/画像注釈: 画像の一部へ寄る/丸で囲む（hyperframes-keyframes 相当）。ただし任意keyframeは不可なので、有限プリセット（zoom-to, circle, arrow）に閉じる。
 追加すると効くテンプレート
-- flow.horizontal@1: content-schema で「将来」と書いてある工程・フロー図。各ステップがそのセリフでハイライトするのは行トリガーと最も相性が良い。
+- [x] flow.diagram@1: 工程・フロー図。縦横を `style.orientation` で切替える単一テンプレート。各ノードがそのセリフでハイライトするのは行トリガーと最も相性が良い（[../flow-template/spec.md](../flow-template/spec.md)）。
 - steps / timeline@1: 番号付き縦ステップ。list.callout の親戚で実装部品を流用可。
 - stat@1（大きな数値＋ラベル）: count-up とセット。導入・結びの締めに。
 - quote@1: 引用カード。著者・出典付き。行トリガーで強調。
@@ -162,5 +162,5 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 おすすめの進め方
 1. [x] onset + spotlight（体感価値が最も大きく、emphasize の拡張で追加のみ）
 2. [x] 保存時検証と remap の collectLineRefs 一本化（正本性・壊れにくさ。地味だが効く）
-3. flow.horizontal or steps（行トリガーが映える新テンプレート）
+3. [x] flow.diagram（縦横、行トリガーが映える新テンプレート）
 4. count-up + stat（見せ場づくり）

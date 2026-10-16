@@ -1897,3 +1897,55 @@ describe("chart.bar form", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });
+
+describe("flow.diagram form", () => {
+  const flowInput = {
+    title: "処理の流れ",
+    diagram: {
+      nodes: [{ label: "受付" }, { label: "審査", caption: "窓口" }, { label: "完了" }],
+      edges: [
+        { from: 0, to: 1, label: "書類" },
+        { from: 1, to: 2 },
+      ],
+    },
+    style: { orientation: "vertical", preset: "boxed" },
+    effects: [
+      {
+        target: { kind: "nodes" },
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 120 },
+      },
+    ],
+  };
+
+  it("round-trips the flow diagram and effects", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-flow",
+        template: { id: "flow.diagram", version: 1 },
+        layer: "overlay",
+        input: structuredClone(flowInput),
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(flowInput);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("creates new flow cues with a starter diagram", () => {
+    const cue = createCueFormValue({
+      sceneId: "scene-point-1",
+      templateId: "flow.diagram",
+      templateVersion: 1,
+      layer: "overlay",
+      order: 0,
+    });
+    const parsed = JSON.parse(cue.fields.diagram ?? "") as {
+      nodes: unknown[];
+      edges: unknown[];
+    };
+    expect(parsed.nodes).toHaveLength(2);
+    expect(parsed.edges).toHaveLength(1);
+  });
+});

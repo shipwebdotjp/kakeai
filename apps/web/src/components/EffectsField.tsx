@@ -13,14 +13,14 @@ type Json = Record<string, unknown>;
 interface EffectsFieldProps {
   label: string;
   fieldKey: string;
-  variant: "table" | "chart";
+  variant: "table" | "chart" | "flow";
   value: string;
   setField: (key: string, value: string) => void;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
 }
 
-const TARGET_OPTIONS: Record<"table" | "chart", readonly { value: string; label: string }[]> = {
+const TARGET_OPTIONS: Record<"table" | "chart" | "flow", readonly { value: string; label: string }[]> = {
   table: [
     { value: "row", label: "行" },
     { value: "cell", label: "セル" },
@@ -31,6 +31,10 @@ const TARGET_OPTIONS: Record<"table" | "chart", readonly { value: string; label:
     { value: "category", label: "カテゴリ" },
     { value: "series", label: "系列" },
     { value: "bars", label: "全棒" },
+  ],
+  flow: [
+    { value: "node", label: "ノード" },
+    { value: "nodes", label: "全ノード" },
   ],
 };
 
@@ -82,13 +86,13 @@ function normalizeTarget(kind: string, previous: Json): Json {
   if (kind === "cell") {
     return { kind, row: Number(previous.row) || 0, key: String(previous.key ?? "") };
   }
-  if (kind === "row" || kind === "category" || kind === "series") {
+  if (kind === "row" || kind === "category" || kind === "series" || kind === "node") {
     return { kind, index: Number(previous.index) || 0 };
   }
   return { kind };
 }
 
-function defaultEntry(variant: "table" | "chart"): Json {
+function defaultEntry(variant: "table" | "chart" | "flow"): Json {
   return {
     target: normalizeTarget(TARGET_OPTIONS[variant][0]!.value, {}),
     trigger: { kind: "cue" },
@@ -157,7 +161,11 @@ export function EffectsField({
         const trigger = triggerOf(entry);
         const effect = effectOf(entry);
         const targetKind = String(target.kind ?? "");
-        const hasIndex = targetKind === "row" || targetKind === "category" || targetKind === "series";
+        const hasIndex =
+          targetKind === "row" ||
+          targetKind === "category" ||
+          targetKind === "series" ||
+          targetKind === "node";
         const isCell = targetKind === "cell";
         return (
           <div key={index} className="mt-2 rounded border border-border p-2">

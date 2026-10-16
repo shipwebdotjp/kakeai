@@ -50,7 +50,8 @@ export type TemplateFieldSpec =
   | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }
-  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" }
+  | { kind: "flow"; key: string; label: string; maxNodes: number; maxEdges: number }
+  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" }
   | { kind: "calloutItems"; key: string; label: string }
   | { kind: "animation"; key: string; label: string };
 
@@ -902,6 +903,147 @@ const listCalloutV1: VisualTemplateDefinition = {
   },
 };
 
+export const FLOW_MAX_NODES = 8;
+export const FLOW_MAX_EDGES = 16;
+
+export const flowOrientationSchema = z.enum(["vertical", "horizontal"]);
+export type FlowOrientation = z.infer<typeof flowOrientationSchema>;
+
+export const flowStylePresetSchema = z.enum(["clean", "boxed"]);
+export type FlowStylePreset = z.infer<typeof flowStylePresetSchema>;
+
+export const flowNodeSchema = z.strictObject({
+  label: z.string().min(1).max(64),
+  caption: z.string().max(64).optional(),
+});
+export type FlowNode = z.infer<typeof flowNodeSchema>;
+
+export const flowEdgeSchema = z.strictObject({
+  from: nonNegativeInt,
+  to: nonNegativeInt,
+  label: z.string().max(32).optional(),
+});
+export type FlowEdge = z.infer<typeof flowEdgeSchema>;
+
+export const flowDiagramSchema = z
+  .strictObject({
+    nodes: z.array(flowNodeSchema).min(1).max(FLOW_MAX_NODES),
+    edges: z.array(flowEdgeSchema).max(FLOW_MAX_EDGES),
+  })
+  .superRefine((diagram, ctx) => {
+    diagram.edges.forEach((edge, index) => {
+      if (edge.from >= diagram.nodes.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: `辺の from がノード数を超えています: ${edge.from}`,
+          path: ["edges", index, "from"],
+        });
+      }
+      if (edge.to >= diagram.nodes.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: `辺の to がノード数を超えています: ${edge.to}`,
+          path: ["edges", index, "to"],
+        });
+      }
+      if (edge.from === edge.to) {
+        ctx.addIssue({
+          code: "custom",
+          message: "自己ループの辺は指定できません",
+          path: ["edges", index, "to"],
+        });
+      }
+    });
+  });
+export type FlowDiagram = z.infer<typeof flowDiagramSchema>;
+
+export const flowStyleSchema = z.strictObject({
+  orientation: flowOrientationSchema.default("horizontal"),
+  preset: flowStylePresetSchema.default("clean"),
+});
+export type FlowStyle = z.infer<typeof flowStyleSchema>;
+
+export const flowEffectTargetSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("node"), index: nonNegativeInt }),
+  z.strictObject({ kind: z.literal("nodes") }),
+]);
+export type FlowEffectTarget = z.infer<typeof flowEffectTargetSchema>;
+
+export const flowEffectSchema = z.strictObject({
+  target: flowEffectTargetSchema,
+  trigger: lineTriggerSchema,
+  effect: cueEffectSchema,
+});
+export type FlowEffect = z.infer<typeof flowEffectSchema>;
+
+export const flowEffectsSchema = z.array(flowEffectSchema).max(32);
+
+export const flowDiagramInputSchema = z
+  .strictObject({
+    title: z.string().optional(),
+    diagram: flowDiagramSchema,
+    style: flowStyleSchema.optional(),
+    effects: flowEffectsSchema.optional(),
+  })
+  .superRefine((input, ctx) => {
+    (input.effects ?? []).forEach((entry, index) => {
+      if (
+        entry.target.kind === "node" &&
+        entry.target.index >= input.diagram.nodes.length
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: `効果のノード番号がノード数を超えています: ${entry.target.index}`,
+          path: ["effects", index, "target", "index"],
+        });
+      }
+    });
+  });
+export type FlowDiagramInput = z.infer<typeof flowDiagramInputSchema>;
+
+const FLOW_ORIENTATION_OPTIONS = [
+  { value: "horizontal", label: "横" },
+  { value: "vertical", label: "縦" },
+] as const;
+
+const FLOW_STYLE_PRESET_OPTIONS = [
+  { value: "clean", label: "シンプル" },
+  { value: "boxed", label: "枠付き" },
+] as const;
+
+const flowDiagramV1: VisualTemplateDefinition = {
+  id: "flow.diagram",
+  version: 1,
+  inputSchema: flowDiagramInputSchema,
+  layers: ["overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "フロー図", description: "ノードと辺で工程・流れを表す図", category: "data" },
+  inputFields: [
+    { kind: "optionalText", key: "title", label: "タイトル" },
+    {
+      kind: "flow",
+      key: "diagram",
+      label: "ノードと辺",
+      maxNodes: FLOW_MAX_NODES,
+      maxEdges: FLOW_MAX_EDGES,
+    },
+    { kind: "select", key: "style.orientation", label: "向き", options: FLOW_ORIENTATION_OPTIONS },
+    { kind: "select", key: "style.preset", label: "スタイル", options: FLOW_STYLE_PRESET_OPTIONS },
+    { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "flow" },
+  ],
+  collectAssetRefs: () => [],
+  collectLineRefs: (input, path) => {
+    const parsed = flowEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
+    if (!parsed.success) {
+      return [];
+    }
+    return parsed.data.flatMap((entry, index) =>
+      collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
+    );
+  },
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   mediaFullBleedV1,
@@ -913,6 +1055,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   tableSimpleV1,
   chartBarV1,
   listCalloutV1,
+  flowDiagramV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
@@ -921,6 +1064,7 @@ export { sceneSiteMockupV1 };
 export { tableSimpleV1 };
 export { chartBarV1 };
 export { listCalloutV1 };
+export { flowDiagramV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

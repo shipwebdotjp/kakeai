@@ -18,6 +18,8 @@ import {
   chartDataSchema,
   chartEffectsSchema,
   CHART_APPEAR_PRESETS,
+  flowDiagramSchema,
+  flowEffectsSchema,
   listCalloutItemsSchema,
   tableDataSchema,
   tableEffectsSchema,
@@ -370,6 +372,46 @@ function normalizeChartEffect(entry: unknown): unknown {
   return { ...entry, effect: { ...effect, preset: CHART_PRESET_FALLBACK[preset] ?? "grow" } };
 }
 
+function effectsSchemaForVariant(variant: "table" | "chart" | "flow") {
+  switch (variant) {
+    case "chart":
+      return chartEffectsSchema;
+    case "flow":
+      return flowEffectsSchema;
+    case "table":
+      return tableEffectsSchema;
+  }
+}
+
+function defaultEffectsForVariant(variant: "table" | "chart" | "flow"): unknown[] {
+  switch (variant) {
+    case "chart":
+      return [
+        {
+          target: { kind: "bars" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "grow", durationMs: 600, staggerMs: 120 },
+        },
+      ];
+    case "flow":
+      return [
+        {
+          target: { kind: "nodes" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 120 },
+        },
+      ];
+    case "table":
+      return [
+        {
+          target: { kind: "rows" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 150 },
+        },
+      ];
+  }
+}
+
 function readCueFields(
   input: Record<string, unknown>,
   definition: VisualTemplateDefinition,
@@ -472,6 +514,12 @@ function readCueFields(
         break;
       }
       case "grid": {
+        const value = getAtPath(input, field.key);
+        result[field.key] =
+          typeof value === "object" && value !== null ? JSON.stringify(value) : "";
+        break;
+      }
+      case "flow": {
         const value = getAtPath(input, field.key);
         result[field.key] =
           typeof value === "object" && value !== null ? JSON.stringify(value) : "";
@@ -935,6 +983,27 @@ function buildCueInput(
         setAtPath(input, field.key, validated.data);
         break;
       }
+      case "flow": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          deleteAtPath(input, field.key);
+          break;
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("ノードと辺を正しく入力してください");
+        }
+        const validated = flowDiagramSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          const detail = validated.error.issues[0];
+          const where = detail && detail.path.length > 0 ? `（${detail.path.join(".")}）` : "";
+          throw new Error(`ノードと辺を正しく入力してください${where}`);
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
       case "effects": {
         const trimmed = raw.trim();
         if (trimmed.length === 0) {
@@ -947,7 +1016,7 @@ function buildCueInput(
         } catch {
           throw new Error("セリフ同期の効果を正しく入力してください");
         }
-        const schema = field.variant === "chart" ? chartEffectsSchema : tableEffectsSchema;
+        const schema = effectsSchemaForVariant(field.variant);
         const validated = schema.safeParse(parsedJson);
         if (!validated.success) {
           throw new Error("セリフ同期の効果を正しく入力してください");
@@ -1476,23 +1545,14 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
       case "grid":
         fields[field.key] = defaultGridDataJson();
         break;
+      case "flow":
+        fields[field.key] = JSON.stringify({
+          nodes: [{ label: "開始" }, { label: "完了" }],
+          edges: [{ from: 0, to: 1 }],
+        });
+        break;
       case "effects":
-        fields[field.key] =
-          field.variant === "chart"
-            ? JSON.stringify([
-                {
-                  target: { kind: "bars" },
-                  trigger: { kind: "cue" },
-                  effect: { kind: "appear", preset: "grow", durationMs: 600, staggerMs: 120 },
-                },
-              ])
-            : JSON.stringify([
-                {
-                  target: { kind: "rows" },
-                  trigger: { kind: "cue" },
-                  effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 150 },
-                },
-              ]);
+        fields[field.key] = JSON.stringify(defaultEffectsForVariant(field.variant));
         break;
       case "calloutItems":
         fields[field.key] = JSON.stringify([{ text: "ポイント" }]);

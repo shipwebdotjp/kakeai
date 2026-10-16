@@ -222,7 +222,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `chart.bar@1` | タイトル、カテゴリ、系列、数値、向き、目盛り、効果 | 対応（[../chart-template/spec.md](../chart-template/spec.md)） |
 | `table.simple@1` | 見出し、列定義、行、スタイル、効果 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
 | `list.callout@1` | 見出し、ポイント列、行トリガー付き効果 | 対応（[../cue-effects/spec.md](../cue-effects/spec.md)） |
-| `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |
+| `flow.diagram@1` | タイトル、ノード、辺、向き、スタイル、効果 | 対応。縦横を `style.orientation` で切替える。行トリガーでノードを強調する（[../flow-template/spec.md](../flow-template/spec.md)） |
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 

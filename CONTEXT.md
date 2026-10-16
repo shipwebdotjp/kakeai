@@ -108,6 +108,14 @@ _Avoid_: Asset, Render
 A trusted reusable visual expression with a defined input contract.
 _Avoid_: Visual cue, scene
 
+**Node**:
+An item of a Flow Diagram, referenced by its position in the diagram's node list. It carries a label and an optional caption.
+_Avoid_: Step, box
+
+**Edge**:
+A directed connection between two Nodes of a Flow Diagram, referencing them by index. It may carry a label.
+_Avoid_: Arrow, link
+
 **Visual Cue**:
 An instruction to display one Visual Template with specific inputs over a segment of a Scene, on a named layer and with an enter/exit transition.
 _Avoid_: Asset, template

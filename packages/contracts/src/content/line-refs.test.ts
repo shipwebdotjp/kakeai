@@ -89,4 +89,34 @@ describe("collectLineReferences", () => {
       ["scenes", 1, "visualCues", 2, "input", "appear", "trigger", "endLineId"],
     ]);
   });
+
+  it("collects flow.diagram effect triggers", () => {
+    const doc = validContentDocument();
+    const lineId = doc.scenes[1]!.lines[0]!.id;
+    doc.scenes[1]!.visualCues.push({
+      id: "vc-flow",
+      template: { id: "flow.diagram", version: 1 },
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 5,
+      transition,
+      input: {
+        diagram: { nodes: [{ label: "A" }, { label: "B" }], edges: [{ from: 0, to: 1 }] },
+        effects: [
+          {
+            target: { kind: "node", index: 1 },
+            trigger: { kind: "lines", startLineId: lineId, endLineId: lineId },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+          },
+        ],
+      },
+    });
+
+    const references = collectLineReferences(doc);
+
+    expect(references.map((reference) => reference.path)).toEqual([
+      ["scenes", 1, "visualCues", 2, "input", "effects", 0, "trigger", "startLineId"],
+      ["scenes", 1, "visualCues", 2, "input", "effects", 0, "trigger", "endLineId"],
+    ]);
+  });
 });
