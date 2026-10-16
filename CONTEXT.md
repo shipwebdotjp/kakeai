@@ -160,6 +160,18 @@ _Avoid_: animation, cue transition
 The bounded, local-time animation a template renderer returns for its own elements (target, preset, start, duration). Only the top-level compiler turns it into a timeline.
 _Avoid_: keyframe, timeline
 
+**Cue Trigger**:
+A line range or the whole cue window that fires a Cue Effect inside a Visual Cue. It references narration lines by id, never by seconds.
+_Avoid_: keyframe, timing, animation
+
+**Cue Effect**:
+A change a Visual Template applies to one of its own elements when a Cue Trigger is reached: a one-shot appearance or a sustained emphasis. It is distinct from a cue transition, which bounds the whole cue.
+_Avoid_: animation, cue transition, keyframe
+
+**Sustained Emphasis**:
+A Cue Effect that highlights a target while its line range is active and reverts at the range's end.
+_Avoid_: highlight state, css class
+
 **Template Field**:
 A declarative input-field spec (`inputFields`) on a Visual Template that drives the generic Cue editor, so adding a template needs no editor code.
 _Avoid_: form schema, zod

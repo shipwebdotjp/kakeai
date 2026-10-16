@@ -219,11 +219,14 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `character.standing@1` | `characterId`, `appearanceId`, `side`(left/right), 倍率 | 対応。1 Sceneに左右1体ずつ最大2件を編集。発話中の立ち絵はバウンド。[../face-expression/spec.md](../face-expression/spec.md) の表情対応を含み、外観が参照する Face Set のベース＋眉＋目＋口＋前景を合成し、台詞区間ごとに Expression Preset を切り替える。Face Set を持たない外観は単体画像と同じ見た目 |
 | `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `backgroundColor?`, `animation?`（preset, durationMs） | 対応。端末枠内に画像・動画、または `kind: "composition"` の CompositionVersion を表示する複合ビジュアル。背景・カードに置ける。画面要素の登場アニメーションを追加できる |
 | `scene.site-mockup@1` | `variant`, `screen`(`NestedVisual`), `theme?`, `name?`/`handle?`/`url?`/`caption?`, `logo?`, `animation?` | 対応。有名サイト・ブラウザのガワに画像・動画を収める。card/overlay |
-| `chart.bar@1` | タイトル、カテゴリ、系列、数値、向き、目盛り、登場 | 対応（[../chart-template/spec.md](../chart-template/spec.md)） |
-| `table.simple@1` | 見出し、列定義、行、強調セル、スタイル、登場 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
+| `chart.bar@1` | タイトル、カテゴリ、系列、数値、向き、目盛り、効果 | 対応（[../chart-template/spec.md](../chart-template/spec.md)） |
+| `table.simple@1` | 見出し、列定義、行、スタイル、効果 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
+| `list.callout@1` | 見出し、ポイント列、行トリガー付き効果 | 対応（[../cue-effects/spec.md](../cue-effects/spec.md)） |
 | `flow.horizontal@1` | ノード、辺、強調状態 | 将来 |
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
+
+テンプレート内部の演出は、Cue Trigger（行区間またはCue窓）と Cue Effect（`appear` / `emphasize`）の共通単位で表せる。Triggerは行IDを参照し、実時刻はコンパイラが音声尺から解決する。targetの束ね方はテンプレート固有で、データ駆動テンプレートは `effects` 配列、著者アイテム型は各アイテムのインラインとする。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。例外として、Kakeai管理下でAIが作成し不変bundleとしてpublishしたCompositionVersionは、`composition.full-bleed@1` のID入力、または `NestedVisual` の `kind: "composition"`（端末画面など）を通じてnative nested compositionとして参照できる。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
 

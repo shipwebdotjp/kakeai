@@ -27,6 +27,19 @@ export interface ExpressionTarget {
   mouthBaseId?: string;
 }
 
+export interface LineInterval {
+  lineId: string;
+  startMs: number;
+  endMs: number;
+}
+
+export interface StateInterval {
+  targetId: string;
+  intervals: { startMs: number; endMs: number }[];
+  on: Record<string, string | number>;
+  off?: Record<string, string | number>;
+}
+
 export interface RenderedCue {
   html: string;
   assetIds: string[];
@@ -34,6 +47,7 @@ export interface RenderedCue {
   motionTargetId?: string;
   expressionTargets?: ExpressionTarget[];
   nestedCompositionWindows?: NestedCompositionWindow[];
+  stateIntervals?: StateInterval[];
 }
 
 export interface NestedCompositionWindow {
@@ -56,5 +70,6 @@ export interface RenderContext {
   scope: RenderScope;
   path: (string | number)[];
   cueTiming?: CueTiming;
+  lineIntervals?: LineInterval[];
   renderNested: (node: NestedVisual, scope: RenderScope, path: (string | number)[]) => RenderedCue;
 }

@@ -11,6 +11,7 @@ import {
   type AnimationPolicy,
 } from "../content/animation";
 import { fontFaceSpecSchema, textSurfaceSchema, themeAccentTokenSchema } from "../content/theme";
+import { tableToneSchema } from "../content/tone";
 import {
   MAX_NESTED_VISUAL_DEPTH,
   fitSchema,
@@ -23,6 +24,7 @@ import {
   type NestedVisual,
 } from "../content/nested";
 import type { AssetKindName, AssetReference } from "../content/asset-reference";
+import type { LineReference } from "../content/cue-effect";
 
 export const textAnchorSchema = z.enum(["left", "center", "right"]);
 
@@ -55,6 +57,7 @@ export interface VisualTemplateDefinition {
   display: TemplateDisplay;
   inputFields?: readonly TemplateFieldSpec[];
   collectAssetRefs: (input: unknown, path: (string | number)[], depth?: number) => AssetReference[];
+  collectLineRefs?: (input: unknown, path: (string | number)[]) => LineReference[];
 }
 
 const MEDIA_KINDS = ["image", "video"] as const;
@@ -428,17 +431,6 @@ export type TableCellAlign = z.infer<typeof tableCellAlignSchema>;
 
 export const tableNumberFormatSchema = z.enum(["integer", "decimal", "percent", "currency"]);
 export type TableNumberFormat = z.infer<typeof tableNumberFormatSchema>;
-
-export const tableToneSchema = z.enum([
-  "primary",
-  "secondary",
-  "tertiary",
-  "success",
-  "warning",
-  "error",
-  "info",
-]);
-export type TableTone = z.infer<typeof tableToneSchema>;
 
 export const tableStylePresetSchema = z.enum(["clean", "striped", "bordered"]);
 export type TableStylePreset = z.infer<typeof tableStylePresetSchema>;
