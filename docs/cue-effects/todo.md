@@ -44,20 +44,20 @@
 
 ## Phase 5: 二重表現の解消とエディタ
 
-### 5a エディタ（進行中）
+### 5a エディタ
 
-- [x] `TemplateFieldSpec` に `effects` 種別を追加し、`table.simple`/`chart.bar` の `inputFields` に載せる
-- [x] `form.ts` の `readCueFields`・`buildCueInput`・`defaultCueFields` を `effects` に対応させる
-- [x] `EffectsField` 部品（対象・契機・効果の編集、行ピッカー）を追加する
-- [x] 行の削除で、削除行を参照する `effects` のトリガーを落とす（`removeLineInScene`）
-- [x] `list.callout` の `items`（text ＋ trigger ＋ effect）編集部品を追加し `inputFields` に載せる
-- [ ] シーン分割（`splitPointScene`）で `effects` のトリガー参照を振り分ける
-- 完了条件: 表・グラフ・ポイントの効果をエディタで設定でき、行削除後も参照が破綻しない。
+- [x] `TemplateFieldSpec` に `effects`・`calloutItems` 種別を追加し、`table.simple`/`chart.bar`/`list.callout` の `inputFields` に載せる
+- [x] `form.ts` の `readCueFields`・`buildCueInput`・`defaultCueFields` を `effects`・`calloutItems` に対応させる
+- [x] `EffectsField`・`CalloutItemsField` 部品（対象・契機・効果、行ピッカー）を追加する
+- [x] 行の削除で、削除行を参照する効果トリガーを落とし、`countLineCueReferences` にも算入する
+- [x] シーン分割（`splitPointScene`）で効果トリガーの参照を前後シーンへ振り分ける
+- 完了条件: 表・グラフ・ポイントの効果をエディタで設定でき、行削除・シーン分割後も参照が破綻しない。
 
 ### 5b 二重表現の解消
 
-- [ ] `table.simple`・`chart.bar` から `reveal`・`emphasis` を削除し `effects` へ一本化する（保存済み参照の有無で `@1` 書き換えか `@2` かを決める）
-- [ ] `DataGridField` の強調UIと `form.ts` の `grid` の `emphasis` 依存を整理する
+- [x] `table.simple`・`chart.bar` から `reveal`・`emphasis` を削除し `effects` へ一本化する（`@1` を書き換え）
+- [x] `DataGridField` の強調UIと `form.ts` の `grid.emphasis` 依存を `dataKind` へ整理する
+- [x] 新規Cueに既定の `effects` を入れる（表=全行フェード、グラフ=全棒grow）
 - 完了条件: 実装と文書の矛盾がない。
 
 ## Phase 6: 文書同期

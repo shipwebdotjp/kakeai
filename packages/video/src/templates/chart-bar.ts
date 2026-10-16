@@ -1,18 +1,17 @@
 import {
   DEFAULT_ANIMATION_POLICY,
-  CHART_REVEAL_DEFAULT_DURATION_MS,
-  CHART_REVEAL_DEFAULT_STAGGER_MS,
   chartBarInputSchema,
+  type ChartAppearPreset,
   type ChartColorBy,
   type ChartEffect,
-  type ChartRevealPreset,
+  type FigureEase,
   type TableColumn,
   type TableRow,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 import type { AnimationItem, RenderedCue, RenderContext, StateInterval } from "../render-context";
-import { planAppearEffect, type AppearTarget } from "../cue-effects";
+import { resolveTriggerWindow } from "../cue-effects";
 import { formatNumber } from "./table-format";
 
 const PLOT_HEIGHT_PX = 560;
@@ -74,9 +73,9 @@ function valueLabel(value: number, column: TableColumn): string {
   return escapeHtmlText(formatNumber(value, column.format));
 }
 
-function actionForPreset(
-  preset: ChartRevealPreset,
-): { action: "grow" | "fade"; ease: "normal" | "overshoot" } {
+function chartAction(
+  preset: ChartAppearPreset,
+): { action: "grow" | "fade"; ease: FigureEase } {
   switch (preset) {
     case "grow":
       return { action: "grow", ease: "normal" };
@@ -204,7 +203,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
       { path: context.path, code: "invalid_input", message: "chart.bar の入力が正しくありません。" },
     ]);
   }
-  const { title, data, style, reveal } = parsed.data;
+  const { title, data, style } = parsed.data;
   const { columns, rows } = data;
   const categoryColumn = columns[0]!;
   const seriesColumns = columns.slice(1);
@@ -224,13 +223,6 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   );
   const stats = niceScale(maxValue);
   const orientation = style?.orientation ?? "vertical";
-  const preset = reveal?.preset ?? "grow";
-  const revealMode = reveal?.mode ?? "bars";
-  const durationMs = Math.min(
-    reveal?.durationMs ?? CHART_REVEAL_DEFAULT_DURATION_MS,
-    DEFAULT_ANIMATION_POLICY.maxDurationMs,
-  );
-  const staggerMs = reveal?.staggerMs ?? CHART_REVEAL_DEFAULT_STAGGER_MS;
 
   const args: RenderArgs = {
     context,
@@ -251,24 +243,10 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
 
   const animation: AnimationItem[] = [];
   const stateIntervals: StateInterval[] = [];
-  if (revealMode === "bars") {
-    const { action, ease } = actionForPreset(preset);
-    rows.forEach((_row, categoryIndex) => {
-      seriesColumns.forEach((_column, seriesIndex) => {
-        animation.push({
-          targetId: context.scope.id(`bar-${categoryIndex}-${seriesIndex}`),
-          action,
-          axis: orientation === "horizontal" ? "x" : "y",
-          ease,
-          startMs: categoryIndex * staggerMs,
-          durationMs,
-        });
-      });
-    });
-  }
 
   applyChartEffects({
     effects: parsed.data.effects ?? [],
+    orientation,
     barId: (categoryIndex, seriesIndex) =>
       context.scope.id(`bar-${categoryIndex}-${seriesIndex}`),
     categoryCount: rows.length,
@@ -303,16 +281,21 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   };
 }
 
+interface ChartEffectTargetRef {
+  id: string;
+  step: number;
+}
+
 function resolveChartEffectTargets(
   effect: ChartEffect,
   barId: (categoryIndex: number, seriesIndex: number) => string,
   categoryCount: number,
   seriesCount: number,
-): AppearTarget[] {
+): ChartEffectTargetRef[] {
   const target = effect.target;
   switch (target.kind) {
     case "bars": {
-      const targets: AppearTarget[] = [];
+      const targets: ChartEffectTargetRef[] = [];
       for (let categoryIndex = 0; categoryIndex < categoryCount; categoryIndex += 1) {
         for (let seriesIndex = 0; seriesIndex < seriesCount; seriesIndex += 1) {
           targets.push({ id: barId(categoryIndex, seriesIndex), step: categoryIndex });
@@ -321,14 +304,14 @@ function resolveChartEffectTargets(
       return targets;
     }
     case "category": {
-      const targets: AppearTarget[] = [];
+      const targets: ChartEffectTargetRef[] = [];
       for (let seriesIndex = 0; seriesIndex < seriesCount; seriesIndex += 1) {
         targets.push({ id: barId(target.index, seriesIndex), step: 0 });
       }
       return targets;
     }
     case "series": {
-      const targets: AppearTarget[] = [];
+      const targets: ChartEffectTargetRef[] = [];
       for (let categoryIndex = 0; categoryIndex < categoryCount; categoryIndex += 1) {
         targets.push({ id: barId(categoryIndex, target.index), step: 0 });
       }
@@ -339,6 +322,7 @@ function resolveChartEffectTargets(
 
 function applyChartEffects(options: {
   effects: readonly ChartEffect[];
+  orientation: "vertical" | "horizontal";
   barId: (categoryIndex: number, seriesIndex: number) => string;
   categoryCount: number;
   seriesCount: number;
@@ -349,6 +333,7 @@ function applyChartEffects(options: {
   stateIntervals: StateInterval[];
 }): void {
   const lineIntervals = options.lineIntervals ?? [];
+  const axis = options.orientation === "horizontal" ? "x" : "y";
   options.effects.forEach((entry, effectIndex) => {
     const targets = resolveChartEffectTargets(
       entry,
@@ -359,15 +344,32 @@ function applyChartEffects(options: {
     if (targets.length === 0) {
       return;
     }
-    const plan = planAppearEffect({
-      targets,
-      trigger: entry.trigger,
-      effect: entry.effect,
-      lineIntervals,
-      spanMs: options.spanMs,
-      path: [...options.path, "effects", effectIndex],
-    });
-    options.animation.push(...plan.animation);
-    options.stateIntervals.push(...plan.stateIntervals);
+    const path = [...options.path, "effects", effectIndex];
+    const window = resolveTriggerWindow(entry.trigger, lineIntervals, options.spanMs, path);
+    if (window === null) {
+      return;
+    }
+    const { action, ease } = chartAction(entry.effect.preset);
+    const maxDurationMs = Math.min(
+      entry.effect.durationMs,
+      DEFAULT_ANIMATION_POLICY.maxDurationMs,
+    );
+    const staggerMs = entry.effect.staggerMs ?? 0;
+    for (const target of targets) {
+      const startMs = window.startMs + target.step * staggerMs;
+      if (startMs >= options.spanMs || startMs >= window.endMs) {
+        continue;
+      }
+      const durationMs = Math.max(0, Math.min(maxDurationMs, window.endMs - startMs));
+      options.animation.push({ targetId: target.id, action, axis, ease, startMs, durationMs });
+      if (startMs > 0) {
+        options.stateIntervals.push({
+          targetId: target.id,
+          intervals: [{ startMs: 0, endMs: startMs }],
+          on: { opacity: 0 },
+          off: { opacity: 1 },
+        });
+      }
+    }
   });
 }

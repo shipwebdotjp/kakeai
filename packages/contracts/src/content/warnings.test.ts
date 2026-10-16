@@ -121,29 +121,6 @@ describe("computeContentWarnings", () => {
     expect(warnings.map((warning) => warning.code)).toContain("table_rows_overflow");
   });
 
-  it("warns when the total table reveal exceeds the guideline", () => {
-    const document = validContentDocument();
-    document.scenes[1]!.visualCues.push(
-      tableCue({
-        data: {
-          columns: [{ key: "name", label: "項目", type: "text" }],
-          rows: [{ name: "a" }, { name: "b" }, { name: "c" }],
-        },
-        reveal: { mode: "rows", preset: "fade", durationMs: 2000, staggerMs: 2000 },
-      }),
-    );
-    const warnings = computeContentWarnings(document);
-    expect(warnings.map((warning) => warning.code)).toContain("table_reveal_overflow");
-    expect(warnings.map((warning) => warning.path)).toContainEqual([
-      "scenes",
-      1,
-      "visualCues",
-      2,
-      "input",
-      "reveal",
-    ]);
-  });
-
   it("warns when a bar chart has a negative value", () => {
     const document = validContentDocument();
     document.scenes[1]!.visualCues.push(

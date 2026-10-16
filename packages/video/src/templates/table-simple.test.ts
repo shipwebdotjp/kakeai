@@ -79,73 +79,10 @@ describe("renderTableSimple", () => {
     expect(rendered.html).not.toContain("<script>alert");
   });
 
-  it("returns staggered row animation entries by default", () => {
-    const rendered = renderTableSimple(
-      { ...baseInput, reveal: { mode: "rows", preset: "fade", durationMs: 400, staggerMs: 150 } },
-      context(),
-    );
-    expect(rendered.animation).toHaveLength(2);
-    expect(rendered.animation[0]).toMatchObject({ action: "fade", startMs: 0, durationMs: 400 });
-    expect(rendered.animation[1]).toMatchObject({ action: "fade", startMs: 150, durationMs: 400 });
-    expect(rendered.animation[0]!.targetId).not.toBe(rendered.animation[1]!.targetId);
-  });
-
-  it("returns no animation entries when reveal mode is none", () => {
-    const rendered = renderTableSimple(
-      { ...baseInput, reveal: { mode: "none", preset: "fade", durationMs: 400, staggerMs: 150 } },
-      context(),
-    );
+  it("returns no animation entries without effects", () => {
+    const rendered = renderTableSimple(baseInput, context());
     expect(rendered.animation).toEqual([]);
-  });
-
-  it("returns column-staggered cell animation entries in columns mode", () => {
-    const rendered = renderTableSimple(
-      {
-        ...baseInput,
-        reveal: { mode: "columns", preset: "slide-up", durationMs: 300, staggerMs: 100 },
-      },
-      context(),
-    );
-    expect(rendered.animation).toHaveLength(4);
-    const starts = rendered.animation.map((item) => item.startMs);
-    expect(starts).toEqual([0, 100, 0, 100]);
-  });
-
-  it("highlights emphasized rows and cells with theme-derived colors", () => {
-    const rendered = renderTableSimple(
-      {
-        ...baseInput,
-        data: {
-          ...baseInput.data,
-          emphasis: [
-            { row: 1, tone: "primary" },
-            { row: 0, key: "price", tone: "error" },
-          ],
-        },
-      },
-      context(),
-    );
-    const backgrounds = rendered.html.match(/background:#[0-9A-F]{6}/g) ?? [];
-    expect(backgrounds.length).toBeGreaterThanOrEqual(2);
-    expect(rendered.animation).toHaveLength(2);
-  });
-
-  it("keeps cell emphasis as an override on an emphasized row", () => {
-    const rendered = renderTableSimple(
-      {
-        ...baseInput,
-        data: {
-          ...baseInput.data,
-          emphasis: [
-            { row: 0, tone: "primary" },
-            { row: 0, key: "price", tone: "error" },
-          ],
-        },
-      },
-      context(),
-    );
-    const backgrounds = rendered.html.match(/background:#[0-9A-F]{6}/g) ?? [];
-    expect(new Set(backgrounds).size).toBe(2);
+    expect(rendered.stateIntervals).toEqual([]);
   });
 
   it("rejects invalid input", () => {

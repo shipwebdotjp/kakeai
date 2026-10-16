@@ -1651,10 +1651,15 @@ describe("table.simple form", () => {
         { name: "Free", price: 0 },
         { name: "Pro", price: 1500 },
       ],
-      emphasis: [{ row: 1, tone: "primary" }],
     },
     style: { preset: "clean", zebra: true, headerAccent: "primary" },
-    reveal: { mode: "rows", preset: "fade", durationMs: 400, staggerMs: 150 },
+    effects: [
+      {
+        target: { kind: "rows" },
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 150 },
+      },
+    ],
   };
 
   function tableCue() {
@@ -1666,7 +1671,7 @@ describe("table.simple form", () => {
     });
   }
 
-  it("round-trips table data and nested style/reveal fields", () => {
+  it("round-trips table data and nested style/effects fields", () => {
     const base = createInitialContentDocument();
     base.scenes[1]!.visualCues = [tableCue()];
     const values = toFormValues(base);
@@ -1679,7 +1684,7 @@ describe("table.simple form", () => {
     const base = createInitialContentDocument();
     const input = structuredClone(tableInput) as Record<string, unknown>;
     delete (input as { style?: unknown }).style;
-    delete (input as { reveal?: unknown }).reveal;
+    delete (input as { effects?: unknown }).effects;
     base.scenes[1]!.visualCues = [vc({
       id: "vc-table",
       template: { id: "table.simple", version: 1 },
@@ -1691,14 +1696,12 @@ describe("table.simple form", () => {
     expect(cue.fields["style.preset"]).toBe("clean");
     expect(cue.fields["style.headerAccent"]).toBe("");
     expect(cue.fields["style.zebra"]).toBe("");
-    expect(cue.fields["reveal.mode"]).toBe("rows");
     cue.fields["style.headerAccent"] = "secondary";
-    cue.fields["reveal.mode"] = "columns";
     const rebuilt = buildContentDocument(base, values);
     expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual({
-      ...tableInput,
+      caption: tableInput.caption,
+      data: tableInput.data,
       style: { preset: "clean", headerAccent: "secondary" },
-      reveal: { mode: "columns", preset: "fade" },
     });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
@@ -1739,7 +1742,13 @@ describe("chart.bar form", () => {
       ],
     },
     style: { preset: "grid", orientation: "vertical", valueLabels: true, colorBy: "category" },
-    reveal: { mode: "bars", preset: "grow", durationMs: 600, staggerMs: 120 },
+    effects: [
+      {
+        target: { kind: "bars" },
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "grow", durationMs: 600, staggerMs: 120 },
+      },
+    ],
   };
 
   it("round-trips chart data and nested fields", () => {

@@ -101,8 +101,8 @@ MVPの実装フェーズ。各フェーズは独立して検証できる粒度�
 
 - [Visual Theme基盤](../visual-themes/spec.md)（`soft-editorial@1`）: [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張) の一部として実装済み。詳細と完了条件は [../visual-themes/todo.md](../visual-themes/todo.md) を正とする
 
-- [Cue効果](../cue-effects/spec.md)（行トリガー付き `appear`/`emphasize`、`list.callout@1`）: セリフ行区間を契機に発火・持続する演出の共通単位。`table.simple@1`・`chart.bar@1` の `reveal`・`emphasis` も本単位へ移行する。実装は [../cue-effects/todo.md](../cue-effects/todo.md) を正とする
+- [Cue効果](../cue-effects/spec.md)（行トリガー付き `appear`/`emphasize`、`list.callout@1`）: セリフ行区間を契機に発火・持続する演出の共通単位。`table.simple@1`・`chart.bar@1` の `reveal`・`emphasis` は本単位へ一本化した。実装は [../cue-effects/todo.md](../cue-effects/todo.md) を正とする
 
-- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 複合ビジュアル基盤（VisualCue、NestedVisual、`scene.device-frame@1`、Cue一覧UI、transition）は [複合ビジュアル](../composite-visuals/spec.md) で実装済み。残りは 複数VisualCueの拡張、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、chart(line/pie)/flow系VisualTemplate。うち背景・カードの焦点位置は [焦点位置](../focal-point/spec.md)、拡大率は [拡大率](../media-zoom/spec.md) で、複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で、`table.simple@1`（列定義、行、強調セル、CSV貼り付け）は [表テンプレート](../table-template/spec.md) で、`chart.bar@1`（カテゴリ・複数系列・値軸・grow/bounce）は [棒グラフテンプレート](../chart-template/spec.md) で実装済み
+- [ロードマップ Phase 1](./roadmap.md#phase-1-編集表現の拡張): 複合ビジュアル基盤（VisualCue、NestedVisual、`scene.device-frame@1`、Cue一覧UI、transition）は [複合ビジュアル](../composite-visuals/spec.md) で実装済み。残りは 複数VisualCueの拡張、表示区間、Scene別・複数BGM、SFX、立ち絵の区間別切替、chart(line/pie)/flow系VisualTemplate。うち背景・カードの焦点位置は [焦点位置](../focal-point/spec.md)、拡大率は [拡大率](../media-zoom/spec.md) で、複数立ち絵（左右1体ずつ最大2体・発話中バウンド）は [複数立ち絵](../multi-standing/spec.md) で、`table.simple@1`（列定義、行、行トリガー効果、CSV貼り付け）は [表テンプレート](../table-template/spec.md) で、`chart.bar@1`（カテゴリ・複数系列・値軸・行トリガー効果のgrow/bounce）は [棒グラフテンプレート](../chart-template/spec.md) で実装済み
 - [ロードマップ Phase 5](./roadmap.md#phase-5-派生コンテンツと制作運用): progressPercentに依存した詳細進捗表示、実行中Jobのキャンセル、複数worker、自動再試行、contentHash/JCS、Jobリース、楽観ロック、同一SHA復旧の厳密化
 - `health.storage.status` の容量警告: 管理領域の使用量から80GiB閾値で `warning` を返し、UIとhealthに表示する（[spec.md](./spec.md) のリソース上限）。現状は常に `ok`。

@@ -796,7 +796,6 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           setField={setField}
           maxColumns={field.maxColumns}
           maxRows={field.maxRows}
-          emphasis={field.emphasis === true}
         />
       );
     case "effects":

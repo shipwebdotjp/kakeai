@@ -11,7 +11,6 @@ import {
   type AnimationPolicy,
 } from "../content/animation";
 import { fontFaceSpecSchema, textSurfaceSchema, themeAccentTokenSchema } from "../content/theme";
-import { tableToneSchema } from "../content/tone";
 import { appearEffectSchema, cueEffectSchema, lineTriggerSchema } from "../content/cue-effect";
 import {
   MAX_NESTED_VISUAL_DEPTH,
@@ -45,7 +44,7 @@ export type TemplateFieldSpec =
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
   | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
-  | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; emphasis?: boolean }
+  | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }
   | { kind: "effects"; key: string; label: string; variant: "table" | "chart" }
   | { kind: "calloutItems"; key: string; label: string }
   | { kind: "animation"; key: string; label: string };
@@ -423,8 +422,6 @@ export const compositionFullBleedV1: VisualTemplateDefinition = {
 
 export const TABLE_MAX_COLUMNS = 8;
 export const TABLE_MAX_ROWS = 12;
-export const TABLE_REVEAL_STAGGER_MAX_MS = 2000;
-export const TABLE_REVEAL_DEFAULT_STAGGER_MS = 150;
 
 export const tableColumnTypeSchema = z.enum(["text", "number"]);
 export type TableColumnType = z.infer<typeof tableColumnTypeSchema>;
@@ -437,12 +434,6 @@ export type TableNumberFormat = z.infer<typeof tableNumberFormatSchema>;
 
 export const tableStylePresetSchema = z.enum(["clean", "striped", "bordered"]);
 export type TableStylePreset = z.infer<typeof tableStylePresetSchema>;
-
-export const tableRevealModeSchema = z.enum(["none", "rows", "columns"]);
-export type TableRevealMode = z.infer<typeof tableRevealModeSchema>;
-
-export const tableRevealPresetSchema = z.enum(["fade", "slide-up", "scale-in"]);
-export type TableRevealPreset = z.infer<typeof tableRevealPresetSchema>;
 
 export const tableColumnSchema = z.strictObject({
   key: z
@@ -462,13 +453,6 @@ export const tableRowSchema = z.record(
   z.union([z.string(), z.number()]),
 );
 export type TableRow = z.infer<typeof tableRowSchema>;
-
-export const tableEmphasisSchema = z.strictObject({
-  row: nonNegativeInt,
-  key: z.string().min(1).max(64).optional(),
-  tone: tableToneSchema,
-});
-export type TableEmphasis = z.infer<typeof tableEmphasisSchema>;
 
 interface FigureData {
   columns: TableColumn[];
@@ -507,27 +491,9 @@ export const tableDataSchema = z
   .strictObject({
     columns: z.array(tableColumnSchema).min(1).max(TABLE_MAX_COLUMNS),
     rows: z.array(tableRowSchema).max(TABLE_MAX_ROWS),
-    emphasis: z.array(tableEmphasisSchema).optional(),
   })
   .superRefine((data, ctx) => {
     refineFigureData(data, ctx);
-    const known = new Set(data.columns.map((column) => column.key));
-    (data.emphasis ?? []).forEach((entry, entryIndex) => {
-      if (entry.row >= data.rows.length) {
-        ctx.addIssue({
-          code: "custom",
-          message: `強調の行番号が行数を超えています: ${entry.row}`,
-          path: ["emphasis", entryIndex, "row"],
-        });
-      }
-      if (entry.key !== undefined && !known.has(entry.key)) {
-        ctx.addIssue({
-          code: "custom",
-          message: `強調の列キーが未定義です: ${entry.key}`,
-          path: ["emphasis", entryIndex, "key"],
-        });
-      }
-    });
   });
 export type TableData = z.infer<typeof tableDataSchema>;
 
@@ -537,16 +503,6 @@ export const tableStyleSchema = z.strictObject({
   headerAccent: themeAccentTokenSchema.optional(),
 });
 export type TableStyle = z.infer<typeof tableStyleSchema>;
-
-export const tableRevealSchema = z.strictObject({
-  mode: tableRevealModeSchema.default("rows"),
-  preset: tableRevealPresetSchema.default("fade"),
-  durationMs: nonNegativeInt.max(DEFAULT_ANIMATION_POLICY.maxDurationMs).default(
-    DEFAULT_ANIMATION_POLICY.defaultDurationMs,
-  ),
-  staggerMs: nonNegativeInt.max(TABLE_REVEAL_STAGGER_MAX_MS).default(TABLE_REVEAL_DEFAULT_STAGGER_MS),
-});
-export type TableReveal = z.infer<typeof tableRevealSchema>;
 
 export const tableEffectTargetSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("row"), index: nonNegativeInt }),
@@ -570,7 +526,6 @@ export const tableSimpleInputSchema = z
     caption: z.string().optional(),
     data: tableDataSchema,
     style: tableStyleSchema.optional(),
-    reveal: tableRevealSchema.optional(),
     effects: tableEffectsSchema.optional(),
   })
   .superRefine((input, ctx) => {
@@ -618,18 +573,6 @@ const TABLE_HEADER_ACCENT_OPTIONS = [
   { value: "tertiary", label: "ターシャリ" },
 ] as const;
 
-const TABLE_REVEAL_MODE_OPTIONS = [
-  { value: "rows", label: "行ごと" },
-  { value: "columns", label: "列ごと" },
-  { value: "none", label: "なし" },
-] as const;
-
-const TABLE_REVEAL_PRESET_OPTIONS = [
-  { value: "fade", label: "フェード" },
-  { value: "slide-up", label: "下から" },
-  { value: "scale-in", label: "拡大" },
-] as const;
-
 const tableSimpleV1: VisualTemplateDefinition = {
   id: "table.simple",
   version: 1,
@@ -637,7 +580,7 @@ const tableSimpleV1: VisualTemplateDefinition = {
   layers: ["overlay"],
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
-  display: { label: "表", description: "列定義・行・強調セルを持つ表", category: "data" },
+  display: { label: "表", description: "列定義・行・セルを持つ表", category: "data" },
   inputFields: [
     { kind: "optionalText", key: "caption", label: "見出し" },
     {
@@ -646,7 +589,7 @@ const tableSimpleV1: VisualTemplateDefinition = {
       label: "表データ",
       maxColumns: TABLE_MAX_COLUMNS,
       maxRows: TABLE_MAX_ROWS,
-      emphasis: true,
+      dataKind: "table",
     },
     { kind: "select", key: "style.preset", label: "スタイル", options: TABLE_STYLE_PRESET_OPTIONS },
     {
@@ -657,24 +600,6 @@ const tableSimpleV1: VisualTemplateDefinition = {
       optional: true,
     },
     { kind: "boolean", key: "style.zebra", label: "ゼブラ" },
-    { kind: "select", key: "reveal.mode", label: "登場の仕方", options: TABLE_REVEAL_MODE_OPTIONS },
-    { kind: "select", key: "reveal.preset", label: "登場のアニメーション", options: TABLE_REVEAL_PRESET_OPTIONS },
-    {
-      kind: "number",
-      key: "reveal.durationMs",
-      label: "登場の尺(ms)",
-      min: 0,
-      max: DEFAULT_ANIMATION_POLICY.maxDurationMs,
-      step: 50,
-    },
-    {
-      kind: "number",
-      key: "reveal.staggerMs",
-      label: "登場のずれ(ms)",
-      min: 0,
-      max: TABLE_REVEAL_STAGGER_MAX_MS,
-      step: 10,
-    },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "table" },
   ],
   collectAssetRefs: () => [],
@@ -692,9 +617,6 @@ const tableSimpleV1: VisualTemplateDefinition = {
 export const CHART_MAX_CATEGORIES = 8;
 export const CHART_MAX_SERIES = 4;
 export const CHART_MAX_COLUMNS = CHART_MAX_SERIES + 1;
-export const CHART_REVEAL_STAGGER_MAX_MS = 2000;
-export const CHART_REVEAL_DEFAULT_STAGGER_MS = 120;
-export const CHART_REVEAL_DEFAULT_DURATION_MS = 600;
 
 export const chartOrientationSchema = z.enum(["vertical", "horizontal"]);
 export type ChartOrientation = z.infer<typeof chartOrientationSchema>;
@@ -705,11 +627,9 @@ export type ChartColorBy = z.infer<typeof chartColorBySchema>;
 export const chartStylePresetSchema = z.enum(["clean", "grid"]);
 export type ChartStylePreset = z.infer<typeof chartStylePresetSchema>;
 
-export const chartRevealModeSchema = z.enum(["bars", "none"]);
-export type ChartRevealMode = z.infer<typeof chartRevealModeSchema>;
-
-export const chartRevealPresetSchema = z.enum(["grow", "bounce", "fade"]);
-export type ChartRevealPreset = z.infer<typeof chartRevealPresetSchema>;
+export const chartAppearPresetSchema = z.enum(["grow", "bounce", "fade"]);
+export type ChartAppearPreset = z.infer<typeof chartAppearPresetSchema>;
+export const CHART_APPEAR_PRESETS = chartAppearPresetSchema.options;
 
 export const chartDataSchema = z
   .strictObject({
@@ -761,18 +681,6 @@ export const chartStyleSchema = z.strictObject({
 });
 export type ChartStyle = z.infer<typeof chartStyleSchema>;
 
-export const chartRevealSchema = z.strictObject({
-  mode: chartRevealModeSchema.default("bars"),
-  preset: chartRevealPresetSchema.default("grow"),
-  durationMs: nonNegativeInt.max(DEFAULT_ANIMATION_POLICY.maxDurationMs).default(
-    CHART_REVEAL_DEFAULT_DURATION_MS,
-  ),
-  staggerMs: nonNegativeInt.max(CHART_REVEAL_STAGGER_MAX_MS).default(
-    CHART_REVEAL_DEFAULT_STAGGER_MS,
-  ),
-});
-export type ChartReveal = z.infer<typeof chartRevealSchema>;
-
 export const chartEffectTargetSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("category"), index: nonNegativeInt }),
   z.strictObject({ kind: z.literal("series"), index: nonNegativeInt }),
@@ -783,7 +691,12 @@ export type ChartEffectTarget = z.infer<typeof chartEffectTargetSchema>;
 export const chartEffectSchema = z.strictObject({
   target: chartEffectTargetSchema,
   trigger: lineTriggerSchema,
-  effect: appearEffectSchema,
+  effect: z.strictObject({
+    kind: z.literal("appear"),
+    preset: chartAppearPresetSchema,
+    durationMs: nonNegativeInt,
+    staggerMs: nonNegativeInt.optional(),
+  }),
 });
 export type ChartEffect = z.infer<typeof chartEffectSchema>;
 
@@ -794,7 +707,6 @@ export const chartBarInputSchema = z
     title: z.string().optional(),
     data: chartDataSchema,
     style: chartStyleSchema.optional(),
-    reveal: chartRevealSchema.optional(),
     effects: chartEffectsSchema.optional(),
   })
   .superRefine((input, ctx) => {
@@ -836,17 +748,6 @@ const CHART_COLOR_BY_OPTIONS = [
   { value: "category", label: "カテゴリごと" },
 ] as const;
 
-const CHART_REVEAL_MODE_OPTIONS = [
-  { value: "bars", label: "棒ごと" },
-  { value: "none", label: "なし" },
-] as const;
-
-const CHART_REVEAL_PRESET_OPTIONS = [
-  { value: "grow", label: "伸ばす" },
-  { value: "bounce", label: "弾ませる" },
-  { value: "fade", label: "フェード" },
-] as const;
-
 const chartBarV1: VisualTemplateDefinition = {
   id: "chart.bar",
   version: 1,
@@ -863,7 +764,7 @@ const chartBarV1: VisualTemplateDefinition = {
       label: "グラフデータ",
       maxColumns: CHART_MAX_COLUMNS,
       maxRows: CHART_MAX_CATEGORIES,
-      emphasis: false,
+      dataKind: "chart",
     },
     { kind: "select", key: "style.preset", label: "目盛り線", options: CHART_STYLE_PRESET_OPTIONS },
     { kind: "select", key: "style.orientation", label: "向き", options: CHART_ORIENTATION_OPTIONS },
@@ -876,24 +777,6 @@ const chartBarV1: VisualTemplateDefinition = {
     },
     { kind: "optionalText", key: "style.axisUnit", label: "軸の単位" },
     { kind: "boolean", key: "style.valueLabels", label: "値ラベル" },
-    { kind: "select", key: "reveal.mode", label: "登場の仕方", options: CHART_REVEAL_MODE_OPTIONS },
-    { kind: "select", key: "reveal.preset", label: "登場のアニメーション", options: CHART_REVEAL_PRESET_OPTIONS },
-    {
-      kind: "number",
-      key: "reveal.durationMs",
-      label: "登場の尺(ms)",
-      min: 0,
-      max: DEFAULT_ANIMATION_POLICY.maxDurationMs,
-      step: 50,
-    },
-    {
-      kind: "number",
-      key: "reveal.staggerMs",
-      label: "登場のずれ(ms)",
-      min: 0,
-      max: CHART_REVEAL_STAGGER_MAX_MS,
-      step: 10,
-    },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "chart" },
   ],
   collectAssetRefs: () => [],

@@ -1,5 +1,6 @@
 import {
   APPEAR_PRESETS,
+  CHART_APPEAR_PRESETS,
   EMPHASIZE_STYLES,
   TABLE_TONES,
 } from "@kakeai/contracts";
@@ -44,6 +45,8 @@ const APPEAR_PRESET_LABELS: Record<string, string> = {
   "slide-left": "右から",
   "slide-right": "左から",
   "scale-in": "拡大",
+  grow: "伸ばす",
+  bounce: "弾ませる",
 };
 
 const EMPHASIZE_STYLE_LABELS: Record<string, string> = {
@@ -87,7 +90,10 @@ function defaultEntry(variant: "table" | "chart"): Json {
   return {
     target: normalizeTarget(TARGET_OPTIONS[variant][0]!.value, {}),
     trigger: { kind: "cue" },
-    effect: { kind: "appear", preset: "fade", durationMs: 400 },
+    effect:
+      variant === "chart"
+        ? { kind: "appear", preset: "grow", durationMs: 600 }
+        : { kind: "appear", preset: "fade", durationMs: 400 },
   };
 }
 
@@ -361,7 +367,7 @@ export function EffectsField({
                         update(index, { effect: { ...effect, preset: event.target.value } })
                       }
                     >
-                      {APPEAR_PRESETS.map((preset) => (
+                      {(variant === "chart" ? CHART_APPEAR_PRESETS : APPEAR_PRESETS).map((preset) => (
                         <option key={preset} value={preset}>
                           {APPEAR_PRESET_LABELS[preset] ?? preset}
                         </option>

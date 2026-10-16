@@ -8,9 +8,7 @@ import {
   textBlockInputSchema,
   textBlockV1,
   type ChartData,
-  type ChartReveal,
   type TableData,
-  type TableReveal,
   type TextRole,
 } from "../templates";
 
@@ -33,14 +31,12 @@ export const CAPTION_CONSTRAINT: TextConstraint = { maxLines: 2, charsPerLine: 2
 export const TABLE_CELL_CHAR_GUIDELINE = 14;
 export const TABLE_ROW_GUIDELINE = 10;
 export const TABLE_COLUMN_GUIDELINE = 6;
-export const TABLE_REVEAL_TOTAL_GUIDELINE_MS = 4000;
 
 export const CHART_CATEGORY_GUIDELINE = 6;
 export const CHART_SERIES_GUIDELINE = 3;
 
 function chartWarnings(
   data: ChartData,
-  reveal: ChartReveal | undefined,
   basePath: (string | number)[],
 ): Warning[] {
   const warnings: Warning[] = [];
@@ -73,22 +69,11 @@ function chartWarnings(
       }
     });
   });
-  if (reveal !== undefined && reveal.mode !== "none") {
-    const totalMs = Math.max(0, categories - 1) * reveal.staggerMs + reveal.durationMs;
-    if (totalMs > TABLE_REVEAL_TOTAL_GUIDELINE_MS) {
-      warnings.push({
-        path: [...basePath, "reveal"],
-        code: "chart_reveal_overflow",
-        message: `グラフの登場演出が目安（${TABLE_REVEAL_TOTAL_GUIDELINE_MS / 1000}秒）を超えています。ずれ・尺を見直してください。`,
-      });
-    }
-  }
   return warnings;
 }
 
 function tableWarnings(
   data: TableData,
-  reveal: TableReveal | undefined,
   basePath: (string | number)[],
 ): Warning[] {
   const warnings: Warning[] = [];
@@ -105,17 +90,6 @@ function tableWarnings(
       code: "table_rows_overflow",
       message: `表の行数が目安（最大${TABLE_ROW_GUIDELINE}行）を超えています。プレビューで確認してください。`,
     });
-  }
-  if (reveal !== undefined && reveal.mode !== "none") {
-    const count = reveal.mode === "rows" ? data.rows.length : data.columns.length;
-    const totalMs = Math.max(0, count - 1) * reveal.staggerMs + reveal.durationMs;
-    if (totalMs > TABLE_REVEAL_TOTAL_GUIDELINE_MS) {
-      warnings.push({
-        path: [...basePath, "reveal"],
-        code: "table_reveal_overflow",
-        message: `表の登場演出が目安（${TABLE_REVEAL_TOTAL_GUIDELINE_MS / 1000}秒）を超えています。ずれ・尺を見直してください。`,
-      });
-    }
   }
   data.rows.forEach((row, rowIndex) => {
     for (const [key, value] of Object.entries(row)) {
@@ -177,7 +151,6 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
           warnings.push(
             ...chartWarnings(
               parsed.data.data,
-              parsed.data.reveal,
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
             ),
           );
@@ -190,7 +163,6 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
           warnings.push(
             ...tableWarnings(
               parsed.data.data,
-              parsed.data.reveal,
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
             ),
           );

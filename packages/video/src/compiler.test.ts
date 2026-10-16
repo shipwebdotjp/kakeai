@@ -1144,7 +1144,13 @@ describe("compileDocument", () => {
               { name: "Pro", price: 1500 },
             ],
           },
-          reveal: { mode: "rows", preset: "fade", durationMs: 400, staggerMs: 150 },
+          effects: [
+            {
+              target: { kind: "rows" },
+              trigger: { kind: "cue" },
+              effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 150 },
+            },
+          ],
         },
       }),
     ];
@@ -1223,7 +1229,13 @@ describe("compileDocument", () => {
               { month: "2月", sales: 200 },
             ],
           },
-          reveal: { mode: "bars", preset: "bounce", durationMs: 600, staggerMs: 120 },
+          effects: [
+            {
+              target: { kind: "bars" },
+              trigger: { kind: "cue" },
+              effect: { kind: "appear", preset: "bounce", durationMs: 600, staggerMs: 120 },
+            },
+          ],
         },
       }),
     ];

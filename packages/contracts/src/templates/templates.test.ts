@@ -147,7 +147,7 @@ describe("visual template metadata", () => {
     expect(grid?.kind).toBe("grid");
     if (grid?.kind === "grid") {
       expect(grid.key).toBe("data");
-      expect(grid.emphasis).toBe(false);
+      expect(grid.dataKind).toBe("chart");
     }
   });
 
@@ -162,7 +162,13 @@ describe("visual template metadata", () => {
         ],
         rows: [{ month: "1月", sales: 120, cost: 80 }],
       },
-      reveal: { mode: "bars", preset: "bounce", durationMs: 600, staggerMs: 120 },
+      effects: [
+        {
+          target: { kind: "bars" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "bounce", durationMs: 600, staggerMs: 120 },
+        },
+      ],
     });
     expect(parsed.success).toBe(true);
   });
@@ -232,7 +238,7 @@ describe("visual template metadata", () => {
     ).toBe(true);
   });
 
-  it("rejects duplicate column keys, unknown row keys, and out-of-range emphasis", () => {
+  it("rejects duplicate column keys, unknown row keys, and text formatting on text columns", () => {
     const base = {
       data: {
         columns: [
@@ -240,7 +246,6 @@ describe("visual template metadata", () => {
           { key: "price", label: "月額", type: "number" },
         ],
         rows: [{ name: "Free", price: 0 }],
-        emphasis: [{ row: 0, key: "price", tone: "primary" }],
       },
     };
     expect(tableSimpleInputSchema.safeParse(base).success).toBe(true);
@@ -262,20 +267,15 @@ describe("visual template metadata", () => {
     ).toBe(false);
     expect(
       tableSimpleInputSchema.safeParse({
-        data: { ...base.data, emphasis: [{ row: 5, tone: "primary" }] },
-      }).success,
-    ).toBe(false);
-    expect(
-      tableSimpleInputSchema.safeParse({
-        data: { ...base.data, emphasis: [{ row: 0, key: "missing", tone: "primary" }] },
-      }).success,
-    ).toBe(false);
-    expect(
-      tableSimpleInputSchema.safeParse({
         data: {
           ...base.data,
           columns: [{ key: "name", label: "A", type: "text", format: "currency" }],
         },
+      }).success,
+    ).toBe(false);
+    expect(
+      tableSimpleInputSchema.safeParse({
+        data: { ...base.data, emphasis: [{ row: 0, tone: "primary" }] },
       }).success,
     ).toBe(false);
   });

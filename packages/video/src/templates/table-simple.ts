@@ -1,6 +1,4 @@
 import {
-  DEFAULT_ANIMATION_POLICY,
-  TABLE_REVEAL_DEFAULT_STAGGER_MS,
   tableSimpleInputSchema,
   type EmphasizeEffect,
   type TableColumn,
@@ -16,7 +14,7 @@ import type {
   StateInterval,
 } from "../render-context";
 import { planAppearEffect, resolveTriggerWindow, type AppearTarget } from "../cue-effects";
-import { accentForegroundHex, mixHex } from "../theme";
+import { accentForegroundHex } from "../theme";
 import { formatNumber } from "./table-format";
 import { toneHex } from "./tone";
 
@@ -34,11 +32,6 @@ function columnAlign(column: TableColumn): string {
   return column.type === "number" ? "right" : "left";
 }
 
-interface RowEmphasis {
-  base: string | null;
-  cells: Map<string, string>;
-}
-
 export function renderTableSimple(input: unknown, context: RenderContext): RenderedCue {
   const parsed = tableSimpleInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -46,26 +39,9 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
       { path: context.path, code: "invalid_input", message: "table.simple の入力が不正です。" },
     ]);
   }
-  const { caption, data, style, reveal, effects } = parsed.data;
-  const { columns, rows, emphasis } = data;
+  const { caption, data, style, effects } = parsed.data;
+  const { columns, rows } = data;
   const theme = context.theme;
-
-  const emphasisByRow = new Map<number, RowEmphasis>();
-  for (const entry of emphasis ?? []) {
-    const background = mixHex(toneHex(entry.tone, theme), theme.surface, 0.78);
-    const entryStyle = `background:${background};color:${accentForegroundHex(background, theme)}`;
-    const existing = emphasisByRow.get(entry.row);
-    if (existing === undefined) {
-      emphasisByRow.set(entry.row, {
-        base: entry.key === undefined ? entryStyle : null,
-        cells: entry.key === undefined ? new Map() : new Map([[entry.key, entryStyle]]),
-      });
-    } else if (entry.key === undefined) {
-      existing.base = entryStyle;
-    } else {
-      existing.cells.set(entry.key, entryStyle);
-    }
-  }
 
   const headerAccent = `var(--kakeai-accent-${style?.headerAccent ?? "primary"})`;
   const headerHtml = columns
@@ -75,13 +51,6 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
     )
     .join("");
 
-  const revealMode = reveal?.mode ?? "rows";
-  const revealPreset = reveal?.preset ?? "fade";
-  const durationMs = Math.min(
-    reveal?.durationMs ?? DEFAULT_ANIMATION_POLICY.defaultDurationMs,
-    DEFAULT_ANIMATION_POLICY.maxDurationMs,
-  );
-  const staggerMs = reveal?.staggerMs ?? TABLE_REVEAL_DEFAULT_STAGGER_MS;
   const animation: AnimationItem[] = [];
   const stateIntervals: StateInterval[] = [];
   const rowIds: string[] = [];
@@ -89,36 +58,16 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
 
   const bodyHtml = rows
     .map((row, rowIndex) => {
-      const rowEmphasis = emphasisByRow.get(rowIndex);
       const rowId = context.scope.id(`row-${rowIndex}`);
       rowIds.push(rowId);
       const cellsHtml = columns
         .map((column, columnIndex) => {
           const cellId = context.scope.id(`cell-${rowIndex}-${columnIndex}`);
           cellIds.set(`${rowIndex}:${column.key}`, cellId);
-          const cellEmphasis = rowEmphasis?.cells.get(column.key) ?? rowEmphasis?.base ?? null;
-          const cellStyle = `text-align:${columnAlign(column)};${cellEmphasis !== null ? `${cellEmphasis};` : ""}`;
-          if (revealMode === "columns") {
-            animation.push({
-              targetId: cellId,
-              action: revealPreset,
-              startMs: columnIndex * staggerMs,
-              durationMs,
-            });
-          }
-          return `<td id="${cellId}" class="kakeai-tablecell" style="${cellStyle}">${escapeHtmlText(cellText(row[column.key] ?? "", column))}</td>`;
+          return `<td id="${cellId}" class="kakeai-tablecell" style="text-align:${columnAlign(column)};">${escapeHtmlText(cellText(row[column.key] ?? "", column))}</td>`;
         })
         .join("");
-      if (revealMode === "rows") {
-        animation.push({
-          targetId: rowId,
-          action: revealPreset,
-          startMs: rowIndex * staggerMs,
-          durationMs,
-        });
-      }
-      const rowStyle = rowEmphasis?.base ?? "";
-      return `<tr id="${rowId}" class="kakeai-tablerow"${rowStyle.length > 0 ? ` style="${rowStyle}"` : ""}>${cellsHtml}</tr>`;
+      return `<tr id="${rowId}" class="kakeai-tablerow">${cellsHtml}</tr>`;
     })
     .join("");
 

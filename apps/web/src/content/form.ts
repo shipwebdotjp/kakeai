@@ -889,7 +889,7 @@ function buildCueInput(
           break;
         }
         let parsedJson: unknown;
-        const isChart = field.emphasis === false;
+        const isChart = field.dataKind === "chart";
         const errorMessage = isChart
           ? "グラフデータを正しく入力してください"
           : "表データを正しく入力してください";
@@ -1448,7 +1448,22 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         fields[field.key] = defaultGridDataJson();
         break;
       case "effects":
-        fields[field.key] = "[]";
+        fields[field.key] =
+          field.variant === "chart"
+            ? JSON.stringify([
+                {
+                  target: { kind: "bars" },
+                  trigger: { kind: "cue" },
+                  effect: { kind: "appear", preset: "grow", durationMs: 600, staggerMs: 120 },
+                },
+              ])
+            : JSON.stringify([
+                {
+                  target: { kind: "rows" },
+                  trigger: { kind: "cue" },
+                  effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 150 },
+                },
+              ]);
         break;
       case "calloutItems":
         fields[field.key] = JSON.stringify([{ text: "ポイント" }]);

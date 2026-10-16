@@ -1,23 +1,7 @@
 import { useState } from "react";
-import {
-  tableDataSchema,
-  type TableColumn,
-  type TableData,
-  type TableTone,
-} from "@kakeai/contracts";
+import { tableDataSchema, type TableColumn, type TableData } from "@kakeai/contracts";
 import { defaultGridDataJson } from "../content/form";
 import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
-
-const TONE_OPTIONS: readonly { value: string; label: string }[] = [
-  { value: "", label: "なし" },
-  { value: "primary", label: "プライマリ" },
-  { value: "secondary", label: "セカンダリ" },
-  { value: "tertiary", label: "ターシャリ" },
-  { value: "success", label: "成功" },
-  { value: "warning", label: "警告" },
-  { value: "error", label: "エラー" },
-  { value: "info", label: "情報" },
-];
 
 const COLUMN_TYPE_OPTIONS: readonly { value: string; label: string }[] = [
   { value: "text", label: "文字列" },
@@ -46,7 +30,6 @@ interface DataGridFieldProps {
   setField: (key: string, value: string) => void;
   maxColumns: number;
   maxRows: number;
-  emphasis: boolean;
 }
 
 function parseTableData(value: string): TableData | null {
@@ -189,7 +172,6 @@ export function DataGridField({
   setField,
   maxColumns,
   maxRows,
-  emphasis,
 }: DataGridFieldProps) {
   const [csvText, setCsvText] = useState("");
   const [notice, setNotice] = useState("");
@@ -197,12 +179,7 @@ export function DataGridField({
 
   const commit = (next: TableData) => {
     setNotice("");
-    if (!emphasis) {
-      const { emphasis: _dropped, ...rest } = next;
-      setField(fieldKey, JSON.stringify(rest));
-      return;
-    }
-    setField(fieldKey, JSON.stringify(next));
+    setField(fieldKey, JSON.stringify({ columns: next.columns, rows: next.rows }));
   };
 
   if (data === null) {
@@ -249,14 +226,7 @@ export function DataGridField({
       const { [previous]: moved, ...rest } = row;
       return { ...rest, [key]: moved as string | number };
     });
-    if (!emphasis) {
-      commit({ ...data, columns, rows });
-      return;
-    }
-    const nextEmphasis = (data.emphasis ?? []).map((entry) =>
-      entry.key === previous ? { ...entry, key } : entry,
-    );
-    commit({ ...data, columns, rows, emphasis: nextEmphasis });
+    commit({ ...data, columns, rows });
   };
 
   const changeColumnType = (index: number, type: "text" | "number") => {
@@ -294,20 +264,14 @@ export function DataGridField({
 
   const removeColumn = (index: number) => {
     const key = data.columns[index]!.key;
-    const next: TableData = {
+    commit({
       ...data,
       columns: data.columns.filter((_, columnIndex) => columnIndex !== index),
       rows: data.rows.map((row) => {
         const { [key]: _removed, ...rest } = row;
         return rest;
       }),
-    };
-    if (emphasis) {
-      next.emphasis = (data.emphasis ?? []).filter((entry) => entry.key !== key);
-    } else {
-      delete next.emphasis;
-    }
-    commit(next);
+    });
   };
 
   const updateCell = (rowIndex: number, key: string, raw: string, type: "text" | "number") => {
@@ -330,47 +294,7 @@ export function DataGridField({
   };
 
   const removeRow = (rowIndex: number) => {
-    const rows = data.rows.filter((_, index) => index !== rowIndex);
-    if (!emphasis) {
-      commit({ ...data, rows });
-      return;
-    }
-    const nextEmphasis = (data.emphasis ?? [])
-      .filter((entry) => entry.row !== rowIndex)
-      .map((entry) => (entry.row > rowIndex ? { ...entry, row: entry.row - 1 } : entry));
-    commit({ ...data, rows, emphasis: nextEmphasis });
-  };
-
-  const cellTone = (rowIndex: number, key: string): string => {
-    const entry = (data.emphasis ?? []).find(
-      (candidate) => candidate.row === rowIndex && candidate.key === key,
-    );
-    return entry?.tone ?? "";
-  };
-
-  const setCellTone = (rowIndex: number, key: string, tone: string) => {
-    const rest = (data.emphasis ?? []).filter(
-      (entry) => !(entry.row === rowIndex && entry.key === key),
-    );
-    const emphasis =
-      tone.length === 0 ? rest : [...rest, { row: rowIndex, key, tone: tone as TableTone }];
-    commit({ ...data, emphasis });
-  };
-
-  const rowTone = (rowIndex: number): string => {
-    const entry = (data.emphasis ?? []).find(
-      (candidate) => candidate.row === rowIndex && candidate.key === undefined,
-    );
-    return entry?.tone ?? "";
-  };
-
-  const setRowTone = (rowIndex: number, tone: string) => {
-    const rest = (data.emphasis ?? []).filter(
-      (entry) => !(entry.row === rowIndex && entry.key === undefined),
-    );
-    const emphasis =
-      tone.length === 0 ? rest : [...rest, { row: rowIndex, tone: tone as TableTone }];
-    commit({ ...data, emphasis });
+    commit({ ...data, rows: data.rows.filter((_, index) => index !== rowIndex) });
   };
 
   const importCsv = () => {
@@ -410,7 +334,7 @@ export function DataGridField({
     }
     setNotice(parts.join("、"));
     setCsvText("");
-    setField(fieldKey, JSON.stringify(emphasis ? { columns, rows, emphasis: [] } : { columns, rows }));
+    setField(fieldKey, JSON.stringify({ columns, rows }));
   };
 
   return (
@@ -427,7 +351,6 @@ export function DataGridField({
         <table className="border-collapse">
           <thead>
             <tr>
-              {emphasis && <th className="border border-border p-1 text-xs">行の強調</th>}
               {data.columns.map((column, columnIndex) => (
                 <th key={column.key} className="border border-border p-1">
                   <div className="flex flex-col gap-1">
@@ -511,47 +434,14 @@ export function DataGridField({
           <tbody>
             {data.rows.map((row, rowIndex) => (
               <tr key={rowIndex}>
-                {emphasis && (
-                  <td className="border border-border p-1">
-                    <select
-                      className={textFieldClass}
-                      value={rowTone(rowIndex)}
-                      onChange={(event) => setRowTone(rowIndex, event.target.value)}
-                    >
-                      {TONE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                )}
                 {data.columns.map((column) => (
                   <td key={column.key} className="border border-border p-1">
-                    <div className="flex items-center gap-1">
-                      <CellInput
-                        key={`${rowIndex}-${column.key}-${String(row[column.key] ?? "")}`}
-                        value={row[column.key]}
-                        columnType={column.type}
-                        onCommit={(raw) => updateCell(rowIndex, column.key, raw, column.type)}
-                      />
-                      {emphasis && (
-                        <select
-                          className={textFieldClass}
-                          value={cellTone(rowIndex, column.key)}
-                          onChange={(event) =>
-                            setCellTone(rowIndex, column.key, event.target.value)
-                          }
-                          title="セルの強調"
-                        >
-                          {TONE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
+                    <CellInput
+                      key={`${rowIndex}-${column.key}-${String(row[column.key] ?? "")}`}
+                      value={row[column.key]}
+                      columnType={column.type}
+                      onCommit={(raw) => updateCell(rowIndex, column.key, raw, column.type)}
+                    />
                   </td>
                 ))}
                 <td className="border border-border p-1">

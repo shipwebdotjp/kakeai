@@ -80,13 +80,13 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 ## 各テンプレートへの適用
 
-### `table.simple@1` / `chart.bar@1` への追加（追加型で開始）
+### `table.simple@1` / `chart.bar@1`
 
-まずは既存を壊さない追加型で `effects` を導入し、二重表現の解消は後続で行う。
+`effects` を唯一の内部演出とし、`reveal`・`emphasis` は廃止する。
 
-- `table.simple`: 任意の `effects` を追加する。targetは `{ "kind": "row", "index" } | { "kind": "cell", "row", "key" } | { "kind": "rows" } | { "kind": "columns" }`。`appear` は共通ヘルパ、`emphasize` は `stateIntervals` で描画する。既存の `data.emphasis` と `reveal` は当面残す。
-- `chart.bar`: 任意の `effects`（`appear` のみ）を追加する。targetは `{ "kind": "category", "index" } | { "kind": "series", "index" } | { "kind": "bars" }`。既存の `reveal` は当面残す（`grow`/`bounce` は `reveal` 側に残る）。
-- 追加のみで既存の有効入力の解釈を変えないため、版は据え置く（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。`reveal`・`emphasis` の削除は保存済み参照の有無で `@1` 書き換えか `@2` かを決める（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
+- `table.simple`: `effects` のみを持つ。targetは `{ "kind": "row", "index" } | { "kind": "cell", "row", "key" } | { "kind": "rows" } | { "kind": "columns" }`。`appear` は共通ヘルパ、`emphasize` は `stateIntervals` で描画する。旧 `data.emphasis`（静的強調）は `trigger: { "kind": "cue" }` の `emphasize`、旧 `reveal`（一括登場）はグループtarget＋`staggerMs` の `appear` で表す。
+- `chart.bar`: `effects`（`appear` のみ）を持つ。targetは `{ "kind": "category", "index" } | { "kind": "series", "index" } | { "kind": "bars" }`。`grow`／`bounce`／`fade` は `appear` の preset として保持し、`axis` は描画側が `style.orientation` から決める。
+- `reveal`・`emphasis` の削除は保存済み有効入力の再解釈を伴う。`@1` を書き換えた（正式リリース前の破壊的変更。[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。新規Cueには既定の `effects`（表は全行フェード、グラフは全棒grow）を入れる。
 
 ### `list.callout@1`（新規）
 
@@ -109,7 +109,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 ## 版と移行
 
 - 新規テンプレート（`list.callout@1`）は `@1` から開始する。
-- 既存テンプレートの入力形状変更は、保存済み参照の有無で `@1` 書き換えか `@2` 追加かを決める。破壊的変更は正式リリース前だけ許容する（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
+- 既存テンプレートの入力形状変更は、保存済み参照の有無で `@1` 書き換えか `@2` 追加かを決める。`table.simple@1`・`chart.bar@1` の `reveal`・`emphasis` 削除は、正式リリース前の破壊的変更として `@1` を書き換えた（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
 - 効果語彙の追加（将来の `onset` など）は、保存済み有効入力の解釈を変えない限り同じ版を書き換えてよい（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
 
 ## 非ゴール

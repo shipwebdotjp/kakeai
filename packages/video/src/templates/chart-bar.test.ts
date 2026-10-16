@@ -49,8 +49,20 @@ describe("renderChartBar", () => {
     expect(rendered.html).toContain("kakeai-chartbar");
   });
 
-  it("emits a grow action along the vertical axis by default", () => {
-    const rendered = renderChartBar(singleSeries, context());
+  it("grows bars along the vertical axis through a cue-triggered effect", () => {
+    const rendered = renderChartBar(
+      {
+        ...singleSeries,
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "grow", durationMs: 600, staggerMs: 120 },
+          },
+        ],
+      },
+      { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
+    );
     expect(rendered.animation).toHaveLength(2);
     expect(rendered.animation[0]).toMatchObject({
       action: "grow",
@@ -61,18 +73,37 @@ describe("renderChartBar", () => {
     expect(rendered.animation[1]).toMatchObject({ startMs: 120 });
   });
 
-  it("maps bounce to an overshoot ease", () => {
+  it("maps the bounce preset to an overshoot ease", () => {
     const rendered = renderChartBar(
-      { ...singleSeries, reveal: { mode: "bars", preset: "bounce", durationMs: 600, staggerMs: 120 } },
-      context(),
+      {
+        ...singleSeries,
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "bounce", durationMs: 600, staggerMs: 120 },
+          },
+        ],
+      },
+      { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
     );
     expect(rendered.animation.every((item) => item.ease === "overshoot")).toBe(true);
   });
 
   it("emits a horizontal grow action in horizontal orientation", () => {
     const rendered = renderChartBar(
-      { ...singleSeries, style: { orientation: "horizontal", valueLabels: true } },
-      context(),
+      {
+        ...singleSeries,
+        style: { orientation: "horizontal", valueLabels: true },
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "grow", durationMs: 600 },
+          },
+        ],
+      },
+      { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
     );
     expect(rendered.animation.every((item) => item.axis === "x")).toBe(true);
     expect(rendered.html).toContain("kakeai-chart-horizontal");
@@ -168,7 +199,7 @@ describe("renderChartBar", () => {
   it("keeps two chart cues from colliding", () => {
     const a = renderChartBar(singleSeries, { ...context(), scope: cueScope("vc-a") });
     const b = renderChartBar(singleSeries, { ...context(), scope: cueScope("vc-b") });
-    expect(a.animation[0]!.targetId).not.toBe(b.animation[0]!.targetId);
+    expect(a.html).not.toBe(b.html);
   });
 });
 
@@ -192,18 +223,24 @@ describe("renderChartBar effects", () => {
         lineIntervals: [{ lineId: "l2", startMs: 1500, endMs: 2500 }],
       },
     );
-    expect(rendered.animation).toContainEqual({
-      targetId: scope.id("bar-0-0"),
-      action: "fade",
-      startMs: 1500,
-      durationMs: 200,
-    });
-    expect(rendered.animation).toContainEqual({
-      targetId: scope.id("bar-1-0"),
-      action: "fade",
-      startMs: 1550,
-      durationMs: 200,
-    });
+    expect(rendered.animation).toEqual([
+      {
+        targetId: scope.id("bar-0-0"),
+        action: "fade",
+        axis: "y",
+        ease: "normal",
+        startMs: 1500,
+        durationMs: 200,
+      },
+      {
+        targetId: scope.id("bar-1-0"),
+        action: "fade",
+        axis: "y",
+        ease: "normal",
+        startMs: 1550,
+        durationMs: 200,
+      },
+    ]);
     expect(rendered.stateIntervals).toContainEqual({
       targetId: scope.id("bar-0-0"),
       intervals: [{ startMs: 0, endMs: 1500 }],
@@ -221,18 +258,22 @@ describe("renderChartBar effects", () => {
           {
             target: { kind: "category", index: 1 },
             trigger: { kind: "cue" },
-            effect: { kind: "appear", preset: "scale-in", durationMs: 300 },
+            effect: { kind: "appear", preset: "fade", durationMs: 300 },
           },
         ],
       },
       { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
     );
-    expect(rendered.animation).toContainEqual({
-      targetId: scope.id("bar-1-0"),
-      action: "scale-in",
-      startMs: 0,
-      durationMs: 300,
-    });
+    expect(rendered.animation).toEqual([
+      {
+        targetId: scope.id("bar-1-0"),
+        action: "fade",
+        axis: "y",
+        ease: "normal",
+        startMs: 0,
+        durationMs: 300,
+      },
+    ]);
     expect(rendered.stateIntervals).toEqual([]);
   });
 });

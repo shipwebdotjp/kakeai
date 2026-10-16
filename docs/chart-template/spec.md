@@ -32,12 +32,13 @@
     "colorBy": "series",        // series | category（省略時: 系列1本なら category、複数なら series）
     "axisUnit": ""              // 目盛りラベルに付ける任意の単位
   },
-  "reveal": {
-    "mode": "bars",             // bars | none
-    "preset": "grow",           // grow | bounce | fade
-    "durationMs": 600,
-    "staggerMs": 120
-  }
+  "effects": [
+    {
+      "target": { "kind": "bars" },                    // category | series | bars
+      "trigger": { "kind": "cue" },                    // cue | lines
+      "effect": { "kind": "appear", "preset": "grow", "durationMs": 600, "staggerMs": 120 }
+    }
+  ]
 }
 ```
 
@@ -45,23 +46,21 @@
 - 値ラベルは系列の `format`（`integer | decimal | percent | currency`）で整形する。目盛りは、全系列の `format` が同じときはその `format`、異なるときはそのまま表示し、`axisUnit` を末尾に付ける。
 - `colorBy` が `series` のとき系列ごと、`category` のときカテゴリごとに `VisualTheme.categoryColors` を巡回して割り当てる。
 - 負値は0として描画し、警告（`chart_negative_value`）を返す。保存は拒否しない。
-- `reveal` の合計尺（`(カテゴリ数−1)×staggerMs＋durationMs`）が目安（4秒）を超えると警告を返す。`durationMs` は `animationPolicy.maxDurationMs` でクランプする。
-
-**行トリガー付き効果**: `effects` に行区間トリガー付きの `appear` を追加できる（target はカテゴリ・系列・グループ）。既存の `reveal`（`grow`/`bounce`/`fade`）は当面残し、`effects` と併存する。二重表現の解消と `effects` 編集UIは後続で行う。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+- `effects` は行トリガー付きの `appear`（`grow`／`bounce`／`fade`）を持つ。target は `category`（カテゴリ番号）・`series`（系列番号）・`bars`（全棒）を指す。`durationMs` は `animationPolicy.maxDurationMs` でクランプし、ずらしはカテゴリ単位とする。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 ## 図形アクション
 
-`reveal.preset` は、テンプレートの `AnimationPlan` の図形アクションへ写像する。
+`effects.effect.preset` は、テンプレートの `AnimationPlan` の図形アクションへ写像する。
 
-| `reveal.preset` | action | ease | 内容 |
+| preset | action | ease | 内容 |
 | --- | --- | --- | --- |
 | `grow` | `grow` | `normal` | 基準線から伸ばす |
 | `bounce` | `grow` | `overshoot` | 伸ばして跳ねる |
 | `fade` | `fade` | `normal` | フェードで出す |
 
 - `grow` の軸は `style.orientation` に従い、縦棒は `scaleY`、横棒は `scaleX`。`transform-origin` はテンプレートCSSが持つ。
-- ずらしはカテゴリ単位（`startMs = カテゴリindex × staggerMs`）。同一カテゴリの系列は同時に伸びる。
-- `mode: none` は内部アニメを返さない。
+- `bars` target のずらしはカテゴリ単位（`startMs = カテゴリindex × staggerMs`）。同一カテゴリの系列は同時に伸びる。
+- 効果がなければ内部アニメを返さない。
 
 ## 値軸と凡例
 
@@ -74,10 +73,11 @@
 | `id@version` | `chart.bar@1` |
 | `layers` | `overlay` |
 | `transitionPolicy` | 既定（入退場はCue側） |
-| `animationPolicy` | 既定（内部アニメは `reveal` が `AnimationPlan` を返す） |
+| `animationPolicy` | 既定（内部アニメは `effects` が `AnimationPlan`／`stateIntervals` を返す） |
 | `collectAssetRefs` | 素材を使わないため空 |
+| `collectLineRefs` | `effects[].trigger` の行参照を収集する |
 
-`inputFields` は次の通り。`data` は編集画面の `grid` フィールド（強調なし）が編集する。
+`inputFields` は次の通り。`data` は編集画面の `grid` フィールド（`dataKind: "chart"`）が編集する。
 
 | key | kind | 内容 |
 | --- | --- | --- |
@@ -88,15 +88,14 @@
 | `style.colorBy` | select（任意） | series / category |
 | `style.axisUnit` | optionalText | 軸の単位 |
 | `style.valueLabels` | boolean | 値ラベル |
-| `reveal.mode` | select | bars / none |
-| `reveal.preset` | select | grow / bounce / fade |
-| `reveal.durationMs` | number | 1本の尺 |
-| `reveal.staggerMs` | number | カテゴリ間のずれ |
+| `effects` | effects | 行トリガー付きの登場（`variant: "chart"`） |
+
+新規Cueには、全棒を伸ばす既定効果を入れる。
 
 ## 受け入れ条件
 
 - カテゴリ・系列・値を持つ棒グラフを保存し、プレビューでシークし、MP4をレンダーできる。
 - 系列ごとに色が分かれ、複数系列では凡例が出る。値ラベル・目盛りが系列の書式で整形される。
 - `grow`・`bounce`・`fade` の登場が、プレビューのシークとMP4で一致する。
-- 先頭列がカテゴリでない、系列が数値でない、上限超過の場合を拒否する。
-- 負値・カテゴリ/系列の目安超過・登場尺超過を `meta.warnings` で返す（拒否しない）。
+- 先頭列がカテゴリでない、系列が数値でない、範囲外の効果 target、上限超過の場合を拒否する。
+- 負値・カテゴリ/系列の目安超過を `meta.warnings` で返す（拒否しない）。
