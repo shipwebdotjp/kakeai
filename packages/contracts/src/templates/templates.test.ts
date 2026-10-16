@@ -333,7 +333,7 @@ describe("visual template metadata", () => {
     ).toBe(false);
   });
 
-  it("accepts chart.bar appear effects and rejects out-of-range or non-appear effects", () => {    const data = {
+  it("accepts chart.bar appear and emphasize effects and rejects out-of-range targets", () => {    const data = {
       columns: [
         { key: "m", label: "月", type: "text" },
         { key: "s", label: "売上", type: "number" },
@@ -371,11 +371,11 @@ describe("visual template metadata", () => {
           {
             target: { kind: "bars" },
             trigger: { kind: "cue" },
-            effect: { kind: "emphasize", style: "frame", tone: "primary" },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
           },
         ],
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("registers list.callout@1 as an editable overlay template", () => {

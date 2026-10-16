@@ -1,6 +1,7 @@
 import {
   tableSimpleInputSchema,
   type EmphasizeEffect,
+  type OnsetPreset,
   type TableColumn,
   type TableEffect,
   type VisualThemeDefinition,
@@ -13,10 +14,23 @@ import type {
   RenderContext,
   StateInterval,
 } from "../render-context";
-import { planAppearEffect, resolveTriggerWindow, type AppearTarget } from "../cue-effects";
+import {
+  onsetOverlayId,
+  planAppearEffect,
+  planOnsetEffect,
+  resolveTriggerWindow,
+  SPOTLIGHT_DIM_OFF,
+  SPOTLIGHT_DIM_ON,
+  type AppearTarget,
+} from "../cue-effects";
 import { accentForegroundHex } from "../theme";
 import { formatNumber } from "./table-format";
 import { toneHex } from "./tone";
+
+interface TableOnset {
+  preset: OnsetPreset;
+  color: string;
+}
 
 function cellText(value: string | number, column: TableColumn): string {
   if (typeof value === "number" && column.type === "number") {
@@ -53,23 +67,21 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
 
   const animation: AnimationItem[] = [];
   const stateIntervals: StateInterval[] = [];
-  const rowIds: string[] = [];
-  const cellIds = new Map<string, string>();
+  const onsets = new Map<string, TableOnset>();
 
-  const bodyHtml = rows
-    .map((row, rowIndex) => {
-      const rowId = context.scope.id(`row-${rowIndex}`);
-      rowIds.push(rowId);
-      const cellsHtml = columns
-        .map((column, columnIndex) => {
-          const cellId = context.scope.id(`cell-${rowIndex}-${columnIndex}`);
-          cellIds.set(`${rowIndex}:${column.key}`, cellId);
-          return `<td id="${cellId}" class="kakeai-tablecell" style="text-align:${columnAlign(column)};">${escapeHtmlText(cellText(row[column.key] ?? "", column))}</td>`;
-        })
-        .join("");
-      return `<tr id="${rowId}" class="kakeai-tablerow">${cellsHtml}</tr>`;
-    })
-    .join("");
+  const rowIdOf = (rowIndex: number): string => context.scope.id(`row-${rowIndex}`);
+  const cellIdOf = (rowIndex: number, columnIndex: number): string =>
+    context.scope.id(`cell-${rowIndex}-${columnIndex}`);
+  const rowIds = rows.map((_row, rowIndex) => rowIdOf(rowIndex));
+  const rowCellIds = rows.map((_row, rowIndex) =>
+    columns.map((_column, columnIndex) => cellIdOf(rowIndex, columnIndex)),
+  );
+  const cellIds = new Map<string, string>();
+  columns.forEach((column, columnIndex) => {
+    rows.forEach((_row, rowIndex) => {
+      cellIds.set(`${rowIndex}:${column.key}`, cellIdOf(rowIndex, columnIndex));
+    });
+  });
 
   const spanMs = context.cueTiming?.spanMs ?? 0;
   const lineIntervals = context.lineIntervals ?? [];
@@ -78,6 +90,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
   applyTableEffects({
     effects: effects ?? [],
     rowIds,
+    rowCellIds,
     cellIds,
     columns,
     rows,
@@ -88,7 +101,25 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
     path: context.path,
     animation,
     stateIntervals,
+    onsets,
   });
+
+  const bodyHtml = rows
+    .map((row, rowIndex) => {
+      const cellsHtml = columns
+        .map((column, columnIndex) => {
+          const cellId = cellIdOf(rowIndex, columnIndex);
+          const onset = onsets.get(cellId);
+          const overlay =
+            onset === undefined
+              ? ""
+              : `<span id="${onsetOverlayId(cellId)}" class="kakeai-onsetoverlay kakeai-onset-${onset.preset}" style="--kakeai-onset-color:${onset.color}"></span>`;
+          return `<td id="${cellId}" class="kakeai-tablecell" style="text-align:${columnAlign(column)};">${escapeHtmlText(cellText(row[column.key] ?? "", column))}${overlay}</td>`;
+        })
+        .join("");
+      return `<tr id="${rowIdOf(rowIndex)}" class="kakeai-tablerow">${cellsHtml}</tr>`;
+    })
+    .join("");
 
   const captionHtml =
     caption === undefined || caption.trim().length === 0
@@ -142,6 +173,41 @@ function resolveTableEffectTargets(
   }
 }
 
+function onsetElementIds(
+  effect: TableEffect,
+  targets: readonly TableEffectTargetRef[],
+  rowCellIds: readonly (readonly string[])[],
+): string[] {
+  switch (effect.target.kind) {
+    case "row":
+      return [...(rowCellIds[effect.target.index] ?? [])];
+    case "rows":
+    case "columns":
+      return rowCellIds.flatMap((ids) => [...ids]);
+    case "cell":
+      return targets[0] === undefined ? [] : [targets[0].id];
+  }
+}
+
+function spotlightSiblingIds(
+  effect: TableEffect,
+  targets: readonly TableEffectTargetRef[],
+  rowCellIds: readonly (readonly string[])[],
+): string[] {
+  if (effect.effect.kind !== "emphasize" || effect.effect.style !== "spotlight") {
+    return [];
+  }
+  const target = effect.target;
+  if (target.kind === "row") {
+    return rowCellIds.flatMap((ids, rowIndex) => (rowIndex === target.index ? [] : [...ids]));
+  }
+  if (target.kind === "cell") {
+    const targetId = targets[0]?.id;
+    return targets.length === 0 ? [] : rowCellIds.flat().filter((id) => id !== targetId);
+  }
+  return [];
+}
+
 function emphasizeOnVars(
   effect: EmphasizeEffect,
   theme: VisualThemeDefinition,
@@ -150,6 +216,9 @@ function emphasizeOnVars(
   if (effect.style === "frame") {
     return { boxShadow: `inset 0 0 0 6px ${hex}` };
   }
+  if (effect.style === "spotlight") {
+    return { boxShadow: `inset 0 0 0 4px ${hex}` };
+  }
   return { backgroundColor: hex, color: accentForegroundHex(hex, theme) };
 }
 
@@ -157,7 +226,7 @@ function emphasizeOffVars(
   effect: EmphasizeEffect,
   zebraRow: boolean,
 ): Record<string, string | number> {
-  if (effect.style === "frame") {
+  if (effect.style === "frame" || effect.style === "spotlight") {
     return { boxShadow: "none" };
   }
   return {
@@ -169,6 +238,7 @@ function emphasizeOffVars(
 function applyTableEffects(options: {
   effects: readonly TableEffect[];
   rowIds: readonly string[];
+  rowCellIds: readonly (readonly string[])[];
   cellIds: ReadonlyMap<string, string>;
   columns: readonly TableColumn[];
   rows: readonly unknown[];
@@ -179,6 +249,7 @@ function applyTableEffects(options: {
   path: (string | number)[];
   animation: AnimationItem[];
   stateIntervals: StateInterval[];
+  onsets: Map<string, TableOnset>;
 }): void {
   const lineIntervals = options.lineIntervals ?? [];
   options.effects.forEach((entry, effectIndex) => {
@@ -211,13 +282,37 @@ function applyTableEffects(options: {
     if (window === null) {
       return;
     }
+    const interval = [{ startMs: window.startMs, endMs: window.endMs }];
     for (const target of targets) {
       options.stateIntervals.push({
         targetId: target.id,
-        intervals: [{ startMs: window.startMs, endMs: window.endMs }],
+        intervals: interval,
         on: emphasizeOnVars(entry.effect, options.theme),
         off: emphasizeOffVars(entry.effect, options.zebra && target.rowIndex % 2 === 1),
       });
+    }
+    for (const siblingId of spotlightSiblingIds(entry, targets, options.rowCellIds)) {
+      options.stateIntervals.push({
+        targetId: siblingId,
+        intervals: interval,
+        on: SPOTLIGHT_DIM_ON,
+        off: SPOTLIGHT_DIM_OFF,
+      });
+    }
+    if (entry.effect.onset !== undefined) {
+      const color = toneHex(entry.effect.tone, options.theme);
+      for (const elementId of onsetElementIds(entry, targets, options.rowCellIds)) {
+        options.onsets.set(elementId, { preset: entry.effect.onset.preset, color });
+        const onset = planOnsetEffect({
+          overlayId: onsetOverlayId(elementId),
+          effect: entry.effect,
+          window,
+          spanMs: options.spanMs,
+        });
+        if (onset !== null) {
+          options.animation.push(onset);
+        }
+      }
     }
   });
 }

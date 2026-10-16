@@ -1,4 +1,9 @@
-import { DEFAULT_ANIMATION_POLICY, type AppearEffect, type LineTrigger } from "@kakeai/contracts";
+import {
+  DEFAULT_ANIMATION_POLICY,
+  type AppearEffect,
+  type EmphasizeEffect,
+  type LineTrigger,
+} from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import type { AnimationItem, LineInterval, StateInterval } from "./render-context";
 
@@ -77,4 +82,39 @@ export function planAppearEffect(options: {
     }
   });
   return { animation, stateIntervals };
+}
+
+export const SPOTLIGHT_DIM_ON: Record<string, string | number> = { filter: "brightness(0.4)" };
+export const SPOTLIGHT_DIM_OFF: Record<string, string | number> = { filter: "none" };
+
+export function onsetOverlayId(elementId: string): string {
+  return `${elementId}-onset`;
+}
+
+export function planOnsetEffect(options: {
+  overlayId: string;
+  effect: EmphasizeEffect;
+  window: CueEffectWindow;
+  spanMs: number;
+}): AnimationItem | null {
+  const onset = options.effect.onset;
+  if (onset === undefined) {
+    return null;
+  }
+  const windowMs = options.window.endMs - options.window.startMs;
+  const durationMs = Math.max(
+    0,
+    Math.min(onset.durationMs, DEFAULT_ANIMATION_POLICY.maxDurationMs, windowMs, options.spanMs),
+  );
+  const startMs = options.window.startMs;
+  if (durationMs <= 0 || startMs >= options.spanMs) {
+    return null;
+  }
+  return {
+    targetId: options.overlayId,
+    action: onset.preset,
+    ease: onset.preset === "pop" ? "overshoot" : "normal",
+    startMs,
+    durationMs,
+  };
 }

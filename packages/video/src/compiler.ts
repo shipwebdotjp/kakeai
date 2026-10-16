@@ -17,7 +17,6 @@ import {
   type AnimationPreset,
   type ContentDocument,
   type CueLayer,
-  type FigureAction,
   type FigureEase,
   type NarrationSegment,
   type NestedVisual,
@@ -33,7 +32,7 @@ import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import { seededRandom } from "./random";
-import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval } from "./render-context";
+import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval, RenderAnimationAction } from "./render-context";
 import {
   THEME_FONT_STACKS,
   mixHex,
@@ -705,7 +704,8 @@ const STYLES = [
   ".kakeai-tablecaption{margin:0 0 20px;font-size:44px;font-weight:700;color:var(--kakeai-text);text-align:center;}",
   ".kakeai-table{border-collapse:collapse;width:100%;font-size:36px;line-height:1.5;color:var(--kakeai-text);}",
   ".kakeai-tablehead{padding:14px 28px;border-bottom:4px solid var(--kakeai-accent-primary);font-weight:700;white-space:normal;word-break:break-word;}",
-  ".kakeai-tablecell{padding:14px 28px;white-space:normal;word-break:break-word;}",
+  ".kakeai-tablecell{position:relative;padding:14px 28px;white-space:normal;word-break:break-word;}",
+  ".kakeai-tablerow{position:relative;}",
   ".kakeai-table-zebra .kakeai-tablerow:nth-child(even) .kakeai-tablecell{background:var(--kakeai-surface-muted);}",
   ".kakeai-table-bordered .kakeai-tablecell{border:2px solid var(--kakeai-border);}",
   ".kakeai-table-bordered .kakeai-tablehead{border:2px solid var(--kakeai-border);border-bottom:4px solid var(--kakeai-accent-primary);}",
@@ -740,7 +740,11 @@ const STYLES = [
   ".kakeai-calloutwrap{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:120px 200px;box-sizing:border-box;}",
   ".kakeai-callouttitle{font-size:52px;font-weight:700;color:var(--kakeai-text);}",
   ".kakeai-calloutlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:20px;width:100%;max-width:1400px;}",
-  ".kakeai-calloutitem{background:var(--kakeai-surface);border-radius:var(--kakeai-radius-lg);padding:24px 36px;font-size:40px;line-height:1.3;color:var(--kakeai-text);box-shadow:0 8px 32px var(--kakeai-shadow);}",
+  ".kakeai-calloutitem{position:relative;background:var(--kakeai-surface);border-radius:var(--kakeai-radius-lg);padding:24px 36px;font-size:40px;line-height:1.3;color:var(--kakeai-text);box-shadow:0 8px 32px var(--kakeai-shadow);}",
+  ".kakeai-onsetoverlay{position:absolute;inset:0;pointer-events:none;opacity:0;display:block;}",
+  ".kakeai-onsetsweep{--kakeai-onset-progress:1;border-radius:inherit;padding:6px;background:conic-gradient(from calc(var(--kakeai-onset-progress,0) * 360deg),transparent 0deg,var(--kakeai-onset-color,#fff) 45deg,transparent 110deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;}",
+  ".kakeai-onsetflash{border-radius:inherit;background:var(--kakeai-onset-color,#fff);}",
+  ".kakeai-onsetpop{border-radius:inherit;box-shadow:inset 0 0 0 6px var(--kakeai-onset-color,#fff);}",
 ].join("\n");
 
 const FADE_START_EPSILON_MS = 1;
@@ -777,10 +781,16 @@ function presetVars(preset: AnimationPreset, phase: "enter" | "exit"): string | 
   }
 }
 
-function actionVars(action: FigureAction, axis: "x" | "y" | undefined): string | null {
+function actionVars(action: RenderAnimationAction, axis: "x" | "y" | undefined): string | null {
   switch (action) {
     case "grow":
       return axis === "x" ? "scaleX:0" : "scaleY:0";
+    case "sweep":
+      return "opacity:1,--kakeai-onset-progress:0";
+    case "flash":
+      return "opacity:1";
+    case "pop":
+      return "opacity:1,scale:0.85";
     case "none":
     case "fade":
     case "slide-up":

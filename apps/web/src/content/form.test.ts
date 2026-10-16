@@ -1726,6 +1726,36 @@ describe("table.simple form", () => {
     expect(parsed.columns).toHaveLength(2);
     expect(parsed.rows).toHaveLength(1);
   });
+
+  it("round-trips a spotlight emphasis with an onset", () => {
+    const base = createInitialContentDocument();
+    const input = {
+      ...structuredClone(tableInput),
+      effects: [
+        {
+          target: { kind: "row", index: 1 },
+          trigger: { kind: "cue" },
+          effect: {
+            kind: "emphasize",
+            style: "spotlight",
+            tone: "warning",
+            onset: { preset: "sweep", durationMs: 600 },
+          },
+        },
+      ],
+    };
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-table",
+        template: { id: "table.simple", version: 1 },
+        layer: "overlay",
+        input,
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(input);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
 });
 
 describe("chart.bar form", () => {
@@ -1840,5 +1870,30 @@ describe("chart.bar form", () => {
     expect(parsed.columns[0]!.type).toBe("text");
     expect(parsed.columns[1]!.type).toBe("number");
     expect(parsed.rows).toHaveLength(1);
+  });
+
+  it("round-trips a chart emphasize effect", () => {
+    const base = createInitialContentDocument();
+    const input = {
+      ...structuredClone(chartInput),
+      effects: [
+        {
+          target: { kind: "category", index: 1 },
+          trigger: { kind: "cue" },
+          effect: { kind: "emphasize", style: "spotlight", tone: "info" },
+        },
+      ],
+    };
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-chart",
+        template: { id: "chart.bar", version: 1 },
+        layer: "overlay",
+        input,
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(input);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });

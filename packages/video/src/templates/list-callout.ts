@@ -6,7 +6,14 @@ import {
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 import type { AnimationItem, RenderedCue, RenderContext, StateInterval } from "../render-context";
-import { planAppearEffect, resolveTriggerWindow } from "../cue-effects";
+import {
+  onsetOverlayId,
+  planAppearEffect,
+  planOnsetEffect,
+  resolveTriggerWindow,
+  SPOTLIGHT_DIM_OFF,
+  SPOTLIGHT_DIM_ON,
+} from "../cue-effects";
 import { accentForegroundHex } from "../theme";
 import { toneHex } from "./tone";
 
@@ -15,17 +22,29 @@ function emphasizeOnVars(
   theme: VisualThemeDefinition,
 ): Record<string, string | number> {
   const hex = toneHex(effect.tone, theme);
-  if (effect.style === "frame") {
+  if (effect.style === "frame" || effect.style === "spotlight") {
     return { boxShadow: `inset 0 0 0 4px ${hex}` };
   }
   return { backgroundColor: hex, color: accentForegroundHex(hex, theme) };
 }
 
 function emphasizeOffVars(effect: EmphasizeEffect): Record<string, string | number> {
-  if (effect.style === "frame") {
+  if (effect.style === "frame" || effect.style === "spotlight") {
     return { boxShadow: "none" };
   }
   return { backgroundColor: "transparent", color: "inherit" };
+}
+
+function itemOverlayHtml(
+  itemId: string,
+  effect: EmphasizeEffect | undefined,
+  theme: VisualThemeDefinition,
+): string {
+  if (effect === undefined || effect.onset === undefined) {
+    return "";
+  }
+  const hex = toneHex(effect.tone, theme);
+  return `<span id="${onsetOverlayId(itemId)}" class="kakeai-onsetoverlay kakeai-onset-${effect.onset.preset}" style="--kakeai-onset-color:${hex}"></span>`;
 }
 
 export function renderListCallout(input: unknown, context: RenderContext): RenderedCue {
@@ -51,12 +70,35 @@ export function renderListCallout(input: unknown, context: RenderContext): Rende
     if (item.effect.kind === "emphasize") {
       const window = resolveTriggerWindow(item.trigger, lineIntervals, spanMs, path);
       if (window !== null) {
+        const interval = [{ startMs: window.startMs, endMs: window.endMs }];
         stateIntervals.push({
           targetId: itemIds[index]!,
-          intervals: [{ startMs: window.startMs, endMs: window.endMs }],
+          intervals: interval,
           on: emphasizeOnVars(item.effect, theme),
           off: emphasizeOffVars(item.effect),
         });
+        if (item.effect.style === "spotlight") {
+          itemIds.forEach((otherId, otherIndex) => {
+            if (otherIndex === index) {
+              return;
+            }
+            stateIntervals.push({
+              targetId: otherId,
+              intervals: interval,
+              on: SPOTLIGHT_DIM_ON,
+              off: SPOTLIGHT_DIM_OFF,
+            });
+          });
+        }
+        const onset = planOnsetEffect({
+          overlayId: onsetOverlayId(itemIds[index]!),
+          effect: item.effect,
+          window,
+          spanMs,
+        });
+        if (onset !== null) {
+          animation.push(onset);
+        }
       }
       return;
     }
@@ -90,10 +132,10 @@ export function renderListCallout(input: unknown, context: RenderContext): Rende
       ? ""
       : `<figcaption class="kakeai-callouttitle">${escapeHtmlText(title)}</figcaption>`;
   const itemsHtml = items
-    .map(
-      (item, index) =>
-        `<li id="${itemIds[index]}" class="kakeai-calloutitem">${escapeHtmlText(item.text)}</li>`,
-    )
+    .map((item, index) => {
+      const effect = item.effect?.kind === "emphasize" ? item.effect : undefined;
+      return `<li id="${itemIds[index]}" class="kakeai-calloutitem">${escapeHtmlText(item.text)}${itemOverlayHtml(itemIds[index]!, effect, theme)}</li>`;
+    })
     .join("");
   return {
     html: `<figure class="kakeai-calloutwrap">${titleHtml}<ul class="kakeai-calloutlist">${itemsHtml}</ul></figure>`,

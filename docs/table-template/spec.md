@@ -51,7 +51,7 @@
 - `columns[].key` は行オブジェクトのキーと対応する識別子で、`columns` 内で一意とする。`key` は `[A-Za-z0-9_-]` の1〜64文字とする。
 - `rows` は「列キー→値」のオブジェクト配列とする。値は文字列または数値のみとする。列定義に無いキーは空セルとして扱い、欠けたキーは空セルとする。
 - `columns[].type` は `text | number` とする。`align`（`left | center | right`）の既定は型から導出する（text→left、number→right）。`format` は number 列だけが持ち、`integer | decimal | percent | currency` とする（省略時はそのまま表示）。`percent` は比率（0.25→25%）と解釈し、`currency` はJPY・小数なしと解釈する。数値整形は `ja-JP` ロケールでコンパイル時に静的HTML化する。
-- `effects` は行トリガー付きの `appear`／`emphasize` を持つ。target は `row`（行番号）・`cell`（行番号と列キー）・`rows`（全行）・`columns`（全列）を指す。`trigger` は `cue`（Cue全体）または `lines`（同じSceneのセリフ区間）。`appear` は登場、`emphasize` は枠・背景の強調。セリフの実時間は音声尺から解決する。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+- `effects` は行トリガー付きの `appear`／`emphasize` を持つ。target は `row`（行番号）・`cell`（行番号と列キー）・`rows`（全行）・`columns`（全列）を指す。`trigger` は `cue`（Cue全体）または `lines`（同じSceneのセリフ区間）。`appear` は登場、`emphasize` は枠・背景・スポットライトの強調。`emphasize` は任意の `onset`（`sweep | flash | pop`）を持てる。セリフの実時間は音声尺から解決する。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 - 列数は最大 `8`、行数は最大 `12`、効果は最大 `32` をスキーマで強制する。フォントサイズはテンプレート契約として固定し、行数超過で描画時に黙って縮小しない。超過の目安は警告（`meta.warnings`）で返す。
 
 ## テンプレート定義
@@ -88,7 +88,8 @@
 ## レンダリング
 
 - `effects` のみが内部アニメを生む。`appear` は対象を `AnimationPlan` として登場させ、グループtarget（`rows`/`columns`）では `startMs = index × staggerMs` でずらす。`emphasize` は `stateIntervals` として対象の区間中だけ強調し、区間末で元に戻す。
-- 強調は行全体またはセルにテーマ由来の背景色（`style: background`）または枠（`style: frame`）を付け、背景の文字色はコントラストの取れる側を選ぶ。
+- 強調は行全体またはセルにテーマ由来の背景色（`style: background`）または枠（`style: frame`）を付け、背景の文字色はコントラストの取れる側を選ぶ。`style: spotlight` は対象にリングを付けて兄弟セルを `filter` で減光する。
+- `onset` は対象のセル内の一時オーバーレイ（走査線など）に発火を当てる。行targetでは各セルにオーバーレイする（`<tr>` に子要素を置けないため）。発火と持続は別要素・別プロパティで競合しない。
 - 見出し行はテーマのアクセント色で装飾する。表本体はテーマの surface・border・text を使い、9:16テンプレート将来対応のため出力ピクセルではなく相対配置で描く。
 - 同一テンプレートの複数配置・入れ子で要素ID・AnimationPlan・stateIntervalsが衝突しないことをコンパイラテストで確認する。
 

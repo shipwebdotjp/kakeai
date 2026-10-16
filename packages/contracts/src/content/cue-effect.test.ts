@@ -4,6 +4,7 @@ import {
   cueEffectSchema,
   emphasizeEffectSchema,
   lineTriggerSchema,
+  onsetSpecSchema,
   timedEffectSchema,
 } from "./cue-effect";
 import { tableToneSchema } from "./tone";
@@ -65,13 +66,57 @@ describe("emphasizeEffectSchema", () => {
     expect(tableToneSchema.safeParse("warning").success).toBe(true);
   });
 
-  it("rejects unknown styles and tones", () => {
+  it("accepts spotlight and an optional onset", () => {
+    expect(
+      emphasizeEffectSchema.safeParse({ kind: "emphasize", style: "spotlight", tone: "info" }).success,
+    ).toBe(true);
+    expect(
+      emphasizeEffectSchema.safeParse({
+        kind: "emphasize",
+        style: "frame",
+        tone: "primary",
+        onset: { preset: "sweep", durationMs: 600 },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects unknown styles, tones, and onset presets", () => {
     expect(
       emphasizeEffectSchema.safeParse({ kind: "emphasize", style: "glow", tone: "primary" }).success,
     ).toBe(false);
     expect(
       emphasizeEffectSchema.safeParse({ kind: "emphasize", style: "frame", tone: "brand" }).success,
     ).toBe(false);
+    expect(
+      emphasizeEffectSchema.safeParse({
+        kind: "emphasize",
+        style: "frame",
+        tone: "primary",
+        onset: { preset: "spin", durationMs: 600 },
+      }).success,
+    ).toBe(false);
+    expect(
+      emphasizeEffectSchema.safeParse({
+        kind: "emphasize",
+        style: "frame",
+        tone: "primary",
+        onset: { preset: "sweep", durationMs: 600, extra: 1 },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("onsetSpecSchema", () => {
+  it("accepts the onset vocabulary with a duration", () => {
+    for (const preset of ["sweep", "flash", "pop"]) {
+      expect(onsetSpecSchema.safeParse({ preset, durationMs: 500 }).success).toBe(true);
+    }
+  });
+
+  it("rejects unknown presets, negative durations, and missing durations", () => {
+    expect(onsetSpecSchema.safeParse({ preset: "sweep", durationMs: -1 }).success).toBe(false);
+    expect(onsetSpecSchema.safeParse({ preset: "sweep" }).success).toBe(false);
+    expect(onsetSpecSchema.safeParse({ preset: "unknown", durationMs: 500 }).success).toBe(false);
   });
 });
 

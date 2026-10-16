@@ -6,6 +6,7 @@ import {
 } from "@kakeai/contracts";
 import { lineOptionLabel, type LineFormValue, type SpeakerFormValue } from "../content/form";
 import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
 
@@ -40,6 +41,7 @@ const APPEAR_PRESET_LABELS: Record<string, string> = {
 const EMPHASIZE_STYLE_LABELS: Record<string, string> = {
   frame: "枠",
   background: "背景",
+  spotlight: "スポットライト",
 };
 
 const TONE_LABELS: Record<string, string> = {
@@ -279,6 +281,10 @@ export function CalloutItemsField({
                           ))}
                         </select>
                       </label>
+                      <OnsetField
+                        effect={effect}
+                        onChange={(next) => update(index, { effect: next })}
+                      />
                     </>
                   ) : (
                     <label className="inline-flex items-center gap-1.5">

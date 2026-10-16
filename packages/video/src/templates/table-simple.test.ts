@@ -198,4 +198,72 @@ describe("renderTableSimple effects", () => {
     });
     expect(rendered.stateIntervals).toEqual([]);
   });
+
+  it("rings the spotlighted row and dims the sibling cells for its range", () => {
+    const rendered = renderTableSimple(
+      {
+        ...baseInput,
+        effects: [
+          {
+            target: { kind: "row", index: 1 },
+            trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    const scope = cueScope("visual-table-1");
+    const row1 = scope.id("row-1");
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: row1,
+      intervals: [{ startMs: 1500, endMs: 2500 }],
+      on: { boxShadow: expect.stringContaining("inset") },
+      off: { boxShadow: "none" },
+    });
+    for (const cellId of [scope.id("cell-0-0"), scope.id("cell-0-1")]) {
+      expect(rendered.stateIntervals).toContainEqual({
+        targetId: cellId,
+        intervals: [{ startMs: 1500, endMs: 2500 }],
+        on: { filter: "brightness(0.4)" },
+        off: { filter: "none" },
+      });
+    }
+    expect(
+      rendered.stateIntervals?.some((entry) => entry.targetId === scope.id("cell-1-0")),
+    ).toBe(false);
+  });
+
+  it("sweeps the onset overlay on every cell of a highlighted row", () => {
+    const rendered = renderTableSimple(
+      {
+        ...baseInput,
+        effects: [
+          {
+            target: { kind: "row", index: 0 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: {
+              kind: "emphasize",
+              style: "frame",
+              tone: "info",
+              onset: { preset: "sweep", durationMs: 600 },
+            },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    const scope = cueScope("visual-table-1");
+    for (const cellId of [scope.id("cell-0-0"), scope.id("cell-0-1")]) {
+      expect(rendered.animation).toContainEqual({
+        targetId: `${cellId}-onset`,
+        action: "sweep",
+        ease: "normal",
+        startMs: 500,
+        durationMs: 600,
+      });
+      expect(rendered.html).toContain(`id="${cellId}-onset"`);
+      expect(rendered.html).toContain("kakeai-onset-sweep");
+    }
+  });
 });

@@ -6,6 +6,7 @@ import {
 } from "@kakeai/contracts";
 import { lineOptionLabel, type LineFormValue, type SpeakerFormValue } from "../content/form";
 import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
 
@@ -52,6 +53,7 @@ const APPEAR_PRESET_LABELS: Record<string, string> = {
 const EMPHASIZE_STYLE_LABELS: Record<string, string> = {
   frame: "枠",
   background: "背景",
+  spotlight: "スポットライト",
 };
 
 const TONE_LABELS: Record<string, string> = {
@@ -107,13 +109,14 @@ export function EffectsField({
   speakers,
 }: EffectsFieldProps) {
   const entries = parseEntries(value);
-  const effectOptions =
+  const effectOptions = [
+    { value: "appear", label: "登場" },
+    { value: "emphasize", label: "強調" },
+  ];
+  const emphasizeStyles =
     variant === "chart"
-      ? [{ value: "appear", label: "登場" }]
-      : [
-          { value: "appear", label: "登場" },
-          { value: "emphasize", label: "強調" },
-        ];
+      ? EMPHASIZE_STYLES.filter((style) => style !== "background")
+      : [...EMPHASIZE_STYLES];
 
   if (entries === null) {
     return (
@@ -344,7 +347,7 @@ export function EffectsField({
                         update(index, { effect: { ...effect, style: event.target.value } })
                       }
                     >
-                      {EMPHASIZE_STYLES.map((style) => (
+                      {emphasizeStyles.map((style) => (
                         <option key={style} value={style}>
                           {EMPHASIZE_STYLE_LABELS[style] ?? style}
                         </option>
@@ -367,6 +370,10 @@ export function EffectsField({
                       ))}
                     </select>
                   </label>
+                  <OnsetField
+                    effect={effect}
+                    onChange={(next) => update(index, { effect: next })}
+                  />
                 </>
               ) : (
                 <>

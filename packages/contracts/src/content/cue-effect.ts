@@ -32,9 +32,19 @@ export const appearPresetSchema = z.enum([
 export type AppearPreset = z.infer<typeof appearPresetSchema>;
 export const APPEAR_PRESETS = appearPresetSchema.options;
 
-export const emphasizeStyleSchema = z.enum(["background", "frame"]);
+export const emphasizeStyleSchema = z.enum(["background", "frame", "spotlight"]);
 export type EmphasizeStyle = z.infer<typeof emphasizeStyleSchema>;
 export const EMPHASIZE_STYLES = emphasizeStyleSchema.options;
+
+export const onsetPresetSchema = z.enum(["sweep", "flash", "pop"]);
+export type OnsetPreset = z.infer<typeof onsetPresetSchema>;
+export const ONSET_PRESETS = onsetPresetSchema.options;
+
+export const onsetSpecSchema = z.strictObject({
+  preset: onsetPresetSchema,
+  durationMs: nonNegativeInt,
+});
+export type OnsetSpec = z.infer<typeof onsetSpecSchema>;
 
 export const appearEffectSchema = z.strictObject({
   kind: z.literal("appear"),
@@ -48,6 +58,7 @@ export const emphasizeEffectSchema = z.strictObject({
   kind: z.literal("emphasize"),
   style: emphasizeStyleSchema,
   tone: tableToneSchema,
+  onset: onsetSpecSchema.optional(),
 });
 export type EmphasizeEffect = z.infer<typeof emphasizeEffectSchema>;
 

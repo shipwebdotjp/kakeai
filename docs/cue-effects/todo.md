@@ -66,3 +66,14 @@
 - [ ] [../table-template/spec.md](../table-template/spec.md)・[../chart-template/spec.md](../chart-template/spec.md) の入力契約を `effects` へ更新する
 - [ ] [../../CONTEXT.md](../../CONTEXT.md) の用語を確認する
 - 完了条件: 実装と文書の矛盾がない。
+
+## Phase 7: onset（発火演出）と spotlight（兄弟減光）
+
+- [x] `onsetSpecSchema`（`sweep | flash | pop`）を `emphasizeEffectSchema.onset` に追加し、`emphasizeStyleSchema` に `spotlight` を追加する
+- [x] `chart.bar` の `effect` を `appear`（grow/bounce/fade）と `emphasize`（frame/spotlight）の判別unionにする（`background` は保存時に拒否）
+- [x] videoローカルの onset action を追加し、`actionVars` と `STYLES`（走査線オーバーレイ）へ写像する
+- [x] `planOnsetEffect` と `SPOTLIGHT_DIM_*` を `cue-effects` に追加する
+- [x] `table.simple`・`list.callout`・`chart.bar` で spotlight の兄弟減光と onset オーバーレイを描画する（行targetは各セルへオーバーレイ）
+- [x] `EffectsField`・`CalloutItemsField` に spotlight と onset 編集（`OnsetField`）を追加し、chart の効果に「強調」を出す
+- [x] 契約・レンダラ・フォームのテストを追加する
+- 完了条件: `emphasize` の onset/spotlight がプレビューのシークとMP4で一致し、既存の `appear`・`emphasize` の挙動が回帰しない。

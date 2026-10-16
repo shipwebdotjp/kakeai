@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CompositionCompileError } from "./compile-error";
-import { planAppearEffect, resolveTriggerWindow } from "./cue-effects";
+import { planAppearEffect, planOnsetEffect, resolveTriggerWindow } from "./cue-effects";
 import type { LineInterval } from "./render-context";
 
 const intervals: LineInterval[] = [
@@ -118,5 +118,67 @@ describe("planAppearEffect", () => {
       path,
     });
     expect(plan).toEqual({ animation: [], stateIntervals: [] });
+  });
+});
+
+describe("planOnsetEffect", () => {
+  it("starts the onset at the window and clamps its duration to the window", () => {
+    const onset = planOnsetEffect({
+      overlayId: "a-onset",
+      effect: {
+        kind: "emphasize",
+        style: "frame",
+        tone: "primary",
+        onset: { preset: "sweep", durationMs: 5000 },
+      },
+      window: { startMs: 1500, endMs: 2500 },
+      spanMs: 9000,
+    });
+    expect(onset).toEqual({
+      targetId: "a-onset",
+      action: "sweep",
+      ease: "normal",
+      startMs: 1500,
+      durationMs: 1000,
+    });
+  });
+
+  it("uses an overshoot ease for the pop preset", () => {
+    const onset = planOnsetEffect({
+      overlayId: "a-onset",
+      effect: {
+        kind: "emphasize",
+        style: "frame",
+        tone: "primary",
+        onset: { preset: "pop", durationMs: 400 },
+      },
+      window: { startMs: 500, endMs: 1500 },
+      spanMs: 9000,
+    });
+    expect(onset?.ease).toBe("overshoot");
+  });
+
+  it("returns null without an onset or with an empty window", () => {
+    expect(
+      planOnsetEffect({
+        overlayId: "a-onset",
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+        window: { startMs: 0, endMs: 1000 },
+        spanMs: 9000,
+      }),
+    ).toBeNull();
+    expect(
+      planOnsetEffect({
+        overlayId: "a-onset",
+        effect: {
+          kind: "emphasize",
+          style: "frame",
+          tone: "primary",
+          onset: { preset: "flash", durationMs: 400 },
+        },
+        window: { startMs: 500, endMs: 500 },
+        spanMs: 9000,
+      }),
+    ).toBeNull();
   });
 });

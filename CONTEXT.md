@@ -172,6 +172,14 @@ _Avoid_: animation, cue transition, keyframe
 A Cue Effect that highlights a target while its line range is active and reverts at the range's end.
 _Avoid_: highlight state, css class
 
+**Onset**:
+An optional one-shot flourish of an emphasis that plays once when the Cue Trigger is reached, on a transient sub-element separate from the sustained emphasis.
+_Avoid_: keyframe, intro animation
+
+**Spotlight**:
+An emphasis style that highlights a target while dimming its sibling elements for the range. Siblings are resolved by the template.
+_Avoid_: dim, mute, focus
+
 **Template Field**:
 A declarative input-field spec (`inputFields`) on a Visual Template that drives the generic Cue editor, so adding a template needs no editor code.
 _Avoid_: form schema, zod

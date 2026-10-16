@@ -11,7 +11,12 @@ import {
   type AnimationPolicy,
 } from "../content/animation";
 import { fontFaceSpecSchema, textSurfaceSchema, themeAccentTokenSchema } from "../content/theme";
-import { appearEffectSchema, cueEffectSchema, lineTriggerSchema } from "../content/cue-effect";
+import {
+  appearEffectSchema,
+  cueEffectSchema,
+  emphasizeEffectSchema,
+  lineTriggerSchema,
+} from "../content/cue-effect";
 import {
   MAX_NESTED_VISUAL_DEPTH,
   fitSchema,
@@ -688,15 +693,24 @@ export const chartEffectTargetSchema = z.discriminatedUnion("kind", [
 ]);
 export type ChartEffectTarget = z.infer<typeof chartEffectTargetSchema>;
 
+export const chartAppearEffectSchema = z.strictObject({
+  kind: z.literal("appear"),
+  preset: chartAppearPresetSchema,
+  durationMs: nonNegativeInt,
+  staggerMs: nonNegativeInt.optional(),
+});
+export type ChartAppearEffect = z.infer<typeof chartAppearEffectSchema>;
+
+export const chartCueEffectSchema = z.discriminatedUnion("kind", [
+  chartAppearEffectSchema,
+  emphasizeEffectSchema,
+]);
+export type ChartCueEffect = z.infer<typeof chartCueEffectSchema>;
+
 export const chartEffectSchema = z.strictObject({
   target: chartEffectTargetSchema,
   trigger: lineTriggerSchema,
-  effect: z.strictObject({
-    kind: z.literal("appear"),
-    preset: chartAppearPresetSchema,
-    durationMs: nonNegativeInt,
-    staggerMs: nonNegativeInt.optional(),
-  }),
+  effect: chartCueEffectSchema,
 });
 export type ChartEffect = z.infer<typeof chartEffectSchema>;
 
@@ -727,6 +741,13 @@ export const chartBarInputSchema = z
           code: "custom",
           message: `効果の系列番号が範囲外です: ${entry.target.index}`,
           path: ["effects", index, "target", "index"],
+        });
+      }
+      if (entry.effect.kind === "emphasize" && entry.effect.style === "background") {
+        ctx.addIssue({
+          code: "custom",
+          message: "棒グラフの強調は frame か spotlight を指定してください",
+          path: ["effects", index, "effect", "style"],
         });
       }
     });

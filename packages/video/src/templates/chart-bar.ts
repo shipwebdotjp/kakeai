@@ -4,15 +4,25 @@ import {
   type ChartAppearPreset,
   type ChartColorBy,
   type ChartEffect,
+  type EmphasizeEffect,
   type FigureEase,
+  type OnsetPreset,
   type TableColumn,
   type TableRow,
+  type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 import type { AnimationItem, RenderedCue, RenderContext, StateInterval } from "../render-context";
-import { resolveTriggerWindow } from "../cue-effects";
+import {
+  onsetOverlayId,
+  planOnsetEffect,
+  resolveTriggerWindow,
+  SPOTLIGHT_DIM_OFF,
+  SPOTLIGHT_DIM_ON,
+} from "../cue-effects";
 import { formatNumber } from "./table-format";
+import { toneHex } from "./tone";
 
 const PLOT_HEIGHT_PX = 560;
 const CATEGORY_BAND_PX = 48;
@@ -98,9 +108,22 @@ interface RenderArgs {
   seriesColumns: TableColumn[];
   categoryColumn: TableColumn;
   colorFor: (categoryIndex: number, seriesIndex: number) => string;
+  onsetFor: (categoryIndex: number, seriesIndex: number) => ChartOnset | undefined;
   valueLabels: boolean;
   axisUnit: string;
   axisFormat: TableColumn | undefined;
+}
+
+interface ChartOnset {
+  preset: OnsetPreset;
+  color: string;
+}
+
+function barOverlayHtml(onset: ChartOnset | undefined, overlayId: string): string {
+  if (onset === undefined) {
+    return "";
+  }
+  return `<span id="${overlayId}" class="kakeai-onsetoverlay kakeai-onset-${onset.preset}" style="--kakeai-onset-color:${onset.color}"></span>`;
 }
 
 function axisTickLabel(tick: number, column: TableColumn | undefined, unit: string): string {
@@ -109,7 +132,7 @@ function axisTickLabel(tick: number, column: TableColumn | undefined, unit: stri
 }
 
 function renderVertical(args: RenderArgs): string {
-  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, valueLabels, axisUnit, axisFormat } = args;
+  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, valueLabels, axisUnit, axisFormat } = args;
   const available = PLOT_HEIGHT_PX - CATEGORY_BAND_PX;
   const availableWidth = PLOT_WIDTH_PX - ROW_LABEL_WIDTH_PX;
   const bandWidth = rows.length === 0 ? availableWidth : availableWidth / rows.length;
@@ -130,7 +153,8 @@ function renderVertical(args: RenderArgs): string {
           const label = valueLabels
             ? `<span class="kakeai-chartvalue">${valueLabel(value, column)}</span>`
             : "";
-          return `<div id="${id}" class="kakeai-chartbar" style="width:${width}px;height:${roundPx(height)}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}</div>`;
+          const overlay = barOverlayHtml(onsetFor(categoryIndex, seriesIndex), onsetOverlayId(id));
+          return `<div id="${id}" class="kakeai-chartbar" style="width:${width}px;height:${roundPx(height)}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}${overlay}</div>`;
         })
         .join("");
       return `<div class="kakeai-chartcol"><div class="kakeai-chartbars">${bars}</div><div class="kakeai-chartcat">${escapeHtmlText(categoryLabel(row, categoryColumn))}</div></div>`;
@@ -140,7 +164,7 @@ function renderVertical(args: RenderArgs): string {
 }
 
 function renderHorizontal(args: RenderArgs): string {
-  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, valueLabels, axisUnit, axisFormat } = args;
+  const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, valueLabels, axisUnit, axisFormat } = args;
   const available = PLOT_WIDTH_PX - ROW_LABEL_WIDTH_PX;
   const availableHeight = PLOT_HEIGHT_PX;
   const rowHeight =
@@ -164,7 +188,8 @@ function renderHorizontal(args: RenderArgs): string {
           const label = valueLabels
             ? `<span class="kakeai-charthvalue">${valueLabel(value, column)}</span>`
             : "";
-          return `<div id="${id}" class="kakeai-chartbar kakeai-chartbar-h" style="width:${roundPx(width)}px;height:${height}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}</div>`;
+          const overlay = barOverlayHtml(onsetFor(categoryIndex, seriesIndex), onsetOverlayId(id));
+          return `<div id="${id}" class="kakeai-chartbar kakeai-chartbar-h" style="width:${roundPx(width)}px;height:${height}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}${overlay}</div>`;
         })
         .join("");
       return `<div class="kakeai-chartrow"><div class="kakeai-charthcat">${escapeHtmlText(categoryLabel(row, categoryColumn))}</div><div class="kakeai-chartbars-h">${bars}</div></div>`;
@@ -224,6 +249,32 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   const stats = niceScale(maxValue);
   const orientation = style?.orientation ?? "vertical";
 
+  const barId = (categoryIndex: number, seriesIndex: number): string =>
+    context.scope.id(`bar-${categoryIndex}-${seriesIndex}`);
+  const barIdsByCategory = rows.map((_row, categoryIndex) =>
+    seriesColumns.map((_column, seriesIndex) => barId(categoryIndex, seriesIndex)),
+  );
+
+  const animation: AnimationItem[] = [];
+  const stateIntervals: StateInterval[] = [];
+  const onsets = new Map<string, ChartOnset>();
+
+  applyChartEffects({
+    effects: parsed.data.effects ?? [],
+    orientation,
+    theme: context.theme,
+    barId,
+    barIdsByCategory,
+    categoryCount: rows.length,
+    seriesCount,
+    lineIntervals: context.lineIntervals ?? [],
+    spanMs: context.cueTiming?.spanMs ?? 0,
+    path: context.path,
+    animation,
+    stateIntervals,
+    onsets,
+  });
+
   const args: RenderArgs = {
     context,
     rows,
@@ -232,6 +283,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
     seriesColumns,
     categoryColumn,
     colorFor,
+    onsetFor: (categoryIndex, seriesIndex) => onsets.get(barId(categoryIndex, seriesIndex)),
     valueLabels: style?.valueLabels ?? true,
     axisUnit: style?.axisUnit ?? "",
     axisFormat:
@@ -240,23 +292,6 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
         : undefined,
   };
   const body = orientation === "horizontal" ? renderHorizontal(args) : renderVertical(args);
-
-  const animation: AnimationItem[] = [];
-  const stateIntervals: StateInterval[] = [];
-
-  applyChartEffects({
-    effects: parsed.data.effects ?? [],
-    orientation,
-    barId: (categoryIndex, seriesIndex) =>
-      context.scope.id(`bar-${categoryIndex}-${seriesIndex}`),
-    categoryCount: rows.length,
-    seriesCount,
-    lineIntervals: context.lineIntervals ?? [],
-    spanMs: context.cueTiming?.spanMs ?? 0,
-    path: context.path,
-    animation,
-    stateIntervals,
-  });
 
   const titleHtml =
     title === undefined || title.trim().length === 0
@@ -320,10 +355,44 @@ function resolveChartEffectTargets(
   }
 }
 
+function chartSpotlightSiblings(
+  effect: ChartEffect,
+  barIdsByCategory: readonly (readonly string[])[],
+): string[] {
+  if (effect.effect.kind !== "emphasize" || effect.effect.style !== "spotlight") {
+    return [];
+  }
+  const target = effect.target;
+  if (target.kind === "category") {
+    return barIdsByCategory.flatMap((ids, categoryIndex) =>
+      categoryIndex === target.index ? [] : [...ids],
+    );
+  }
+  if (target.kind === "series") {
+    return barIdsByCategory.flatMap((ids) =>
+      ids.filter((_id, seriesIndex) => seriesIndex !== target.index),
+    );
+  }
+  return [];
+}
+
+function chartEmphasizeOnVars(
+  effect: EmphasizeEffect,
+  theme: VisualThemeDefinition,
+): Record<string, string | number> {
+  return { boxShadow: `inset 0 0 0 4px ${toneHex(effect.tone, theme)}` };
+}
+
+function chartEmphasizeOffVars(): Record<string, string | number> {
+  return { boxShadow: "none" };
+}
+
 function applyChartEffects(options: {
   effects: readonly ChartEffect[];
   orientation: "vertical" | "horizontal";
+  theme: VisualThemeDefinition;
   barId: (categoryIndex: number, seriesIndex: number) => string;
+  barIdsByCategory: readonly (readonly string[])[];
   categoryCount: number;
   seriesCount: number;
   lineIntervals: RenderContext["lineIntervals"];
@@ -331,6 +400,7 @@ function applyChartEffects(options: {
   path: (string | number)[];
   animation: AnimationItem[];
   stateIntervals: StateInterval[];
+  onsets: Map<string, ChartOnset>;
 }): void {
   const lineIntervals = options.lineIntervals ?? [];
   const axis = options.orientation === "horizontal" ? "x" : "y";
@@ -347,6 +417,41 @@ function applyChartEffects(options: {
     const path = [...options.path, "effects", effectIndex];
     const window = resolveTriggerWindow(entry.trigger, lineIntervals, options.spanMs, path);
     if (window === null) {
+      return;
+    }
+    if (entry.effect.kind === "emphasize") {
+      const interval = [{ startMs: window.startMs, endMs: window.endMs }];
+      for (const target of targets) {
+        options.stateIntervals.push({
+          targetId: target.id,
+          intervals: interval,
+          on: chartEmphasizeOnVars(entry.effect, options.theme),
+          off: chartEmphasizeOffVars(),
+        });
+      }
+      for (const siblingId of chartSpotlightSiblings(entry, options.barIdsByCategory)) {
+        options.stateIntervals.push({
+          targetId: siblingId,
+          intervals: interval,
+          on: SPOTLIGHT_DIM_ON,
+          off: SPOTLIGHT_DIM_OFF,
+        });
+      }
+      if (entry.effect.onset !== undefined) {
+        const color = toneHex(entry.effect.tone, options.theme);
+        for (const target of targets) {
+          options.onsets.set(target.id, { preset: entry.effect.onset.preset, color });
+          const onset = planOnsetEffect({
+            overlayId: onsetOverlayId(target.id),
+            effect: entry.effect,
+            window,
+            spanMs: options.spanMs,
+          });
+          if (onset !== null) {
+            options.animation.push(onset);
+          }
+        }
+      }
       return;
     }
     const { action, ease } = chartAction(entry.effect.preset);

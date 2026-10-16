@@ -3,15 +3,18 @@ import type {
   FigureAction,
   FigureEase,
   NestedVisual,
+  OnsetPreset,
   VisualThemeDefinition,
 } from "@kakeai/contracts";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import type { CompositionVersionResolved, CompositionVersionResolver } from "./composition-resolver";
 import type { RenderScope } from "./scope";
 
+export type RenderAnimationAction = FigureAction | OnsetPreset;
+
 export interface AnimationItem {
   targetId: string;
-  action: FigureAction;
+  action: RenderAnimationAction;
   axis?: "x" | "y";
   ease?: FigureEase;
   startMs: number;

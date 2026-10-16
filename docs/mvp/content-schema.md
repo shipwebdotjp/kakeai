@@ -226,7 +226,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
-テンプレート内部の演出は、Cue Trigger（行区間またはCue窓）と Cue Effect（`appear` / `emphasize`）の共通単位で表せる。Triggerは行IDを参照し、実時刻はコンパイラが音声尺から解決する。targetの束ね方はテンプレート固有で、データ駆動テンプレートは `effects` 配列、著者アイテム型は各アイテムのインラインとする。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+テンプレート内部の演出は、Cue Trigger（行区間またはCue窓）と Cue Effect（`appear` / `emphasize`）の共通単位で表せる。`emphasize` は `style`（`background` / `frame` / `spotlight`）と、任意の `onset`（発火の一発演出。`sweep` / `flash` / `pop`）を持つ。Triggerは行IDを参照し、実時刻はコンパイラが音声尺から解決する。targetの束ね方はテンプレート固有で、データ駆動テンプレートは `effects` 配列、著者アイテム型は各アイテムのインラインとする。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 スクリーンショット、写真、イラスト、既にレンダー済みのモーショングラフィックスはAssetを参照する。表・グラフ・フローチャートは画像化する必要はなく、構造化データをVisualTemplateへ渡して描画する。VisualTemplateのコードはアプリ側で管理する信頼済み実装だけとし、利用者または外部AIが生成した任意のHyperFrames／HTMLコードはDocumentに保存または実行しない。例外として、Kakeai管理下でAIが作成し不変bundleとしてpublishしたCompositionVersionは、`composition.full-bleed@1` のID入力、または `NestedVisual` の `kind: "composition"`（端末画面など）を通じてnative nested compositionとして参照できる。将来、生成したPNGや動画をキャッシュする場合も、それは来歴を持つ派生Assetとして扱う。
 

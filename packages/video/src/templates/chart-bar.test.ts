@@ -276,4 +276,71 @@ describe("renderChartBar effects", () => {
     ]);
     expect(rendered.stateIntervals).toEqual([]);
   });
+
+  it("rings the spotlighted category and dims the other bars", () => {
+    const scope = cueScope("visual-chart-1");
+    const rendered = renderChartBar(
+      {
+        ...singleSeries,
+        effects: [
+          {
+            target: { kind: "category", index: 1 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+          },
+        ],
+      },
+      {
+        ...context(),
+        cueTiming: { startMs: 0, spanMs: 9000 },
+        lineIntervals: [{ lineId: "l1", startMs: 500, endMs: 1500 }],
+      },
+    );
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: scope.id("bar-1-0"),
+      intervals: [{ startMs: 500, endMs: 1500 }],
+      on: { boxShadow: expect.stringContaining("inset") },
+      off: { boxShadow: "none" },
+    });
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: scope.id("bar-0-0"),
+      intervals: [{ startMs: 500, endMs: 1500 }],
+      on: { filter: "brightness(0.4)" },
+      off: { filter: "none" },
+    });
+  });
+
+  it("pops the onset overlay on every highlighted bar", () => {
+    const scope = cueScope("visual-chart-1");
+    const rendered = renderChartBar(
+      {
+        ...singleSeries,
+        effects: [
+          {
+            target: { kind: "bars" },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: {
+              kind: "emphasize",
+              style: "frame",
+              tone: "primary",
+              onset: { preset: "pop", durationMs: 500 },
+            },
+          },
+        ],
+      },
+      {
+        ...context(),
+        cueTiming: { startMs: 0, spanMs: 9000 },
+        lineIntervals: [{ lineId: "l1", startMs: 500, endMs: 1500 }],
+      },
+    );
+    expect(rendered.animation).toContainEqual({
+      targetId: `${scope.id("bar-0-0")}-onset`,
+      action: "pop",
+      ease: "overshoot",
+      startMs: 500,
+      durationMs: 500,
+    });
+    expect(rendered.html).toContain("kakeai-onset-pop");
+  });
 });

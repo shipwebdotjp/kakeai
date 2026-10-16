@@ -104,6 +104,66 @@ describe("renderListCallout", () => {
     expect(() => renderListCallout({ items: [] }, context())).toThrow(CompositionCompileError);
   });
 
+  it("dims the sibling items when an item uses spotlight", () => {
+    const rendered = renderListCallout(
+      {
+        items: [
+          {
+            text: "a",
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+          },
+          { text: "b" },
+        ],
+      },
+      context(),
+    );
+    const scope = cueScope("callout-1");
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: scope.id("item-0"),
+      intervals: [{ startMs: 500, endMs: 1500 }],
+      on: { boxShadow: expect.stringContaining("inset") },
+      off: { boxShadow: "none" },
+    });
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: scope.id("item-1"),
+      intervals: [{ startMs: 500, endMs: 1500 }],
+      on: { filter: "brightness(0.4)" },
+      off: { filter: "none" },
+    });
+  });
+
+  it("flashes an onset overlay when an item emphasizes with an onset", () => {
+    const rendered = renderListCallout(
+      {
+        items: [
+          {
+            text: "a",
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: {
+              kind: "emphasize",
+              style: "background",
+              tone: "warning",
+              onset: { preset: "flash", durationMs: 400 },
+            },
+          },
+        ],
+      },
+      context(),
+    );
+    const scope = cueScope("callout-1");
+    const overlayId = `${scope.id("item-0")}-onset`;
+    expect(rendered.animation).toContainEqual({
+      targetId: overlayId,
+      action: "flash",
+      ease: "normal",
+      startMs: 500,
+      durationMs: 400,
+    });
+    expect(rendered.html).toContain(`id="${overlayId}"`);
+    expect(rendered.html).toContain("kakeai-onset-flash");
+  });
+
   it("keeps two callout cues from colliding", () => {
     const a = renderListCallout(baseInput, context("callout-a"));
     const b = renderListCallout(baseInput, context("callout-b"));
