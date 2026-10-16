@@ -1,6 +1,7 @@
 import {
   APPEAR_PRESETS,
   EMPHASIZE_STYLES,
+  LIST_CALLOUT_MAX_ITEMS,
   TABLE_TONES,
 } from "@kakeai/contracts";
 import { lineOptionLabel, type LineFormValue, type SpeakerFormValue } from "../content/form";
@@ -121,6 +122,7 @@ export function CalloutItemsField({
               <button
                 type="button"
                 className={buttonNeutralClass}
+                disabled={items.length <= 1}
                 onClick={() =>
                   commit(items.filter((_item, itemIndex) => itemIndex !== index))
                 }
@@ -158,7 +160,7 @@ export function CalloutItemsField({
                         update(index, {
                           trigger:
                             event.target.value === "lines"
-                              ? { kind: "lines", startLineId: "", endLineId: "" }
+                              ? { kind: "lines", startLineId: lines[0]?.id ?? "", endLineId: lines[0]?.id ?? "" }
                               : { kind: "cue" },
                         })
                       }
@@ -293,7 +295,13 @@ export function CalloutItemsField({
       <button
         type="button"
         className={`mt-2 ${buttonNeutralClass}`}
-        onClick={() => commit([...items, { text: "" }])}
+        disabled={items.length >= LIST_CALLOUT_MAX_ITEMS}
+        onClick={() => {
+          if (items.length >= LIST_CALLOUT_MAX_ITEMS) {
+            return;
+          }
+          commit([...items, { text: "ポイント" }]);
+        }}
       >
         ポイントを追加
       </button>

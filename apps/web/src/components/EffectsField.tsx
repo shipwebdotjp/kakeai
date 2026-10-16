@@ -73,9 +73,19 @@ function parseEntries(value: string): Json[] | null {
   }
 }
 
+function normalizeTarget(kind: string, previous: Json): Json {
+  if (kind === "cell") {
+    return { kind, row: Number(previous.row) || 0, key: String(previous.key ?? "") };
+  }
+  if (kind === "row" || kind === "category" || kind === "series") {
+    return { kind, index: Number(previous.index) || 0 };
+  }
+  return { kind };
+}
+
 function defaultEntry(variant: "table" | "chart"): Json {
   return {
-    target: { kind: TARGET_OPTIONS[variant][0]!.value },
+    target: normalizeTarget(TARGET_OPTIONS[variant][0]!.value, {}),
     trigger: { kind: "cue" },
     effect: { kind: "appear", preset: "fade", durationMs: 400 },
   };
@@ -148,9 +158,10 @@ export function EffectsField({
                 <select
                   className={textFieldClass}
                   value={targetKind}
-                  onChange={(event) =>
-                    update(index, { target: { kind: event.target.value } })
-                  }
+                  onChange={(event) => {
+                    const kind = event.target.value;
+                    update(index, { target: normalizeTarget(kind, target) });
+                  }}
                 >
                   {TARGET_OPTIONS[variant].map((option) => (
                     <option key={option.value} value={option.value}>
@@ -169,7 +180,10 @@ export function EffectsField({
                     value={String(target.index ?? 0)}
                     onChange={(event) =>
                       update(index, {
-                        target: { ...target, index: Number(event.target.value) || 0 },
+                        target: {
+                          ...target,
+                          index: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                        },
                       })
                     }
                   />
@@ -186,7 +200,10 @@ export function EffectsField({
                       value={String(target.row ?? 0)}
                       onChange={(event) =>
                         update(index, {
-                          target: { ...target, row: Number(event.target.value) || 0 },
+                          target: {
+                            ...target,
+                            row: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                          },
                         })
                       }
                     />
@@ -221,7 +238,7 @@ export function EffectsField({
                     update(index, {
                       trigger:
                         event.target.value === "lines"
-                          ? { kind: "lines", startLineId: "", endLineId: "" }
+                          ? { kind: "lines", startLineId: lines[0]?.id ?? "", endLineId: lines[0]?.id ?? "" }
                           : { kind: "cue" },
                     })
                   }

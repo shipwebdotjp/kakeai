@@ -285,6 +285,22 @@ describe("countLineCueReferences", () => {
     expect(countLineCueReferences(scene, "l3")).toBe(1);
     expect(countLineCueReferences(scene, "l9")).toBe(0);
   });
+
+  it("counts cues whose effect trigger references the line", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc", { templateId: "table.simple", fields: { effects } })],
+    );
+    expect(countLineCueReferences(scene, "l2")).toBe(1);
+    expect(countLineCueReferences(scene, "l1")).toBe(0);
+  });
 });
 
 describe("splitPointScene", () => {
@@ -311,6 +327,32 @@ describe("splitPointScene", () => {
     expect(second.kind).toBe("point");
     expect(second.transitionPreset).toBe("cut");
     expect(second.cues.some((entry) => entry.fields.role === "heading")).toBe(true);
+  });
+
+  it("drops effect triggers whose lines move to the other scene", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "row", index: 1 },
+        trigger: { kind: "lines", startLineId: "l3", endLineId: "l3" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [cue("vc", { templateId: "table.simple", rangeKind: "scene", fields: { effects } })],
+    );
+
+    const { first } = splitPointScene(scene, 2, "要点 2", new Set(), null);
+    const remaining = JSON.parse(first.cues.find((entry) => entry.id === "vc")!.fields.effects!) as {
+      trigger: { startLineId: string };
+    }[];
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.trigger.startLineId).toBe("l1");
   });
 
   it("routes cues by their line range", () => {

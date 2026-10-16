@@ -939,7 +939,9 @@ function buildCueInput(
         }
         const validated = listCalloutItemsSchema.safeParse(parsedJson);
         if (!validated.success) {
-          throw new Error("ポイントを正しく入力してください");
+          const detail = validated.error.issues[0];
+          const where = detail && detail.path.length > 0 ? `（${detail.path.join(".")}）` : "";
+          throw new Error(`ポイントを正しく入力してください${where}`);
         }
         setAtPath(input, field.key, validated.data);
         break;
@@ -1449,7 +1451,7 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         fields[field.key] = "[]";
         break;
       case "calloutItems":
-        fields[field.key] = JSON.stringify([{ text: "" }]);
+        fields[field.key] = JSON.stringify([{ text: "ポイント" }]);
         break;
       default:
         fields[field.key] = "";
@@ -1834,9 +1836,20 @@ export function removeLineInScene(scene: SceneFormValue, lineIndex: number): Sce
     lines: nextLines,
     cues: cues.map((cue) => ({
       ...cue,
-      fields: dropDeletedLineTriggers(cue.fields, deletedId),
+      fields: dropDeletedLineTriggers(
+        cue.fields,
+        deletedId,
+        effectFieldKeys(cue.templateId, cue.templateVersion),
+      ),
     })),
   };
+}
+
+function effectFieldKeys(templateId: string, templateVersion: number): string[] {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  return (definition?.inputFields ?? [])
+    .filter((field) => field.kind === "effects" || field.kind === "calloutItems")
+    .map((field) => field.key);
 }
 
 function triggerReferencesLine(entry: unknown, lineId: string): boolean {
@@ -1854,14 +1867,32 @@ function triggerReferencesLine(entry: unknown, lineId: string): boolean {
   );
 }
 
+function fieldReferencesLine(value: string | undefined, lineId: string): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return false;
+  }
+  return (
+    Array.isArray(parsed) &&
+    parsed.some((entry) => triggerReferencesLine(entry, lineId))
+  );
+}
+
 function dropDeletedLineTriggers(
   fields: Record<string, string>,
   lineId: string,
+  effectKeys: readonly string[],
 ): Record<string, string> {
   let changed = false;
   const next: Record<string, string> = { ...fields };
-  for (const [key, value] of Object.entries(fields)) {
-    if (!value.trimStart().startsWith("[")) {
+  for (const key of effectKeys) {
+    const value = fields[key];
+    if (value === undefined) {
       continue;
     }
     let parsed: unknown;
@@ -1882,12 +1913,64 @@ function dropDeletedLineTriggers(
   return changed ? next : fields;
 }
 
+function triggerWithinLines(entry: unknown, allowed: ReadonlySet<string>): boolean {
+  if (typeof entry !== "object" || entry === null) {
+    return false;
+  }
+  const trigger = (entry as { trigger?: unknown }).trigger;
+  if (typeof trigger !== "object" || trigger === null) {
+    return false;
+  }
+  const value = trigger as { kind?: unknown; startLineId?: unknown; endLineId?: unknown };
+  if (value.kind === "cue") {
+    return true;
+  }
+  return (
+    value.kind === "lines" &&
+    allowed.has(String(value.startLineId)) &&
+    allowed.has(String(value.endLineId))
+  );
+}
+
+function filterTriggersToLines(
+  fields: Record<string, string>,
+  allowed: ReadonlySet<string>,
+  effectKeys: readonly string[],
+): Record<string, string> {
+  let changed = false;
+  const next: Record<string, string> = { ...fields };
+  for (const key of effectKeys) {
+    const value = fields[key];
+    if (value === undefined) {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(parsed)) {
+      continue;
+    }
+    const filtered = parsed.filter((entry) => triggerWithinLines(entry, allowed));
+    if (filtered.length !== parsed.length) {
+      next[key] = JSON.stringify(filtered);
+      changed = true;
+    }
+  }
+  return changed ? next : fields;
+}
+
 export function countLineCueReferences(scene: SceneFormValue, lineId: string): number {
-  return scene.cues.filter(
-    (cue) =>
-      cue.rangeKind === "lines" &&
-      (cue.startLineId === lineId || cue.endLineId === lineId),
-  ).length;
+  return scene.cues.filter((cue) => {
+    if (cue.rangeKind === "lines" && (cue.startLineId === lineId || cue.endLineId === lineId)) {
+      return true;
+    }
+    return effectFieldKeys(cue.templateId, cue.templateVersion).some((key) =>
+      fieldReferencesLine(cue.fields[key], lineId),
+    );
+  }).length;
 }
 
 export function moveLineInScene(
@@ -1998,8 +2081,27 @@ export function splitPointScene(
       endLineId: lines[high]!.id,
     });
   }
+  const firstLineIds = new Set(lines.slice(0, splitAt).map((line) => line.id));
+  const secondLineIds = new Set(lines.slice(splitAt).map((line) => line.id));
+  const toScene = (
+    target: SceneFormValue,
+    targetLines: LineFormValue[],
+    targetCues: CueFormValue[],
+    allowed: ReadonlySet<string>,
+  ): SceneFormValue => ({
+    ...target,
+    lines: targetLines,
+    cues: targetCues.map((cue) => ({
+      ...cue,
+      fields: filterTriggersToLines(
+        cue.fields,
+        allowed,
+        effectFieldKeys(cue.templateId, cue.templateVersion),
+      ),
+    })),
+  });
   return {
-    first: { ...scene, lines: lines.slice(0, splitAt), cues: firstCues },
-    second: { ...second, lines: lines.slice(splitAt), cues: secondCues },
+    first: toScene(scene, lines.slice(0, splitAt), firstCues, firstLineIds),
+    second: toScene(second, lines.slice(splitAt), secondCues, secondLineIds),
   };
 }
