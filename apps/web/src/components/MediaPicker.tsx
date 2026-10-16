@@ -11,6 +11,7 @@ interface MediaPickerProps {
   selectedAssetId: string | null;
   onSelect: (assetId: string | null) => void;
   variant?: "select" | "add";
+  inline?: boolean;
 }
 
 export function MediaPicker({
@@ -19,6 +20,7 @@ export function MediaPicker({
   selectedAssetId,
   onSelect,
   variant = "select",
+  inline = false,
 }: MediaPickerProps) {
   const assets = useAssets();
   const [open, setOpen] = useState(false);
@@ -28,7 +30,7 @@ export function MediaPicker({
     : undefined;
 
   return (
-    <div className="my-2">
+    <div className={inline ? "" : "my-2"}>
       {variant === "add" ? (
         <button type="button" className={buttonNeutralClass} onClick={() => setOpen(true)}>
           {label}

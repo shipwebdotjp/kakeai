@@ -576,32 +576,35 @@ function LineEditor({
                   className={buttonDangerClass}
                   onClick={() => deleteTake(take.id)}
                 >
-                  削除
+                  候補削除
                 </button>
               </li>
             ))}
           </ul>
         )}
-        {line.selectedAudioTakeId !== null && (
-          <button
-            type="button"
-            className={buttonNeutralClass}
-            onClick={() => setValue(`${path}.selectedAudioTakeId`, null, { shouldDirty: true })}
-          >
-            音声を解除
-          </button>
-        )}
-        <MediaPicker
-          label="音声を追加"
-          kinds={["audio"]}
-          selectedAssetId={null}
-          variant="add"
-          onSelect={(assetId) => {
-            if (assetId !== null) {
-              addManualTake(assetId);
-            }
-          }}
-        />
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {line.selectedAudioTakeId !== null && (
+            <button
+              type="button"
+              className={buttonNeutralClass}
+              onClick={() => setValue(`${path}.selectedAudioTakeId`, null, { shouldDirty: true })}
+            >
+              音声解除
+            </button>
+          )}
+          <MediaPicker
+            label="音声追加"
+            inline
+            kinds={["audio"]}
+            selectedAssetId={null}
+            variant="add"
+            onSelect={(assetId) => {
+              if (assetId !== null) {
+                addManualTake(assetId);
+              }
+            }}
+          />
+        </div>
       </div>
 
       <div className="mt-2">
