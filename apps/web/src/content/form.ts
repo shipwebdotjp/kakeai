@@ -17,6 +17,7 @@ import {
   sceneDeviceFrameV1,
   chartDataSchema,
   chartEffectsSchema,
+  CHART_APPEAR_PRESETS,
   listCalloutItemsSchema,
   tableDataSchema,
   tableEffectsSchema,
@@ -345,6 +346,30 @@ function readSpeakers(content: ContentDocument): SpeakerFormValue[] {
   }));
 }
 
+const CHART_PRESET_FALLBACK: Record<string, string> = {
+  "slide-up": "fade",
+  "slide-down": "fade",
+  "slide-left": "fade",
+  "slide-right": "fade",
+  "scale-in": "grow",
+};
+const CHART_APPEAR_PRESET_SET = new Set<string>(CHART_APPEAR_PRESETS);
+
+function normalizeChartEffect(entry: unknown): unknown {
+  if (typeof entry !== "object" || entry === null) {
+    return entry;
+  }
+  const effect = (entry as { effect?: unknown }).effect;
+  if (typeof effect !== "object" || effect === null) {
+    return entry;
+  }
+  const preset = (effect as { preset?: unknown }).preset;
+  if (typeof preset !== "string" || CHART_APPEAR_PRESET_SET.has(preset)) {
+    return entry;
+  }
+  return { ...entry, effect: { ...effect, preset: CHART_PRESET_FALLBACK[preset] ?? "grow" } };
+}
+
 function readCueFields(
   input: Record<string, unknown>,
   definition: VisualTemplateDefinition,
@@ -454,8 +479,12 @@ function readCueFields(
       }
       case "effects": {
         const value = getAtPath(input, field.key);
-        result[field.key] =
-          Array.isArray(value) && value.length > 0 ? JSON.stringify(value) : "";
+        if (!Array.isArray(value) || value.length === 0) {
+          result[field.key] = "";
+          break;
+        }
+        const entries = field.variant === "chart" ? value.map(normalizeChartEffect) : value;
+        result[field.key] = JSON.stringify(entries);
         break;
       }
       case "calloutItems": {
@@ -1860,9 +1889,15 @@ export function removeLineInScene(scene: SceneFormValue, lineIndex: number): Sce
   };
 }
 
-function effectFieldKeys(templateId: string, templateVersion: number): string[] {
+function effectFieldKeys(
+  templateId: string,
+  templateVersion: number,
+): string[] | null {
   const definition = getVisualTemplate(templateId, templateVersion);
-  return (definition?.inputFields ?? [])
+  if (definition === undefined) {
+    return null;
+  }
+  return (definition.inputFields ?? [])
     .filter((field) => field.kind === "effects" || field.kind === "calloutItems")
     .map((field) => field.key);
 }
@@ -1901,11 +1936,12 @@ function fieldReferencesLine(value: string | undefined, lineId: string): boolean
 function dropDeletedLineTriggers(
   fields: Record<string, string>,
   lineId: string,
-  effectKeys: readonly string[],
+  effectKeys: readonly string[] | null,
 ): Record<string, string> {
+  const keys = effectKeys ?? Object.keys(fields);
   let changed = false;
   const next: Record<string, string> = { ...fields };
-  for (const key of effectKeys) {
+  for (const key of keys) {
     const value = fields[key];
     if (value === undefined) {
       continue;
@@ -1928,7 +1964,7 @@ function dropDeletedLineTriggers(
   return changed ? next : fields;
 }
 
-function triggerWithinLines(entry: unknown, allowed: ReadonlySet<string>): boolean {
+function shouldDropTrigger(entry: unknown, allowed: ReadonlySet<string>): boolean {
   if (typeof entry !== "object" || entry === null) {
     return false;
   }
@@ -1937,24 +1973,21 @@ function triggerWithinLines(entry: unknown, allowed: ReadonlySet<string>): boole
     return false;
   }
   const value = trigger as { kind?: unknown; startLineId?: unknown; endLineId?: unknown };
-  if (value.kind === "cue") {
-    return true;
+  if (value.kind !== "lines") {
+    return false;
   }
-  return (
-    value.kind === "lines" &&
-    allowed.has(String(value.startLineId)) &&
-    allowed.has(String(value.endLineId))
-  );
+  return !(allowed.has(String(value.startLineId)) && allowed.has(String(value.endLineId)));
 }
 
 function filterTriggersToLines(
   fields: Record<string, string>,
   allowed: ReadonlySet<string>,
-  effectKeys: readonly string[],
+  effectKeys: readonly string[] | null,
 ): Record<string, string> {
+  const keys = effectKeys ?? Object.keys(fields);
   let changed = false;
   const next: Record<string, string> = { ...fields };
-  for (const key of effectKeys) {
+  for (const key of keys) {
     const value = fields[key];
     if (value === undefined) {
       continue;
@@ -1968,7 +2001,7 @@ function filterTriggersToLines(
     if (!Array.isArray(parsed)) {
       continue;
     }
-    const filtered = parsed.filter((entry) => triggerWithinLines(entry, allowed));
+    const filtered = parsed.filter((entry) => !shouldDropTrigger(entry, allowed));
     if (filtered.length !== parsed.length) {
       next[key] = JSON.stringify(filtered);
       changed = true;
@@ -1982,9 +2015,8 @@ export function countLineCueReferences(scene: SceneFormValue, lineId: string): n
     if (cue.rangeKind === "lines" && (cue.startLineId === lineId || cue.endLineId === lineId)) {
       return true;
     }
-    return effectFieldKeys(cue.templateId, cue.templateVersion).some((key) =>
-      fieldReferencesLine(cue.fields[key], lineId),
-    );
+    const keys = effectFieldKeys(cue.templateId, cue.templateVersion) ?? Object.keys(cue.fields);
+    return keys.some((key) => fieldReferencesLine(cue.fields[key], lineId));
   }).length;
 }
 

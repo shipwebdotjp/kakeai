@@ -37,7 +37,13 @@ function parseTableData(value: string): TableData | null {
     return null;
   }
   try {
-    const parsed = tableDataSchema.safeParse(JSON.parse(value));
+    const raw = JSON.parse(value);
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      return null;
+    }
+    const record = { ...(raw as Record<string, unknown>) };
+    delete record.emphasis;
+    const parsed = tableDataSchema.safeParse(record);
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

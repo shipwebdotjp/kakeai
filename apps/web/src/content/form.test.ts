@@ -1790,6 +1790,40 @@ describe("chart.bar form", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("normalizes legacy chart effect presets on read", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-chart",
+        template: { id: "chart.bar", version: 1 },
+        layer: "overlay",
+        input: {
+          data: {
+            columns: [
+              { key: "month", label: "月", type: "text" },
+              { key: "sales", label: "売上", type: "number" },
+            ],
+            rows: [{ month: "1月", sales: 1 }],
+          },
+          effects: [
+            {
+              target: { kind: "bars" },
+              trigger: { kind: "cue" },
+              effect: { kind: "appear", preset: "slide-up", durationMs: 400 },
+            },
+          ],
+        },
+      }),
+    ];
+    const values = toFormValues(base);
+    const parsed = JSON.parse(values.scenes[1]!.cues[0]!.fields.effects!) as {
+      effect: { preset: string };
+    }[];
+    expect(parsed[0]!.effect.preset).toBe("fade");
+    const rebuilt = buildContentDocument(base, values);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
   it("creates new chart cues with a valid starter grid", () => {
     const cue = createCueFormValue({
       sceneId: "scene-point-1",

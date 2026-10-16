@@ -240,17 +240,29 @@ export function EffectsField({
                 <select
                   className={textFieldClass}
                   value={String(trigger.kind ?? "cue")}
-                  onChange={(event) =>
-                    update(index, {
-                      trigger:
-                        event.target.value === "lines"
-                          ? { kind: "lines", startLineId: lines[0]?.id ?? "", endLineId: lines[0]?.id ?? "" }
-                          : { kind: "cue" },
-                    })
-                  }
+                  onChange={(event) => {
+                    if (event.target.value === "lines") {
+                      if (lines.length === 0) {
+                        return;
+                      }
+                      update(index, {
+                        trigger: {
+                          kind: "lines",
+                          startLineId: lines[0]!.id,
+                          endLineId: lines[0]!.id,
+                        },
+                      });
+                      return;
+                    }
+                    update(index, { trigger: { kind: "cue" } });
+                  }}
                 >
                   {TRIGGER_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      disabled={option.value === "lines" && lines.length === 0}
+                    >
                       {option.label}
                     </option>
                   ))}

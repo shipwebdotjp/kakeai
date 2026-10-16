@@ -232,8 +232,7 @@ describe("removeLineInScene", () => {
     expect(removeLineInScene(scene, 3)).toBe(scene);
   });
 
-  it("drops effect triggers that reference the deleted line", () => {
-    const effects = JSON.stringify([
+  it("drops effect triggers that reference the deleted line", () => {    const effects = JSON.stringify([
       {
         target: { kind: "row", index: 0 },
         trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
@@ -272,6 +271,22 @@ describe("removeLineInScene", () => {
           (entry.trigger as { startLineId?: string }).startLineId === "l3",
       ),
     ).toBe(true);
+  });
+
+  it("scans fields for an unknown template when dropping deleted-line triggers", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc", { templateId: "unknown.template", fields: { effects } })],
+    );
+    const next = removeLineInScene(scene, 1);
+    expect(JSON.parse(next.cues[0]!.fields.effects!)).toEqual([]);
   });
 });
 
@@ -353,6 +368,27 @@ describe("splitPointScene", () => {
     }[];
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.trigger.startLineId).toBe("l1");
+  });
+
+  it("keeps callout items without a trigger when splitting", () => {
+    const items = JSON.stringify([
+      { text: "常時表示" },
+      {
+        text: "同期する",
+        trigger: { kind: "lines", startLineId: "l3", endLineId: "l3" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [cue("vc", { templateId: "list.callout", rangeKind: "scene", fields: { items } })],
+    );
+
+    const { first } = splitPointScene(scene, 2, "要点 2", new Set(), null);
+    const remaining = JSON.parse(
+      first.cues.find((entry) => entry.id === "vc")!.fields.items!,
+    ) as { text: string }[];
+    expect(remaining.map((entry) => entry.text)).toEqual(["常時表示"]);
   });
 
   it("routes cues by their line range", () => {
