@@ -237,7 +237,8 @@ function buildDefaultEntryHtml(runtimeCompositionId: string): string {
   const attr = escapeHtmlAttribute(runtimeCompositionId);
   const jsKey = JSON.stringify(runtimeCompositionId).replace(/</g, "\\u003c");
   const durationSec = toSecondsText(DRAFT_DEFAULT_DURATION_MS);
-  return `<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app" data-composition-id="${attr}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${durationSec}" data-fps="${OUTPUT_FPS}"></div><script>window.__timelines = window.__timelines || {};window.__timelines[${jsKey}] = { duration: ${durationSec} };<\/script></body></html>`;
+  const timeline = `{ duration: function () { return ${durationSec}; }, totalTime: function (t) { return t === undefined ? 0 : this; }, seek: function () { return this; }, play: function () { return this; }, pause: function () { return this; } }`;
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app" data-composition-id="${attr}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${durationSec}" data-fps="${OUTPUT_FPS}"></div><script>window.__timelines = window.__timelines || {};window.__timelines[${jsKey}] = ${timeline};<\/script></body></html>`;
 }
 
 function resolveWithin(baseDir: string, relativePath: string, label: string): string {

@@ -472,7 +472,6 @@ describe("render worker", () => {
     expect(artifact.format).toBe("mp4");
     expect(artifact.durationMs).toBeGreaterThan(0);
     expect(artifact.videoCodec).not.toBeNull();
-    expect(artifact.audioCodec).not.toBeNull();
 
     const location = await artifacts.resolveArtifactContent(
       prisma,
@@ -609,6 +608,7 @@ describe("render worker", () => {
     const finished = await jobs.getJob(prisma, job.id);
     expect(finished.status).toBe("succeeded");
     const artifact = finished.artifacts[0]!;
+    expect(artifact.audioCodec).not.toBeNull();
     const location = await artifacts.resolveArtifactContent(
       prisma,
       config.directories,
