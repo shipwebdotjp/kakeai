@@ -112,6 +112,10 @@ _Avoid_: Visual cue, scene
 An instruction to display one Visual Template with specific inputs over a segment of a Scene, on a named layer and with an enter/exit transition.
 _Avoid_: Asset, template
 
+**Cue Map**:
+A non-persistent editor navigation view that lays Scenes and Narration Segments in order and shows the ranges and visual stacking of Visual Cues as lanes. It is not a rendering timeline and never changes editorial data.
+_Avoid_: Timeline, track, storyboard
+
 **Visual Theme**:
 An app-managed visual identity whose selected Theme Revision supplies default visual tokens to a Script Version. Explicit cue inputs always override it.
 _Avoid_: UI theme, site mockup theme

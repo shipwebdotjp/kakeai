@@ -133,7 +133,7 @@ interface Diagnostic {
 
 ### 左ペイン
 
-- 現在位置、Scene種別、Cue・セリフの要約を明確にする。テキストCueは役割だけでなく本文先頭も表示する。
+- Cue対応マップで、現在位置、Scene種別・Label、セリフの要約、Cueの範囲と重なりを明確にする。Cueの詳細は帯のフォーカス／ホバーで表示する。詳細は [../cue-map/spec.md](../cue-map/spec.md) を正とする。
 
 ### プレビューとレンダー
 
