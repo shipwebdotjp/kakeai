@@ -231,6 +231,48 @@ describe("removeLineInScene", () => {
     const scene = makeScene([line("l1", null, "A", "a")]);
     expect(removeLineInScene(scene, 3)).toBe(scene);
   });
+
+  it("drops effect triggers that reference the deleted line", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "row", index: 1 },
+        trigger: { kind: "lines", startLineId: "l3", endLineId: "l3" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "rows" },
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "fade", durationMs: 400 },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [cue("vc-effects", { templateId: "table.simple", fields: { effects } })],
+    );
+
+    const next = removeLineInScene(scene, 1);
+    const remaining = JSON.parse(next.cues[0]!.fields.effects!) as { trigger: { kind: string } }[];
+    expect(remaining).toHaveLength(2);
+    expect(
+      remaining.some(
+        (entry) =>
+          entry.trigger.kind === "lines" &&
+          (entry.trigger as { startLineId?: string }).startLineId === "l2",
+      ),
+    ).toBe(false);
+    expect(
+      remaining.some(
+        (entry) =>
+          entry.trigger.kind === "lines" &&
+          (entry.trigger as { startLineId?: string }).startLineId === "l3",
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("countLineCueReferences", () => {

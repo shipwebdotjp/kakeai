@@ -51,6 +51,7 @@ import { useCompositions } from "../api/hooks";
 import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { DataGridField } from "./DataGridField";
+import { EffectsField } from "./EffectsField";
 
 const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
 const IDENTITY_ZOOM_PERCENT = "100";
@@ -181,6 +182,8 @@ function CueRow({
       getFields={getFields}
       multiline={isTextBlock && field.key === "text"}
       animationPresets={definition?.animationPolicy.presets ?? ANIMATION_PRESETS}
+      lines={lines}
+      speakers={speakers}
     />
   );
 
@@ -384,6 +387,8 @@ interface CueFieldProps {
   getFields: () => Record<string, string>;
   multiline?: boolean;
   animationPresets: readonly AnimationPreset[];
+  lines: LineFormValue[];
+  speakers: SpeakerFormValue[];
 }
 
 interface CompositionVersionFieldProps {
@@ -624,7 +629,7 @@ function NestedScreenField({
   );
 }
 
-function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets }: CueFieldProps) {
+function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
     return (
@@ -791,6 +796,18 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           maxColumns={field.maxColumns}
           maxRows={field.maxRows}
           emphasis={field.emphasis === true}
+        />
+      );
+    case "effects":
+      return (
+        <EffectsField
+          label={field.label}
+          fieldKey={field.key}
+          variant={field.variant}
+          value={value}
+          setField={setField}
+          lines={lines}
+          speakers={speakers}
         />
       );
     case "boolean": {

@@ -46,6 +46,7 @@ export type TemplateFieldSpec =
   | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; emphasis?: boolean }
+  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" }
   | { kind: "animation"; key: string; label: string };
 
 export interface VisualTemplateDefinition {
@@ -561,13 +562,15 @@ export const tableEffectSchema = z.strictObject({
 });
 export type TableEffect = z.infer<typeof tableEffectSchema>;
 
+export const tableEffectsSchema = z.array(tableEffectSchema).max(32);
+
 export const tableSimpleInputSchema = z
   .strictObject({
     caption: z.string().optional(),
     data: tableDataSchema,
     style: tableStyleSchema.optional(),
     reveal: tableRevealSchema.optional(),
-    effects: z.array(tableEffectSchema).max(32).optional(),
+    effects: tableEffectsSchema.optional(),
   })
   .superRefine((input, ctx) => {
     const known = new Set(input.data.columns.map((column) => column.key));
@@ -671,6 +674,7 @@ const tableSimpleV1: VisualTemplateDefinition = {
       max: TABLE_REVEAL_STAGGER_MAX_MS,
       step: 10,
     },
+    { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "table" },
   ],
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
@@ -782,13 +786,15 @@ export const chartEffectSchema = z.strictObject({
 });
 export type ChartEffect = z.infer<typeof chartEffectSchema>;
 
+export const chartEffectsSchema = z.array(chartEffectSchema).max(32);
+
 export const chartBarInputSchema = z
   .strictObject({
     title: z.string().optional(),
     data: chartDataSchema,
     style: chartStyleSchema.optional(),
     reveal: chartRevealSchema.optional(),
-    effects: z.array(chartEffectSchema).max(32).optional(),
+    effects: chartEffectsSchema.optional(),
   })
   .superRefine((input, ctx) => {
     const seriesCount = Math.max(0, input.data.columns.length - 1);
@@ -887,6 +893,7 @@ const chartBarV1: VisualTemplateDefinition = {
       max: CHART_REVEAL_STAGGER_MAX_MS,
       step: 10,
     },
+    { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "chart" },
   ],
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {

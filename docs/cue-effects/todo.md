@@ -44,12 +44,21 @@
 
 ## Phase 5: 二重表現の解消とエディタ
 
+### 5a エディタ（進行中）
+
+- [x] `TemplateFieldSpec` に `effects` 種別を追加し、`table.simple`/`chart.bar` の `inputFields` に載せる
+- [x] `form.ts` の `readCueFields`・`buildCueInput`・`defaultCueFields` を `effects` に対応させる
+- [x] `EffectsField` 部品（対象・契機・効果の編集、行ピッカー）を追加する
+- [x] 行の削除で、削除行を参照する `effects` のトリガーを落とす（`removeLineInScene`）
+- [ ] `list.callout` の `items`（text ＋ trigger ＋ effect）編集部品を追加し `inputFields` に載せる
+- [ ] シーン分割（`splitPointScene`）で `effects` のトリガー参照を振り分ける
+- 完了条件: 表・グラフ・ポイントの効果をエディタで設定でき、行削除後も参照が破綻しない。
+
+### 5b 二重表現の解消
+
 - [ ] `table.simple`・`chart.bar` から `reveal`・`emphasis` を削除し `effects` へ一本化する（保存済み参照の有無で `@1` 書き換えか `@2` かを決める）
-- [ ] `effects`（target/trigger/effect）を行ピッカー付きで編集する `TemplateFieldSpec` 種別と部品を実装する
-- [ ] 行の並べ替え・削除・分割で、`collectLineRefs` を使ってTrigger参照をremapする
-- [ ] `list.callout` の `items` 編集を実装する
-- [ ] UI未対応のTrigger・Effectを読み取り専用で非破壊に保持する
-- 完了条件: エディタでTriggerを設定・整理でき、行を並べ替えても参照が保たれ、保存・プレビューできる。
+- [ ] `DataGridField` の強調UIと `form.ts` の `grid` の `emphasis` 依存を整理する
+- 完了条件: 実装と文書の矛盾がない。
 
 ## Phase 6: 文書同期
 

@@ -16,7 +16,9 @@ import {
   pointSceneTextCues,
   sceneDeviceFrameV1,
   chartDataSchema,
+  chartEffectsSchema,
   tableDataSchema,
+  tableEffectsSchema,
   type AnimationPreset,
   type Character,
   type CharacterVoice,
@@ -447,6 +449,12 @@ function readCueFields(
         const value = getAtPath(input, field.key);
         result[field.key] =
           typeof value === "object" && value !== null ? JSON.stringify(value) : "";
+        break;
+      }
+      case "effects": {
+        const value = getAtPath(input, field.key);
+        result[field.key] =
+          Array.isArray(value) && value.length > 0 ? JSON.stringify(value) : "";
         break;
       }
       case "animation": {
@@ -888,6 +896,26 @@ function buildCueInput(
         const validated = schema.safeParse(parsedJson);
         if (!validated.success) {
           throw new Error(errorMessage);
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "effects": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          deleteAtPath(input, field.key);
+          break;
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("セリフ同期の効果を正しく入力してください");
+        }
+        const schema = field.variant === "chart" ? chartEffectsSchema : tableEffectsSchema;
+        const validated = schema.safeParse(parsedJson);
+        if (!validated.success) {
+          throw new Error("セリフ同期の効果を正しく入力してください");
         }
         setAtPath(input, field.key, validated.data);
         break;
@@ -1393,6 +1421,9 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
       case "grid":
         fields[field.key] = defaultGridDataJson();
         break;
+      case "effects":
+        fields[field.key] = "[]";
+        break;
       default:
         fields[field.key] = "";
     }
@@ -1771,7 +1802,57 @@ export function removeLineInScene(scene: SceneFormValue, lineIndex: number): Sce
       endLineId: lineIndex === high ? lines[high - 1]!.id : lines[high]!.id,
     });
   }
-  return { ...scene, lines: nextLines, cues };
+  return {
+    ...scene,
+    lines: nextLines,
+    cues: cues.map((cue) => ({
+      ...cue,
+      fields: dropDeletedLineTriggers(cue.fields, deletedId),
+    })),
+  };
+}
+
+function triggerReferencesLine(entry: unknown, lineId: string): boolean {
+  if (typeof entry !== "object" || entry === null) {
+    return false;
+  }
+  const trigger = (entry as { trigger?: unknown }).trigger;
+  if (typeof trigger !== "object" || trigger === null) {
+    return false;
+  }
+  const value = trigger as { kind?: unknown; startLineId?: unknown; endLineId?: unknown };
+  return (
+    value.kind === "lines" &&
+    (value.startLineId === lineId || value.endLineId === lineId)
+  );
+}
+
+function dropDeletedLineTriggers(
+  fields: Record<string, string>,
+  lineId: string,
+): Record<string, string> {
+  let changed = false;
+  const next: Record<string, string> = { ...fields };
+  for (const [key, value] of Object.entries(fields)) {
+    if (!value.trimStart().startsWith("[")) {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(parsed)) {
+      continue;
+    }
+    const filtered = parsed.filter((entry) => !triggerReferencesLine(entry, lineId));
+    if (filtered.length !== parsed.length) {
+      next[key] = JSON.stringify(filtered);
+      changed = true;
+    }
+  }
+  return changed ? next : fields;
 }
 
 export function countLineCueReferences(scene: SceneFormValue, lineId: string): number {
