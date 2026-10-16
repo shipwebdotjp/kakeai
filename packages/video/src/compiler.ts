@@ -32,7 +32,7 @@ import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import { seededRandom } from "./random";
-import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming } from "./render-context";
+import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval } from "./render-context";
 import {
   THEME_FONT_STACKS,
   mixHex,
@@ -90,6 +90,47 @@ export function toSecondsText(ms: number): string {
 
 function secondsText(seconds: number): string {
   return toSecondsText(seconds * 1000);
+}
+
+function tweenVarsText(vars: Record<string, string | number>): string {
+  return Object.entries(vars)
+    .map(([key, value]) => {
+      if (typeof value !== "number") {
+        return `${key}:${JSON.stringify(value)}`;
+      }
+      return `${key}:${Number.isFinite(value) ? value : 0}`;
+    })
+    .join(",");
+}
+
+function setTweenLine(
+  elementId: string,
+  vars: Record<string, string | number>,
+  atMs: number,
+): string {
+  return `tl.set(document.getElementById("${elementId}"),{${tweenVarsText(vars)}},${toSecondsText(atMs)});`;
+}
+
+export function stateIntervalTweenLines(
+  states: readonly StateInterval[],
+  absStartMs: number,
+  spanMs: number,
+): string[] {
+  const lines: string[] = [];
+  for (const state of states) {
+    for (const interval of state.intervals) {
+      const startMs = Math.max(0, Math.min(interval.startMs, spanMs));
+      const endMs = Math.max(0, Math.min(interval.endMs, spanMs));
+      if (endMs <= startMs) {
+        continue;
+      }
+      lines.push(setTweenLine(state.targetId, state.on, absStartMs + startMs));
+      if (state.off !== undefined) {
+        lines.push(setTweenLine(state.targetId, state.off, absStartMs + endMs));
+      }
+    }
+  }
+  return lines;
 }
 
 function applyCueTiming(html: string, startMs: number, spanMs: number): string {
@@ -219,9 +260,7 @@ function expressionTweenLines(
 ): string[] {
   const lines: string[] = [];
   const setLine = (target: ExpressionTarget, visible: boolean, startMs: number): void => {
-    lines.push(
-      `tl.set(document.getElementById("${target.elementId}"),{opacity:${visible ? 1 : 0}},${toSecondsText(startMs)});`,
-    );
+    lines.push(setTweenLine(target.elementId, { opacity: visible ? 1 : 0 }, startMs));
   };
   let previous: string | null = null;
   for (const interval of intervals) {
@@ -313,9 +352,7 @@ function faceVariantTweenLines(
   const byPreset = new Map(targets.map((target) => [target.presetId, target]));
   const lines: string[] = [];
   const setLine = (elementId: string, visible: boolean, startMs: number): void => {
-    lines.push(
-      `tl.set(document.getElementById("${elementId}"),{opacity:${visible ? 1 : 0}},${toSecondsText(startMs)});`,
-    );
+    lines.push(setTweenLine(elementId, { opacity: visible ? 1 : 0 }, startMs));
   };
   let previous: string | null = null;
   for (const interval of intervals) {
@@ -485,6 +522,7 @@ function makeContext(
   path: (string | number)[],
   faceSetResolver?: FaceSetResolver,
   cueTiming?: CueTiming,
+  lineIntervals?: LineInterval[],
   compositionResolver?: CompositionVersionResolver,
   collectComposition?: (resolved: CompositionVersionResolved) => void,
 ): RenderContext {
@@ -498,6 +536,7 @@ function makeContext(
     scope,
     path,
     cueTiming,
+    lineIntervals,
     renderNested: (node, nestedScope, nestedPath) =>
       renderNestedVisual(
         node,
@@ -509,6 +548,7 @@ function makeContext(
           nestedPath,
           faceSetResolver,
           cueTiming,
+          lineIntervals,
           compositionResolver,
           collectComposition,
         ),
@@ -1048,6 +1088,11 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const span = window.endMs - window.startMs;
       const absStartMs = placement.startMs + window.startMs;
       const scope = cueScope(cue.id);
+      const lineIntervals: LineInterval[] = placement.lines.map((linePlacement) => ({
+        lineId: linePlacement.lineId,
+        startMs: linePlacement.startMs - absStartMs,
+        endMs: linePlacement.endMs - absStartMs,
+      }));
       const context = makeContext(
         document,
         theme,
@@ -1059,6 +1104,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
           startMs: absStartMs,
           spanMs: span,
         },
+        lineIntervals,
         compositionResolver,
         recordComposition,
       );
@@ -1118,6 +1164,14 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
           );
         }
       }
+      for (const stateLine of stateIntervalTweenLines(
+        rendered.stateIntervals ?? [],
+        absStartMs,
+        effectiveSpanMs,
+      )) {
+        tweenLines.push(stateLine);
+      }
+
       for (const item of rendered.animation) {
         if (item.durationMs <= 0) {
           continue;

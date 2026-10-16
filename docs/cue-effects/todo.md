@@ -12,11 +12,13 @@
 
 ## Phase 2: コンパイラとエンジン
 
-- [ ] コンパイラが `resolveTimeline` の `placement.lines` から `lineIntervals` を算出してテンプレートへ渡す
-- [ ] `character.standing` 専用の interval→`tl.set` 生成を共通ヘルパへ抽出し、`stateIntervals` に適用する
-- [ ] `appear`（一発）とグループtargetの `staggerMs` を `AnimationPlan` へ写像する
-- [ ] 行ID不在・逆転区間・空区間・Cue窓外のクランプを検証する
+- [x] コンパイラが `resolveTimeline` の `placement.lines` から `lineIntervals` を算出してテンプレートへ渡す
+- [x] `character.standing` 専用の interval→`tl.set` 生成を共通ヘルパ（`setTweenLine`）へ抽出し、`stateIntervals` に適用する
+- [x] `appear`（一発）とグループtargetの `staggerMs` を `AnimationPlan` へ写像する（`planAppearEffect`）
+- [x] 行ID不在・逆転区間・空区間・Cue窓外のクランプを検証する（`resolveTriggerWindow`・`stateIntervalTweenLines`）
 - 完了条件: `stateIntervals` と `appear` がプレビューのシークとMP4で一致し、`character.standing` の既存挙動が回帰しない。
+
+> Phase 2 は共通ヘルパと型・ユニットテストまで。実素材での end-to-end 一致確認は、効果を使うテンプレートが入る Phase 3・Phase 4 で行う。
 
 ## Phase 3: `table.simple@1` / `chart.bar@1` の移行
 
