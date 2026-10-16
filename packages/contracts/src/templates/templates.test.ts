@@ -378,10 +378,12 @@ describe("visual template metadata", () => {
     ).toBe(false);
   });
 
-  it("registers list.callout@1 as a non-editable overlay template", () => {
+  it("registers list.callout@1 as an editable overlay template", () => {
     const definition = getVisualTemplate("list.callout", 1);
     expect(definition?.layers).toEqual(["overlay"]);
-    expect(isEditableTemplate("list.callout", 1)).toBe(false);
+    expect(isEditableTemplate("list.callout", 1)).toBe(true);
+    const fields = getTemplateInputFields("list.callout", 1);
+    expect(fields?.some((field) => field.kind === "calloutItems")).toBe(true);
   });
 
   it("accepts a list.callout input and rejects mismatched trigger/effect", () => {

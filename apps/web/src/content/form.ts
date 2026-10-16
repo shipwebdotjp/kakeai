@@ -17,6 +17,7 @@ import {
   sceneDeviceFrameV1,
   chartDataSchema,
   chartEffectsSchema,
+  listCalloutItemsSchema,
   tableDataSchema,
   tableEffectsSchema,
   type AnimationPreset,
@@ -455,6 +456,11 @@ function readCueFields(
         const value = getAtPath(input, field.key);
         result[field.key] =
           Array.isArray(value) && value.length > 0 ? JSON.stringify(value) : "";
+        break;
+      }
+      case "calloutItems": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = Array.isArray(value) ? JSON.stringify(value) : "";
         break;
       }
       case "animation": {
@@ -916,6 +922,24 @@ function buildCueInput(
         const validated = schema.safeParse(parsedJson);
         if (!validated.success) {
           throw new Error("セリフ同期の効果を正しく入力してください");
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "calloutItems": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          throw new Error("ポイントを1つ以上入力してください");
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("ポイントを正しく入力してください");
+        }
+        const validated = listCalloutItemsSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          throw new Error("ポイントを正しく入力してください");
         }
         setAtPath(input, field.key, validated.data);
         break;
@@ -1423,6 +1447,9 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         break;
       case "effects":
         fields[field.key] = "[]";
+        break;
+      case "calloutItems":
+        fields[field.key] = JSON.stringify([{ text: "" }]);
         break;
       default:
         fields[field.key] = "";

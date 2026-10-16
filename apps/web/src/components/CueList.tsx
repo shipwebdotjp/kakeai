@@ -52,6 +52,7 @@ import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { DataGridField } from "./DataGridField";
 import { EffectsField } from "./EffectsField";
+import { CalloutItemsField } from "./CalloutItemsField";
 
 const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
 const IDENTITY_ZOOM_PERCENT = "100";
@@ -804,6 +805,17 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           label={field.label}
           fieldKey={field.key}
           variant={field.variant}
+          value={value}
+          setField={setField}
+          lines={lines}
+          speakers={speakers}
+        />
+      );
+    case "calloutItems":
+      return (
+        <CalloutItemsField
+          label={field.label}
+          fieldKey={field.key}
           value={value}
           setField={setField}
           lines={lines}

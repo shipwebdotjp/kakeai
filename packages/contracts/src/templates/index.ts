@@ -47,6 +47,7 @@ export type TemplateFieldSpec =
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; emphasis?: boolean }
   | { kind: "effects"; key: string; label: string; variant: "table" | "chart" }
+  | { kind: "calloutItems"; key: string; label: string }
   | { kind: "animation"; key: string; label: string };
 
 export interface VisualTemplateDefinition {
@@ -926,6 +927,11 @@ export const listCalloutItemSchema = z
   });
 export type ListCalloutItem = z.infer<typeof listCalloutItemSchema>;
 
+export const listCalloutItemsSchema = z
+  .array(listCalloutItemSchema)
+  .min(1)
+  .max(LIST_CALLOUT_MAX_ITEMS);
+
 export const listCalloutAppearSchema = z.strictObject({
   trigger: lineTriggerSchema,
   effect: appearEffectSchema,
@@ -934,7 +940,7 @@ export type ListCalloutAppear = z.infer<typeof listCalloutAppearSchema>;
 
 export const listCalloutInputSchema = z.strictObject({
   title: z.string().optional(),
-  items: z.array(listCalloutItemSchema).min(1).max(LIST_CALLOUT_MAX_ITEMS),
+  items: listCalloutItemsSchema,
   appear: listCalloutAppearSchema.optional(),
 });
 export type ListCalloutInput = z.infer<typeof listCalloutInputSchema>;
@@ -965,6 +971,10 @@ const listCalloutV1: VisualTemplateDefinition = {
     description: "セリフに同期して強調する箇条書き",
     category: "text",
   },
+  inputFields: [
+    { kind: "optionalText", key: "title", label: "見出し" },
+    { kind: "calloutItems", key: "items", label: "ポイント" },
+  ],
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
     const parsed = listCalloutInputSchema.safeParse(input);

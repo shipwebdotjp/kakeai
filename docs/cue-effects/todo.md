@@ -50,7 +50,7 @@
 - [x] `form.ts` の `readCueFields`・`buildCueInput`・`defaultCueFields` を `effects` に対応させる
 - [x] `EffectsField` 部品（対象・契機・効果の編集、行ピッカー）を追加する
 - [x] 行の削除で、削除行を参照する `effects` のトリガーを落とす（`removeLineInScene`）
-- [ ] `list.callout` の `items`（text ＋ trigger ＋ effect）編集部品を追加し `inputFields` に載せる
+- [x] `list.callout` の `items`（text ＋ trigger ＋ effect）編集部品を追加し `inputFields` に載せる
 - [ ] シーン分割（`splitPointScene`）で `effects` のトリガー参照を振り分ける
 - 完了条件: 表・グラフ・ポイントの効果をエディタで設定でき、行削除後も参照が破綻しない。
 
