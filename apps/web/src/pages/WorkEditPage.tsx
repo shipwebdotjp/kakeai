@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useBeforeUnload, useBlocker, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { defaultPointLabel, getVisualTemplate, type ScriptVersion } from "@kakeai/contracts";
+import { defaultPointLabel, type ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
+import { CueMap } from "../components/CueMap";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
@@ -10,9 +11,8 @@ import { CollapsibleStateProvider } from "../components/Collapsible";
 import { errorMessage } from "../lib/errorMessage";
 import { PreviewControllerProvider, usePreviewActions } from "../lib/PreviewController";
 import { useDraftPreview, type UnsavedDocumentState } from "../lib/useDraftPreview";
-import type { CueFormValue, SceneFormValue, SpeakerFormValue } from "../content/form";
-import { lineOptionLabel } from "../content/form";
-import { SCENE_LABELS, TEXT_ROLE_LABELS } from "../content/labels";
+import type { CharacterFormValue, SceneFormValue, SpeakerFormValue } from "../content/form";
+import { SCENE_LABELS } from "../content/labels";
 import {
   EDITOR_LAYOUT_DEFAULT_RATIOS,
   EDITOR_LAYOUT_MAX_LEFT_PX,
@@ -29,8 +29,6 @@ import {
 import { EDITOR_WIDE_MEDIA_QUERY, useMediaQuery } from "../lib/useMediaQuery";
 import { thumbnailsRoute } from "../lib/routes";
 import {
-  badgeInfoClass,
-  badgeNeutralClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
@@ -41,12 +39,6 @@ import {
 function renderDownloadName(title: string, versionNumber: number): string {
   const base = title.trim().replace(/[\\/:*?"<>|]/g, "_");
   return `${base.length > 0 ? base : "render"}_v${versionNumber}.mp4`;
-}
-
-function truncateHead(value: string, limit: number): string {
-  const head = (value.split("\n")[0] ?? "").trim();
-  const chars = Array.from(head);
-  return chars.length > limit ? `${chars.slice(0, limit).join("")}…` : head;
 }
 
 function escapeId(id: string): string {
@@ -135,104 +127,10 @@ function PaneDivider({
   );
 }
 
-function cueSummary(cue: CueFormValue): string {
-  const definition = getVisualTemplate(cue.templateId, cue.templateVersion);
-  const base = definition?.display.label ?? cue.templateId;
-  if (cue.templateId === "text.block") {
-    const role = cue.fields.role;
-    const roleLabel =
-      role !== undefined && role in TEXT_ROLE_LABELS
-        ? TEXT_ROLE_LABELS[role as keyof typeof TEXT_ROLE_LABELS]
-        : undefined;
-    const head = truncateHead(cue.fields.text ?? "", 24);
-    if (head.length > 0) {
-      return roleLabel === undefined ? head : `${roleLabel} — ${head}`;
-    }
-    return roleLabel === undefined ? base : `${base}: ${roleLabel}`;
-  }
-  return base;
-}
-
 type PreviewSeekTarget =
   | { kind: "scene"; id: string }
   | { kind: "cue"; id: string }
   | { kind: "line"; id: string };
-
-function LeftPane({
-  scenes,
-  speakers,
-  sceneLabels,
-  activeTargetId,
-  onJump,
-}: {
-  scenes: SceneFormValue[];
-  speakers: SpeakerFormValue[];
-  sceneLabels: ReadonlyMap<string, string>;
-  activeTargetId: string | null;
-  onJump: (targetId: string, seek: PreviewSeekTarget) => void;
-}) {
-  return (
-    <nav aria-label="構成">
-      <ul className="m-0 list-none p-0">
-        {scenes.map((scene) => (
-          <li key={scene.id} className="mb-1.5">
-            <button
-              type="button"
-              aria-current={activeTargetId === `scene-${scene.id}` ? "true" : undefined}
-              className={
-                activeTargetId === `scene-${scene.id}`
-                  ? "flex w-full items-center gap-1.5 rounded bg-border/60 px-1 text-left font-semibold"
-                  : "flex w-full items-center gap-1.5 text-left font-medium hover:underline"
-              }
-              onClick={() => onJump(`scene-${scene.id}`, { kind: "scene", id: scene.id })}
-            >
-              <span className="min-w-0 flex-1 truncate">
-                {sceneLabels.get(scene.id) ?? scene.id}
-              </span>
-              <span className={scene.kind === "point" ? badgeInfoClass : badgeNeutralClass}>
-                {SCENE_LABELS[scene.kind] ?? scene.kind}
-              </span>
-            </button>
-            <ul className="m-0 ml-3 list-none p-0">
-              {scene.cues.map((cue) => (
-                <li key={cue.id}>
-                  <button
-                    type="button"
-                    aria-current={activeTargetId === `cue-${cue.id}` ? "true" : undefined}
-                    className={
-                      activeTargetId === `cue-${cue.id}`
-                        ? "w-full truncate rounded bg-border/60 px-1 text-left text-xs font-semibold"
-                        : "w-full truncate text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
-                    }
-                    onClick={() => onJump(`cue-${cue.id}`, { kind: "cue", id: cue.id })}
-                  >
-                    {cueSummary(cue)}
-                  </button>
-                </li>
-              ))}
-              {scene.lines.map((line, lineIndex) => (
-                <li key={line.id}>
-                  <button
-                    type="button"
-                    aria-current={activeTargetId === `line-${line.id}` ? "true" : undefined}
-                    className={
-                      activeTargetId === `line-${line.id}`
-                        ? "w-full truncate rounded bg-border/60 px-1 text-left text-xs font-semibold"
-                        : "w-full truncate text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
-                    }
-                    onClick={() => onJump(`line-${line.id}`, { kind: "line", id: line.id })}
-                  >
-                    {lineOptionLabel(scene.lines, lineIndex, speakers, 24)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
 
 export function WorkEditPage() {
   const { workId } = useParams<{ workId: string }>();
@@ -385,7 +283,7 @@ function WorkEditPanesContent({
 }: WorkEditPanesProps) {
   const actions = usePreviewActions();
   const [formScenes, setFormScenes] = useState<SceneFormValue[] | null>(null);
-  const [formSpeakers, setFormSpeakers] = useState<SpeakerFormValue[]>([]);
+  const [formCharacters, setFormCharacters] = useState<CharacterFormValue[]>([]);
   const [activeTargetId, setActiveTargetId] = useState<string | null>(null);
   const [ratios, setRatios] = useState<EditorLayoutRatios>(() => {
     const storage = getLayoutStorage();
@@ -397,6 +295,8 @@ function WorkEditPanesContent({
   const wide = useMediaQuery(EDITOR_WIDE_MEDIA_QUERY);
   const centerRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [leftPanePx, setLeftPanePx] = useState(288);
   const ratiosRef = useRef(ratios);
   const workspaceRef = useRef(workspacePx);
   const wideRef = useRef(wide);
@@ -426,14 +326,36 @@ function WorkEditPanesContent({
   }, []);
 
   useEffect(() => {
+    const element = asideRef.current;
+    if (element === null) {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      if (width > 0) {
+        setLeftPanePx(width);
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     setFormScenes(null);
-    setFormSpeakers([]);
+    setFormCharacters([]);
   }, [workId, editionId]);
 
-  const onValuesChange = useCallback((scenes: SceneFormValue[], speakers: SpeakerFormValue[]) => {
-    setFormScenes(scenes);
-    setFormSpeakers(speakers);
-  }, []);
+  const onValuesChange = useCallback(
+    (
+      scenes: SceneFormValue[],
+      _speakers: SpeakerFormValue[],
+      characters: CharacterFormValue[],
+    ) => {
+      setFormScenes(scenes);
+      setFormCharacters(characters);
+    },
+    [],
+  );
 
   const movePane = useCallback((pane: "left" | "preview", deltaX: number) => {
     const workspace = Math.max(0, workspaceRef.current - 12);
@@ -637,6 +559,7 @@ function WorkEditPanesContent({
 
       <div className="flex min-h-0 flex-1">
         <aside
+          ref={asideRef}
           style={wide ? { width: widths.left } : undefined}
           className={
             wide
@@ -659,11 +582,12 @@ function WorkEditPanesContent({
           {formScenes === null ? (
             <p className={metaTextClass}>読み込み中…</p>
           ) : (
-            <LeftPane
+            <CueMap
               scenes={formScenes}
-              speakers={formSpeakers}
+              characters={formCharacters}
               sceneLabels={sceneLabels}
               activeTargetId={activeTargetId}
+              paneWidthPx={leftPanePx}
               onJump={jump}
             />
           )}

@@ -87,7 +87,7 @@ interface SceneEditorProps {
   editionId: string;
   scriptVersionId: string;
   onSaved?: (scriptVersion: ScriptVersion) => void;
-  onValuesChange?: (scenes: SceneFormValue[], speakers: SpeakerFormValue[]) => void;
+  onValuesChange?: (scenes: SceneFormValue[], speakers: SpeakerFormValue[], characters: CharacterFormValue[]) => void;
   onJumpToLine?: (lineId: string) => void;
   onJumpToTarget?: (targetId: string, seek: DiagnosticTarget["seek"]) => void;
   onDocumentChange?: (state: UnsavedDocumentState) => void;
@@ -337,8 +337,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           id: speaker?.id,
           name: speaker?.name,
         })),
+        characters: (watchedCharacters ?? []).map((character) => ({
+          id: character?.id,
+          name: character?.name,
+          appearances: (character?.appearances ?? []).map((appearance) => ({
+            id: appearance?.id,
+            assetId: appearance?.assetId,
+          })),
+        })),
       }),
-    [watchedScenes, watchedSpeakers],
+    [watchedScenes, watchedSpeakers, watchedCharacters],
   );
   const lastEmittedNavProjection = useRef<string | null>(null);
 
@@ -348,15 +356,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     }
     const snapshot = [...watchedScenes];
     const speakerSnapshot = [...(watchedSpeakers ?? [])];
+    const characterSnapshot = [...(watchedCharacters ?? [])];
     const timer = setTimeout(() => {
       if (navProjection === lastEmittedNavProjection.current) {
         return;
       }
       lastEmittedNavProjection.current = navProjection;
-      onValuesChange?.(snapshot, speakerSnapshot);
+      onValuesChange?.(snapshot, speakerSnapshot, characterSnapshot);
     }, 150);
     return () => clearTimeout(timer);
-  }, [watchedScenes, watchedSpeakers, navProjection, onValuesChange]);
+  }, [watchedScenes, watchedSpeakers, watchedCharacters, navProjection, onValuesChange]);
   const savedVoiceByLineId = useMemo(() => {
     const speakerById = new Map(base.speakers.map((speaker) => [speaker.id, speaker]));
     const map = new Map<string, string | null>();
