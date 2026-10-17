@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getVisualTheme } from "@kakeai/contracts";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import type { RenderContext } from "../render-context";
+import { neutralVisualSkin } from "../skins/neutral";
 import { cueScope } from "../scope";
 import type { AssetResolver } from "../resolver";
 import { CompositionCompileError } from "../compile-error";
@@ -15,6 +16,7 @@ function context(scopeId = "callout-1"): RenderContext {
   return {
     document: validContentDocument(),
     theme,
+    skin: neutralVisualSkin,
     assetResolver,
     scope: cueScope(scopeId),
     path: ["scenes", 1, "visualCues", 2, "input"],

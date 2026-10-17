@@ -14,6 +14,18 @@ export { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 export { buildSrt, formatSrtTimestamp } from "./subtitles";
 export { compileDocument, toSecondsText } from "./compiler";
 export type { CompileDocumentOptions, CompiledComposition } from "./compiler";
+export { neutralVisualSkin } from "./skins/neutral";
+export {
+  getResolvedVisualSkin,
+  listResolvedVisualSkins,
+  resolveVisualSkin,
+  visualSkinRendererRegistry,
+} from "./skins/registry";
+export type {
+  ResolvedVisualSkin,
+  SkinRenderedCue,
+  VisualSkinTemplateRenderer,
+} from "./skins/types";
 export { compileThumbnail } from "./thumbnails/compile";
 export type { CompileThumbnailOptions, CompiledThumbnail } from "./thumbnails/compile";
 export type { CompositionVersionResolver, CompositionVersionResolved } from "./composition-resolver";

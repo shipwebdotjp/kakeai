@@ -1,23 +1,7 @@
 import {
   characterStandingV1,
   characterStandingV1InputSchema,
-  mediaCardInputSchema,
-  mediaCardV1,
-  mediaFullBleedInputSchema,
-  mediaFullBleedV1,
-  sceneDeviceFrameV1,
-  sceneSiteMockupV1,
-  tableSimpleV1,
-  chartBarV1,
-  listCalloutV1,
-  flowDiagramV1,
-  statV1,
-  quoteV1,
-  compositionFullBleedV1,
-  compositionFullBleedInputSchema,
-  canvasProfileOf,
-  deviceFrameInputSchema,
-  textBlockV1,
+  resolveVisualThemeSkin,
   type AnimationPreset,
   type ContentDocument,
   type CueLayer,
@@ -39,28 +23,16 @@ import { seededRandom } from "./random";
 import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval, RenderAnimationAction, ValueAnimation } from "./render-context";
 import {
   THEME_FONT_STACKS,
-  mixHex,
   overlayToRgba,
   resolveSceneAccentHex,
   resolveVisualTheme,
   sceneAccentStyle,
   themeRootStyle,
 } from "./theme";
+import { neutralVisualSkin } from "./skins/neutral";
+import { resolveVisualSkin } from "./skins/registry";
+import type { ResolvedVisualSkin } from "./skins/types";
 import { COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE, compositionClipReachesSceneEnd, compositionCrossfadeExceedsChild, compositionTransitionOverflowMessage, cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type LinePlacement, type ResolvedTimeline } from "./timeline";
-import { renderTextBlock } from "./templates/text-block";
-import { renderMediaFullBleed } from "./templates/media-full-bleed";
-import { renderMediaCard } from "./templates/media-card";
-import {
-  renderCharacterStanding,
-} from "./templates/character-standing";
-import { renderDeviceFrame } from "./templates/device-frame";
-import { renderTableSimple } from "./templates/table-simple";
-import { renderChartBar } from "./templates/chart-bar";
-import { renderListCallout } from "./templates/list-callout";
-import { renderFlowDiagram } from "./templates/flow-diagram";
-import { renderStat } from "./templates/stat";
-import { renderQuote } from "./templates/quote";
-import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, gainToVolume, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
 export const COMPOSITION_ID = "kakeai-main";
@@ -72,6 +44,7 @@ export interface CompileDocumentOptions {
   faceSetResolver?: FaceSetResolver;
   themeResolver?: (id: string, version: number) => VisualThemeDefinition | undefined;
   resolvedTheme?: VisualThemeDefinition;
+  resolvedSkin?: ResolvedVisualSkin;
 }
 
 export interface CompiledComposition {
@@ -414,10 +387,6 @@ function faceVariantTweenLines(
   return lines;
 }
 
-function sceneBackground(accentHex: string, theme: VisualThemeDefinition): string {
-  return `linear-gradient(135deg, ${mixHex(accentHex, theme.canvas.base, 0.72)} 0%, ${mixHex(accentHex, theme.canvas.base, 0.88)} 100%)`;
-}
-
 function renderNestedMedia(node: NestedVisual & { kind: "media" }, context: RenderContext): RenderedCue {
   const media = resolveCueMedia(node.assetId, context.assetResolver, context.path);
   const id = context.scope.id("media");
@@ -437,112 +406,30 @@ function renderNestedMedia(node: NestedVisual & { kind: "media" }, context: Rend
   };
 }
 
-function renderCompositionFullBleed(
-  input: unknown,
-  context: RenderContext,
-  compositionResolver?: CompositionVersionResolver,
-): RenderedCue & { compositionVersion?: CompositionVersionResolved } {
-  const parsed = compositionFullBleedInputSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new CompositionCompileError([
-      {
-        path: [...context.path, "input"],
-        code: "invalid_input",
-        message: "compositionVersionId を指定してください",
-      },
-    ]);
-  }
-  if (!compositionResolver) {
-    throw new CompositionCompileError([
-      {
-        path: [...context.path, "input"],
-        code: "missing_composition_resolver",
-        message: "CompositionVersionResolver が設定されていません",
-      },
-    ]);
-  }
-  let resolved: CompositionVersionResolved;
-  try {
-    resolved = compositionResolver(parsed.data.compositionVersionId);
-  } catch (err) {
-    throw new CompositionCompileError([
-      {
-        path: [...context.path, "input", "compositionVersionId"],
-        code: "unknown_composition_version",
-        message: `CompositionVersion を解釈できません: ${(err as Error).message}`,
-      },
-    ]);
-  }
-
-  const hostId = context.scope.id("comp-host");
-  const src = resolved.previewUrl ?? resolved.entrypoint;
-  if (canvasProfileOf(resolved.manifest) !== "landscape") {
-    throw new CompositionCompileError([
-      {
-        path: [...context.path, "input", "compositionVersionId"],
-        code: "invalid_composition_profile",
-        message:
-          "composition.full-bleed@1 には横長(landscape)のCompositionVersionだけを指定できます。縦型はscene.device-frame@1の画面に配置してください。",
-      },
-    ]);
-  }
-  const width = resolved.manifest.width;
-  const height = resolved.manifest.height;
-  return {
-    html: `<div id="${hostId}" class="kakeai-fullbleed" data-composition-id="${escapeHtmlAttribute(resolved.runtimeCompositionId)}" data-composition-src="${escapeHtmlAttribute(src)}" data-width="${width}" data-height="${height}"></div>`,
-    assetIds: [],
-    animation: [],
-    compositionVersion: resolved,
-  };
-}
-
 function dispatchTemplate(
   key: string,
   input: unknown,
   context: RenderContext,
-  compositionResolver?: CompositionVersionResolver,
 ): RenderedCue & { compositionVersion?: CompositionVersionResolved } {
-  switch (key) {
-    case `${textBlockV1.id}@${textBlockV1.version}`:
-      return { html: renderTextBlock(input, context.path, context.theme), assetIds: [], animation: [] };
-    case `${mediaFullBleedV1.id}@${mediaFullBleedV1.version}`:
-      return renderMediaFullBleed(input, context, mediaFullBleedInputSchema);
-    case `${mediaCardV1.id}@${mediaCardV1.version}`:
-      return renderMediaCard(input, context, mediaCardInputSchema);
-    case `${characterStandingV1.id}@${characterStandingV1.version}`:
-      return renderCharacterStanding(input, context);
-    case `${sceneDeviceFrameV1.id}@${sceneDeviceFrameV1.version}`:
-      return renderDeviceFrame(input, context, deviceFrameInputSchema);
-    case `${sceneSiteMockupV1.id}@${sceneSiteMockupV1.version}`:
-      return renderSiteMockup(input, context);
-    case `${tableSimpleV1.id}@${tableSimpleV1.version}`:
-      return renderTableSimple(input, context);
-    case `${chartBarV1.id}@${chartBarV1.version}`:
-      return renderChartBar(input, context);
-    case `${listCalloutV1.id}@${listCalloutV1.version}`:
-      return renderListCallout(input, context);
-    case `${flowDiagramV1.id}@${flowDiagramV1.version}`:
-      return renderFlowDiagram(input, context);
-    case `${statV1.id}@${statV1.version}`:
-      return renderStat(input, context);
-    case `${quoteV1.id}@${quoteV1.version}`:
-      return renderQuote(input, context);
-    case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
-      return renderCompositionFullBleed(input, context, compositionResolver);
-    default:
-      throw new CompositionCompileError([
-        {
-          path: [...context.path, "template"],
-          code: "unknown_template",
-          message: `未対応のVisualTemplateです: ${key}`,
-        },
-      ]);
+  const renderer =
+    context.skin.templateRenderers.get(key) ??
+    neutralVisualSkin.templateRenderers.get(key);
+  if (renderer === undefined) {
+    throw new CompositionCompileError([
+      {
+        path: [...context.path, "template"],
+        code: "unknown_template",
+        message: `未対応のVisualTemplateです: ${key}`,
+      },
+    ]);
   }
+  return renderer(input, context);
 }
 
 function makeContext(
   document: ContentDocument,
   theme: VisualThemeDefinition,
+  skin: ResolvedVisualSkin,
   assetResolver: AssetResolver,
   scope: RenderScope,
   path: (string | number)[],
@@ -555,6 +442,7 @@ function makeContext(
   const context: RenderContext = {
     document,
     theme,
+    skin,
     assetResolver,
     faceSetResolver,
     compositionResolver,
@@ -569,6 +457,7 @@ function makeContext(
         makeContext(
           document,
           theme,
+          skin,
           assetResolver,
           nestedScope,
           nestedPath,
@@ -660,7 +549,6 @@ function renderNestedVisual(node: NestedVisual, context: RenderContext): Rendere
     `${node.template.id}@${node.template.version}`,
     node.input,
     context,
-    context.compositionResolver,
   );
 }
 
@@ -1242,6 +1130,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     options.resolvedTheme ??
     (options.themeResolver ? options.themeResolver(document.visualTheme.id, document.visualTheme.version) : undefined) ??
     resolveVisualTheme(document);
+  const skin = options.resolvedSkin ?? resolveVisualSkin(resolveVisualThemeSkin(theme));
   const timeline = resolveTimeline(document);
   const sceneById = new Map(document.scenes.map((scene) => [scene.id, scene]));
 
@@ -1299,7 +1188,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     const sceneClips: string[] = [];
     const bgId = `kakeai-scene-${placement.sceneIndex}-bg`;
     const accentHex = resolveSceneAccentHex(scene, theme);
-    const background = sceneBackground(accentHex, theme);
+    const background = skin.sceneBackground(accentHex, theme);
     sceneClips.push(
       `<section id="${bgId}" class="clip" data-start="${startSec}" data-duration="${durationSec}"><div id="${bgId}-body" class="kakeai-scenebg" style="background:${background}"></div></section>`,
     );
@@ -1337,6 +1226,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const context = makeContext(
         document,
         theme,
+        skin,
         assetResolver,
         scope,
         cuePath,
@@ -1361,7 +1251,6 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         `${cue.template.id}@${cue.template.version}`,
         cue.input,
         context,
-        compositionResolver,
       );
       for (const assetId of rendered.assetIds) {
         trackAsset(assetId);

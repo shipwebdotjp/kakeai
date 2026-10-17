@@ -9,6 +9,7 @@ import type {
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import type { CompositionVersionResolved, CompositionVersionResolver } from "./composition-resolver";
 import type { RenderScope } from "./scope";
+import type { ResolvedVisualSkin } from "./skins/types";
 
 export type RenderAnimationAction = FigureAction | OnsetPreset;
 
@@ -78,6 +79,7 @@ export interface CueTiming {
 export interface RenderContext {
   document: ContentDocument;
   theme: VisualThemeDefinition;
+  skin: ResolvedVisualSkin;
   assetResolver: AssetResolver;
   faceSetResolver?: FaceSetResolver;
   compositionResolver?: CompositionVersionResolver;

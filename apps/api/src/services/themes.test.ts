@@ -6,6 +6,7 @@ import {
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
+  resolveVisualThemeSkin,
 } from "@kakeai/contracts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
@@ -108,6 +109,25 @@ describe("Theme Services & Routes", () => {
     const published2 = await themeService.publishThemeDraft(theme.id);
     expect(published2.latestRevision?.version).toBe(2);
     expect(published2.revisions.length).toBe(2);
+  });
+
+  it("upgrades legacy v1 definitions to v2 with an explicit neutral skin", async () => {
+    const theme = await themeService.createTheme({ name: "Skinned" });
+    expect(theme.draft?.definition.themeDefinitionSchemaVersion).toBe(2);
+    expect(resolveVisualThemeSkin(theme.draft!.definition)).toEqual({ id: "neutral", version: 1 });
+
+    const legacy = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    expect(legacy.themeDefinitionSchemaVersion).toBe(1);
+    const updated = await themeService.updateThemeDraft(theme.id, legacy);
+    expect(updated.draft?.definition.themeDefinitionSchemaVersion).toBe(2);
+    expect(resolveVisualThemeSkin(updated.draft!.definition)).toEqual({ id: "neutral", version: 1 });
+
+    const published = await themeService.publishThemeDraft(theme.id);
+    expect(published.latestRevision?.definition.themeDefinitionSchemaVersion).toBe(2);
+    expect(resolveVisualThemeSkin(published.latestRevision!.definition)).toEqual({
+      id: "neutral",
+      version: 1,
+    });
   });
 
   it("archives theme and keeps revision resolution intact", async () => {

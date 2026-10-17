@@ -2,12 +2,14 @@ import {
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
+  resolveVisualThemeSkin,
   visualThemeDefinitionSchema,
   visualThemeDefinitions,
   type ThemeDetail,
   type ThemeRevision as ThemeRevisionDto,
   type ThemeSummary,
   type VisualThemeDefinition,
+  type VisualThemeDefinitionV2,
   type VisualThemeRef,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
@@ -15,6 +17,17 @@ import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError } from "../http/validation.ts";
 import type { FontCatalogService } from "./font-catalog.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
+
+function asV2Definition(definition: VisualThemeDefinition): VisualThemeDefinitionV2 {
+  if (definition.themeDefinitionSchemaVersion === 2) {
+    return definition;
+  }
+  return {
+    ...definition,
+    themeDefinitionSchemaVersion: 2,
+    skin: resolveVisualThemeSkin(definition),
+  };
+}
 
 export class ThemeService {
   private resolver: ThemeResolver;
@@ -230,8 +243,8 @@ export class ThemeService {
         data: { name },
       });
 
-      const initialDefinition: VisualThemeDefinition = {
-        ...baseDefinition,
+      const initialDefinition: VisualThemeDefinitionV2 = {
+        ...asV2Definition(baseDefinition),
         id: theme.id,
         name,
         version: 1,
@@ -256,8 +269,8 @@ export class ThemeService {
       throw resourceNotFound("theme", themeId);
     }
 
-    const updatedDefinition: VisualThemeDefinition = {
-      ...definition,
+    const updatedDefinition: VisualThemeDefinitionV2 = {
+      ...asV2Definition(definition),
       id: themeId,
       name: theme.name,
     };
@@ -307,8 +320,8 @@ export class ThemeService {
     } else {
       // Reset draft definition back to base default
       const defaultDef = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
-      const resetDef: VisualThemeDefinition = {
-        ...defaultDef,
+      const resetDef: VisualThemeDefinitionV2 = {
+        ...asV2Definition(defaultDef),
         id: themeId,
         name: theme.name,
         version: 1,
@@ -351,8 +364,8 @@ export class ThemeService {
 
       const nextVersion = (aggregate._max.versionNumber ?? 0) + 1;
 
-      const publishedDefinition: VisualThemeDefinition = {
-        ...rawDefinition,
+      const publishedDefinition: VisualThemeDefinitionV2 = {
+        ...asV2Definition(rawDefinition),
         id: themeId,
         name: theme.name,
         version: nextVersion,

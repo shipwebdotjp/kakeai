@@ -586,7 +586,7 @@ POST /language-editions/:editionId/draft-preview は、未保存のContentDocume
 
 ### Render Jobの作成
 
-POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、参照CompositionVersionのID・bundle hash・manifest、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
+POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、参照CompositionVersionのID・bundle hash・manifest、解決済みVisual Skin Ref、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
 
 MVPの出力設定は固定であるため、リクエストボディは空のJSON objectとする。
 

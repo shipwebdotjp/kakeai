@@ -167,6 +167,7 @@ describe("render job creation", () => {
     expect(snapshot.template).toEqual({ id: "explanation-scenes", version: 1 });
     expect(snapshot.output).toEqual({ width: 1920, height: 1080, fps: 30, format: "mp4" });
     expect(snapshot.assets.map((asset) => asset.assetId)).toEqual([image.id]);
+    expect(snapshot.skin).toEqual({ id: "neutral", version: 1 });
 
     await jobs.cancelJob(prisma, job.id);
   });

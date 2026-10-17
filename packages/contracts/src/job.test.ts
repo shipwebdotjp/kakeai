@@ -34,6 +34,21 @@ describe("jobInputSnapshotSchema", () => {
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
 
+  it("accepts a render snapshot with a fixed skin ref", () => {
+    const snapshot = {
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      kind: "render",
+      scriptVersionId: "scr_001",
+      versionNumber: 1,
+      content: validContentDocument(),
+      assets: [],
+      skin: { id: "neutral", version: 1 },
+      template: { id: "explanation-scenes", version: 1 },
+      output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
+    };
+    expect(renderJobSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
   it("accepts an asset_ingest snapshot", () => {
     const snapshot = {
       snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,

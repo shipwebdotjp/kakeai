@@ -5,7 +5,7 @@ import { voiceAdapterIdSchema, voiceIdSchema, voiceProfileExtrasSchema } from ".
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 import { compositionManifestSchema } from "./composition";
 import { expressionPresetSchema, faceLayerSchema } from "./face-set";
-import { visualThemeDefinitionSchema } from "./content/theme";
+import { visualSkinRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 
 export const SNAPSHOT_SCHEMA_VERSION = 3 as const;
 
@@ -59,6 +59,7 @@ export const renderJobSnapshotSchema = z.object({
   compositionVersions: z.array(snapshotCompositionVersionRefSchema).optional().default([]),
   faceSets: z.array(snapshotFaceSetRefSchema).optional().default([]),
   themeDefinition: visualThemeDefinitionSchema.optional(),
+  skin: visualSkinRefSchema.optional(),
   fontDiagnostics: z.object({ missingFonts: z.array(z.string()) }).optional(),
   template: z.object({
     id: z.string().min(1),

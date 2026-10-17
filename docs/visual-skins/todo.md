@@ -4,12 +4,12 @@
 
 ## S1: Skin契約とneutral互換
 
-- [ ] `VisualSkinRef`、app管理Skin registry、Skin version、TemplateごとのSkin renderer登録契約を`packages/contracts`と`packages/video`へ追加する
-- [ ] Theme Definition Schema v2に`skin`を追加し、v1のskin欠落を`neutral@1`へ解決する互換規則を実装する
-- [ ] `neutral@1`を既存rendererと同じ出力意味で登録し、すべての既存VisualTemplateにfallbackを持たせる
-- [ ] Render Context、Theme preview、Render Job snapshotへ解決済みSkin Refを接続する。ContentDocumentの`visualTheme`形状は変えない
-- [ ] テスト: v1 Theme互換、未知Skin拒否、Skin未対応Templateのneutral fallback、snapshot固定
-- [ ] 完了条件: 既存ScriptVersionとJobを変えずに、新しいTheme RevisionがSkinを明示選択できる
+- [x] `VisualSkinRef`、app管理Skin registry、Skin version、TemplateごとのSkin renderer登録契約を`packages/contracts`と`packages/video`へ追加する
+- [x] Theme Definition Schema v2に`skin`を追加し、v1のskin欠落を`neutral@1`へ解決する互換規則を実装する
+- [x] `neutral@1`を既存rendererと同じ出力意味で登録し、すべての既存VisualTemplateにfallbackを持たせる
+- [x] Render Context、Theme preview、Render Job snapshotへ解決済みSkin Refを接続する。ContentDocumentの`visualTheme`形状は変えない
+- [x] テスト: v1 Theme互換、未知Skin拒否、Skin未対応Templateのneutral fallback、snapshot固定
+- [x] 完了条件: 既存ScriptVersionとJobを変えずに、新しいTheme RevisionがSkinを明示選択できる
 
 ## S2: `handmade-paper@1`とTheme選択
 

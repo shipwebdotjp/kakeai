@@ -3,12 +3,15 @@ import { join } from "node:path";
 import { createRenderJob, executeRenderJob } from "@hyperframes/producer";
 import {
   compileDocument,
+  resolveVisualSkin,
   type CompiledComposition,
   type ResolvedAssetKind,
 } from "@kakeai/video";
 import { computeDirectoryHashAndFiles } from "../storage/composition-store.ts";
 import {
+  NEUTRAL_VISUAL_SKIN_REF,
   parseRenderJobSnapshot,
+  resolveVisualThemeSkin,
   type RenderJobSnapshot,
 } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
@@ -191,11 +194,17 @@ export async function processRenderJob(
     }
 
     const fileById = new Map(assets.map((asset) => [asset.assetId, asset.fileName]));
+    const skinRef =
+      snapshot.skin ??
+      (snapshot.themeDefinition === undefined
+        ? NEUTRAL_VISUAL_SKIN_REF
+        : resolveVisualThemeSkin(snapshot.themeDefinition));
     let compiled: CompiledComposition;
     try {
       compiled = compileDocument({
         document: snapshot.content,
         resolvedTheme: snapshot.themeDefinition,
+        resolvedSkin: resolveVisualSkin(skinRef),
         assetResolver: (assetId) => {
           const fileName = fileById.get(assetId);
           const asset = assets.find((entry) => entry.assetId === assetId);
