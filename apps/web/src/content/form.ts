@@ -76,6 +76,7 @@ export interface LineFormValue {
   speechText: string;
   selectedAudioTakeId: string | null;
   expressionId: string | null;
+  gapBeforeMs: number;
   takes: TakeFormValue[];
 }
 
@@ -666,6 +667,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
           speechText: line.speechText,
           selectedAudioTakeId: line.selectedAudioTakeId,
           expressionId: line.expressionId,
+          gapBeforeMs: line.gapBeforeMs ?? 0,
           takes: takesByLine.get(line.id) ?? [],
         })),
         cues,
@@ -696,6 +698,7 @@ function buildLines(sceneValue: SceneFormValue, speakerIds: ReadonlySet<string>)
         : null;
     const speakerId =
       line.speakerId !== null && speakerIds.has(line.speakerId) ? line.speakerId : null;
+    const gapBeforeMs = intOrZero(line.gapBeforeMs);
     return {
       id: line.id,
       speakerId,
@@ -703,6 +706,7 @@ function buildLines(sceneValue: SceneFormValue, speakerIds: ReadonlySet<string>)
       speechText: line.speechText,
       selectedAudioTakeId: selected,
       expressionId: speakerId !== null ? line.expressionId : null,
+      ...(gapBeforeMs > 0 ? { gapBeforeMs } : {}),
     };
   });
 }
@@ -1442,6 +1446,7 @@ export function createEmptyLine(sceneId: string, existing: ReadonlySet<string>):
     speechText: "",
     selectedAudioTakeId: null,
     expressionId: null,
+    gapBeforeMs: 0,
     takes: [],
   };
 }
@@ -1951,6 +1956,7 @@ export function duplicateLineFormValue(
   copy.captionText = line.captionText;
   copy.speechText = line.speechText;
   copy.expressionId = line.expressionId;
+  copy.gapBeforeMs = line.gapBeforeMs;
   return copy;
 }
 

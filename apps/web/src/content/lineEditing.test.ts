@@ -29,7 +29,7 @@ function line(
   selectedAudioTakeId: string | null = null,
   expressionId: string | null = null,
 ): LineFormValue {
-  return { id, speakerId, captionText, speechText, selectedAudioTakeId, expressionId, takes };
+  return { id, speakerId, captionText, speechText, selectedAudioTakeId, expressionId, gapBeforeMs: 0, takes };
 }
 
 function speaker(id: string, name: string): SpeakerFormValue {

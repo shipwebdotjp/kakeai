@@ -8,15 +8,15 @@
 - [x] `CONTEXT.md` にNarration Gap、Insert Scene、Embedded Video Audioを追加する。
 - [x] 動画埋め込み音声を通常の動画Cueではなくinsert Sceneだけで自動再生する決定をADRに記録する。
 
-## [ ] R1 セリフ前の間
+## [x] R1 セリフ前の間
 
-- [ ] `NarrationSegment` に任意の `gapBeforeMs` を追加し、省略時を0として検証・正規化する。
-- [ ] タイムライン解決器を、auto/fixedの両方でgapを予約する規則へ変更する。
-- [ ] プレビューDTO・Cue Map・セリフジャンプが、gapとSegment本体を混同しないようにする。
-- [ ] `LinesEditor` に「このセリフの前の間（ms）」を追加する。
-- [ ] contracts/video/web/APIの境界テストを追加する。少なくとも先頭gap、音声あり・なし、fixed尺超過、line rangeがgapを含まないことを確認する。
-- [ ] ユーザーガイドに操作と制約を追加する。
-- [ ] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
+- [x] `NarrationSegment` に任意の `gapBeforeMs` を追加し、省略時を0として検証・正規化する。
+- [x] タイムライン解決器を、auto/fixedの両方でgapを予約する規則へ変更する。
+- [x] プレビューDTO・Cue Map・セリフジャンプが、gapとSegment本体を混同しないようにする。
+- [x] `LinesEditor` に「このセリフの前の間（ms）」を追加する。
+- [x] contracts/video/web/APIの境界テストを追加する。少なくとも先頭gap、音声あり・なし、fixed尺超過、line rangeがgapを含まないことを確認する。
+- [x] ユーザーガイドに操作と制約を追加する。
+- [x] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
 
 完了条件: 指定したgapが字幕・発話音声・発話演出を伴わず、プレビューとMP4で同じ位置・同じ長さになる。
 

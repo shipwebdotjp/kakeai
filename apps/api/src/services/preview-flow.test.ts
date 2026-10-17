@@ -349,6 +349,61 @@ describe("script version preview", () => {
     expect(preview.assets.map((asset) => asset.assetId)).toEqual([readyAudio.id]);
   });
 
+  it("shifts the preview line start and scene duration by the narration gap", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const audioAsset = await upload("audio.wav", join(fixturesDir, "audio.wav"));
+    await drainWorker();
+    const readyAudio = await assets.getAsset(prisma, audioAsset.asset.id);
+    expect(readyAudio.status).toBe("ready");
+    if (readyAudio.durationMs === null) {
+      throw new Error("expected audio duration");
+    }
+    const work = await works.createWork(prisma, "間プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-gap",
+        speakerId: null,
+        captionText: "間あき",
+        speechText: "まあき",
+        selectedAudioTakeId: "take-gap",
+        expressionId: null,
+        gapBeforeMs: 700,
+      },
+    ];
+    content.audioTakes = [
+      {
+        id: "take-gap",
+        narrationSegmentId: "line-gap",
+        source: "manual",
+        assetId: readyAudio.id,
+        durationMs: readyAudio.durationMs,
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+    const pointTiming = preview.timeline.scenes.find((scene) => scene.sceneId === point.id);
+    expect(pointTiming).toBeDefined();
+    expect(pointTiming!.durationMs).toBe(500 + 700 + readyAudio.durationMs + 500);
+    expect(pointTiming!.lines).toEqual([
+      { lineId: "line-gap", startMs: pointTiming!.startMs + 1200, durationMs: readyAudio.durationMs },
+    ]);
+  });
+
   it("returns 404 for an unknown script version", async () => {
     try {
       await scriptVersions.getScriptVersionPreview(prisma, config.directories, "scr_missing");

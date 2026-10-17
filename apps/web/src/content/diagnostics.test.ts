@@ -48,6 +48,7 @@ describe("diagnosticTarget", () => {
           takes: [],
           selectedAudioTakeId: null,
           expressionId: null,
+          gapBeforeMs: 0,
         },
         {
           id: "line-2",
@@ -57,6 +58,7 @@ describe("diagnosticTarget", () => {
           takes: [],
           selectedAudioTakeId: null,
           expressionId: null,
+          gapBeforeMs: 0,
         },
       ],
     },

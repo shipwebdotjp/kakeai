@@ -621,6 +621,34 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("omits a zero narration gap and round-trips a positive one", () => {
+    const base = createInitialContentDocument();
+    const point = pointScenes(base)[0]!;
+    point.lines = [
+      {
+        id: "l1",
+        speakerId: null,
+        captionText: "間あり",
+        speechText: "まあり",
+        selectedAudioTakeId: null,
+        expressionId: null,
+        gapBeforeMs: 800,
+      },
+    ];
+
+    const values = toFormValues(base);
+    expect(values.scenes.find((scene) => scene.id === point.id)?.lines[0]?.gapBeforeMs).toBe(800);
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(pointScenes(rebuilt)[0]!.lines[0]!.gapBeforeMs).toBe(800);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+
+    values.scenes.find((scene) => scene.id === point.id)!.lines[0]!.gapBeforeMs = 0;
+    const zeroed = buildContentDocument(base, values);
+    expect("gapBeforeMs" in pointScenes(zeroed)[0]!.lines[0]!).toBe(false);
+    expect(contentDocumentSchema.safeParse(zeroed).success).toBe(true);
+  });
+
   it("clears a dangling take selection when the take is removed", () => {
     const base = createInitialContentDocument();
     const point = pointScenes(base)[0]!;
@@ -1114,6 +1142,7 @@ describe("buildContentDocument", () => {
         selectedAudioTakeId: null,
         expressionId: "happy",
         takes: [],
+        gapBeforeMs: 0,
       },
     ];
 

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
-import type { VisualCue } from "@kakeai/contracts";
+import type { ContentDocument, VisualCue } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import {
   collectCompositionWindowIssues,
   collectOffsetRangeWarnings,
   collectSceneTransitionIssues,
+  resolveCueWindow,
   resolveTimeline,
   sceneTransitionOf,
 } from "./timeline";
@@ -26,7 +27,7 @@ describe("resolveTimeline", () => {
   it("places auto lines after the head padding", () => {
     const timeline = resolveTimeline(validContentDocument());
     expect(timeline.scenes[1]?.lines).toEqual([
-      { lineId: "line-p1-1", startMs: 4500, durationMs: 3000, endMs: 7500 },
+      { lineId: "line-p1-1", startMs: 4500, durationMs: 3000, endMs: 7500, gapBeforeMs: 0 },
     ]);
   });
 
@@ -101,6 +102,114 @@ describe("resolveTimeline", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(CompositionCompileError);
       expect((error as CompositionCompileError).issues[0]?.code).toBe("unknown_take");
+    }
+  });
+});
+
+describe("narration gapBeforeMs", () => {
+  function withLinesCue(startLineId: string, endLineId: string): ContentDocument {
+    const document = validContentDocument();
+    const base = document.scenes[1]!.visualCues[0]!;
+    document.scenes[1]!.visualCues.push({
+      ...base,
+      id: "vc-p1-lines",
+      range: { kind: "lines", startLineId, endLineId },
+    });
+    return document;
+  }
+
+  it("reserves a gap before an audio line in an auto scene", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.lines[0]!.gapBeforeMs = 700;
+    const timeline = resolveTimeline(document);
+    expect(timeline.scenes[1]!.durationMs).toBe(4700);
+    expect(timeline.scenes[1]!.lines[0]).toEqual({
+      lineId: "line-p1-1",
+      startMs: 5200,
+      durationMs: 3000,
+      endMs: 8200,
+      gapBeforeMs: 700,
+    });
+    expect(timeline.totalDurationMs).toBe(14700);
+  });
+
+  it("reserves a gap before a silent line in an auto scene", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[2]!;
+    scene.timing = { mode: "auto" };
+    scene.lines = [
+      {
+        id: "line-p2-1",
+        speakerId: null,
+        captionText: "字幕のみ",
+        speechText: "じまくのみ",
+        selectedAudioTakeId: null,
+        expressionId: null,
+        gapBeforeMs: 400,
+      },
+    ];
+    const timeline = resolveTimeline(document);
+    expect(timeline.scenes[2]!.durationMs).toBe(3900);
+    expect(timeline.scenes[2]!.lines[0]).toEqual({
+      lineId: "line-p2-1",
+      startMs: 8900,
+      durationMs: 2500,
+      endMs: 11400,
+      gapBeforeMs: 400,
+    });
+  });
+
+  it("excludes the gap from a lines range", () => {
+    const document = withLinesCue("line-p1-1", "line-p1-1");
+    document.scenes[1]!.lines[0]!.gapBeforeMs = 700;
+    const timeline = resolveTimeline(document);
+    const cue = document.scenes[1]!.visualCues.find((entry) => entry.id === "vc-p1-lines")!;
+    const window = resolveCueWindow(timeline.scenes[1]!, cue, ["scenes", 1, "visualCues"]);
+    expect(window).toEqual({ startMs: 1200, endMs: 4200 });
+  });
+
+  it("subtracts gaps from the fixed remainder distributed to silent lines", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    scene.timing = { mode: "fixed", durationMs: 5001 };
+    scene.lines[0]!.gapBeforeMs = 200;
+    scene.lines.push({
+      id: "line-p1-2",
+      speakerId: null,
+      captionText: "字幕のみ",
+      speechText: "じまくのみ",
+      selectedAudioTakeId: null,
+      expressionId: null,
+    });
+    scene.lines.push({
+      id: "line-p1-3",
+      speakerId: null,
+      captionText: "字幕のみ2",
+      speechText: "じまくのみ2",
+      selectedAudioTakeId: null,
+      expressionId: null,
+    });
+    const timeline = resolveTimeline(document);
+    expect(timeline.scenes[1]!.lines.map((line) => [line.startMs, line.durationMs])).toEqual([
+      [4200, 3000],
+      [7200, 901],
+      [8101, 900],
+    ]);
+  });
+
+  it("rejects a fixed scene whose audio and gaps exceed the duration", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    scene.timing = { mode: "fixed", durationMs: 3500 };
+    scene.lines[0]!.gapBeforeMs = 700;
+    try {
+      resolveTimeline(document);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompositionCompileError);
+      expect((error as CompositionCompileError).issues[0]?.code).toBe(
+        "fixed_duration_overflow",
+      );
     }
   });
 });

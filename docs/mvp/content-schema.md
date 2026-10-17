@@ -52,6 +52,8 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 }
 ```
 
+`gapBeforeMs` は任意の非負整数で、当該Segmentの**直前**に置く、字幕・発話・発話演出を伴わない無音区間のミリ秒である。省略時は `0` と解釈し、`0` は保存時にも省略できる。既存の有効JSONの解釈を変えない加算的拡張であり、`schemaVersion` は上げない。解決規則は [../timeline-inserts/spec.md](../timeline-inserts/spec.md) を正とする。
+
 `selectedAudioTakeId` は必須の `string | null` とする。`null` は、このラインに音声を配置せず字幕だけを表示することを表す。JSONではこのキーを省略しない。選択可能な音声は、ScriptVersion直下の `audioTakes` に `NarrationSegment.id` とともに管理する。MVPでは手動アップロードだけを作成し、将来TTSで生成した音声も同じ形で追加する。
 
 `expressionId` は必須の `string | null` とする。`null` は、このラインで表情を切り替えない（`normal` と解釈する）ことを表す。JSONではこのキーを省略しない。`expressionId` は、話者（`Speaker.characterId`）に対応するキャラクターの、そのSceneで有効な Character Appearance が参照する Face Set 内の Expression Preset を指す。`speakerId` が `null` のラインは `expressionId` も `null` に限る。詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。
@@ -201,8 +203,8 @@ MVPの編集画面は、各Sceneに **Cue一覧** を表示し、Cueの追加・
 
 Sceneの `timing` は判別unionである。新規の要点Sceneは原則として `auto` を使う。導入・結びはラインを持たないため、テンプレート既定の固定尺を使う。
 
-- `{ "mode": "auto" }`: 音声主導の既定値である。`selectedAudioTakeId` があるラインには参照AudioTakeの `durationMs` を、音声なしラインにはテンプレート既定の `silentCaptionDurationMs = 2500` を順に割り当てる。Scene尺は先頭パディング `500ms` + 全ラインの割当尺 + 末尾パディング `500ms` とする。これらの既定値は `explanation-scenes@1` の契約であり、各SceneのJSONには重複保存しない。
-- `{ "mode": "fixed", "durationMs": D }`: 利用者が明示的に尺を指定する例外である。音声ありラインは参照AudioTakeの尺を順に使用する。選択済み音声の合計を `A`、音声なしライン数を `N` とし、`A > D` は保存・レンダー前に `RENDER_INPUT_INVALID` とする。`N > 0` の場合は残りの `D - A` を音声なしラインへ均等配分し、割り切れないミリ秒は登録順に1msずつ配る。`N = 0` かつ `A < D` の余りはScene末尾の無音区間とする。
+- `{ "mode": "auto" }`: 音声主導の既定値である。`selectedAudioTakeId` があるラインには参照AudioTakeの `durationMs` を、音声なしラインにはテンプレート既定の `silentCaptionDurationMs = 2500` を順に割り当てる。各ラインの本体の前に、そのラインの `gapBeforeMs` を置く。Scene尺は先頭パディング `500ms` + 全ラインのgap合計 + 全ラインの割当尺 + 末尾パディング `500ms` とする。これらの既定値は `explanation-scenes@1` の契約であり、各SceneのJSONには重複保存しない。
+- `{ "mode": "fixed", "durationMs": D }`: 利用者が明示的に尺を指定する例外である。音声ありラインは参照AudioTakeの尺を順に使用する。選択済み音声の合計を `A`、全ラインのgap合計を `G`、音声なしライン数を `N` とし、`A + G > D` は保存・レンダー前に `RENDER_INPUT_INVALID` とする。`N > 0` の場合は残りの `D - A - G` を音声なしラインへ均等配分し、割り切れないミリ秒は登録順に1msずつ配る。`N = 0` かつ `A + G < D` の余りはScene末尾の無音区間とする。
 
 両モードともラインは配列の登録順に連続配置する。編集画面は、算出後のScene尺、各ラインの開始・終了、先頭・末尾パディングまたは余りを表示する。利用者は自由な字幕タイミング編集はできない。ラインを持たないSceneの区間は `kind: "scene"` で指定する。
 

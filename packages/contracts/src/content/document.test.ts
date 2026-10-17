@@ -13,6 +13,28 @@ describe("contentDocumentSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("treats an omitted or zero narration gapBeforeMs as valid", () => {
+    const doc = validContentDocument();
+    const line = doc.scenes[1]!.lines[0]!;
+    expect("gapBeforeMs" in line).toBe(false);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+
+    line.gapBeforeMs = 0;
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects a negative narration gapBeforeMs", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.lines[0]!.gapBeforeMs = -1;
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects a non-integer narration gapBeforeMs", () => {
+    const doc = validContentDocument();
+    doc.scenes[1]!.lines[0]!.gapBeforeMs = 12.5;
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
   it("requires voiceProfileId on speakers", () => {
     const doc = validContentDocument();
     delete (doc.speakers[0] as { voiceProfileId?: unknown }).voiceProfileId;

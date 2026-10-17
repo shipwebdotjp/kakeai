@@ -24,6 +24,7 @@ function makeLine(id: string, captionText: string): LineFormValue {
     speechText: "",
     selectedAudioTakeId: null,
     expressionId: null,
+    gapBeforeMs: 0,
     takes: [],
   };
 }

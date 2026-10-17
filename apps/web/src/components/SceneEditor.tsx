@@ -1076,12 +1076,21 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                       <p>シーン尺: {(placement.durationMs / 1000).toFixed(1)}秒</p>
                       {placement.lines.length > 0 && (
                         <ol className="my-1 ml-4 list-decimal p-0">
-                          {placement.lines.map((line) => (
-                            <li key={line.lineId}>
-                              {(line.startMs / 1000).toFixed(2)}s 〜{" "}
-                              {(line.endMs / 1000).toFixed(2)}s（
-                              {(line.durationMs / 1000).toFixed(2)}秒）
-                            </li>
+                          {placement.lines.flatMap((line) => {
+                            const entries: { key: string; text: string }[] = [];
+                            if (line.gapBeforeMs > 0) {
+                              entries.push({
+                                key: `${line.lineId}-gap`,
+                                text: `間 ${((line.startMs - line.gapBeforeMs) / 1000).toFixed(2)}s 〜 ${(line.startMs / 1000).toFixed(2)}s（${(line.gapBeforeMs / 1000).toFixed(2)}秒）`,
+                              });
+                            }
+                            entries.push({
+                              key: line.lineId,
+                              text: `${(line.startMs / 1000).toFixed(2)}s 〜 ${(line.endMs / 1000).toFixed(2)}s（${(line.durationMs / 1000).toFixed(2)}秒）`,
+                            });
+                            return entries;
+                          }).map((entry) => (
+                            <li key={entry.key}>{entry.text}</li>
                           ))}
                         </ol>
                       )}

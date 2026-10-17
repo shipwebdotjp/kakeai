@@ -491,6 +491,18 @@ function LineEditor({
         {...register(`scenes.${sceneIndex}.lines.${lineIndex}.speechText`)}
       />
       <label className="inline-flex items-center gap-1.5 text-sm">
+        このセリフの前の間（ms）
+        <input
+          type="number"
+          min={0}
+          className={`w-24 ${textFieldClass}`}
+          {...register(`scenes.${sceneIndex}.lines.${lineIndex}.gapBeforeMs`, {
+            valueAsNumber: true,
+            min: 0,
+          })}
+        />
+      </label>
+      <label className="inline-flex items-center gap-1.5 text-sm">
         キャラクター
         <select
           className={textFieldClass}

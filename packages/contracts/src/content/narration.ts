@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idSchema, positiveInt } from "./primitives";
+import { idSchema, nonNegativeInt, positiveInt } from "./primitives";
 
 export const narrationSegmentSchema = z.strictObject({
   id: idSchema,
@@ -8,6 +8,7 @@ export const narrationSegmentSchema = z.strictObject({
   speechText: z.string(),
   selectedAudioTakeId: idSchema.nullable(),
   expressionId: idSchema.nullable(),
+  gapBeforeMs: nonNegativeInt.optional(),
 });
 
 export const audioTakeSourceSchema = z.enum(["manual", "tts"]);

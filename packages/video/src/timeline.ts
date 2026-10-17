@@ -48,6 +48,7 @@ export interface LinePlacement {
   startMs: number;
   durationMs: number;
   endMs: number;
+  gapBeforeMs: number;
 }
 
 export interface ScenePlacement {
@@ -62,6 +63,10 @@ export interface ScenePlacement {
 export interface ResolvedTimeline {
   scenes: ScenePlacement[];
   totalDurationMs: number;
+}
+
+export function narrationGapBeforeMs(line: { gapBeforeMs?: number }): number {
+  return line.gapBeforeMs ?? 0;
 }
 
 function takeDurationById(document: ContentDocument): Map<string, number> {
@@ -98,8 +103,16 @@ function placeAutoLines(
   const placements: LinePlacement[] = [];
   let cursor = sceneStartMs + SCENE_PADDING_MS;
   for (const line of scene.lines) {
+    const gapBeforeMs = narrationGapBeforeMs(line);
+    cursor += gapBeforeMs;
     const durationMs = takeDurationMs(takes, line, sceneIndex) ?? SILENT_CAPTION_DURATION_MS;
-    placements.push({ lineId: line.id, startMs: cursor, durationMs, endMs: cursor + durationMs });
+    placements.push({
+      lineId: line.id,
+      startMs: cursor,
+      durationMs,
+      endMs: cursor + durationMs,
+      gapBeforeMs,
+    });
     cursor += durationMs;
   }
   return placements;
@@ -119,25 +132,31 @@ function placeFixedLines(
     (total, line) => total + (takeDurationMs(takes, line, sceneIndex) ?? 0),
     0,
   );
-  if (audioTotalMs > durationMs) {
+  const gapTotalMs = scene.lines.reduce(
+    (total, line) => total + narrationGapBeforeMs(line),
+    0,
+  );
+  if (audioTotalMs + gapTotalMs > durationMs) {
     return {
       lines: [],
       issues: [
         {
           path: ["scenes", sceneIndex, "timing"],
           code: "fixed_duration_overflow",
-          message: `選択済み音声の合計尺が固定尺を超えています。`,
+          message: `選択済み音声とセリフ前の間の合計尺が固定尺を超えています。`,
         },
       ],
     };
   }
   const silentLines = scene.lines.filter((line) => line.selectedAudioTakeId === null);
-  const remainderMs = durationMs - audioTotalMs;
+  const remainderMs = durationMs - audioTotalMs - gapTotalMs;
   const baseMs = silentLines.length === 0 ? 0 : Math.floor(remainderMs / silentLines.length);
   let extraMs = silentLines.length === 0 ? 0 : remainderMs % silentLines.length;
   const lines: LinePlacement[] = [];
   let cursor = sceneStartMs;
   for (const line of scene.lines) {
+    const gapBeforeMs = narrationGapBeforeMs(line);
+    cursor += gapBeforeMs;
     let lineDurationMs: number;
     if (line.selectedAudioTakeId === null) {
       lineDurationMs = baseMs + (extraMs > 0 ? 1 : 0);
@@ -147,7 +166,13 @@ function placeFixedLines(
     } else {
       lineDurationMs = takeDurationMs(takes, line, sceneIndex) ?? 0;
     }
-    lines.push({ lineId: line.id, startMs: cursor, durationMs: lineDurationMs, endMs: cursor + lineDurationMs });
+    lines.push({
+      lineId: line.id,
+      startMs: cursor,
+      durationMs: lineDurationMs,
+      endMs: cursor + lineDurationMs,
+      gapBeforeMs,
+    });
     cursor += lineDurationMs;
   }
   return { lines, issues: [] };
@@ -177,7 +202,8 @@ export function resolveTimeline(document: ContentDocument): ResolvedTimeline {
     }
     const lines = placeAutoLines(scene, takes, cursor, sceneIndex);
     const linesTotalMs = lines.reduce((total, line) => total + line.durationMs, 0);
-    const durationMs = SCENE_PADDING_MS + linesTotalMs + SCENE_PADDING_MS;
+    const gapsTotalMs = lines.reduce((total, line) => total + line.gapBeforeMs, 0);
+    const durationMs = SCENE_PADDING_MS + gapsTotalMs + linesTotalMs + SCENE_PADDING_MS;
     scenes.push({
       sceneId: scene.id,
       sceneIndex,
