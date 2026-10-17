@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Composition } from "@kakeai/contracts";
+import { CANVAS_PROFILE_LABELS, canvasProfileOf } from "@kakeai/contracts";
 import { useCompositions } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
 import { buttonNeutralClass, errorTextClass, metaTextClass } from "../ui";
@@ -73,6 +74,7 @@ export function CompositionLibraryPage() {
               <thead>
                 <tr>
                   <th className="pr-4">版</th>
+                  <th className="pr-4">キャンバス</th>
                   <th className="pr-4">バージョンID</th>
                   <th className="pr-4">bundle</th>
                   <th className="pr-4">entrypoint</th>
@@ -83,6 +85,9 @@ export function CompositionLibraryPage() {
                 {versions.map((version) => (
                   <tr key={version.id} className="border-t border-border">
                     <td className="py-1 pr-4">v{version.versionNumber}</td>
+                    <td className="py-1 pr-4">
+                      {CANVAS_PROFILE_LABELS[canvasProfileOf(version.manifest)]}
+                    </td>
                     <td className="py-1 pr-4 font-mono text-xs">{version.id}</td>
                     <td className="py-1 pr-4 font-mono text-xs" title={version.bundleHash}>
                       {shortHash(version.bundleHash)}

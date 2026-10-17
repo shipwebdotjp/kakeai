@@ -48,6 +48,7 @@ import { resolveAssetContent } from "./assets.ts";
 import {
   collectCompositionVersionIds,
   CompositionService,
+  getCompositionCanvasProfilesByVersionId,
   getCompositionDurationsByVersionId,
 } from "./compositions.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
@@ -865,6 +866,34 @@ export async function saveScriptVersion(
         message: `CompositionVersionが見つかりません: ${versionId}`,
       })),
     );
+  }
+
+  const compositionProfiles = await getCompositionCanvasProfilesByVersionId(
+    prisma,
+    compositionVersionIds,
+  );
+  const portraitIssues: ValidationIssue[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.template.id !== "composition.full-bleed") {
+        return;
+      }
+      const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
+      if (!parsedInput.success) {
+        return;
+      }
+      if (compositionProfiles.get(parsedInput.data.compositionVersionId) === "portrait") {
+        portraitIssues.push({
+          path: ["scenes", sceneIndex, "visualCues", cueIndex, "input", "compositionVersionId"],
+          code: "invalid_value",
+          message:
+            "composition.full-bleed@1 には横長(landscape)のCompositionVersionだけを指定できます。縦型はscene.device-frame@1の画面に配置してください。",
+        });
+      }
+    });
+  });
+  if (portraitIssues.length > 0) {
+    throw validationError(portraitIssues);
   }
   let compositionWindowIssues: ReturnType<typeof collectCompositionWindowIssues> = [];
   try {

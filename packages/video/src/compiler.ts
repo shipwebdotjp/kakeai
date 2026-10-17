@@ -15,6 +15,7 @@ import {
   quoteV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
+  canvasProfileOf,
   deviceFrameInputSchema,
   textBlockV1,
   type AnimationPreset,
@@ -475,6 +476,16 @@ function renderCompositionFullBleed(
 
   const hostId = context.scope.id("comp-host");
   const src = resolved.previewUrl ?? resolved.entrypoint;
+  if (canvasProfileOf(resolved.manifest) !== "landscape") {
+    throw new CompositionCompileError([
+      {
+        path: [...context.path, "input", "compositionVersionId"],
+        code: "invalid_composition_profile",
+        message:
+          "composition.full-bleed@1 には横長(landscape)のCompositionVersionだけを指定できます。縦型はscene.device-frame@1の画面に配置してください。",
+      },
+    ]);
+  }
   const width = resolved.manifest.width;
   const height = resolved.manifest.height;
   return {
@@ -679,7 +690,7 @@ const STYLES = [
   ".kakeai-deviceframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
   ".kakeai-deviceframe-screen{overflow:hidden;background:#000;box-shadow:0 24px 60px var(--kakeai-shadow);container-type:size;}",
   ".kakeai-deviceframe-laptop .kakeai-deviceframe-screen{width:72%;aspect-ratio:16/9;border-radius:18px;border:24px solid var(--kakeai-ink);}",
-  ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/19.5;border-radius:36px;border:18px solid var(--kakeai-ink);}",
+  ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/16;border-radius:36px;border:18px solid var(--kakeai-ink);}",
   ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
   ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:var(--kakeai-scrim);border-radius:var(--kakeai-radius-sm);padding:12px 36px;color:var(--kakeai-onmedia);text-shadow:0 2px 12px rgba(0,0,0,.6);}",
   ".kakeai-mockup{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",

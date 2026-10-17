@@ -680,4 +680,133 @@ describe("Composition Library Integration Tests", () => {
       },
     });
   });
+
+  it("test 16: portrait profile seeds 1080x1920 and publishes", async () => {
+    const comp = await service.createComposition({
+      name: "Portrait",
+      runtimeCompositionId: "cmp.test.portrait",
+      canvasProfile: "portrait",
+    });
+
+    const seeded = await service.getDraftFiles(comp.id);
+    expect(seeded.files["index.html"]).toContain('data-width="1080"');
+    expect(seeded.files["index.html"]).toContain('data-height="1920"');
+    const seededManifest = JSON.parse(seeded.files["manifest.json"]);
+    expect(seededManifest.canvasProfile).toBe("portrait");
+    expect(seededManifest.width).toBe(1080);
+    expect(seededManifest.height).toBe(1920);
+
+    const version = await service.publish(comp.id, {});
+    expect(version.manifest.canvasProfile).toBe("portrait");
+    expect(version.manifest.width).toBe(1080);
+    expect(version.manifest.height).toBe(1920);
+  });
+
+  it("test 17: publish rejects entry and manifest dimension mismatch", async () => {
+    const comp = await service.createComposition({
+      name: "Dim Mismatch",
+      runtimeCompositionId: "cmp.test.dim-mismatch",
+    });
+    await service.updateDraft(comp.id, {
+      files: {
+        "index.html":
+          '<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app" data-composition-id="cmp.test.dim-mismatch" data-width="1080" data-height="1920" data-duration="5" data-fps="30"></div><script>window.__timelines = window.__timelines || {};window.__timelines["cmp.test.dim-mismatch"] = { duration: 5 };</script></body></html>',
+      },
+    });
+    await expect(service.publish(comp.id, {})).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: "dimension_mismatch", path: ["entrypoint", "data-width"] }),
+        ]),
+      },
+    });
+  });
+
+  it("test 18: save rejects a portrait composition in composition.full-bleed", async () => {
+    const comp = await service.createComposition({
+      name: "Portrait Full Bleed",
+      runtimeCompositionId: "cmp.test.portrait-full-bleed",
+      canvasProfile: "portrait",
+    });
+    const version = await service.publish(comp.id, {});
+    const work = await works.createWork(db, "portrait full bleed", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.scenes[0]!.visualCues.push({
+      id: "cue-comp-portrait",
+      template: { id: "composition.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      input: { compositionVersionId: version.id },
+    });
+    await expect(
+      scriptVersions.saveScriptVersion(db, edition.id, {
+        sourceScriptVersionId: null,
+        content,
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: {
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            code: "invalid_value",
+            path: expect.arrayContaining(["compositionVersionId"]),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it("test 19: nested portrait composition previews and pins in a device screen", async () => {
+    const comp = await service.createComposition({
+      name: "Portrait Screen",
+      runtimeCompositionId: "cmp.test.portrait-screen",
+      canvasProfile: "portrait",
+    });
+    const version = await service.publish(comp.id, {});
+    const directories = dataDirectories(tmpDir);
+    const work = await works.createWork(db, "portrait screen", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.scenes[0]!.visualCues.push({
+      id: "cue-screen-portrait",
+      template: { id: "scene.device-frame", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: { enter: { preset: "none", durationMs: 0 }, exit: { preset: "none", durationMs: 0 } },
+      input: {
+        frame: "phone",
+        screen: { kind: "composition", compositionVersionId: version.id, fit: "contain" },
+      },
+    });
+
+    const saved = await scriptVersions.saveScriptVersion(db, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+
+    const preview = await scriptVersions.getScriptVersionPreview(
+      db,
+      directories,
+      saved.scriptVersion.id,
+    );
+    expect(preview.compositionHtml).toContain("--kakeai-cw:1080px");
+    expect(preview.compositionHtml).toContain("--kakeai-ch:1920px");
+    expect(preview.compositionHtml).toContain("aspect-ratio:9/16");
+
+    const draft = await scriptVersions.createDraftPreview(db, directories, edition.id, { content });
+    expect(draft.compositionHtml).toEqual(preview.compositionHtml);
+
+    const job = await renderJobs.createRenderJob(db, saved.scriptVersion.id, testFontCatalog);
+    const row = await db.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
+    expect(snapshot.compositionVersions).toHaveLength(1);
+    expect(snapshot.compositionVersions[0]!.manifest.canvasProfile).toBe("portrait");
+    await jobs.cancelJob(db, job.id);
+  });
 });

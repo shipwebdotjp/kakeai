@@ -15,6 +15,7 @@ import {
   listVisualTemplateCatalog,
   textBlockV1,
   type AnimationPreset,
+  type CanvasProfile,
   type CueLayer,
   type TemplateFieldSpec,
 } from "@kakeai/contracts";
@@ -35,6 +36,7 @@ import {
   NESTED_MODE_MEDIA,
   NESTED_MODE_SUFFIX,
   STANDING_TEMPLATE_ID,
+  compositionVersionOptions,
   createCueFormValue,
   lineIndex,
   lineOptionLabel,
@@ -398,16 +400,12 @@ interface CompositionVersionFieldProps {
   value: string;
   setField: (key: string, value: string) => void;
   fieldKey: string;
+  profiles?: readonly CanvasProfile[];
 }
 
-function CompositionVersionField({ label, value, setField, fieldKey }: CompositionVersionFieldProps) {
+function CompositionVersionField({ label, value, setField, fieldKey, profiles }: CompositionVersionFieldProps) {
   const compositions = useCompositions();
-  const options = (compositions.data ?? []).flatMap((composition) =>
-    (composition.versions ?? []).map((version) => ({
-      value: version.id,
-      label: `${composition.name} v${version.versionNumber}`,
-    })),
-  );
+  const options = compositionVersionOptions(compositions.data ?? [], profiles);
   const knowsCurrent = value.length === 0 || options.some((option) => option.value === value);
   return (
     <div className="my-2">
@@ -640,6 +638,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
         value={value}
         setField={setField}
         fieldKey={field.key}
+        profiles={["landscape"]}
       />
     );
   }

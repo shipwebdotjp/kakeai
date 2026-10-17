@@ -50,11 +50,16 @@ update the draft and publish a new version, then point the script at the new ver
 ```
 
 - `runtimeCompositionId` is stable and unique across Compositions. It must match the manifest.
+- Optional `canvasProfile` (`"landscape"` default, or `"portrait"`): the fixed internal canvas.
+  `landscape` is 1920×1080; `portrait` is 1080×1920. It is immutable per published version, so a
+  single Composition can publish both. The final render stays 1920×1080; the profile only sizes the
+  nested composition's own canvas.
 - Optional `entrypoint` (default `"index.html"`): a bundle-relative path. Absolute paths and
   `..` segments are rejected.
-- Creation seeds the draft (`index.html` = a minimal standalone composition; `manifest.json`
-  with `contentHash:"draft"`, `entrypoint`, `runtimeCompositionId`, `width:1920`, `height:1080`,
-  `durationMs:5000`, `dependencies:[]`). The seed is written to
+- Creation seeds the draft (`index.html` = a minimal standalone composition with the profile's
+  `data-width`/`data-height`; `manifest.json` with `contentHash:"draft"`, `entrypoint`,
+  `runtimeCompositionId`, `canvasProfile`, the profile dimensions, `durationMs:5000`,
+  `dependencies:[]`). The seed is written to
   `<dataRoot>/compositions/drafts/<compositionId>/` immediately at create time (see Storage layout).
 
 ## 3. Edit the draft bundle
@@ -83,8 +88,9 @@ update the draft and publish a new version, then point the script at the new ver
   (images, etc.); the server decodes and writes the bytes. The same normalized path must not
   appear in both `files` and `filesBase64`.
 - Instead of hand-writing `manifest.json`, pass a `manifest` object
-  (`{ "durationMs"?: number, "dependencies"?: string[] }`) and the server writes `manifest.json`
-  for you, filling `entrypoint`/`runtimeCompositionId`/`width`/`height`/`contentHash`. Direct
+  (`{ "durationMs"?: number, "dependencies"?: string[], "canvasProfile"?: "landscape" | "portrait" }`)
+  and the server writes `manifest.json` for you, filling `entrypoint`/`runtimeCompositionId`/`width`/`height`/`contentHash`.
+  `canvasProfile` defaults to the draft's current profile, or `landscape` if none. Direct
   `files["manifest.json"]` still works.
 - Errors are structured (see below); validate with a dry-run before the real publish.
 
@@ -119,6 +125,7 @@ write this by hand — use the `manifest` field of the draft update — but this
   "entrypoint": "index.html",
   "contentHash": "draft",
   "runtimeCompositionId": "cmp.news.trump-si-3reasons",
+  "canvasProfile": "landscape",
   "width": 1920,
   "height": 1080,
   "durationMs": 10000,
@@ -126,10 +133,13 @@ write this by hand — use the `manifest` field of the draft update — but this
 }
 ```
 
-- `width`/`height` are literals `1920`/`1080`; `durationMs` is a positive integer (ms).
-- `contentHash` is **optional** and not validated — the server computes `bundleHash` itself. On
-  publish the server sets the stored/returned `manifest.contentHash` to the real `bundleHash`
-  (the `manifest.json` inside the bundle still says `"draft"`; trust the returned `bundleHash`).
+- `canvasProfile` is optional (`"landscape"` or `"portrait"`); omitted resolves as `landscape`.
+  `width`/`height` must equal the profile's fixed dimensions (`landscape` 1920×1080, `portrait`
+  1080×1920). Arbitrary sizes and profile/dimension mismatches are rejected.
+- `durationMs` is a positive integer (ms). `contentHash` is **optional** and not validated — the
+  server computes `bundleHash` itself. On publish the server sets the stored/returned
+  `manifest.contentHash` to the real `bundleHash` (the `manifest.json` inside the bundle still says
+  `"draft"`; trust the returned `bundleHash`).
 - Every `dependencies` entry must exist as a file in the bundle, or publish fails. Binary files
   may be listed too.
 
@@ -144,7 +154,9 @@ runtime `runtimeCompositionId`**, and the same id is the `window.__timelines[...
 
 ### Authoring constraints (bundle v1, enforced)
 
-- 1920x1080 full-screen motion only; finite positive `durationMs`; output fps is 30.
+- Full-screen motion in one of the fixed Canvas Profiles: `landscape` (1920×1080) or `portrait`
+  (1080×1920); finite positive `durationMs`; output fps is 30. The root's `data-width`/`data-height`
+  must match the manifest's profile dimensions exactly.
 - **No audio**: `<audio>`, `<bgsound>`, or audio `<source>` is rejected outright.
 - **No external URLs / network-fetched dependencies.** Vendor libraries into the bundle (this
   project keeps `vendor/gsap.min.js`) and list them in `dependencies`. The scaffold's
@@ -214,7 +226,8 @@ Then publish for real:
 POST /api/v1/compositions/:compositionId/publish   body: {"entrypoint"?: "..."}
 ```
 
-Publish validates entrypoint existence, manifest match, `runtimeCompositionId` match, 1920x1080,
+Publish validates entrypoint existence, manifest match, `runtimeCompositionId` match, manifest
+dimensions against the Canvas Profile, entry root `data-width`/`data-height` against the manifest,
 finite `durationMs`, in-bundle dependencies, no external URLs, matching entry
 `data-composition-id`, no audio, and no HyperFrames lint errors, then copies the draft to an
 immutable bundle and returns the new `CompositionVersion` (`id`, `versionNumber`, `bundleHash`,
@@ -243,11 +256,14 @@ in one ScriptVersion: HyperFrames scopes each nested-composition instance (runti
 ID, CSS, DOM lookups, timeline registration, SVG ids), so there is no one-reference limit.
 
 - **Background placement is background-only.** You cannot put a `composition.full-bleed` cue on
-  `card`/`overlay`/`standing` layers — script save rejects it. To place a composition inside a
-  device screen, use `scene.device-frame@1` and set its `screen` to
+  `card`/`overlay`/`standing` layers — script save rejects it. It also accepts only `landscape`
+  Canvas Profile versions; a `portrait` version is rejected at save, draft preview, preview, and
+  render. To place a composition inside a device screen, use `scene.device-frame@1` and set its
+  `screen` to
   `{ "kind": "composition", "compositionVersionId": "<id>", "fit": "contain" | "cover",
-  "zoom"?: 0.5..3, "position"?: { "x": 0..1, "y": 0..1 } }`. Other composite templates (site
-  mockup, TV, custom bezels) can gain a composition slot later.
+  "zoom"?: 0.5..3, "position"?: { "x": 0..1, "y": 0..1 } }`. Both Canvas Profiles work in a device
+  screen; the `phone` frame is 9:16, so a `portrait` composition fits it at `contain`. Other
+  composite templates (site mockup, TV, custom bezels) can gain a composition slot later.
 - **Nested device-screen composition timing.** The child plays from 0 at the cue start and is
   hidden at its own `durationMs` (no last-frame hold, no loop). Cue/Scene crossfade only changes
   the parent device frame's visibility; the child clock is not reset.

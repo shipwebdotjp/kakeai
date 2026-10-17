@@ -85,7 +85,7 @@ Kakeai の Web UI は、ブラウザで作品と台本を編集する画面で�
 
 画面右上の「コンポジション」から、AI が作成・公開した全画面モーション（Composition）の一覧を確認できます。
 
-- 各 Composition の **名前・runtime ID・draft の状態・公開バージョン数** が並びます。押すと選択され、右に draft の entrypoint と公開バージョン（版番号・バージョンID・bundle ハッシュ・entrypoint・公開日時）が表示されます。
+- 各 Composition の **名前・runtime ID・draft の状態・公開バージョン数** が並びます。押すと選択され、右に draft の entrypoint と公開バージョン（版番号・キャンバス・バージョンID・bundle ハッシュ・entrypoint・公開日時）が表示されます。
 - Composition の作成・編集・公開は AI（HyperFrames）が行います。Web UI からの HTML 編集や公開操作はありません。
 - 台本で使うには、シーンの Cue に **コンポジション背景（全面）** を追加し、入力欄から公開済みバージョンを選びます。Scene 背景（range: scene, layer: background）にのみ置け、同じバージョンは 1 つの台本内で 1 回だけ使えます。
 - 詳しくは [Composition Library](../composition-library.md) を参照してください。

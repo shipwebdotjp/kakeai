@@ -923,6 +923,87 @@ describe("compileDocument", () => {
     expect(compiled.compositionVersions[0]!.id).toBe("ver-nested");
   });
 
+  it("renders a portrait composition in a phone screen at default contain without letterbox", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-portrait",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "phone",
+          screen: { kind: "composition", compositionVersionId: "ver-portrait", fit: "contain" },
+        },
+      }),
+    ];
+    const portraitResolver: CompositionVersionResolver = (versionId) => ({
+      id: versionId,
+      runtimeCompositionId: "cmp.portrait",
+      entrypoint: "index.html",
+      bundleHash: "bundle-portrait",
+      storageKey: "compositions/portrait",
+      previewUrl: "/preview/portrait",
+      manifest: {
+        entrypoint: "index.html",
+        runtimeCompositionId: "cmp.portrait",
+        canvasProfile: "portrait",
+        width: 1080,
+        height: 1920,
+        durationMs: 5000,
+        dependencies: [],
+      },
+    });
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      compositionResolver: portraitResolver,
+    });
+    expect(compiled.html).toContain("aspect-ratio:9/16");
+    expect(compiled.html).toContain("--kakeai-cw:1080px;--kakeai-ch:1920px");
+    expect(compiled.html).toContain(
+      "--kakeai-s:min(tan(atan2(100cqw,1080px)),tan(atan2(100cqh,1920px)))",
+    );
+    expect(compiled.html).toContain('data-width="1080"');
+    expect(compiled.html).toContain('data-height="1920"');
+    expect(compiled.compositionVersions[0]!.manifest.canvasProfile).toBe("portrait");
+  });
+
+  it("rejects a portrait composition in composition.full-bleed", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-fullbleed-portrait",
+        template: { id: "composition.full-bleed", version: 1 },
+        layer: "background",
+        input: { compositionVersionId: "ver-portrait" },
+      }),
+    ];
+    const portraitResolver: CompositionVersionResolver = (versionId) => ({
+      id: versionId,
+      runtimeCompositionId: "cmp.portrait",
+      entrypoint: "index.html",
+      bundleHash: "bundle-portrait",
+      storageKey: "compositions/portrait",
+      previewUrl: "/preview/portrait",
+      manifest: {
+        entrypoint: "index.html",
+        runtimeCompositionId: "cmp.portrait",
+        canvasProfile: "portrait",
+        width: 1080,
+        height: 1920,
+        durationMs: 5000,
+        dependencies: [],
+      },
+    });
+    expect(() =>
+      compileDocument({
+        document,
+        assetResolver: resolver,
+        compositionResolver: portraitResolver,
+      }),
+    ).toThrow(/composition\.full-bleed/);
+  });
+
   it("applies cover fit, zoom and position to a nested composition", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [

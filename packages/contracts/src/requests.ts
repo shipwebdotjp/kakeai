@@ -2,6 +2,7 @@ import { z } from "zod";
 import { idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { templateRefSchema } from "./content/nested";
+import { canvasProfileSchema } from "./composition";
 import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 import { voiceIdSchema } from "./voice-profile";
 import { assetTagsSchema } from "./asset";
@@ -87,6 +88,7 @@ export const createCompositionRequestSchema = z.strictObject({
   name: z.string().trim().min(1),
   runtimeCompositionId: z.string().trim().min(1),
   entrypoint: bundleRelativePathSchema.optional(),
+  canvasProfile: canvasProfileSchema.optional(),
 });
 
 export type CreateCompositionRequest = z.infer<typeof createCompositionRequestSchema>;
@@ -94,6 +96,7 @@ export type CreateCompositionRequest = z.infer<typeof createCompositionRequestSc
 export const compositionDraftManifestInputSchema = z.strictObject({
   durationMs: z.number().int().positive().optional(),
   dependencies: z.array(z.string().min(1)).optional(),
+  canvasProfile: canvasProfileSchema.optional(),
 });
 
 export type CompositionDraftManifestInput = z.infer<typeof compositionDraftManifestInputSchema>;

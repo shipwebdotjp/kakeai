@@ -3,6 +3,7 @@ import {
   contentDocumentSchema,
   createInitialContentDocument,
   createPointScene,
+  type Composition,
   type ContentDocument,
   type PointScene,
   type VisualCue,
@@ -12,6 +13,7 @@ import {
   cloneSceneFormValue,
   collectLineIds,
   collectSceneIds,
+  compositionVersionOptions,
   countAppearanceReferences,
   countCharacterReferences,
   createCueFormValue,
@@ -2071,3 +2073,76 @@ describe("quote form", () => {
     expect(effects[0]!.effect.kind).toBe("appear");
   });
 });
+
+describe("compositionVersionOptions", () => {
+  const landscape = {
+    id: "cmp-1",
+    name: "Landscape",
+    runtimeCompositionId: "cmp.landscape",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    versions: [
+      {
+        id: "ver-landscape",
+        compositionId: "cmp-1",
+        versionNumber: 1,
+        bundleHash: "hash-l",
+        storageKey: "compositions/bundles/hash-l",
+        manifest: {
+          entrypoint: "index.html",
+          runtimeCompositionId: "cmp.landscape",
+          width: 1920,
+          height: 1080,
+          durationMs: 5000,
+          dependencies: [],
+        },
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  } satisfies Composition;
+
+  const portrait = {
+    id: "cmp-2",
+    name: "Portrait",
+    runtimeCompositionId: "cmp.portrait",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    versions: [
+      {
+        id: "ver-portrait",
+        compositionId: "cmp-2",
+        versionNumber: 2,
+        bundleHash: "hash-p",
+        storageKey: "compositions/bundles/hash-p",
+        manifest: {
+          entrypoint: "index.html",
+          runtimeCompositionId: "cmp.portrait",
+          canvasProfile: "portrait",
+          width: 1080,
+          height: 1920,
+          durationMs: 5000,
+          dependencies: [],
+        },
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  } satisfies Composition;
+
+  it("labels versions with their canvas profile", () => {
+    const options = compositionVersionOptions([landscape, portrait]);
+    expect(options.map((option) => option.value)).toEqual(["ver-landscape", "ver-portrait"]);
+    expect(options[0]!.label).toContain("横長");
+    expect(options[1]!.label).toContain("縦長");
+  });
+
+  it("filters to the requested profiles", () => {
+    const options = compositionVersionOptions([landscape, portrait], ["landscape"]);
+    expect(options.map((option) => option.value)).toEqual(["ver-landscape"]);
+  });
+
+  it("treats a legacy manifest without a profile as landscape", () => {
+    const options = compositionVersionOptions([landscape], ["landscape"]);
+    expect(options).toHaveLength(1);
+  });
+});
+

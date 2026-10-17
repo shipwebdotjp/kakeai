@@ -68,3 +68,15 @@
 - [x] preview の content URL 解決、render snapshot、bundle materialize を入れ子参照へ対応する
 - [x] テスト: Zod 契約、laptop／phone の contain・cover、zoom・position、child 終端での非表示、preview URL、snapshot 固定、R2 回帰、UI form の round-trip・非破壊保存
 - [x] 完了条件: 端末画面に publish 済み Composition を埋め込み、保存・プレビュー・MP4出力できる
+
+## C7 Canvas Profile（縦型 Composition）
+
+- [x] `CanvasProfile`（`landscape` = 1920×1080 / `portrait` = 1080×1920）を `CompositionVersion` の不変プロパティとし、manifest に任意の `canvasProfile` を追加して寸法一致を検証する
+- [x] Composition 作成・draft manifest API に `canvasProfile`（既定 landscape）を追加し、seed HTML と manifest を選択寸法で作る
+- [x] publish で entry root の `data-width` / `data-height` が manifest プロファイル寸法と一致することを検証する
+- [x] 保存・draft preview・preview・render で `composition.full-bleed@1` の portrait 参照を拒否する
+- [x] `scene.device-frame@1` の phone screen を 9:16 に変更し（保存済み `@1` phone 参照が無いことを確認）、laptop の挙動を維持する
+- [x] UI で公開 version の Canvas Profile を表示し、full-bleed selector を landscape に絞る
+- [x] テスト: manifest 互換・検証、portrait の draft seed、entry/manifest 寸法不一致拒否、phone の既定 fit 描画、full-bleed portrait 拒否、selector フィルタ、preview／render snapshot の一致
+- [x] [ADR-0066](../adr/0066-canvas-profile-as-version-property.md) を追加し、仕様・ロードマップ・API契約・content-schema・CONTEXT・作者スキル・ユーザーガイドを同期する
+- [x] 完了条件: landscape と portrait の版を publish し、portrait を端末画面へ埋め込んで保存・プレビュー・MP4出力でき、full-bleed の誤用は拒否される

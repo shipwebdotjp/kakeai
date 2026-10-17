@@ -92,6 +92,10 @@ _Avoid_: Composition Version, Script Version
 An immutable published bundle of one Composition that a Script Version may reference.
 _Avoid_: Composition Draft, Asset Rendition
 
+**Canvas Profile**:
+The fixed internal canvas a Composition Version renders into, chosen from a small set: `landscape` (1920×1080) or `portrait` (1080×1920). It is immutable per Composition Version and does not change the fixed 1920×1080 size of the surrounding render.
+_Avoid_: Output size, resolution, aspect ratio
+
 **Job**:
 A durable record of one asynchronous operation on a Work or its edition.
 _Avoid_: Render, task

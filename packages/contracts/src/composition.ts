@@ -1,15 +1,51 @@
 import { z } from "zod";
 import { idSchema } from "./content/primitives.ts";
 
-export const compositionManifestSchema = z.strictObject({
-  entrypoint: z.string().min(1),
-  contentHash: z.string().min(1).optional(),
-  runtimeCompositionId: z.string().min(1),
-  width: z.literal(1920),
-  height: z.literal(1080),
-  durationMs: z.number().int().positive(),
-  dependencies: z.array(z.string().min(1)),
-});
+export const canvasProfileSchema = z.enum(["landscape", "portrait"]);
+
+export type CanvasProfile = z.infer<typeof canvasProfileSchema>;
+
+export const DEFAULT_CANVAS_PROFILE: CanvasProfile = "landscape";
+
+export const CANVAS_PROFILE_DIMENSIONS: Record<CanvasProfile, { width: number; height: number }> = {
+  landscape: { width: 1920, height: 1080 },
+  portrait: { width: 1080, height: 1920 },
+};
+
+export const CANVAS_PROFILE_LABELS: Record<CanvasProfile, string> = {
+  landscape: "横長 (1920×1080)",
+  portrait: "縦長 (1080×1920)",
+};
+
+export function canvasProfileDimensions(profile: CanvasProfile): { width: number; height: number } {
+  return CANVAS_PROFILE_DIMENSIONS[profile];
+}
+
+export function canvasProfileOf(manifest: { canvasProfile?: CanvasProfile | undefined }): CanvasProfile {
+  return manifest.canvasProfile ?? DEFAULT_CANVAS_PROFILE;
+}
+
+export const compositionManifestSchema = z
+  .strictObject({
+    entrypoint: z.string().min(1),
+    contentHash: z.string().min(1).optional(),
+    runtimeCompositionId: z.string().min(1),
+    canvasProfile: canvasProfileSchema.optional(),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    durationMs: z.number().int().positive(),
+    dependencies: z.array(z.string().min(1)),
+  })
+  .superRefine((manifest, ctx) => {
+    const expected = CANVAS_PROFILE_DIMENSIONS[canvasProfileOf(manifest)];
+    if (manifest.width !== expected.width || manifest.height !== expected.height) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["width"],
+        message: `寸法は ${expected.width}x${expected.height} (${canvasProfileOf(manifest)}) である必要があります（現在 ${manifest.width}x${manifest.height}）`,
+      });
+    }
+  });
 
 export type CompositionManifest = z.infer<typeof compositionManifestSchema>;
 

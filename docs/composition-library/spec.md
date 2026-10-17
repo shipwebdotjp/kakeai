@@ -21,11 +21,11 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 
 CompositionVersion は次の manifest を持つ。
 
-- bundle 内の相対 entrypoint、内容ハッシュ、安定した runtime composition ID、幅、高さ、有限の既定尺。
+- bundle 内の相対 entrypoint、内容ハッシュ、安定した runtime composition ID、Canvas Profile とその寸法、有限の既定尺。
 - すべての子 composition、固定画像、動画、フォントなどの bundle 内依存。
 - 音声トラックを含まないこと。
 
-v1 は 1920×1080 の全画面モーションだけを受け入れる。外部 URL、絶対パス、ネットワーク取得に依存する素材は許可しない。AI は通常の HyperFrames composition QA と preview を通してから publish するが、外部 project 用の sandbox や手動承認フローは持たない。publish 時はサーバが entry HTML に HyperFrames lint を実行し、error がある bundle は拒否する（warning は許容する）。
+v1 は `landscape`（1920×1080）と `portrait`（1080×1920）の全画面モーションを受け入れる。Canvas Profile は version ごとの不変プロパティであり、1つの Composition が両プロファイルの版を公開できる。外部 URL、絶対パス、ネットワーク取得に依存する素材は許可しない。AI は通常の HyperFrames composition QA と preview を通してから publish するが、外部 project 用の sandbox や手動承認フローは持たない。publish 時はサーバが entry HTML に HyperFrames lint を実行し、error がある bundle は拒否する（warning は許容する）。
 
 ### manifest と entry の契約
 
@@ -36,6 +36,7 @@ v1 は 1920×1080 の全画面モーションだけを受け入れる。外部 U
   "entrypoint": "index.html",
   "contentHash": "draft",
   "runtimeCompositionId": "cmp.motion.example",
+  "canvasProfile": "landscape",
   "width": 1920,
   "height": 1080,
   "durationMs": 10000,
@@ -43,15 +44,24 @@ v1 は 1920×1080 の全画面モーションだけを受け入れる。外部 U
 }
 ```
 
-- `width` / `height` は `1920` / `1080` 固定、`durationMs` は正の整数（ms）。
+- `canvasProfile` は任意で、`landscape` または `portrait`。欠落時は `landscape` として解決する（既存 bundle の互換）。`width` / `height` はプロファイルの固定寸法（`landscape` = 1920×1080、`portrait` = 1080×1920）と一致しなければならない。任意の寸法や profile/寸法不一致は拒否する。`durationMs` は正の整数（ms）。
 - `contentHash` は任意。サーバが publish 時に bundle 内容から `bundleHash` を計算し、保存・返却する manifest の `contentHash` にはその実ハッシュを設定する（bundle 内の `manifest.json` は書き換えない）。
 - `dependencies` の各要素は bundle 内に実在する相対パスでなければならない。バイナリ（画像など）も依存に含められる。
-- entry HTML は standalone 形式（`<body>` 直下に root、`<style>` は `<head>`）で書き、root の `data-composition-id` は `runtimeCompositionId` と一致させる。`<template>` 形式はコンパイル時に `<head>` の style/script が破棄されるため使わない。
+- entry HTML は standalone 形式（`<body>` 直下に root、`<style>` は `<head>`）で書き、root の `data-composition-id` は `runtimeCompositionId` と、root の `data-width` / `data-height` はプロファイル寸法とそれぞれ一致させる。`<template>` 形式はコンパイル時に `<head>` の style/script が破棄されるため使わない。
 - entry に `http(s)://` の外部 URL を含めてはならない。ライブラリは bundle へ同梱し `dependencies` に登録する。
+
+### Canvas Profile
+
+Canvas Profile は CompositionVersion が描画する内部キャンバスの固定セットである。
+
+- `landscape` = 1920×1080（既定）、`portrait` = 1080×1920。
+- version ごとの不変プロパティで、1つの Composition が landscape と portrait の版を別々に公開できる。ScriptVersion は使いたい版の ID を参照するだけで、既存参照は変わらない。
+- 最終レンダー出力は常に 1920×1080。Canvas Profile は親 Composition へ入れ子配置される child 自身のキャンバスだけを定義する。
+- `composition.full-bleed@1` は landscape の version だけを background に置ける。portrait は `scene.device-frame@1` の画面（9:16）に配置する。portrait を full-bleed へ保存・preview・render すると拒否する。
 
 ### authoring API
 
-- `POST /compositions/:id/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取る。`files` はテキストファイル、`filesBase64` は base64 文字列で表したバイナリファイル（画像など）で、指定したファイルだけを上書きする部分更新（削除はしない）。同じ正規化パスを両方に含めることはできない。`manifest` を渡すとサーバが `manifest.json` を生成する（`entrypoint`・`runtimeCompositionId`・`width`・`height`・`contentHash` はサーバが設定し、`durationMs`・`dependencies` を上書きする）。`files["manifest.json"]` の直書きも引き続き可能。
+- `POST /compositions/:id/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取る。`files` はテキストファイル、`filesBase64` は base64 文字列で表したバイナリファイル（画像など）で、指定したファイルだけを上書きする部分更新（削除はしない）。同じ正規化パスを両方に含めることはできない。`manifest` を渡すとサーバが `manifest.json` を生成する（`entrypoint`・`runtimeCompositionId`・`width`・`height`・`contentHash` はサーバが設定し、`canvasProfile`・`durationMs`・`dependencies` を上書きする）。`canvasProfile` 省略時は現在の draft のプロファイル、無ければ `landscape` を使う。`files["manifest.json"]` の直書きも引き続き可能。
 - `GET /compositions/:id/draft/files` は `{ entrypoint, files, binaryFiles? }` を返し、seed を含む draft の内容を読み戻せる。`files` は UTF-8 テキスト、`binaryFiles` は base64 文字列で表したバイナリ（存在する場合のみ）。
 - `POST /compositions/:id/publish?dryRun=true` は version を作らずに publish と同じ検証だけを行い、成功時 `{ manifest }` を返す。失敗は常に 422 `VALIDATION_ERROR` と `details.issues`（`path`・`code`・`message`）で返し、manifest・依存・entry・外部 URL・entry id・lint の各問題を列挙する。
 
@@ -104,7 +114,7 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 - 子は Cue 開始から 0 秒で再生し、child 尺で非表示にする。freeze と loop は持たない。Cue／Scene crossfade は親 device frame の可視性だけを変え、child の時計はリセットしない。
 - 子の配置は slot の content box を基準に fit → zoom → position（object-position 相当の crop）で決める。親 screen は既存の角丸・枠・`overflow:hidden` で最終 clip を所有し、`contain` の余白は既存の黒背景を見せる。
 - 配置は frame ごとの px 定数を持たず、**slot 要素を CSS `container-type: size` にする**ことで成立する。コンパイラは `cqw`/`cqh` と `tan(atan2())` から無単位の倍率を求め、固定 1920×1080 の子を `transform: scale()` で拡縮する。trusted template が Composition slot を設けるときは、その要素を `container-type: size` にする（独自ベゼル・将来の TV／site mockup も同じ契約）。
-- 現行 canvas は 1920×1080 固定。phone では `contain` の余白または `cover` の crop を選ぶ。
+- 現行 canvas は `landscape`（1920×1080）と `portrait`（1080×1920）の2プロファイル。slot のスケーリングは解決済み manifest の寸法から導出し、`portrait` は phone screen（9:16）にそのまま収まる。`contain` の余白または `cover` の crop を選べる。
 
 ScriptVersion の保存、プレビュー、Render Job の作成時に CompositionVersion の存在と bundle 完全性を確認する。draft、削除済み version、破損した bundle は参照できない。
 

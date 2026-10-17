@@ -2,15 +2,20 @@ import { mkdir, readdir, readFile, stat, writeFile, cp } from "node:fs/promises"
 import { randomUUID } from "node:crypto";
 import { join, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { prepareHyperframeLintBody, runHyperframeLint } from "@hyperframes/producer";
-import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH, escapeHtmlAttribute, toSecondsText } from "@kakeai/video";
+import { OUTPUT_FPS, escapeHtmlAttribute, toSecondsText } from "@kakeai/video";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import {
+  type CanvasProfile,
   type Composition,
   type CompositionDraft,
   type CompositionDraftFiles,
   type CompositionVersion,
   type CompositionManifest,
   type ContentDocument,
+  CANVAS_PROFILE_DIMENSIONS,
+  DEFAULT_CANVAS_PROFILE,
+  canvasProfileOf,
+  canvasProfileSchema,
   compositionDraftFilesSchema,
   compositionFullBleedInputSchema,
   compositionManifestSchema,
@@ -111,6 +116,15 @@ function findExternalUrl(content: string): string | undefined {
 function findCompositionId(html: string): string | undefined {
   const match = html.match(/<[^>]*\bdata-composition-id\s*=\s*["']([^"']*)["']/i);
   return match?.[1];
+}
+
+function findEntryDimensions(html: string): { width?: string; height?: string } | undefined {
+  const width = html.match(/\bdata-width\s*=\s*["']([^"']*)["']/i)?.[1];
+  const height = html.match(/\bdata-height\s*=\s*["']([^"']*)["']/i)?.[1];
+  if (width === undefined && height === undefined) {
+    return undefined;
+  }
+  return { width, height };
 }
 
 interface DraftBudget {
@@ -233,12 +247,15 @@ function assertSafeRelativePath(relativePath: string, label: string): void {
 
 const DRAFT_DEFAULT_DURATION_MS = 5000;
 
-function buildDefaultEntryHtml(runtimeCompositionId: string): string {
+function buildDefaultEntryHtml(
+  runtimeCompositionId: string,
+  dimensions: { width: number; height: number },
+): string {
   const attr = escapeHtmlAttribute(runtimeCompositionId);
   const jsKey = JSON.stringify(runtimeCompositionId).replace(/</g, "\\u003c");
   const durationSec = toSecondsText(DRAFT_DEFAULT_DURATION_MS);
   const timeline = `{ duration: function () { return ${durationSec}; }, totalTime: function (t) { return t === undefined ? 0 : this; }, seek: function () { return this; }, play: function () { return this; }, pause: function () { return this; } }`;
-  return `<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app" data-composition-id="${attr}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${durationSec}" data-fps="${OUTPUT_FPS}"></div><script>window.__timelines = window.__timelines || {};window.__timelines[${jsKey}] = ${timeline};<\/script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app" data-composition-id="${attr}" data-width="${dimensions.width}" data-height="${dimensions.height}" data-duration="${durationSec}" data-fps="${OUTPUT_FPS}"></div><script>window.__timelines = window.__timelines || {};window.__timelines[${jsKey}] = ${timeline};<\/script></body></html>`;
 }
 
 function resolveWithin(baseDir: string, relativePath: string, label: string): string {
@@ -329,6 +346,7 @@ export async function validateCompositionBundle(
   }
 
   if (manifest !== undefined) {
+    const expectedDimensions = CANVAS_PROFILE_DIMENSIONS[canvasProfileOf(manifest)];
     if (manifest.entrypoint !== entrypoint) {
       issues.push({
         path: ["manifest", "entrypoint"],
@@ -343,11 +361,11 @@ export async function validateCompositionBundle(
         message: `manifest の runtimeCompositionId '${manifest.runtimeCompositionId}' が Composition '${expectedRuntimeCompositionId}' と一致しません`,
       });
     }
-    if (manifest.width !== OUTPUT_WIDTH || manifest.height !== OUTPUT_HEIGHT) {
+    if (manifest.width !== expectedDimensions.width || manifest.height !== expectedDimensions.height) {
       issues.push({
         path: ["manifest", "width"],
         code: "invalid_dimensions",
-        message: `寸法は ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} である必要があります（現在 ${manifest.width}x${manifest.height}）`,
+        message: `寸法は ${expectedDimensions.width}x${expectedDimensions.height} (${canvasProfileOf(manifest)}) である必要があります（現在 ${manifest.width}x${manifest.height}）`,
       });
     }
     if (!Number.isFinite(manifest.durationMs) || manifest.durationMs <= 0) {
@@ -409,6 +427,22 @@ export async function validateCompositionBundle(
       });
     }
 
+    if (manifest !== undefined) {
+      const expected = CANVAS_PROFILE_DIMENSIONS[canvasProfileOf(manifest)];
+      const entryDimensions = findEntryDimensions(entryHtml);
+      if (entryDimensions !== undefined) {
+        const widthMatches = Number(entryDimensions.width) === expected.width;
+        const heightMatches = Number(entryDimensions.height) === expected.height;
+        if (!widthMatches || !heightMatches) {
+          issues.push({
+            path: ["entrypoint", "data-width"],
+            code: "dimension_mismatch",
+            message: `entry の data-width/data-height は manifest の寸法 ${expected.width}x${expected.height} と一致する必要があります（現在 ${entryDimensions.width ?? "?"}x${entryDimensions.height ?? "?"}）`,
+          });
+        }
+      }
+    }
+
     const lintInput = prepareHyperframeLintBody({ html: entryHtml, entryFile: entrypoint });
     if ("error" in lintInput) {
       issues.push({
@@ -468,9 +502,12 @@ export class CompositionService {
     name: string;
     runtimeCompositionId: string;
     entrypoint?: string;
+    canvasProfile?: CanvasProfile;
   }): Promise<Composition> {
     const entrypoint = input.entrypoint ?? "index.html";
     assertSafeRelativePath(entrypoint, "entrypoint");
+    const canvasProfile = input.canvasProfile ?? DEFAULT_CANVAS_PROFILE;
+    const dimensions = CANVAS_PROFILE_DIMENSIONS[canvasProfile];
     const existing = await this.db.composition.findUnique({
       where: { runtimeCompositionId: input.runtimeCompositionId },
     });
@@ -489,13 +526,14 @@ export class CompositionService {
     const draftDir = join(dataDirectories(this.dataDir).root, draftStorageKey);
     await mkdir(draftDir, { recursive: true });
 
-    const defaultHtml = buildDefaultEntryHtml(input.runtimeCompositionId);
+    const defaultHtml = buildDefaultEntryHtml(input.runtimeCompositionId, dimensions);
     const defaultManifest = {
       entrypoint,
       contentHash: "draft",
       runtimeCompositionId: input.runtimeCompositionId,
-      width: OUTPUT_WIDTH,
-      height: OUTPUT_HEIGHT,
+      canvasProfile,
+      width: dimensions.width,
+      height: dimensions.height,
       durationMs: DRAFT_DEFAULT_DURATION_MS,
       dependencies: [],
     };
@@ -635,7 +673,7 @@ export class CompositionService {
       entrypoint?: string;
       files?: Record<string, string>;
       filesBase64?: Record<string, string>;
-      manifest?: { durationMs?: number; dependencies?: string[] };
+      manifest?: { durationMs?: number; dependencies?: string[]; canvasProfile?: CanvasProfile };
     },
   ): Promise<CompositionDraft> {
     const composition = await this.getCompositionById(compositionId);
@@ -779,12 +817,16 @@ export class CompositionService {
 
     if (input.manifest !== undefined) {
       const existing = await this.readDraftManifest(draftDir);
+      const canvasProfile =
+        input.manifest.canvasProfile ?? (existing ? canvasProfileOf(existing) : DEFAULT_CANVAS_PROFILE);
+      const dimensions = CANVAS_PROFILE_DIMENSIONS[canvasProfile];
       const manifest: CompositionManifest = {
         entrypoint: updatedEntrypoint,
         contentHash: "draft",
         runtimeCompositionId: composition.runtimeCompositionId,
-        width: OUTPUT_WIDTH,
-        height: OUTPUT_HEIGHT,
+        canvasProfile,
+        width: dimensions.width,
+        height: dimensions.height,
         durationMs: input.manifest.durationMs ?? existing?.durationMs ?? DRAFT_DEFAULT_DURATION_MS,
         dependencies: input.manifest.dependencies ?? existing?.dependencies ?? [],
       };
@@ -981,4 +1023,27 @@ export async function getCompositionDurationsByVersionId(
     }
   }
   return durations;
+}
+
+export async function getCompositionCanvasProfilesByVersionId(
+  db: PrismaClient,
+  versionIds: string[],
+): Promise<Map<string, CanvasProfile>> {
+  const uniqueIds = [...new Set(versionIds)];
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+  const rows = await db.compositionVersion.findMany({ where: { id: { in: uniqueIds } } });
+  const profiles = new Map<string, CanvasProfile>();
+  for (const row of rows) {
+    let raw: unknown;
+    try {
+      raw = (JSON.parse(row.manifestJson) as { canvasProfile?: unknown }).canvasProfile;
+    } catch {
+      continue;
+    }
+    const parsed = canvasProfileSchema.safeParse(raw);
+    profiles.set(row.id, parsed.success ? parsed.data : DEFAULT_CANVAS_PROFILE);
+  }
+  return profiles;
 }

@@ -1,10 +1,12 @@
 import {
+  CANVAS_PROFILE_LABELS,
   DEFAULT_ANIMATION_POLICY,
   DEFAULT_SCENE_ACCENT,
   DEFAULT_TRANSITION_POLICY,
   TEMPLATE_ID,
   TEMPLATE_VERSION,
   THEME_ACCENT_TOKENS,
+  canvasProfileOf,
   characterStandingV1,
   defaultPointLabel,
   getTemplateInputFields,
@@ -40,7 +42,25 @@ import {
   type TransitionPreset,
   type VisualCue,
   type VisualTemplateDefinition,
+  type CanvasProfile,
+  type Composition,
 } from "@kakeai/contracts";
+
+export function compositionVersionOptions(
+  compositions: readonly Composition[],
+  profiles?: readonly CanvasProfile[],
+): { value: string; label: string }[] {
+  return compositions.flatMap((composition) =>
+    (composition.versions ?? [])
+      .filter(
+        (version) => profiles === undefined || profiles.includes(canvasProfileOf(version.manifest)),
+      )
+      .map((version) => ({
+        value: version.id,
+        label: `${composition.name} v${version.versionNumber}・${CANVAS_PROFILE_LABELS[canvasProfileOf(version.manifest)]}`,
+      })),
+  );
+}
 
 export interface TakeFormValue {
   id: string;
