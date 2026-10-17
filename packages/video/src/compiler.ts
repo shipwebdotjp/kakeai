@@ -12,6 +12,7 @@ import {
   listCalloutV1,
   flowDiagramV1,
   statV1,
+  quoteV1,
   compositionFullBleedV1,
   compositionFullBleedInputSchema,
   deviceFrameInputSchema,
@@ -57,6 +58,7 @@ import { renderChartBar } from "./templates/chart-bar";
 import { renderListCallout } from "./templates/list-callout";
 import { renderFlowDiagram } from "./templates/flow-diagram";
 import { renderStat } from "./templates/stat";
+import { renderQuote } from "./templates/quote";
 import { renderSiteMockup } from "./templates/site-mockup";
 import { focalPointStyle, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
@@ -512,6 +514,8 @@ function dispatchTemplate(
       return renderFlowDiagram(input, context);
     case `${statV1.id}@${statV1.version}`:
       return renderStat(input, context);
+    case `${quoteV1.id}@${quoteV1.version}`:
+      return renderQuote(input, context);
     case `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`:
       return renderCompositionFullBleed(input, context, compositionResolver);
     default:
@@ -765,6 +769,13 @@ const STYLES = [
   ".kakeai-statvalue{position:relative;font-size:180px;font-weight:800;line-height:1.05;color:var(--kakeai-accent-primary);}",
   ".kakeai-statlabel{margin:0;font-size:52px;font-weight:700;color:var(--kakeai-text);}",
   ".kakeai-statcaption{margin:0;font-size:32px;color:var(--kakeai-muted);}",
+  ".kakeai-quotewrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:120px 200px;box-sizing:border-box;}",
+  ".kakeai-quotecard{display:flex;flex-direction:column;gap:24px;max-width:1400px;padding:48px 80px;border-radius:var(--kakeai-radius-lg);box-sizing:border-box;}",
+  ".kakeai-quote-card{background:var(--kakeai-surface);box-shadow:0 12px 48px var(--kakeai-shadow);}",
+  ".kakeai-quotetext{position:relative;margin:0;font-size:56px;font-weight:600;line-height:1.4;color:var(--kakeai-accent-primary);}",
+  ".kakeai-quoteattrib{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:flex-end;gap:16px;font-size:32px;color:var(--kakeai-muted);}",
+  ".kakeai-quoteauthor{font-weight:700;color:var(--kakeai-text);}",
+  ".kakeai-quotesource{font-style:normal;}",
   ".kakeai-onsetoverlay{position:absolute;inset:0;pointer-events:none;opacity:0;display:block;}",
   ".kakeai-onsetsweep{--kakeai-onset-progress:1;border-radius:inherit;padding:6px;background:conic-gradient(from calc(var(--kakeai-onset-progress,0) * 360deg),transparent 0deg,var(--kakeai-onset-color,#fff) 45deg,transparent 110deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;}",
   ".kakeai-onsetflash{border-radius:inherit;background:var(--kakeai-onset-color,#fff);}",

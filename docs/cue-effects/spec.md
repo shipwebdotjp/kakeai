@@ -105,6 +105,10 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 1つの大きな数値とラベルを強調表示するテンプレート。`effects` は `{ trigger, effect }`（targetなし）で、`value`（`value` 入力へのカウント）・`emphasize`（数値への枠・背景）・`appear`（カード）を扱う。書式は `format`（`integer` / `decimal` / `percent` / `currency`）を使う。詳細は [../stat-template/spec.md](../stat-template/spec.md) を正とする。
 
+### `quote@1`
+
+引用本文・著者・出典を表示するテンプレート。`effects` は `{ trigger, effect }`（targetなし）で、`emphasize`（引用本文への枠・背景・スポットライト）・`appear`（カード）を扱う。`spotlight` では著者・出典を兄弟として減光する。`value` は持たない。詳細は [../quote-template/spec.md](../quote-template/spec.md) を正とする。
+
 ### `list.callout@1`（新規）
 
 セリフ同期のポイント列を表す著者アイテム型テンプレート。
@@ -161,7 +165,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 - [x] flow.diagram@1: 工程・フロー図。縦横を `style.orientation` で切替える単一テンプレート。各ノードがそのセリフでハイライトするのは行トリガーと最も相性が良い（[../flow-template/spec.md](../flow-template/spec.md)）。
 - steps / timeline@1: 番号付き縦ステップ。list.callout の親戚で実装部品を流用可。
 - [x] stat@1（大きな数値＋ラベル）: `value` 効果でカウントする（[../stat-template/spec.md](../stat-template/spec.md)）。
-- quote@1: 引用カード。著者・出典付き。行トリガーで強調。
+- [x] quote@1: 引用カード。著者・出典付き。行トリガーで強調。
 - image.callout@1（画像注釈）: 画像にポイント/矢印/丸を重ね、行ごとに切替。解説動画の主力。
 - code.block@1: 行番号付きコードで、ナレーションに合わせて該当行をハイライト。技術解説向け。
 - chart.line@1 / chart.pie@1: ADR-0057 が draw/sweep を想定済み。折れ線の描画＋点のハイライトは行トリガーと好相性。

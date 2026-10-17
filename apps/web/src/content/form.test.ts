@@ -2019,3 +2019,55 @@ describe("stat form", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 });
+
+describe("quote form", () => {
+  const quoteInput = {
+    quote: "再利用できる",
+    author: "山田太郎",
+    source: "設計資料",
+    style: { tone: "secondary", preset: "card" },
+    effects: [
+      {
+        trigger: { kind: "lines", startLineId: "line-1", endLineId: "line-1" },
+        effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+      },
+    ],
+  };
+
+  it("round-trips the quote, author, source, and a line-triggered effect", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.lines = [
+      {
+        id: "line-1",
+        speakerId: null,
+        captionText: "a",
+        speechText: "a",
+        selectedAudioTakeId: null,
+        expressionId: null,
+      },
+    ];
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-quote",
+        template: { id: "quote", version: 1 },
+        layer: "overlay",
+        input: structuredClone(quoteInput),
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(quoteInput);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("creates new quote cues with a card-appear effect", () => {
+    const cue = createCueFormValue({
+      sceneId: "scene-point-1",
+      templateId: "quote",
+      templateVersion: 1,
+      layer: "overlay",
+      order: 0,
+    });
+    const effects = JSON.parse(cue.fields.effects ?? "") as { effect: { kind: string } }[];
+    expect(effects[0]!.effect.kind).toBe("appear");
+  });
+});

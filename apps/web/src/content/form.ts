@@ -21,6 +21,7 @@ import {
   flowDiagramSchema,
   flowEffectsSchema,
   listCalloutItemsSchema,
+  quoteEffectsSchema,
   statEffectsSchema,
   tableDataSchema,
   tableEffectsSchema,
@@ -373,7 +374,7 @@ function normalizeChartEffect(entry: unknown): unknown {
   return { ...entry, effect: { ...effect, preset: CHART_PRESET_FALLBACK[preset] ?? "grow" } };
 }
 
-function effectsSchemaForVariant(variant: "table" | "chart" | "flow" | "stat") {
+function effectsSchemaForVariant(variant: "table" | "chart" | "flow" | "stat" | "quote") {
   switch (variant) {
     case "chart":
       return chartEffectsSchema;
@@ -381,12 +382,14 @@ function effectsSchemaForVariant(variant: "table" | "chart" | "flow" | "stat") {
       return flowEffectsSchema;
     case "stat":
       return statEffectsSchema;
+    case "quote":
+      return quoteEffectsSchema;
     case "table":
       return tableEffectsSchema;
   }
 }
 
-function defaultEffectsForVariant(variant: "table" | "chart" | "flow" | "stat"): unknown[] {
+function defaultEffectsForVariant(variant: "table" | "chart" | "flow" | "stat" | "quote"): unknown[] {
   switch (variant) {
     case "chart":
       return [
@@ -409,6 +412,13 @@ function defaultEffectsForVariant(variant: "table" | "chart" | "flow" | "stat"):
         {
           trigger: { kind: "cue" },
           effect: { kind: "value", durationMs: 1000 },
+        },
+      ];
+    case "quote":
+      return [
+        {
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400 },
         },
       ];
     case "table":

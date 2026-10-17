@@ -9,6 +9,7 @@ import {
   listVisualTemplateCatalog,
   mediaCardInputSchema,
   mediaFullBleedInputSchema,
+  quoteInputSchema,
   statInputSchema,
   tableSimpleInputSchema,
 } from "./index";
@@ -595,5 +596,37 @@ describe("stat@1", () => {
 
   it("rejects an unknown format", () => {
     expect(statInputSchema.safeParse({ value: 1, format: "ratio" }).success).toBe(false);
+  });
+});
+
+describe("quote@1", () => {
+  it("registers quote@1 as an editable overlay template with an effects field", () => {
+    const definition = getVisualTemplate("quote", 1);
+    expect(definition?.layers).toEqual(["overlay"]);
+    expect(isEditableTemplate("quote", 1)).toBe(true);
+    const fields = getTemplateInputFields("quote", 1);
+    expect(fields?.some((field) => field.key === "quote")).toBe(true);
+    expect(fields?.some((field) => field.kind === "effects")).toBe(true);
+  });
+
+  it("accepts a quote with author, source, and a line-triggered emphasize", () => {
+    expect(
+      quoteInputSchema.safeParse({
+        quote: "再利用できる",
+        author: "山田太郎",
+        source: "設計資料",
+        style: { tone: "secondary", preset: "card" },
+        effects: [
+          {
+            trigger: { kind: "lines", startLineId: "line-1", endLineId: "line-1" },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a quote without the required text", () => {
+    expect(quoteInputSchema.safeParse({ author: "山田太郎" }).success).toBe(false);
   });
 });

@@ -55,7 +55,7 @@ export type TemplateFieldSpec =
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }
   | { kind: "flow"; key: string; label: string; maxNodes: number; maxEdges: number }
-  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" | "stat" }
+  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" | "stat" | "quote" }
   | { kind: "calloutItems"; key: string; label: string }
   | { kind: "animation"; key: string; label: string };
 
@@ -1157,6 +1157,66 @@ const statV1: VisualTemplateDefinition = {
   },
 };
 
+export const QUOTE_STYLE_PRESETS = ["plain", "card"] as const;
+export const quoteStylePresetSchema = z.enum(QUOTE_STYLE_PRESETS);
+export type QuoteStylePreset = z.infer<typeof quoteStylePresetSchema>;
+
+export const quoteStyleSchema = z.strictObject({
+  tone: tableToneSchema.default("primary"),
+  preset: quoteStylePresetSchema.default("plain"),
+});
+export type QuoteStyle = z.infer<typeof quoteStyleSchema>;
+
+export const quoteEffectSchema = z.strictObject({
+  trigger: lineTriggerSchema,
+  effect: cueEffectSchema,
+});
+export type QuoteEffect = z.infer<typeof quoteEffectSchema>;
+
+export const quoteEffectsSchema = z.array(quoteEffectSchema).max(16);
+
+export const quoteInputSchema = z.strictObject({
+  quote: z.string(),
+  author: z.string().optional(),
+  source: z.string().optional(),
+  style: quoteStyleSchema.optional(),
+  effects: quoteEffectsSchema.optional(),
+});
+export type QuoteInput = z.infer<typeof quoteInputSchema>;
+
+const QUOTE_STYLE_PRESET_OPTIONS = [
+  { value: "plain", label: "シンプル" },
+  { value: "card", label: "カード" },
+] as const;
+
+const quoteV1: VisualTemplateDefinition = {
+  id: "quote",
+  version: 1,
+  inputSchema: quoteInputSchema,
+  layers: ["overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: { label: "引用", description: "著者・出典付きの引用カード", category: "text" },
+  inputFields: [
+    { kind: "text", key: "quote", label: "引用" },
+    { kind: "optionalText", key: "author", label: "著者" },
+    { kind: "optionalText", key: "source", label: "出典" },
+    { kind: "select", key: "style.tone", label: "色", options: STAT_TONE_OPTIONS },
+    { kind: "select", key: "style.preset", label: "スタイル", options: QUOTE_STYLE_PRESET_OPTIONS },
+    { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "quote" },
+  ],
+  collectAssetRefs: () => [],
+  collectLineRefs: (input, path) => {
+    const parsed = quoteEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
+    if (!parsed.success) {
+      return [];
+    }
+    return parsed.data.flatMap((entry, index) =>
+      collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
+    );
+  },
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   mediaFullBleedV1,
@@ -1170,6 +1230,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   listCalloutV1,
   flowDiagramV1,
   statV1,
+  quoteV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
@@ -1180,6 +1241,7 @@ export { chartBarV1 };
 export { listCalloutV1 };
 export { flowDiagramV1 };
 export { statV1 };
+export { quoteV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

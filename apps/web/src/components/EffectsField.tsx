@@ -10,7 +10,7 @@ import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
 
-type EffectVariant = "table" | "chart" | "flow" | "stat";
+type EffectVariant = "table" | "chart" | "flow" | "stat" | "quote";
 
 interface EffectsFieldProps {
   label: string;
@@ -39,6 +39,7 @@ const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
     { value: "nodes", label: "全ノード" },
   ],
   stat: [],
+  quote: [],
 };
 
 const TRIGGER_OPTIONS = [
@@ -63,6 +64,10 @@ const EFFECT_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
   ],
   stat: [
     { value: "value", label: "数値カウント" },
+    { value: "emphasize", label: "強調" },
+    { value: "appear", label: "登場" },
+  ],
+  quote: [
     { value: "emphasize", label: "強調" },
     { value: "appear", label: "登場" },
   ],
@@ -131,6 +136,9 @@ function defaultEntry(variant: EffectVariant): Json {
   if (variant === "stat") {
     return { trigger: { kind: "cue" }, effect: { kind: "value" } };
   }
+  if (variant === "quote") {
+    return { trigger: { kind: "cue" }, effect: { kind: "emphasize", style: "frame", tone: "primary" } };
+  }
   return {
     target: normalizeTarget(TARGET_OPTIONS[variant][0]!.value, {}),
     trigger: { kind: "cue" },
@@ -151,7 +159,7 @@ export function EffectsField({
   speakers,
 }: EffectsFieldProps) {
   const entries = parseEntries(value);
-  const targetless = variant === "stat";
+  const targetless = variant === "stat" || variant === "quote";
   const emphasizeStyles =
     variant === "chart"
       ? EMPHASIZE_STYLES.filter((style) => style !== "background")
