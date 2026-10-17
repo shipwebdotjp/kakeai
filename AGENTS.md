@@ -16,7 +16,7 @@ Kakeai は、編集意図（正本JSON）をレンダー済みメディアから
 
 ## docs の運用
 
-- 新機能は `docs/<feature>/` を切り、その中に `spec.md` と `todo.md` を置いて開発する。実装の判断はそのフォルダの文書を正とする。既存のMVPは [docs/mvp/](docs/mvp/)。
+- 複数フェーズへの分割が必要な大きな変更を伴う新機能は `docs/<feature>/` を切り、その中に `spec.md` と `todo.md`と`roadmap.md` を置いて開発する。実装の判断はそのフォルダの文書を正とする。既存のMVPは [docs/mvp/](docs/mvp/)。
 - 用語は [CONTEXT.md](CONTEXT.md) に集約する。実装詳細は書かない。
 - ADRは `docs/adr/NNNN-slug.md` に **1決定=1ファイル** で追加する。番号は既存の最大+1。
 - ADRは重大で後戻りコストの大きい決定だけ記録する。細かな実装選択や簡単に戻せる決定はADRにしない。
