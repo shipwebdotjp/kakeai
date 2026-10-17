@@ -100,6 +100,7 @@ function makeScene(lines: LineFormValue[], cues: CueFormValue[] = []): SceneForm
         exitDurationMs: 0,
       },
     ],
+    audioCues: [],
   };
 }
 

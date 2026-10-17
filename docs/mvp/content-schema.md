@@ -268,7 +268,7 @@ Characterなど位置を持つテンプレートは、出力ピクセルでは�
 
 これにより、将来9:16テンプレートを追加しても制作上の意図を保ったまま配置規則を変えられる。`character.standing@1` は `side` と倍率を正規化座標へ写像する。半幅 `0.125×scale` を用い、左 `x=0.03+0.125×scale` / 右 `x=0.97−0.125×scale` / `y=0.86` とする（外端の余白を一定に保つ）。各テンプレートのアニメーションと既定z-indexはテンプレート側で管理し、MVPの正本JSONには持ち込まない。
 
-BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset自体を「BGM型」に固定せず、同じ音声素材をナレーション以外の用途にも利用可能にする。`AudioCue.range` も `kind` による判別union（`work` / `scene`）とする。MVPの編集画面は `role: "bgm"` と `{ "kind": "work" }` のAudioCueを1件だけ編集し、既定値は `gainDb: -18`、`loop: true` とする。Scene別・複数BGM・SFXの編集はMVP後とし、既存のAudioCue値は保持する。
+BGMはAudioCueとしてScene外またはScene単位で配置する。音声Asset自体を「BGM型」に固定せず、同じ音声素材をナレーション以外の用途にも利用可能にする。`AudioCue.range` も `kind` による判別union（`work` / `scene`）とする。`AudioCue.role` は `bgm` / `sfx` / `program` とし、音源ファイルの種類ではなく編集意図と将来のミックス方針の分類である。作品全体BGMは `role: "bgm"` と `{ "kind": "work" }` のAudioCueを1件だけ編集し、既定値は `gainDb: -18`、`loop: true` とする。Scene範囲のAudioCue（`{ "kind": "scene" }`）は編集画面で一覧・追加・削除・素材選択・role・gain・loopを編集でき、Sceneの開始から終了まで重ねてミックスする。開始オフセット・フェード・ダッキングは持たない。詳細は [../timeline-inserts/spec.md](../timeline-inserts/spec.md) を正とする。
 
 ```json
 {

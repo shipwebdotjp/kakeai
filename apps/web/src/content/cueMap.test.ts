@@ -49,6 +49,7 @@ function makeScene(
     lines,
     cues,
     standings: [],
+    audioCues: [],
   };
 }
 

@@ -79,6 +79,7 @@ import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { StandingFields } from "./StandingFields";
+import { SceneAudioFields } from "./SceneAudioFields";
 
 const DRAFT_PREVIEW_DEBOUNCE_MS = 800;
 
@@ -1119,6 +1120,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               sceneIndex={sceneIndex}
               sceneId={scene.id}
               characters={watchedCharacters}
+            />
+
+            <SceneAudioFields
+              control={control}
+              register={register}
+              getValues={getValues}
+              setValue={setValue}
+              sceneIndex={sceneIndex}
             />
 
             {scene.kind === "point" && (

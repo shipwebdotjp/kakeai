@@ -13,6 +13,25 @@ describe("contentDocumentSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a scene audio cue with the program role", () => {
+    const doc = validContentDocument();
+    doc.audioCues.push({
+      id: "cue-program",
+      role: "program",
+      assetId: "asset-audio-program",
+      range: { kind: "scene", sceneId: doc.scenes[1]!.id },
+      gainDb: 0,
+      loop: false,
+    });
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects an unknown audio cue role", () => {
+    const doc = validContentDocument();
+    (doc.audioCues[0] as { role: string }).role = "voice";
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
   it("treats an omitted or zero narration gapBeforeMs as valid", () => {
     const doc = validContentDocument();
     const line = doc.scenes[1]!.lines[0]!;

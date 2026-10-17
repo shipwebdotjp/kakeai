@@ -702,6 +702,68 @@ describe("buildContentDocument", () => {
     expect(cleared.audioCues.some((cue) => cue.id === "cue-scene")).toBe(true);
   });
 
+  it("round-trips scene audio cues independently from work BGM", () => {
+    const base = createInitialContentDocument();
+    const point = pointScenes(base)[0]!;
+    base.audioCues = [
+      { id: "cue-work", role: "bgm", assetId: "asset-bgm", range: { kind: "work" }, gainDb: -18, loop: true },
+      {
+        id: "cue-scene",
+        role: "program",
+        assetId: "asset-audio-1",
+        range: { kind: "scene", sceneId: point.id },
+        gainDb: 0,
+        loop: false,
+      },
+    ];
+
+    const values = toFormValues(base);
+    const sceneValue = values.scenes.find((scene) => scene.id === point.id)!;
+    expect(sceneValue.audioCues).toEqual([
+      { cueId: "cue-scene", assetId: "asset-audio-1", role: "program", gainDb: 0, loop: false },
+    ]);
+
+    sceneValue.audioCues[0]!.role = "sfx";
+    sceneValue.audioCues[0]!.gainDb = -6;
+    sceneValue.audioCues[0]!.loop = true;
+    values.bgm.gainDb = -12;
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.audioCues.find((cue) => cue.id === "cue-scene")).toMatchObject({
+      role: "sfx",
+      gainDb: -6,
+      loop: true,
+      range: { kind: "scene", sceneId: point.id },
+    });
+    expect(rebuilt.audioCues.find((cue) => cue.id === "cue-work")).toMatchObject({ gainDb: -12 });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("adds and removes a scene audio cue", () => {
+    const base = createInitialContentDocument();
+    const point = pointScenes(base)[0]!;
+    const values = toFormValues(base);
+    values.scenes.find((scene) => scene.id === point.id)!.audioCues.push({
+      cueId: null,
+      assetId: "asset-audio-1",
+      role: "sfx",
+      gainDb: 0,
+      loop: false,
+    });
+
+    const rebuilt = buildContentDocument(base, values);
+    const added = rebuilt.audioCues.filter(
+      (cue) => cue.range.kind === "scene" && cue.range.sceneId === point.id,
+    );
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({ role: "sfx", assetId: "asset-audio-1" });
+
+    values.scenes.find((scene) => scene.id === point.id)!.audioCues = [];
+    const cleared = buildContentDocument(base, values);
+    expect(cleared.audioCues.filter((cue) => cue.range.kind === "scene")).toHaveLength(0);
+    expect(contentDocumentSchema.safeParse(cleared).success).toBe(true);
+  });
+
   it("round-trips characters and a scene standing cue", () => {
     const base = createInitialContentDocument();
     base.characters = [

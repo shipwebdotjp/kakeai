@@ -20,14 +20,14 @@
 
 完了条件: 指定したgapが字幕・発話音声・発話演出を伴わず、プレビューとMP4で同じ位置・同じ長さになる。
 
-## [ ] R2 Scene AudioCue編集
+## [x] R2 Scene AudioCue編集
 
-- [ ] `AudioCue.role` に `program` を追加し、既存の`bgm`/`sfx`を維持する。
-- [ ] `SceneEditor` にScene AudioCueの一覧、追加、削除、素材選択、role、gain、loopを追加する。
-- [ ] 作品全体BGMフォームとScene AudioCueフォームが、対象外のCueを削除・変更しないことを確認する。
-- [ ] API保存・プレビュー・レンダーで、Scene開始・停止・loop・複数Cueミックスを検証する。
-- [ ] UIとユーザーガイドで、Scene AudioCueには開始オフセット／フェード／ダッキングがないことを明示する。
-- [ ] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
+- [x] `AudioCue.role` に `program` を追加し、既存の`bgm`/`sfx`を維持する。
+- [x] `SceneEditor` にScene AudioCueの一覧、追加、削除、素材選択、role、gain、loopを追加する。
+- [x] 作品全体BGMフォームとScene AudioCueフォームが、対象外のCueを削除・変更しないことを確認する。
+- [x] API保存・プレビュー・レンダーで、Scene開始・停止・loop・複数Cueミックスを検証する。
+- [x] UIとユーザーガイドで、Scene AudioCueには開始オフセット／フェード／ダッキングがないことを明示する。
+- [x] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
 
 完了条件: 任意のreadyなaudio AssetをNarration Segmentへ紐付けず、Scene全体の音声として編集・保存・プレビュー・レンダーできる。
 

@@ -26,6 +26,7 @@ describe("diagnosticTarget", () => {
       ],
       lines: [],
       standings: [],
+      audioCues: [],
     },
     {
       ...createPointSceneFormValue("要点1", new Set()),

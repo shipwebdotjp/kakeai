@@ -404,6 +404,44 @@ describe("script version preview", () => {
     ]);
   });
 
+  it("includes a scene audio cue with the program role in the preview", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const audioAsset = await upload("audio.wav", join(fixturesDir, "audio.wav"));
+    await drainWorker();
+    const readyAudio = await assets.getAsset(prisma, audioAsset.asset.id);
+    expect(readyAudio.status).toBe("ready");
+    const work = await works.createWork(prisma, "シーン音声プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    content.audioCues = [
+      {
+        id: "scene-program",
+        role: "program",
+        assetId: readyAudio.id,
+        range: { kind: "scene", sceneId: point.id },
+        gainDb: 0,
+        loop: false,
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+    expect(preview.compositionHtml).toContain('id="kakeai-audio-cue-scene-program-0"');
+    expect(preview.assets.map((asset) => asset.assetId)).toContain(readyAudio.id);
+  });
+
   it("returns 404 for an unknown script version", async () => {
     try {
       await scriptVersions.getScriptVersionPreview(prisma, config.directories, "scr_missing");

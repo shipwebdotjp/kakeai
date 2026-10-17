@@ -28,6 +28,7 @@ import {
   tableDataSchema,
   tableEffectsSchema,
   type AnimationPreset,
+  type AudioCueRole,
   type Character,
   type CharacterVoice,
   type ContentDocument,
@@ -83,6 +84,14 @@ export interface LineFormValue {
 export interface BgmFormValue {
   cueId: string | null;
   assetId: string | null;
+  gainDb: number;
+  loop: boolean;
+}
+
+export interface SceneAudioCueFormValue {
+  cueId: string | null;
+  assetId: string | null;
+  role: AudioCueRole;
   gainDb: number;
   loop: boolean;
 }
@@ -161,6 +170,7 @@ export interface SceneFormValue {
   lines: LineFormValue[];
   cues: CueFormValue[];
   standings: StandingFormValue[];
+  audioCues: SceneAudioCueFormValue[];
 }
 
 import type { VisualThemeRef } from "@kakeai/contracts";
@@ -176,6 +186,16 @@ export interface DocumentFormValues {
 const FALLBACK_DURATION_MS = 4000;
 export const DEFAULT_BGM_GAIN_DB = -18;
 export const DEFAULT_BGM_LOOP = true;
+export const AUDIO_CUE_ROLES: readonly AudioCueRole[] = ["bgm", "sfx", "program"];
+export const AUDIO_CUE_ROLE_LABELS: Record<AudioCueRole, string> = {
+  bgm: "BGM",
+  sfx: "効果音",
+  program: "音源",
+};
+
+export function defaultAudioGainDb(role: AudioCueRole): number {
+  return role === "bgm" ? DEFAULT_BGM_GAIN_DB : 0;
+}
 export const DEFAULT_STANDING_SCALE = 1;
 export const MIN_STANDING_SCALE = 0.1;
 export const MAX_STANDING_SCALE = 3;
@@ -672,6 +692,15 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
         })),
         cues,
         standings: readStandings(scene),
+        audioCues: content.audioCues
+          .filter((cue) => cue.range.kind === "scene" && cue.range.sceneId === scene.id)
+          .map((cue) => ({
+            cueId: cue.id,
+            assetId: cue.assetId,
+            role: cue.role,
+            gainDb: cue.gainDb ?? defaultAudioGainDb(cue.role),
+            loop: cue.loop ?? false,
+          })),
       };
     }),
     bgm: {
@@ -722,6 +751,23 @@ function buildAudioTakes(values: DocumentFormValues): ContentDocument["audioTake
         durationMs: take.durationMs,
       })),
     ),
+  );
+}
+
+export function buildSceneAudioCues(
+  values: DocumentFormValues,
+): ContentDocument["audioCues"] {
+  return values.scenes.flatMap((scene) =>
+    scene.audioCues
+      .filter((cue) => cue.assetId !== null && cue.assetId.length > 0)
+      .map((cue) => ({
+        id: cue.cueId ?? `audio-scene-${randomId()}`,
+        role: cue.role,
+        assetId: cue.assetId as string,
+        range: { kind: "scene" as const, sceneId: scene.id },
+        gainDb: Number.isFinite(cue.gainDb) ? cue.gainDb : defaultAudioGainDb(cue.role),
+        loop: cue.loop,
+      })),
   );
 }
 
@@ -1403,14 +1449,19 @@ export function buildContentDocument(
     }
     return { ...common, kind: "outro" };
   });
-  const sceneIds = new Set(scenes.map((scene) => scene.id));
   const audioTakes = buildAudioTakes(values);
   const managedBgmId = values.bgm.cueId;
-  const audioCues = base.audioCues.filter(
-    (cue) =>
-      cue.id !== managedBgmId &&
-      (cue.range.kind !== "scene" || sceneIds.has(cue.range.sceneId)),
-  );
+  const preservedAudioCues = base.audioCues.filter((cue) => {
+    if (cue.id === managedBgmId) {
+      return false;
+    }
+    // Scene AudioCue は編集フォームが正本なので、work範囲だけを保持する。
+    return cue.range.kind === "work";
+  });
+  const audioCues: ContentDocument["audioCues"] = [
+    ...preservedAudioCues,
+    ...buildSceneAudioCues(values),
+  ];
   if (values.bgm.assetId !== null) {
     audioCues.push({
       id: managedBgmId ?? `audio-bgm-${randomId()}`,
@@ -1711,6 +1762,7 @@ export function createPointSceneFormValue(
     lines: [],
     cues: pointSceneTextCues(id).map(toCueFormValue),
     standings: emptyStandingSlots(),
+    audioCues: [],
   };
 }
 
@@ -1745,6 +1797,7 @@ export function cloneSceneFormValue(
       };
     }),
     standings: source.standings.map((standing) => ({ ...standing, cueId: null })),
+    audioCues: [],
   };
 }
 

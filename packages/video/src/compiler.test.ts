@@ -214,6 +214,43 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('data-volume="0.126"');
   });
 
+  it("plays a non-looping scene audio cue from the scene start", () => {
+    const document = validContentDocument();
+    document.audioCues = [
+      {
+        id: "scene-program",
+        role: "program",
+        assetId: "asset-audio-program",
+        range: { kind: "scene", sceneId: "scene-point-1" },
+        gainDb: 0,
+      },
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain('id="kakeai-audio-cue-scene-program-0"');
+    expect(compiled.html).toContain('src="/preview/asset-audio-program"');
+    expect(compiled.html).toContain('data-start="4" data-duration="3"');
+    expect(compiled.html).toContain('data-volume="1"');
+  });
+
+  it("loops a scene audio cue within the scene span", () => {
+    const document = validContentDocument();
+    document.audioCues = [
+      {
+        id: "scene-sfx",
+        role: "sfx",
+        assetId: "asset-audio-sfx",
+        range: { kind: "scene", sceneId: "scene-point-1" },
+        gainDb: -6,
+        loop: true,
+      },
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain('id="kakeai-audio-cue-scene-sfx-0"');
+    expect(compiled.html).toContain('id="kakeai-audio-cue-scene-sfx-1"');
+    expect(compiled.html).toContain('data-start="4" data-duration="3"');
+    expect(compiled.html).toContain('data-start="7" data-duration="1"');
+  });
+
   it("rejects a loop whose copy count exceeds the cap", () => {
     const document = validContentDocument();
     document.audioCues = [
