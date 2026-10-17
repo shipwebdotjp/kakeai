@@ -146,7 +146,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | DELETE | /face-sets/:faceSetId | 204 | 未参照の Face Set を削除 |
 | GET | /themes | 200 | Theme 一覧（組み込み＋利用者テーマ）を取得（[../theme-customization/spec.md](../theme-customization/spec.md)） |
 | POST | /themes | 201 | Theme の作成・複製 |
-| POST | /themes/preview | 200 | 代表サンプルによる Theme Draft 非永続プレビューを合成 |
+| POST | /themes/preview | 200 | 代表サンプルによる Theme Draft 非永続プレビューを合成（`fontDiagnostics` 付き） |
 | GET | /themes/:themeId | 200 | Theme 詳細と全 Revision / Draft を取得 |
 | PUT | /themes/:themeId/draft | 200 | Theme Draft を保存・更新 |
 | DELETE | /themes/:themeId/draft | 200 | Theme Draft を破棄 |
@@ -494,11 +494,15 @@ Compositionは再利用するHyperFrames projectの論理単位で、draftを編
 - `POST /compositions` は `{ name, runtimeCompositionId, entrypoint?, canvasProfile?, authoringStyle? }` を受け取り、Compositionとactive draftをdefault `index.html`・`manifest.json` 付きで作成する。`canvasProfile` は `landscape`（既定）または `portrait` で、seed HTMLとmanifestの寸法に反映する。`runtimeCompositionId` はComposition間で一意。`authoringStyle: { visualTheme: { id, version } }` を指定すると、同じContextを再解決し、`kakeai-style/`（`STYLE.md`、`tokens.css`、`fonts.css`、`components.css`、`kit-lock.json`）をseedへ加え、`styleProvenance` を記録する。未指定の新規draftは `neutral` として記録する。
 - `GET /compositions/:compositionId/draft/files` は `{ entrypoint, files, binaryFiles? }` を返し、seedを含むdraftを読み戻せる。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列。
 - `POST /compositions/:compositionId/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取り、指定したファイルだけを上書きする（部分更新、削除なし）。`files` はテキスト、`filesBase64` はbase64文字列のバイナリファイル（画像など）で、同じ正規化パスを両方に含めることはできない。親ディレクトリは自動作成する。`kakeai-style/` は予約された保護パスであり、そこへの更新とentrypoint指定は422 `STYLE_KIT_MODIFIED` で拒否する。`manifest`（`{ durationMs?, dependencies?, canvasProfile? }`）を渡すとサーバが `manifest.json` を生成する。`canvasProfile` 省略時は現在のdraftのプロファイル、無ければ `landscape` を使う。
-- `POST /compositions/:compositionId/publish` は任意の `{ entrypoint? }` でdraftを検証し、CompositionVersionを作る。検証はentrypointの存在、manifestのruntime composition ID・Canvas Profileと一致する寸法・有限尺・依存の実在、外部URLの不在、entryの `data-composition-id` 一致、entry rootの `data-width`／`data-height` とmanifest寸法の一致、音声要素の不在、HyperFrames lintのerror不在（warningは許容）を確認する。`styleProvenance` が `authored` のdraftでは、さらに `kakeai-style/` の各保護ファイルと `kit-lock.json` をseed時のhashと照合し、変更・欠落・余分なファイルを422 `STYLE_KIT_MODIFIED`（`details.issues` に該当path）で拒否する。publishはkitをbundleへコピーし、解決済みの `styleProvenance` をversionへ固定する。`?dryRun=true` ではversionを作らず同じ検証だけを行い、成功時200 `{ manifest }` を返す。同じdraftを再publishすると新しいversionNumberの不変versionが作られる。
+- `POST /compositions/:compositionId/publish` は任意の `{ entrypoint? }` でdraftを検証し、CompositionVersionを作る。検証はentrypointの存在、manifestのruntime composition ID・Canvas Profileと一致する寸法・有限尺・依存の実在、外部URLの不在、entryの `data-composition-id` 一致、entry rootの `data-width`／`data-height` とmanifest寸法の一致、音声要素の不在、HyperFrames lintのerror不在（warningは許容）を確認する。`styleProvenance` が `authored` のdraftでは、さらに `kakeai-style/` の各保護ファイルと `kit-lock.json` をseed時のhashと照合し、変更・欠落・余分なファイルを422 `STYLE_KIT_MODIFIED`（`details.issues` に該当path）で拒否する。publishはkitをbundleへコピーし、解決済みの `styleProvenance` をversionへ固定する。`?dryRun=true` ではversionを作らず同じ検証だけを行い、成功時200 `{ manifest }` と `meta.fontDiagnostics` を返す。publish成功時も `meta.fontDiagnostics` に診断結果を返す。同じdraftを再publishすると新しいversionNumberの不変versionが作られる。
 - 検証失敗は422 `VALIDATION_ERROR` と `details.issues`（`path`・`code`・`message`）で返す。`manifest` の `contentHash` は任意で、publish時にサーバが計算した `bundleHash` を保存・返却するmanifestの `contentHash` に設定する。
 - `GET /compositions`、`GET /compositions/:compositionId` は一覧・メタデータを返す。published bundleは `GET /compositions/versions/:compositionVersionId/content/*bundlePath` で配信し、path traversalは403 `LOCAL_ACCESS_DENIED` で拒否する。
 
 台本は `composition.full-bleed@1` の `input.compositionVersionId` としてversion IDだけを参照する。参照はpublish済みversionに限り、同一ContentDocument内で同じversionを複数回参照できない。`composition.full-bleed@1` はCanvas Profileが `landscape` のversionだけをbackgroundに置ける。`portrait` は `scene.device-frame@1` の画面に置き、保存・draft preview・preview・renderはいずれもfull-bleedのportrait参照を422で拒否する。
+
+### Font診断
+
+Composition Authoring Context生成時、Theme Draft代表プレビュー時、Composition publish（dry-run含む）前、Render Job作成時には、KakeaiはHyperFramesと同じChromiumでThemeのFont Faceの`@font-face local()`解決可否を診断し、`fontDiagnostics` 文字列配列として返す。解決できないFaceはStyle Kitの`fonts.css`で定義済みのgeneric stackへフォールバックし、処理は継続する（拒否しない）。`GET /fonts` が返すFaceは、Chromium検証済みのものだけ `verifiedLocalFace: true/false` を持つ（未検証は省略）。Font Catalog自体が利用できない環境では全Font Faceがgeneric stackで描画され、その旨を診断に含める。
 
 ## プレビュー
 
@@ -588,7 +592,7 @@ POST /language-editions/:editionId/draft-preview は、未保存のContentDocume
 
 ### Render Jobの作成
 
-POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、参照CompositionVersionのID・bundle hash・manifest、解決済みVisual Skin Ref、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
+POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、参照CompositionVersionのID・bundle hash・manifest、解決済みVisual Skin Ref、Font診断（`missingFonts` と `diagnostics`）、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
 
 MVPの出力設定は固定であるため、リクエストボディは空のJSON objectとする。
 

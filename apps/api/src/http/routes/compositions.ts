@@ -141,13 +141,32 @@ export function createCompositionsRouter(
           issues: [{ path: ["dryRun"], code: "invalid_value", message: "dryRun は 'true' または 'false' を指定してください" }],
         });
       }
+      const diagnoseFonts = async (): Promise<string[]> => {
+        if (authoringService === undefined) {
+          return [];
+        }
+        try {
+          const composition = await compositionService.getCompositionById(compositionId);
+          return await authoringService.diagnoseStyleFonts(composition.draft?.styleProvenance);
+        } catch (error) {
+          return [
+            `Font診断を省略しました: ${error instanceof Error ? error.message : String(error)}`,
+          ];
+        }
+      };
       if (dryRun === "true") {
-        const manifest = await compositionService.validateDraft(compositionId, body);
-        sendData(res, 200, { manifest });
+        const [manifest, fontDiagnostics] = await Promise.all([
+          compositionService.validateDraft(compositionId, body),
+          diagnoseFonts(),
+        ]);
+        sendData(res, 200, { manifest }, { fontDiagnostics });
         return;
       }
-      const version = await compositionService.publish(compositionId, body);
-      sendData(res, 201, version);
+      const [version, fontDiagnostics] = await Promise.all([
+        compositionService.publish(compositionId, body),
+        diagnoseFonts(),
+      ]);
+      sendData(res, 201, version, { fontDiagnostics });
     } catch (err) {
       next(err);
     }

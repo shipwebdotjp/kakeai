@@ -300,7 +300,10 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
   };
 }
 
-export function compileThemeRepresentativePreview(definition: VisualThemeDefinition): DraftPreview {
+export function compileThemeRepresentativePreview(
+  definition: VisualThemeDefinition,
+  fontDiagnostics: readonly string[] = [],
+): DraftPreview {
   const sampleDoc = createRepresentativeSampleDocument(definition);
   let compiled: CompiledComposition;
   let timeline;
@@ -362,6 +365,7 @@ export function compileThemeRepresentativePreview(definition: VisualThemeDefinit
       playerVersion: HYPERFRAMES_PLAYER_VERSION,
     },
     timeline,
+    fontDiagnostics: fontDiagnostics.filter((entry): entry is string => typeof entry === "string"),
   };
 
   const parsed = draftPreviewSchema.safeParse(result);

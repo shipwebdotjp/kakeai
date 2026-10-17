@@ -60,7 +60,12 @@ export const renderJobSnapshotSchema = z.object({
   faceSets: z.array(snapshotFaceSetRefSchema).optional().default([]),
   themeDefinition: visualThemeDefinitionSchema.optional(),
   skin: visualSkinRefSchema.optional(),
-  fontDiagnostics: z.object({ missingFonts: z.array(z.string()) }).optional(),
+  fontDiagnostics: z
+    .object({
+      missingFonts: z.array(z.string()),
+      diagnostics: z.array(z.string()).optional().default([]),
+    })
+    .optional(),
   template: z.object({
     id: z.string().min(1),
     version: positiveInt,

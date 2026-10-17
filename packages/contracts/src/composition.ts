@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { idSchema } from "./content/primitives.ts";
-import { visualSkinRefSchema, visualThemeRefSchema } from "./content/theme.ts";
+import {
+  visualSkinRefSchema,
+  visualThemeRefSchema,
+  type VisualSkinRef,
+} from "./content/theme.ts";
 
 export const canvasProfileSchema = z.enum(["landscape", "portrait"]);
 
@@ -94,6 +98,23 @@ export const compositionStyleProvenanceSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("legacy") }),
 ]);
 export type CompositionStyleProvenance = z.infer<typeof compositionStyleProvenanceSchema>;
+
+export type CompositionSkinRelation = "same" | "neutral" | "legacy" | "different";
+
+export function compositionSkinRelation(
+  scriptSkin: VisualSkinRef,
+  provenance: CompositionStyleProvenance | undefined,
+): CompositionSkinRelation {
+  if (provenance === undefined || provenance.kind === "legacy") {
+    return "legacy";
+  }
+  if (provenance.kind === "neutral") {
+    return "neutral";
+  }
+  return provenance.skin.id === scriptSkin.id && provenance.skin.version === scriptSkin.version
+    ? "same"
+    : "different";
+}
 
 export const compositionAuthoringBriefSchema = z.strictObject({
   intent: z.string().min(1),

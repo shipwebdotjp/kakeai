@@ -15,6 +15,7 @@ import {
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError } from "../http/validation.ts";
+import { logger } from "../logger.ts";
 import type { FontCatalogService } from "./font-catalog.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
 
@@ -206,6 +207,22 @@ export class ThemeService {
       revisions,
       draft,
     };
+  }
+
+  async resolveFontDiagnostics(definition: VisualThemeDefinition): Promise<string[]> {
+    try {
+      const { diagnostics } = await this.fontCatalogService.diagnoseTheme(definition, {
+        verify: true,
+      });
+      return diagnostics;
+    } catch (error) {
+      logger.warn("theme_font_diagnostics_failed", {
+        themeId: definition.id,
+        version: definition.version,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
   }
 
   async createTheme(input: { name: string; sourceThemeRef?: VisualThemeRef }): Promise<ThemeDetail> {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import {
   useFieldArray,
   useWatch,
@@ -11,13 +11,17 @@ import {
   ANIMATION_PRESETS,
   DEFAULT_ANIMATION_POLICY,
   DEFAULT_VISUAL_THEME_REF,
+  compositionSkinRelation,
   getVisualTemplate,
   listVisualTemplateCatalog,
+  resolveVisualThemeSkin,
   textBlockV1,
   type AnimationPreset,
   type CanvasProfile,
+  type CompositionStyleProvenance,
   type CueLayer,
   type TemplateFieldSpec,
+  type VisualSkinRef,
 } from "@kakeai/contracts";
 import {
   CROP_CENTER_PERCENT,
@@ -49,7 +53,7 @@ import {
   type SpeakerFormValue,
 } from "../content/form";
 import { PRESET_LABELS, badgeNeutralClass, buttonDangerClass, buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
-import { useCompositions } from "../api/hooks";
+import { useCompositions, useTheme } from "../api/hooks";
 import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { DataGridField } from "./DataGridField";
@@ -74,6 +78,46 @@ const RANGE_LABELS: Record<string, string> = {
 };
 
 const TEXT_BLOCK_PRIMARY_KEYS: ReadonlySet<string> = new Set(["text", "role"]);
+
+const ScriptSkinContext = createContext<VisualSkinRef | null>(null);
+
+export function ScriptSkinProvider({
+  control,
+  children,
+}: {
+  control: Control<DocumentFormValues>;
+  children: ReactNode;
+}) {
+  const visualThemeRef = useWatch({ control, name: "visualTheme" });
+  const themeQuery = useTheme(visualThemeRef?.id);
+  const scriptSkin = useMemo(() => {
+    const theme = themeQuery.data;
+    if (theme === undefined || visualThemeRef === undefined) {
+      return null;
+    }
+    const revision = theme.revisions.find((entry) => entry.version === visualThemeRef.version);
+    return revision === undefined ? null : resolveVisualThemeSkin(revision.definition);
+  }, [themeQuery.data, visualThemeRef]);
+  return <ScriptSkinContext.Provider value={scriptSkin}>{children}</ScriptSkinContext.Provider>;
+}
+
+function skinMismatchMessage(
+  relation: ReturnType<typeof compositionSkinRelation>,
+  scriptSkin: VisualSkinRef,
+  provenance: CompositionStyleProvenance | undefined,
+): string | undefined {
+  const scriptLabel = `${scriptSkin.id}@${scriptSkin.version}`;
+  if (relation === "neutral") {
+    return `このCompositionはスキン未指定（neutral）で作られています。台本のスキン ${scriptLabel} と調和しない可能性があります。`;
+  }
+  if (relation === "legacy") {
+    return `このCompositionの作風情報がありません（legacy）。台本のスキン ${scriptLabel} と調和しない可能性があります。`;
+  }
+  if (relation === "different" && provenance?.kind === "authored") {
+    return `このCompositionは ${provenance.skin.id}@${provenance.skin.version} で作られています。台本のスキン ${scriptLabel} と異なります。`;
+  }
+  return undefined;
+}
 
 interface AddableTemplate {
   id: string;
@@ -405,8 +449,28 @@ interface CompositionVersionFieldProps {
 
 function CompositionVersionField({ label, value, setField, fieldKey, profiles }: CompositionVersionFieldProps) {
   const compositions = useCompositions();
+  const scriptSkin = useContext(ScriptSkinContext);
   const options = compositionVersionOptions(compositions.data ?? [], profiles);
   const knowsCurrent = value.length === 0 || options.some((option) => option.value === value);
+  const provenanceByVersionId = useMemo(() => {
+    const map = new Map<string, CompositionStyleProvenance | undefined>();
+    for (const composition of compositions.data ?? []) {
+      for (const version of composition.versions ?? []) {
+        map.set(version.id, version.styleProvenance);
+      }
+    }
+    return map;
+  }, [compositions.data]);
+  const provenance = provenanceByVersionId.get(value);
+  const knownInLibrary = provenanceByVersionId.has(value);
+  const mismatch =
+    scriptSkin !== null && value.length > 0 && knownInLibrary
+      ? skinMismatchMessage(
+          compositionSkinRelation(scriptSkin, provenance),
+          scriptSkin,
+          provenance,
+        )
+      : undefined;
   return (
     <div className="my-2">
       <label className="inline-flex items-center gap-1.5">
@@ -431,6 +495,9 @@ function CompositionVersionField({ label, value, setField, fieldKey, profiles }:
       )}
       {!compositions.isLoading && compositions.data !== undefined && options.length === 0 && (
         <p className={metaTextClass}>公開済みのCompositionVersionがありません。</p>
+      )}
+      {mismatch !== undefined && (
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{mismatch}</p>
       )}
     </div>
   );

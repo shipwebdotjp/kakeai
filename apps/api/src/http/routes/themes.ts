@@ -35,7 +35,8 @@ export function createThemesRouter(themeService: ThemeService): Router {
     "/preview",
     asyncHandler(async (req, res) => {
       const body = parseBody(previewThemeDraftRequestSchema, req.body);
-      const preview = compileThemeRepresentativePreview(body.definition);
+      const fontDiagnostics = await themeService.resolveFontDiagnostics(body.definition);
+      const preview = compileThemeRepresentativePreview(body.definition, fontDiagnostics);
       sendData(res, 200, preview);
     }),
   );

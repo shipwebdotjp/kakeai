@@ -3,6 +3,8 @@ import {
   CANVAS_PROFILE_DIMENSIONS,
   canvasProfileOf,
   compositionManifestSchema,
+  compositionSkinRelation,
+  type CompositionStyleProvenance,
 } from "./composition";
 import { createCompositionRequestSchema, compositionDraftManifestInputSchema } from "./requests";
 
@@ -94,5 +96,34 @@ describe("canvas profile request fields", () => {
         canvasProfile: "square",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("compositionSkinRelation", () => {
+  const scriptSkin = { id: "handmade-paper", version: 1 };
+  const authored = (skin: { id: string; version: number }): CompositionStyleProvenance => ({
+    kind: "authored",
+    contextSchemaVersion: 1,
+    theme: { ref: { id: "theme_1", version: 1 }, definitionHash: "sha256:abc" },
+    skin,
+    kit: { version: 1, hash: "sha256:def", files: {} },
+    canvasProfile: "landscape",
+    fontDiagnostics: [],
+  });
+
+  it("reports the same skin", () => {
+    expect(compositionSkinRelation(scriptSkin, authored(scriptSkin))).toBe("same");
+  });
+
+  it("reports a different skin", () => {
+    expect(compositionSkinRelation(scriptSkin, authored({ id: "neutral", version: 1 }))).toBe(
+      "different",
+    );
+  });
+
+  it("reports neutral and legacy provenance", () => {
+    expect(compositionSkinRelation(scriptSkin, { kind: "neutral" })).toBe("neutral");
+    expect(compositionSkinRelation(scriptSkin, { kind: "legacy" })).toBe("legacy");
+    expect(compositionSkinRelation(scriptSkin, undefined)).toBe("legacy");
   });
 });

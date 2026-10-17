@@ -6,6 +6,7 @@ import {
   type CanvasProfile,
   type CompositionAuthoringContext,
   type CompositionAuthoredStyleProvenance,
+  type CompositionStyleProvenance,
   type VisualThemeRef,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
@@ -39,10 +40,7 @@ export class CompositionAuthoringService {
   }): Promise<ResolvedAuthoringStyle> {
     const canvasProfile = input.canvasProfile ?? DEFAULT_CANVAS_PROFILE;
     const resolver = new ThemeResolver(this.deps.db);
-    const [theme, fontCatalog] = await Promise.all([
-      resolver.resolve(input.visualTheme.id, input.visualTheme.version),
-      this.deps.fontCatalogService.getCatalog(),
-    ]);
+    const theme = await resolver.resolve(input.visualTheme.id, input.visualTheme.version);
     if (theme === undefined) {
       throw new ApiError(422, "VALIDATION_ERROR", undefined, {
         issues: [
@@ -56,7 +54,10 @@ export class CompositionAuthoringService {
     }
 
     const skin = resolveVisualThemeSkin(theme);
-    const contents = buildStyleKitContents({ skin, theme, fontCatalog });
+    const fontResolution = await this.deps.fontCatalogService.resolveThemeFonts(theme, {
+      verify: true,
+    });
+    const contents = buildStyleKitContents({ skin, theme, fontResolution });
     const provenance = styleKitProvenance({ skin, theme, canvasProfile, contents });
 
     const context: CompositionAuthoringContext = {
@@ -71,5 +72,27 @@ export class CompositionAuthoringService {
     };
 
     return { context, provenance, kitFiles: contents.files };
+  }
+
+  async diagnoseStyleFonts(
+    provenance: CompositionStyleProvenance | undefined,
+  ): Promise<string[]> {
+    if (provenance === undefined || provenance.kind !== "authored") {
+      return [];
+    }
+    const resolver = new ThemeResolver(this.deps.db);
+    const theme = await resolver.resolve(
+      provenance.theme.ref.id,
+      provenance.theme.ref.version,
+    );
+    if (theme === undefined) {
+      return [
+        `作者Theme ${provenance.theme.ref.id}@${provenance.theme.ref.version} を解決できないためFont診断を省略しました`,
+      ];
+    }
+    const resolution = await this.deps.fontCatalogService.resolveThemeFonts(theme, {
+      verify: true,
+    });
+    return resolution.diagnostics;
   }
 }

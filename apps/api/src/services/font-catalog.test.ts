@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { FontCatalogService, type FontCatalogAdapter } from "./font-catalog.ts";
-import type { FontFace } from "@kakeai/contracts";
+import {
+  FakeFontCatalogAdapter,
+  FontCatalogService,
+  findLocalFace,
+  type FontCatalogAdapter,
+} from "./font-catalog.ts";
+import { FakeFontVerifier } from "./font-verifier.ts";
+import { getVisualTheme, visualThemeDefinitionSchema, type FontFace, type VisualThemeDefinition, type VisualThemeTextRole } from "@kakeai/contracts";
 
 class CountingAdapter implements FontCatalogAdapter {
   calls = 0;
@@ -10,6 +16,52 @@ class CountingAdapter implements FontCatalogAdapter {
     await new Promise((resolve) => setTimeout(resolve, 10));
     return { supported: true, faces: this.faces, reason: null };
   }
+}
+
+const faces: FontFace[] = [
+  {
+    platformId: "HiraginoSans-W3",
+    family: "Hiragino Sans",
+    displayName: "Hiragino Sans W3",
+    postScriptName: "HiraginoSans-W3",
+    weight: 400,
+    style: "normal",
+    stretch: "normal",
+    available: true,
+  },
+  {
+    platformId: "HiraginoSans-W6",
+    family: "Hiragino Sans",
+    displayName: "Hiragino Sans W6",
+    postScriptName: "HiraginoSans-W6",
+    weight: 700,
+    style: "normal",
+    stretch: "normal",
+    available: true,
+  },
+];
+
+function themeWithFonts(): VisualThemeDefinition {
+  const base = getVisualTheme("soft-editorial", 1)!;
+  const withFace = (
+    role: VisualThemeTextRole,
+    family: string,
+    platformId: string,
+    weight: number,
+  ) => ({
+    ...base.textRoles[role],
+    fontFace: { platformId, family, style: "normal" as const, weight, fallbacks: [] },
+  });
+  return visualThemeDefinitionSchema.parse({
+    ...base,
+    themeDefinitionSchemaVersion: 2,
+    skin: { id: "neutral", version: 1 },
+    textRoles: {
+      ...base.textRoles,
+      title: withFace("title", "Hiragino Sans", "HiraginoSans-W6", 700),
+      body: withFace("body", "No Such Font", "NoSuchFont-Regular", 400),
+    },
+  });
 }
 
 describe("FontCatalogService", () => {
@@ -30,5 +82,89 @@ describe("FontCatalogService", () => {
     expect(second).toBe(first);
     await service.getCatalog(true);
     expect(adapter.calls).toBe(2);
+  });
+
+  it("resolves the exact local face for a family and weight", () => {
+    const catalog = { supported: true, faces, reason: null, updatedAt: "2026-01-01T00:00:00.000Z" };
+    const byPlatform = findLocalFace(
+      { platformId: "HiraginoSans-W6", family: "Hiragino Sans", style: "normal", weight: 700, fallbacks: [] },
+      catalog,
+    );
+    expect(byPlatform?.postScriptName).toBe("HiraginoSans-W6");
+
+    const byWeight = findLocalFace(
+      { family: "Hiragino Sans", style: "normal", weight: 700, fallbacks: [] },
+      catalog,
+    );
+    expect(byWeight?.postScriptName).toBe("HiraginoSans-W6");
+
+    const unknown = findLocalFace(
+      { family: "No Such Font", style: "normal", weight: 400, fallbacks: [] },
+      catalog,
+    );
+    expect(unknown).toBeUndefined();
+  });
+
+  it("uses Chromium-verified faces and falls back for unverified or unknown faces", async () => {
+    const theme = themeWithFonts();
+    const verifiedService = new FontCatalogService(
+      new FakeFontCatalogAdapter(true, faces),
+      new FakeFontVerifier({ verified: ["HiraginoSans-W6"] }),
+    );
+    const verified = await verifiedService.resolveThemeFonts(theme, { verify: true });
+    const title = verified.roles.find((role) => role.role === "title")!;
+    expect(title.localFaceName).toBe("HiraginoSans-W6");
+    expect(title.localFaceWeight).toBe(700);
+    expect(title.usesFallback).toBe(false);
+    const titleLine = verified.diagnostics.find((line) => line.startsWith("title:"))!;
+    expect(titleLine).not.toContain("解決できない");
+    expect(verified.missingFonts).toContain("No Such Font");
+    expect(verified.missingFonts).not.toContain("Hiragino Sans");
+
+    const unverifiedService = new FontCatalogService(
+      new FakeFontCatalogAdapter(true, faces),
+      new FakeFontVerifier({ verified: [] }),
+    );
+    const unverified = await unverifiedService.resolveThemeFonts(theme, { verify: true });
+    const unverifiedTitle = unverified.roles.find((role) => role.role === "title")!;
+    expect(unverifiedTitle.localFaceName).toBeUndefined();
+    expect(unverifiedTitle.usesFallback).toBe(true);
+    expect(unverified.missingFonts).toContain("Hiragino Sans");
+    expect(unverified.diagnostics.join("\n")).toContain("Chromiumで解決できない");
+  });
+
+  it("treats faces as usable when Chromium verification is unavailable", async () => {
+    const service = new FontCatalogService(new FakeFontCatalogAdapter(true, faces));
+    const resolution = await service.resolveThemeFonts(themeWithFonts(), { verify: true });
+    const title = resolution.roles.find((role) => role.role === "title")!;
+    expect(title.localFaceName).toBe("HiraginoSans-W6");
+    expect(title.usesFallback).toBe(false);
+    expect(resolution.verificationSupported).toBe(false);
+    expect(resolution.missingFonts).not.toContain("Hiragino Sans");
+    expect(resolution.diagnostics.join("\n")).toContain("Chromium未検証");
+  });
+
+  it("falls back for every font when the catalog is unsupported", async () => {
+    const service = new FontCatalogService(
+      new FakeFontCatalogAdapter(false, [], "unsupported_platform"),
+    );
+    const resolution = await service.resolveThemeFonts(themeWithFonts(), { verify: true });
+    expect(resolution.catalogSupported).toBe(false);
+    expect(resolution.missingFonts).toEqual([]);
+    expect(resolution.roles.every((role) => role.usesFallback)).toBe(true);
+  });
+
+  it("annotates catalog faces that Chromium verification has checked", async () => {
+    const service = new FontCatalogService(
+      new FakeFontCatalogAdapter(true, faces),
+      new FakeFontVerifier({ verified: ["HiraginoSans-W6"] }),
+    );
+    const before = await service.getCatalog();
+    expect(before.faces.every((face) => face.verifiedLocalFace === undefined)).toBe(true);
+
+    await service.resolveThemeFonts(themeWithFonts(), { verify: true });
+    const after = await service.getCatalog();
+    expect(after.faces.find((face) => face.postScriptName === "HiraginoSans-W6")?.verifiedLocalFace).toBe(true);
+    expect(after.faces.find((face) => face.postScriptName === "HiraginoSans-W3")?.verifiedLocalFace).toBeUndefined();
   });
 });

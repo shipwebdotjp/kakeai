@@ -11,6 +11,7 @@ import {
 import { CompositionAuthoringService } from "./authoring-context.ts";
 import { CompositionService } from "./compositions.ts";
 import { FakeFontCatalogAdapter, FontCatalogService } from "./font-catalog.ts";
+import { FakeFontVerifier } from "./font-verifier.ts";
 import { ThemeService } from "./themes.ts";
 import { dataDirectories, ensureDataDirectories } from "../storage/paths.ts";
 import { createPrismaClient } from "../db/client.ts";
@@ -147,6 +148,33 @@ describe("Composition Authoring Context and Style Kit", () => {
     expect(resolved.context.skin).toEqual({ id: "neutral", version: 1 });
     expect(resolved.context.canvasProfile).toBe("portrait");
     expect(resolved.kitFiles["components.css"]).toContain(".kk-surface");
+  });
+
+  it("generates fonts.css only from Chromium-verified local faces", async () => {
+    const { themeId, version } = await publishPaperTheme();
+    const withVerified = new CompositionAuthoringService({
+      db: prisma,
+      fontCatalogService: new FontCatalogService(
+        new FakeFontCatalogAdapter(true, faces),
+        new FakeFontVerifier({ verified: ["HiraginoSans-W6"] }),
+      ),
+    });
+    const verified = await withVerified.resolve({ visualTheme: { id: themeId, version } });
+    expect(verified.kitFiles["fonts.css"]).toContain('local("HiraginoSans-W6")');
+    expect(verified.context.fontDiagnostics.join("\n")).not.toContain("解決できない");
+
+    const withUnverified = new CompositionAuthoringService({
+      db: prisma,
+      fontCatalogService: new FontCatalogService(
+        new FakeFontCatalogAdapter(true, faces),
+        new FakeFontVerifier({ verified: [] }),
+      ),
+    });
+    const unverified = await withUnverified.resolve({ visualTheme: { id: themeId, version } });
+    expect(unverified.kitFiles["fonts.css"]).not.toContain('local("HiraginoSans-W6")');
+    expect(unverified.kitFiles["fonts.css"]).toContain("--kakeai-font-title: sans-serif;");
+    expect(unverified.context.fontDiagnostics.join("\n")).toContain("Chromiumで解決できない");
+    expect(unverified.provenance.fontDiagnostics).toEqual(unverified.context.fontDiagnostics);
   });
 
   it("rejects unknown themes and draft-only themes", async () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Composition } from "@kakeai/contracts";
+import type { Composition, CompositionStyleProvenance } from "@kakeai/contracts";
 import { CANVAS_PROFILE_LABELS, canvasProfileOf } from "@kakeai/contracts";
 import { useCompositions } from "../api/hooks";
 import { errorMessage } from "../lib/errorMessage";
@@ -14,6 +14,16 @@ function draftStatus(composition: Composition): string {
     return "draftなし";
   }
   return `draft: ${composition.draft.entrypoint}`;
+}
+
+function provenanceLabel(provenance: CompositionStyleProvenance | undefined): string {
+  if (provenance === undefined || provenance.kind === "legacy") {
+    return "legacy（作風情報なし）";
+  }
+  if (provenance.kind === "neutral") {
+    return "neutral（スキン未指定）";
+  }
+  return `${provenance.skin.id}@${provenance.skin.version}`;
 }
 
 export function CompositionLibraryPage() {
@@ -75,6 +85,7 @@ export function CompositionLibraryPage() {
                 <tr>
                   <th className="pr-4">版</th>
                   <th className="pr-4">キャンバス</th>
+                  <th className="pr-4">スキン</th>
                   <th className="pr-4">バージョンID</th>
                   <th className="pr-4">bundle</th>
                   <th className="pr-4">entrypoint</th>
@@ -88,6 +99,7 @@ export function CompositionLibraryPage() {
                     <td className="py-1 pr-4">
                       {CANVAS_PROFILE_LABELS[canvasProfileOf(version.manifest)]}
                     </td>
+                    <td className="py-1 pr-4">{provenanceLabel(version.styleProvenance)}</td>
                     <td className="py-1 pr-4 font-mono text-xs">{version.id}</td>
                     <td className="py-1 pr-4 font-mono text-xs" title={version.bundleHash}>
                       {shortHash(version.bundleHash)}

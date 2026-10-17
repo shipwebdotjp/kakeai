@@ -7,7 +7,7 @@ Composition Library は、AI（HyperFrames）が作成・公開した全画面�
 画面右上の「コンポジション」を開くと、登録されている Composition の一覧が表示されます。
 
 - 一覧には各 Composition の名前・runtime ID・draft の状態・公開バージョン数が並びます。項目を押すと選択され、詳細が表示されます。
-- 詳細には draft の entrypoint と、公開バージョンの一覧（版番号・キャンバス・バージョンID・bundle ハッシュ・entrypoint・公開日時）が表示されます。「キャンバス」はその版の Canvas Profile（横長 1920×1080 ／ 縦長 1080×1920）です。
+- 詳細には draft の entrypoint と、公開バージョンの一覧（版番号・キャンバス・スキン・バージョンID・bundle ハッシュ・entrypoint・公開日時）が表示されます。「キャンバス」はその版の Canvas Profile（横長 1920×1080 ／ 縦長 1080×1920）です。「スキン」は AI がその版を作ったときの世界観（例: `handmade-paper@1`、スキン未指定の `neutral`、情報がない `legacy`）です。
 - Composition の作成・更新・公開（Publish）は AI が行います。Web UI には HTML の直接編集や公開ボタンはありません。編集内容は draft に入り、公開して初めて台本から参照できる不変の CompositionVersion になります。
 
 ## 台本で使う
@@ -33,3 +33,5 @@ Composition Library は、AI（HyperFrames）が作成・公開した全画面�
 - 端末画面での埋め込みは、いまはデバイスフレーム（ラップトップ／スマートフォン）の画面のみです。サイトモックアップやカードへの埋め込みは今後の対応です。
 
 > ドロップダウンに目的のバージョンが無い場合は、AI がまだ公開していないか、公開に失敗しています。公開時には、manifest の Canvas Profile（横長 1920×1080 ／ 縦長 1080×1920）と寸法の一致・有限尺・無音・HyperFrames lint エラーなしなどが検証されます。
+
+> 台本のテーマのスキンと、選んだ CompositionVersion のスキンが異なる場合、ドロップダウンの下に警告が表示されます（例: 紙のスキンの台本に `neutral` の Composition を置いた場合）。保存やレンダーは拒否されません。見た目の調和を確認してください。

@@ -83,7 +83,22 @@ export async function createRenderJob(
     throw new ApiError(422, "RENDER_INPUT_INVALID", `Visual Themeが見つかりません: ${content.visualTheme.id}@${content.visualTheme.version}`);
   }
 
-  const fontDiagnostics = await fontCatalogService.diagnoseTheme(resolvedThemeDefinition);
+  let fontResolution: { missingFonts: string[]; diagnostics: string[] } = {
+    missingFonts: [],
+    diagnostics: [],
+  };
+  try {
+    fontResolution = await fontCatalogService.resolveThemeFonts(resolvedThemeDefinition, {
+      verify: true,
+    });
+  } catch (error) {
+    fontResolution = {
+      missingFonts: [],
+      diagnostics: [
+        `Font診断を省略しました: ${error instanceof Error ? error.message : String(error)}`,
+      ],
+    };
+  }
 
   const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
@@ -215,7 +230,10 @@ export async function createRenderJob(
     faceSets: snapshotFaceSets,
     themeDefinition: resolvedThemeDefinition,
     skin: resolveVisualThemeSkin(resolvedThemeDefinition),
-    fontDiagnostics,
+    fontDiagnostics: {
+      missingFonts: fontResolution.missingFonts,
+      diagnostics: fontResolution.diagnostics,
+    },
     template: { id: content.template.id, version: content.template.version },
     output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
     renderer: {

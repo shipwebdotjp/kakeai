@@ -287,6 +287,7 @@ export const draftPreviewSourceSchema = z.object({
 
 export const draftPreviewSchema = previewBodySchema.extend({
   source: draftPreviewSourceSchema,
+  fontDiagnostics: z.array(z.string()).optional(),
 });
 
 export type WorkSummary = z.infer<typeof workSummarySchema>;
@@ -319,6 +320,7 @@ export const fontFaceSchema = z.object({
   weight: z.number().int(),
   style: z.enum(["normal", "italic", "oblique"]),
   stretch: z.string(),
+  verifiedLocalFace: z.boolean().optional(),
   variableAxes: z
     .array(
       z.object({

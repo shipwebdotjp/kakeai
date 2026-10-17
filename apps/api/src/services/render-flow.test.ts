@@ -168,6 +168,7 @@ describe("render job creation", () => {
     expect(snapshot.output).toEqual({ width: 1920, height: 1080, fps: 30, format: "mp4" });
     expect(snapshot.assets.map((asset) => asset.assetId)).toEqual([image.id]);
     expect(snapshot.skin).toEqual({ id: "neutral", version: 1 });
+    expect(snapshot.fontDiagnostics).toEqual({ missingFonts: [], diagnostics: [] });
 
     await jobs.cancelJob(prisma, job.id);
   });

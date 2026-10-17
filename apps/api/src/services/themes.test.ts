@@ -179,6 +179,31 @@ describe("Theme Services & Routes", () => {
     expect(preview.compositionHtml).toContain("data:image/svg+xml");
   });
 
+  it("returns font diagnostics and attaches them to the representative preview", async () => {
+    const defaultTheme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const withFace = toVisualThemeDefinitionV2({
+      ...defaultTheme,
+      textRoles: {
+        ...defaultTheme.textRoles,
+        title: {
+          ...defaultTheme.textRoles.title,
+          fontFace: {
+            family: "Hiragino Sans",
+            platformId: "HiraginoSans-W3",
+            style: "normal",
+            weight: 400,
+            fallbacks: [],
+          },
+        },
+      },
+    });
+    const diagnostics = await themeService.resolveFontDiagnostics(withFace);
+    expect(diagnostics.join("\n")).toContain("HiraginoSans-W3");
+
+    const preview = compileThemeRepresentativePreview(withFace, diagnostics);
+    expect(preview.fontDiagnostics).toEqual(diagnostics);
+  });
+
   it("handles non-macOS font catalog adapter returning unsupported state", async () => {
     const nonMacAdapter = new FakeFontCatalogAdapter(false, [], "unsupported_platform");
     const catalog = await nonMacAdapter.getCatalog();

@@ -34,11 +34,11 @@
 
 ## S4: Font診断と互換性表示
 
-- [ ] Font CatalogへChromium用の検証済みlocal face nameを追加し、ThemeのFont Faceから安全な`fonts.css`を生成する
-- [ ] Context生成、draft preview、publish前、render投入前のFont診断とfallback警告を追加する
-- [ ] Composition selectorと詳細画面にStyle Provenanceを表示し、Script VersionのSkinと異なるCompositionへ警告を出す
-- [ ] テスト: family名と正確なlocal face nameの区別、`@font-face local()`のChromium解決、欠落時fallback、Skin不一致警告
-- [ ] 完了条件: 同一macOSで選択した手書きFont Faceを、agent生成CompositionとKakeai rendererが安全に共有できる
+- [x] Font CatalogへChromium用の検証済みlocal face nameを追加し、ThemeのFont Faceから安全な`fonts.css`を生成する
+- [x] Context生成、draft preview、publish前、render投入前のFont診断とfallback警告を追加する
+- [x] Composition selectorと詳細画面にStyle Provenanceを表示し、Script VersionのSkinと異なるCompositionへ警告を出す
+- [x] テスト: family名と正確なlocal face nameの区別、`@font-face local()`のChromium解決、欠落時fallback、Skin不一致警告
+- [x] 完了条件: 同一macOSで選択した手書きFont Faceを、agent生成CompositionとKakeai rendererが安全に共有できる
 
 ## S5: 文書・回帰・手動確認
 

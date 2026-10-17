@@ -8,37 +8,22 @@ import {
   getVisualSkinDefinition,
   type CompositionAuthoringBrief,
   type CompositionAuthoredStyleProvenance,
-  type FontCatalog,
-  type FontFace,
-  type FontFaceSpec,
-  type ThemeFontCategory,
   type VisualSkinRef,
   type VisualThemeDefinition,
   type VisualThemeTextRole,
 } from "@kakeai/contracts";
 import { mixHex, overlayToRgba } from "@kakeai/video";
 import { ApiError } from "../http/errors.ts";
+import {
+  GENERIC_FONT_STACKS,
+  THEME_TEXT_ROLES,
+  type ResolvedThemeFontRole,
+  type ThemeFontResolution,
+} from "./font-catalog.ts";
 
 export const STYLE_KIT_VERSION = 1 as const;
 
 const PROTECTED_KIT_FILES = ["STYLE.md", "tokens.css", "fonts.css", "components.css"] as const;
-
-const TEXT_ROLES: readonly VisualThemeTextRole[] = [
-  "title",
-  "subtitle",
-  "heading",
-  "body",
-  "closing",
-  "caption",
-  "label",
-  "code",
-];
-
-const GENERIC_FONT_STACKS: Record<ThemeFontCategory, string> = {
-  sans: "sans-serif",
-  serif: "serif",
-  mono: "monospace",
-};
 
 const NEUTRAL_BRIEF: CompositionAuthoringBrief = {
   intent: "Visual Themeの配色・書体・余白に沿ったTemplate標準のモーション。",
@@ -114,79 +99,20 @@ function fontAlias(role: VisualThemeTextRole): string {
   return `KakeaiSkin-${role}`;
 }
 
-interface ResolvedFontRole {
-  role: VisualThemeTextRole;
-  category: ThemeFontCategory;
-  localFace: FontFace | undefined;
-}
-
-function resolveLocalFace(fontFace: FontFaceSpec, catalog: FontCatalog): FontFace | undefined {
-  const faces = catalog.faces;
-  const wantedPostScript = fontFace.platformId?.toLowerCase();
-  if (wantedPostScript !== undefined && wantedPostScript.length > 0) {
-    const byPostScript = faces.find(
-      (face) => face.postScriptName.toLowerCase() === wantedPostScript,
-    );
-    if (byPostScript !== undefined) {
-      return byPostScript;
-    }
-  }
-  const wantedFamily = fontFace.family.toLowerCase();
-  const familyMatches = faces.filter((face) => face.family.toLowerCase() === wantedFamily);
-  if (familyMatches.length === 0) {
-    return undefined;
-  }
-  const exact = familyMatches.find(
-    (face) => face.weight === fontFace.weight && face.style === fontFace.style,
-  );
-  const styled = familyMatches.find((face) => face.style === fontFace.style);
-  return exact ?? styled ?? familyMatches[0];
-}
-
-function resolveFontRoles(
-  theme: VisualThemeDefinition,
-  catalog: FontCatalog,
-): { roles: ResolvedFontRole[]; diagnostics: string[] } {
-  const diagnostics: string[] = [];
-  const roles = TEXT_ROLES.map((role) => {
-    const token = theme.textRoles[role];
-    const fontFace = token.fontFace;
-    let localFace: FontFace | undefined;
-    if (fontFace !== undefined) {
-      const resolved = catalog.supported ? resolveLocalFace(fontFace, catalog) : undefined;
-      if (resolved !== undefined) {
-        localFace = resolved;
-        diagnostics.push(
-          `${role}: local face ${cssStringLiteral(resolved.postScriptName)} を使用`,
-        );
-      } else {
-        diagnostics.push(
-          `${role}: ${cssStringLiteral(fontFace.family)} を解決できないため ${GENERIC_FONT_STACKS[token.font]} を使用`,
-        );
-      }
-    }
-    return { role, category: token.font, localFace };
-  });
-  if (!catalog.supported) {
-    diagnostics.unshift("フォントカタログが利用できないため、すべての文字はgeneric stackで描画されます");
-  }
-  return { roles, diagnostics };
-}
-
-function renderFontsCss(theme: VisualThemeDefinition, roles: ResolvedFontRole[]): string {
+function renderFontsCss(theme: VisualThemeDefinition, roles: readonly ResolvedThemeFontRole[]): string {
   const lines: string[] = [
     `/* Kakeai Style Kit fonts (kit v${STYLE_KIT_VERSION}) — source theme ${cssCommentSafe(theme.id)}@${theme.version} */`,
   ];
   for (const role of roles) {
-    if (role.localFace === undefined) {
+    if (role.localFaceName === undefined) {
       continue;
     }
     lines.push(
       `@font-face {`,
       `  font-family: ${cssStringLiteral(fontAlias(role.role))};`,
-      `  src: local(${cssStringLiteral(role.localFace.postScriptName)});`,
-      `  font-style: ${role.localFace.style};`,
-      `  font-weight: ${role.localFace.weight};`,
+      `  src: local(${cssStringLiteral(role.localFaceName)});`,
+      `  font-style: ${role.localFaceStyle ?? "normal"};`,
+      `  font-weight: ${role.localFaceWeight ?? 400};`,
       `  font-display: block;`,
       `}`,
     );
@@ -194,7 +120,7 @@ function renderFontsCss(theme: VisualThemeDefinition, roles: ResolvedFontRole[])
   lines.push(":root {");
   for (const role of roles) {
     const stack =
-      role.localFace === undefined
+      role.localFaceName === undefined
         ? GENERIC_FONT_STACKS[role.category]
         : `${cssStringLiteral(fontAlias(role.role))}, ${GENERIC_FONT_STACKS[role.category]}`;
     lines.push(`  --kakeai-font-${role.role}: ${stack};`);
@@ -231,7 +157,7 @@ function renderTokensCss(theme: VisualThemeDefinition): string {
     `  --kakeai-tone-error: ${theme.semantic.error};`,
     `  --kakeai-tone-info: ${theme.semantic.info};`,
   ];
-  for (const role of TEXT_ROLES) {
+  for (const role of THEME_TEXT_ROLES) {
     const token = theme.textRoles[role];
     lines.push(
       `  --kakeai-text-${role}-size: ${token.fontSize}px;`,
@@ -393,16 +319,16 @@ export interface StyleKitContents {
 export function buildStyleKitContents(options: {
   skin: VisualSkinRef;
   theme: VisualThemeDefinition;
-  fontCatalog: FontCatalog;
+  fontResolution: ThemeFontResolution;
 }): StyleKitContents {
-  const { skin, theme, fontCatalog } = options;
-  const { roles, diagnostics } = resolveFontRoles(theme, fontCatalog);
+  const { skin, theme, fontResolution } = options;
+  const diagnostics = fontResolution.diagnostics;
   const definitionHash = hashVisualThemeDefinition(theme);
 
   const files: Record<string, string> = {
     "STYLE.md": renderStyleMd({ skin, definitionHash, theme, fontDiagnostics: diagnostics }),
     "tokens.css": renderTokensCss(theme),
-    "fonts.css": renderFontsCss(theme, roles),
+    "fonts.css": renderFontsCss(theme, fontResolution.roles),
     "components.css": renderComponentsCss(skin, theme),
   };
 

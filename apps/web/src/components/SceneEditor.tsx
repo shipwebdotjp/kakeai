@@ -79,7 +79,7 @@ import {
 } from "../ui";
 import { CharacterFields } from "./CharacterFields";
 import { Collapsible, useStoredCollapsible } from "./Collapsible";
-import { CueList } from "./CueList";
+import { CueList, ScriptSkinProvider } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
 import { ScriptImportModal } from "./ScriptImportModal";
@@ -1296,6 +1296,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         )}
       </Collapsible>
 
+      <ScriptSkinProvider control={control}>
       {fields.map((field, sceneIndex) => {
         const scene = watchedScenes[sceneIndex];
         if (scene === undefined) {
@@ -1483,6 +1484,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           </section>
         );
       })}
+      </ScriptSkinProvider>
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
