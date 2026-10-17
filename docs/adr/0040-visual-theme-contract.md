@@ -1,5 +1,7 @@
 # Visual Theme 契約（`soft-editorial@1`）
 
+> amended by [ADR-0069](./0069-visual-skin-and-composition-authoring-context.md)
+
 Superseded by [ADR 0049](./0049-custom-visual-theme-revisions.md).
 
 Visual Theme はVisualTemplateの見た目の**既定値**を提供する。Cueの明示設定は常に優先し、既存テンプレートの入力契約と柔軟性を変えない。初回は `soft-editorial@1` を唯一の組み込みテーマとし、Document・プレビュー・レンダー・既存VisualTemplateへ接続する。

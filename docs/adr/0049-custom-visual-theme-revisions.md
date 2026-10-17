@@ -1,5 +1,7 @@
 # 利用者編集可能な Visual Theme を不変revisionとdraftに分ける
 
+> amended by [ADR-0069](./0069-visual-skin-and-composition-authoring-context.md)
+
 Visual Themeをアプリ共通ライブラリとして利用者が作成・編集できるようにする。ただし、Script VersionとRender Jobが参照できるのは不変の公開Theme Revisionだけとし、編集途中のTheme Draftはテーマ編集画面のプレビュー専用にする。テーマ更新を自動追従させず、利用者が公開revisionを選び、通常の明示保存で新しいScript Versionを作ることで適用する。これにより、自由なテーマ調整と過去の作品・レンダーの意図の保持を両立する。
 
 ## Considered Options

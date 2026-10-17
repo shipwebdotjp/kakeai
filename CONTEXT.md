@@ -141,7 +141,7 @@ A non-persistent editor navigation view that lays Scenes and Narration Segments 
 _Avoid_: Timeline, track, storyboard
 
 **Visual Theme**:
-An app-managed visual identity whose selected Theme Revision supplies default visual tokens to a Script Version. Explicit cue inputs always override it.
+An app-managed visual identity whose selected Theme Revision supplies default visual tokens and selects one Visual Skin for a Script Version. Explicit cue inputs always override it.
 _Avoid_: UI theme, site mockup theme
 
 **Theme Revision**:
@@ -151,6 +151,22 @@ _Avoid_: Theme draft, theme update
 **Theme Draft**:
 A mutable, non-renderable working definition of a Visual Theme used only by the theme editor and its preview.
 _Avoid_: Theme Revision, Script Version
+
+**Visual Skin**:
+An app-managed, versioned visual grammar shared by supported Visual Templates and Composition authoring. It supplies trusted rendering rules and falls back to neutral rendering when a Template is unsupported.
+_Avoid_: Theme, arbitrary CSS, Asset
+
+**Style Kit**:
+An immutable trusted bundle of a Visual Skin's authoring rules, CSS, font aliases, and reusable visual parts, copied into an AI-authored Composition bundle.
+_Avoid_: User asset, plugin
+
+**Composition Authoring Context**:
+A non-persistent, resolved input that gives an AI a published Theme Revision, Visual Skin, Style Kit, and font diagnostics before it creates a Composition Draft.
+_Avoid_: CompositionVersion, Script Version
+
+**Composition Style Provenance**:
+Immutable metadata on a published CompositionVersion that records the Theme Revision, Visual Skin, Style Kit, and font diagnostics used when authoring it.
+_Avoid_: Runtime theme override
 
 **Font Face**:
 One selectable installed typeface face, including its family, weight, style, and platform-specific identifier. A Visual Theme uses it as a default while retaining a fallback when it is unavailable.

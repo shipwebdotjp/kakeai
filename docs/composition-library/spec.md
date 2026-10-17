@@ -6,7 +6,7 @@
 
 ScriptVersion の正本は引き続き ContentDocument であり、HyperFrames HTML を台本 JSON へ保存しない。台本は `composition.full-bleed@1` の入力として CompositionVersion の ID だけを参照する。詳細な ContentDocument 契約は [../mvp/content-schema.md](../mvp/content-schema.md)、HTTP 契約は [../mvp/api-contract.md](../mvp/api-contract.md) を正とする。
 
-v1 の対象は、Kakeai の Composition Library に保存され、HyperFrames skill を使う AI が作成・変更した project だけである。任意の外部 project の import、利用者による HTML/CSS/JavaScript の直接編集、任意 HTML の ScriptVersion への保存は対象外とする。
+v1 の対象は、Kakeai の Composition Library に保存され、HyperFrames skill を使う AI が作成・変更した project だけである。任意の外部 project の import、利用者による HTML/CSS/JavaScript の直接編集、任意 HTML の ScriptVersion への保存は対象外とする。Visual Skinを使うComposition Authoring Context、Style Kit、Style Provenanceの拡張は[../visual-skins/spec.md](../visual-skins/spec.md)を正とする。
 
 ## ライフサイクル
 

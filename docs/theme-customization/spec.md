@@ -4,7 +4,7 @@
 
 この文書は、利用者がVisual Themeを作成・編集・公開し、作品へ明示的に適用できるようにする仕様である。既存のVisual Theme基盤に対するこの機能の判断は本書を正とし、設計判断は[ADR 0049](../adr/0049-custom-visual-theme-revisions.md)を参照する。用語は[CONTEXT.md](../../CONTEXT.md)を正とする。
 
-Visual Themeは出力映像の既定の見た目であり、Web UIのライト／ダークテーマではない。任意のCSS、HTML、JavaScript、フォントファイルの持ち込みは含めない。V1では実作品をTheme Draftで一時プレビューする機能を含めず、テーマ編集画面に固定の代表サンプルプレビューを置く。
+Visual Themeは出力映像の既定の見た目であり、Web UIのライト／ダークテーマではない。Visual Themeが選ぶVisual Skinと、そのSkinをAI Compositionへ渡す後続機能は[../visual-skins/spec.md](../visual-skins/spec.md)を正とする。この文書のV1はSkin選択を含まず、Visual Skin実装後に同仕様がTheme Definition Schema v2を追加する。任意のCSS、HTML、JavaScript、フォントファイルの持ち込みは含めない。V1では実作品をTheme Draftで一時プレビューする機能を含めず、テーマ編集画面に固定の代表サンプルプレビューを置く。
 
 ## 成果と非ゴール
 
@@ -43,7 +43,7 @@ Work編集画面は、現在のTheme Revisionと、同じThemeの利用可能な
 
 Theme RevisionとTheme Draftの定義JSONは`themeDefinitionSchemaVersion`を持ち、ContentDocumentの`schemaVersion`から独立して進化する。各定義はZodで厳密に検証する。`ContentDocument.visualTheme`の形状は既存の`{ id, version }`を維持するため、この機能だけではContentDocumentのschemaVersionを上げない。
 
-テーマの共通トークンは既存のcanvas、accents、surface、semantic colors、radius、shadow、motion、categoryColors、artDirectionを維持する。利用者が編集できる文字既定値は次のroleを持つ。
+テーマの共通トークンは既存のcanvas、accents、surface、semantic colors、radius、shadow、motion、categoryColors、artDirectionを維持する。Visual Skin機能を実装するとき、Theme Definition Schema v2は版付きVisual Skin Refも持つ。利用者が編集できる文字既定値は次のroleを持つ。
 
 - `title`
 - `subtitle`

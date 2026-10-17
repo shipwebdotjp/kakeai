@@ -2,7 +2,7 @@
 
 ## 目的と境界
 
-この文書は、VisualTemplateの見た目の既定値を提供する **Visual Theme** の基盤と、唯一の組み込みテーマ `soft-editorial@1` を定める。利用者編集可能なTheme、revision、draft、Font Face、選択UIは[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)を正とする。決定は[ADR 0049](../adr/0049-custom-visual-theme-revisions.md)を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md) を正とする。
+この文書は、VisualTemplateの見た目の既定値を提供する **Visual Theme** の基盤と、唯一の組み込みテーマ `soft-editorial@1` を定める。利用者編集可能なTheme、revision、draft、Font Face、選択UIは[Visual Theme カスタマイズ仕様](../theme-customization/spec.md)を正とする。Themeが選ぶVisual Skin、SkinのTemplate fallback、Composition authoringへの共有は[Visual Skin仕様](../visual-skins/spec.md)を正とする。決定は[ADR 0049](../adr/0049-custom-visual-theme-revisions.md)を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md) を正とする。
 
 本書の「編集UI」およびrole対応範囲は、カスタマイズ機能を導入する前の基盤の記録である。前記仕様と矛盾するときは、Visual Theme カスタマイズ仕様を優先する。
 
