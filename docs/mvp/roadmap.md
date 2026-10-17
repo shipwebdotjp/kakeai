@@ -28,6 +28,7 @@
 - 背景とカードの正規化した焦点位置と拡大率を編集する（[../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) で実装済み。`focalPoint` の編集・中央リセット、メディアの拡大率と等倍リセット）。
 - 1 Scene内の複数VisualCue、表示順、セリフ区間・offset区間を編集する。
 - Scene別BGM、複数BGM、SFX、より高度な音声ミックスを追加する。
+- セリフ前の間、Scene単位の非ナレーション音声、動画と埋め込み音声を同期して再生するインサートSceneを、[セリフ間・Scene音声・インサートScene](../timeline-inserts/spec.md)のR1→R2→R3の順に追加する。通常の背景・カード動画は無音のままとする（[ADR-0067](../adr/0067-insert-scene-owns-embedded-video-audio.md)）。
 - 複数立ち絵、セリフ区間・offset区間ごとの立ち絵切替、口パクを追加する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) を正とする（グローバルな Face Set ライブラリ、`character.standing@1`、`NarrationSegment.expressionId`。再レンダー差異の許容は [ADR-0045](../adr/0045-face-set-global-reference.md)）。
 - 有名な投稿サイト・技術サイト・ブラウザのガワに画像・動画を収めるサイトモックアップ（フレーム型）は [../site-mockup/spec.md](../site-mockup/spec.md) で実装済み（`scene.site-mockup@1`、variantの加算的追加を許容、汎用スタイル＋利用者ロゴ）。
 - 見た目の既定値を提供するVisual Theme基盤は [../visual-themes/spec.md](../visual-themes/spec.md) で実装済み（`soft-editorial@1` を全作品で固定、Sceneアクセントのテーマ3色／自由色、Cue明示値が常に優先）。二つ目のテーマとWorkごとの選択UIは将来のテーマ追加時に導入する。

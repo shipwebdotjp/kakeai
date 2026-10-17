@@ -20,6 +20,10 @@ _Avoid_: Composition HTML, timeline
 The smallest unit of spoken content, with separate caption and spoken text, an optional selected Audio Take, and an optional per-line Expression Preset reference.
 _Avoid_: Subtitle, audio file
 
+**Narration Gap**:
+An intentional silent interval immediately before a Narration Segment. It is not a Narration Segment and has no caption, speech, or speaker performance.
+_Avoid_: Blank narration, audio offset
+
 **Audio Take**:
 An immutable candidate audio recording for one Narration Segment. A segment may select one take or deliberately have no audio.
 _Avoid_: Narration segment, BGM
@@ -27,6 +31,14 @@ _Avoid_: Narration segment, BGM
 **Scene**:
 A template-defined editorial unit of a Script Version, identified by a kind, with a duration, a per-scene accent color, narration lines, and visual cues. Text is expressed as visual cues, not typed slots.
 _Avoid_: Visual cue, template
+
+**Insert Scene**:
+A Scene that pauses narration to present one source video and, by default, its embedded audio as a self-contained insert.
+_Avoid_: Background video, point scene
+
+**Embedded Video Audio**:
+The audio stream contained in the source video of an Insert Scene, synchronized with that Scene's video rather than represented as a separate Audio Take.
+_Avoid_: Narration, Scene Audio Cue
 
 **Scene Label**:
 A required, saved, non-rendered editing name for a Scene, shown in navigation and lists to tell Scenes apart. It is separate from a heading text cue and is not an identifier.
@@ -201,7 +213,7 @@ A declarative input-field spec (`inputFields`) on a Visual Template that drives 
 _Avoid_: form schema, zod
 
 **Audio Cue**:
-An instruction to place an audio Asset, such as background music, over a range of a work.
+An instruction to place an audio Asset, such as background music, a sound effect, or program audio, over a Work or Scene range.
 _Avoid_: BGM asset, narration segment
 
 **Thumbnail**:
