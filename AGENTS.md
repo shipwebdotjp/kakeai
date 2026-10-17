@@ -39,20 +39,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 - `apps/api`: Express + Prisma。workerループを内蔵し、単一プロセスで起動する（P1以降）。
 - `apps/web`: Vite + React + TypeScript + Tailwind CSS（P2以降）。
 
-## 実装ルール
 
-- **契約が先**: 型は原則 `z.infer` で導出し、`packages/contracts` に集約する。API入出力・ContentDocument・VisualTemplate入力をZodで検証し、無検証でレンダーへ渡さない。
-- **コメントを書かない**: コードにコメントを追加しない。意図は名前と型で表す。
-- **正本と派生**: 正本はSQLiteの不変 `ScriptVersion.contentJson`。Composition HTML・MP4・フレームは派生物とし、正本にしない。
-- **スキーマ版**: ContentDocument は `schemaVersion: 1` から開始。移行コードを先回りして持たない。破壊的変更時に版を上げて新ScriptVersionで移行する。破壊的変更時は [docs/mvp/content-schema-history.md](docs/mvp/content-schema-history.md) と移行コード、ADRを同じ変更で更新する。JCS正規化や `contentHash` は持たない（キー順を安定させたJSON文字列で保存）。
-- **ID**: `NarrationSegment` と Scene のIDは同一Workの版をまたいで安定させ、編集保存で作り直さない。
-- **素材**: 原本を保持し、原則そのまま使う。原本を直接レンダーに使えない場合だけ必要時に `AssetRendition` を作る。`storageKey` は内容ハッシュ由来。
-- **テンプレート**: `template.id@version` の版は「保存済みの有効入力を再解釈しない境界」であり、既存の有効データの意味・レイアウト・検証結果を変える場合だけ版を上げる。再解釈を伴わない拡張は同じ版を書き換えてよい。参照ゼロの版は削除可。VisualTemplate入力スキーマも版ごとに固定する（[ADR-0061](docs/adr/0061-template-version-as-reinterpretation-boundary.md)）。
-- **Job**: 単一worker、`queued → running → succeeded|failed` と `queued → cancelled` のみ。リースは持たず、起動時に `running` を `WORKER_INTERRUPTED` で掃除する。二重取得は `updateMany` のbest-effortで足りる。
-- **台本保存**: 明示保存（自動保存なし）。last-write-wins。テキストあふれは拒否せず `meta.warnings` で返す。
-- **保護**: ループバックに束縛し、JSON/アップロードは厳密な `Host`/`Origin` 検証、content配信は `HttpOnly; SameSite=Strict` のメディアセッションCookie。独自ヘッダや起動トークンは使わない。
-- **保存先**: OSのアプリデータ領域をルートにし、開発時は `KAKEAI_DATA_DIR` で差し替える。絶対パスを正本へ埋め込まない。
-- **非ゴール**: マルチユーザー、分散レンダリング、高可用性、認証、クラウド保存。
 
 ## テスト
 
@@ -71,7 +58,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 1. `ocr review --audience agent -b "<変更の背景>" > /tmp/ocr_review.txt 2>&1` でレビューし、指摘を確認する。
 2. 正当な指摘のみを修正する。
 3. 再度レビューして修正する。ocrレビューは最大3回までで打ち切る。
-4. コミットする。
+4. 打ち切り・指摘0、いずれの場合でも指示がなくてもコミットを行なう。
 
 - 文書のみの軽微な変更はレビューを省略してよい。
 - コミットメッセージは変更の意図を簡潔に書く。
