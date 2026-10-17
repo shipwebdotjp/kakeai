@@ -42,3 +42,14 @@
 - [x] `npm run typecheck` と `npm test` を通す
 - [x] `ocr review --audience agent -b "利用者編集可能なVisual Theme、revision、draft preview、ローカルフォント対応"`を実行し、正当な指摘を最大3回まで修正する
 - [x] 変更をコミットする
+
+## 不具合修正（テーマ編集画面）
+
+- [x] 代表サンプルプレビューを通常の`<iframe>`ではなくHyperFramesプレイヤーで再生し、スケール・再生・シークを効かせる
+- [x] テーマ詳細画面を`PageLayout`（`max-w-3xl`）から外し、2ペインエディタ用の幅を確保する
+- [x] 色入力（スウォッチ＋hexコード）を`ColorField`へ共通化し、セルからのはみ出し・スウォッチの縮小をなくす
+- [x] 入力途中の不完全なhexコードを定義へ反映せず、プレビューAPIの422と無言のプレビュー停止を防ぐ
+- [x] プレビュー生成エラーをUIに表示する
+- [x] `npm run typecheck` と `npm test` を通す
+- [x] `ocr review --audience agent -b "テーマ編集画面のプレビューと色入力の不具合修正"`を実行し、正当な指摘を最大3回まで修正する
+- [x] 変更をコミットする

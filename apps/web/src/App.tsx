@@ -96,6 +96,10 @@ export const router = createBrowserRouter([
         element: <ThumbnailsPage />,
       },
       {
+        path: `${THEMES_ROUTE_PATH}/:themeId`,
+        element: <ThemeDetailPage />,
+      },
+      {
         element: <PageLayout />,
         children: [
           {
@@ -125,10 +129,6 @@ export const router = createBrowserRouter([
           {
             path: THEMES_ROUTE_PATH,
             element: <ThemesPage />,
-          },
-          {
-            path: `${THEMES_ROUTE_PATH}/:themeId`,
-            element: <ThemeDetailPage />,
           },
           {
             path: "*",

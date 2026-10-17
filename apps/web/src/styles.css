@@ -44,3 +44,15 @@ body {
   background-color: var(--surface);
   color: var(--foreground);
 }
+
+/* Native color inputs keep an inner padding/border that shrinks the swatch.
+   Let the chosen color fill the element box the layout controls. */
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+input[type="color"]::-webkit-color-swatch,
+input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 4px;
+}

@@ -89,6 +89,8 @@ Render Jobを作るときは、ContentDocumentのTheme Refだけでなく、解�
 
 テーマ編集画面のプレビューは固定の代表ContentDocumentを使う。代表サンプルにはbackground、surface、accent、title、subtitle、heading、body、closing、label、captionを含める。編集フォームの未保存値を`themeDefinition` overrideとしてプレビューAPIへ送り、通常のコンパイラでHTMLと診断を返す。この呼び出しはDB、Script Version、Theme Revision、Job、Artifactを作成しない。実WorkをDraftでプレビューするAPIはV1に含めない。
 
+返したHTMLは完成したCompositionそのものなので、Web UIはHyperFramesプレイヤー（`<hyperframes-player>`）で再生する。プレイヤーは枠に合わせてCompositionをスケールし、Sceneの`data-start`/`data-duration`に従って再生・シークする。通常の`<iframe>`へ直接描画してはならない（スケールされず、全Sceneが重なって表示される）。
+
 ## APIとUI
 
 APIは少なくとも次の責務を持つ。

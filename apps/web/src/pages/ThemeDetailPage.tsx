@@ -10,6 +10,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import "@hyperframes/player";
 import {
   NEUTRAL_VISUAL_SKIN_REF,
   SOFT_EDITORIAL_THEME_ID,
@@ -38,6 +39,7 @@ import {
   useTheme,
   useUpdateThemeDraft,
 } from "../api/hooks";
+import { ColorField } from "../components/ColorField";
 import { errorMessage } from "../lib/errorMessage";
 import { THEMES_ROUTE_PATH, themeDetailRoute } from "../lib/routes";
 import {
@@ -99,7 +101,7 @@ export function ThemeDetailPage() {
     if (!formDef) return;
     const timer = setTimeout(() => {
       previewDraft.mutate(formDef);
-    }, 300);
+    }, 400);
     return () => clearTimeout(timer);
   }, [formDef]);
 
@@ -226,7 +228,7 @@ export function ThemeDetailPage() {
   if (!theme || !formDef) return <p className={errorTextClass}>テーマが見つかりません。</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-[1400px] space-y-4">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
         <div className="flex items-center gap-3">
@@ -328,14 +330,14 @@ export function ThemeDetailPage() {
       )}
 
       {/* Main Grid: Left Form / Right Live Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Form (7 cols) */}
-        <div className="lg:col-span-6 space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Left Form (6 cols) */}
+        <div className="space-y-4 lg:col-span-6">
           {/* Tabs */}
-          <div className="flex border-b border-border text-sm">
+          <div className="flex flex-wrap border-b border-border text-sm">
             <button
               type="button"
-              className={`px-4 py-2 font-medium border-b-2 ${
+              className={`whitespace-nowrap px-4 py-2 font-medium border-b-2 ${
                 activeTab === "colors"
                   ? "border-brand-600 text-brand-600"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -346,7 +348,7 @@ export function ThemeDetailPage() {
             </button>
             <button
               type="button"
-              className={`px-4 py-2 font-medium border-b-2 ${
+              className={`whitespace-nowrap px-4 py-2 font-medium border-b-2 ${
                 activeTab === "typography"
                   ? "border-brand-600 text-brand-600"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -357,7 +359,7 @@ export function ThemeDetailPage() {
             </button>
             <button
               type="button"
-              className={`px-4 py-2 font-medium border-b-2 ${
+              className={`whitespace-nowrap px-4 py-2 font-medium border-b-2 ${
                 activeTab === "surfaces"
                   ? "border-brand-600 text-brand-600"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -368,7 +370,7 @@ export function ThemeDetailPage() {
             </button>
             <button
               type="button"
-              className={`px-4 py-2 font-medium border-b-2 ${
+              className={`whitespace-nowrap px-4 py-2 font-medium border-b-2 ${
                 activeTab === "skin"
                   ? "border-brand-600 text-brand-600"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -421,132 +423,48 @@ export function ThemeDetailPage() {
           {activeTab === "colors" && (
             <div className="space-y-4 text-sm">
               <fieldset disabled={isBuiltIn} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">キャンバス背景 (canvas.base)</label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="color"
-                        value={formDef.canvas.base}
-                        onChange={(e) => updateColor("base", e.target.value)}
-                        className="h-8 w-12 rounded cursor-pointer border border-border"
-                      />
-                      <input
-                        type="text"
-                        value={formDef.canvas.base}
-                        onChange={(e) => updateColor("base", e.target.value)}
-                        className={`font-mono ${textFieldClass}`}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">キャンバス文字 (canvas.ink)</label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="color"
-                        value={formDef.canvas.ink}
-                        onChange={(e) => updateColor("ink", e.target.value)}
-                        className="h-8 w-12 rounded cursor-pointer border border-border"
-                      />
-                      <input
-                        type="text"
-                        value={formDef.canvas.ink}
-                        onChange={(e) => updateColor("ink", e.target.value)}
-                        className={`font-mono ${textFieldClass}`}
-                      />
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <ColorField
+                    label="キャンバス背景 (canvas.base)"
+                    value={formDef.canvas.base}
+                    onChange={(value) => updateColor("base", value)}
+                  />
+                  <ColorField
+                    label="キャンバス文字 (canvas.ink)"
+                    value={formDef.canvas.ink}
+                    onChange={(value) => updateColor("ink", value)}
+                  />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">プライマリ (accents.primary)</label>
-                    <div className="flex gap-1.5 items-center">
-                      <input
-                        type="color"
-                        value={formDef.accents.primary}
-                        onChange={(e) => updateAccent("primary", e.target.value)}
-                        className="h-8 w-10 rounded cursor-pointer border border-border"
-                      />
-                      <input
-                        type="text"
-                        value={formDef.accents.primary}
-                        onChange={(e) => updateAccent("primary", e.target.value)}
-                        className={`font-mono text-xs ${textFieldClass}`}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">セカンダリ (accents.secondary)</label>
-                    <div className="flex gap-1.5 items-center">
-                      <input
-                        type="color"
-                        value={formDef.accents.secondary}
-                        onChange={(e) => updateAccent("secondary", e.target.value)}
-                        className="h-8 w-10 rounded cursor-pointer border border-border"
-                      />
-                      <input
-                        type="text"
-                        value={formDef.accents.secondary}
-                        onChange={(e) => updateAccent("secondary", e.target.value)}
-                        className={`font-mono text-xs ${textFieldClass}`}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">ターシャリ (accents.tertiary)</label>
-                    <div className="flex gap-1.5 items-center">
-                      <input
-                        type="color"
-                        value={formDef.accents.tertiary}
-                        onChange={(e) => updateAccent("tertiary", e.target.value)}
-                        className="h-8 w-10 rounded cursor-pointer border border-border"
-                      />
-                      <input
-                        type="text"
-                        value={formDef.accents.tertiary}
-                        onChange={(e) => updateAccent("tertiary", e.target.value)}
-                        className={`font-mono text-xs ${textFieldClass}`}
-                      />
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <ColorField
+                    label="プライマリ (accents.primary)"
+                    value={formDef.accents.primary}
+                    onChange={(value) => updateAccent("primary", value)}
+                  />
+                  <ColorField
+                    label="セカンダリ (accents.secondary)"
+                    value={formDef.accents.secondary}
+                    onChange={(value) => updateAccent("secondary", value)}
+                  />
+                  <ColorField
+                    label="ターシャリ (accents.tertiary)"
+                    value={formDef.accents.tertiary}
+                    onChange={(value) => updateAccent("tertiary", value)}
+                  />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">カード等背景 (surface)</label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="color"
-                        value={formDef.surface}
-                        onChange={(e) => updateColor("surface", e.target.value)}
-                        className="h-8 w-12 rounded cursor-pointer border border-border"
-                      />
-                      <input
-                        type="text"
-                        value={formDef.surface}
-                        onChange={(e) => updateColor("surface", e.target.value)}
-                        className={`font-mono ${textFieldClass}`}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">基本文字色 (text)</label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="color"
-                        value={formDef.text}
-                        onChange={(e) => updateColor("text", e.target.value)}
-                        className="h-8 w-12 rounded cursor-pointer border border-border"
-                      />
-                      <input
-                        type="text"
-                        value={formDef.text}
-                        onChange={(e) => updateColor("text", e.target.value)}
-                        className={`font-mono ${textFieldClass}`}
-                      />
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <ColorField
+                    label="カード等背景 (surface)"
+                    value={formDef.surface}
+                    onChange={(value) => updateColor("surface", value)}
+                  />
+                  <ColorField
+                    label="基本文字色 (text)"
+                    value={formDef.text}
+                    onChange={(value) => updateColor("text", value)}
+                  />
                 </div>
               </fieldset>
             </div>
@@ -615,31 +533,12 @@ export function ThemeDetailPage() {
                         </div>
 
                         <div>
-                          <label className="block mb-1">文字色</label>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="color"
-                              className="h-7 w-8 rounded border border-border"
-                              value={style.color}
-                              onChange={(e) =>
-                                updateTextStyle(role, (s) => ({
-                                  ...s,
-                                  color: e.target.value.toUpperCase(),
-                                }))
-                              }
-                            />
-                            <input
-                              type="text"
-                              className={`font-mono text-xs w-full ${textFieldClass}`}
-                              value={style.color}
-                              onChange={(e) =>
-                                updateTextStyle(role, (s) => ({
-                                  ...s,
-                                  color: e.target.value.toUpperCase(),
-                                }))
-                              }
-                            />
-                          </div>
+                          <span className="mb-1 block">文字色</span>
+                          <ColorField
+                            ariaLabel={`${ROLE_LABELS[role]} 文字色`}
+                            value={style.color}
+                            onChange={(color) => updateTextStyle(role, (s) => ({ ...s, color }))}
+                          />
                         </div>
                       </div>
 
@@ -780,31 +679,14 @@ export function ThemeDetailPage() {
                       {surf.enabled && (
                         <div className="grid grid-cols-2 gap-3 text-xs">
                           <div>
-                            <label className="block mb-1">背景色</label>
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="color"
-                                className="h-7 w-8 rounded border border-border"
-                                value={surf.backgroundColor}
-                                onChange={(e) =>
-                                  updateSurface(role, (s) => ({
-                                    ...s,
-                                    backgroundColor: e.target.value.toUpperCase(),
-                                  }))
-                                }
-                              />
-                              <input
-                                type="text"
-                                className={`font-mono text-xs w-full ${textFieldClass}`}
-                                value={surf.backgroundColor}
-                                onChange={(e) =>
-                                  updateSurface(role, (s) => ({
-                                    ...s,
-                                    backgroundColor: e.target.value.toUpperCase(),
-                                  }))
-                                }
-                              />
-                            </div>
+                            <span className="mb-1 block">背景色</span>
+                            <ColorField
+                              ariaLabel={`${ROLE_LABELS[role]} 囲みの背景色`}
+                              value={surf.backgroundColor}
+                              onChange={(backgroundColor) =>
+                                updateSurface(role, (s) => ({ ...s, backgroundColor }))
+                              }
+                            />
                           </div>
 
                           <div>
@@ -883,7 +765,7 @@ export function ThemeDetailPage() {
         </div>
 
         {/* Right Live Preview (6 cols) */}
-        <div className="lg:col-span-6 space-y-3">
+        <div className="space-y-3 lg:col-span-6">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm">代表サンプル リアルタイムプレビュー</h3>
             {previewDraft.isPending && (
@@ -891,13 +773,14 @@ export function ThemeDetailPage() {
             )}
           </div>
 
-          <div className="relative aspect-video w-full rounded border border-border bg-black overflow-hidden shadow">
+          <div className="relative aspect-video w-full overflow-hidden rounded border border-border bg-black shadow">
             {previewDraft.data?.compositionHtml ? (
-              <iframe
-                className="h-full w-full border-0"
-                sandbox="allow-scripts"
-                srcDoc={previewDraft.data.compositionHtml}
-                title="Theme Preview"
+              <hyperframes-player
+                srcdoc={previewDraft.data.compositionHtml}
+                controls
+                autoplay
+                loop
+                className="h-full w-full"
               />
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-neutral-400">
@@ -905,6 +788,10 @@ export function ThemeDetailPage() {
               </div>
             )}
           </div>
+
+          {previewDraft.isError && (
+            <p className={errorTextClass}>{errorMessage(previewDraft.error)}</p>
+          )}
 
           {theme.missingFonts && theme.missingFonts.length > 0 && (
             <div className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
