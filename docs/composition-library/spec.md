@@ -64,6 +64,7 @@ Canvas Profile は CompositionVersion が描画する内部キャンバスの固
 - `POST /compositions/:id/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取る。`files` はテキストファイル、`filesBase64` は base64 文字列で表したバイナリファイル（画像など）で、指定したファイルだけを上書きする部分更新（削除はしない）。同じ正規化パスを両方に含めることはできない。`manifest` を渡すとサーバが `manifest.json` を生成する（`entrypoint`・`runtimeCompositionId`・`width`・`height`・`contentHash` はサーバが設定し、`canvasProfile`・`durationMs`・`dependencies` を上書きする）。`canvasProfile` 省略時は現在の draft のプロファイル、無ければ `landscape` を使う。`files["manifest.json"]` の直書きも引き続き可能。
 - `GET /compositions/:id/draft/files` は `{ entrypoint, files, binaryFiles? }` を返し、seed を含む draft の内容を読み戻せる。`files` は UTF-8 テキスト、`binaryFiles` は base64 文字列で表したバイナリ（存在する場合のみ）。
 - `POST /compositions/:id/publish?dryRun=true` は version を作らずに publish と同じ検証だけを行い、成功時 `{ manifest }` を返す。失敗は常に 422 `VALIDATION_ERROR` と `details.issues`（`path`・`code`・`message`）で返し、manifest・依存・entry・外部 URL・entry id・lint の各問題を列挙する。
+- Visual Skinを使うComposition authoring（`POST /compositions`の任意`authoringStyle`、`POST /composition-authoring-contexts`、Style Kit付きseed、`kakeai-style/`の保護とhash検証、`CompositionStyleProvenance`）は[../visual-skins/spec.md](../visual-skins/spec.md)を正とし、この文書のauthoring APIを拡張する。Style Kit付きのpublishでは、manifest・依存・entry・外部URL・lintの検証に加えて保護ファイルのhash照合を行い、改変を422 `STYLE_KIT_MODIFIED`で拒否する。
 
 ### 保存レイアウト
 

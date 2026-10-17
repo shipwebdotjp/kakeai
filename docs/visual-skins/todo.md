@@ -42,7 +42,7 @@
 
 ## S5: 文書・回帰・手動確認
 
-- [ ] [spec.md](./spec.md)、Theme／Composition仕様、API契約、MVPロードマップ、CONTEXT、ADR、ユーザーガイドを同期する
-- [ ] `handmade-paper@1`で、タイトル、画像カード、3要点、引用、Skin未対応の表を含む代表動画をpreview／MP4 renderする
-- [ ] OCRレビューを最大3回実行し、正当な指摘だけを修正する
-- [ ] 完了条件: Theme変更、Composition authoring、既存作品のpreview／renderが相互に回帰しない
+- [x] [spec.md](./spec.md)、Theme／Composition仕様、API契約、MVPロードマップ、CONTEXT、ADR、ユーザーガイドを同期する
+- [x] `handmade-paper@1`で、タイトル、画像カード、3要点、引用、Skin未対応の表を含む代表動画をpreview／MP4 renderする
+- [x] OCRレビューを最大3回実行し、正当な指摘だけを修正する
+- [x] 完了条件: Theme変更、Composition authoring、既存作品のpreview／renderが相互に回帰しない

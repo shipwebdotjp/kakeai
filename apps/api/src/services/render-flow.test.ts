@@ -7,7 +7,10 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import {
   createInitialContentDocument,
+  HANDMADE_PAPER_SKIN_REF,
+  getVisualTheme,
   renderJobSnapshotSchema,
+  toVisualThemeDefinitionV2,
 } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import { loadConfig } from "../config.ts";
@@ -540,6 +543,181 @@ describe("render worker", () => {
     const finished = await jobs.getJob(prisma, job.id);
     expect(finished.status).toBe("succeeded");
     const artifact = finished.artifacts[0]!;
+    const location = await artifacts.resolveArtifactContent(
+      prisma,
+      config.directories,
+      artifact.id,
+    );
+    const probe = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v",
+      "-show_entries",
+      "stream=codec_type",
+      "-of",
+      "csv=p=0",
+      location.path,
+    ]);
+    expect(probe.stdout.trim()).toBe("video");
+    await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
+  }, 300000);
+
+  it("renders a handmade-paper representative video into the mp4", async () => {
+    if (!ffmpegReady || !renderEnabled) {
+      return;
+    }
+    const image = await readyImage();
+    const paperTheme = toVisualThemeDefinitionV2(
+      getVisualTheme("soft-editorial", 1)!,
+      HANDMADE_PAPER_SKIN_REF,
+    );
+    const themeRow = await prisma.theme.create({ data: { name: "S5 Paper Theme" } });
+    await prisma.themeRevision.create({
+      data: {
+        themeId: themeRow.id,
+        versionNumber: 1,
+        definitionJson: JSON.stringify({
+          ...paperTheme,
+          id: themeRow.id,
+          name: "S5 Paper Theme",
+          version: 1,
+        }),
+      },
+    });
+
+    const work = await works.createWork(prisma, "紙スキン代表動画", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.visualTheme = { id: themeRow.id, version: 1 };
+    content.audioTakes = [];
+    content.audioCues = [];
+    const transition = {
+      enter: { preset: "fade", durationMs: 300 },
+      exit: { preset: "none", durationMs: 0 },
+    } as const;
+    content.scenes = [
+      {
+        id: "scene-title",
+        kind: "intro",
+        label: "導入",
+        accent: { kind: "theme", token: "primary" },
+        timing: { mode: "fixed", durationMs: 3000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-title",
+            template: { id: "text.block", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition,
+            input: { text: "紙のタイトル", role: "title" },
+          },
+        ],
+      },
+      {
+        id: "scene-body",
+        kind: "point",
+        label: "要点",
+        accent: { kind: "theme", token: "secondary" },
+        timing: { mode: "fixed", durationMs: 4000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-photo",
+            template: { id: "media.card", version: 1 },
+            range: { kind: "scene" },
+            layer: "card",
+            order: 0,
+            transition,
+            input: { assetId: image.id, heading: "画像カード", caption: "紙に留めた写真" },
+          },
+          {
+            id: "vc-points",
+            template: { id: "list.callout", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 1,
+            transition,
+            input: { items: [{ text: "ひとつめ" }, { text: "ふたつめ" }, { text: "みっつめ" }] },
+          },
+        ],
+      },
+      {
+        id: "scene-quote",
+        kind: "point",
+        label: "引用と表",
+        accent: { kind: "theme", token: "tertiary" },
+        timing: { mode: "fixed", durationMs: 4000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-quote",
+            template: { id: "quote", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition,
+            input: { quote: "引用の言葉", author: "著者名" },
+          },
+          {
+            id: "vc-table",
+            template: { id: "table.simple", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 1,
+            transition,
+            input: {
+              data: {
+                columns: [
+                  { key: "item", label: "項目", type: "text" },
+                  { key: "value", label: "値", type: "number" },
+                ],
+                rows: [
+                  { item: "A", value: 1 },
+                  { item: "B", value: 2 },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      {
+        id: "scene-outro",
+        kind: "outro",
+        label: "結び",
+        accent: { kind: "theme", token: "primary" },
+        timing: { mode: "fixed", durationMs: 3000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-closing",
+            template: { id: "text.block", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition,
+            input: { text: "まとめ", role: "closing" },
+          },
+        ],
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    const snapshotRow = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(snapshotRow.inputSnapshotJson));
+    expect(snapshot.skin).toEqual(HANDMADE_PAPER_SKIN_REF);
+
+    await drainWorker();
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    const artifact = finished.artifacts[0]!;
+    expect(artifact.format).toBe("mp4");
+    expect(artifact.durationMs).toBeGreaterThan(0);
     const location = await artifacts.resolveArtifactContent(
       prisma,
       config.directories,
