@@ -2,7 +2,7 @@ import {
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
-  resolveVisualThemeSkin,
+  toVisualThemeDefinitionV2,
   visualThemeDefinitionSchema,
   visualThemeDefinitions,
   type ThemeDetail,
@@ -17,17 +17,6 @@ import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError } from "../http/validation.ts";
 import type { FontCatalogService } from "./font-catalog.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
-
-function asV2Definition(definition: VisualThemeDefinition): VisualThemeDefinitionV2 {
-  if (definition.themeDefinitionSchemaVersion === 2) {
-    return definition;
-  }
-  return {
-    ...definition,
-    themeDefinitionSchemaVersion: 2,
-    skin: resolveVisualThemeSkin(definition),
-  };
-}
 
 export class ThemeService {
   private resolver: ThemeResolver;
@@ -244,7 +233,7 @@ export class ThemeService {
       });
 
       const initialDefinition: VisualThemeDefinitionV2 = {
-        ...asV2Definition(baseDefinition),
+        ...toVisualThemeDefinitionV2(baseDefinition),
         id: theme.id,
         name,
         version: 1,
@@ -270,7 +259,7 @@ export class ThemeService {
     }
 
     const updatedDefinition: VisualThemeDefinitionV2 = {
-      ...asV2Definition(definition),
+      ...toVisualThemeDefinitionV2(definition),
       id: themeId,
       name: theme.name,
     };
@@ -321,7 +310,7 @@ export class ThemeService {
       // Reset draft definition back to base default
       const defaultDef = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
       const resetDef: VisualThemeDefinitionV2 = {
-        ...asV2Definition(defaultDef),
+        ...toVisualThemeDefinitionV2(defaultDef),
         id: themeId,
         name: theme.name,
         version: 1,
@@ -365,7 +354,7 @@ export class ThemeService {
       const nextVersion = (aggregate._max.versionNumber ?? 0) + 1;
 
       const publishedDefinition: VisualThemeDefinitionV2 = {
-        ...asV2Definition(rawDefinition),
+        ...toVisualThemeDefinitionV2(rawDefinition),
         id: themeId,
         name: theme.name,
         version: nextVersion,

@@ -15,6 +15,7 @@ export { buildSrt, formatSrtTimestamp } from "./subtitles";
 export { compileDocument, toSecondsText } from "./compiler";
 export type { CompileDocumentOptions, CompiledComposition } from "./compiler";
 export { neutralVisualSkin } from "./skins/neutral";
+export { handmadePaperSkin } from "./skins/handmade-paper";
 export {
   getResolvedVisualSkin,
   listResolvedVisualSkins,

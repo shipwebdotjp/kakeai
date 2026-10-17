@@ -24,9 +24,17 @@ export type VisualSkinDefinition = z.infer<typeof visualSkinDefinitionSchema>;
 export const NEUTRAL_VISUAL_SKIN_ID = "neutral" as const;
 export const NEUTRAL_VISUAL_SKIN_VERSION = 1 as const;
 
+export const HANDMADE_PAPER_SKIN_ID = "handmade-paper" as const;
+export const HANDMADE_PAPER_SKIN_VERSION = 1 as const;
+
 export const NEUTRAL_VISUAL_SKIN_REF: VisualSkinRef = {
   id: NEUTRAL_VISUAL_SKIN_ID,
   version: NEUTRAL_VISUAL_SKIN_VERSION,
+};
+
+export const HANDMADE_PAPER_SKIN_REF: VisualSkinRef = {
+  id: HANDMADE_PAPER_SKIN_ID,
+  version: HANDMADE_PAPER_SKIN_VERSION,
 };
 
 export const visualSkinDefinitions: readonly VisualSkinDefinition[] = [
@@ -35,6 +43,12 @@ export const visualSkinDefinitions: readonly VisualSkinDefinition[] = [
     version: NEUTRAL_VISUAL_SKIN_VERSION,
     name: "Neutral",
     description: "Visual Template標準のTheme準拠描画。全Templateへのfallbackを持つ。",
+  },
+  {
+    id: HANDMADE_PAPER_SKIN_ID,
+    version: HANDMADE_PAPER_SKIN_VERSION,
+    name: "Handmade Paper",
+    description: "温かな紙と控えめなテープで情報を整理した編集ノート風の世界観。",
   },
 ];
 
@@ -219,6 +233,20 @@ export function resolveVisualThemeSkin(definition: VisualThemeDefinition): Visua
   return definition.themeDefinitionSchemaVersion === 2
     ? definition.skin
     : NEUTRAL_VISUAL_SKIN_REF;
+}
+
+export function toVisualThemeDefinitionV2(
+  definition: VisualThemeDefinition,
+  skin: VisualSkinRef = resolveVisualThemeSkin(definition),
+): VisualThemeDefinitionV2 {
+  if (definition.themeDefinitionSchemaVersion === 2) {
+    return skin === definition.skin ? definition : { ...definition, skin };
+  }
+  return {
+    ...definition,
+    themeDefinitionSchemaVersion: 2,
+    skin,
+  };
 }
 
 export const SOFT_EDITORIAL_THEME_ID = "soft-editorial" as const;

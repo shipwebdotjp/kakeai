@@ -1,5 +1,6 @@
 import type { VisualSkinRef } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
+import { handmadePaperSkin } from "./handmade-paper";
 import { neutralVisualSkin } from "./neutral";
 import type { ResolvedVisualSkin } from "./types";
 
@@ -9,6 +10,7 @@ function skinRefKey(ref: VisualSkinRef): string {
 
 export const visualSkinRendererRegistry: ReadonlyMap<string, ResolvedVisualSkin> = new Map([
   [skinRefKey(neutralVisualSkin.ref), neutralVisualSkin],
+  [skinRefKey(handmadePaperSkin.ref), handmadePaperSkin],
 ]);
 
 export function getResolvedVisualSkin(ref: VisualSkinRef): ResolvedVisualSkin | undefined {

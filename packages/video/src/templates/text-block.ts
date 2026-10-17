@@ -10,10 +10,10 @@ import { CompositionCompileError } from "../compile-error";
 import { escapeCssFontFamily, escapeHtmlText } from "../escape";
 import { THEME_FONT_STACKS, hexToRgb } from "../theme";
 
-type TextAnchor = "left" | "center" | "right";
-type VerticalAlign = "top" | "middle" | "bottom";
+export type TextAnchor = "left" | "center" | "right";
+export type VerticalAlign = "top" | "middle" | "bottom";
 
-interface TextDecoration {
+export interface TextDecoration {
   bold: boolean;
   italic: boolean;
   outline: boolean;
@@ -105,19 +105,19 @@ const ROLE_DEFAULTS: Record<string, RoleDefault> = {
   },
 };
 
-const JUSTIFY: Record<TextAnchor, string> = {
+export const JUSTIFY: Record<TextAnchor, string> = {
   left: "flex-start",
   center: "center",
   right: "flex-end",
 };
 
-const ALIGN_ITEMS: Record<VerticalAlign, string> = {
+export const ALIGN_ITEMS: Record<VerticalAlign, string> = {
   top: "flex-start",
   middle: "center",
   bottom: "flex-end",
 };
 
-function textShadow(decoration: TextDecoration): string {
+export function textShadow(decoration: TextDecoration): string {
   const parts: string[] = [];
   if (decoration.shadow) {
     parts.push("0 2px 16px rgba(0,0,0,.55)");
@@ -132,7 +132,7 @@ function textShadow(decoration: TextDecoration): string {
   return parts.length === 0 ? "none" : parts.join(",");
 }
 
-function renderSurfaceStyle(surface: TextSurface | undefined): string {
+export function textSurfaceCss(surface: TextSurface | undefined): string {
   if (!surface || !surface.enabled) {
     return "";
   }
@@ -149,11 +149,25 @@ function renderSurfaceStyle(surface: TextSurface | undefined): string {
   return styles.join(";");
 }
 
-export function renderTextBlock(
+export interface TextBlockRenderSpec {
+  text: string;
+  role: string;
+  anchor: TextAnchor;
+  verticalAlign: VerticalAlign;
+  fontFamilyCss: string;
+  fontSize: number;
+  color: string;
+  lineHeight: number;
+  decoration: TextDecoration;
+  cueSurface: TextSurface | undefined;
+  themeSurface: TextSurface | undefined;
+}
+
+export function resolveTextBlockSpec(
   input: unknown,
   path: (string | number)[],
   theme: VisualThemeDefinition,
-): string {
+): TextBlockRenderSpec | null {
   const parsed = textBlockInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -178,7 +192,7 @@ export function renderTextBlock(
 
   const { text, role } = data;
   if (text.trim().length === 0) {
-    return "";
+    return null;
   }
 
   const themeToken = (theme.textRoles as Record<string, VisualThemeTextToken | undefined>)[role];
@@ -210,15 +224,40 @@ export function renderTextBlock(
 
   const surfaceFromCue = "surface" in data ? data.surface : undefined;
   const surfaceFromTheme = role === "caption" ? theme.surfaces?.caption : role === "label" ? theme.surfaces?.label : undefined;
-  const surfaceToUse = surfaceFromCue ?? surfaceFromTheme;
-  const surfaceCss = renderSurfaceStyle(surfaceToUse);
+
+  return {
+    text,
+    role,
+    anchor,
+    verticalAlign,
+    fontFamilyCss,
+    fontSize,
+    color,
+    lineHeight,
+    decoration,
+    cueSurface: surfaceFromCue,
+    themeSurface: surfaceFromTheme,
+  };
+}
+
+export function renderTextBlock(
+  input: unknown,
+  path: (string | number)[],
+  theme: VisualThemeDefinition,
+): string {
+  const spec = resolveTextBlockSpec(input, path, theme);
+  if (spec === null) {
+    return "";
+  }
+
+  const surfaceCss = textSurfaceCss(spec.cueSurface ?? spec.themeSurface);
 
   const wrapperStyle = [
     "position:absolute",
     "inset:0",
     "display:flex",
-    `justify-content:${JUSTIFY[anchor]}`,
-    `align-items:${ALIGN_ITEMS[verticalAlign]}`,
+    `justify-content:${JUSTIFY[spec.anchor]}`,
+    `align-items:${ALIGN_ITEMS[spec.verticalAlign]}`,
     "padding:120px 140px",
     "box-sizing:border-box",
   ].join(";");
@@ -226,17 +265,17 @@ export function renderTextBlock(
   const textStyle = [
     "margin:0",
     "max-width:1600px",
-    `font-family:${fontFamilyCss}`,
-    `font-size:${fontSize}px`,
-    `color:${color}`,
-    `font-weight:${decoration.bold ? "700" : "400"}`,
-    `font-style:${decoration.italic ? "italic" : "normal"}`,
-    `line-height:${lineHeight}`,
+    `font-family:${spec.fontFamilyCss}`,
+    `font-size:${spec.fontSize}px`,
+    `color:${spec.color}`,
+    `font-weight:${spec.decoration.bold ? "700" : "400"}`,
+    `font-style:${spec.decoration.italic ? "italic" : "normal"}`,
+    `line-height:${spec.lineHeight}`,
     "white-space:pre-line",
-    `text-align:${anchor}`,
-    `text-shadow:${textShadow(decoration)}`,
+    `text-align:${spec.anchor}`,
+    `text-shadow:${textShadow(spec.decoration)}`,
     surfaceCss,
   ].filter((s) => s.length > 0).join(";");
 
-  return `<div class="kakeai-textblock" style="${wrapperStyle}"><p class="kakeai-textblock-text" style="${textStyle}">${escapeHtmlText(text)}</p></div>`;
+  return `<div class="kakeai-textblock" style="${wrapperStyle}"><p class="kakeai-textblock-text" style="${textStyle}">${escapeHtmlText(spec.text)}</p></div>`;
 }

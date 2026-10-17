@@ -4,6 +4,7 @@ import {
   HYPERFRAMES_PLAYER_VERSION,
   compileDocument,
   CompositionCompileError,
+  mixHex,
   resolveTimeline,
   resolveCueWindow,
   OUTPUT_FPS,
@@ -11,8 +12,6 @@ import {
 } from "@kakeai/video";
 import {
   CONTENT_SCHEMA_VERSION,
-  SOFT_EDITORIAL_THEME_ID,
-  SOFT_EDITORIAL_THEME_VERSION,
   draftPreviewSchema,
   type ContentDocument,
   type DraftPreview,
@@ -20,6 +19,18 @@ import {
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { ApiError } from "../http/errors.ts";
+
+export const THEME_PREVIEW_MEDIA_ASSET_ID = "theme-preview-media";
+
+function previewMediaDataUrl(themeDefinition: VisualThemeDefinition): string {
+  const base = themeDefinition.canvas.base;
+  const ink = themeDefinition.canvas.ink;
+  const deep = mixHex(base, ink, 0.28);
+  const mid = mixHex(base, ink, 0.16);
+  const soft = mixHex(base, ink, 0.07);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="${soft}"/><rect x="40" y="40" width="250" height="150" rx="14" fill="${mid}"/><circle cx="472" cy="128" r="72" fill="${deep}"/><rect x="40" y="228" width="560" height="84" rx="16" fill="${base}"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
 
 export function createRepresentativeSampleDocument(themeDefinition: VisualThemeDefinition): ContentDocument {
   const themeRef = { id: themeDefinition.id, version: themeDefinition.version };
@@ -145,6 +156,121 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
         ],
       },
       {
+        id: "scene-sample-media",
+        kind: "point",
+        label: "画像カード",
+        timing: { mode: "fixed", durationMs: 4000 },
+        accent: { kind: "theme", token: "primary" },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-media-card",
+            template: { id: "media.card", version: 1 },
+            range: { kind: "scene" },
+            layer: "card",
+            order: 0,
+            transition: {
+              enter: { preset: "fade", durationMs: 350 },
+              exit: { preset: "none", durationMs: 0 },
+            },
+            input: {
+              assetId: THEME_PREVIEW_MEDIA_ASSET_ID,
+              heading: "画像カードの見出し",
+              caption: "スキンによる写真の見せ方を確認します。",
+            },
+          },
+        ],
+      },
+      {
+        id: "scene-sample-points",
+        kind: "point",
+        label: "要点リスト",
+        timing: { mode: "fixed", durationMs: 4000 },
+        accent: { kind: "theme", token: "secondary" },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-list-callout",
+            template: { id: "list.callout", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition: {
+              enter: { preset: "fade", durationMs: 350 },
+              exit: { preset: "none", durationMs: 0 },
+            },
+            input: {
+              title: "3つの要点",
+              items: [
+                { text: "ひとつめの要点" },
+                { text: "ふたつめの要点" },
+                { text: "みっつめの要点" },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        id: "scene-sample-quote",
+        kind: "point",
+        label: "引用",
+        timing: { mode: "fixed", durationMs: 4000 },
+        accent: { kind: "theme", token: "tertiary" },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-quote",
+            template: { id: "quote", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition: {
+              enter: { preset: "fade", durationMs: 350 },
+              exit: { preset: "none", durationMs: 0 },
+            },
+            input: {
+              quote: "引用カードの見え方を確認します。",
+              author: "出典元の名前",
+              source: "文献名",
+            },
+          },
+        ],
+      },
+      {
+        id: "scene-sample-fallback",
+        kind: "point",
+        label: "テンプレート標準",
+        timing: { mode: "fixed", durationMs: 4000 },
+        accent: { kind: "theme", token: "primary" },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-table",
+            template: { id: "table.simple", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition: {
+              enter: { preset: "fade", durationMs: 350 },
+              exit: { preset: "none", durationMs: 0 },
+            },
+            input: {
+              caption: "Skin未対応テンプレートは標準描画",
+              data: {
+                columns: [
+                  { key: "item", label: "項目", type: "text" },
+                  { key: "value", label: "値", type: "number" },
+                ],
+                rows: [
+                  { item: "サンプル1", value: 120 },
+                  { item: "サンプル2", value: 80 },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      {
         id: "scene-sample-outro",
         kind: "outro",
         label: "結び",
@@ -180,10 +306,14 @@ export function compileThemeRepresentativePreview(definition: VisualThemeDefinit
   let timeline;
 
   try {
+    const mediaUrl = previewMediaDataUrl(definition);
     compiled = compileDocument({
       document: sampleDoc,
       resolvedTheme: definition,
       assetResolver: (assetId) => {
+        if (assetId === THEME_PREVIEW_MEDIA_ASSET_ID) {
+          return { url: mediaUrl, kind: "image", durationMs: null };
+        }
         throw new CompositionCompileError([
           { path: ["assets", assetId], code: "unresolvable_asset", message: "素材なし" },
         ]);

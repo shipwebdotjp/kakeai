@@ -13,13 +13,13 @@
 
 ## S2: `handmade-paper@1`とTheme選択
 
-- [ ] `handmade-paper@1`のtrusted rendererと部品を追加する。初期対象はScene背景、`text.block@1`、`media.card@1`、`list.callout@1`、`quote@1`に限定する
-- [ ] 紙、テープ、破れ縁、控えめなshadow、有限の貼り付けmotionを、Template入力を増やさずにSkin実装へ閉じる
-- [ ] Skin未対応の表、グラフ、フロー、stat、端末枠、立ち絵がneutral fallbackになることを確認する
-- [ ] Theme Draft／公開revisionの編集画面にSkin選択を追加する。Skin自体の作成・編集UIは追加しない
-- [ ] 代表Theme previewに、初期対象5表現とSkin未対応fallbackを含める
-- [ ] テスト: Skin描画の回帰、Cue明示上書き優先、Template入力・Cue range・AnimationPlan境界の維持
-- [ ] 完了条件: `handmade-paper@1`を選ぶThemeで、通常の解説動画のタイトル、画像、3要点、引用が一貫した紙の世界観になる
+- [x] `handmade-paper@1`のtrusted rendererと部品を追加する。初期対象はScene背景、`text.block@1`、`media.card@1`、`list.callout@1`、`quote@1`に限定する
+- [x] 紙、テープ、破れ縁、控えめなshadow、有限の貼り付けmotionを、Template入力を増やさずにSkin実装へ閉じる
+- [x] Skin未対応の表、グラフ、フロー、stat、端末枠、立ち絵がneutral fallbackになることを確認する
+- [x] Theme Draft／公開revisionの編集画面にSkin選択を追加する。Skin自体の作成・編集UIは追加しない
+- [x] 代表Theme previewに、初期対象5表現とSkin未対応fallbackを含める
+- [x] テスト: Skin描画の回帰、Cue明示上書き優先、Template入力・Cue range・AnimationPlan境界の維持
+- [x] 完了条件: `handmade-paper@1`を選ぶThemeで、通常の解説動画のタイトル、画像、3要点、引用が一貫した紙の世界観になる
 
 ## S3: Style KitとComposition Authoring Context
 

@@ -116,7 +116,7 @@ export function renderQuote(input: unknown, context: RenderContext): RenderedCue
   };
 }
 
-function applyQuoteEffects(options: {
+export function applyQuoteEffects(options: {
   effects: readonly QuoteEffect[];
   cardId: string;
   quoteId: string;

@@ -11,14 +11,19 @@ import {
   Upload,
 } from "lucide-react";
 import {
+  NEUTRAL_VISUAL_SKIN_REF,
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
+  listVisualSkinDefinitions,
+  resolveVisualThemeSkin,
+  toVisualThemeDefinitionV2,
   visualThemeTextRoleSchema,
   type FontFace,
   type FontFaceSpec,
   type TextSurface,
   type TextStyle,
+  type VisualSkinRef,
   type VisualThemeDefinition,
   type VisualThemeTextRole,
 } from "@kakeai/contracts";
@@ -73,7 +78,7 @@ export function ThemeDetailPage() {
 
   const [formDef, setFormDef] = useState<VisualThemeDefinition | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState<"colors" | "typography" | "surfaces">("colors");
+  const [activeTab, setActiveTab] = useState<"colors" | "typography" | "surfaces" | "skin">("colors");
   const [fontSearch, setFontSearch] = useState("");
 
   const theme = themeQuery.data;
@@ -100,6 +105,9 @@ export function ThemeDetailPage() {
 
   const fontFaces = fontCatalogQuery.data?.faces ?? [];
   const fontCatalogSupported = fontCatalogQuery.data?.supported ?? true;
+
+  const skinDefinitions = useMemo(() => listVisualSkinDefinitions(), []);
+  const currentSkin = formDef ? resolveVisualThemeSkin(formDef) : NEUTRAL_VISUAL_SKIN_REF;
 
   const filteredFontFaces = useMemo(() => {
     if (!fontSearch.trim()) return fontFaces.slice(0, 50);
@@ -165,6 +173,12 @@ export function ThemeDetailPage() {
       ...formDef,
       surfaces: { ...formDef.surfaces, [role]: updated },
     });
+    setDirty(true);
+  };
+
+  const updateSkin = (skin: VisualSkinRef) => {
+    if (!formDef || isBuiltIn) return;
+    setFormDef(toVisualThemeDefinitionV2(formDef, skin));
     setDirty(true);
   };
 
@@ -352,7 +366,56 @@ export function ThemeDetailPage() {
             >
               テキスト囲み・背景
             </button>
+            <button
+              type="button"
+              className={`px-4 py-2 font-medium border-b-2 ${
+                activeTab === "skin"
+                  ? "border-brand-600 text-brand-600"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setActiveTab("skin")}
+            >
+              世界観（スキン）
+            </button>
           </div>
+
+          {/* Tab: Skin */}
+          {activeTab === "skin" && (
+            <div className="space-y-4 text-sm">
+              <fieldset disabled={isBuiltIn} className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  動画全体の世界観を選びます。スキン未対応のテンプレートは標準描画で表示されます。
+                </p>
+                {skinDefinitions.map((skin) => {
+                  const selected =
+                    currentSkin.id === skin.id && currentSkin.version === skin.version;
+                  return (
+                    <label
+                      key={`${skin.id}@${skin.version}`}
+                      className={`flex cursor-pointer items-start gap-3 rounded border p-3 ${
+                        selected ? "border-brand-600 bg-brand-50" : "border-border"
+                      } ${isBuiltIn ? "cursor-default" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="visual-skin"
+                        className="mt-1"
+                        checked={selected}
+                        disabled={isBuiltIn}
+                        onChange={() => updateSkin({ id: skin.id, version: skin.version })}
+                      />
+                      <span>
+                        <span className="block font-semibold">{skin.name}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {skin.description}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            </div>
+          )}
 
           {/* Tab 1: Colors */}
           {activeTab === "colors" && (

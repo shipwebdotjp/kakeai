@@ -1,6 +1,8 @@
 import {
   listCalloutInputSchema,
   type EmphasizeEffect,
+  type ListCalloutAppear,
+  type ListCalloutItem,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
@@ -35,7 +37,7 @@ function emphasizeOffVars(effect: EmphasizeEffect): Record<string, string | numb
   return { backgroundColor: "transparent", color: "inherit" };
 }
 
-function itemOverlayHtml(
+export function calloutItemOverlayHtml(
   itemId: string,
   effect: EmphasizeEffect | undefined,
   theme: VisualThemeDefinition,
@@ -47,14 +49,11 @@ function itemOverlayHtml(
   return `<span id="${onsetOverlayId(itemId)}" class="kakeai-onsetoverlay kakeai-onset-${effect.onset.preset}" style="--kakeai-onset-color:${hex}"></span>`;
 }
 
-export function renderListCallout(input: unknown, context: RenderContext): RenderedCue {
-  const parsed = listCalloutInputSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new CompositionCompileError([
-      { path: context.path, code: "invalid_input", message: "list.callout の入力が不正です。" },
-    ]);
-  }
-  const { title, items, appear } = parsed.data;
+export function planListCalloutEffects(
+  items: readonly ListCalloutItem[],
+  appear: ListCalloutAppear | undefined,
+  context: RenderContext,
+): { itemIds: string[]; animation: AnimationItem[]; stateIntervals: StateInterval[] } {
   const theme = context.theme;
   const spanMs = context.cueTiming?.spanMs ?? 0;
   const lineIntervals = context.lineIntervals ?? [];
@@ -126,6 +125,20 @@ export function renderListCallout(input: unknown, context: RenderContext): Rende
     stateIntervals.push(...plan.stateIntervals);
   }
 
+  return { itemIds, animation, stateIntervals };
+}
+
+export function renderListCallout(input: unknown, context: RenderContext): RenderedCue {
+  const parsed = listCalloutInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new CompositionCompileError([
+      { path: context.path, code: "invalid_input", message: "list.callout の入力が不正です。" },
+    ]);
+  }
+  const { title, items, appear } = parsed.data;
+  const theme = context.theme;
+  const { itemIds, animation, stateIntervals } = planListCalloutEffects(items, appear, context);
+
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
@@ -133,7 +146,7 @@ export function renderListCallout(input: unknown, context: RenderContext): Rende
   const itemsHtml = items
     .map((item, index) => {
       const effect = item.effect?.kind === "emphasize" ? item.effect : undefined;
-      return `<li id="${itemIds[index]}" class="kakeai-calloutitem">${escapeHtmlText(item.text)}${itemOverlayHtml(itemIds[index]!, effect, theme)}</li>`;
+      return `<li id="${itemIds[index]}" class="kakeai-calloutitem">${escapeHtmlText(item.text)}${calloutItemOverlayHtml(itemIds[index]!, effect, theme)}</li>`;
     })
     .join("");
   return {

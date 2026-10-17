@@ -3,10 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  HANDMADE_PAPER_SKIN_REF,
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
   resolveVisualThemeSkin,
+  toVisualThemeDefinitionV2,
 } from "@kakeai/contracts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
@@ -154,10 +156,27 @@ describe("Theme Services & Routes", () => {
 
     expect(preview.compositionHtml).toContain("kakeai-root");
     expect(preview.compositionHtml).toContain("テーマプレビュー");
+    expect(preview.compositionHtml).toContain("kakeai-cardmedia");
+    expect(preview.compositionHtml).toContain("kakeai-calloutitem");
+    expect(preview.compositionHtml).toContain("kakeai-quotecard");
+    expect(preview.compositionHtml).toContain("kakeai-tableframe");
     expect(preview.timeline.totalDurationMs).toBeGreaterThan(0);
 
     const count = await prisma.theme.count();
     expect(count).toBe(0);
+  });
+
+  it("shows handmade-paper expressions with a neutral fallback in the preview", () => {
+    const defaultTheme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const paperTheme = toVisualThemeDefinitionV2(defaultTheme, HANDMADE_PAPER_SKIN_REF);
+    const preview = compileThemeRepresentativePreview(paperTheme);
+
+    expect(preview.compositionHtml).toContain("kakeai-paper-slip");
+    expect(preview.compositionHtml).toContain("kakeai-paper-photo");
+    expect(preview.compositionHtml).toContain("kakeai-paper-listitem");
+    expect(preview.compositionHtml).toContain("kakeai-paper-quotecard");
+    expect(preview.compositionHtml).toContain("kakeai-tableframe");
+    expect(preview.compositionHtml).toContain("data:image/svg+xml");
   });
 
   it("handles non-macOS font catalog adapter returning unsupported state", async () => {
