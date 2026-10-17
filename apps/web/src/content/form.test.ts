@@ -18,6 +18,7 @@ import {
   countCharacterReferences,
   createCueFormValue,
   createEmptyLine,
+  createInsertSceneFormValue,
   createPointSceneFormValue,
   newSceneId,
   toFormValues,
@@ -120,6 +121,28 @@ describe("buildContentDocument", () => {
     ]);
     expect(rebuilt.scenes[1]!.id).toBe(points[1]!.id);
     expect(rebuilt.scenes[2]!.id).toBe(points[0]!.id);
+  });
+
+  it("round-trips an inserted video scene", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const insert = createInsertSceneFormValue(
+      "動画 1",
+      "asset-video-1",
+      5000,
+      collectSceneIds(values.scenes),
+    );
+    values.scenes.splice(values.scenes.length - 1, 0, insert);
+
+    const rebuilt = buildContentDocument(base, values);
+    const scene = rebuilt.scenes.find((entry) => entry.kind === "insert");
+    expect(scene).toMatchObject({
+      kind: "insert",
+      embeddedAudio: true,
+      timing: { mode: "fixed", durationMs: 5000 },
+    });
+    expect(scene?.visualCues).toHaveLength(1);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
   it("updates an editable cue and keeps unmanaged cues", () => {

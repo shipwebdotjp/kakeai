@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
-import type { ContentDocument, VisualCue } from "@kakeai/contracts";
+import { createInsertScene, type ContentDocument, type VisualCue } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import {
   collectCompositionWindowIssues,
@@ -29,6 +29,19 @@ describe("resolveTimeline", () => {
     expect(timeline.scenes[1]?.lines).toEqual([
       { lineId: "line-p1-1", startMs: 4500, durationMs: 3000, endMs: 7500, gapBeforeMs: 0 },
     ]);
+  });
+
+  it("resolves an insert scene as a fixed silent scene", () => {
+    const document = validContentDocument();
+    document.scenes.splice(
+      2,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 5000, true),
+    );
+    const timeline = resolveTimeline(document);
+    const insert = timeline.scenes.find((scene) => scene.sceneId === "scene-insert-1");
+    expect(insert?.durationMs).toBe(5000);
+    expect(insert?.lines).toEqual([]);
   });
 
   it("distributes fixed remainder across silent lines in order", () => {

@@ -69,6 +69,7 @@ model Asset {
   durationMs      Int?
   widthPx         Int?
   heightPx        Int?
+  hasAudio        Boolean          @default(false)
   tagsJson        String?
   favoritedAt     DateTime?
   archivedAt      DateTime?

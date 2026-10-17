@@ -37,7 +37,7 @@ async function buildRendition(
   config: AppConfig,
   kind: AssetKindName,
   originalPath: string,
-): Promise<{ record: RenditionRecord; durationMs: number | null; widthPx: number | null; heightPx: number | null }> {
+): Promise<{ record: RenditionRecord; durationMs: number | null; widthPx: number | null; heightPx: number | null; audioCodec: string | null }> {
   const plan = renditionPlanFor(kind);
   const tempOutput = join(config.directories.tmp, `rendition-${randomUUID()}.${plan.extension}`);
   try {
@@ -59,6 +59,7 @@ async function buildRendition(
       durationMs: probe.durationMs,
       widthPx: probe.widthPx,
       heightPx: probe.heightPx,
+      audioCodec: probe.audioCodec,
     };
   } catch (error) {
     await rm(tempOutput, { force: true }).catch(() => undefined);
@@ -98,12 +99,14 @@ export async function processAssetIngest(
       durationMs: built.durationMs,
       widthPx: built.widthPx,
       heightPx: built.heightPx,
+      audioCodec: built.audioCodec,
     };
   }
 
   const durationMs = kind === "image" ? null : finalProbe.durationMs;
   const widthPx = kind === "audio" ? null : finalProbe.widthPx;
   const heightPx = kind === "audio" ? null : finalProbe.heightPx;
+  const hasAudio = kind === "image" ? false : finalProbe.audioCodec !== null;
 
   const previousRendition = await prisma.assetRendition.findUnique({
     where: { assetId_purpose: { assetId: asset.id, purpose: RENDITION_PURPOSE } },
@@ -123,7 +126,7 @@ export async function processAssetIngest(
     }
     await transaction.asset.update({
       where: { id: asset.id },
-      data: { status: "ready", durationMs, widthPx, heightPx },
+      data: { status: "ready", durationMs, widthPx, heightPx, hasAudio },
     });
     await transaction.job.update({
       where: { id: job.id },

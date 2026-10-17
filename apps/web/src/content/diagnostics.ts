@@ -27,6 +27,8 @@ const SCENE_LEVEL_KEYS = new Set([
   "transition",
   "transitionPreset",
   "transitionDurationMs",
+  "mainVisualCueId",
+  "embeddedAudio",
 ]);
 
 export function diagnosticTarget(

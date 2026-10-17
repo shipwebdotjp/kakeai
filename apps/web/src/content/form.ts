@@ -8,6 +8,8 @@ import {
   THEME_ACCENT_TOKENS,
   canvasProfileOf,
   characterStandingV1,
+  createInsertScene,
+  defaultInsertLabel,
   defaultPointLabel,
   getTemplateInputFields,
   getVisualTemplate,
@@ -158,7 +160,7 @@ export type SceneAccentKind = "theme" | "custom";
 
 export interface SceneFormValue {
   id: string;
-  kind: "intro" | "point" | "outro";
+  kind: "intro" | "point" | "outro" | "insert";
   label: string;
   accentKind: SceneAccentKind;
   accentToken: ThemeAccentToken;
@@ -171,6 +173,8 @@ export interface SceneFormValue {
   cues: CueFormValue[];
   standings: StandingFormValue[];
   audioCues: SceneAudioCueFormValue[];
+  mainVisualCueId: string;
+  embeddedAudio: boolean;
 }
 
 import type { VisualThemeRef } from "@kakeai/contracts";
@@ -701,6 +705,8 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
             gainDb: cue.gainDb ?? defaultAudioGainDb(cue.role),
             loop: cue.loop ?? false,
           })),
+        mainVisualCueId: scene.kind === "insert" ? scene.mainVisualCueId : "",
+        embeddedAudio: scene.kind === "insert" ? scene.embeddedAudio : true,
       };
     }),
     bgm: {
@@ -1447,6 +1453,24 @@ export function buildContentDocument(
     if (sceneValue.kind === "point") {
       return { ...common, kind: "point" };
     }
+    if (sceneValue.kind === "insert") {
+      const mainCues = sceneValue.cues.filter(
+        (cue) => cue.id === sceneValue.mainVisualCueId,
+      );
+      const mainCue = mainCues[0];
+      if (mainCue === undefined) {
+        throw new Error(`insert Scene ${sceneValue.id} の主動画Cueが存在しません`);
+      }
+      return {
+        ...common,
+        kind: "insert",
+        timing: { mode: "fixed", durationMs: fixedDurationMs },
+        lines: [],
+        visualCues: buildVisualCues(baseScene, { ...sceneValue, cues: mainCues, standings: [] }),
+        mainVisualCueId: mainCue.id,
+        embeddedAudio: sceneValue.embeddedAudio,
+      };
+    }
     return { ...common, kind: "outro" };
   });
   const audioTakes = buildAudioTakes(values);
@@ -1743,6 +1767,43 @@ export function nextPointLabel(
   return defaultPointLabel(ordinal);
 }
 
+export function nextInsertLabel(
+  scenes: readonly SceneFormValue[],
+  insertIndex: number,
+): string {
+  const ordinal =
+    scenes.slice(0, insertIndex).filter((scene) => scene.kind === "insert").length + 1;
+  return defaultInsertLabel(ordinal);
+}
+
+export function createInsertSceneFormValue(
+  label: string,
+  assetId: string,
+  durationMs: number,
+  existingSceneIds: ReadonlySet<string>,
+): SceneFormValue {
+  const id = newSceneId(existingSceneIds);
+  const scene = createInsertScene(id, label, assetId, durationMs, true);
+  return {
+    id,
+    kind: "insert",
+    label,
+    accentKind: "theme",
+    accentToken: "primary",
+    accentColor: "",
+    timingMode: "fixed",
+    durationMs,
+    transitionPreset: "cut",
+    transitionDurationMs: 0,
+    lines: [],
+    cues: scene.visualCues.map(toCueFormValue),
+    standings: [],
+    audioCues: [],
+    mainVisualCueId: scene.mainVisualCueId,
+    embeddedAudio: true,
+  };
+}
+
 export function createPointSceneFormValue(
   label: string,
   existingSceneIds: ReadonlySet<string>,
@@ -1763,6 +1824,8 @@ export function createPointSceneFormValue(
     cues: pointSceneTextCues(id).map(toCueFormValue),
     standings: emptyStandingSlots(),
     audioCues: [],
+    mainVisualCueId: "",
+    embeddedAudio: true,
   };
 }
 
@@ -1798,6 +1861,8 @@ export function cloneSceneFormValue(
     }),
     standings: source.standings.map((standing) => ({ ...standing, cueId: null })),
     audioCues: [],
+    mainVisualCueId: "",
+    embeddedAudio: true,
   };
 }
 

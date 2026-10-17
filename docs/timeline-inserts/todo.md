@@ -31,15 +31,15 @@
 
 完了条件: 任意のreadyなaudio AssetをNarration Segmentへ紐付けず、Scene全体の音声として編集・保存・プレビュー・レンダーできる。
 
-## [ ] R3 インサートScene
+## [x] R3 インサートScene
 
-- [ ] contractsに`insert` Scene、主動画Cue参照、`embeddedAudio`を追加し、Scene順序・主動画Cue・尺の制約を検証する。
-- [ ] 作品新規作成、保存、復元、複製、Scene並べ替え、Cue Map、プレビューDTOがinsert Sceneを扱えるようにする。
-- [ ] 動画Assetの埋め込み音声を、insert Sceneで映像と同期してプレビュー・MP4へ出力する。必要なRenditionの導出・利用をasset/render境界に置く。
-- [ ] 作品全体BGMをinsert Scene区間で200msフェード付きに抑制する。
-- [ ] Webに「動画を挿入」操作、動画選択、音声有無・有効状態・BGM抑制の表示、埋め込み音声のオン／オフを追加する。
-- [ ] 音声なし動画、音声無効、BGMあり、Scene AudioCue併用、Scene Transition、削除・差し替えの契約テストを追加する。
-- [ ] ユーザーガイドにインサートSceneの作成、音声規則、初期版のトリム／ループ非対応を追加する。
-- [ ] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
+- [x] contractsに`insert` Scene、主動画Cue参照、`embeddedAudio`を追加し、Scene順序・主動画Cue・尺の制約を検証する。
+- [x] 作品新規作成、保存、復元、複製、Scene並べ替え、Cue Map、プレビューDTOがinsert Sceneを扱えるようにする。
+- [x] 動画Assetの埋め込み音声を、insert Sceneで映像と同期してプレビュー・MP4へ出力する。必要なRenditionの導出・利用をasset/render境界に置く。
+- [x] 作品全体BGMをinsert Scene区間で200msフェード付きに抑制する。
+- [x] Webに「動画を挿入」操作、動画選択、音声有無・有効状態・BGM抑制の表示、埋め込み音声のオン／オフを追加する。
+- [x] 音声なし動画、音声無効、BGMあり、Scene AudioCue併用、Scene Transition、削除・差し替えの契約テストを追加する。
+- [x] ユーザーガイドにインサートSceneの作成、音声規則、初期版のトリム／ループ非対応を追加する。
+- [x] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
 
 完了条件: 動画の挿入だけで映像と埋め込み音声を同期して再生でき、会話と通常の背景動画の既存挙動を変えずにMP4出力できる。

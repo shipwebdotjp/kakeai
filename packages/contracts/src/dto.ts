@@ -89,6 +89,7 @@ export const assetSchema = z.object({
   durationMs: nonNegativeInt.nullable(),
   widthPx: positiveInt.nullable(),
   heightPx: positiveInt.nullable(),
+  hasAudio: z.boolean(),
   tags: assetTagsSchema,
   favoritedAt: timestampSchema.nullable(),
   archivedAt: timestampSchema.nullable(),

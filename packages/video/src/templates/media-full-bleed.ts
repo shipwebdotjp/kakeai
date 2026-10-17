@@ -23,7 +23,7 @@ export function renderMediaFullBleed(
   const id = context.scope.id("media");
   const style = `object-fit:${fit};${mediaCropStyle(focalPoint, zoom)}`;
   if (media.kind === "video") {
-    if (data.loop === true && context.cueTiming !== undefined) {
+    if (data.loop === true && context.cueTiming !== undefined && context.embeddedAudio !== true) {
       const looped = renderLoopVideoSegments({
         idPrefix: id,
         url: media.url,
@@ -39,7 +39,7 @@ export function renderMediaFullBleed(
       }
     }
     return {
-      html: `<video id="${id}" class="kakeai-fullbleed" src="${src}" style="${style}" muted playsinline preload="auto" data-media-start="0"></video>`,
+      html: `<video id="${id}" class="kakeai-fullbleed" src="${src}" style="${style}"${context.embeddedAudio === true ? ' data-has-audio="true"' : " muted"} playsinline preload="auto" data-media-start="0"></video>`,
       assetIds: [assetId],
       animation: [],
     };

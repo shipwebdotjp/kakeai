@@ -50,6 +50,8 @@ function makeScene(
     cues,
     standings: [],
     audioCues: [],
+    mainVisualCueId: "",
+    embeddedAudio: true,
   };
 }
 
@@ -97,6 +99,7 @@ function makeAsset(id: string, kind: Asset["kind"]): Asset {
     durationMs: null,
     widthPx: null,
     heightPx: null,
+    hasAudio: false,
     tags: [],
     favoritedAt: null,
     archivedAt: null,

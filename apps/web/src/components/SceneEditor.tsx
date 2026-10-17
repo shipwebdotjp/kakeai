@@ -12,6 +12,7 @@ import {
   contentDocumentSchema,
   DEFAULT_VISUAL_THEME_REF,
   getVisualTheme,
+  type Asset,
   type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
   type ContentDocument,
@@ -24,6 +25,7 @@ import { diagnosticTarget, type Diagnostic, type DiagnosticTarget } from "../con
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
   useAdapterVoicesMap,
+  useAssets,
   useBulkGenerateTtsTakes,
   useCharacters,
   useFaceSets,
@@ -38,6 +40,7 @@ import {
   cloneSceneFormValue,
   collectSceneIds,
   countCharacterFormUsage,
+  createInsertSceneFormValue,
   createPointSceneFormValue,
   generatedTakePolicy,
   mergeTake,
@@ -45,6 +48,7 @@ import {
   newCharacterId,
   newSceneId,
   newSpeakerId,
+  nextInsertLabel,
   nextPointLabel,
   splitPointScene,
   toFormValues,
@@ -56,6 +60,7 @@ import {
   type SpeakerFormValue,
 } from "../content/form";
 import { SCENE_LABELS } from "../content/labels";
+import { AssetThumbnail, assetLabel } from "../lib/assets";
 import { errorMessage } from "../lib/errorMessage";
 import type { UnsavedDocumentState } from "../lib/useDraftPreview";
 import {
@@ -121,7 +126,7 @@ interface TimingFieldsProps {
   register: UseFormRegister<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
-  sceneKind: "intro" | "point" | "outro";
+  sceneKind: "intro" | "point" | "outro" | "insert";
 }
 
 const THEME_ACCENTS = getVisualTheme(
@@ -196,6 +201,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
           <input
             type="number"
             min={1}
+            disabled={sceneKind === "insert"}
             className={`w-24 ${textFieldClass}`}
             {...register(`scenes.${sceneIndex}.durationMs`, { valueAsNumber: true })}
           />
@@ -237,6 +243,41 @@ const SCENE_TRANSITION_LABELS: Record<string, string> = {
   crossfade: "クロスフェード",
 };
 
+function isMiddleScene(kind: SceneFormValue["kind"] | undefined): boolean {
+  return kind === "point" || kind === "insert";
+}
+
+function resolveMainCueIndex(
+  cues: readonly { id: string }[],
+  mainVisualCueId: string,
+): number {
+  return cues.findIndex((cue) => cue.id === mainVisualCueId);
+}
+
+function insertAssetStatusMessage(
+  assetId: string,
+  isLoading: boolean,
+  isError: boolean,
+): string {
+  if (assetId.length === 0) {
+    return "動画を選択してください";
+  }
+  if (isLoading) {
+    return "素材を確認しています…";
+  }
+  if (isError) {
+    return "素材を確認できません";
+  }
+  return "選択中の動画が見つかりません（削除された可能性）";
+}
+
+function assetAudioLabel(asset: Asset | undefined): string {
+  if (asset === undefined) {
+    return "音声ストリーム不明";
+  }
+  return asset.hasAudio ? "音声ストリームあり" : "音声ストリームなし";
+}
+
 function sceneSettingsSummary(scene: SceneFormValue, sceneIndex: number): string {
   const parts = [scene.accentKind === "custom" ? "自由色" : "テーマ色"];
   parts.push(scene.timingMode === "fixed" ? `固定 ${scene.durationMs}ms` : "自動");
@@ -246,6 +287,112 @@ function sceneSettingsSummary(scene: SceneFormValue, sceneIndex: number): string
   return parts.join(" / ");
 }
 
+interface InsertSceneFieldsProps {
+  scene: SceneFormValue;
+  sceneIndex: number;
+  assets: readonly Asset[];
+  assetsLoading: boolean;
+  assetsError: boolean;
+  register: UseFormRegister<DocumentFormValues>;
+  setValue: UseFormSetValue<DocumentFormValues>;
+  onError: (message: string) => void;
+}
+
+function InsertSceneFields({
+  scene,
+  sceneIndex,
+  assets,
+  assetsLoading,
+  assetsError,
+  register,
+  setValue,
+  onError,
+}: InsertSceneFieldsProps) {
+  const mainCueIndex = resolveMainCueIndex(scene.cues, scene.mainVisualCueId);
+  const mainCue = mainCueIndex === -1 ? undefined : scene.cues[mainCueIndex];
+  const assetId = mainCue?.fields.assetId ?? "";
+  const asset = assets.find((entry) => entry.id === assetId);
+  const durationMs = asset?.durationMs ?? null;
+  return (
+    <div className="my-3 flex flex-col gap-2 rounded border border-border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">インサート動画</span>
+        {asset === undefined ? (
+          <span className={metaTextClass}>
+            {insertAssetStatusMessage(assetId, assetsLoading, assetsError)}
+          </span>
+        ) : (
+          <>
+            <AssetThumbnail asset={asset} />
+            <span className="truncate text-xs">{assetLabel(asset)}</span>
+          </>
+        )}
+        <MediaPicker
+          label="動画を差し替え"
+          kinds={["video"]}
+          selectedAssetId={assetId.length > 0 ? assetId : null}
+          onSelect={(nextId) => {
+            if (nextId === null) {
+              return;
+            }
+            const next = assets.find((entry) => entry.id === nextId);
+            if (next === undefined) {
+              onError("素材一覧を確認できません。読み込み後に選び直してください。");
+              return;
+            }
+            if (next.kind !== "video") {
+              onError("インサートSceneには動画素材だけを指定できます。");
+              return;
+            }
+            if (next.durationMs === null || next.durationMs <= 0) {
+              onError("尺が確定していない動画はインサートSceneに指定できません。");
+              return;
+            }
+            if (mainCue === undefined) {
+              onError("主動画Cueを特定できません。動画を追加し直してください。");
+              return;
+            }
+            setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.assetId`, next.id, {
+              shouldDirty: true,
+            });
+            setValue(`scenes.${sceneIndex}.durationMs`, next.durationMs, { shouldDirty: true });
+          }}
+          inline
+        />
+      </div>
+      <p className={metaTextClass}>
+        動画尺:{" "}
+        {durationMs !== null && Number.isFinite(durationMs)
+          ? `${(durationMs / 1000).toFixed(2)}秒`
+          : "不明"}
+      </p>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className={asset?.hasAudio === true ? badgeInfoClass : badgeNeutralClass}>
+          {assetAudioLabel(asset)}
+        </span>
+        <label className="inline-flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            {...register(`scenes.${sceneIndex}.embeddedAudio`)}
+          />
+          埋め込み音声を再生
+        </label>
+        {scene.embeddedAudio && <span className={badgeNeutralClass}>作品全体BGMをこの区間で抑制</span>}
+        {scene.embeddedAudio && asset !== undefined && asset.hasAudio === false && (
+          <span className={badgeNeutralClass}>この区間は無音になります</span>
+        )}
+      </div>
+      {mainCueIndex === -1 && (
+        <p className={errorTextClass}>主動画Cueが見つかりません。動画を選び直してください。</p>
+      )}
+      {asset !== undefined && asset.kind !== "video" && (
+        <p className={errorTextClass}>動画以外の素材は主動画に指定できません。</p>
+      )}
+      <p className={metaTextClass}>初期版では動画のトリム・ループ・速度変更はできません。</p>
+    </div>
+  );
+}
+
 export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onJumpToTarget, onDocumentChange, onDirtyChange }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
@@ -253,6 +400,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const faceSets = useFaceSets();
   const adapterVoices = useAdapterVoicesMap();
   const themesQuery = useThemes();
+  const assetsQuery = useAssets();
   const [diagnostics, setDiagnostics] = useState<{ errors: Diagnostic[]; warnings: Diagnostic[] }>({
     errors: [],
     warnings: [],
@@ -484,10 +632,42 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     );
   };
 
+  const onInsertVideo = (assetId: string | null) => {
+    if (assetId === null) {
+      return;
+    }
+    const asset = (assetsQuery.data ?? []).find((entry) => entry.id === assetId);
+    if (
+      asset === undefined ||
+      asset.kind !== "video" ||
+      asset.durationMs === null ||
+      asset.durationMs <= 0
+    ) {
+      setDiagnostics((prev) => ({
+        ...prev,
+        errors: [{ message: "尺が確定した動画だけを挿入できます。素材の取り込み完了後に選び直してください。" }],
+      }));
+      setOpenKind("error");
+      return;
+    }
+    const scenes = getValues("scenes");
+    const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
+    const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
+    insert(
+      insertIndex,
+      createInsertSceneFormValue(
+        nextInsertLabel(scenes, insertIndex),
+        asset.id,
+        asset.durationMs,
+        collectSceneIds(scenes),
+      ),
+    );
+  };
+
   const onMove = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     const scenes = getValues("scenes");
-    if (scenes[index]?.kind !== "point" || scenes[target]?.kind !== "point") {
+    if (!isMiddleScene(scenes[index]?.kind) || !isMiddleScene(scenes[target]?.kind)) {
       return;
     }
     move(index, target);
@@ -1018,21 +1198,25 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                 {SCENE_LABELS[scene.kind] ?? scene.kind}
               </span>
               <span className="font-mono text-xs text-muted-foreground">{scene.id}</span>
-              {scene.kind === "point" && (
+              {(scene.kind === "point" || scene.kind === "insert") && (
                 <span className="ml-auto flex gap-1">
-                  <button
-                    type="button"
-                    className={buttonNeutralClass}
-                    disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
-                    onClick={() => onClonePrevious(sceneIndex)}
-                  >
-                    前のシーンを複製
-                  </button>
+                  {scene.kind === "point" && (
+                    <button
+                      type="button"
+                      className={buttonNeutralClass}
+                      disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
+                      onClick={() => onClonePrevious(sceneIndex)}
+                    >
+                      前のシーンを複製
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={iconButtonClass}
                     aria-label="上へ移動"
-                    disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
+                    disabled={
+                      !isMiddleScene(watchedScenes[sceneIndex - 1]?.kind)
+                    }
                     onClick={() => onMove(sceneIndex, -1)}
                   >
                     <ChevronUp aria-hidden="true" className="h-4 w-4" />
@@ -1041,7 +1225,9 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                     type="button"
                     className={iconButtonClass}
                     aria-label="下へ移動"
-                    disabled={watchedScenes[sceneIndex + 1]?.kind !== "point"}
+                    disabled={
+                      !isMiddleScene(watchedScenes[sceneIndex + 1]?.kind)
+                    }
                     onClick={() => onMove(sceneIndex, 1)}
                   >
                     <ChevronDown aria-hidden="true" className="h-4 w-4" />
@@ -1101,26 +1287,44 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               </Collapsible>
             </Collapsible>
 
-            <CueList
-              control={control}
-              register={register}
-              setValue={setValue}
-              getValues={getValues}
-              sceneIndex={sceneIndex}
-              sceneId={scene.id}
-              lines={scene.lines}
-              speakers={watchedSpeakers}
-              sceneDurationMs={placementBySceneId.get(scene.id)?.durationMs ?? null}
-            />
+            {scene.kind === "insert" ? (
+              <InsertSceneFields
+                scene={scene}
+                sceneIndex={sceneIndex}
+                assets={assetsQuery.data ?? []}
+                assetsLoading={assetsQuery.isLoading}
+                assetsError={assetsQuery.isError}
+                register={register}
+                setValue={setValue}
+                onError={(message) => {
+                  setDiagnostics((prev) => ({ ...prev, errors: [{ message }] }));
+                  setOpenKind("error");
+                }}
+              />
+            ) : (
+              <CueList
+                control={control}
+                register={register}
+                setValue={setValue}
+                getValues={getValues}
+                sceneIndex={sceneIndex}
+                sceneId={scene.id}
+                lines={scene.lines}
+                speakers={watchedSpeakers}
+                sceneDurationMs={placementBySceneId.get(scene.id)?.durationMs ?? null}
+              />
+            )}
 
-            <StandingFields
-              control={control}
-              register={register}
-              setValue={setValue}
-              sceneIndex={sceneIndex}
-              sceneId={scene.id}
-              characters={watchedCharacters}
-            />
+            {scene.kind !== "insert" && (
+              <StandingFields
+                control={control}
+                register={register}
+                setValue={setValue}
+                sceneIndex={sceneIndex}
+                sceneId={scene.id}
+                characters={watchedCharacters}
+              />
+            )}
 
             <SceneAudioFields
               control={control}
@@ -1159,6 +1363,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
           要点を追加
         </button>
+        <MediaPicker
+          label="動画を挿入"
+          kinds={["video"]}
+          selectedAssetId={null}
+          onSelect={onInsertVideo}
+          variant="add"
+          inline
+        />
         <button
           type="button"
           className={buttonNeutralClass}

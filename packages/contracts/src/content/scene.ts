@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { accentColorSchema, idSchema, nonNegativeInt } from "./primitives";
+import { accentColorSchema, idSchema, nonNegativeInt, positiveInt } from "./primitives";
 import { themeAccentTokenSchema } from "./theme";
 import { sceneTimingSchema } from "./timing";
 import { narrationSegmentSchema } from "./narration";
@@ -79,13 +79,29 @@ export const outroSceneSchema = z.strictObject({
   ...sceneBaseShape,
 });
 
+const insertTimingSchema = z.strictObject({
+  mode: z.literal("fixed"),
+  durationMs: positiveInt,
+});
+
+export const insertSceneSchema = z.strictObject({
+  kind: z.literal("insert"),
+  ...sceneBaseShape,
+  timing: insertTimingSchema,
+  lines: z.array(narrationSegmentSchema).length(0),
+  mainVisualCueId: idSchema,
+  embeddedAudio: z.boolean(),
+});
+
 export const sceneSchema = z.discriminatedUnion("kind", [
   introSceneSchema,
   pointSceneSchema,
   outroSceneSchema,
+  insertSceneSchema,
 ]);
 
 export type Scene = z.infer<typeof sceneSchema>;
 export type IntroScene = z.infer<typeof introSceneSchema>;
 export type PointScene = z.infer<typeof pointSceneSchema>;
 export type OutroScene = z.infer<typeof outroSceneSchema>;
+export type InsertScene = z.infer<typeof insertSceneSchema>;

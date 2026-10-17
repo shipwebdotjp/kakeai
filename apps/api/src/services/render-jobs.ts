@@ -23,6 +23,7 @@ import { resourceNotFound } from "../http/validation.ts";
 import {
   assertAssetsAvailable,
   assertFaceSetReferences,
+  assertInsertScenes,
   assertTakeDurations,
   loadAllReferences,
   renderSourceDurationMs,
@@ -86,6 +87,7 @@ export async function createRenderJob(
   const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
+  assertInsertScenes(content, assetById);
   assertFaceSetReferences(content, faceSetById, assetById);
 
   const snapshotFaceSets: RenderJobSnapshot["faceSets"] = [...faceSetById.values()]

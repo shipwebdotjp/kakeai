@@ -96,6 +96,7 @@ export function toAsset(row: AssetRow): Asset {
     durationMs: row.durationMs,
     widthPx: row.widthPx,
     heightPx: row.heightPx,
+    hasAudio: row.hasAudio,
     tags: parseAssetTags(row.tagsJson),
     favoritedAt: row.favoritedAt === null ? null : toIso(row.favoritedAt),
     archivedAt: row.archivedAt === null ? null : toIso(row.archivedAt),

@@ -27,6 +27,8 @@ describe("diagnosticTarget", () => {
       lines: [],
       standings: [],
       audioCues: [],
+      mainVisualCueId: "",
+      embeddedAudio: true,
     },
     {
       ...createPointSceneFormValue("要点1", new Set()),

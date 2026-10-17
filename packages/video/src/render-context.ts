@@ -86,5 +86,6 @@ export interface RenderContext {
   path: (string | number)[];
   cueTiming?: CueTiming;
   lineIntervals?: LineInterval[];
+  embeddedAudio?: boolean;
   renderNested: (node: NestedVisual, scope: RenderScope, path: (string | number)[]) => RenderedCue;
 }

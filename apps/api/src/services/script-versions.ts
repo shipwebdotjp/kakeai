@@ -23,12 +23,14 @@ import {
   compositionFullBleedInputSchema,
   computeContentWarnings,
   draftPreviewSchema,
+  mediaFullBleedInputSchema,
   scriptVersionPreviewSchema,
   type AssetKindName,
   type AssetReference,
   type ContentDocument,
   type DraftPreview,
   type DraftPreviewRequest,
+  type InsertScene,
   type PreviewCueTiming,
   type SaveScriptVersionRequest,
   type ScriptVersion as ScriptVersionDto,
@@ -430,6 +432,7 @@ async function validateAssetReferences(
   const { references, assetById, faceSetById } = await loadAllReferences(client, content);
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
+  assertInsertScenes(content, assetById);
   assertFaceSetReferences(content, faceSetById, assetById);
 }
 
@@ -528,6 +531,98 @@ export function renderSourceDurationMs(asset: AssetWithRenditions): number | nul
   return rendition?.durationMs ?? asset.durationMs;
 }
 
+function insertMainAssetId(scene: InsertScene): string | null {
+  const cue = scene.visualCues.find((entry) => entry.id === scene.mainVisualCueId);
+  if (cue === undefined) {
+    return null;
+  }
+  const parsed = mediaFullBleedInputSchema.safeParse(cue.input);
+  return parsed.success ? parsed.data.assetId : null;
+}
+
+export function assertInsertScenes(
+  content: ContentDocument,
+  assetById: Map<string, AssetWithRenditions>,
+): void {
+  const issues: ValidationIssue[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    if (scene.kind !== "insert") {
+      return;
+    }
+    const assetId = insertMainAssetId(scene);
+    if (assetId === null) {
+      return;
+    }
+    const asset = assetById.get(assetId);
+    if (asset === undefined) {
+      return;
+    }
+    if (asset.kind !== "video") {
+      issues.push({
+        path: ["scenes", sceneIndex, "mainVisualCueId"],
+        code: "invalid_type",
+        message: "インサートSceneの主動画には動画素材を指定してください。",
+      });
+      return;
+    }
+    const expectedMs = renderSourceDurationMs(asset);
+    if (expectedMs === null) {
+      issues.push({
+        path: ["scenes", sceneIndex, "timing", "durationMs"],
+        code: "invalid_value",
+        message: "尺が不明な動画はインサートSceneの主動画に指定できません。",
+      });
+    } else if (scene.timing.durationMs !== expectedMs) {
+      issues.push({
+        path: ["scenes", sceneIndex, "timing", "durationMs"],
+        code: "invalid_value",
+        message: "Scene尺が主動画の確定尺と一致しません。",
+      });
+    }
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
+export async function collectInsertWarnings(
+  client: PrismaClient | Prisma.TransactionClient,
+  content: ContentDocument,
+): Promise<Warning[]> {
+  const assetIds = [
+    ...new Set(
+      content.scenes
+        .filter((scene): scene is InsertScene => scene.kind === "insert" && scene.embeddedAudio)
+        .map((scene) => insertMainAssetId(scene))
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  if (assetIds.length === 0) {
+    return [];
+  }
+  const assets = await client.asset.findMany({
+    where: { id: { in: assetIds } },
+  });
+  const assetById = new Map(assets.map((asset) => [asset.id, asset]));
+  const warnings: Warning[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    if (scene.kind !== "insert" || !scene.embeddedAudio) {
+      return;
+    }
+    const assetId = insertMainAssetId(scene);
+    const asset = assetId === null ? undefined : assetById.get(assetId);
+    if (asset === undefined || asset.kind !== "video" || asset.hasAudio) {
+      return;
+    }
+    warnings.push({
+      path: ["scenes", sceneIndex, "embeddedAudio"],
+      code: "insert_video_without_audio",
+      message: "この動画には音声ストリームがないため、インサート区間は無音になります。",
+    });
+  });
+  return warnings;
+}
+
 function previewCueTimings(content: ContentDocument, placement: ScenePlacement): PreviewCueTiming[] {
   const scene = content.scenes[placement.sceneIndex];
   if (scene === undefined) {
@@ -623,6 +718,7 @@ export async function compilePreview(
 ): Promise<CompiledPreview> {
   const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
+  assertInsertScenes(content, assetById);
   assertFaceSetReferences(content, faceSetById, assetById);
   if (options.strictTakeDurations === true) {
     assertTakeDurations(content, assetById);
@@ -933,7 +1029,11 @@ export async function saveScriptVersion(
   } catch (error) {
     throwIfFatalTimelineError(error);
   }
-  const warnings = [...computeContentWarnings(content), ...offsetWarnings];
+  const warnings = [
+    ...computeContentWarnings(content),
+    ...offsetWarnings,
+    ...(await collectInsertWarnings(prisma, content)),
+  ];
   const contentJson = serializeContent(content);
 
   const maxAttempts = 5;

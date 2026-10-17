@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { contentDocumentSchema } from "./document";
+import { createInsertScene } from "./defaults";
 import { validContentDocument } from "../testing/fixtures";
 
 const transition = {
@@ -548,6 +549,97 @@ describe("contentDocumentSchema", () => {
   it("rejects an outro before the end", () => {
     const doc = validContentDocument();
     doc.scenes.reverse();
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("accepts an insert scene between point scenes", () => {
+    const doc = validContentDocument();
+    doc.scenes.splice(
+      2,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true),
+    );
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects an insert scene with auto timing", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    (insert as { timing: unknown }).timing = { mode: "auto" };
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an insert scene that carries lines", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.lines.push({
+      id: "line-insert-1",
+      speakerId: null,
+      captionText: "x",
+      speechText: "x",
+      selectedAudioTakeId: null,
+      expressionId: null,
+    });
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an insert scene whose main cue is not media.full-bleed", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.visualCues = [
+      {
+        id: insert.mainVisualCueId,
+        template: { id: "text.block", version: 1 },
+        range: { kind: "scene" },
+        layer: "overlay",
+        order: 0,
+        transition,
+        input: { text: "x", role: "heading" },
+      },
+    ];
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an insert scene whose main cue is not a scene-range background cue", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.visualCues[0]!.range = { kind: "offset", startMs: 0, endMs: 1000 };
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an insert scene whose main cue loops", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.visualCues[0]!.input = { assetId: "asset-video-1", fit: "cover", loop: true };
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an insert scene with extra visual cues", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.visualCues.push({
+      id: "vc-insert-extra",
+      template: { id: "text.block", version: 1 },
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 1,
+      transition,
+      input: { text: "x", role: "heading" },
+    });
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("rejects an insert scene whose mainVisualCueId is missing", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.mainVisualCueId = "vc-missing";
+    doc.scenes.splice(2, 0, insert);
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 });

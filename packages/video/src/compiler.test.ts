@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
-import { ONSET_PRESETS, type SnapshotFaceSet, type VisualCue } from "@kakeai/contracts";
+import { ONSET_PRESETS, createInsertScene, type SnapshotFaceSet, type VisualCue } from "@kakeai/contracts";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import type { CompositionVersionResolver } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
@@ -212,6 +212,56 @@ describe("compileDocument", () => {
     expect(copies.length).toBe(5);
     expect(compiled.html).toContain('src="/preview/asset-bgm"');
     expect(compiled.html).toContain('data-volume="0.126"');
+  });
+
+  it("renders an insert scene's main video as audible embedded audio", () => {
+    const document = validContentDocument();
+    document.scenes.splice(
+      2,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 5000, true),
+    );
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    expect(compiled.html).toContain('data-has-audio="true"');
+    expect(compiled.html).not.toContain(" muted");
+  });
+
+  it("renders an insert scene's main video muted when embedded audio is off", () => {
+    const document = validContentDocument();
+    document.scenes.splice(
+      2,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 5000, false),
+    );
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    expect(compiled.html).not.toContain('data-has-audio="true"');
+    expect(compiled.html).toContain(" muted playsinline");
+  });
+
+  it("ducks work BGM with 200ms fades around an embedded-audio insert scene", () => {
+    const document = validContentDocument();
+    document.scenes.splice(
+      2,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 5000, true),
+    );
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    expect(compiled.html).toMatch(/id="kakeai-audio-cue-bgm-main-seg0-\d+"/);
+    expect(compiled.html).toMatch(/id="kakeai-audio-cue-bgm-main-seg1-\d+"/);
+    expect(compiled.html).toContain('data-fade-out="0.2"');
+    expect(compiled.html).toContain('data-fade-in="0.2"');
+  });
+
+  it("keeps work BGM continuous when the insert scene has embedded audio off", () => {
+    const document = validContentDocument();
+    document.scenes.splice(
+      2,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 5000, false),
+    );
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    expect(compiled.html).toContain('id="kakeai-audio-cue-bgm-main-0"');
+    expect(compiled.html).not.toContain("data-fade-out");
   });
 
   it("plays a non-looping scene audio cue from the scene start", () => {
