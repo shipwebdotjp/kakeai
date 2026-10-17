@@ -53,3 +53,12 @@
 - [x] `npm run typecheck` と `npm test` を通す
 - [x] `ocr review --audience agent -b "テーマ編集画面のプレビューと色入力の不具合修正"`を実行し、正当な指摘を最大3回まで修正する
 - [x] 変更をコミットする
+
+## 不具合修正（Font Face の選択と描画）
+
+- [x] macOS Font Catalog adapterがfontファイル名をfamilyとして返していた問題を修正し、typefaceのfamily・PostScript名・weight/styleを正しく取り出す
+- [x] `指定 Font Face`の選択肢をPostScript名で識別し、同じfamilyの複数face（例: 游明朝体 Medium/Demibold）を選び分けられるようにする
+- [x] コンパイラがText Roleごとにplatform identifierを先頭にしたfont-familyを出力し、選択したfaceがそのまま描画されるようにする（字幕・Skin・サムネイル含む）
+- [x] `npm run typecheck` と `npm test` を通す
+- [x] `ocr review --audience agent -b "指定Font Faceが描画に反映されない不具合の修正"`を実行し、正当な指摘を最大3回まで修正する
+- [x] 変更をコミットする

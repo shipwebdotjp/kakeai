@@ -77,6 +77,10 @@ Font Catalogは現在の端末で利用可能なFont Faceを列挙するアプ�
 
 共通のFont Face DTOは、安定したplatform identifier、family名、表示名、face名、weight、style、stretch、可変font axis、利用可否を持つ。Theme定義には少なくとも選択faceのplatform identifier、family名、style/weight、定義済みfallback列を保存する。利用者入力のfont名を未エスケープのCSSとして出力してはならず、コンパイラはFont Resolverが解決・エスケープした値だけを出力する。
 
+family名はCSSのfont familyとして解決できる名前でなければならない。macOSの`system_profiler SPFontsDataType`が返す項目名はフォントファイル名（例: `YuMincho.ttc`）でありfamily名ではないため、adapterはtypeface側の`family`を使い、存在しない場合だけファイル名から拡張子を除いて代用する。platform identifierはPostScript名とし、同じfamilyに複数のfaceがある場合でもfaceを一意に特定できるようにする。Web UIのface選択はplatform identifierで選択肢を識別し、familyだけで同一視してはならない。
+
+コンパイラはText Roleごとに、選択faceのplatform identifier、family名、カテゴリのgeneric stackの順でfont-familyを出力する。platform identifierを先頭に置くことで、family内に複数のfaceがあるフォント（例: 游明朝体のMediumとDemibold）でも選択したfaceがそのまま描画される。
+
 V1のmacOS Font CatalogはmacOSのフォント基盤から列挙し、起動時キャッシュと手動更新を持つ。将来のWindows DirectWrite、Linux Fontconfig実装も同一DTOを返す。レンダーに使うChromiumでfaceが解決できるかはカタログ列挙と別に確認する。
 
 指定faceが選択・プレビュー・Render Job作成時に見つからない場合、保存や公開は拒否しない。Theme編集画面、Work編集画面、プレビュー、レンダー投入前に欠落Font Faceと使用するfallbackを警告し、コンパイルはfallbackで継続する。Theme Revision自体は同じFont Face参照を保持し、環境依存の解決結果を正本へ書き戻さない。

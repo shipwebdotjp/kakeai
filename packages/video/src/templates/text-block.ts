@@ -7,8 +7,8 @@ import {
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
-import { escapeCssFontFamily, escapeHtmlText } from "../escape";
-import { THEME_FONT_STACKS, hexToRgb } from "../theme";
+import { escapeHtmlText } from "../escape";
+import { hexToRgb, resolveFontFamilyCss } from "../theme";
 
 export type TextAnchor = "left" | "center" | "right";
 export type VerticalAlign = "top" | "middle" | "bottom";
@@ -210,10 +210,7 @@ export function resolveTextBlockSpec(
   const themeFontFace = themeToken?.fontFace;
   const selectedFontFace = fontFaceSpec ?? themeFontFace;
 
-  let fontFamilyCss = THEME_FONT_STACKS[font];
-  if (selectedFontFace?.family) {
-    fontFamilyCss = `${escapeCssFontFamily(selectedFontFace.family)},${THEME_FONT_STACKS[font]}`;
-  }
+  const fontFamilyCss = resolveFontFamilyCss(selectedFontFace, font);
 
   const decoration: TextDecoration = {
     bold: data.decoration?.bold ?? themeToken?.decoration.bold ?? fallback.decoration.bold,

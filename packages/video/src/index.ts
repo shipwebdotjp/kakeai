@@ -39,9 +39,11 @@ export {
   mixHex,
   overlayToRgba,
   relativeLuminance,
+  resolveFontFamilyCss,
   resolveSceneAccentHex,
   resolveVisualTheme,
   rgbToHex,
   sceneAccentStyle,
   themeRootStyle,
 } from "./theme";
+export type { FontFaceNames } from "./theme";

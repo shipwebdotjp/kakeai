@@ -8,12 +8,39 @@ import {
   mixHex,
   overlayToRgba,
   relativeLuminance,
+  resolveFontFamilyCss,
   resolveSceneAccentHex,
   resolveVisualTheme,
   rgbToHex,
   sceneAccentStyle,
   themeRootStyle,
 } from "./theme";
+
+describe("resolveFontFamilyCss", () => {
+  it("falls back to the category stack without a font face", () => {
+    expect(resolveFontFamilyCss(undefined, "sans")).toContain("sans-serif");
+    expect(resolveFontFamilyCss({}, "serif")).toContain("serif");
+  });
+
+  it("pins the selected local face before its family and the category stack", () => {
+    expect(resolveFontFamilyCss({ platformId: "YuMin-Medium", family: "游明朝体" }, "serif")).toBe(
+      "'YuMin-Medium','游明朝体','Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif",
+    );
+  });
+
+  it("keeps a family-only font face usable", () => {
+    expect(resolveFontFamilyCss({ family: "Hiragino Sans" }, "sans")).toMatch(
+      /^'Hiragino Sans','Noto Sans JP'/,
+    );
+  });
+
+  it("drops duplicate names and escapes unsafe characters", () => {
+    expect(resolveFontFamilyCss({ platformId: "YuMin-Medium", family: "yumin-medium" }, "serif")).toMatch(
+      /^'YuMin-Medium','Hiragino Mincho ProN'/,
+    );
+    expect(resolveFontFamilyCss({ platformId: "Bad';}{Name" }, "sans")).toMatch(/^'BadName',/);
+  });
+});
 
 describe("theme color math", () => {
   it("mixes two hex colors", () => {

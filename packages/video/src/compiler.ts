@@ -13,7 +13,7 @@ import {
 } from "@kakeai/contracts";
 import type { CompositionVersionResolver, CompositionVersionResolved } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
-import { escapeCssFontFamily, escapeHtmlAttribute, escapeHtmlText } from "./escape";
+import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
 import { hexToRgb } from "./theme";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
@@ -22,8 +22,8 @@ import { cueScope, type RenderScope } from "./scope";
 import { seededRandom } from "./random";
 import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval, RenderAnimationAction, ValueAnimation } from "./render-context";
 import {
-  THEME_FONT_STACKS,
   overlayToRgba,
+  resolveFontFamilyCss,
   resolveSceneAccentHex,
   resolveVisualTheme,
   sceneAccentStyle,
@@ -1447,10 +1447,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       const captionText = line.captionText.trim();
       if (captionText.length > 0) {
         const captionToken = theme.textRoles.caption;
-        let fontFamily = THEME_FONT_STACKS[captionToken.font];
-        if (captionToken.fontFace?.family) {
-          fontFamily = `${escapeCssFontFamily(captionToken.fontFace.family)},${THEME_FONT_STACKS[captionToken.font]}`;
-        }
+        const fontFamily = resolveFontFamilyCss(captionToken.fontFace, captionToken.font);
 
         const captionSurface = theme.surfaces?.caption;
         let surfaceBgStyle = `background:${overlayToRgba(theme.scrim)}`;

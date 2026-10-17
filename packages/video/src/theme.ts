@@ -7,12 +7,55 @@ import {
   type VisualThemeOverlay,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
+import { escapeCssFontFamily } from "./escape";
 
 export const THEME_FONT_STACKS: Record<ThemeFontCategory, string> = {
   sans: "'Noto Sans JP','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif",
   serif: "'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif",
   mono: "'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace",
 };
+
+/**
+ * Font names that identify a single local face, not just a family. The
+ * platform identifier is a PostScript name, which Chromium resolves as a
+ * family name on macOS; without it a family with several faces renders
+ * whichever face the platform prefers.
+ */
+export interface FontFaceNames {
+  platformId?: string;
+  family?: string;
+}
+
+/**
+ * Builds the `font-family` value for a theme text role: the selected local
+ * face first, then its family, then the category stack as a last resort.
+ * Values come from the Font Catalog, never from free user input, and every
+ * name is escaped before it reaches CSS.
+ */
+export function resolveFontFamilyCss(
+  fontFace: FontFaceNames | undefined,
+  category: ThemeFontCategory,
+): string {
+  const names: string[] = [];
+  const push = (name: string | undefined): void => {
+    const trimmed = name?.trim();
+    if (trimmed === undefined || trimmed.length === 0) {
+      return;
+    }
+    if (names.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
+      return;
+    }
+    names.push(trimmed);
+  };
+  push(fontFace?.platformId);
+  push(fontFace?.family);
+
+  const stack = THEME_FONT_STACKS[category];
+  if (names.length === 0) {
+    return stack;
+  }
+  return `${names.map(escapeCssFontFamily).join(",")},${stack}`;
+}
 
 interface Rgb {
   r: number;

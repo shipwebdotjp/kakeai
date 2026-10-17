@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCatalogFaces,
   FakeFontCatalogAdapter,
   FontCatalogService,
   findLocalFace,
@@ -7,6 +8,71 @@ import {
 } from "./font-catalog.ts";
 import { FakeFontVerifier } from "./font-verifier.ts";
 import { getVisualTheme, visualThemeDefinitionSchema, type FontFace, type VisualThemeDefinition, type VisualThemeTextRole } from "@kakeai/contracts";
+
+describe("buildCatalogFaces", () => {
+  it("reads the family from the typeface instead of the font file name", () => {
+    const faces = buildCatalogFaces([
+      {
+        _name: "YuMincho.ttc",
+        typefaces: [
+          {
+            _name: "YuMin-Medium",
+            family: "游明朝体",
+            fullname: "游明朝体 ミディアム",
+            style: "ミディアム",
+          },
+          {
+            _name: "YuMin_36pKn-Extrabold",
+            family: "游明朝体+36ポかな",
+            fullname: "游明朝体+36ポかな エクストラボールド",
+            style: "エクストラボールド",
+          },
+        ],
+      },
+    ]);
+
+    expect(faces.map((face) => face.postScriptName)).toEqual([
+      "YuMin-Medium",
+      "YuMin_36pKn-Extrabold",
+    ]);
+    expect(faces[0]!.family).toBe("游明朝体");
+    expect(faces[0]!.weight).toBe(500);
+    expect(faces[0]!.platformId).toBe("YuMin-Medium");
+    expect(faces[1]!.weight).toBe(800);
+  });
+
+  it("strips the file extension when a typeface has no family", () => {
+    const faces = buildCatalogFaces([
+      { _name: "NotoSansJP-Regular.otf", typefaces: [{ _name: "NotoSansJP-Regular" }] },
+    ]);
+    expect(faces[0]!.family).toBe("NotoSansJP-Regular");
+    expect(faces[0]!.postScriptName).toBe("NotoSansJP-Regular");
+    expect(faces[0]!.weight).toBe(400);
+  });
+
+  it("reads italic and bold faces from English metadata", () => {
+    const faces = buildCatalogFaces([
+      {
+        _name: "Family.ttc",
+        typefaces: [
+          { _name: "Family-BoldItalic", family: "Family", style: "Bold Italic" },
+          { _name: "Family-Light", family: "Family", style: "Light" },
+          { _name: "Family-Demibold", family: "Family", style: "Demibold" },
+        ],
+      },
+    ]);
+    expect(faces.map((face) => [face.weight, face.style])).toEqual([
+      [700, "italic"],
+      [300, "normal"],
+      [600, "normal"],
+    ]);
+  });
+
+  it("ignores malformed payloads", () => {
+    expect(buildCatalogFaces(undefined)).toEqual([]);
+    expect(buildCatalogFaces([{ _name: "NoFaces.ttc" }, null])).toEqual([]);
+  });
+});
 
 class CountingAdapter implements FontCatalogAdapter {
   calls = 0;

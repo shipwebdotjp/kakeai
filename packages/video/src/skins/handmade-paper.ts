@@ -11,7 +11,7 @@ import {
   type VisualThemeTextRole,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
-import { escapeCssFontFamily, escapeHtmlText } from "../escape";
+import { escapeHtmlText } from "../escape";
 import type {
   AnimationItem,
   RenderAnimationAction,
@@ -19,7 +19,7 @@ import type {
   RenderContext,
   StateInterval,
 } from "../render-context";
-import { THEME_FONT_STACKS, mixHex, overlayToRgba } from "../theme";
+import { mixHex, overlayToRgba, resolveFontFamilyCss } from "../theme";
 import { onsetOverlayId } from "../cue-effects";
 import { calloutItemOverlayHtml, planListCalloutEffects } from "../templates/list-callout";
 import { renderMediaCardMedia } from "../templates/media-card";
@@ -157,10 +157,7 @@ function themeTextCss(
   options: { fontSize?: number; color?: string; weight?: string } = {},
 ): string {
   const token = theme.textRoles[role];
-  const fontFamily =
-    token.fontFace?.family !== undefined
-      ? `${escapeCssFontFamily(token.fontFace.family)},${THEME_FONT_STACKS[token.font]}`
-      : THEME_FONT_STACKS[token.font];
+  const fontFamily = resolveFontFamilyCss(token.fontFace, token.font);
   return [
     "margin:0",
     `font-family:${fontFamily}`,

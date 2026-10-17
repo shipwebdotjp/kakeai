@@ -10,7 +10,7 @@ import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "../escape";
 import { THUMBNAIL_OUTPUT_HEIGHT } from "../meta";
 import type { AssetResolver } from "../resolver";
-import { THEME_FONT_STACKS, mixHex, overlayToRgba } from "../theme";
+import { mixHex, overlayToRgba, resolveFontFamilyCss } from "../theme";
 import { mediaCropStyle, resolveCueMedia } from "../templates/shared";
 
 export interface ThumbnailRenderContext {
@@ -31,7 +31,7 @@ function scaledSize(base: number, factor = 1): number {
 }
 
 function roleFontFamily(token: VisualThemeTextToken): string {
-  return THEME_FONT_STACKS[token.font];
+  return resolveFontFamilyCss(token.fontFace, token.font);
 }
 
 interface TextCss {

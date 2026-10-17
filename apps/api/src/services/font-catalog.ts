@@ -17,14 +17,6 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-export function escapeCssFontFamily(name: string): string {
-  const sanitized = name.replace(/['"\\;{}()<>&]/g, "").trim();
-  if (sanitized.length === 0) {
-    return "sans-serif";
-  }
-  return `'${sanitized}'`;
-}
-
 export const THEME_TEXT_ROLES: readonly VisualThemeTextRole[] = [
   "title",
   "subtitle",
@@ -48,6 +40,97 @@ export interface FontCatalogAdapter {
   getCatalog(): Promise<{ supported: boolean; faces: FontFace[]; reason: string | null }>;
 }
 
+const FONT_FILE_EXTENSION = /\.(ttf|otf|ttc|otc|dfont|woff2?)$/i;
+
+function asText(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}
+
+// Ordered most specific first: "extrabold" contains "bold", "ultralight"
+// contains "light", so the compound words must win.
+const WEIGHT_HINTS: readonly (readonly [readonly string[], number])[] = [
+  [["black", "ブラック"], 900],
+  [["hairline", "thin", "ヘアライン"], 100],
+  [["extralight", "extra light", "ultralight", "ultra light", "エクストラライト", "ウルトラライト"], 200],
+  [["light", "ライト"], 300],
+  [["demibold", "demi bold", "semibold", "semi bold", "デミボールド", "セミボールド"], 600],
+  [
+    ["extrabold", "extra bold", "ultrabold", "ultra bold", "heavy", "エクストラボールド", "ウルトラボールド", "ヘビー"],
+    800,
+  ],
+  [["medium", "ミディアム"], 500],
+  [["bold", "ボールド", "太字"], 700],
+];
+
+function weightFromHint(hint: string): number {
+  const normalized = hint.toLowerCase();
+  for (const [keywords, weight] of WEIGHT_HINTS) {
+    if (keywords.some((keyword) => normalized.includes(keyword))) {
+      return weight;
+    }
+  }
+  return 400;
+}
+
+function styleFromHint(hint: string): "normal" | "italic" | "oblique" {
+  const normalized = hint.toLowerCase();
+  if (/italic|イタリック|斜体/.test(normalized)) {
+    return "italic";
+  }
+  return /oblique/.test(normalized) ? "oblique" : "normal";
+}
+
+/**
+ * Normalizes the `system_profiler SPFontsDataType -json` payload into Font
+ * Faces. The item `_name` is the font *file* name ("YuMincho.ttc"), which is
+ * not usable as a CSS family; the typeface `family` is.
+ */
+export function buildCatalogFaces(fontItems: unknown): FontFace[] {
+  if (!Array.isArray(fontItems)) {
+    return [];
+  }
+  const faces: FontFace[] = [];
+  for (const item of fontItems) {
+    if (typeof item !== "object" || item === null) {
+      continue;
+    }
+    const itemRecord = item as Record<string, unknown>;
+    const fileFamily = asText(itemRecord._name)?.replace(FONT_FILE_EXTENSION, "");
+    const typefaces = Array.isArray(itemRecord.typefaces) ? itemRecord.typefaces : [];
+    for (const typeface of typefaces) {
+      if (typeof typeface !== "object" || typeface === null) {
+        continue;
+      }
+      const face = typeface as Record<string, unknown>;
+      const displayName = asText(face._name) ?? asText(face.fullname) ?? fileFamily;
+      if (displayName === undefined) {
+        continue;
+      }
+      const family = asText(face.family) ?? fileFamily ?? displayName;
+      const postScriptName = asText(face.postscript_name) ?? displayName;
+      const hint = [asText(face.style), asText(face.fullname), displayName].filter(
+        (entry): entry is string => entry !== undefined,
+      ).join(" ");
+
+      faces.push({
+        platformId: postScriptName,
+        family,
+        displayName,
+        postScriptName,
+        weight: weightFromHint(hint),
+        style: styleFromHint(hint),
+        stretch: "normal",
+        available: true,
+      });
+    }
+  }
+  return faces;
+}
+
 export class MacOsFontCatalogAdapter implements FontCatalogAdapter {
   async getCatalog(): Promise<{ supported: boolean; faces: FontFace[]; reason: string | null }> {
     if (process.platform !== "darwin") {
@@ -65,34 +148,10 @@ export class MacOsFontCatalogAdapter implements FontCatalogAdapter {
       });
       const data = JSON.parse(stdout);
       const fontItems = data?.SPFontsDataType ?? [];
-      const faces: FontFace[] = [];
-
-      for (const item of fontItems) {
-        const family = typeof item._name === "string" ? item._name : "Unknown";
-        const typefaces = Array.isArray(item.typefaces) ? item.typefaces : [];
-        for (const face of typefaces) {
-          const displayName = typeof face._name === "string" ? face._name : family;
-          const postScriptName = typeof face.postscript_name === "string" ? face.postscript_name : displayName;
-          const styleStr = typeof face.style === "string" ? face.style.toLowerCase() : "normal";
-          const style = styleStr.includes("italic") ? "italic" : styleStr.includes("oblique") ? "oblique" : "normal";
-          const weight = styleStr.includes("bold") ? 700 : 400;
-
-          faces.push({
-            platformId: postScriptName,
-            family,
-            displayName,
-            postScriptName,
-            weight,
-            style,
-            stretch: "normal",
-            available: true,
-          });
-        }
-      }
 
       return {
         supported: true,
-        faces,
+        faces: buildCatalogFaces(fontItems),
         reason: null,
       };
     } catch {

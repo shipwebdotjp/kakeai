@@ -41,6 +41,7 @@ import {
 } from "../api/hooks";
 import { ColorField } from "../components/ColorField";
 import { errorMessage } from "../lib/errorMessage";
+import { includeFontFace, selectableFontFaces } from "../lib/fontFaceOptions";
 import { THEMES_ROUTE_PATH, themeDetailRoute } from "../lib/routes";
 import {
   buttonNeutralClass,
@@ -110,17 +111,10 @@ export function ThemeDetailPage() {
 
   const skinDefinitions = useMemo(() => listVisualSkinDefinitions(), []);
   const currentSkin = formDef ? resolveVisualThemeSkin(formDef) : NEUTRAL_VISUAL_SKIN_REF;
-
-  const filteredFontFaces = useMemo(() => {
-    if (!fontSearch.trim()) return fontFaces.slice(0, 50);
-    const query = fontSearch.toLowerCase();
-    return fontFaces.filter(
-      (f) =>
-        f.family.toLowerCase().includes(query) ||
-        f.displayName.toLowerCase().includes(query) ||
-        f.postScriptName.toLowerCase().includes(query),
-    ).slice(0, 50);
-  }, [fontFaces, fontSearch]);
+  const matchedFontFaces = useMemo(
+    () => selectableFontFaces(fontFaces, fontSearch, undefined),
+    [fontFaces, fontSearch],
+  );
 
   const updateColor = (key: keyof VisualThemeDefinition["canvas"] | "surface" | "surfaceMuted" | "text" | "muted" | "border" | "onMedia", value: string) => {
     if (!formDef || isBuiltIn) return;
@@ -489,6 +483,15 @@ export function ThemeDetailPage() {
               <fieldset disabled={isBuiltIn} className="space-y-6">
                 {ALL_ROLES.map((role) => {
                   const style = formDef.textRoles[role];
+                  const faceOptions = includeFontFace(
+                    matchedFontFaces,
+                    fontFaces,
+                    style.fontFace?.platformId,
+                  );
+                  const selectedFaceUnknown =
+                    style.fontFace?.platformId !== undefined &&
+                    style.fontFace.platformId.length > 0 &&
+                    !faceOptions.some((face) => face.postScriptName === style.fontFace?.platformId);
 
                   return (
                     <div key={role} className="rounded border border-border p-3 space-y-2">
@@ -548,29 +551,39 @@ export function ThemeDetailPage() {
                           <label className="block text-xs mb-1">指定 Font Face</label>
                           <select
                             className={`w-full text-xs ${textFieldClass}`}
-                            value={style.fontFace?.family ?? ""}
+                            value={style.fontFace?.platformId ?? ""}
                             onChange={(e) => {
-                              const selectedFamily = e.target.value;
-                              if (!selectedFamily) {
+                              const selectedPostScriptName = e.target.value;
+                              if (!selectedPostScriptName) {
                                 updateTextStyle(role, (s) => ({ ...s, fontFace: undefined }));
-                              } else {
-                                const found = fontFaces.find((f) => f.family === selectedFamily);
-                                updateTextStyle(role, (s) => ({
-                                  ...s,
-                                  fontFace: {
-                                    family: selectedFamily,
-                                    platformId: found?.postScriptName,
-                                    weight: found?.weight ?? 400,
-                                    style: found?.style ?? "normal",
-                                    fallbacks: [],
-                                  },
-                                }));
+                                return;
                               }
+                              const found = fontFaces.find(
+                                (f) => f.postScriptName === selectedPostScriptName,
+                              );
+                              if (found === undefined) {
+                                return;
+                              }
+                              updateTextStyle(role, (s) => ({
+                                ...s,
+                                fontFace: {
+                                  family: found.family,
+                                  platformId: found.postScriptName,
+                                  weight: found.weight,
+                                  style: found.style,
+                                  fallbacks: [],
+                                },
+                              }));
                             }}
                           >
                             <option value="">（カテゴリ既定の標準フォント）</option>
-                            {filteredFontFaces.map((face) => (
-                              <option key={face.postScriptName} value={face.family}>
+                            {selectedFaceUnknown && (
+                              <option value={style.fontFace?.platformId ?? ""}>
+                                （この端末にないフォント: {style.fontFace?.family}）
+                              </option>
+                            )}
+                            {faceOptions.map((face) => (
+                              <option key={face.postScriptName} value={face.postScriptName}>
                                 {face.displayName} ({face.family})
                               </option>
                             ))}
