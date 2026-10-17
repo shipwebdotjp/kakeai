@@ -3,6 +3,7 @@ import {
   type AppearEffect,
   type EmphasizeEffect,
   type LineTrigger,
+  type OnsetPreset,
   type ValueEffect,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
@@ -98,6 +99,11 @@ export function onsetOverlayId(elementId: string): string {
   return `${elementId}-onset`;
 }
 
+export const PERSISTENT_ONSET_PRESETS: ReadonlySet<OnsetPreset> = new Set([
+  "marker",
+  "underline",
+]);
+
 export function tableNumberFormatToValueFormat(format: string | undefined): ValueFormat {
   switch (format) {
     case "currency":
@@ -155,10 +161,10 @@ export function planOnsetEffect(options: {
   effect: EmphasizeEffect;
   window: CueEffectWindow;
   spanMs: number;
-}): AnimationItem | null {
+}): CueEffectPlan {
   const onset = options.effect.onset;
   if (onset === undefined) {
-    return null;
+    return { animation: [], stateIntervals: [] };
   }
   const windowMs = options.window.endMs - options.window.startMs;
   const durationMs = Math.max(
@@ -167,13 +173,26 @@ export function planOnsetEffect(options: {
   );
   const startMs = options.window.startMs;
   if (durationMs <= 0 || startMs >= options.spanMs) {
-    return null;
+    return { animation: [], stateIntervals: [] };
   }
-  return {
-    targetId: options.overlayId,
-    action: onset.preset,
-    ease: onset.preset === "pop" ? "overshoot" : "normal",
-    startMs,
-    durationMs,
-  };
+  const animation: AnimationItem[] = [
+    {
+      targetId: options.overlayId,
+      action: onset.preset,
+      ease: onset.preset === "pop" ? "overshoot" : "normal",
+      startMs,
+      durationMs,
+    },
+  ];
+  const stateIntervals: StateInterval[] = PERSISTENT_ONSET_PRESETS.has(onset.preset)
+    ? [
+        {
+          targetId: options.overlayId,
+          intervals: [{ startMs: options.window.startMs, endMs: options.window.endMs }],
+          on: { opacity: 1 },
+          off: { opacity: 0 },
+        },
+      ]
+    : [];
+  return { animation, stateIntervals };
 }

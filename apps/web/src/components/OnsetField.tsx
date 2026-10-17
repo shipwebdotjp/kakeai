@@ -12,6 +12,8 @@ const ONSET_PRESET_LABELS: Record<string, string> = {
   sweep: "枠を一周",
   flash: "フラッシュ",
   pop: "ポップ",
+  marker: "蛍光ペン",
+  underline: "下線",
 };
 
 const DEFAULT_ONSET = { preset: "sweep", durationMs: 600 };

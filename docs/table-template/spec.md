@@ -51,7 +51,7 @@
 - `columns[].key` は行オブジェクトのキーと対応する識別子で、`columns` 内で一意とする。`key` は `[A-Za-z0-9_-]` の1〜64文字とする。
 - `rows` は「列キー→値」のオブジェクト配列とする。値は文字列または数値のみとする。列定義に無いキーは空セルとして扱い、欠けたキーは空セルとする。
 - `columns[].type` は `text | number` とする。`align`（`left | center | right`）の既定は型から導出する（text→left、number→right）。`format` は number 列だけが持ち、`integer | decimal | percent | currency` とする（省略時はそのまま表示）。`percent` は比率（0.25→25%）と解釈し、`currency` はJPY・小数なしと解釈する。数値整形は `ja-JP` ロケールでコンパイル時に静的HTML化する。
-- `effects` は行トリガー付きの `appear`／`emphasize`／`value` を持つ。target は `row`（行番号）・`cell`（行番号と列キー）・`rows`（全行）・`columns`（全列）を指す。`trigger` は `cue`（Cue全体）または `lines`（同じSceneのセリフ区間）。`appear` は登場、`emphasize` は枠・背景・スポットライトの強調、`value` は数値セルのカウント（`cell` かつ数値列のみ）。`emphasize` は任意の `onset`（`sweep | flash | pop`）を持てる。セリフの実時間は音声尺から解決する。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
+- `effects` は行トリガー付きの `appear`／`emphasize`／`value` を持つ。target は `row`（行番号）・`cell`（行番号と列キー）・`rows`（全行）・`columns`（全列）を指す。`trigger` は `cue`（Cue全体）または `lines`（同じSceneのセリフ区間）。`appear` は登場、`emphasize` は枠・背景・スポットライトの強調、`value` は数値セルのカウント（`cell` かつ数値列のみ）。`emphasize` は任意の `onset`（`sweep | flash | pop | marker | underline`）を持てる。セリフの実時間は音声尺から解決する。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 - 列数は最大 `8`、行数は最大 `12`、効果は最大 `32` をスキーマで強制する。フォントサイズはテンプレート契約として固定し、行数超過で描画時に黙って縮小しない。超過の目安は警告（`meta.warnings`）で返す。
 
 ## テンプレート定義

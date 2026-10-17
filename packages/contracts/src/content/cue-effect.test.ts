@@ -5,6 +5,7 @@ import {
   emphasizeEffectSchema,
   lineTriggerSchema,
   numericEffectSchema,
+  ONSET_PRESETS,
   onsetSpecSchema,
   timedEffectSchema,
   valueEffectSchema,
@@ -132,7 +133,7 @@ describe("valueEffectSchema", () => {
 
 describe("onsetSpecSchema", () => {
   it("accepts the onset vocabulary with a duration", () => {
-    for (const preset of ["sweep", "flash", "pop"]) {
+    for (const preset of ONSET_PRESETS) {
       expect(onsetSpecSchema.safeParse({ preset, durationMs: 500 }).success).toBe(true);
     }
   });

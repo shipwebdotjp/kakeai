@@ -342,15 +342,14 @@ function applyTableEffects(options: {
       const color = toneHex(entry.effect.tone, options.theme);
       for (const elementId of onsetElementIds(entry, targets, options.rowCellIds)) {
         options.onsets.set(elementId, { preset: entry.effect.onset.preset, color });
-        const onset = planOnsetEffect({
+        const onsetPlan = planOnsetEffect({
           overlayId: onsetOverlayId(elementId),
           effect: entry.effect,
           window,
           spanMs: options.spanMs,
         });
-        if (onset !== null) {
-          options.animation.push(onset);
-        }
+        options.animation.push(...onsetPlan.animation);
+        options.stateIntervals.push(...onsetPlan.stateIntervals);
       }
     }
   });

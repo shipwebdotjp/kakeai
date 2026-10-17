@@ -788,9 +788,13 @@ const STYLES = [
   ".kakeai-quoteauthor{font-weight:700;color:var(--kakeai-text);}",
   ".kakeai-quotesource{font-style:normal;}",
   ".kakeai-onsetoverlay{position:absolute;inset:0;pointer-events:none;opacity:0;display:block;}",
-  ".kakeai-onsetsweep{--kakeai-onset-progress:1;border-radius:inherit;padding:6px;background:conic-gradient(from calc(var(--kakeai-onset-progress,0) * 360deg),transparent 0deg,var(--kakeai-onset-color,#fff) 45deg,transparent 110deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;}",
-  ".kakeai-onsetflash{border-radius:inherit;background:var(--kakeai-onset-color,#fff);}",
-  ".kakeai-onsetpop{border-radius:inherit;box-shadow:inset 0 0 0 6px var(--kakeai-onset-color,#fff);}",
+  ".kakeai-onset-sweep{--kakeai-onset-progress:1;border-radius:inherit;padding:6px;background:conic-gradient(from calc(var(--kakeai-onset-progress,0) * 360deg),transparent 0deg,var(--kakeai-onset-color,#fff) 45deg,transparent 110deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;}",
+  ".kakeai-onset-flash{border-radius:inherit;background:var(--kakeai-onset-color,#fff);}",
+  ".kakeai-onset-pop{border-radius:inherit;box-shadow:inset 0 0 0 6px var(--kakeai-onset-color,#fff);}",
+  ".kakeai-onset-underline{--kakeai-onset-progress:1;}",
+  ".kakeai-onset-underline::after{content:'';position:absolute;left:0;right:0;bottom:0.06em;height:0.09em;background:var(--kakeai-onset-color,#fff);border-radius:2px;transform:scaleX(var(--kakeai-onset-progress,0));transform-origin:left center;}",
+  ".kakeai-onset-marker{--kakeai-onset-progress:1;}",
+  ".kakeai-onset-marker::after{content:'';position:absolute;left:0;right:0;top:0.3em;bottom:0.12em;background:var(--kakeai-onset-color,#fff);opacity:0.45;border-radius:0.08em;transform:scaleX(var(--kakeai-onset-progress,0));transform-origin:left center;}",
 ].join("\n");
 
 const FADE_START_EPSILON_MS = 1;
@@ -832,11 +836,14 @@ function actionVars(action: RenderAnimationAction, axis: "x" | "y" | undefined):
     case "grow":
       return axis === "x" ? "scaleX:0" : "scaleY:0";
     case "sweep":
-      return "opacity:1,--kakeai-onset-progress:0";
+      return 'opacity:1,"--kakeai-onset-progress":0';
     case "flash":
       return "opacity:1";
     case "pop":
       return "opacity:1,scale:0.85";
+    case "marker":
+    case "underline":
+      return '"--kakeai-onset-progress":0';
     case "none":
     case "fade":
     case "slide-up":

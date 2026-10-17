@@ -86,3 +86,14 @@
 - [x] web の remap（`removeLineInScene`・`splitPointScene`・`countLineCueReferences`）を `collectLineRefs` に一本化する（未知テンプレートは非破壊保持）
 - [x] 契約・web のテストを追加・更新する
 - 完了条件: 別Scene・不存在の効果トリガーを保存時に拒否し、行削除・分割後も参照が破綻しない。
+
+## Phase 9: onset preset `marker` / `underline`（蛍光ペン、持続）
+
+- [x] `onsetPresetSchema` に `marker`・`underline` を追加する
+- [x] `planOnsetEffect` を `CueEffectPlan`（`{ animation, stateIntervals }`）を返す形にし、`marker`・`underline` は区間ON/OFFの `stateIntervals` を返す
+- [x] `actionVars` に `marker`/`underline`（`--kakeai-onset-progress:0`）を追加し、`STYLES` に `::after` の線を追加する
+- [x] `STYLES` の onset セレクタのハイフン欠落（`.kakeai-onsetsweep` 等）を修正し、テンプレートの `kakeai-onset-${preset}` と一致させる
+- [x] 各テンプレートの `planOnsetEffect` 呼び出しを `CueEffectPlan` へ更新する（`table.simple`・`chart.bar`・`list.callout`・`quote`・`stat`・`flow.diagram`）
+- [x] `OnsetField` に `marker`・`underline` のラベルを追加する
+- [x] 契約・`cue-effects`・テンプレート・コンパイラ（全presetのセレクタ一致）のテストを追加する
+- 完了条件: `marker`/`underline` が発火で線を走らせ、区間末まで残って解除され、プレビューのシークとMP4で一致する。既存 `sweep`/`flash`/`pop` の見た目が修正後も回帰しない。

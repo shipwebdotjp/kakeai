@@ -90,15 +90,14 @@ export function renderListCallout(input: unknown, context: RenderContext): Rende
             });
           });
         }
-        const onset = planOnsetEffect({
+        const onsetPlan = planOnsetEffect({
           overlayId: onsetOverlayId(itemIds[index]!),
           effect: item.effect,
           window,
           spanMs,
         });
-        if (onset !== null) {
-          animation.push(onset);
-        }
+        animation.push(...onsetPlan.animation);
+        stateIntervals.push(...onsetPlan.stateIntervals);
       }
       return;
     }

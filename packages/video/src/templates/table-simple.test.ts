@@ -290,4 +290,42 @@ describe("renderTableSimple effects", () => {
       expect(rendered.html).toContain("kakeai-onset-sweep");
     }
   });
+
+  it("keeps a marker onset overlay visible across the trigger window", () => {
+    const rendered = renderTableSimple(
+      {
+        ...baseInput,
+        effects: [
+          {
+            target: { kind: "row", index: 0 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: {
+              kind: "emphasize",
+              style: "frame",
+              tone: "info",
+              onset: { preset: "marker", durationMs: 600 },
+            },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    const scope = cueScope("visual-table-1");
+    for (const cellId of [scope.id("cell-0-0"), scope.id("cell-0-1")]) {
+      expect(rendered.animation).toContainEqual({
+        targetId: `${cellId}-onset`,
+        action: "marker",
+        ease: "normal",
+        startMs: 500,
+        durationMs: 600,
+      });
+      expect(rendered.stateIntervals).toContainEqual({
+        targetId: `${cellId}-onset`,
+        intervals: [{ startMs: 500, endMs: 1500 }],
+        on: { opacity: 1 },
+        off: { opacity: 0 },
+      });
+      expect(rendered.html).toContain("kakeai-onset-marker");
+    }
+  });
 });

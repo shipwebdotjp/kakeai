@@ -47,7 +47,7 @@ Effectは有限enumとする。
 - `appear.staggerMs` は任意で、グループtarget（複数要素をまとめて指す場合）にだけ意味を持つ。省略時は0。
 - `emphasize.style` は `background | frame | spotlight`。`frame` は枠を太くする、`background` は背景色を付ける、`spotlight` は対象をリングで強調し兄弟を減光する。
 - `emphasize.tone` は `primary | secondary | tertiary | success | warning | error | info` とし、レンダー時にテーマから解決する（`table.simple` の強調と同じ語彙）。
-- `emphasize.onset` は任意で `{ preset: "sweep" | "flash" | "pop", durationMs }`。発火の尺は `animationPolicy.maxDurationMs` とTrigger区間でクランプする。
+- `emphasize.onset` は任意で `{ preset: "sweep" | "flash" | "pop" | "marker" | "underline", durationMs }`。発火の尺は `animationPolicy.maxDurationMs` とTrigger区間でクランプする。`marker`（蛍光ペンの帯）と `underline`（下線）は発火で線が左から右へ走り、その後Trigger区間末まで残って区間末で解除される（持続する点が `sweep`/`flash`/`pop` と異なる）。
 - `value` は `from`（任意・既定0）と `durationMs`（任意・省略時はTrigger区間長）を持つ。尺は `animationPolicy.maxDurationMs` とTrigger区間でクランプする。書式は対象が持つ書式（`table.simple` は数値列、`chart.bar` は系列、`stat` は自身の `format`）を使う。
 - `chart.bar` の強調は棒の色を上書きしないよう `frame | spotlight` に限る（`background` は保存時に拒否する）。
 
@@ -69,7 +69,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 - `appear` は対象をTrigger開始で `AnimationPlan`（`startMs` はCue相対）として登場させる。グループtargetでは `startMs = index × staggerMs` を加える。効果以前は非表示、以降は表示のままとする。
 - `emphasize` は `stateIntervals` として対象のON区間を返す。ONで強調の見た目、OFFで元に戻す。ON/OFFは `tl.set` で切り替え、補間しない。
-- `emphasize.onset` は対象内の一時サブ要素（走査線など）に `AnimationPlan`（`startMs` はTrigger開始）として当て、持続の `stateIntervals` とは別要素・別プロパティにする。`sweep`/`flash`/`pop` は有限enumのvideoローカルなactionで、コンパイラが対応するCSSプロパティ・カスタムプロパティの開始値へ写像する。`<tr>` に子要素を置けないため、行targetのonsetは各セルへオーバーレイする。
+- `emphasize.onset` は対象内の一時サブ要素（走査線など）に `AnimationPlan`（`startMs` はTrigger開始）として当て、持続の `stateIntervals` とは別要素・別プロパティにする。`sweep`/`flash`/`pop`/`marker`/`underline` は有限enumのvideoローカルなactionで、コンパイラが対応するCSSプロパティ・カスタムプロパティの開始値へ写像する。`marker`/`underline` は `--kakeai-onset-progress` を0→1へ走らせる線（`::after`擬似要素）を発火に、overlayの `opacity` を区間ON/OFFする `stateIntervals` を持続に使い、発火と持続を別プロパティに閉じる。`<tr>` に子要素を置けないため、行targetのonsetは各セルへオーバーレイする。
 - `emphasize.style: "spotlight"` は対象にリングの `stateIntervals` を返し、加えて兄弟要素を `filter` で減光する `stateIntervals` を返す。兄弟要素はテンプレートが解決する（`appear` の非表示が `opacity` を使うため、減光は `opacity` ではなく `filter` を使い競合を避ける）。
 - `value` は `valueAnimations: { targetId, from, to, format, startMs, durationMs }[]` を返す。コンパイラだけがプロキシオブジェクトの `fromTo` を生成し、`onUpdate` で対象のテキストを書式化して書き換える。発火前は `from`、区間中は補間、区間後は `to` を表示する。
 - 発火と持続は別サブ要素に割り当て、同じ要素の同じプロパティを取り合わない（[ADR-0063](../adr/0063-animation-onset-and-sustained-state.md)）。`value` はテキストだけを書き換え、`emphasize` の枠・背景とは競合しない。
@@ -131,7 +131,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 - 新規テンプレート（`list.callout@1`）は `@1` から開始する。
 - 既存テンプレートの入力形状変更は、保存済み参照の有無で `@1` 書き換えか `@2` 追加かを決める。`table.simple@1`・`chart.bar@1` の `reveal`・`emphasis` 削除は、正式リリース前の破壊的変更として `@1` を書き換えた（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
-- 効果語彙の追加は、保存済み有効入力の解釈を変えない限り同じ版を書き換えてよい（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。`spotlight`・`onset`・`value` の追加と `chart.bar` の `emphasize` 追加は、いずれも追加のみのため `@1` を据え置いた。
+- 効果語彙の追加は、保存済み有効入力の解釈を変えない限り同じ版を書き換えてよい（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。`spotlight`・`onset`・`value` の追加と `chart.bar` の `emphasize` 追加、`onset` の `marker`・`underline` 追加は、いずれも追加のみのため `@1` を据え置いた。
 
 ## 非ゴール
 
@@ -143,6 +143,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 - 3つのポイントを常時表示し、各ポイントが対応する行区間で強調され、区間末で解除される動画を、プレビューのシークとMP4で一致して再現できる。
 - `emphasize` に `onset` を付けたとき、発火がTrigger開始で一度だけ走り、`spotlight` では対象がリングで強調され兄弟が減光され、いずれも区間末で解除される。プレビューとMP4が一致する。
+- `onset.preset` が `marker`／`underline` のとき、Trigger開始で線が左から右へ走り、区間末まで残って区間末で解除される。プレビューのシークとMP4で一致する。
 - 行の並べ替え・削除・分割後も、Trigger参照が同じ行を指し続ける。
 - 存在しない行ID・逆転区間・空区間を保存時に拒否し、Cue窓外のTriggerをクランプする。
 - `table.simple`・`chart.bar` の移行後、既存相当の見た目（一括登場・静的強調）を `effects` で再現でき、プレビューとMP4が一致する。
@@ -158,7 +159,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 効果の語彙（パターン）を増やす
 - [x] spotlight（他を暗く）: 対象を強調しつつ兄弟を減光。表・グラフ・ポイントで一番「分かった感」が出る。`emphasize` の style 追加（`style: "spotlight"`）で実装。
 - [x] count-up（数値のカウント）: 行区間で数値を0→値へ。chart/table の数値や「stat（大数字）」テンプレートと好相性。持続状態ではなく「区間で進行する値」なので新しい effect 種別 `value` を足し、`valueAnimations` としてコンパイラがトゥイーンを生成する（[ADR-0065](../adr/0065-count-up-value-effect.md)、[../stat-template/spec.md](../stat-template/spec.md)）。
-- marker/underline（蛍光ペン）: 発火で線が走る onset 系。onset の preset として追加すると語彙が自然に増える。
+- [x] marker/underline（蛍光ペン）: 発火で線が走る onset 系。onset の preset（`marker`＝蛍光ペンの帯、`underline`＝下線）として追加。発火で線が左から右へ走り、Trigger区間末まで残る。
 - pulse（繰り返し強調）: 「ずっと点滅」。既に pulse preset はあるので emphasize の繰り返しオプションとして。
 - カメラ/画像注釈: 画像の一部へ寄る/丸で囲む（hyperframes-keyframes 相当）。ただし任意keyframeは不可なので、有限プリセット（zoom-to, circle, arrow）に閉じる。
 追加すると効くテンプレート

@@ -36,7 +36,7 @@ export const emphasizeStyleSchema = z.enum(["background", "frame", "spotlight"])
 export type EmphasizeStyle = z.infer<typeof emphasizeStyleSchema>;
 export const EMPHASIZE_STYLES = emphasizeStyleSchema.options;
 
-export const onsetPresetSchema = z.enum(["sweep", "flash", "pop"]);
+export const onsetPresetSchema = z.enum(["sweep", "flash", "pop", "marker", "underline"]);
 export type OnsetPreset = z.infer<typeof onsetPresetSchema>;
 export const ONSET_PRESETS = onsetPresetSchema.options;
 

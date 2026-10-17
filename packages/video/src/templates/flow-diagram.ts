@@ -313,15 +313,14 @@ function applyFlowEffects(options: {
       const color = toneHex(entry.effect.tone, options.theme);
       for (const target of targets) {
         options.onsets.set(target.id, { preset: entry.effect.onset.preset, color });
-        const onset = planOnsetEffect({
+        const onsetPlan = planOnsetEffect({
           overlayId: onsetOverlayId(target.id),
           effect: entry.effect,
           window,
           spanMs: options.spanMs,
         });
-        if (onset !== null) {
-          options.animation.push(onset);
-        }
+        options.animation.push(...onsetPlan.animation);
+        options.stateIntervals.push(...onsetPlan.stateIntervals);
       }
     }
   });

@@ -123,7 +123,7 @@ describe("planAppearEffect", () => {
 
 describe("planOnsetEffect", () => {
   it("starts the onset at the window and clamps its duration to the window", () => {
-    const onset = planOnsetEffect({
+    const plan = planOnsetEffect({
       overlayId: "a-onset",
       effect: {
         kind: "emphasize",
@@ -134,17 +134,20 @@ describe("planOnsetEffect", () => {
       window: { startMs: 1500, endMs: 2500 },
       spanMs: 9000,
     });
-    expect(onset).toEqual({
-      targetId: "a-onset",
-      action: "sweep",
-      ease: "normal",
-      startMs: 1500,
-      durationMs: 1000,
-    });
+    expect(plan.animation).toEqual([
+      {
+        targetId: "a-onset",
+        action: "sweep",
+        ease: "normal",
+        startMs: 1500,
+        durationMs: 1000,
+      },
+    ]);
+    expect(plan.stateIntervals).toEqual([]);
   });
 
   it("uses an overshoot ease for the pop preset", () => {
-    const onset = planOnsetEffect({
+    const plan = planOnsetEffect({
       overlayId: "a-onset",
       effect: {
         kind: "emphasize",
@@ -155,10 +158,38 @@ describe("planOnsetEffect", () => {
       window: { startMs: 500, endMs: 1500 },
       spanMs: 9000,
     });
-    expect(onset?.ease).toBe("overshoot");
+    expect(plan.animation[0]?.ease).toBe("overshoot");
   });
 
-  it("returns null without an onset or with an empty window", () => {
+  it("keeps marker and underline visible for the whole trigger window", () => {
+    for (const preset of ["marker", "underline"] as const) {
+      const plan = planOnsetEffect({
+        overlayId: "a-onset",
+        effect: {
+          kind: "emphasize",
+          style: "frame",
+          tone: "primary",
+          onset: { preset, durationMs: 400 },
+        },
+        window: { startMs: 500, endMs: 2500 },
+        spanMs: 9000,
+      });
+      expect(plan.animation).toEqual([
+        { targetId: "a-onset", action: preset, ease: "normal", startMs: 500, durationMs: 400 },
+      ]);
+      expect(plan.stateIntervals).toEqual([
+        {
+          targetId: "a-onset",
+          intervals: [{ startMs: 500, endMs: 2500 }],
+          on: { opacity: 1 },
+          off: { opacity: 0 },
+        },
+      ]);
+    }
+  });
+
+  it("returns an empty plan without an onset or with an empty window", () => {
+    const empty = { animation: [], stateIntervals: [] };
     expect(
       planOnsetEffect({
         overlayId: "a-onset",
@@ -166,7 +197,7 @@ describe("planOnsetEffect", () => {
         window: { startMs: 0, endMs: 1000 },
         spanMs: 9000,
       }),
-    ).toBeNull();
+    ).toEqual(empty);
     expect(
       planOnsetEffect({
         overlayId: "a-onset",
@@ -179,6 +210,6 @@ describe("planOnsetEffect", () => {
         window: { startMs: 500, endMs: 500 },
         spanMs: 9000,
       }),
-    ).toBeNull();
+    ).toEqual(empty);
   });
 });

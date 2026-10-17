@@ -169,15 +169,14 @@ function applyQuoteEffects(options: {
     }
     if (entry.effect.onset !== undefined) {
       options.markOnset(entry.effect.onset.preset, toneHex(entry.effect.tone, options.theme));
-      const onset = planOnsetEffect({
+      const onsetPlan = planOnsetEffect({
         overlayId: onsetOverlayId(options.quoteId),
         effect: entry.effect,
         window,
         spanMs: options.spanMs,
       });
-      if (onset !== null) {
-        options.animation.push(onset);
-      }
+      options.animation.push(...onsetPlan.animation);
+      options.stateIntervals.push(...onsetPlan.stateIntervals);
     }
   });
 }

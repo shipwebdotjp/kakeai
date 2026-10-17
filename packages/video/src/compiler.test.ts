@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
-import type { SnapshotFaceSet, VisualCue } from "@kakeai/contracts";
+import { ONSET_PRESETS, type SnapshotFaceSet, type VisualCue } from "@kakeai/contracts";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import type { CompositionVersionResolver } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
@@ -87,6 +87,13 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('window.__timelines["kakeai-main"]');
   });
 
+  it("defines an onset overlay selector matching every preset class", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    for (const preset of ONSET_PRESETS) {
+      expect(compiled.html).toContain(`.kakeai-onset-${preset}{`);
+    }
+  });
+
   it("emits a count-up tween for a stat value effect", () => {
     const document = validContentDocument();
     document.scenes[1]!.visualCues = [
@@ -107,6 +114,38 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("_o={v:0}");
     expect(compiled.html).toContain("v:1200");
     expect(compiled.html).toContain("el.textContent=_fmt(");
+  });
+
+  it("emits a syntactically valid timeline script for an onset preset", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-onset",
+        template: { id: "stat", version: 1 },
+        layer: "overlay",
+        input: {
+          value: 42,
+          format: "integer",
+          effects: [
+            {
+              trigger: { kind: "cue" },
+              effect: {
+                kind: "emphasize",
+                style: "frame",
+                tone: "primary",
+                onset: { preset: "marker", durationMs: 600 },
+              },
+            },
+          ],
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const start = compiled.html.lastIndexOf("<script>") + "<script>".length;
+    const end = compiled.html.indexOf("</script>", start);
+    const script = compiled.html.slice(start, end);
+    expect(script).toContain('"--kakeai-onset-progress":0');
+    expect(() => new Function(script)).not.toThrow();
   });
 
   it("applies cue enter and exit transitions to the cue frame", () => {
