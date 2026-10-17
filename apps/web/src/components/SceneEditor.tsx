@@ -477,6 +477,24 @@ function InsertSceneFields({
           />
           埋め込み音声を再生
         </label>
+        <label className="inline-flex items-center gap-1.5">
+          音量
+          <input
+            type="number"
+            step={1}
+            min={-60}
+            max={12}
+            disabled={!scene.embeddedAudio || asset?.hasAudio !== true}
+            className={`w-20 ${textFieldClass}`}
+            {...register(`scenes.${sceneIndex}.embeddedAudioGainDb`, {
+              setValueAs: (value) => {
+                const parsed = Number(value);
+                return value === "" || !Number.isFinite(parsed) ? 0 : parsed;
+              },
+            })}
+          />
+          dB
+        </label>
         {scene.embeddedAudio && <span className={badgeNeutralClass}>作品全体BGMをこの区間で抑制</span>}
         {scene.embeddedAudio && asset !== undefined && asset.hasAudio === false && (
           <span className={badgeNeutralClass}>この区間は無音になります</span>

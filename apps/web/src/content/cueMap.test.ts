@@ -52,6 +52,7 @@ function makeScene(
     audioCues: [],
     mainVisualCueId: "",
     embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 

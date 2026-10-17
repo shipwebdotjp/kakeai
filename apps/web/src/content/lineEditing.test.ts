@@ -103,6 +103,7 @@ function makeScene(lines: LineFormValue[], cues: CueFormValue[] = []): SceneForm
     audioCues: [],
     mainVisualCueId: "",
     embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 

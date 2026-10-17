@@ -91,6 +91,7 @@ export const insertSceneSchema = z.strictObject({
   lines: z.array(narrationSegmentSchema).length(0),
   mainVisualCueId: idSchema,
   embeddedAudio: z.boolean(),
+  embeddedAudioGainDb: z.number().finite().optional(),
 });
 
 export const sceneSchema = z.discriminatedUnion("kind", [

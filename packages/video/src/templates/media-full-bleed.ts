@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
 import type { RenderedCue, RenderContext } from "../render-context";
-import { mediaCropStyle, renderLoopVideoSegments, resolveCueMedia, secondsText } from "./shared";
+import { mediaCropStyle, gainToVolume, renderLoopVideoSegments, resolveCueMedia, secondsText } from "./shared";
 
 export function renderMediaFullBleed(
   input: unknown,
@@ -41,6 +41,7 @@ export function renderMediaFullBleed(
     }
     const loopLengthMs = trimEndMs === null ? null : trimEndMs - trimStartMs;
     const audible = context.embeddedAudio === true;
+    const embeddedVolume = audible ? gainToVolume(context.embeddedAudioGainDb) : undefined;
     if (
       data.loop === true &&
       context.cueTiming !== undefined &&
@@ -57,18 +58,23 @@ export function renderMediaFullBleed(
         mediaStartMs: trimStartMs,
         loopLengthMs,
         audible,
+        volume: embeddedVolume,
         path: context.path,
       });
       if (looped !== null) {
         return { html: looped, assetIds: [assetId], animation: [] };
       }
     }
+    const audioAttr =
+      audible && embeddedVolume !== undefined
+        ? ` data-has-audio="true" data-volume="${escapeHtmlAttribute(embeddedVolume)}"`
+        : " muted";
     const timingAttrs =
       context.cueTiming !== undefined && loopLengthMs !== null && data.trimEndMs !== undefined
         ? ` data-start="${secondsText(context.cueTiming.startMs)}" data-duration="${secondsText(Math.min(context.cueTiming.spanMs, loopLengthMs))}"`
         : "";
     return {
-      html: `<video id="${id}" class="kakeai-fullbleed" src="${src}" style="${style}"${audible ? ' data-has-audio="true"' : " muted"} playsinline preload="auto" data-media-start="${secondsText(trimStartMs)}"${timingAttrs}></video>`,
+      html: `<video id="${id}" class="kakeai-fullbleed" src="${src}" style="${style}"${audioAttr} playsinline preload="auto" data-media-start="${secondsText(trimStartMs)}"${timingAttrs}></video>`,
       assetIds: [assetId],
       animation: [],
     };

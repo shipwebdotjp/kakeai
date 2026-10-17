@@ -54,6 +54,12 @@ export function secondsText(ms: number): string {
   return String(Math.round(seconds * 1000) / 1000);
 }
 
+export function gainToVolume(gainDb: number | undefined): string {
+  const db = Number.isFinite(gainDb) ? (gainDb as number) : 0;
+  const volume = Math.min(3.98, Math.max(0, Math.pow(10, db / 20)));
+  return String(Math.round(volume * 1000) / 1000);
+}
+
 export function renderLoopVideoSegments(options: {
   idPrefix: string;
   url: string;
@@ -65,6 +71,7 @@ export function renderLoopVideoSegments(options: {
   mediaStartMs?: number;
   loopLengthMs?: number | null;
   audible?: boolean;
+  volume?: string;
   path: (string | number)[];
 }): string | null {
   const fullSourceMs = options.sourceDurationMs;
@@ -91,6 +98,10 @@ export function renderLoopVideoSegments(options: {
   }
   const src = escapeHtmlAttribute(options.url);
   const audioAttr = options.audible === true ? ' data-has-audio="true"' : " muted";
+  const volumeAttr =
+    options.audible === true && options.volume !== undefined
+      ? ` data-volume="${escapeHtmlAttribute(options.volume)}"`
+      : "";
   const mediaStartText = secondsText(mediaStartMs);
   const segments: string[] = [];
   for (let index = 0; index < copies; index += 1) {
@@ -102,7 +113,7 @@ export function renderLoopVideoSegments(options: {
     const id = escapeHtmlAttribute(`${options.idPrefix}-${index}`);
     const last = index === copies - 1 ? " data-kakeai-loop-segment-last=\"true\"" : "";
     segments.push(
-      `<video id="${id}" class="${options.className}" src="${src}" style="${options.style}"${audioAttr} playsinline preload="auto" data-media-start="${mediaStartText}" data-start="${secondsText(startMs)}" data-duration="${secondsText(durationMs)}" data-kakeai-loop-segment="true"${last}></video>`,
+      `<video id="${id}" class="${options.className}" src="${src}" style="${options.style}"${audioAttr}${volumeAttr} playsinline preload="auto" data-media-start="${mediaStartText}" data-start="${secondsText(startMs)}" data-duration="${secondsText(durationMs)}" data-kakeai-loop-segment="true"${last}></video>`,
     );
   }
   return segments.join("");

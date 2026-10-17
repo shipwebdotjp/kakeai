@@ -73,7 +73,7 @@ insert Sceneは次を満たす。
 - `timing` は `fixed` とする。
 - `lines` は空配列とする。字幕と話者発話は持たない。
 - 1件の主動画Cueを持つ。主動画Cueは `media.full-bleed@1`、`layer: background`、`range: { kind: "scene" }` であり、readyなvideo Assetを参照する。
-- `insert` 固有の設定は主動画CueのIDと、`embeddedAudio: true | false` を持つ。新規作成時はtrueとする。動画のトリムとループは主動画Cueの `media.full-bleed@1` 入力で持つ。
+- `insert` 固有の設定は主動画CueのID、`embeddedAudio: true | false`、任意の `embeddedAudioGainDb`（dB、既定0・0は省略可）を持つ。新規作成時は `embeddedAudio: true`、ゲインは0とする。動画のトリムとループは主動画Cueの `media.full-bleed@1` 入力で持つ。
 - standing Cueは持てない。初期UIは主動画Cue以外のVisual Cueを追加しない。
 
 主動画CueのIDを明示参照することで、映像指定をSceneの型付きスロットへ重複保存せず、既存のVisual Cue契約を正本とする。
@@ -95,7 +95,7 @@ Sceneの前後には既存のScene Transitionを使える。新規insert Scene�
 
 ### 埋め込み音声とミックス
 
-`embeddedAudio: true` のinsert Sceneは、主動画Assetの埋め込み音声ストリームを使用区間だけ、映像と同じ時間軸で再生する。レンダー実装は必要に応じて音声Renditionを導出してよいが、利用者が別Assetを管理する必要はない。
+`embeddedAudio: true` のinsert Sceneは、主動画Assetの埋め込み音声ストリームを使用区間だけ、映像と同じ時間軸で再生する。任意の `embeddedAudioGainDb`（dB、既定0）で音量を調整でき、映像・音声のどちらにも同じ使用区間が適用される。レンダー実装は必要に応じて音声Renditionを導出してよいが、利用者が別Assetを管理する必要はない。
 
 動画に音声ストリームがない場合、Sceneは無音で再生し、編集画面と保存時診断でその事実を示す。`embeddedAudio: false` は、映像だけを見せたい明示的な無音指定である。
 

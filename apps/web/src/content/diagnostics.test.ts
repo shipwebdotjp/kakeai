@@ -29,6 +29,7 @@ describe("diagnosticTarget", () => {
       audioCues: [],
       mainVisualCueId: "",
       embeddedAudio: true,
+      embeddedAudioGainDb: 0,
     },
     {
       ...createPointSceneFormValue("要点1", new Set()),

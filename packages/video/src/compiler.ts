@@ -61,7 +61,7 @@ import { renderFlowDiagram } from "./templates/flow-diagram";
 import { renderStat } from "./templates/stat";
 import { renderQuote } from "./templates/quote";
 import { renderSiteMockup } from "./templates/site-mockup";
-import { focalPointStyle, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
+import { focalPointStyle, gainToVolume, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
 export const COMPOSITION_ID = "kakeai-main";
 
@@ -895,12 +895,6 @@ function valueTweenLine(item: ValueAnimation, absStartMs: number): string | null
   return `(function(){var _fmt=${formatter};var _o={v:${item.from}};tl.fromTo(_o,{v:${item.from}},{v:${item.to},duration:${secondsText(item.durationMs / 1000)},ease:"power1.out",immediateRender:true,onUpdate:function(){var el=document.getElementById(${targetId});if(el){el.textContent=_fmt(this.targets()[0].v);}}},${toSecondsText(startMs)});})();`;
 }
 
-function gainToVolume(gainDb: number | undefined): string {
-  const db = gainDb ?? 0;
-  const volume = Math.min(3.98, Math.max(0, Math.pow(10, db / 20)));
-  return String(Math.round(volume * 1000) / 1000);
-}
-
 function audioElement(options: {
   id: string;
   url: string;
@@ -1361,6 +1355,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         cue.id === scene.mainVisualCueId
       ) {
         context.embeddedAudio = true;
+        context.embeddedAudioGainDb = scene.embeddedAudioGainDb ?? 0;
       }
       const rendered = dispatchTemplate(
         `${cue.template.id}@${cue.template.version}`,

@@ -264,6 +264,32 @@ describe("compileDocument", () => {
     expect(compiled.html).not.toContain("data-fade-out");
   });
 
+  it("applies the embedded audio gain as data-volume on the insert video", () => {
+    const document = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 5000, true);
+    insert.embeddedAudioGainDb = -6;
+    document.scenes.splice(2, 0, insert);
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    expect(compiled.html).toContain('data-has-audio="true" data-volume="0.501"');
+  });
+
+  it("applies the embedded audio gain to each loop segment", () => {
+    const document = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 6000, true);
+    insert.embeddedAudioGainDb = -6;
+    insert.visualCues[0]!.input = {
+      assetId: "asset-video-insert",
+      fit: "cover",
+      trimStartMs: 0,
+      trimEndMs: 2000,
+      loop: true,
+    };
+    document.scenes.splice(2, 0, insert);
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    const segments = compiled.html.match(/data-has-audio="true" data-volume="0.501"/g) ?? [];
+    expect(segments.length).toBe(3);
+  });
+
   it("renders an insert scene with a trimmed source and synchronized embedded audio", () => {
     const document = validContentDocument();
     const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 3000, true);

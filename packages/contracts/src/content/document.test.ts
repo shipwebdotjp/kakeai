@@ -625,6 +625,22 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
   });
 
+  it("accepts an insert scene with an embedded audio gain", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.embeddedAudioGainDb = -6;
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects a non-finite embedded audio gain", () => {
+    const doc = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
+    insert.embeddedAudioGainDb = Number.POSITIVE_INFINITY;
+    doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
   it("rejects a full-bleed cue whose trim start is not before trim end", () => {
     const doc = validContentDocument();
     doc.scenes[0]!.visualCues[0]!.input = {

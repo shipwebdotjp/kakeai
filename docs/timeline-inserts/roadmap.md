@@ -6,7 +6,7 @@
 
 - R1: `NarrationSegment.gapBeforeMs`（セリフ直前の無音区間）。auto/fixed 両方で予約し、プレビュー・レンダー・セリフジャンプが本体と混同しない。
 - R2: Scene範囲 `AudioCue`（`bgm` / `sfx` / `program`）の編集・保存・プレビュー・レンダー。
-- R3: `insert` Scene。主動画Cueの動画を映像と埋め込み音声ごと再生し、作品全体BGMを200msフェード付きで抑制。`Asset.hasAudio` を永続化。ADR-0067 / 0068。
+- R3: `insert` Scene。主動画Cueの動画を映像と埋め込み音声ごと再生し、作品全体BGMを200msフェード付きで抑制。`Asset.hasAudio` を永続化。ADR-0067 / 0068。動画のトリム・ループ（ADR-0069）と埋め込み音声の音量（`embeddedAudioGainDb`）に対応。
 
 ## 意図的に見送った項目
 

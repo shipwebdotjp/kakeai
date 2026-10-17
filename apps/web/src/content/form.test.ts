@@ -170,6 +170,37 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("round-trips insert embedded audio gain and omits zero", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const insert = createInsertSceneFormValue(
+      "動画 1",
+      "asset-video-1",
+      5000,
+      collectSceneIds(values.scenes),
+    );
+    insert.embeddedAudioGainDb = -6;
+    values.scenes.splice(values.scenes.length - 1, 0, insert);
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes.find((entry) => entry.kind === "insert")).toMatchObject({
+      embeddedAudioGainDb: -6,
+    });
+
+    const base2 = createInitialContentDocument();
+    const values2 = toFormValues(base2);
+    const insert2 = createInsertSceneFormValue(
+      "動画 1",
+      "asset-video-1",
+      5000,
+      collectSceneIds(values2.scenes),
+    );
+    values2.scenes.splice(values2.scenes.length - 1, 0, insert2);
+    const rebuilt2 = buildContentDocument(base2, values2);
+    expect(rebuilt2.scenes.find((entry) => entry.kind === "insert")).not.toHaveProperty(
+      "embeddedAudioGainDb",
+    );
+  });
+
   it("updates an editable cue and keeps unmanaged cues", () => {
     const base = createInitialContentDocument();
     const intro = base.scenes[0]!;

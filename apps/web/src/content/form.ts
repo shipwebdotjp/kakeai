@@ -175,6 +175,7 @@ export interface SceneFormValue {
   audioCues: SceneAudioCueFormValue[];
   mainVisualCueId: string;
   embeddedAudio: boolean;
+  embeddedAudioGainDb: number;
 }
 
 import type { VisualThemeRef } from "@kakeai/contracts";
@@ -707,6 +708,12 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
           })),
         mainVisualCueId: scene.kind === "insert" ? scene.mainVisualCueId : "",
         embeddedAudio: scene.kind === "insert" ? scene.embeddedAudio : true,
+        embeddedAudioGainDb:
+          scene.kind === "insert" &&
+          typeof scene.embeddedAudioGainDb === "number" &&
+          Number.isFinite(scene.embeddedAudioGainDb)
+            ? scene.embeddedAudioGainDb
+            : 0,
       };
     }),
     bgm: {
@@ -1469,6 +1476,10 @@ export function buildContentDocument(
         visualCues: buildVisualCues(baseScene, { ...sceneValue, cues: mainCues, standings: [] }),
         mainVisualCueId: mainCue.id,
         embeddedAudio: sceneValue.embeddedAudio,
+        ...(Number.isFinite(sceneValue.embeddedAudioGainDb) &&
+        sceneValue.embeddedAudioGainDb !== 0
+          ? { embeddedAudioGainDb: sceneValue.embeddedAudioGainDb }
+          : {}),
       };
     }
     return { ...common, kind: "outro" };
@@ -1801,6 +1812,7 @@ export function createInsertSceneFormValue(
     audioCues: [],
     mainVisualCueId: scene.mainVisualCueId,
     embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 
@@ -1826,6 +1838,7 @@ export function createPointSceneFormValue(
     audioCues: [],
     mainVisualCueId: "",
     embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 
@@ -1863,6 +1876,7 @@ export function cloneSceneFormValue(
     audioCues: [],
     mainVisualCueId: "",
     embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 
