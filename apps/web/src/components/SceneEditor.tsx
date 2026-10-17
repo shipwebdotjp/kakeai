@@ -127,6 +127,7 @@ interface TimingFieldsProps {
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
   sceneKind: "intro" | "point" | "outro" | "insert";
+  insertLoop?: boolean;
 }
 
 const THEME_ACCENTS = getVisualTheme(
@@ -140,7 +141,7 @@ const ACCENT_TOKEN_OPTIONS: readonly { value: ThemeAccentToken; label: string }[
   { value: "tertiary", label: `ターシャリ（${THEME_ACCENTS.tertiary}）` },
 ];
 
-function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: TimingFieldsProps) {
+function TimingFields({ control, register, setValue, sceneIndex, sceneKind, insertLoop = false }: TimingFieldsProps) {
   const mode = useWatch({ control, name: `scenes.${sceneIndex}.timingMode` });
   const accentKind = useWatch({ control, name: `scenes.${sceneIndex}.accentKind` });
   const accentColor = useWatch({ control, name: `scenes.${sceneIndex}.accentColor` });
@@ -195,13 +196,12 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
           <option value="fixed">固定</option>
         </select>
       </label>
-      {mode === "fixed" && (
+      {mode === "fixed" && (sceneKind !== "insert" || insertLoop) && (
         <label className="inline-flex items-center gap-1.5">
           固定尺(ms)
           <input
             type="number"
             min={1}
-            disabled={sceneKind === "insert"}
             className={`w-24 ${textFieldClass}`}
             {...register(`scenes.${sceneIndex}.durationMs`, { valueAsNumber: true })}
           />
@@ -310,9 +310,65 @@ function InsertSceneFields({
 }: InsertSceneFieldsProps) {
   const mainCueIndex = resolveMainCueIndex(scene.cues, scene.mainVisualCueId);
   const mainCue = mainCueIndex === -1 ? undefined : scene.cues[mainCueIndex];
-  const assetId = mainCue?.fields.assetId ?? "";
+  const fields = mainCue?.fields ?? {};
+  const assetId = fields.assetId ?? "";
   const asset = assets.find((entry) => entry.id === assetId);
-  const durationMs = asset?.durationMs ?? null;
+  const assetDurationMs = asset?.durationMs ?? null;
+  const loop = fields.loop === "true";
+  const rawTrimStart = fields.trimStartMs ?? "";
+  const rawTrimEnd = fields.trimEndMs ?? "";
+  const parsedTrimStart = rawTrimStart === "" ? 0 : Number(rawTrimStart);
+  const parsedTrimEnd = rawTrimEnd === "" ? null : Number(rawTrimEnd);
+  const trimStartMs =
+    Number.isInteger(parsedTrimStart) && parsedTrimStart >= 0 ? parsedTrimStart : 0;
+  const trimEndValid =
+    parsedTrimEnd === null ||
+    (Number.isInteger(parsedTrimEnd) &&
+      parsedTrimEnd > trimStartMs &&
+      (assetDurationMs === null || parsedTrimEnd <= assetDurationMs));
+  const trimStartValid =
+    rawTrimStart === "" ||
+    (Number.isInteger(parsedTrimStart) &&
+      parsedTrimStart >= 0 &&
+      (assetDurationMs === null || parsedTrimStart < assetDurationMs));
+  const trimEndMs =
+    parsedTrimEnd !== null && trimEndValid ? parsedTrimEnd : assetDurationMs;
+  const clipMs =
+    trimStartValid && trimEndValid && trimEndMs !== null && assetDurationMs !== null
+      ? trimEndMs - trimStartMs
+      : null;
+  let trimError: string | null = null;
+  if (!trimStartValid) {
+    trimError = "トリム開始はミリ秒の整数（0以上、動画尺未満）で入力してください。";
+  } else if (!trimEndValid) {
+    trimError =
+      parsedTrimEnd !== null && assetDurationMs !== null && parsedTrimEnd > assetDurationMs
+        ? "トリム終了が動画の尺を超えています。"
+        : "トリム終了は開始より大きく、ミリ秒の整数で入力してください。";
+  }
+
+  useEffect(() => {
+    if (clipMs === null || clipMs <= 0) {
+      return;
+    }
+    if (loop && scene.durationMs >= clipMs) {
+      return;
+    }
+    if (!loop && scene.durationMs === clipMs) {
+      return;
+    }
+    setValue(`scenes.${sceneIndex}.durationMs`, clipMs, { shouldDirty: true });
+  }, [clipMs, loop, scene.durationMs, sceneIndex, setValue]);
+
+  const setField = (key: string, value: string) => {
+    if (mainCueIndex === -1) {
+      return;
+    }
+    setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.${key}`, value, {
+      shouldDirty: true,
+    });
+  };
+
   return (
     <div className="my-3 flex flex-col gap-2 rounded border border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -355,6 +411,12 @@ function InsertSceneFields({
             setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.assetId`, next.id, {
               shouldDirty: true,
             });
+            setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.trimStartMs`, "", {
+              shouldDirty: true,
+            });
+            setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.trimEndMs`, "", {
+              shouldDirty: true,
+            });
             setValue(`scenes.${sceneIndex}.durationMs`, next.durationMs, { shouldDirty: true });
           }}
           inline
@@ -362,10 +424,48 @@ function InsertSceneFields({
       </div>
       <p className={metaTextClass}>
         動画尺:{" "}
-        {durationMs !== null && Number.isFinite(durationMs)
-          ? `${(durationMs / 1000).toFixed(2)}秒`
+        {assetDurationMs !== null && Number.isFinite(assetDurationMs)
+          ? `${(assetDurationMs / 1000).toFixed(2)}秒`
           : "不明"}
+        {clipMs !== null && clipMs > 0 && (
+          <> ／ 使用区間: {(trimStartMs / 1000).toFixed(2)}〜{((trimStartMs + clipMs) / 1000).toFixed(2)}秒（{(clipMs / 1000).toFixed(2)}秒）</>
+        )}
       </p>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <label className="inline-flex items-center gap-1.5">
+          トリム開始(ms)
+          <input
+            type="number"
+            min={0}
+            step={1}
+            className={`w-24 ${textFieldClass}`}
+            placeholder="0"
+            value={fields.trimStartMs ?? ""}
+            onChange={(event) => setField("trimStartMs", event.target.value)}
+          />
+        </label>
+        <label className="inline-flex items-center gap-1.5">
+          トリム終了(ms)
+          <input
+            type="number"
+            min={0}
+            step={1}
+            className={`w-24 ${textFieldClass}`}
+            placeholder={assetDurationMs !== null ? String(assetDurationMs) : ""}
+            value={fields.trimEndMs ?? ""}
+            onChange={(event) => setField("trimEndMs", event.target.value)}
+          />
+        </label>
+        <label className="inline-flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={loop}
+            onChange={(event) => setField("loop", event.target.checked ? "true" : "")}
+          />
+          ループ再生
+        </label>
+      </div>
+      {trimError !== null && <p className={errorTextClass}>{trimError}</p>}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={asset?.hasAudio === true ? badgeInfoClass : badgeNeutralClass}>
           {assetAudioLabel(asset)}
@@ -388,7 +488,9 @@ function InsertSceneFields({
       {asset !== undefined && asset.kind !== "video" && (
         <p className={errorTextClass}>動画以外の素材は主動画に指定できません。</p>
       )}
-      <p className={metaTextClass}>初期版では動画のトリム・ループ・速度変更はできません。</p>
+      <p className={metaTextClass}>
+        初期版では速度変更・逆再生には対応していません。ループ時は使用区間をScene尺まで繰り返します。
+      </p>
     </div>
   );
 }
@@ -1250,6 +1352,11 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                 setValue={setValue}
                 sceneIndex={sceneIndex}
                 sceneKind={scene.kind}
+                insertLoop={
+                  scene.kind === "insert" &&
+                  scene.cues.find((cue) => cue.id === scene.mainVisualCueId)?.fields.loop ===
+                    "true"
+                }
               />
 
               <Collapsible title="尺の内訳" className="mt-1 text-xs" storageKey={`scene-duration-${scene.id}`}>

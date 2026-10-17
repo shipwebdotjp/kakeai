@@ -196,14 +196,6 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
             path: [...cuePath, "range"],
           });
         }
-        const parsed = mediaFullBleedV1.inputSchema.safeParse(cue.input);
-        if (parsed.success && (parsed.data as { loop?: boolean }).loop === true) {
-          ctx.addIssue({
-            code: "custom",
-            message: `insert Scene ${scene.id} の主動画Cueは loop を指定できません`,
-            path: [...cuePath, "input", "loop"],
-          });
-        }
       }
     }
 

@@ -14,8 +14,7 @@
 
 ### インサートScene
 
-- 動画のトリム・ループ・速度変更・逆再生（spec: 非目標）。初期版は動画全体をそのまま再生する。
-  - 契約・APIは主動画Cueの `input.loop` を拒否済み（`packages/contracts/src/content/document.ts` の insert 検証）。
+- 動画の速度変更・逆再生（spec: 非目標）。P2でトリム・ループは実装済み。
 - 複数動画をつなぐインサート（spec: 非目標）。1 insert = 1 動画。
 - インサートScene中のセリフ・字幕・立ち絵（spec: 非目標）。契約で `lines` 空・立ち絵Cue禁止を強制。
 - 主動画Cue以外のVisualCue（overlayテキスト等）。契約は「主動画Cue 1件のみ」を要求。
@@ -45,15 +44,10 @@
 - 実装の当たり: `apps/api/src/media/probe.ts`（`audioCodec` は取得済み）、`apps/api/src/worker/asset-ingest.ts`、`apps/api/src/services/assets.ts`。
 - 注意: `system_profiler` ではなくffprobe。大量素材では起動時一括を避け、素材詳細表示時の遅延probeでもよい。
 
-### P2. インサートSceneの動画トリム／ループ（spec 非目標の最有力）
+### P2. インサートSceneの動画トリム／ループ（実装済み）
 
-- 目的: 「動画の一部だけ見せたい」「短い動画を尺に合わせて繰り返す」。
-- 範囲: 主動画Cueに `trimStartMs` / `trimEndMs` と既存 `loop` を許可し、Scene尺 = 実効表示尺の規則を再定義。`RenderContext.embeddedAudio` の音声も同じトリムに追従させる必要がある。
-- 実装の当たり:
-  - 契約: `packages/contracts/src/content/scene.ts` の insert 検証、`templates/index.ts` の `media.full-bleed` 入力。
-  - 動画: `packages/video/src/templates/media-full-bleed.ts` の `data-media-start`、`packages/video/src/templates/shared.ts` の `renderLoopVideoSegments`、`compiler.ts` の insert 音声。
-  - API: `assertInsertScenes` の尺一致規則をトリム後の実効尺へ。
-- 注意: 映像はエンジンがフレーム抽出、音声は別途抽出のため、トリム範囲を両方に一致させる。ADR-0068の「音声は動画から抽出」を維持する。
+- 実装済み。主動画Cue `media.full-bleed@1` の `trimStartMs` / `trimEndMs` / `loop` で使用区間と繰り返しを指定し、映像と埋め込み音声を同じ使用区間で再生する。Scene尺はループなし `= L` / ループあり `>= L`。ADR-0069 を参照。
+- 残: `media.card@1` のトリム（今回の対象外）、トリムのプレビュー操作（数値入力のみ）。Webの素材尺表示は `Asset.durationMs` を使い、API検証は render Rendition の尺（`renderSourceDurationMs`）を使うため、両者が異なる素材では保存時に尺不一致になり得る（通常は一致する）。必要なら Asset DTO に render 尺を露出して揃える。
 
 ### P3. AudioCueのオフセット／フェード
 

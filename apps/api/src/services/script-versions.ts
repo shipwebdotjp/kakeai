@@ -31,6 +31,7 @@ import {
   type DraftPreview,
   type DraftPreviewRequest,
   type InsertScene,
+  type MediaFullBleedInput,
   type PreviewCueTiming,
   type SaveScriptVersionRequest,
   type ScriptVersion as ScriptVersionDto,
@@ -531,13 +532,17 @@ export function renderSourceDurationMs(asset: AssetWithRenditions): number | nul
   return rendition?.durationMs ?? asset.durationMs;
 }
 
-function insertMainAssetId(scene: InsertScene): string | null {
+function insertMainCueInput(scene: InsertScene): MediaFullBleedInput | null {
   const cue = scene.visualCues.find((entry) => entry.id === scene.mainVisualCueId);
   if (cue === undefined) {
     return null;
   }
   const parsed = mediaFullBleedInputSchema.safeParse(cue.input);
-  return parsed.success ? parsed.data.assetId : null;
+  return parsed.success ? parsed.data : null;
+}
+
+function insertMainAssetId(scene: InsertScene): string | null {
+  return insertMainCueInput(scene)?.assetId ?? null;
 }
 
 export function assertInsertScenes(
@@ -549,11 +554,11 @@ export function assertInsertScenes(
     if (scene.kind !== "insert") {
       return;
     }
-    const assetId = insertMainAssetId(scene);
-    if (assetId === null) {
+    const input = insertMainCueInput(scene);
+    if (input === null) {
       return;
     }
-    const asset = assetById.get(assetId);
+    const asset = assetById.get(input.assetId);
     if (asset === undefined) {
       return;
     }
@@ -565,18 +570,39 @@ export function assertInsertScenes(
       });
       return;
     }
-    const expectedMs = renderSourceDurationMs(asset);
-    if (expectedMs === null) {
+    const sourceMs = renderSourceDurationMs(asset);
+    if (sourceMs === null) {
       issues.push({
         path: ["scenes", sceneIndex, "timing", "durationMs"],
         code: "invalid_value",
         message: "尺が不明な動画はインサートSceneの主動画に指定できません。",
       });
-    } else if (scene.timing.durationMs !== expectedMs) {
+      return;
+    }
+    const trimStartMs = input.trimStartMs ?? 0;
+    const trimEndMs = input.trimEndMs ?? sourceMs;
+    if (trimStartMs >= trimEndMs || trimEndMs > sourceMs) {
+      issues.push({
+        path: ["scenes", sceneIndex, "mainVisualCueId"],
+        code: "invalid_value",
+        message: "動画トリムの範囲が素材の尺を超えているか、開始 ≧ 終了です。",
+      });
+      return;
+    }
+    const clipMs = trimEndMs - trimStartMs;
+    if (input.loop === true) {
+      if (scene.timing.durationMs < clipMs) {
+        issues.push({
+          path: ["scenes", sceneIndex, "timing", "durationMs"],
+          code: "invalid_value",
+          message: "ループ再生ではScene尺をトリム後の動画尺以上にしてください。",
+        });
+      }
+    } else if (scene.timing.durationMs !== clipMs) {
       issues.push({
         path: ["scenes", sceneIndex, "timing", "durationMs"],
         code: "invalid_value",
-        message: "Scene尺が主動画の確定尺と一致しません。",
+        message: "Scene尺が主動画のトリム後の尺と一致しません。",
       });
     }
   });

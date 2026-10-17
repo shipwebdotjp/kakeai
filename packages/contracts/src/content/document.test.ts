@@ -611,11 +611,28 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
-  it("rejects an insert scene whose main cue loops", () => {
+  it("accepts an insert scene whose main cue loops or is trimmed", () => {
     const doc = validContentDocument();
     const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-1", 5000, true);
-    insert.visualCues[0]!.input = { assetId: "asset-video-1", fit: "cover", loop: true };
+    insert.visualCues[0]!.input = {
+      assetId: "asset-video-1",
+      fit: "cover",
+      loop: true,
+      trimStartMs: 1000,
+      trimEndMs: 4000,
+    };
     doc.scenes.splice(2, 0, insert);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects a full-bleed cue whose trim start is not before trim end", () => {
+    const doc = validContentDocument();
+    doc.scenes[0]!.visualCues[0]!.input = {
+      assetId: "asset-bg",
+      fit: "cover",
+      trimStartMs: 4000,
+      trimEndMs: 1000,
+    };
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 

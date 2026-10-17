@@ -73,20 +73,29 @@ insert Sceneは次を満たす。
 - `timing` は `fixed` とする。
 - `lines` は空配列とする。字幕と話者発話は持たない。
 - 1件の主動画Cueを持つ。主動画Cueは `media.full-bleed@1`、`layer: background`、`range: { kind: "scene" }` であり、readyなvideo Assetを参照する。
-- `insert` 固有の設定は主動画CueのIDと、`embeddedAudio: true | false` を持つ。新規作成時はtrueとする。
+- `insert` 固有の設定は主動画CueのIDと、`embeddedAudio: true | false` を持つ。新規作成時はtrueとする。動画のトリムとループは主動画Cueの `media.full-bleed@1` 入力で持つ。
 - standing Cueは持てない。初期UIは主動画Cue以外のVisual Cueを追加しない。
 
 主動画CueのIDを明示参照することで、映像指定をSceneの型付きスロットへ重複保存せず、既存のVisual Cue契約を正本とする。
 
 ### 尺と映像
 
-初期版では動画のトリムとループを提供しない。動画を選択すると、Sceneの固定尺を動画Assetの確定尺に設定する。動画尺が不明なAssetは主動画に選べない。Scene尺と主動画尺が異なる入力は保存・プレビュー・レンダーで拒否する。
+主動画Cueは `media.full-bleed@1` の任意入力 `trimStartMs` / `trimEndMs` でソース動画の使用区間を指定でき、`loop` で使用区間を繰り返せる。映像指定は主動画Cueが正本であり、Sceneへは重複保存しない。
+
+ソース動画の確定尺を `S`、`trimStartMs = t0`（既定0）、`trimEndMs = t1`（既定`S`）とし、使用区間の尺を `L = t1 - t0` とする。`0 ≤ t0 < t1 ≤ S` を保存・プレビュー・レンダーで検証する。動画尺が不明なAssetは主動画に選べない。
+
+Scene尺は次を満たす。
+
+- `loop` なし: `scene.durationMs === L`（トリムなしなら `L = S`）。
+- `loop` あり: `scene.durationMs >= L`。使用区間をScene尺まで繰り返す。
+
+映像は `data-media-start = t0` を指定し、ループ時は使用区間 `L` ごとの `<video>` セグメントを並べる。動画の使用区間と埋め込み音声の抽出区間は同じ `t0` / `L` を使い、映像と音声を同期させる。
 
 Sceneの前後には既存のScene Transitionを使える。新規insert Sceneの既定transitionはcutとする。
 
 ### 埋め込み音声とミックス
 
-`embeddedAudio: true` のinsert Sceneは、主動画Assetの埋め込み音声ストリームをScene先頭からScene終端まで、映像と同じ時間軸で再生する。レンダー実装は必要に応じて音声Renditionを導出してよいが、利用者が別Assetを管理する必要はない。
+`embeddedAudio: true` のinsert Sceneは、主動画Assetの埋め込み音声ストリームを使用区間だけ、映像と同じ時間軸で再生する。レンダー実装は必要に応じて音声Renditionを導出してよいが、利用者が別Assetを管理する必要はない。
 
 動画に音声ストリームがない場合、Sceneは無音で再生し、編集画面と保存時診断でその事実を示す。`embeddedAudio: false` は、映像だけを見せたい明示的な無音指定である。
 
@@ -102,7 +111,8 @@ Sceneの前後には既存のScene Transitionを使える。新規insert Scene�
 
 - 任意のセリフの直前に指定したgapだけ、字幕・発話音声・発話演出なしの間を置ける。
 - Scene AudioCueをUIで追加・編集・削除し、Sceneの開始から正しい尺でプレビュー・レンダーできる。
-- 「動画を挿入」だけで、動画映像と埋め込み音声が同時に始まり、動画尺で終わる。前後のNarration Segmentは再生されない。
+- 「動画を挿入」だけで、動画映像と埋め込み音声が同時に始まり、使用区間の尺で終わる。前後のNarration Segmentは再生されない。
+- 主動画のトリムとループを指定でき、映像と埋め込み音声が同じ使用区間で再生される。
 - 動画に音声がない場合と埋め込み音声を無効にした場合を、無音として識別できる。
 - 作品全体BGMは、埋め込み音声が有効なインサートSceneで重ならない。
 - 通常の背景・カード動画は、従来どおり無音である。
@@ -110,7 +120,8 @@ Sceneの前後には既存のScene Transitionを使える。新規insert Scene�
 
 ## 非目標
 
-- 複数動画をつなぐインサート、動画のトリム、ループ、速度変更、逆再生。
+- 複数動画をつなぐインサート、動画の速度変更、逆再生。
 - インサートScene中のセリフ・字幕・立ち絵。
 - AudioCueの任意オフセット、個別フェード、個別ダッキング、波形編集。
 - 動画の埋め込み音声を、通常の背景・カード動画へ自動適用すること。
+- `media.card@1` の動画トリム（ループは従来どおり）。

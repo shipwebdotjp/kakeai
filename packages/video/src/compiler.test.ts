@@ -264,6 +264,55 @@ describe("compileDocument", () => {
     expect(compiled.html).not.toContain("data-fade-out");
   });
 
+  it("renders an insert scene with a trimmed source and synchronized embedded audio", () => {
+    const document = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 3000, true);
+    insert.visualCues[0]!.input = {
+      assetId: "asset-video-insert",
+      fit: "cover",
+      trimStartMs: 1000,
+      trimEndMs: 4000,
+    };
+    document.scenes.splice(2, 0, insert);
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    expect(compiled.html).toContain('data-media-start="1"');
+    expect(compiled.html).toContain('data-has-audio="true"');
+    expect(compiled.html).not.toContain(" muted");
+  });
+
+  it("loops an insert scene's trimmed video with audible loop segments", () => {
+    const document = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 6000, true);
+    insert.visualCues[0]!.input = {
+      assetId: "asset-video-insert",
+      fit: "cover",
+      trimStartMs: 0,
+      trimEndMs: 2000,
+      loop: true,
+    };
+    document.scenes.splice(2, 0, insert);
+    const compiled = compileDocument({ document, assetResolver: videoResolverWithDuration(5000) });
+    const segments = compiled.html.match(/data-kakeai-loop-segment="true"/g) ?? [];
+    expect(segments.length).toBe(3);
+    expect(compiled.html).toContain('data-has-audio="true"');
+    expect(compiled.html).not.toContain(" muted");
+  });
+
+  it("rejects a trim range outside the video duration", () => {
+    const document = validContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", "asset-video-insert", 5000, true);
+    insert.visualCues[0]!.input = {
+      assetId: "asset-video-insert",
+      fit: "cover",
+      trimStartMs: 0,
+      trimEndMs: 6000,
+    };
+    document.scenes.splice(2, 0, insert);
+    expect(() =>
+      compileDocument({ document, assetResolver: videoResolverWithDuration(5000) }),
+    ).toThrow(CompositionCompileError);
+  });
+
   it("plays a non-looping scene audio cue from the scene start", () => {
     const document = validContentDocument();
     document.audioCues = [

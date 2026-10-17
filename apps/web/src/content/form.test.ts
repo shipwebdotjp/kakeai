@@ -145,6 +145,31 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("round-trips insert trim and loop cue fields", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const insert = createInsertSceneFormValue(
+      "動画 1",
+      "asset-video-1",
+      5000,
+      collectSceneIds(values.scenes),
+    );
+    insert.cues[0]!.fields.trimStartMs = "1000";
+    insert.cues[0]!.fields.trimEndMs = "4000";
+    insert.cues[0]!.fields.loop = "true";
+    insert.durationMs = 6000;
+    values.scenes.splice(values.scenes.length - 1, 0, insert);
+
+    const rebuilt = buildContentDocument(base, values);
+    const scene = rebuilt.scenes.find((entry) => entry.kind === "insert");
+    expect(scene?.visualCues[0]?.input).toMatchObject({
+      trimStartMs: 1000,
+      trimEndMs: 4000,
+      loop: true,
+    });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
   it("updates an editable cue and keeps unmanaged cues", () => {
     const base = createInitialContentDocument();
     const intro = base.scenes[0]!;

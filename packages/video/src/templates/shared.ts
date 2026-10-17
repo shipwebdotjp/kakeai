@@ -46,7 +46,7 @@ export function mediaCropStyle(
   return `${base}transform:scale(${zoom});transform-origin:${point.x * 100}% ${point.y * 100}%;`;
 }
 
-function secondsText(ms: number): string {
+export function secondsText(ms: number): string {
   const seconds = ms / 1000;
   if (Number.isInteger(seconds)) {
     return String(seconds);
@@ -62,9 +62,19 @@ export function renderLoopVideoSegments(options: {
   startMs: number;
   spanMs: number;
   sourceDurationMs: number | null;
+  mediaStartMs?: number;
+  loopLengthMs?: number | null;
+  audible?: boolean;
   path: (string | number)[];
 }): string | null {
-  const sourceMs = options.sourceDurationMs;
+  const fullSourceMs = options.sourceDurationMs;
+  const mediaStartMs = options.mediaStartMs ?? 0;
+  const sourceMs =
+    options.loopLengthMs !== undefined
+      ? options.loopLengthMs
+      : fullSourceMs === null
+        ? null
+        : fullSourceMs - mediaStartMs;
   if (sourceMs === null || sourceMs <= 0 || sourceMs >= options.spanMs) {
     return null;
   }
@@ -80,6 +90,8 @@ export function renderLoopVideoSegments(options: {
     ]);
   }
   const src = escapeHtmlAttribute(options.url);
+  const audioAttr = options.audible === true ? ' data-has-audio="true"' : " muted";
+  const mediaStartText = secondsText(mediaStartMs);
   const segments: string[] = [];
   for (let index = 0; index < copies; index += 1) {
     const startMs = options.startMs + index * sourceMs;
@@ -90,7 +102,7 @@ export function renderLoopVideoSegments(options: {
     const id = escapeHtmlAttribute(`${options.idPrefix}-${index}`);
     const last = index === copies - 1 ? " data-kakeai-loop-segment-last=\"true\"" : "";
     segments.push(
-      `<video id="${id}" class="${options.className}" src="${src}" style="${options.style}" muted playsinline preload="auto" data-media-start="0" data-start="${secondsText(startMs)}" data-duration="${secondsText(durationMs)}" data-kakeai-loop-segment="true"${last}></video>`,
+      `<video id="${id}" class="${options.className}" src="${src}" style="${options.style}"${audioAttr} playsinline preload="auto" data-media-start="${mediaStartText}" data-start="${secondsText(startMs)}" data-duration="${secondsText(durationMs)}" data-kakeai-loop-segment="true"${last}></video>`,
     );
   }
   return segments.join("");

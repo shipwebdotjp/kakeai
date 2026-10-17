@@ -169,13 +169,29 @@ const textBlockV1: VisualTemplateDefinition = {
   collectAssetRefs: () => [],
 };
 
-export const mediaFullBleedInputSchema = z.strictObject({
-  assetId: idSchema,
-  fit: fitSchema,
-  focalPoint: focalPointSchema.optional(),
-  zoom: mediaZoomSchema.optional(),
-  loop: z.boolean().optional(),
-});
+export const mediaFullBleedInputSchema = z
+  .strictObject({
+    assetId: idSchema,
+    fit: fitSchema,
+    focalPoint: focalPointSchema.optional(),
+    zoom: mediaZoomSchema.optional(),
+    loop: z.boolean().optional(),
+    trimStartMs: nonNegativeInt.optional(),
+    trimEndMs: nonNegativeInt.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.trimStartMs !== undefined &&
+      value.trimEndMs !== undefined &&
+      value.trimStartMs >= value.trimEndMs
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "動画トリムは開始(ms) < 終了(ms) で指定してください",
+        path: ["trimEndMs"],
+      });
+    }
+  });
 export type MediaFullBleedInput = z.infer<typeof mediaFullBleedInputSchema>;
 
 const mediaFullBleedV1: VisualTemplateDefinition = {
@@ -190,6 +206,8 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
     { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
     { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
     { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
+    { kind: "number", key: "trimStartMs", label: "トリム開始(ms)", min: 0, step: 1, optional: true },
+    { kind: "number", key: "trimEndMs", label: "トリム終了(ms)", min: 0, step: 1, optional: true },
     { kind: "boolean", key: "loop", label: "動画をループ再生" },
   ],
   collectAssetRefs: (input, path) => {
