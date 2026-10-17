@@ -7,6 +7,7 @@ import {
   publishCompositionRequestSchema,
 } from "@kakeai/contracts";
 import type { CompositionService } from "../../services/compositions.ts";
+import type { CompositionAuthoringService, ResolvedAuthoringStyle } from "../../services/authoring-context.ts";
 import { sendData } from "../envelope.ts";
 import { parseBody } from "../validation.ts";
 import { ApiError } from "../errors.ts";
@@ -24,6 +25,7 @@ export function isPathInside(baseDir: string, target: string): boolean {
 export function createCompositionsRouter(
   compositionService: CompositionService,
   mediaGuard?: RequestHandler,
+  authoringService?: CompositionAuthoringService,
 ): Router {
   const router = Router();
 
@@ -70,7 +72,27 @@ export function createCompositionsRouter(
   router.post("/", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = parseBody(createCompositionRequestSchema, req.body);
-      const composition = await compositionService.createComposition(body);
+      const { authoringStyle, ...compositionInput } = body;
+      let authoringSeed:
+        | {
+            provenance: ResolvedAuthoringStyle["provenance"];
+            kitFiles: Record<string, string>;
+          }
+        | undefined;
+      if (authoringStyle !== undefined) {
+        if (authoringService === undefined) {
+          throw new ApiError(500, "INTERNAL_ERROR", "Composition authoring is not configured.");
+        }
+        const resolved = await authoringService.resolve({
+          visualTheme: authoringStyle.visualTheme,
+          canvasProfile: body.canvasProfile,
+        });
+        authoringSeed = { provenance: resolved.provenance, kitFiles: resolved.kitFiles };
+      }
+      const composition = await compositionService.createComposition({
+        ...compositionInput,
+        authoringStyle: authoringSeed,
+      });
       sendData(res, 201, composition);
     } catch (err) {
       next(err);

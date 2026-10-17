@@ -252,23 +252,25 @@ model Composition {
 }
 
 model CompositionDraft {
-  id            String      @id @default(cuid())
-  compositionId String      @unique
-  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
-  entrypoint    String
-  storageKey    String      @unique
-  updatedAt     DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  compositionId      String      @unique
+  composition        Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
+  entrypoint         String
+  storageKey         String      @unique
+  updatedAt          DateTime    @updatedAt
+  authoringStyleJson String?
 }
 
 model CompositionVersion {
-  id            String      @id @default(cuid())
-  compositionId String
-  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
-  versionNumber Int
-  bundleHash    String
-  storageKey    String      @unique
-  manifestJson  String
-  createdAt     DateTime    @default(now())
+  id                  String      @id @default(cuid())
+  compositionId       String
+  composition         Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
+  versionNumber       Int
+  bundleHash          String
+  storageKey          String      @unique
+  manifestJson        String
+  createdAt           DateTime    @default(now())
+  styleProvenanceJson String?
 
   @@unique([compositionId, versionNumber])
 }

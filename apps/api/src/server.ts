@@ -17,11 +17,13 @@ import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createVoiceProfilesRouter } from "./http/routes/voice-profiles.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
 import { createCompositionsRouter } from "./http/routes/compositions.ts";
+import { createCompositionAuthoringRouter } from "./http/routes/composition-authoring.ts";
 import { createThemesRouter } from "./http/routes/themes.ts";
 import { createFontsRouter } from "./http/routes/fonts.ts";
 import { createThumbnailsRouter } from "./http/routes/thumbnails.ts";
 import type { Rasterizer } from "./media/rasterize.ts";
 import { CompositionService } from "./services/compositions.ts";
+import { CompositionAuthoringService } from "./services/authoring-context.ts";
 import { ThemeService } from "./services/themes.ts";
 import { getSharedFontCatalogService, type FontCatalogService } from "./services/font-catalog.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
@@ -194,7 +196,18 @@ export function createApp(dependencies: AppDependencies): Express {
     db: dependencies.prisma,
     dataDir: dependencies.config.directories.root,
   });
-  api.use("/compositions", createCompositionsRouter(compositionService, mediaGuard));
+  const compositionAuthoringService = new CompositionAuthoringService({
+    db: dependencies.prisma,
+    fontCatalogService,
+  });
+  api.use(
+    "/compositions",
+    createCompositionsRouter(compositionService, mediaGuard, compositionAuthoringService),
+  );
+  api.use(
+    "/composition-authoring-contexts",
+    createCompositionAuthoringRouter(compositionAuthoringService),
+  );
 
   api.use("/themes", createThemesRouter(themeService));
   api.use("/fonts", createFontsRouter(fontCatalogService));

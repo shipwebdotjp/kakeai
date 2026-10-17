@@ -11,7 +11,10 @@ import {
   type CompositionDraftFiles,
   type CompositionVersion,
   type CompositionManifest,
+  type CompositionAuthoredStyleProvenance,
+  type CompositionStyleProvenance,
   type ContentDocument,
+  AUTHORING_STYLE_DIRECTORY,
   CANVAS_PROFILE_DIMENSIONS,
   DEFAULT_CANVAS_PROFILE,
   canvasProfileOf,
@@ -19,12 +22,18 @@ import {
   compositionDraftFilesSchema,
   compositionFullBleedInputSchema,
   compositionManifestSchema,
+  compositionStyleProvenanceSchema,
   collectNestedCompositionVersionIds,
   getVisualTemplate,
 } from "@kakeai/contracts";
 import { dataDirectories } from "../storage/paths.ts";
 import { computeDirectoryHashAndFiles } from "../storage/composition-store.ts";
 import { ApiError } from "../http/errors.ts";
+import {
+  assertNotProtectedStylePath,
+  styleKitModifiedError,
+  verifyCompositionStyleKit,
+} from "./style-kit.ts";
 
 export interface CompositionServiceDependencies {
   db: PrismaClient;
@@ -61,6 +70,103 @@ function draftNotFound(compositionId: string): ApiError {
     resource: "composition_draft",
     id: compositionId,
   });
+}
+
+function parseCompositionStyleProvenance(
+  json: string | null | undefined,
+): CompositionStyleProvenance {
+  if (json === null || json === undefined) {
+    return { kind: "legacy" };
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "CompositionのStyle Provenanceを解釈できません。");
+  }
+  const parsed = compositionStyleProvenanceSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", "CompositionのStyle Provenanceを解釈できません。");
+  }
+  return parsed.data;
+}
+
+function authoredProvenanceOf(
+  provenance: CompositionStyleProvenance | undefined,
+): CompositionAuthoredStyleProvenance | undefined {
+  return provenance?.kind === "authored" ? provenance : undefined;
+}
+
+interface CompositionDraftRow {
+  id: string;
+  compositionId: string;
+  entrypoint: string;
+  storageKey: string;
+  authoringStyleJson: string | null;
+  updatedAt: Date;
+}
+
+interface CompositionVersionRow {
+  id: string;
+  compositionId: string;
+  versionNumber: number;
+  bundleHash: string;
+  storageKey: string;
+  manifestJson: string;
+  styleProvenanceJson: string | null;
+  createdAt: Date;
+}
+
+function toCompositionDraftDto(draft: CompositionDraftRow): CompositionDraft {
+  return {
+    id: draft.id,
+    compositionId: draft.compositionId,
+    entrypoint: draft.entrypoint,
+    storageKey: draft.storageKey,
+    updatedAt: draft.updatedAt.toISOString(),
+    styleProvenance: parseCompositionStyleProvenance(draft.authoringStyleJson),
+  };
+}
+
+function parseCompositionManifest(json: string): CompositionManifest {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "Composition manifestを解釈できません。");
+  }
+  const parsed = compositionManifestSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", "Composition manifestを解釈できません。");
+  }
+  return parsed.data;
+}
+
+function toCompositionVersionDto(version: CompositionVersionRow): CompositionVersion {
+  return {
+    id: version.id,
+    compositionId: version.compositionId,
+    versionNumber: version.versionNumber,
+    bundleHash: version.bundleHash,
+    storageKey: version.storageKey,
+    manifest: parseCompositionManifest(version.manifestJson),
+    styleProvenance: parseCompositionStyleProvenance(version.styleProvenanceJson),
+    createdAt: version.createdAt.toISOString(),
+  };
+}
+
+async function assertStyleKitIntact(
+  draftDir: string,
+  provenance: CompositionStyleProvenance | undefined,
+): Promise<void> {
+  const authored = authoredProvenanceOf(provenance);
+  if (authored === undefined) {
+    return;
+  }
+  const issues = await verifyCompositionStyleKit(draftDir, authored);
+  if (issues.length > 0) {
+    throw styleKitModifiedError(issues);
+  }
 }
 
 function invalidPathError(relPath: string, label: string): ApiError {
@@ -503,9 +609,14 @@ export class CompositionService {
     runtimeCompositionId: string;
     entrypoint?: string;
     canvasProfile?: CanvasProfile;
+    authoringStyle?: {
+      provenance: CompositionAuthoredStyleProvenance;
+      kitFiles: Record<string, string>;
+    };
   }): Promise<Composition> {
     const entrypoint = input.entrypoint ?? "index.html";
     assertSafeRelativePath(entrypoint, "entrypoint");
+    assertNotProtectedStylePath(entrypoint);
     const canvasProfile = input.canvasProfile ?? DEFAULT_CANVAS_PROFILE;
     const dimensions = CANVAS_PROFILE_DIMENSIONS[canvasProfile];
     const existing = await this.db.composition.findUnique({
@@ -543,11 +654,22 @@ export class CompositionService {
     await writeFile(entryPath, defaultHtml, "utf-8");
     await writeFile(join(draftDir, "manifest.json"), JSON.stringify(defaultManifest, null, 2), "utf-8");
 
+    if (input.authoringStyle !== undefined) {
+      const kitRoot = join(draftDir, AUTHORING_STYLE_DIRECTORY);
+      for (const [relPath, content] of Object.entries(input.authoringStyle.kitFiles)) {
+        assertSafeRelativePath(relPath, "style kit file");
+        const filePath = resolveWithin(kitRoot, relPath, "style kit file");
+        await mkdir(dirname(filePath), { recursive: true });
+        await writeFile(filePath, content, "utf-8");
+      }
+    }
+
     await this.db.compositionDraft.create({
       data: {
         compositionId: composition.id,
         entrypoint,
         storageKey: draftStorageKey,
+        authoringStyleJson: JSON.stringify(input.authoringStyle?.provenance ?? { kind: "neutral" }),
       },
     });
 
@@ -573,32 +695,8 @@ export class CompositionService {
       runtimeCompositionId: composition.runtimeCompositionId,
       createdAt: composition.createdAt.toISOString(),
       updatedAt: composition.updatedAt.toISOString(),
-      draft: composition.draft
-        ? {
-            id: composition.draft.id,
-            compositionId: composition.draft.compositionId,
-            entrypoint: composition.draft.entrypoint,
-            storageKey: composition.draft.storageKey,
-            updatedAt: composition.draft.updatedAt.toISOString(),
-          }
-        : null,
-      versions: composition.versions.map((v: {
-        id: string;
-        compositionId: string;
-        versionNumber: number;
-        bundleHash: string;
-        storageKey: string;
-        manifestJson: string;
-        createdAt: Date;
-      }) => ({
-        id: v.id,
-        compositionId: v.compositionId,
-        versionNumber: v.versionNumber,
-        bundleHash: v.bundleHash,
-        storageKey: v.storageKey,
-        manifest: JSON.parse(v.manifestJson),
-        createdAt: v.createdAt.toISOString(),
-      })),
+      draft: composition.draft ? toCompositionDraftDto(composition.draft) : null,
+      versions: composition.versions.map(toCompositionVersionDto),
     };
   }
 
@@ -638,32 +736,16 @@ export class CompositionService {
       runtimeCompositionId: string;
       createdAt: Date;
       updatedAt: Date;
-      draft: { id: string; compositionId: string; entrypoint: string; storageKey: string; updatedAt: Date } | null;
-      versions: Array<{ id: string; compositionId: string; versionNumber: number; bundleHash: string; storageKey: string; manifestJson: string; createdAt: Date }>;
+      draft: CompositionDraftRow | null;
+      versions: CompositionVersionRow[];
     }) => ({
       id: composition.id,
       name: composition.name,
       runtimeCompositionId: composition.runtimeCompositionId,
       createdAt: composition.createdAt.toISOString(),
       updatedAt: composition.updatedAt.toISOString(),
-      draft: composition.draft
-        ? {
-            id: composition.draft.id,
-            compositionId: composition.draft.compositionId,
-            entrypoint: composition.draft.entrypoint,
-            storageKey: composition.draft.storageKey,
-            updatedAt: composition.draft.updatedAt.toISOString(),
-          }
-        : null,
-      versions: composition.versions.map((v) => ({
-        id: v.id,
-        compositionId: v.compositionId,
-        versionNumber: v.versionNumber,
-        bundleHash: v.bundleHash,
-        storageKey: v.storageKey,
-        manifest: JSON.parse(v.manifestJson),
-        createdAt: v.createdAt.toISOString(),
-      })),
+      draft: composition.draft ? toCompositionDraftDto(composition.draft) : null,
+      versions: composition.versions.map(toCompositionVersionDto),
     }));
   }
 
@@ -691,7 +773,9 @@ export class CompositionService {
       } catch {
         throw invalidPathError(key, "file path");
       }
-      return relative(draftDir, filePath).split(sep).join("/");
+      const normalized = relative(draftDir, filePath).split(sep).join("/");
+      assertNotProtectedStylePath(normalized);
+      return normalized;
     };
 
     const textFiles = new Map<string, string>();
@@ -806,11 +890,16 @@ export class CompositionService {
     }
 
     if (input.entrypoint !== undefined) {
+      let normalizedEntrypoint: string;
       try {
-        resolveWithin(draftDir, input.entrypoint, "entrypoint");
+        normalizedEntrypoint = relative(
+          draftDir,
+          resolveWithin(draftDir, input.entrypoint, "entrypoint"),
+        ).split(sep).join("/");
       } catch {
         throw invalidPathError(input.entrypoint, "entrypoint");
       }
+      assertNotProtectedStylePath(normalizedEntrypoint);
     }
 
     const updatedEntrypoint = input.entrypoint ?? composition.draft.entrypoint;
@@ -909,6 +998,7 @@ export class CompositionService {
     }
     const entrypoint = input.entrypoint ?? composition.draft.entrypoint;
     const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
+    await assertStyleKitIntact(draftDir, composition.draft.styleProvenance);
     const { manifest, contentHash } = await validateCompositionBundle(
       draftDir,
       entrypoint,
@@ -928,6 +1018,10 @@ export class CompositionService {
 
     const entrypoint = input.entrypoint ?? composition.draft.entrypoint;
     const draftDir = join(dataDirectories(this.dataDir).root, composition.draft.storageKey);
+
+    const draftProvenance = composition.draft.styleProvenance ?? { kind: "neutral" as const };
+    const authored = authoredProvenanceOf(draftProvenance);
+    await assertStyleKitIntact(draftDir, draftProvenance);
 
     const { manifest: draftManifest, contentHash } = await validateCompositionBundle(
       draftDir,
@@ -956,6 +1050,7 @@ export class CompositionService {
         bundleHash: contentHash,
         storageKey: versionStorageKey,
         manifestJson: JSON.stringify(manifest),
+        styleProvenanceJson: JSON.stringify(authored ?? { kind: "neutral" }),
       },
     });
 
@@ -964,15 +1059,7 @@ export class CompositionService {
       data: { updatedAt: new Date() },
     });
 
-    return {
-      id: createdVersion.id,
-      compositionId: createdVersion.compositionId,
-      versionNumber: createdVersion.versionNumber,
-      bundleHash: createdVersion.bundleHash,
-      storageKey: createdVersion.storageKey,
-      manifest,
-      createdAt: createdVersion.createdAt.toISOString(),
-    };
+    return toCompositionVersionDto(createdVersion);
   }
 
   async getVersionById(versionId: string): Promise<CompositionVersion> {
@@ -985,15 +1072,7 @@ export class CompositionService {
         id: versionId,
       });
     }
-    return {
-      id: v.id,
-      compositionId: v.compositionId,
-      versionNumber: v.versionNumber,
-      bundleHash: v.bundleHash,
-      storageKey: v.storageKey,
-      manifest: JSON.parse(v.manifestJson),
-      createdAt: v.createdAt.toISOString(),
-    };
+    return toCompositionVersionDto(v);
   }
 
   async getDurationsByVersionId(versionIds: string[]): Promise<Map<string, number>> {

@@ -27,6 +27,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   TTS_ENGINE_UNAVAILABLE: "音声エンジンに接続できません。起動を確認してください。",
   INVALID_STATE: "現在の状態では操作を実行できません。",
   THEME_DEFINITION_INVALID: "テーマ定義が無効です。",
+  STYLE_KIT_MODIFIED: "Style Kitが変更されています。",
   INVALID_OPERATION: "この操作は許可されていません。",
   INTERNAL_ERROR: "予期しないエラーが発生しました。",
   DATABASE_BUSY: "データベースが混雑しています。少し待って再試行してください。",

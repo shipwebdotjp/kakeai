@@ -23,14 +23,14 @@
 
 ## S3: Style KitとComposition Authoring Context
 
-- [ ] Skinごとの不変Style Kit（`STYLE.md`、CSS、SVG／画像、lock）とhash計算を追加する
-- [ ] `POST /composition-authoring-contexts`を追加し、公開Theme RevisionとCanvas Profileから非永続Contextを返す
-- [ ] `POST /compositions`の`authoringStyle`入力を追加し、Style Kit付きDraftをseedする
-- [ ] Draft read-back、更新、dry-run publish、publishでKitの相対path・サイズ上限・hash検証を接続し、改変を`STYLE_KIT_MODIFIED`で拒否する
-- [ ] `CompositionStyleProvenance`をDraft／publish済みCompositionVersionへ保存し、既存Compositionは`legacy`または`neutral`互換として読めるようにする
-- [ ] `skills/kakeai-composition/SKILL.md`とスターターをContext取得、Kit利用、ローカルfont alias、Style QAの手順へ更新する
-- [ ] テスト: Context無永続性、同じ入力のKit hash安定、seed／read-back、Kit改変拒否、provenance不変性、旧Composition互換
-- [ ] 完了条件: Kakeai外で動くCLI agentがloopback APIだけを使い、Skinに沿う自己完結Composition bundleを作成・QA・publishできる
+- [x] Skinごとの不変Style Kit（`STYLE.md`、CSS、SVG／画像、lock）とhash計算を追加する
+- [x] `POST /composition-authoring-contexts`を追加し、公開Theme RevisionとCanvas Profileから非永続Contextを返す
+- [x] `POST /compositions`の`authoringStyle`入力を追加し、Style Kit付きDraftをseedする
+- [x] Draft read-back、更新、dry-run publish、publishでKitの相対path・サイズ上限・hash検証を接続し、改変を`STYLE_KIT_MODIFIED`で拒否する
+- [x] `CompositionStyleProvenance`をDraft／publish済みCompositionVersionへ保存し、既存Compositionは`legacy`または`neutral`互換として読めるようにする
+- [x] `skills/kakeai-composition/SKILL.md`とスターターをContext取得、Kit利用、ローカルfont alias、Style QAの手順へ更新する
+- [x] テスト: Context無永続性、同じ入力のKit hash安定、seed／read-back、Kit改変拒否、provenance不変性、旧Composition互換
+- [x] 完了条件: Kakeai外で動くCLI agentがloopback APIだけを使い、Skinに沿う自己完結Composition bundleを作成・QA・publishできる
 
 ## S4: Font診断と互換性表示
 

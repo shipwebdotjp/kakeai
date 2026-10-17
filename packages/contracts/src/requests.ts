@@ -89,9 +89,23 @@ export const createCompositionRequestSchema = z.strictObject({
   runtimeCompositionId: z.string().trim().min(1),
   entrypoint: bundleRelativePathSchema.optional(),
   canvasProfile: canvasProfileSchema.optional(),
+  authoringStyle: z
+    .strictObject({
+      visualTheme: visualThemeRefSchema,
+    })
+    .optional(),
 });
 
 export type CreateCompositionRequest = z.infer<typeof createCompositionRequestSchema>;
+
+export const compositionAuthoringContextRequestSchema = z.strictObject({
+  visualTheme: visualThemeRefSchema,
+  canvasProfile: canvasProfileSchema.optional(),
+});
+
+export type CompositionAuthoringContextRequest = z.infer<
+  typeof compositionAuthoringContextRequestSchema
+>;
 
 export const compositionDraftManifestInputSchema = z.strictObject({
   durationMs: z.number().int().positive().optional(),

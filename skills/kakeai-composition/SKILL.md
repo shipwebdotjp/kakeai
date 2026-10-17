@@ -15,6 +15,11 @@ only published versions by ID through the `composition.full-bleed@1` visual temp
 Draft-only changes are invisible to scripts, previews, and render jobs: nothing is recognized
 until you publish.
 
+When the target Visual Theme uses a Visual Skin, the server also gives you a **Style Kit**
+(`kakeai-style/` in the draft) through the Composition Authoring Context, so your composition
+shares the theme's colors, typography, and world view. Kit files are protected: publish
+verifies their hashes and rejects any change with `STYLE_KIT_MODIFIED`.
+
 ## 0. Connect to the local API
 
 - Base URL: `http://127.0.0.1:4317/api/v1` (`KAKEAI_PORT` overrides `4317`; same value on `localhost` / `[::1]`).
@@ -32,7 +37,10 @@ until you publish.
   (`id`, `versionNumber`, `bundleHash`, `manifest`).
 - `GET /api/v1/compositions/:compositionId/draft/files` returns `{ entrypoint, files, binaryFiles? }`
   (`files` = UTF-8 text, `binaryFiles` = base64), so you can inspect the seeded
-  `index.html`/`manifest.json` and your own uploads before editing.
+  `index.html`/`manifest.json`, an existing `kakeai-style/` Style Kit, and your own uploads
+  before editing.
+- Composition responses include `styleProvenance`: `authored` (a Style Kit was seeded),
+  `neutral` (no skin authoring), or `legacy` (pre-Style-Kit version). It is read-only history.
 
 The manifest schema lives in `packages/contracts/src/composition.ts`; validation and the default
 seed are in `apps/api/src/services/compositions.ts`. You can also read the exact schema from a
@@ -61,6 +69,52 @@ update the draft and publish a new version, then point the script at the new ver
   `runtimeCompositionId`, `canvasProfile`, the profile dimensions, `durationMs:5000`,
   `dependencies:[]`). The seed is written to
   `<dataRoot>/compositions/drafts/<compositionId>/` immediately at create time (see Storage layout).
+
+### Visual Skin authoring (`authoringStyle`)
+
+When the script's theme uses a Visual Skin, resolve the **Composition Authoring Context**
+*before* creating the composition:
+
+```
+POST /api/v1/composition-authoring-contexts
+{ "visualTheme": { "id": "theme_...", "version": 3 }, "canvasProfile": "landscape" }
+```
+
+The response (200) is the non-persistent authoring input:
+
+```json
+{
+  "contextSchemaVersion": 1,
+  "theme": { "ref": { "id": "theme_...", "version": 3 }, "definitionHash": "sha256:..." },
+  "skin": { "id": "handmade-paper", "version": 1 },
+  "kit": { "version": 1, "hash": "sha256:..." },
+  "canvasProfile": "landscape",
+  "brief": { "intent": "...", "must": ["..."], "avoid": ["..."] },
+  "fontDiagnostics": ["..."],
+  "seed": { "styleDirectory": "kakeai-style/" }
+}
+```
+
+- Only **published** Theme Revisions resolve; drafts, archived themes, and unknown refs return
+  `422 VALIDATION_ERROR`. Resolving writes nothing, and the same inputs always return the same
+  `kit.hash`.
+- Respect `brief.must` / `brief.avoid` and read `STYLE.md` before authoring.
+
+Then create the Composition with the same theme so the draft is seeded with the Style Kit:
+
+```json
+{
+  "name": "Paper notes intro",
+  "runtimeCompositionId": "cmp.motion.paper-notes",
+  "authoringStyle": { "visualTheme": { "id": "theme_...", "version": 3 } }
+}
+```
+
+`authoringStyle` carries only the theme ref. Set the top-level `canvasProfile` as well if the
+composition should use a non-default profile; the server resolves the context with that profile
+and seeds the Style Kit and manifest accordingly. The server re-resolves the same context and
+writes `kakeai-style/` (`STYLE.md`, `tokens.css`, `fonts.css`, `components.css`, `kit-lock.json`)
+next to the minimal entry.
 
 ## 3. Edit the draft bundle
 
@@ -93,6 +147,26 @@ update the draft and publish a new version, then point the script at the new ver
   `canvasProfile` defaults to the draft's current profile, or `landscape` if none. Direct
   `files["manifest.json"]` still works.
 - Errors are structured (see below); validate with a dry-run before the real publish.
+
+### Style Kit rules (when `kakeai-style/` exists)
+
+- Read `STYLE.md`, `tokens.css`, `fonts.css`, `kit-lock.json` first; `STYLE.md` defines the
+  world view, must/avoid rules, and readability/motion principles.
+- `kakeai-style/` is **protected**: never send changes under that prefix (the API rejects them
+  with `422 STYLE_KIT_MODIFIED`) and never edit those files on disk. Put your own CSS, SVG, and
+  images in `assets/` or your own namespace, not in `kakeai-style/`.
+- Link the kit from the entry (`<link rel="stylesheet" href="kakeai-style/tokens.css">` plus
+  `fonts.css` and `components.css`) and list every linked file in the manifest `dependencies`.
+  Use the `tokens.css` CSS variables for colors, radii, shadows, and motion.
+- **Fonts**: use only the `var(--kakeai-font-*)` aliases from `fonts.css` (verified
+  `@font-face { src: local(...) }`). Never write raw family names or the theme's font names —
+  HyperFrames lint rejects named families without `@font-face`. Wait for
+  `document.fonts.ready` before text measurement and timeline registration.
+- `fontDiagnostics` lists which local faces resolved; entries that fell back to a generic stack
+  render with the theme's fallback, not the selected face. Do not try to fix this by embedding
+  font files.
+- Use the kit components (for `handmade-paper@1`: `.kk-paper`, `.kk-paper-torn`, `.kk-tape`,
+  `.kk-note`) instead of re-drawing the world view yourself.
 
 ### Binary assets (images)
 
@@ -206,6 +280,10 @@ Run the normal HyperFrames composition QA on the entry **before** publishing:
   the harness afterwards.
 - The server re-runs the HyperFrames lint at publish time and rejects bundles with lint errors
   (warnings allowed), but do not rely on it as your only check.
+- Style QA with a kit: confirm every `kakeai-style/` file is byte-identical to the seed (never
+  edited), the entry references the kit through `kakeai-style/…` paths, fonts use
+  `var(--kakeai-font-*)`, and the result follows `STYLE.md`'s must/avoid rules. Dry-run publish
+  verifies the kit hashes and fails with `STYLE_KIT_MODIFIED` on any change.
 
 ## 5. Publish
 
@@ -231,8 +309,14 @@ dimensions against the Canvas Profile, entry root `data-width`/`data-height` aga
 finite `durationMs`, in-bundle dependencies, no external URLs, matching entry
 `data-composition-id`, no audio, and no HyperFrames lint errors, then copies the draft to an
 immutable bundle and returns the new `CompositionVersion` (`id`, `versionNumber`, `bundleHash`,
-`storageKey`, `manifest`). Failures use the same `422 VALIDATION_ERROR` `details.issues` shape as
-the dry-run.
+`storageKey`, `manifest`, `styleProvenance`). Failures use the same `422 VALIDATION_ERROR`
+`details.issues` shape as the dry-run.
+
+When the draft has a Style Kit, publish additionally verifies every protected file and the
+`kit-lock.json` against the seeded hashes and rejects tampering with `422 STYLE_KIT_MODIFIED`
+(`details.issues` lists the modified/missing/extra paths). The published `styleProvenance` pins
+the authoring Theme ref and definition hash, Skin ref, kit hash, and font diagnostics; it never
+follows later theme or skin changes.
 
 Re-publishing an unchanged draft creates a new version number with identical content.
 Published versions are never modified or deleted while referenced.
