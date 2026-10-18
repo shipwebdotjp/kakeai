@@ -33,11 +33,12 @@
 
 - `quote` は必須。空文字も許容するが、内容は利用者が入力する。
 - `author`・`source` は任意。両方空のときは帰属表示（`figcaption`）を描画しない。
+- `style.tone` は本文の文字色ではなく、引用符・左罫線などのアクセント（差し込み色）に使う。引用本文の文字色はテーマの基本文字色（`text`）で描画する。
 - `effects` の各要素は `{ trigger, effect }`。target は持たない（引用は1つ）。
   - `effect` は `cueEffectSchema`（`appear` / `emphasize`）。
   - `emphasize`: 引用本文に枠・背景・スポットライトを当てる（区間中）。`spotlight` では著者・出典を減光する。`onset` は引用本文内の一時オーバーレイに当たる。
   - `appear`: カード全体を登場させる。
-- 強調の対象は引用本文のみ。`background` は引用本文の背景色と文字色を変える（カード全体は変えない）。
+- 強調の対象は引用本文のみ。`background` は引用本文の背景色を変え、可読性のため文字色を反転する（区間末で基本文字色へ戻る。カード全体は変えない）。
 
 ## テンプレート定義
 
@@ -66,7 +67,8 @@
 ## レンダリング
 
 - `figure.kakeai-quotewrap` > `div.kakeai-quotecard`（`preset: card` のとき背景と影を付ける）> `blockquote.kakeai-quotetext` + `figcaption.kakeai-quoteattrib`（著者・出典）を描く。
-- 引用本文要素に `id` を付ける。`emphasize` は引用本文に `stateIntervals`（`tl.set`）を当て、`spotlight` では著者・出典要素に減光の `stateIntervals` を当てる。`onset` は引用本文内の一時オーバーレイに当てる（発火と持続は別要素・別プロパティ）。
+- 引用本文の文字色はテーマの基本文字色（`text`）とし、アクセント色（`style.tone`）は文字色には使わない。アクセントは左罫線（標準描画）や引用符（`handmade-paper@1`）などの差し込みにだけ使う。
+- 引用本文要素に `id` を付ける。`emphasize` は引用本文に `stateIntervals`（`tl.set`）を当て、`spotlight` では著者・出典要素に減光の `stateIntervals` を当てる。`onset` は引用本文内の一時オーバーレイに当てる（発火と持続は別要素・別プロパティ）。`background` の解除時は文字色を基本文字色（`text`）へ戻す。
 - `appear` はカード要素を `AnimationPlan` として登場させる。
 - 要素IDはCue scope 配下に閉じ、複数配置・入れ子で衝突しない。
 - 決定性: 同じ入力・同じシーク位置で同じ表示になる。プレビューとMP4が一致する。

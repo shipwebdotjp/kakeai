@@ -35,12 +35,12 @@ function emphasizeOnVars(
 
 function emphasizeOffVars(
   effect: EmphasizeEffect,
-  toneColor: string,
+  textColor: string,
 ): Record<string, string | number> {
   if (effect.style === "frame" || effect.style === "spotlight") {
     return { boxShadow: "none" };
   }
-  return { backgroundColor: "transparent", color: toneColor };
+  return { backgroundColor: "transparent", color: textColor };
 }
 
 export function renderQuote(input: unknown, context: RenderContext): RenderedCue {
@@ -52,7 +52,8 @@ export function renderQuote(input: unknown, context: RenderContext): RenderedCue
   }
   const { quote, author, source, style, effects } = parsed.data;
   const theme = context.theme;
-  const toneColor = toneHex(style?.tone ?? "primary", theme);
+  const accentColor = toneHex(style?.tone ?? "primary", theme);
+  const textColor = theme.text;
   const preset = style?.preset ?? "plain";
   const cardId = context.scope.id("card");
   const quoteId = context.scope.id("quote");
@@ -76,7 +77,7 @@ export function renderQuote(input: unknown, context: RenderContext): RenderedCue
     quoteId,
     siblings,
     theme,
-    toneColor,
+    textColor,
     lineIntervals: context.lineIntervals ?? [],
     spanMs: context.cueTiming?.spanMs ?? 0,
     path: context.path,
@@ -93,7 +94,7 @@ export function renderQuote(input: unknown, context: RenderContext): RenderedCue
     onsetInfo === undefined
       ? ""
       : `<span id="${onsetOverlayId(quoteId)}" class="kakeai-onsetoverlay kakeai-onset-${onsetInfo.preset}" style="--kakeai-onset-color:${onsetInfo.color}"></span>`;
-  const quoteHtml = `<blockquote id="${quoteId}" class="kakeai-quotetext" style="color:${toneColor}">${escapeHtmlText(quote)}${overlay}</blockquote>`;
+  const quoteHtml = `<blockquote id="${quoteId}" class="kakeai-quotetext" style="--kakeai-quote-tone:${accentColor}">${escapeHtmlText(quote)}${overlay}</blockquote>`;
   const authorHtml =
     author === undefined || author.trim().length === 0
       ? ""
@@ -122,7 +123,7 @@ export function applyQuoteEffects(options: {
   quoteId: string;
   siblings: readonly string[];
   theme: VisualThemeDefinition;
-  toneColor: string;
+  textColor: string;
   lineIntervals: RenderContext["lineIntervals"];
   spanMs: number;
   path: (string | number)[];
@@ -155,7 +156,7 @@ export function applyQuoteEffects(options: {
       targetId: options.quoteId,
       intervals: interval,
       on: emphasizeOnVars(entry.effect, options.theme),
-      off: emphasizeOffVars(entry.effect, options.toneColor),
+      off: emphasizeOffVars(entry.effect, options.textColor),
     });
     if (entry.effect.style === "spotlight") {
       for (const siblingId of options.siblings) {

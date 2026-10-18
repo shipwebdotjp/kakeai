@@ -411,7 +411,7 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
     quoteId,
     siblings,
     theme,
-    toneColor,
+    textColor: theme.textRoles.heading.color,
     lineIntervals: context.lineIntervals ?? [],
     spanMs: context.cueTiming?.spanMs ?? 0,
     path: context.path,
@@ -431,13 +431,12 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
   const quoteStyle = [
     themeTextCss(theme, "heading", {
       fontSize: Math.min(theme.textRoles.heading.fontSize, 52),
-      color: toneColor,
     }),
     "position:relative",
     "white-space:pre-line",
   ].join(";");
   const quoteHtml = `<blockquote id="${quoteId}" class="kakeai-paper-quotetext" style="${quoteStyle}">${escapeHtmlText(quote)}${overlay}</blockquote>`;
-  const quoteMarkHtml = `<span class="kakeai-paper-quotemark" style="display:block;font-size:96px;line-height:0.45;color:var(--kakeai-accent-soft);font-weight:700;">&ldquo;</span>`;
+  const quoteMarkHtml = `<span class="kakeai-paper-quotemark" style="display:block;font-size:96px;line-height:0.45;color:${toneColor};font-weight:700;">&ldquo;</span>`;
   const authorHtml =
     author === undefined || author.trim().length === 0
       ? ""

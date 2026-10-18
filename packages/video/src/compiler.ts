@@ -671,7 +671,7 @@ const STYLES = [
   ".kakeai-quotewrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:120px 200px;box-sizing:border-box;}",
   ".kakeai-quotecard{display:flex;flex-direction:column;gap:24px;max-width:1400px;padding:48px 80px;border-radius:var(--kakeai-radius-lg);box-sizing:border-box;}",
   ".kakeai-quote-card{background:var(--kakeai-surface);box-shadow:0 12px 48px var(--kakeai-shadow);}",
-  ".kakeai-quotetext{position:relative;margin:0;font-size:56px;font-weight:600;line-height:1.4;color:var(--kakeai-accent-primary);}",
+  ".kakeai-quotetext{position:relative;margin:0;border-left:8px solid var(--kakeai-quote-tone,var(--kakeai-accent-primary));padding-left:40px;font-size:56px;font-weight:600;line-height:1.4;color:var(--kakeai-text);}",
   ".kakeai-quoteattrib{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:flex-end;gap:16px;font-size:32px;color:var(--kakeai-muted);}",
   ".kakeai-quoteauthor{font-weight:700;color:var(--kakeai-text);}",
   ".kakeai-quotesource{font-style:normal;}",

@@ -65,6 +65,38 @@ describe("renderQuote", () => {
     expect(first.html).not.toBe(other.html);
   });
 
+  it("draws the quote body in the base text color and keeps the tone as an accent", () => {
+    const rendered = renderQuote(
+      { ...baseInput, style: { tone: "secondary", preset: "plain" } },
+      context(),
+    );
+    expect(rendered.html).toContain(`--kakeai-quote-tone:${theme.accents.secondary}`);
+    expect(rendered.html).not.toContain(`color:${theme.accents.secondary}`);
+    expect(rendered.html).not.toContain(`color:${theme.text}`);
+  });
+
+  it("restores the base text color after a background emphasize", () => {
+    const scope = cueScope("visual-quote-1");
+    const rendered = renderQuote(
+      {
+        ...baseInput,
+        effects: [
+          {
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: { kind: "emphasize", style: "background", tone: "secondary" },
+          },
+        ],
+      },
+      timedContext(),
+    );
+    expect(rendered.stateIntervals).toContainEqual({
+      targetId: scope.id("quote"),
+      intervals: [{ startMs: 500, endMs: 1500 }],
+      on: { backgroundColor: theme.accents.secondary, color: expect.any(String) },
+      off: { backgroundColor: "transparent", color: theme.text },
+    });
+  });
+
   it("emphasizes the quote and appears the card", () => {
     const scope = cueScope("visual-quote-1");
     const rendered = renderQuote(
