@@ -59,6 +59,7 @@ import { MediaPicker } from "./MediaPicker";
 import { DataGridField } from "./DataGridField";
 import { EffectsField } from "./EffectsField";
 import { CalloutItemsField } from "./CalloutItemsField";
+import { MessagesField } from "./MessagesField";
 import { FlowField } from "./FlowField";
 
 const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
@@ -886,6 +887,16 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           setField={setField}
           lines={lines}
           speakers={speakers}
+        />
+      );
+    case "messages":
+      return (
+        <MessagesField
+          label={field.label}
+          fieldKey={field.key}
+          value={value}
+          setField={setField}
+          maxMessages={field.maxMessages}
         />
       );
     case "flow":

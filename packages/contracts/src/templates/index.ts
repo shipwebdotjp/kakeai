@@ -57,6 +57,7 @@ export type TemplateFieldSpec =
   | { kind: "flow"; key: string; label: string; maxNodes: number; maxEdges: number }
   | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" | "stat" | "quote" }
   | { kind: "calloutItems"; key: string; label: string }
+  | { kind: "messages"; key: string; label: string; maxMessages: number }
   | { kind: "animation"; key: string; label: string };
 
 export interface VisualTemplateDefinition {
@@ -1235,6 +1236,75 @@ const quoteV1: VisualTemplateDefinition = {
   },
 };
 
+export const CHAT_MAX_MESSAGES = 6;
+
+export const chatSideSchema = z.enum(["left", "right"]);
+export type ChatSide = z.infer<typeof chatSideSchema>;
+
+export const chatFrameSchema = z.enum(["none", "phone", "laptop"]);
+export type ChatFrame = z.infer<typeof chatFrameSchema>;
+
+export const chatMessageSchema = z.strictObject({
+  name: z.string().optional(),
+  icon: nestedMediaVisualSchema.optional(),
+  side: chatSideSchema.optional(),
+  body: z.string(),
+  time: z.string().optional(),
+});
+export type ChatMessage = z.infer<typeof chatMessageSchema>;
+
+export const chatMessagesSchema = z
+  .array(chatMessageSchema)
+  .min(1)
+  .max(CHAT_MAX_MESSAGES);
+
+export const chatThreadInputSchema = z.strictObject({
+  title: z.string().optional(),
+  frame: chatFrameSchema.default("phone"),
+  statusBar: z.boolean().optional(),
+  statusTime: z.string().optional(),
+  messages: chatMessagesSchema,
+});
+export type ChatThreadInput = z.infer<typeof chatThreadInputSchema>;
+
+const CHAT_FRAME_OPTIONS = [
+  { value: "phone", label: "スマートフォン" },
+  { value: "laptop", label: "ノートPC" },
+  { value: "none", label: "枠なし（全面）" },
+] as const;
+
+const chatThreadV1: VisualTemplateDefinition = {
+  id: "chat.thread",
+  version: 1,
+  inputSchema: chatThreadInputSchema,
+  layers: ["card", "overlay"],
+  transitionPolicy: DEFAULT_TRANSITION_POLICY,
+  animationPolicy: DEFAULT_ANIMATION_POLICY,
+  display: {
+    label: "チャット",
+    description: "会話を吹き出しで並べるチャット画面",
+    category: "text",
+  },
+  inputFields: [
+    { kind: "optionalText", key: "title", label: "チャットのタイトル" },
+    { kind: "select", key: "frame", label: "端末の枠", options: CHAT_FRAME_OPTIONS },
+    { kind: "optionalText", key: "statusTime", label: "ステータスバーの時刻" },
+    { kind: "boolean", key: "statusBar", label: "ステータスバーを表示" },
+    { kind: "messages", key: "messages", label: "メッセージ", maxMessages: CHAT_MAX_MESSAGES },
+  ],
+  collectAssetRefs: (input, path, depth = 0) => {
+    const parsed = chatThreadInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return [];
+    }
+    return parsed.data.messages.flatMap((message, index) =>
+      message.icon === undefined
+        ? []
+        : collectNestedAssetRefs(message.icon, [...path, "messages", index, "icon"], depth),
+    );
+  },
+};
+
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
   mediaFullBleedV1,
@@ -1249,6 +1319,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   flowDiagramV1,
   statV1,
   quoteV1,
+  chatThreadV1,
 ];
 
 export { textBlockV1, mediaFullBleedV1, mediaCardV1 };
@@ -1260,6 +1331,7 @@ export { listCalloutV1 };
 export { flowDiagramV1 };
 export { statV1 };
 export { quoteV1 };
+export { chatThreadV1 };
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(
   visualTemplateDefinitions.map((definition) => [

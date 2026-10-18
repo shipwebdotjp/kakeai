@@ -1,0 +1,38 @@
+# チャットテンプレート 実装TODO
+
+正は [spec.md](spec.md)。実装の判断はこのフォルダの文書に従う。
+
+## Phase 1 — 基盤とテンプレート
+
+- [x] `.kakeai-cuebody` を `container-type: size` にし、任意の Cue が `cq` 単位を使えるようにする
+- [x] `packages/contracts` に `chat.thread@1` の入力スキーマ（`chatThreadInputSchema`・`chatMessageSchema`・`chatMessagesSchema`）を追加
+- [x] `messages` TemplateFieldSpec を追加し、`collectAssetRefs` でアイコン素材を収集
+- [x] `packages/video` に `renderChatThread` を追加し、neutral Visual Skin に登録
+- [x] チャット用CSSを追加（コンテナ相対・固定pxなし・内蔵flex）
+- [x] `computeContentWarnings` にチャット本文の目安超過警告を追加
+
+## Phase 2 — 編集UI
+
+- [x] `MessagesField` を追加（名前・本文・左右・時刻・アイコン）
+- [x] `form.ts` の読み取り・書き込み・既定値に `messages` を追加
+- [x] `CueList` のフィールド分岐に `messages` を追加
+
+## Phase 3 — 枠とステータスバー
+
+- [x] `frame: phone | laptop | none` を実装（コンテナ相対で共通レイアウト）
+- [x] `phone` のステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー、静的）を実装
+- [x] `statusBar` / `statusTime` 入力を追加
+
+## Phase 4 — テストと文書
+
+- [x] contracts の登録・入力検証・素材参照のテスト
+- [x] video のレンダリング（枠・ステータスバー・アイコン scope・エスケープ）のテスト
+- [x] 機能ドキュメント（`spec.md`・`todo.md`・`roadmap.md`）と ADR-0070
+- [x] `CONTEXT.md` の用語追加、`docs/mvp/content-schema.md` のテンプレート表更新
+- [x] ユーザーガイドの追記
+
+## 未着手（roadmap 参照）
+
+- [ ] メッセージ単位のセリフ同期（行トリガー）
+- [ ] `desktop` など端末枠の追加
+- [ ] Cue Map の代表画像へのアイコン反映

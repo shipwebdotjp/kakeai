@@ -3,6 +3,8 @@ import type { ContentDocument } from "./document";
 import {
   chartBarInputSchema,
   chartBarV1,
+  chatThreadInputSchema,
+  chatThreadV1,
   tableSimpleInputSchema,
   tableSimpleV1,
   textBlockInputSchema,
@@ -27,6 +29,8 @@ export const TEXT_CONSTRAINTS: Record<TextRole, TextConstraint> = {
 };
 
 export const CAPTION_CONSTRAINT: TextConstraint = { maxLines: 2, charsPerLine: 20 };
+
+export const CHAT_MESSAGE_CONSTRAINT: TextConstraint = { maxLines: 4, charsPerLine: 16 };
 
 export const TABLE_CELL_CHAR_GUIDELINE = 14;
 export const TABLE_ROW_GUIDELINE = 10;
@@ -166,6 +170,32 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
             ),
           );
+        }
+        return;
+      }
+      if (cue.template.id === chatThreadV1.id && cue.template.version === chatThreadV1.version) {
+        const parsed = chatThreadInputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          parsed.data.messages.forEach((message, messageIndex) => {
+            const warning = overflowWarning(
+              [
+                "scenes",
+                sceneIndex,
+                "visualCues",
+                cueIndex,
+                "input",
+                "messages",
+                messageIndex,
+                "body",
+              ],
+              "チャット本文",
+              message.body,
+              CHAT_MESSAGE_CONSTRAINT,
+            );
+            if (warning) {
+              warnings.push(warning);
+            }
+          });
         }
         return;
       }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   chartBarInputSchema,
+  chatThreadInputSchema,
+  chatThreadV1,
   flowDiagramInputSchema,
   getTemplateInputFields,
   getVisualTemplate,
@@ -628,5 +630,57 @@ describe("quote@1", () => {
 
   it("rejects a quote without the required text", () => {
     expect(quoteInputSchema.safeParse({ author: "山田太郎" }).success).toBe(false);
+  });
+});
+
+describe("chat.thread@1", () => {
+  it("registers chat.thread@1 as an editable card/overlay template with a messages field", () => {
+    const definition = getVisualTemplate("chat.thread", 1);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
+    expect(isEditableTemplate("chat.thread", 1)).toBe(true);
+    const fields = getTemplateInputFields("chat.thread", 1);
+    const messages = fields?.find((field) => field.kind === "messages");
+    expect(messages?.kind).toBe("messages");
+    if (messages?.kind === "messages") {
+      expect(messages.key).toBe("messages");
+      expect(messages.maxMessages).toBe(6);
+    }
+  });
+
+  it("defaults the frame to phone and accepts a conversation", () => {
+    const parsed = chatThreadInputSchema.safeParse({
+      title: "相談",
+      messages: [
+        { name: "リン", body: "どう思う？", side: "left", time: "12:30" },
+        { body: "いいね", side: "right" },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.frame).toBe("phone");
+    }
+  });
+
+  it("rejects an empty or over-long conversation", () => {
+    expect(chatThreadInputSchema.safeParse({ messages: [] }).success).toBe(false);
+    expect(
+      chatThreadInputSchema.safeParse({
+        messages: Array.from({ length: 7 }, () => ({ body: "a" })),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("collects icon asset references from every message", () => {
+    const refs = chatThreadV1.collectAssetRefs(
+      {
+        messages: [
+          { body: "a", icon: { kind: "media", assetId: "asset-1" } },
+          { body: "b" },
+          { body: "c", icon: { kind: "media", assetId: "asset-2" } },
+        ],
+      },
+      ["input"],
+    );
+    expect(refs.map((ref) => ref.assetId)).toEqual(["asset-1", "asset-2"]);
   });
 });

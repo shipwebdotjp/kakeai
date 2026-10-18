@@ -124,6 +124,14 @@ _Avoid_: Asset, Render
 A trusted reusable visual expression with a defined input contract.
 _Avoid_: Visual cue, scene
 
+**Container-Relative Layout**:
+A Visual Template layout whose dimensions follow the size of its containing element through container queries, instead of fixed canvas pixels, so one template renders at different widths without duplication.
+_Avoid_: responsive breakpoint, media query, scaling
+
+**Chat Template**:
+A data-driven Visual Template that arranges a short conversation as chat bubbles, with an optional phone or laptop frame and a static status bar. It is shown as video only and is not tied to narration, speakers, or TTS.
+_Avoid_: Narration, Speaker, site mockup
+
 **Node**:
 An item of a Flow Diagram, referenced by its position in the diagram's node list. It carries a label and an optional caption.
 _Avoid_: Step, box

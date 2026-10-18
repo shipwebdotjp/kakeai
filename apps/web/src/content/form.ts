@@ -21,6 +21,7 @@ import {
   sceneDeviceFrameV1,
   chartDataSchema,
   chartEffectsSchema,
+  chatMessagesSchema,
   CHART_APPEAR_PRESETS,
   flowDiagramSchema,
   flowEffectsSchema,
@@ -611,6 +612,11 @@ function readCueFields(
         result[field.key] = Array.isArray(value) ? JSON.stringify(value) : "";
         break;
       }
+      case "messages": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = Array.isArray(value) ? JSON.stringify(value) : "";
+        break;
+      }
       case "animation": {
         const value = input[field.key];
         const spec =
@@ -1148,6 +1154,26 @@ function buildCueInput(
           const detail = validated.error.issues[0];
           const where = detail && detail.path.length > 0 ? `（${detail.path.join(".")}）` : "";
           throw new Error(`ポイントを正しく入力してください${where}`);
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "messages": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          throw new Error("メッセージを1つ以上入力してください");
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("メッセージを正しく入力してください");
+        }
+        const validated = chatMessagesSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          const detail = validated.error.issues[0];
+          const where = detail && detail.path.length > 0 ? `（${detail.path.join(".")}）` : "";
+          throw new Error(`メッセージを正しく入力してください${where}`);
         }
         setAtPath(input, field.key, validated.data);
         break;
@@ -1720,6 +1746,12 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         break;
       case "calloutItems":
         fields[field.key] = JSON.stringify([{ text: "ポイント" }]);
+        break;
+      case "messages":
+        fields[field.key] = JSON.stringify([
+          { name: "相手", body: "こんにちは", side: "left" },
+          { name: "自分", body: "よろしくお願いします", side: "right" },
+        ]);
         break;
       default:
         fields[field.key] = "";
