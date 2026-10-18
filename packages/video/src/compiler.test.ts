@@ -1095,6 +1095,60 @@ describe("compileDocument", () => {
     }
   });
 
+  it("adds phone status bar and laptop keyboard chrome only when requested", () => {
+    const phoneDoc = validContentDocument();
+    phoneDoc.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-status",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "phone",
+          statusBar: true,
+          screen: { kind: "media", assetId: "asset-screen-image", fit: "cover" },
+        },
+      }),
+    ];
+    const phone = compileDocument({ document: phoneDoc, assetResolver: resolver });
+    expect(phone.html).toContain('class="kakeai-deviceframe-status kakeai-statusbar"');
+    expect(phone.html).toContain("kakeai-statusbar-island");
+    expect(phone.html).not.toContain('class="kakeai-laptopbase"');
+
+    const laptopDoc = validContentDocument();
+    laptopDoc.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-keyboard",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          keyboard: true,
+          screen: { kind: "media", assetId: "asset-screen-image", fit: "cover" },
+        },
+      }),
+    ];
+    const laptop = compileDocument({ document: laptopDoc, assetResolver: resolver });
+    expect(laptop.html).toContain("kakeai-deviceframe-keyboard");
+    expect(laptop.html).toContain('class="kakeai-laptopbase"');
+    expect(laptop.html).not.toContain('class="kakeai-deviceframe-status');
+
+    const plainDoc = validContentDocument();
+    plainDoc.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-device-plain",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "media", assetId: "asset-screen-image", fit: "cover" },
+        },
+      }),
+    ];
+    const plain = compileDocument({ document: plainDoc, assetResolver: resolver });
+    expect(plain.html).not.toContain('class="kakeai-laptopbase"');
+    expect(plain.html).not.toContain('class="kakeai-deviceframe-status');
+  });
+
   it("renders a nested composition in a device-frame screen with contain fit", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [

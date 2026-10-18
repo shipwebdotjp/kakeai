@@ -296,6 +296,8 @@ export const deviceFrameInputSchema = z.strictObject({
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
   animation: animationSpecSchema.optional(),
+  statusBar: z.boolean().default(false),
+  keyboard: z.boolean().default(false),
 });
 
 const DEVICE_FRAME_FIELDS: readonly TemplateFieldSpec[] = [
@@ -303,6 +305,8 @@ const DEVICE_FRAME_FIELDS: readonly TemplateFieldSpec[] = [
   { kind: "select", key: "frame", label: "フレーム", options: DEVICE_FRAME_OPTIONS },
   { kind: "color", key: "backgroundColor", label: "背景色" },
   { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
+  { kind: "boolean", key: "statusBar", label: "ステータスバーを表示（スマートフォン）" },
+  { kind: "boolean", key: "keyboard", label: "キーボードを表示（ノートPC）" },
 ];
 
 function collectDeviceFrameRefs(
@@ -1277,8 +1281,9 @@ export const chatThreadInputSchema = z
   .strictObject({
     title: z.string().optional(),
     frame: chatFrameSchema.default("phone"),
-    statusBar: z.boolean().optional(),
+    statusBar: z.boolean().default(true),
     statusTime: z.string().optional(),
+    keyboard: z.boolean().default(false),
     messages: chatMessagesSchema,
     effects: chatEffectsSchema.optional(),
   })
@@ -1319,6 +1324,7 @@ const chatThreadV1: VisualTemplateDefinition = {
     { kind: "select", key: "frame", label: "端末の枠", options: CHAT_FRAME_OPTIONS },
     { kind: "optionalText", key: "statusTime", label: "ステータスバーの時刻" },
     { kind: "boolean", key: "statusBar", label: "ステータスバーを表示" },
+    { kind: "boolean", key: "keyboard", label: "キーボードを表示（ノートPC）" },
     { kind: "messages", key: "messages", label: "メッセージ", maxMessages: CHAT_MAX_MESSAGES },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "chat" },
   ],

@@ -66,7 +66,7 @@ describe("renderChatThread", () => {
   it("shows the phone status bar by default and hides it for other frames", () => {
     const phone = renderChatThread({ ...baseInput, frame: "phone" }, context());
     expect(phone.html).toContain("kakeai-chatstatus");
-    expect(phone.html).toContain("kakeai-chatstatus-island");
+    expect(phone.html).toContain("kakeai-statusbar-island");
     expect(phone.html).toContain("9:41");
 
     const laptop = renderChatThread({ ...baseInput, frame: "laptop" }, context());
@@ -80,6 +80,24 @@ describe("renderChatThread", () => {
     const none = renderChatThread({ ...baseInput, frame: "none" }, context());
     expect(none.html).toContain("kakeai-chatpanel-none");
     expect(none.html).not.toContain("kakeai-chatstatus");
+  });
+
+  it("adds a keyboard base to the laptop frame only when requested", () => {
+    const withKeyboard = renderChatThread(
+      { ...baseInput, frame: "laptop", keyboard: true },
+      context(),
+    );
+    expect(withKeyboard.html).toContain("kakeai-chatwrap-keyboard");
+    expect(withKeyboard.html).toContain("kakeai-laptopbase");
+
+    const withoutKeyboard = renderChatThread({ ...baseInput, frame: "laptop" }, context());
+    expect(withoutKeyboard.html).not.toContain("kakeai-laptopbase");
+
+    const phoneKeyboard = renderChatThread(
+      { ...baseInput, frame: "phone", keyboard: true },
+      context(),
+    );
+    expect(phoneKeyboard.html).not.toContain("kakeai-laptopbase");
   });
 
   it("honors statusBar off and a custom status time", () => {

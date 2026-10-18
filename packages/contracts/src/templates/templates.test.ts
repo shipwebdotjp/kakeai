@@ -3,6 +3,7 @@ import {
   chartBarInputSchema,
   chatThreadInputSchema,
   chatThreadV1,
+  deviceFrameInputSchema,
   flowDiagramInputSchema,
   getTemplateInputFields,
   getVisualTemplate,
@@ -21,6 +22,26 @@ describe("visual template metadata", () => {
     const fields = getTemplateInputFields("scene.device-frame", 1);
     expect(fields?.some((field) => field.kind === "animation")).toBe(true);
     expect(isEditableTemplate("scene.device-frame", 1)).toBe(true);
+  });
+
+  it("accepts optional status bar and keyboard chrome on scene.device-frame", () => {
+    const screen = { kind: "media", assetId: "asset-1" } as const;
+    expect(
+      deviceFrameInputSchema.safeParse({ frame: "phone", statusBar: true, screen }).success,
+    ).toBe(true);
+    expect(
+      deviceFrameInputSchema.safeParse({ frame: "laptop", keyboard: true, screen }).success,
+    ).toBe(true);
+    expect(
+      deviceFrameInputSchema.safeParse({ frame: "phone", keyboard: "yes", screen }).success,
+    ).toBe(false);
+    const fields = getTemplateInputFields("scene.device-frame", 1);
+    expect(fields?.some((field) => field.kind === "boolean" && field.key === "statusBar")).toBe(
+      true,
+    );
+    expect(fields?.some((field) => field.kind === "boolean" && field.key === "keyboard")).toBe(
+      true,
+    );
   });
 
   it("marks the unified text template as editable via generic fields", () => {
@@ -639,6 +660,9 @@ describe("chat.thread@1", () => {
     expect(definition?.layers).toEqual(["card", "overlay"]);
     expect(isEditableTemplate("chat.thread", 1)).toBe(true);
     const fields = getTemplateInputFields("chat.thread", 1);
+    expect(fields?.some((field) => field.kind === "boolean" && field.key === "keyboard")).toBe(
+      true,
+    );
     const messages = fields?.find((field) => field.kind === "messages");
     expect(messages?.kind).toBe("messages");
     if (messages?.kind === "messages") {
