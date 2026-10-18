@@ -70,9 +70,15 @@ describe("renderChatThread", () => {
     expect(phone.html).toContain("9:41");
 
     const laptop = renderChatThread({ ...baseInput, frame: "laptop" }, context());
+    expect(laptop.html).toContain("kakeai-chatpanel-laptop");
     expect(laptop.html).not.toContain("kakeai-chatstatus");
 
+    const desktop = renderChatThread({ ...baseInput, frame: "desktop" }, context());
+    expect(desktop.html).toContain("kakeai-chatpanel-desktop");
+    expect(desktop.html).not.toContain("kakeai-chatstatus");
+
     const none = renderChatThread({ ...baseInput, frame: "none" }, context());
+    expect(none.html).toContain("kakeai-chatpanel-none");
     expect(none.html).not.toContain("kakeai-chatstatus");
   });
 

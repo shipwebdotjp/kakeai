@@ -659,6 +659,14 @@ describe("chat.thread@1", () => {
     if (parsed.success) {
       expect(parsed.data.frame).toBe("phone");
     }
+    for (const frame of ["phone", "laptop", "desktop", "none"]) {
+      expect(chatThreadInputSchema.safeParse({ frame, messages: [{ body: "a" }] }).success).toBe(
+        true,
+      );
+    }
+    expect(
+      chatThreadInputSchema.safeParse({ frame: "tablet", messages: [{ body: "a" }] }).success,
+    ).toBe(false);
   });
 
   it("rejects an empty or over-long conversation", () => {

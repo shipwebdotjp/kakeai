@@ -16,7 +16,7 @@
 ```jsonc
 {
   "title": "相談のやりとり",          // 任意。ヘッダバー。空なら描かない
-  "frame": "phone",                  // phone | laptop | none（既定 phone）
+  "frame": "phone",                  // phone | laptop | desktop | none（既定 phone）
   "statusBar": true,                 // 任意。frame が phone のときだけ有効（既定 true）
   "statusTime": "9:41",              // 任意。ステータスバーの時刻（既定 "9:41"、空文字で非表示）
   "messages": [
@@ -60,7 +60,7 @@
 | key | kind | 内容 |
 | --- | --- | --- |
 | `title` | optionalText | チャットのタイトル |
-| `frame` | select | スマートフォン / ノートPC / 枠なし（全面） |
+| `frame` | select | スマートフォン / ノートPC / デスクトップ / 枠なし（全面） |
 | `statusTime` | optionalText | ステータスバーの時刻 |
 | `statusBar` | boolean | ステータスバーを表示 |
 | `messages` | messages | メッセージ（名前・本文・左右・時刻・アイコン） |
@@ -80,11 +80,12 @@
 ## 単位と枠（コンテナ相対レイアウト）
 
 - `frame` は枠の形だけを決める。内部レイアウトは全ケースで共通とする。
-  - `phone`: 中央に 9:16 のパネル。
+  - `phone`: 中央に 9:16 のパネル（太いベゼル、大きな角丸）。
   - `laptop`: 中央に 16:9 のパネル。
+  - `desktop`: 中央に 21:9 のワイドなパネル（薄いベゼル、小さめの角丸）。
   - `none`: キャンバス全面。
 - パネル要素を `container-type: size` にする。内側の要素で `--kakeai-chat-u: min(1cqw, 1cqh)` を定義し、**すべての寸法（文字・余白・角丸・アイコン径・ステータスバー高さ）をこの倍数**で表す。固定pxを書かない。
-- `min(1cqw, 1cqh)` により、縦横比が変わっても短辺基準で見た目の密度が揃う（幅基準で拡大したい場合は `1cqw` に替える）。
+- `min(1cqw, 1cqh)` により、縦横比が変わっても短辺基準で見た目の密度が揃う（幅基準で拡大したい場合は `1cqw` に替える）。横長の枠（`laptop`・`desktop`）は高さで頭打ちになるため、縦に収まる件数はスマートフォン枠より少ない。件数上限6は短いメッセージを前提とした目安であり、長い会話はプレビューで確認する。
 - 縦方向は内蔵flexで吸収する。ヘッダは固定、メッセージ列は `flex: 1` かつ下寄せ、`overflow: hidden`。
 - コンパイラは Cue 本体（`.kakeai-cuebody`）を `container-type: size` にして、任意の Cue が `cq` 単位を使えるようにする。`scene.device-frame` の画面が内側にある場合は、より近いその要素がコンテナになる。
 
@@ -118,8 +119,8 @@
 ## 受け入れ条件
 
 - `chat.thread@1` の会話を `card` / `overlay` の両レイヤーで保存し、プレビューでシークし、MP4をレンダーできる。
-- `frame` を `phone` / `laptop` / `none` に切り替えても同じ入力で表示でき、固定pxに依存しない。
-- `phone` でステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）が表示され、`laptop` / `none` では表示されない。
+- `frame` を `phone` / `laptop` / `desktop` / `none` に切り替えても同じ入力で表示でき、固定pxに依存しない。
+- `phone` でステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）が表示され、`laptop` / `desktop` / `none` では表示されない。
 - アイコン素材の参照が `collectAssetRefs` で収集され、存在・ready が保存時に検証される。
 - 空・7件以上のメッセージを拒否し、本文の目安超過を警告で返す。
 - `effects` の `appear` が契機前のメッセージを隠し契機で表示し、`emphasize` が対象の吹き出しを強調し、`spotlight` が他のメッセージを減光する。プレビューのシークとMP4で一致する。

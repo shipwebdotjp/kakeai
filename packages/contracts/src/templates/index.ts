@@ -1241,7 +1241,7 @@ export const CHAT_MAX_MESSAGES = 6;
 export const chatSideSchema = z.enum(["left", "right"]);
 export type ChatSide = z.infer<typeof chatSideSchema>;
 
-export const chatFrameSchema = z.enum(["none", "phone", "laptop"]);
+export const chatFrameSchema = z.enum(["none", "phone", "laptop", "desktop"]);
 export type ChatFrame = z.infer<typeof chatFrameSchema>;
 
 export const chatMessageSchema = z.strictObject({
@@ -1298,6 +1298,7 @@ export type ChatThreadInput = z.infer<typeof chatThreadInputSchema>;
 const CHAT_FRAME_OPTIONS = [
   { value: "phone", label: "スマートフォン" },
   { value: "laptop", label: "ノートPC" },
+  { value: "desktop", label: "デスクトップ" },
   { value: "none", label: "枠なし（全面）" },
 ] as const;
 
