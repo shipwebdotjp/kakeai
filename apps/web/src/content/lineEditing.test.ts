@@ -277,6 +277,32 @@ describe("removeLineInScene", () => {
     ).toBe(true);
   });
 
+  it("drops a chat effect but keeps its messages when the triggered line is deleted", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "message", index: 1 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "messages" },
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "fade", durationMs: 400 },
+      },
+    ]);
+    const messages = JSON.stringify([{ body: "a" }, { body: "b" }]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc-chat", { templateId: "chat.thread", fields: { messages, effects } })],
+    );
+    const next = removeLineInScene(scene, 1);
+    const fields = next.cues[0]!.fields;
+    const remaining = JSON.parse(fields.effects!) as { trigger: { kind: string } }[];
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.trigger.kind).toBe("cue");
+    expect(JSON.parse(fields.messages!)).toEqual([{ body: "a" }, { body: "b" }]);
+  });
+
   it("preserves effect fields for an unknown template when dropping deleted-line triggers", () => {
     const effects = JSON.stringify([
       {

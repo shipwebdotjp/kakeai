@@ -697,6 +697,34 @@ function NestedScreenField({
   );
 }
 
+function messageTargetLabels(values: Record<string, string>): string[] | undefined {
+  const raw = values.messages;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return undefined;
+    }
+    return parsed.map((entry, index) => {
+      const body =
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as { body?: unknown }).body === "string"
+          ? (entry as { body: string }).body
+          : "";
+      const first = body.split("\n")[0].trim();
+      if (first.length === 0) {
+        return `メッセージ ${index + 1}`;
+      }
+      return first.length > 24 ? `${first.slice(0, 24)}…` : first;
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
@@ -876,6 +904,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           setField={setField}
           lines={lines}
           speakers={speakers}
+          messageLabels={field.variant === "chat" ? messageTargetLabels(values) : undefined}
         />
       );
     case "calloutItems":

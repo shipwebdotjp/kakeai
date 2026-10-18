@@ -31,8 +31,17 @@
 - [x] `CONTEXT.md` の用語追加、`docs/mvp/content-schema.md` のテンプレート表更新
 - [x] ユーザーガイドの追記
 
+## Phase 5 — メッセージ単位のセリフ同期
+
+- [x] `chatEffectsSchema`（`target: message | messages`、`trigger`、`effect`）と入力検証（対象番号の範囲）
+- [x] `collectLineRefs` で `effects[].trigger` の行参照を収集
+- [x] 描画: 行／吹き出しの要素ID割り当て、`appear`／`emphasize`／`spotlight`／`onset` の計画
+- [x] `EffectsField` に `chat` variant とメッセージ本文のドロップダウンを追加
+- [x] `form.ts` の `effects` schema／既定値に `chat` を追加
+- [x] テスト（契約・描画・行削除でメッセージが残る回帰）
+- [x] `spec.md` の入力契約・非ゴール・受け入れ条件を更新
+
 ## 未着手（roadmap 参照）
 
-- [ ] メッセージ単位のセリフ同期（行トリガー）
 - [ ] `desktop` など端末枠の追加
 - [ ] Cue Map の代表画像へのアイコン反映

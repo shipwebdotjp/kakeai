@@ -670,6 +670,52 @@ describe("chat.thread@1", () => {
     ).toBe(false);
   });
 
+  it("accepts message-targeted effects and rejects an out-of-range message index", () => {
+    const messages = [{ body: "a" }, { body: "b" }];
+    expect(
+      chatThreadInputSchema.safeParse({
+        messages,
+        effects: [
+          {
+            target: { kind: "message", index: 1 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      chatThreadInputSchema.safeParse({
+        messages,
+        effects: [
+          {
+            target: { kind: "message", index: 2 },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 400 },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("collects line references from message effects", () => {
+    const refs = chatThreadV1.collectLineRefs?.(
+      {
+        messages: [{ body: "a" }],
+        effects: [
+          {
+            target: { kind: "messages" },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l2" },
+            effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 100 },
+          },
+        ],
+      },
+      ["input"],
+    );
+    expect(refs?.map((ref) => ref.lineId)).toEqual(["l1", "l2"]);
+    expect(refs?.[0]?.path).toEqual(["input", "effects", 0, "trigger", "startLineId"]);
+  });
+
   it("collects icon asset references from every message", () => {
     const refs = chatThreadV1.collectAssetRefs(
       {

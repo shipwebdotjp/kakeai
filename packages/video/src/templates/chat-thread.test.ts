@@ -25,7 +25,10 @@ function context(
     scope: cueScope(scopeId),
     path: ["scenes", 1, "visualCues", 0, "input"],
     cueTiming: { startMs: 0, spanMs: 9000 },
-    lineIntervals: [],
+    lineIntervals: [
+      { lineId: "l1", startMs: 500, endMs: 1500 },
+      { lineId: "l2", startMs: 1500, endMs: 2500 },
+    ],
     renderNested: (node: NestedVisual, scope: RenderScope) => {
       nestedScopes.push(scope);
       nestedNodes.push(node);
@@ -119,5 +122,121 @@ describe("renderChatThread", () => {
 
   it("rejects an empty conversation", () => {
     expect(() => renderChatThread({ messages: [] }, context())).toThrow(CompositionCompileError);
+  });
+
+  it("hides a message before its line trigger and reveals it at the window", () => {
+    const rendered = renderChatThread(
+      {
+        messages: [{ body: "a" }, { body: "b" }],
+        effects: [
+          {
+            target: { kind: "message", index: 1 },
+            trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+            effect: { kind: "appear", preset: "fade", durationMs: 400 },
+          },
+        ],
+      },
+      context("chat-1"),
+    );
+    const row1 = cueScope("chat-1").id("msg-1");
+    const hidden = rendered.stateIntervals?.find(
+      (state) => state.targetId === row1 && state.on.opacity === 0,
+    );
+    expect(hidden?.intervals).toEqual([{ startMs: 0, endMs: 1500 }]);
+    expect(
+      rendered.animation?.some((item) => item.targetId === row1 && item.action === "fade"),
+    ).toBe(true);
+  });
+
+  it("staggers an appear across all messages", () => {
+    const rendered = renderChatThread(
+      {
+        messages: [{ body: "a" }, { body: "b" }],
+        effects: [
+          {
+            target: { kind: "messages" },
+            trigger: { kind: "cue" },
+            effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 200 },
+          },
+        ],
+      },
+      context("chat-1"),
+    );
+    const starts = rendered.animation
+      ?.filter((item) => item.action === "fade")
+      .map((item) => item.startMs);
+    expect(starts).toEqual([0, 200]);
+  });
+
+  it("emphasizes the targeted bubble and dims the others with spotlight", () => {
+    const rendered = renderChatThread(
+      {
+        messages: [{ body: "a" }, { body: "b" }, { body: "c" }],
+        effects: [
+          {
+            target: { kind: "message", index: 1 },
+            trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+            effect: { kind: "emphasize", style: "spotlight", tone: "primary" },
+          },
+        ],
+      },
+      context("chat-1"),
+    );
+    const scope = cueScope("chat-1");
+    const emphasized = rendered.stateIntervals?.find(
+      (state) => state.targetId === scope.id("bubble-1") && typeof state.on.boxShadow === "string",
+    );
+    expect(emphasized?.intervals).toEqual([{ startMs: 1500, endMs: 2500 }]);
+    expect(
+      rendered.stateIntervals?.find((state) => state.targetId === scope.id("msg-0"))?.on,
+    ).toEqual({ filter: "brightness(0.4)" });
+    expect(
+      rendered.stateIntervals?.some((state) => state.targetId === scope.id("msg-1")),
+    ).toBe(false);
+  });
+
+  it("renders an onset overlay inside the emphasized bubble", () => {
+    const rendered = renderChatThread(
+      {
+        messages: [{ body: "a" }],
+        effects: [
+          {
+            target: { kind: "message", index: 0 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: {
+              kind: "emphasize",
+              style: "frame",
+              tone: "primary",
+              onset: { preset: "flash", durationMs: 300 },
+            },
+          },
+        ],
+      },
+      context("chat-1"),
+    );
+    const bubble0 = cueScope("chat-1").id("bubble-0");
+    expect(rendered.html).toContain(`id="${bubble0}-onset"`);
+    expect(rendered.html).toContain("kakeai-onset-flash");
+    expect(rendered.animation?.some((item) => item.targetId === `${bubble0}-onset`)).toBe(true);
+  });
+
+  it("restores the bubble background after a background emphasize", () => {
+    const rendered = renderChatThread(
+      {
+        messages: [{ body: "a", side: "right" }],
+        effects: [
+          {
+            target: { kind: "message", index: 0 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: { kind: "emphasize", style: "background", tone: "primary" },
+          },
+        ],
+      },
+      context("chat-1"),
+    );
+    const state = rendered.stateIntervals?.find(
+      (entry) => entry.targetId === cueScope("chat-1").id("bubble-0"),
+    );
+    expect(state?.off?.backgroundColor).toBe(theme.accents.primary);
   });
 });

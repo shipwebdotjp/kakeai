@@ -21,6 +21,7 @@ import {
   sceneDeviceFrameV1,
   chartDataSchema,
   chartEffectsSchema,
+  chatEffectsSchema,
   chatMessagesSchema,
   CHART_APPEAR_PRESETS,
   flowDiagramSchema,
@@ -421,7 +422,9 @@ function normalizeChartEffect(entry: unknown): unknown {
   return { ...entry, effect: { ...effect, preset: CHART_PRESET_FALLBACK[preset] ?? "grow" } };
 }
 
-function effectsSchemaForVariant(variant: "table" | "chart" | "flow" | "stat" | "quote") {
+function effectsSchemaForVariant(
+  variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat",
+) {
   switch (variant) {
     case "chart":
       return chartEffectsSchema;
@@ -431,13 +434,19 @@ function effectsSchemaForVariant(variant: "table" | "chart" | "flow" | "stat" | 
       return statEffectsSchema;
     case "quote":
       return quoteEffectsSchema;
+    case "chat":
+      return chatEffectsSchema;
     case "table":
       return tableEffectsSchema;
   }
 }
 
-function defaultEffectsForVariant(variant: "table" | "chart" | "flow" | "stat" | "quote"): unknown[] {
+function defaultEffectsForVariant(
+  variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat",
+): unknown[] {
   switch (variant) {
+    case "chat":
+      return [];
     case "chart":
       return [
         {

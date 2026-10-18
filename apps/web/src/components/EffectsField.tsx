@@ -10,7 +10,7 @@ import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
 
-type EffectVariant = "table" | "chart" | "flow" | "stat" | "quote";
+type EffectVariant = "table" | "chart" | "flow" | "stat" | "quote" | "chat";
 
 interface EffectsFieldProps {
   label: string;
@@ -20,6 +20,7 @@ interface EffectsFieldProps {
   setField: (key: string, value: string) => void;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
+  messageLabels?: string[];
 }
 
 const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: string }[]> = {
@@ -40,6 +41,10 @@ const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
   ],
   stat: [],
   quote: [],
+  chat: [
+    { value: "message", label: "メッセージ" },
+    { value: "messages", label: "全メッセージ" },
+  ],
 };
 
 const TRIGGER_OPTIONS = [
@@ -70,6 +75,10 @@ const EFFECT_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
   quote: [
     { value: "emphasize", label: "強調" },
     { value: "appear", label: "登場" },
+  ],
+  chat: [
+    { value: "appear", label: "登場" },
+    { value: "emphasize", label: "強調" },
   ],
 };
 
@@ -116,7 +125,13 @@ function normalizeTarget(kind: string, previous: Json): Json {
   if (kind === "cell") {
     return { kind, row: Number(previous.row) || 0, key: String(previous.key ?? "") };
   }
-  if (kind === "row" || kind === "category" || kind === "series" || kind === "node") {
+  if (
+    kind === "row" ||
+    kind === "category" ||
+    kind === "series" ||
+    kind === "node" ||
+    kind === "message"
+  ) {
     return { kind, index: Number(previous.index) || 0 };
   }
   return { kind };
@@ -157,6 +172,7 @@ export function EffectsField({
   setField,
   lines,
   speakers,
+  messageLabels,
 }: EffectsFieldProps) {
   const entries = parseEntries(value);
   const targetless = variant === "stat" || variant === "quote";
@@ -214,7 +230,8 @@ export function EffectsField({
           targetKind === "row" ||
           targetKind === "category" ||
           targetKind === "series" ||
-          targetKind === "node";
+          targetKind === "node" ||
+          targetKind === "message";
         const isCell = targetKind === "cell";
         return (
           <div key={index} className="mt-2 rounded border border-border p-2">
@@ -240,21 +257,49 @@ export function EffectsField({
                   </label>
                   {hasIndex && (
                     <label className="inline-flex items-center gap-1.5">
-                      番号
-                      <input
-                        type="number"
-                        min={0}
-                        className={`w-16 ${textFieldClass}`}
-                        value={String(target.index ?? 0)}
-                        onChange={(event) =>
-                          update(index, {
-                            target: {
-                              ...target,
-                              index: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                            },
-                          })
-                        }
-                      />
+                      {targetKind === "message" ? "メッセージ" : "番号"}
+                      {targetKind === "message" &&
+                      messageLabels !== undefined &&
+                      messageLabels.length > 0 ? (
+                        <select
+                          className={textFieldClass}
+                          value={String(target.index ?? 0)}
+                          onChange={(event) =>
+                            update(index, {
+                              target: {
+                                ...target,
+                                index: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                              },
+                            })
+                          }
+                        >
+                          {Number(target.index ?? 0) >= messageLabels.length && (
+                            <option value={String(target.index ?? 0)}>
+                              {`範囲外（${Number(target.index ?? 0) + 1}）`}
+                            </option>
+                          )}
+                          {messageLabels.map((messageLabel, messageIndex) => (
+                            <option key={messageIndex} value={messageIndex}>
+                              {`${messageIndex + 1}. ${messageLabel}`}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min={0}
+                          className={`w-16 ${textFieldClass}`}
+                          value={String(target.index ?? 0)}
+                          onChange={(event) =>
+                            update(index, {
+                              target: {
+                                ...target,
+                                index: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                              },
+                            })
+                          }
+                        />
+                      )}
                     </label>
                   )}
                   {isCell && (

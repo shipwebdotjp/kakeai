@@ -55,7 +55,7 @@ export type TemplateFieldSpec =
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }
   | { kind: "flow"; key: string; label: string; maxNodes: number; maxEdges: number }
-  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" | "stat" | "quote" }
+  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat" }
   | { kind: "calloutItems"; key: string; label: string }
   | { kind: "messages"; key: string; label: string; maxMessages: number }
   | { kind: "animation"; key: string; label: string };
@@ -1258,13 +1258,41 @@ export const chatMessagesSchema = z
   .min(1)
   .max(CHAT_MAX_MESSAGES);
 
-export const chatThreadInputSchema = z.strictObject({
-  title: z.string().optional(),
-  frame: chatFrameSchema.default("phone"),
-  statusBar: z.boolean().optional(),
-  statusTime: z.string().optional(),
-  messages: chatMessagesSchema,
+export const chatEffectTargetSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("message"), index: nonNegativeInt }),
+  z.strictObject({ kind: z.literal("messages") }),
+]);
+export type ChatEffectTarget = z.infer<typeof chatEffectTargetSchema>;
+
+export const chatEffectSchema = z.strictObject({
+  target: chatEffectTargetSchema,
+  trigger: lineTriggerSchema,
+  effect: cueEffectSchema,
 });
+export type ChatEffect = z.infer<typeof chatEffectSchema>;
+
+export const chatEffectsSchema = z.array(chatEffectSchema).max(32);
+
+export const chatThreadInputSchema = z
+  .strictObject({
+    title: z.string().optional(),
+    frame: chatFrameSchema.default("phone"),
+    statusBar: z.boolean().optional(),
+    statusTime: z.string().optional(),
+    messages: chatMessagesSchema,
+    effects: chatEffectsSchema.optional(),
+  })
+  .superRefine((input, ctx) => {
+    (input.effects ?? []).forEach((entry, index) => {
+      if (entry.target.kind === "message" && entry.target.index >= input.messages.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: `効果のメッセージ番号が件数を超えています: ${entry.target.index}`,
+          path: ["effects", index, "target", "index"],
+        });
+      }
+    });
+  });
 export type ChatThreadInput = z.infer<typeof chatThreadInputSchema>;
 
 const CHAT_FRAME_OPTIONS = [
@@ -1291,6 +1319,7 @@ const chatThreadV1: VisualTemplateDefinition = {
     { kind: "optionalText", key: "statusTime", label: "ステータスバーの時刻" },
     { kind: "boolean", key: "statusBar", label: "ステータスバーを表示" },
     { kind: "messages", key: "messages", label: "メッセージ", maxMessages: CHAT_MAX_MESSAGES },
+    { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "chat" },
   ],
   collectAssetRefs: (input, path, depth = 0) => {
     const parsed = chatThreadInputSchema.safeParse(input);
@@ -1301,6 +1330,15 @@ const chatThreadV1: VisualTemplateDefinition = {
       message.icon === undefined
         ? []
         : collectNestedAssetRefs(message.icon, [...path, "messages", index, "icon"], depth),
+    );
+  },
+  collectLineRefs: (input, path) => {
+    const parsed = chatEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
+    if (!parsed.success) {
+      return [];
+    }
+    return parsed.data.flatMap((entry, index) =>
+      collectTriggerLineRefs(entry.trigger, [...path, "effects", index, "trigger"]),
     );
   },
 };

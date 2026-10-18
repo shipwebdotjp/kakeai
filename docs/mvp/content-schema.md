@@ -229,7 +229,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `stat@1` | 数値、ラベル、補足、書式、トーン、効果 | 対応。大きな数値を行トリガーでカウントする（[../stat-template/spec.md](../stat-template/spec.md)） |
 | `flow.diagram@1` | タイトル、ノード、辺、向き、スタイル、効果 | 対応。縦横を `style.orientation` で切替える。行トリガーでノードを強調する（[../flow-template/spec.md](../flow-template/spec.md)） |
 | `quote@1` | 引用本文、著者、出典、トーン、スタイル、効果 | 対応。著者・出典付きの引用カードを行トリガーで強調する（[../quote-template/spec.md](../quote-template/spec.md)） |
-| `chat.thread@1` | タイトル、メッセージ列（名前・本文・左右・時刻・アイコン）、枠、ステータスバー | 対応。会話を吹き出しで並べる。`frame` でスマートフォン／ノートPC／全面を選び、コンテナ相対で同じレイアウトを表示する（[../chat-template/spec.md](../chat-template/spec.md)） |
+| `chat.thread@1` | タイトル、メッセージ列（名前・本文・左右・時刻・アイコン）、枠、ステータスバー、効果 | 対応。会話を吹き出しで並べる。`frame` でスマートフォン／ノートPC／全面を選び、コンテナ相対で同じレイアウトを表示する。`effects` でメッセージ単位のセリフ同期（登場・強調）ができる（[../chat-template/spec.md](../chat-template/spec.md)） |
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
