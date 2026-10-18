@@ -35,6 +35,12 @@ describe("visual template metadata", () => {
     expect(
       deviceFrameInputSchema.safeParse({ frame: "phone", keyboard: "yes", screen }).success,
     ).toBe(false);
+    const defaults = deviceFrameInputSchema.safeParse({ frame: "phone", screen });
+    expect(defaults.success).toBe(true);
+    if (defaults.success) {
+      expect(defaults.data.statusBar).toBe(true);
+      expect(defaults.data.keyboard).toBe(true);
+    }
     const fields = getTemplateInputFields("scene.device-frame", 1);
     expect(fields?.some((field) => field.kind === "boolean" && field.key === "statusBar")).toBe(
       true,
@@ -682,6 +688,8 @@ describe("chat.thread@1", () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.frame).toBe("phone");
+      expect(parsed.data.statusBar).toBe(true);
+      expect(parsed.data.keyboard).toBe(true);
     }
     for (const frame of ["phone", "laptop", "desktop", "none"]) {
       expect(chatThreadInputSchema.safeParse({ frame, messages: [{ body: "a" }] }).success).toBe(

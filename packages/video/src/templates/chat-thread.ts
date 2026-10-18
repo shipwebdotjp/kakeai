@@ -159,7 +159,7 @@ export function renderChatThread(input: unknown, context: RenderContext): Render
 
   const showStatus = frame === "phone" && statusBar !== false;
   const statusHtml = showStatus ? statusBarHtml("kakeai-chatstatus", statusTime) : "";
-  const showKeyboard = frame === "laptop" && keyboard === true;
+  const showKeyboard = frame === "laptop" && keyboard !== false;
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""

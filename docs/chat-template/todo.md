@@ -51,8 +51,8 @@
 ## Phase 7 — 端末クロームの共通化
 
 - [x] ステータスバーとキーボードベースを `device-chrome` に切り出し、`chat.thread@1` と `scene.device-frame@1` で共有
-- [x] `scene.device-frame@1` に `statusBar?`（phone）・`keyboard?`（laptop）を追加（既定オフ・ADR-0061）
-- [x] `chat.thread@1` に `keyboard?`（laptop）を追加（既定オフ）
+- [x] `scene.device-frame@1` に `statusBar?`（phone）・`keyboard?`（laptop）を追加（既定オン・ADR-0071）
+- [x] `chat.thread@1` に `keyboard?`（laptop）を追加（既定オン）
 - [x] ステータスバー/キーボードのCSSをコンテナ相対（`--kakeai-status-u`）へ統一
 - [x] 契約・描画テスト、`spec.md`・`composite-visuals/spec.md`・`content-schema.md`・ユーザーガイドを更新
 

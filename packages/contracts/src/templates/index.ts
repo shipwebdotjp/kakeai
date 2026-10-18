@@ -296,8 +296,8 @@ export const deviceFrameInputSchema = z.strictObject({
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
   animation: animationSpecSchema.optional(),
-  statusBar: z.boolean().default(false),
-  keyboard: z.boolean().default(false),
+  statusBar: z.boolean().default(true),
+  keyboard: z.boolean().default(true),
 });
 
 const DEVICE_FRAME_FIELDS: readonly TemplateFieldSpec[] = [
@@ -1283,7 +1283,7 @@ export const chatThreadInputSchema = z
     frame: chatFrameSchema.default("phone"),
     statusBar: z.boolean().default(true),
     statusTime: z.string().optional(),
-    keyboard: z.boolean().default(false),
+    keyboard: z.boolean().default(true),
     messages: chatMessagesSchema,
     effects: chatEffectsSchema.optional(),
   })

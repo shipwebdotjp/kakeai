@@ -19,7 +19,7 @@
   "frame": "phone",                  // phone | laptop | desktop | none（既定 phone）
   "statusBar": true,                 // 任意。frame が phone のときだけ有効（既定 true）
   "statusTime": "9:41",              // 任意。ステータスバーの時刻（既定 "9:41"、空文字で非表示）
-  "keyboard": false,                 // 任意。frame が laptop のときだけ有効（既定 false）
+  "keyboard": true,                  // 任意。frame が laptop のときだけ有効（既定 true）
   "messages": [
     {
       "name": "リン",                // 任意。表示名
@@ -86,7 +86,7 @@
   - `laptop`: 中央に 16:9 のパネル。
   - `desktop`: 中央に 21:9 のワイドなパネル（薄いベゼル、小さめの角丸）。
   - `none`: キャンバス全面。
-- `laptop` で `keyboard: true` のときだけ、画面の下にノートPCのキーボードベースを描く（画面＋ベースの全体が縦に収まるよう、画面幅を縮める）。
+- `laptop` では既定で画面の下にノートPCのキーボードベースを描く（`keyboard: false` で消せる）。画面＋ベースの全体が縦に収まるよう、画面幅を縮める。
 - パネル要素を `container-type: size` にする。内側の要素で `--kakeai-chat-u: min(1cqw, 1cqh)` を定義し、**すべての寸法（文字・余白・角丸・アイコン径・ステータスバー高さ）をこの倍数**で表す。固定pxを書かない。
 - `min(1cqw, 1cqh)` により、縦横比が変わっても短辺基準で見た目の密度が揃う（幅基準で拡大したい場合は `1cqw` に替える）。横長の枠（`laptop`・`desktop`）は高さで頭打ちになるため、縦に収まる件数はスマートフォン枠より少ない。件数上限6は短いメッセージを前提とした目安であり、長い会話はプレビューで確認する。
 - 縦方向は内蔵flexで吸収する。ヘッダは固定、メッセージ列は `flex: 1` かつ下寄せ、`overflow: hidden`。
@@ -98,7 +98,7 @@
 - 左に時刻（`statusTime`、既定 `9:41`）、中央にダイナミックアイランド（黒いピル）、右に Wi‑Fi とバッテリーの inline SVG を並べる。
 - すべて静的な装飾であり、**実時刻を読む JavaScript を持たない**。プレビューのシークと MP4 が一致する。
 - ステータスバーとキーボードベースは `scene.device-frame@1` と共通の描画（`device-chrome`）を使う。寸法はコンテナ相対（`--kakeai-status-u`）で、置かれた画面の大きさに追従する。
-- `keyboard` と `scene.device-frame@1` の `statusBar` / `keyboard` は、既存の保存済み入力を再解釈しないよう**既定オフの任意入力**とする（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。既存の `phone` / `laptop` の描画は変わらない。
+- ステータスバー（`phone`）とキーボード（`laptop`）は**既定オン**の任意入力（`.default(true)`）で、`false` を明示すると消せる。正式リリース前は見た目の変更を版の追加なしで行えるため、既存の保存済み入力の描画もこの既定に従う（[ADR-0071](../adr/0071-pre-release-appearance-changes-without-version-bump.md)）。
 
 ## レンダリング
 
@@ -126,7 +126,7 @@
 - `chat.thread@1` の会話を `card` / `overlay` の両レイヤーで保存し、プレビューでシークし、MP4をレンダーできる。
 - `frame` を `phone` / `laptop` / `desktop` / `none` に切り替えても同じ入力で表示でき、固定pxに依存しない。
 - `phone` でステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）が表示され、`laptop` / `desktop` / `none` では表示されない。
-- `laptop` で `keyboard: true` のときだけキーボードベースが表示され、画面＋ベースがキャンバスに収まる。
+- `laptop` でキーボードベースが既定で表示され、`keyboard: false` で消える。画面＋ベースがキャンバスに収まる。
 - アイコン素材の参照が `collectAssetRefs` で収集され、存在・ready が保存時に検証される。
 - 空・7件以上のメッセージを拒否し、本文の目安超過を警告で返す。
 - `effects` の `appear` が契機前のメッセージを隠し契機で表示し、`emphasize` が対象の吹き出しを強調し、`spotlight` が他のメッセージを減光する。プレビューのシークとMP4で一致する。

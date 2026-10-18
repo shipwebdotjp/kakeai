@@ -82,16 +82,13 @@ describe("renderChatThread", () => {
     expect(none.html).not.toContain("kakeai-chatstatus");
   });
 
-  it("adds a keyboard base to the laptop frame only when requested", () => {
-    const withKeyboard = renderChatThread(
-      { ...baseInput, frame: "laptop", keyboard: true },
-      context(),
-    );
-    expect(withKeyboard.html).toContain("kakeai-chatwrap-keyboard");
-    expect(withKeyboard.html).toContain("kakeai-laptopbase");
+  it("shows a keyboard base on the laptop frame by default and hides it when disabled", () => {
+    const defaultLaptop = renderChatThread({ ...baseInput, frame: "laptop" }, context());
+    expect(defaultLaptop.html).toContain("kakeai-chatwrap-keyboard");
+    expect(defaultLaptop.html).toContain("kakeai-laptopbase");
 
-    const withoutKeyboard = renderChatThread({ ...baseInput, frame: "laptop" }, context());
-    expect(withoutKeyboard.html).not.toContain("kakeai-laptopbase");
+    const off = renderChatThread({ ...baseInput, frame: "laptop", keyboard: false }, context());
+    expect(off.html).not.toContain("kakeai-laptopbase");
 
     const phoneKeyboard = renderChatThread(
       { ...baseInput, frame: "phone", keyboard: true },

@@ -26,8 +26,8 @@ export function renderDeviceFrame(
   );
   const screenId = context.scope.id("screen");
   const background = backgroundColor ?? context.theme.surfaceMuted;
-  const showStatus = frame === "phone" && statusBar === true;
-  const showKeyboard = frame === "laptop" && keyboard === true;
+  const showStatus = frame === "phone" && statusBar !== false;
+  const showKeyboard = frame === "laptop" && keyboard !== false;
   const statusHtml = showStatus ? statusBarHtml("kakeai-deviceframe-status") : "";
   const policy = DEFAULT_ANIMATION_POLICY;
   const animationItems: AnimationItem[] =
