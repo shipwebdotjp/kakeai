@@ -47,13 +47,13 @@
 
 ## [ ] P4 共通編集UI・診断・ガイド
 
-- [ ] 素材選択結果のAsset種別を使い、動画だけに共通のVideo Playback編集部品を表示する。画像・Compositionでは非表示かつ非保存とする。
-- [ ] `media` と `nestedMedia` の両方へ同じ部品を接続し、全画面、カード、device-frame、site-mockupで同じ操作を提供する。
-- [ ] Gateの追加・削除・順序変更、Narration Segment選択、source時刻、Gate Audioの編集を追加し、Cue可視窓外の候補を選べないようにする。
-- [ ] 動画→画像・Composition切替、ゲート解除、素材差し替えで無効な `videoPlayback` を残さない。
+- [x] 素材選択結果のAsset種別を使い、動画だけに共通のVideo Playback編集部品を表示する。画像・Compositionでは非表示かつ非保存とする。
+- [x] `media` と `nestedMedia` の両方へ同じ部品を接続し、全画面、カード、device-frame、site-mockupで同じ操作を提供する。
+- [~] Gateの追加・削除・順序変更、Narration Segment選択、source時刻、Gate Audioの編集を追加し、Cue可視窓外の候補を選べないようにする。（追加・削除・台詞順ソート・source時刻・Gate Audio編集は実装済み。Cue可視窓外の候補除外は未実装）
+- [x] 動画→画像・Composition切替、ゲート解除、素材差し替えで無効な `videoPlayback` を残さない。
 - [ ] Cue Mapとドラフトプレビューに、Gate・保持・音声区間の診断とジャンプ先を表示する。
-- [ ] `user-guide/docs/` に通常動画、セリフゲート再生、音声、Insert Sceneとの違い、初期版の制約を追加する。
-- [ ] UI・フォーム復元・プレビューの振る舞いテストを追加する。UI文言そのものは検証しない。
+- [x] `user-guide/docs/` に通常動画、セリフゲート再生、音声、Insert Sceneとの違い、初期版の制約を追加する。
+- [~] UI・フォーム復元・プレビューの振る舞いテストを追加する。UI文言そのものは検証しない。（フォーム復元・Line削除時のGate除去は実装済み。UI操作とプレビュー診断のテストは未実装）
 - [ ] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
 
 完了条件: video Assetを選んだ任意の編集可能なメディア配置で、利用者がゲートと音声を編集し、保存・プレビュー・MP4出力まで確認できる。

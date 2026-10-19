@@ -40,6 +40,7 @@ import {
   NESTED_MODE_MEDIA,
   NESTED_MODE_SUFFIX,
   STANDING_TEMPLATE_ID,
+  VIDEO_PLAYBACK_SUFFIX,
   compositionVersionOptions,
   createCueFormValue,
   lineIndex,
@@ -56,6 +57,7 @@ import { PRESET_LABELS, badgeNeutralClass, buttonDangerClass, buttonNeutralClass
 import { useCompositions, useTheme } from "../api/hooks";
 import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
+import { VideoPlaybackField } from "./VideoPlaybackField";
 import { DataGridField } from "./DataGridField";
 import { EffectsField } from "./EffectsField";
 import { CalloutItemsField } from "./CalloutItemsField";
@@ -611,12 +613,16 @@ function NestedScreenField({
   setField,
   setFields,
   getFields,
+  lines,
+  speakers,
 }: {
   field: Extract<TemplateFieldSpec, { kind: "nestedMedia" }>;
   values: Record<string, string>;
   setField: (key: string, value: string) => void;
   setFields: (values: Record<string, string>) => void;
   getFields: () => Record<string, string>;
+  lines: LineFormValue[];
+  speakers: SpeakerFormValue[];
 }) {
   const mode = values[`${field.key}${NESTED_MODE_SUFFIX}`] ?? NESTED_MODE_MEDIA;
   const isComposition = mode === NESTED_MODE_COMPOSITION;
@@ -678,7 +684,7 @@ function NestedScreenField({
             label={field.label}
             kinds={field.assetKinds}
             selectedAssetId={(values[field.key] ?? "").length > 0 ? (values[field.key] ?? "") : null}
-            onSelect={(assetId) => setField(field.key, assetId ?? "")}
+            onSelect={videoAssetSelectHandler(field.key, values[field.key] ?? "", setField, setFields)}
           />
           <label className="my-2 inline-flex items-center gap-1.5">
             表示方法
@@ -691,6 +697,13 @@ function NestedScreenField({
               <option value="contain">全体を収める</option>
             </select>
           </label>
+          <CueVideoPlaybackField
+            field={field}
+            values={values}
+            setField={setField}
+            lines={lines}
+            speakers={speakers}
+          />
         </div>
       )}
     </div>
@@ -725,6 +738,53 @@ function messageTargetLabels(values: Record<string, string>): string[] | undefin
   }
 }
 
+function videoAssetSelectHandler(
+  fieldKey: string,
+  current: string,
+  setField: (key: string, value: string) => void,
+  setFields: (patch: Record<string, string>) => void,
+): (assetId: string | null) => void {
+  return (assetId) => {
+    const next = assetId ?? "";
+    if (next !== current) {
+      setFields({ [fieldKey]: next, [`${fieldKey}${VIDEO_PLAYBACK_SUFFIX}`]: "" });
+    } else {
+      setField(fieldKey, next);
+    }
+  };
+}
+
+function CueVideoPlaybackField({
+  field,
+  values,
+  setField,
+  lines,
+  speakers,
+}: {
+  field: TemplateFieldSpec;
+  values: Record<string, string>;
+  setField: (key: string, value: string) => void;
+  lines: LineFormValue[];
+  speakers: SpeakerFormValue[];
+}) {
+  if (
+    (field.kind !== "media" && field.kind !== "nestedMedia") ||
+    field.videoPlayback !== true ||
+    (values[field.key] ?? "").length === 0
+  ) {
+    return null;
+  }
+  return (
+    <VideoPlaybackField
+      assetId={values[field.key] ?? ""}
+      value={values[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] ?? ""}
+      onChange={(next) => setField(`${field.key}${VIDEO_PLAYBACK_SUFFIX}`, next)}
+      lines={lines}
+      speakers={speakers}
+    />
+  );
+}
+
 function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
@@ -746,7 +806,14 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             label={field.label}
             kinds={field.assetKinds}
             selectedAssetId={value.length > 0 ? value : null}
-            onSelect={(assetId) => setField(field.key, assetId ?? "")}
+            onSelect={videoAssetSelectHandler(field.key, value, setField, setFields)}
+          />
+          <CueVideoPlaybackField
+            field={field}
+            values={values}
+            setField={setField}
+            lines={lines}
+            speakers={speakers}
           />
         </div>
       );
@@ -759,6 +826,8 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             setField={setField}
             setFields={setFields}
             getFields={getFields}
+            lines={lines}
+            speakers={speakers}
           />
         );
       }
@@ -768,7 +837,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             label={field.label}
             kinds={field.assetKinds}
             selectedAssetId={value.length > 0 ? value : null}
-            onSelect={(assetId) => setField(field.key, assetId ?? "")}
+            onSelect={videoAssetSelectHandler(field.key, value, setField, setFields)}
           />
           <label className="my-2 inline-flex items-center gap-1.5">
             表示方法
@@ -781,6 +850,13 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
               <option value="contain">全体を収める</option>
             </select>
           </label>
+          <CueVideoPlaybackField
+            field={field}
+            values={values}
+            setField={setField}
+            lines={lines}
+            speakers={speakers}
+          />
         </div>
       );
     case "mediaCrop": {

@@ -31,6 +31,7 @@ import {
   statEffectsSchema,
   tableDataSchema,
   tableEffectsSchema,
+  videoPlaybackSchema,
   type AnimationPreset,
   type AudioCueRole,
   type Character,
@@ -49,6 +50,7 @@ import {
   type VisualTemplateDefinition,
   type CanvasProfile,
   type Composition,
+  type VideoPlayback,
 } from "@kakeai/contracts";
 
 export function compositionVersionOptions(
@@ -233,6 +235,29 @@ export const NESTED_COMPOSITION_POS_X_SUFFIX = "__compposx";
 export const NESTED_COMPOSITION_POS_Y_SUFFIX = "__compposy";
 export const NESTED_MODE_MEDIA = "media";
 export const NESTED_MODE_COMPOSITION = "composition";
+
+export const VIDEO_PLAYBACK_SUFFIX = "__videoPlayback";
+
+/** フォーム内部フィールドの文字列から VideoPlayback を復元する。無効・不正なら null。 */
+export function parseVideoPlayback(raw: string | undefined): VideoPlayback | null {
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return null;
+  }
+  try {
+    const parsed = videoPlaybackSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** VideoPlayback をフォーム内部フィールドの文字列へ直列化する。null は空文字。 */
+export function serializeVideoPlayback(playback: VideoPlayback | null | undefined): string {
+  if (playback === null || playback === undefined) {
+    return "";
+  }
+  return JSON.stringify(playback);
+}
 
 function readInputObject(cue: VisualCue | null): Record<string, unknown> {
   if (cue === null || typeof cue.input !== "object" || cue.input === null) {
@@ -498,6 +523,11 @@ function readCueFields(
     switch (field.kind) {
       case "media":
         result[field.key] = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
+        if (field.videoPlayback === true) {
+          result[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = serializeVideoPlayback(
+            input.videoPlayback as VideoPlayback | undefined,
+          );
+        }
         break;
       case "nestedMedia": {
         const value = input[field.key];
@@ -542,6 +572,11 @@ function readCueFields(
         result[field.key] = typeof media?.assetId === "string" ? media.assetId : "";
         result[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] = media?.fit === "contain" ? "contain" : "cover";
         result[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_MEDIA;
+        if (field.videoPlayback === true) {
+          result[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = serializeVideoPlayback(
+            (media as unknown as { videoPlayback?: VideoPlayback } | null)?.videoPlayback,
+          );
+        }
         break;
       }
       case "mediaCrop": {
@@ -969,8 +1004,19 @@ function buildCueInput(
       case "media":
         if (raw.length === 0) {
           hasMedia = false;
+          if (field.videoPlayback === true) {
+            delete input.videoPlayback;
+          }
         } else {
           input[field.key] = raw;
+          if (field.videoPlayback === true) {
+            const playback = parseVideoPlayback(cue.fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`]);
+            if (playback === null) {
+              delete input.videoPlayback;
+            } else {
+              input.videoPlayback = playback;
+            }
+          }
         }
         break;
       case "nestedMedia": {
@@ -1028,7 +1074,14 @@ function buildCueInput(
           }
         } else {
           const fit = cue.fields[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] === "contain" ? "contain" : "cover";
-          input[field.key] = { kind: "media", assetId: raw, fit };
+          const node: Record<string, unknown> = { kind: "media", assetId: raw, fit };
+          if (field.videoPlayback === true) {
+            const playback = parseVideoPlayback(cue.fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`]);
+            if (playback !== null) {
+              node.videoPlayback = playback;
+            }
+          }
+          input[field.key] = node;
         }
         break;
       }
@@ -1716,12 +1769,21 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         fields[field.key] = "";
         fields[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] = "cover";
         fields[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_MEDIA;
+        if (field.videoPlayback === true) {
+          fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = "";
+        }
         if (field.allowComposition) {
           fields[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] = "";
           fields[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] = "contain";
           fields[`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`] = "";
           fields[`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`] = "";
           fields[`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`] = "";
+        }
+        break;
+      case "media":
+        fields[field.key] = "";
+        if (field.videoPlayback === true) {
+          fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = "";
         }
         break;
       case "mediaCrop":
@@ -2149,6 +2211,39 @@ export function normalizeLineRangeCues(scene: SceneFormValue): SceneFormValue {
   return { ...scene, cues };
 }
 
+function pruneVideoPlaybackFields(
+  templateId: string,
+  templateVersion: number,
+  fields: Record<string, string>,
+  isRemoved: (lineId: string) => boolean,
+): Record<string, string> {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  const gated = (definition?.inputFields ?? []).filter(
+    (field) =>
+      (field.kind === "media" || field.kind === "nestedMedia") && field.videoPlayback === true,
+  );
+  if (gated.length === 0) {
+    return fields;
+  }
+  let next = fields;
+  for (const field of gated) {
+    const key = `${field.key}${VIDEO_PLAYBACK_SUFFIX}`;
+    const playback = parseVideoPlayback(next[key]);
+    if (playback === null) {
+      continue;
+    }
+    const gates = playback.gates.filter((gate) => !isRemoved(gate.narrationSegmentId));
+    if (gates.length === playback.gates.length) {
+      continue;
+    }
+    if (next === fields) {
+      next = { ...fields };
+    }
+    next[key] = gates.length === 0 ? "" : serializeVideoPlayback({ ...playback, gates });
+  }
+  return next;
+}
+
 export function removeLineInScene(scene: SceneFormValue, lineIndex: number): SceneFormValue {
   const lines = scene.lines;
   if (lineIndex < 0 || lineIndex >= lines.length) {
@@ -2192,10 +2287,15 @@ export function removeLineInScene(scene: SceneFormValue, lineIndex: number): Sce
     lines: nextLines,
     cues: cues.map((cue) => ({
       ...cue,
-      fields: pruneCueEffectFields(
+      fields: pruneVideoPlaybackFields(
         cue.templateId,
         cue.templateVersion,
-        cue.fields,
+        pruneCueEffectFields(
+          cue.templateId,
+          cue.templateVersion,
+          cue.fields,
+          (lineId) => lineId === deletedId,
+        ),
         (lineId) => lineId === deletedId,
       ),
       baseCue: pruneCueBaseCueTriggers(

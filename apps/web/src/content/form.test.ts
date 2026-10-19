@@ -21,6 +21,7 @@ import {
   createInsertSceneFormValue,
   createPointSceneFormValue,
   newSceneId,
+  removeLineInScene,
   toFormValues,
   NESTED_COMPOSITION_FIT_SUFFIX,
   NESTED_COMPOSITION_POS_X_SUFFIX,
@@ -2313,6 +2314,85 @@ describe("compositionVersionOptions", () => {
   it("treats a legacy manifest without a profile as landscape", () => {
     const options = compositionVersionOptions([landscape], ["landscape"]);
     expect(options).toHaveLength(1);
+  });
+});
+
+describe("video playback form fields", () => {
+  function gatedScene() {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const scene = values.scenes[1]!;
+    const line = createEmptyLine(scene.id, collectLineIds(values.scenes));
+    line.captionText = "セリフ";
+    scene.lines = [line];
+    const cue = createCueFormValue({
+      sceneId: scene.id,
+      templateId: "media.full-bleed",
+      templateVersion: 1,
+      layer: "background",
+      order: 0,
+    });
+    cue.fields.assetId = "asset-video";
+    cue.fields["assetId__videoPlayback"] = JSON.stringify({
+      mode: "gated",
+      sourceEndMs: 4000,
+      gates: [
+        {
+          narrationSegmentId: line.id,
+          sourceMs: 0,
+          audio: { enabled: true, gainDb: -6, fadeInMs: 200, fadeOutMs: 200 },
+        },
+      ],
+    });
+    scene.cues = [cue];
+    return { base, values, scene, line };
+  }
+
+  it("round-trips videoPlayback through the form", () => {
+    const { base, values, line } = gatedScene();
+    const rebuilt = buildContentDocument(base, values);
+    const rebuiltScene = rebuilt.scenes[1]!;
+    expect(rebuiltScene.visualCues[0]!.input).toMatchObject({
+      assetId: "asset-video",
+      videoPlayback: {
+        mode: "gated",
+        sourceEndMs: 4000,
+        gates: [{ narrationSegmentId: line.id, sourceMs: 0 }],
+      },
+    });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+
+    const reread = toFormValues(rebuilt);
+    const rereadCue = reread.scenes[1]!.cues[0]!;
+    expect(rereadCue.fields["assetId__videoPlayback"]).toContain("\"mode\":\"gated\"");
+  });
+
+  it("omits videoPlayback when the gated field is cleared", () => {
+    const { base, values, scene } = gatedScene();
+    scene.cues[0]!.fields["assetId__videoPlayback"] = "";
+    const rebuilt = buildContentDocument(base, values);
+    expect(
+      (rebuilt.scenes[1]!.visualCues[0]!.input as { videoPlayback?: unknown }).videoPlayback,
+    ).toBeUndefined();
+  });
+
+  it("drops gates that reference a removed line", () => {
+    const { scene, line } = gatedScene();
+    const second = createEmptyLine(scene.id, collectLineIds([scene]));
+    second.captionText = "2つ目";
+    scene.lines = [line, second];
+    scene.cues[0]!.fields["assetId__videoPlayback"] = JSON.stringify({
+      mode: "gated",
+      gates: [
+        { narrationSegmentId: line.id, sourceMs: 0 },
+        { narrationSegmentId: second.id, sourceMs: 1000 },
+      ],
+    });
+
+    const pruned = removeLineInScene(scene, 1);
+    const playback = pruned.cues[0]!.fields["assetId__videoPlayback"] ?? "";
+    expect(playback).toContain(line.id);
+    expect(playback).not.toContain(second.id);
   });
 });
 
