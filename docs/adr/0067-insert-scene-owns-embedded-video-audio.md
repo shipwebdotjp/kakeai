@@ -1,5 +1,7 @@
 # インサートSceneだけが動画の埋め込み音声を自動再生する
 
+> amended by [ADR-0072](0072-video-gate-playback-as-common-media-capability.md)
+
 動画を会話の途中で見せる編集意図は、背景として無音動画を表示する意図とは別である。そのため `insert` Sceneを設け、その主動画Cueが参照するvideo Assetの埋め込み音声を既定で映像と同期して再生する。通常の `media.full-bleed` / `media.card` 動画Cueは無音のまま維持し、利用者に別Audio Assetの抽出・配置を求めない。作品全体BGMは埋め込み音声が有効なinsert Scene区間では抑制する。
 
 ## Considered Options

@@ -188,6 +188,18 @@ _Avoid_: Visual cue, track
 A media asset or a trusted template instance placed inside a Composite Visual Template's input. It carries no range, layer, or transition of its own.
 _Avoid_: Visual cue, child scene
 
+**Video Gate Playback**:
+A playback policy on a video media reference that holds the source playhead at declared source times until the corresponding Narration Segments begin.
+_Avoid_: Video template, pause button, time remapping
+
+**Video Gate**:
+One ordered correspondence between a Narration Segment start and a source-video time that the playhead cannot pass before that Segment begins.
+_Avoid_: Cue trigger, keyframe, seek target
+
+**Video Gate Audio**:
+The optional embedded-video audio policy for one source interval after a Video Gate. It is audible only while that video interval advances, never while its frame is held.
+_Avoid_: Audio Cue, Insert Scene embedded audio
+
 **Composite Visual Template**:
 A trusted Visual Template that composes Nested Visuals into a layout with its own internal animation, and can be placed as a background or card.
 _Avoid_: Composition HTML, scene

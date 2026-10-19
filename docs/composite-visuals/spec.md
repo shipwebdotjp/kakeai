@@ -48,12 +48,13 @@
 
 ```jsonc
 NestedVisual =
-  | { "kind": "media", "assetId": "...", "fit"?: "cover" | "contain", "focalPoint"?: { "x": 0.5, "y": 0.5 } }
+  | { "kind": "media", "assetId": "...", "fit"?: "cover" | "contain", "focalPoint"?: { "x": 0.5, "y": 0.5 }, "videoPlayback"?: VideoPlayback }
   | { "kind": "template", "template": { "id": "...", "version": 1 }, "input": {} }
   | { "kind": "composition", "compositionVersionId": "...", "fit": "contain" | "cover", "zoom"?: 0.5..3, "position"?: { "x": 0..1, "y": 0..1 } }
 ```
 
 - `kind: "composition"` はpublish済み `CompositionVersion` を親テンプレート内のslotに埋め込む（[../composition-library/spec.md](../composition-library/spec.md)）。`compositionVersionId` はAssetではなくCompositionVersionを参照する。`fit` は必須、`zoom`（0.5〜3、省略時等倍）と `position`（省略時中央）は任意。素材参照は持たない。
+- `kind: "media"` がvideo Assetを参照するときだけ、任意の `videoPlayback` を持てる。これはNested Visual固有のrangeやtransitionではなく、参照videoの共通再生規則である。Video Gate Playbackの契約は [../video-gate-playback/spec.md](../video-gate-playback/spec.md) を正とする。
 
 - 再帰はテンプレートの `input` 内だけに閉じる。
 - 深さ8・総ノード数64を上限とする。子Visualのテンプレート存在・入力・素材参照はDocumentの再帰walkerで検証する。
@@ -70,8 +71,8 @@ NestedVisual =
 | VisualTemplate | layer | 入力 | 状態 |
 | --- | --- | --- | --- |
 | `text.block@1` | overlay | text, role, 配置, font, decoration ほか | 対応（inputFieldsで編集） |
-| `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom?, loop? | 対応 |
-| `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom?, loop? | 対応 |
+| `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
+| `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
 | `character.standing@1` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体）。Face Set を持つ外観の表情合成（台詞区間ごと）は [../face-expression/spec.md](../face-expression/spec.md) |
 | `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor?, animation?, statusBar?, keyboard? | 対応（複合ビジュアル、画面の登場アニメーション。screen は素材または `kind: "composition"`） |
 
@@ -83,8 +84,8 @@ NestedVisual =
 
 ```ts
 type TemplateFieldSpec =
-  | { kind: "media"; key; label; assetKinds }        // トップレベルの assetId
-  | { kind: "nestedMedia"; key; label; assetKinds; allowComposition? }  // NestedVisual を media または composition として編集
+  | { kind: "media"; key; label; assetKinds; videoPlayback? }        // トップレベルの assetId
+  | { kind: "nestedMedia"; key; label; assetKinds; allowComposition?; videoPlayback? }  // NestedVisual を media または composition として編集
   | { kind: "text"; key; label }
   | { kind: "optionalText"; key; label }             // 空なら key を削除
   | { kind: "select"; key; label; options }
@@ -95,6 +96,7 @@ type TemplateFieldSpec =
 
 - `inputFields` を持つテンプレートは編集可能、持たないテンプレートは読み取り専用で非破壊に保持する。
 - `nestedMedia` は、既存の `input` が `media` 以外（入れ子テンプレート）の場合は元の値を保持し、`media` のときだけ素材の解除でCueを消す。
+- `videoPlayback: true` のmedia／nestedMediaは、選択Assetがreadyなvideoで確定尺を持つときだけ、共通のVideo Playback編集部品を表示する。詳細は [../video-gate-playback/spec.md](../video-gate-playback/spec.md) を正とする。
 - `collectAssetRefs` はテンプレート定義に集約し、`inputFields` とは独立して素材参照を走査する。
 
 ## アニメーションpreset

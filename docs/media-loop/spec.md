@@ -7,6 +7,7 @@
 - 対象は `media.full-bleed@1` と `media.card@1` の動画Cueだけとする。`scene.device-frame`・`scene.site-mockup` などの `nestedMedia`、画像素材、`composition.full-bleed` は対象外。
 - ループは**明示指定**（`loop: true`）のときだけ効く。既定は無効。
 - 動画素材が可視窓より短いときだけ意味を持つ。素材が窓以上に長い場合は従来どおり窓尺でトリムし、ループしない。
+- Video Gate Playbackとは併用しない。Gateはsource時刻を一方向に進める上限であり、loopとの意味を混ぜない（[../video-gate-playback/spec.md](../video-gate-playback/spec.md)）。
 - 契約は任意フィールドの追加であり、再解釈を伴わないため同じ `@1` で行う（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
 
 ## データ

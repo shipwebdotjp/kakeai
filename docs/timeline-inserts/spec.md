@@ -16,7 +16,7 @@
 
 - Narration Segmentは発話と字幕の単位であり、汎用音源を挿入するための代用品にはしない。
 - `AudioCue` は明示的な音声配置、インサートSceneの動画埋め込み音声は動画Assetから導出する音声配置である。後者のために利用者へ別Audio Assetの抽出・アップロードを要求しない。
-- 通常の `media.full-bleed@1` / `media.card@1` の動画Cueは、従来どおり無音である。動画の埋め込み音声を自動再生するのはインサートSceneだけとし、既存の背景動画やカード動画の意味を変えない。
+- 通常の `media.full-bleed@1` / `media.card@1` の動画Cueは、従来どおり無音である。動画の埋め込み音声を**自動**再生するのはインサートSceneだけとし、既存の背景動画やカード動画の意味を変えない。例外として、利用者がVideo Gate PlaybackのGate区間Audioを明示設定した動画だけは、その再生区間で音声を出せる（[../video-gate-playback/spec.md](../video-gate-playback/spec.md)）。
 - プレビューとレンダーは同じ解決タイムラインと同じ音声ミックス規則を使う。
 
 ## R1: セリフ前の間 (`gapBeforeMs`)

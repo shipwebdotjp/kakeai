@@ -24,7 +24,7 @@
 ### 音声・ミックス
 
 - `AudioCue` の任意オフセット、個別フェード、個別ダッキング、波形編集（spec: 非目標）。R2でも明示的に持たない。
-- 通常の `media.full-bleed` / `media.card` 動画への埋め込み音声自動適用（spec: 非目標、ADR-0067）。ミュート維持。
+- 通常の `media.full-bleed` / `media.card` 動画への埋め込み音声**自動**適用（spec: 非目標、ADR-0067）。ミュート維持。ただし明示的なGate区間Audioは [../video-gate-playback/spec.md](../video-gate-playback/spec.md) で別機能として定める。
 - 作品全体BGMの抑制は work範囲 `AudioCue` のみが対象。Scene範囲 `AudioCue` は埋め込み音声と重ねたまま（利用者がCueごとに調整）。
 - 埋め込み音声用の音声Renditionの明示導出はしない（ADR-0068）。レンダーエンジンが動画から抽出する。
 
