@@ -17,8 +17,8 @@
 - [x] `@kakeai/video` に、解決済みライン時刻から連続再生・保持・音声区間を導出する `VideoPlaybackPlan` と `deriveVideoPlaybackPlans()` を追加する。プレビューとレンダーはこのPlanだけを使う。
 - [x] ScriptVersion保存、ドラフトプレビュー、Render Job投入で同じ検証とPlan解決を使う。
 - [x] contracts/videoの境界テストを追加する（Gate構造、`loop`/`trim`排他、先頭Gate、早着・遅着、中間保持、source終端保持、ゼロ長保持、音声切替、crossfade延長）。
-- [ ] API境界テスト（範囲外line、source順逆転、trim/loop併用の保存・プレビュー・レンダー投入拒否）を追加する。
-- [ ] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
+- [x] API境界テスト（範囲外line、source順逆転、trim/loop併用の保存・プレビュー・レンダー投入拒否）を追加する。
+- [x] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
 
 完了条件: ゲート設定の有無で既存動画Cueの意味を変えず、無効なGate入力を保存・プレビュー・レンダー投入の全境界で拒否できる。
 
