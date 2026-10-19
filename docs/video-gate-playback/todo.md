@@ -29,7 +29,7 @@
 - [x] プレビューはPlan内の全Holdを先に抽出・キャッシュしてからHTMLを返し、Render Jobは同じPNGを `projectDir` へ事前生成する。
 - [x] 直接メディアとNested Mediaの共通rendererを通して、全画面、カード、device-frame、site-mockupで同じPlanを適用する。
 - [x] `addClipDurationMs()` がゲート動画の内部区間を延長せず、crossfade延長中も最後のplay/holdを継続する。
-- [ ] 実MP4を使う統合テスト（色の異なる素材で保持中に期待フレームが続き、保持中に動画音声が出ないこと）を追加する。
+- [~] 実MP4を使う統合テスト（色の異なる素材で保持中に期待フレームが続き、保持中に動画音声が出ないこと）を追加する。（PTS解決と正規化PNG抽出・キャッシュの実MP4統合テストは追加済み。保持区間の映像連続と無音のレンダー統合テストは未追加）
 - [ ] videoがCue途中で隠れる、Cue transition、Scene transition、複数動画Cueの重なりを確認する。
 - [ ] `npm run typecheck`、`npm test`、OCRレビュー、コミットを行う。
 
