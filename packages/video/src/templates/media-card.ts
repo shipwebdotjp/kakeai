@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "../escape";
 import type { RenderedCue, RenderContext } from "../render-context";
-import { mediaCropStyle, renderLoopVideoSegments, resolveCueMedia } from "./shared";
+import { mediaCropStyle, renderLoopVideoSegments, renderVideoPlaybackSegments, requireVideoPlaybackPlan, resolveCueMedia, assertVideoMedia } from "./shared";
 
 export function renderMediaCardMedia(
   data: MediaCardInput,
@@ -17,6 +17,22 @@ export function renderMediaCardMedia(
   const frameStyle = `aspect-ratio:${aspectRatio.replace(":", "/")};height:640px;width:auto;position:relative;${clipStyleExtra}`;
   const mediaStyle = mediaCropStyle(focalPoint, zoom);
   const id = context.scope.id("media");
+  if (data.videoPlayback !== undefined) {
+    assertVideoMedia(media, context.path);
+    const html = renderVideoPlaybackSegments({
+      idPrefix: id,
+      plan: requireVideoPlaybackPlan(context),
+      videoUrl: media.url,
+      className: "kakeai-cardmedia",
+      style: `${mediaStyle}position:absolute;inset:0;`,
+      stillResolver: context.stillResolver,
+      path: context.path,
+    });
+    return {
+      html: `<div class="${clipClassName}" style="${frameStyle}">${html}</div>`,
+      assetIds: [assetId],
+    };
+  }
   const looped =
     media.kind === "video" && data.loop === true && context.cueTiming !== undefined
       ? renderLoopVideoSegments({

@@ -17,10 +17,11 @@ import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
 import { hexToRgb } from "./theme";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
-import type { AssetResolver, FaceSetResolver } from "./resolver";
+import type { AssetResolver, FaceSetResolver, StillResolver } from "./resolver";
 import { cueScope, type RenderScope } from "./scope";
 import { seededRandom } from "./random";
 import type { RenderedCue, ExpressionTarget, RenderContext, CueTiming, LineInterval, StateInterval, RenderAnimationAction, ValueAnimation } from "./render-context";
+import { GATE_SEGMENT_ATTRIBUTE, type VideoPlaybackPlan } from "./video-playback";
 import {
   overlayToRgba,
   resolveFontFamilyCss,
@@ -33,7 +34,7 @@ import { neutralVisualSkin } from "./skins/neutral";
 import { resolveVisualSkin } from "./skins/registry";
 import type { ResolvedVisualSkin } from "./skins/types";
 import { COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE, compositionClipReachesSceneEnd, compositionCrossfadeExceedsChild, compositionTransitionOverflowMessage, cueTransitionTotalMs, resolveCueWindow, resolveTimeline, sceneTransitionOf, sceneTransitionOverflowIssue, type LinePlacement, type ResolvedTimeline } from "./timeline";
-import { focalPointStyle, gainToVolume, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
+import { focalPointStyle, gainToVolume, renderVideoPlaybackSegments, requireVideoPlaybackPlan, assertVideoMedia, resolveCueMedia, MAX_LOOP_COPIES } from "./templates/shared";
 
 export const COMPOSITION_ID = "kakeai-main";
 
@@ -45,6 +46,10 @@ export interface CompileDocumentOptions {
   themeResolver?: (id: string, version: number) => VisualThemeDefinition | undefined;
   resolvedTheme?: VisualThemeDefinition;
   resolvedSkin?: ResolvedVisualSkin;
+  /** `deriveVideoPlaybackPlans` で一度だけ導出した Plan 群。 */
+  videoPlaybackPlans?: ReadonlyMap<string, VideoPlaybackPlan>;
+  /** セリフゲート保持区間の静止フレームURL解決器。 */
+  stillResolver?: StillResolver;
 }
 
 export interface CompiledComposition {
@@ -392,6 +397,19 @@ function renderNestedMedia(node: NestedVisual & { kind: "media" }, context: Rend
   const id = context.scope.id("media");
   const fit = node.fit === "contain" ? "contain" : "cover";
   const style = `object-fit:${fit};${focalPointStyle(node.focalPoint)}`;
+  if (node.videoPlayback !== undefined) {
+    assertVideoMedia(media, context.path);
+    const html = renderVideoPlaybackSegments({
+      idPrefix: id,
+      plan: requireVideoPlaybackPlan(context),
+      videoUrl: media.url,
+      className: "kakeai-nestedmedia",
+      style,
+      stillResolver: context.stillResolver,
+      path: context.path,
+    });
+    return { html, assetIds: [node.assetId], animation: [] };
+  }
   if (media.kind === "video") {
     return {
       html: `<video id="${id}" class="kakeai-nestedmedia" src="${escapeHtmlAttribute(media.url)}" style="${style}" muted playsinline preload="auto" data-media-start="0"></video>`,
@@ -438,6 +456,8 @@ function makeContext(
   lineIntervals?: LineInterval[],
   compositionResolver?: CompositionVersionResolver,
   collectComposition?: (resolved: CompositionVersionResolved) => void,
+  videoPlaybackPlans?: ReadonlyMap<string, VideoPlaybackPlan>,
+  stillResolver?: StillResolver,
 ): RenderContext {
   const context: RenderContext = {
     document,
@@ -451,6 +471,8 @@ function makeContext(
     path,
     cueTiming,
     lineIntervals,
+    videoPlaybackPlans,
+    stillResolver,
     renderNested: (node, nestedScope, nestedPath) =>
       renderNestedVisual(
         node,
@@ -466,6 +488,8 @@ function makeContext(
           lineIntervals,
           compositionResolver,
           collectComposition,
+          videoPlaybackPlans,
+          stillResolver,
         ),
       ),
   };
@@ -1035,6 +1059,9 @@ function addClipDurationMs(html: string, extraMs: number): string {
     if (tag.includes("data-kakeai-loop-segment=") && !tag.includes("data-kakeai-loop-segment-last=")) {
       return tag;
     }
+    if (tag.includes(`${GATE_SEGMENT_ATTRIBUTE}=`)) {
+      return tag;
+    }
     return tag.replace(/data-duration="([0-9.]+)"/g, (_match, value: string) => {
       const totalMs = Math.round(Number(value) * 1000) + extraMs;
       return `data-duration="${toSecondsText(totalMs)}"`;
@@ -1166,6 +1193,8 @@ function applySceneTransitions(
 
 export function compileDocument(options: CompileDocumentOptions): CompiledComposition {
   const { document, assetResolver, compositionResolver, faceSetResolver } = options;
+  const videoPlaybackPlans = options.videoPlaybackPlans;
+  const stillResolver = options.stillResolver;
   const theme =
     options.resolvedTheme ??
     (options.themeResolver ? options.themeResolver(document.visualTheme.id, document.visualTheme.version) : undefined) ??
@@ -1278,6 +1307,8 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         lineIntervals,
         compositionResolver,
         recordComposition,
+        videoPlaybackPlans,
+        stillResolver,
       );
       if (
         scene.kind === "insert" &&

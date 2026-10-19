@@ -1,6 +1,8 @@
-import type { AssetResolver } from "../resolver";
+import type { AssetResolver, StillResolver } from "../resolver";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
+import type { RenderContext } from "../render-context";
+import { GATE_SEGMENT_ATTRIBUTE, type VideoPlaybackPlan } from "../video-playback";
 
 export const MAX_LOOP_COPIES = 1000;
 
@@ -27,6 +29,15 @@ export function resolveCueMedia(
     ]);
   }
   return { url: resolved.url, kind: resolved.kind, durationMs: resolved.durationMs ?? null };
+}
+
+/** セリフゲート再生は動画素材にだけ指定できる。 */
+export function assertVideoMedia(media: ResolvedMedia, path: (string | number)[]): void {
+  if (media.kind !== "video") {
+    throw new CompositionCompileError([
+      { path, code: "invalid_asset_kind", message: "セリフゲート再生には動画素材を指定してください。" },
+    ]);
+  }
 }
 
 export function focalPointStyle(focalPoint: { x: number; y: number } | undefined): string {
@@ -117,4 +128,78 @@ export function renderLoopVideoSegments(options: {
     );
   }
   return segments.join("");
+}
+
+/**
+ * VideoPlaybackPlan の区間列を、絶対タイミングを持つ video / 静止 img として描画する。
+ * 直接メディアと Nested Media で共通に使う。
+ */export function renderVideoPlaybackSegments(options: {
+  idPrefix: string;
+  plan: VideoPlaybackPlan;
+  videoUrl: string;
+  className: string;
+  style: string;
+  stillResolver: StillResolver | undefined;
+  path: (string | number)[];
+}): string {
+  const segments: string[] = [];
+  options.plan.segments.forEach((segment, index) => {
+    const id = escapeHtmlAttribute(`${options.idPrefix}-${index}`);
+    const start = secondsText(segment.startMs);
+    const duration = secondsText(segment.endMs - segment.startMs);
+    if (segment.kind === "hold") {
+      if (options.stillResolver === undefined) {
+        throw new CompositionCompileError([
+          {
+            path: options.path,
+            code: "missing_still_resolver",
+            message: "保持フレームの解決器が設定されていません。",
+          },
+        ]);
+      }
+      const src = escapeHtmlAttribute(options.stillResolver(options.plan.assetId, segment.sourceMs));
+      segments.push(
+        `<img id="${id}" class="${options.className}" src="${src}" style="${options.style}" alt="" data-start="${start}" data-duration="${duration}" ${GATE_SEGMENT_ATTRIBUTE}="true">`,
+      );
+      return;
+    }
+    const src = escapeHtmlAttribute(options.videoUrl);
+    const audioAttr = segment.audio === null ? " muted" : ' data-has-audio="true"';
+    const volumeAttr =
+      segment.audio === null
+        ? ""
+        : ` data-volume="${escapeHtmlAttribute(gainToVolume(segment.audio.gainDb))}"`;
+    const fadeIn =
+      segment.audio !== null && segment.audio.fadeInMs > 0
+        ? ` data-fade-in="${secondsText(segment.audio.fadeInMs)}"`
+        : "";
+    const fadeOut =
+      segment.audio !== null && segment.audio.fadeOutMs > 0
+        ? ` data-fade-out="${secondsText(segment.audio.fadeOutMs)}"`
+        : "";
+    segments.push(
+      `<video id="${id}" class="${options.className}" src="${src}" style="${options.style}"${audioAttr}${volumeAttr}${fadeIn}${fadeOut} playsinline preload="auto" data-media-start="${secondsText(segment.sourceStartMs)}" data-start="${start}" data-duration="${duration}" ${GATE_SEGMENT_ATTRIBUTE}="true"></video>`,
+    );
+  });
+  return segments.join("");
+}
+
+/**
+ * 現在の描画位置に対応する VideoPlaybackPlan を取り出す。
+ * Plan が渡されていないのに gated な素材へ到達した場合はコンパイルエラーにする。
+ */
+export function requireVideoPlaybackPlan(context: RenderContext): VideoPlaybackPlan {
+  const key = context.path.join("/");
+  const plan = context.videoPlaybackPlans?.get(key);
+  if (plan === undefined) {
+    throw new CompositionCompileError([
+      {
+        path: context.path,
+        code: "gate_plan_missing",
+        message:
+          "セリフゲート再生のPlanがありません。プレビュー/レンダーでPlanを導出して渡してください。",
+      },
+    ]);
+  }
+  return plan;
 }

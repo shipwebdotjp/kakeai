@@ -33,6 +33,7 @@ import {
 } from "../content/nested";
 import type { AssetKindName, AssetReference } from "../content/asset-reference";
 import type { LineReference } from "../content/cue-effect";
+import { videoPlaybackSchema } from "../content/video-playback";
 
 export const textAnchorSchema = z.enum(["left", "center", "right"]);
 
@@ -43,8 +44,8 @@ export interface TemplateDisplay {
 }
 
 export type TemplateFieldSpec =
-  | { kind: "media"; key: string; label: string; assetKinds: readonly AssetKindName[] }
-  | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[]; optional?: boolean; allowComposition?: boolean }
+  | { kind: "media"; key: string; label: string; assetKinds: readonly AssetKindName[]; videoPlayback?: boolean }
+  | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[]; optional?: boolean; allowComposition?: boolean; videoPlayback?: boolean }
   | { kind: "text"; key: string; label: string }
   | { kind: "optionalText"; key: string; label: string }
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
@@ -179,6 +180,7 @@ export const mediaFullBleedInputSchema = z
     loop: z.boolean().optional(),
     trimStartMs: nonNegativeInt.optional(),
     trimEndMs: nonNegativeInt.optional(),
+    videoPlayback: videoPlaybackSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -190,6 +192,16 @@ export const mediaFullBleedInputSchema = z
         code: "custom",
         message: "動画トリムは開始(ms) < 終了(ms) で指定してください",
         path: ["trimEndMs"],
+      });
+    }
+    if (
+      value.videoPlayback !== undefined &&
+      (value.loop === true || value.trimStartMs !== undefined || value.trimEndMs !== undefined)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "セリフゲート再生はループ再生・トリムと併用できません",
+        path: ["videoPlayback"],
       });
     }
   });
@@ -204,7 +216,7 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
   animationPolicy: DEFAULT_ANIMATION_POLICY,
   display: { label: "背景（全面）", description: "画像・動画を全面に敷く（動画はループ可）", category: "media" },
   inputFields: [
-    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
+    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS, videoPlayback: true },
     { kind: "select", key: "fit", label: "表示方法", options: FIT_OPTIONS },
     { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
     { kind: "number", key: "trimStartMs", label: "トリム開始(ms)", min: 0, step: 1, optional: true },
@@ -227,15 +239,26 @@ const MEDIA_CARD_ASPECT_RATIO_OPTIONS = mediaCardAspectRatioSchema.options.map(
   (value) => ({ value, label: value }),
 );
 
-export const mediaCardInputSchema = z.strictObject({
-  assetId: idSchema,
-  aspectRatio: mediaCardAspectRatioSchema.default("16:9"),
-  heading: z.string(),
-  caption: z.string().optional(),
-  focalPoint: focalPointSchema.optional(),
-  zoom: mediaZoomSchema.optional(),
-  loop: z.boolean().optional(),
-});
+export const mediaCardInputSchema = z
+  .strictObject({
+    assetId: idSchema,
+    aspectRatio: mediaCardAspectRatioSchema.default("16:9"),
+    heading: z.string(),
+    caption: z.string().optional(),
+    focalPoint: focalPointSchema.optional(),
+    zoom: mediaZoomSchema.optional(),
+    loop: z.boolean().optional(),
+    videoPlayback: videoPlaybackSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.videoPlayback !== undefined && value.loop === true) {
+      ctx.addIssue({
+        code: "custom",
+        message: "セリフゲート再生はループ再生と併用できません",
+        path: ["videoPlayback"],
+      });
+    }
+  });
 export type MediaCardInput = z.infer<typeof mediaCardInputSchema>;
 
 const mediaCardV1: VisualTemplateDefinition = {
@@ -247,7 +270,7 @@ const mediaCardV1: VisualTemplateDefinition = {
   animationPolicy: DEFAULT_ANIMATION_POLICY,
   display: { label: "カード", description: "画像・動画を見出し付きカードで表示（動画はループ可）", category: "media" },
   inputFields: [
-    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS },
+    { kind: "media", key: "assetId", label: "素材", assetKinds: MEDIA_KINDS, videoPlayback: true },
     {
       kind: "select",
       key: "aspectRatio",
@@ -301,7 +324,7 @@ export const deviceFrameInputSchema = z.strictObject({
 });
 
 const DEVICE_FRAME_FIELDS: readonly TemplateFieldSpec[] = [
-  { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS, allowComposition: true },
+  { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS, allowComposition: true, videoPlayback: true },
   { kind: "select", key: "frame", label: "フレーム", options: DEVICE_FRAME_OPTIONS },
   { kind: "color", key: "backgroundColor", label: "背景色" },
   { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
@@ -409,13 +432,13 @@ const sceneSiteMockupV1: VisualTemplateDefinition = {
   },
   inputFields: [
     { kind: "select", key: "variant", label: "種類", options: SITE_MOCKUP_VARIANT_OPTIONS },
-    { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS },
+    { kind: "nestedMedia", key: "screen", label: "画面", assetKinds: MEDIA_KINDS, videoPlayback: true },
     { kind: "select", key: "theme", label: "テーマ", options: THEME_OPTIONS, optional: true },
     { kind: "optionalText", key: "name", label: "表示名" },
     { kind: "optionalText", key: "handle", label: "ハンドル" },
     { kind: "optionalText", key: "url", label: "URL" },
     { kind: "optionalText", key: "caption", label: "本文" },
-    { kind: "nestedMedia", key: "logo", label: "ロゴ（任意）", assetKinds: MEDIA_KINDS, optional: true },
+    { kind: "nestedMedia", key: "logo", label: "ロゴ（任意）", assetKinds: MEDIA_KINDS, optional: true, videoPlayback: true },
     { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
   ],
   collectAssetRefs: (input, path, depth = 0) => {

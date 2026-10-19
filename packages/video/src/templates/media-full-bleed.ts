@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
 import type { RenderedCue, RenderContext } from "../render-context";
-import { mediaCropStyle, gainToVolume, renderLoopVideoSegments, resolveCueMedia, secondsText } from "./shared";
+import { mediaCropStyle, gainToVolume, renderLoopVideoSegments, renderVideoPlaybackSegments, requireVideoPlaybackPlan, resolveCueMedia, secondsText, assertVideoMedia } from "./shared";
 
 export function renderMediaFullBleed(
   input: unknown,
@@ -22,6 +22,19 @@ export function renderMediaFullBleed(
   const src = escapeHtmlAttribute(media.url);
   const id = context.scope.id("media");
   const style = `object-fit:${fit};${mediaCropStyle(focalPoint, zoom)}`;
+  if (data.videoPlayback !== undefined) {
+    assertVideoMedia(media, context.path);
+    const html = renderVideoPlaybackSegments({
+      idPrefix: id,
+      plan: requireVideoPlaybackPlan(context),
+      videoUrl: media.url,
+      className: "kakeai-fullbleed",
+      style,
+      stillResolver: context.stillResolver,
+      path: context.path,
+    });
+    return { html, assetIds: [assetId], animation: [] };
+  }
   if (media.kind === "video") {
     const sourceDurationMs = media.durationMs;
     const trimStartMs = data.trimStartMs ?? 0;

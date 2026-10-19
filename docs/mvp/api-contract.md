@@ -100,6 +100,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | PATCH | /assets/:assetId | 200 | タグ・お気に入り・アーカイブを更新 |
 | GET | /assets/:assetId/content | 200 / 206 | 素材ファイルを配信 |
 | GET | /assets/:assetId/render-content | 200 / 206 | readyなrender Renditionを配信 |
+| GET | /assets/:assetId/frame | 200 | セリフゲート保持用の静止フレームPNGを配信 |
 | DELETE | /assets/:assetId | 204 | 未参照の素材を明示削除 |
 | GET | /compositions | 200 | Composition Libraryの一覧を取得 |
 | POST | /compositions | 201 | Compositionとactive draftを作成（AI authoring。任意の `authoringStyle` でStyle Kitをseed） |
@@ -413,6 +414,8 @@ GET /assets は作成日時の降順でAsset配列を返す。任意の kind=ima
 ~~~
 
 GET /assets/:assetId は同じ1件のAsset DTOを返す。GET /assets/:assetId/content は原本を検出済みのMIME typeで返し、動画・音声の確認に必要なHTTP Range requestをサポートする。GET /assets/:assetId/render-content は、正規化Renditionがあればそれを、無ければ原本を返す。正常な部分応答は206 Partial Contentとする。両エンドポイントはメディアセッションCookieで認可されるため、`<img>`、`<audio>`、`<video>` の通常の読み込みとシークで利用できる。Compositionで使うURLは後者であり、原本をそのまま使える場合も同じURLから原本が返る。
+
+GET /assets/:assetId/frame はセリフゲート動画再生の保持区間に使う静止フレームPNGを返す。`ms` は0以上の整数で、readyなvideoの確定尺内に限る。Renditionの実フレームから `ms` 以下で最後のPTSを選び、`renditionSha256 + 解決PTS + extractorVersion` をキーに正規化したPNGをキャッシュして配信する。未ready・非video・尺超過・未指定の `ms` は422 `VALIDATION_ERROR` または `ASSET_UNAVAILABLE` とする。正本JSON・DTO・Job snapshotにはフレーム番号やローカルパスを保存しない。
 
 ### タグとメタデータの更新
 

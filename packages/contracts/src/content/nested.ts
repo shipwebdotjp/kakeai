@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema, positiveInt } from "./primitives";
+import { videoPlaybackSchema } from "./video-playback";
 
 export const MAX_NESTED_VISUAL_DEPTH = 8;
 export const MAX_NESTED_VISUAL_NODES = 64;
@@ -26,6 +27,7 @@ export const nestedMediaVisualSchema = z.strictObject({
   assetId: idSchema,
   fit: fitSchema.optional(),
   focalPoint: focalPointSchema.optional(),
+  videoPlayback: videoPlaybackSchema.optional(),
 });
 
 export const nestedTemplateVisualSchema = z.strictObject({

@@ -6,10 +6,11 @@ import type {
   OnsetPreset,
   VisualThemeDefinition,
 } from "@kakeai/contracts";
-import type { AssetResolver, FaceSetResolver } from "./resolver";
+import type { AssetResolver, FaceSetResolver, StillResolver } from "./resolver";
 import type { CompositionVersionResolved, CompositionVersionResolver } from "./composition-resolver";
 import type { RenderScope } from "./scope";
 import type { ResolvedVisualSkin } from "./skins/types";
+import type { VideoPlaybackPlan } from "./video-playback";
 
 export type RenderAnimationAction = FigureAction | OnsetPreset;
 
@@ -90,5 +91,7 @@ export interface RenderContext {
   lineIntervals?: LineInterval[];
   embeddedAudio?: boolean;
   embeddedAudioGainDb?: number;
+  videoPlaybackPlans?: ReadonlyMap<string, VideoPlaybackPlan>;
+  stillResolver?: StillResolver;
   renderNested: (node: NestedVisual, scope: RenderScope, path: (string | number)[]) => RenderedCue;
 }

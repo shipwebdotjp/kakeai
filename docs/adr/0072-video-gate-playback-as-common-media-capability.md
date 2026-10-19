@@ -1,5 +1,7 @@
 # セリフゲート動画再生を共通メディア能力として扱う
 
+> amended by [ADR-0073](./0073-normalize-gate-still-frames-as-derived-png.md): 先頭・途中・末尾の全ての保持を、source rendition 由来の派生PNG（`<img>`）として統一する。
+
 動画をセリフに合わせて保持・通過させる編集意図は、全画面・カード・端末枠などのレイアウトとは独立している。そのため、専用VisualTemplateや親テンプレートごとの再生フラグではなく、直接メディア入力と `NestedVisual.kind = "media"` が共有するVideo Gate Playbackとして保存・解決する。GateはNarration Segment開始までsource時刻を通過させない一方向の上限とし、動画が遅いときにシーク・加速しない。
 
 ## Considered Options

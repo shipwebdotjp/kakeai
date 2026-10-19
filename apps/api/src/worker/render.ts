@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { createRenderJob, executeRenderJob } from "@hyperframes/producer";
 import {
   compileDocument,
+  collectStillFrameRequests,
+  deriveVideoPlaybackPlans,
   resolveVisualSkin,
   type CompiledComposition,
   type ResolvedAssetKind,
@@ -19,6 +21,11 @@ import type { Job, PrismaClient } from "../generated/prisma/client.ts";
 import { bigIntToSafeNumber } from "../dto/mappers.ts";
 import { logger } from "../logger.ts";
 import { probeMedia } from "../media/probe.ts";
+import {
+  extractStillFramePng,
+  resolveStillFramePtsMs,
+  stillFrameCacheFileName,
+} from "../media/still-frame.ts";
 import {
   commitFile,
   hashFile,
@@ -82,6 +89,7 @@ interface ResolvedSnapshotAsset {
   filePath: string;
   fileName: string;
   durationMs: number | null;
+  sha256: string;
 }
 
 async function resolveSnapshotAssets(
@@ -141,6 +149,7 @@ async function resolveSnapshotAssets(
       filePath,
       fileName: `${asset.assetId}.${extensionForMediaType(asset.mediaType)}`,
       durationMs: asset.durationMs,
+      sha256: asset.sha256,
     });
   }
   return resolved;
@@ -194,6 +203,7 @@ export async function processRenderJob(
     }
 
     const fileById = new Map(assets.map((asset) => [asset.assetId, asset.fileName]));
+    const assetById = new Map(assets.map((asset) => [asset.assetId, asset]));
     const skinRef =
       snapshot.skin ??
       (snapshot.themeDefinition === undefined
@@ -201,13 +211,57 @@ export async function processRenderJob(
         : resolveVisualThemeSkin(snapshot.themeDefinition));
     let compiled: CompiledComposition;
     try {
+      const playbackPlans = deriveVideoPlaybackPlans(snapshot.content, {
+        resolveAssetDurationMs: (assetId) => assetById.get(assetId)?.durationMs ?? null,
+      });
+      const stillFileNameByKey = new Map<string, string>();
+      const extractedFileNames = new Set<string>();
+      for (const request of collectStillFrameRequests(playbackPlans.plans)) {
+        const asset = assetById.get(request.assetId);
+        if (asset === undefined) {
+          throw new RenderJobError(
+            "ASSET_UNAVAILABLE",
+            "保持フレームの素材を解決できないため、レンダーできませんでした。",
+          );
+        }
+        let ptsMs: number;
+        try {
+          ptsMs = await resolveStillFramePtsMs(
+            { filePath: asset.filePath, sha256: asset.sha256 },
+            request.sourceMs,
+          );
+        } catch {
+          throw new RenderJobError(
+            "ASSET_UNAVAILABLE",
+            `保持フレームを抽出できませんでした: ${request.assetId}@${request.sourceMs}ms`,
+          );
+        }
+        const fileName = stillFrameCacheFileName(asset.sha256, ptsMs);
+        if (!extractedFileNames.has(fileName)) {
+          extractedFileNames.add(fileName);
+          await extractStillFramePng(
+            { filePath: asset.filePath, sha256: asset.sha256 },
+            ptsMs,
+            join(assetsDir, fileName),
+          );
+        }
+        stillFileNameByKey.set(`${request.assetId}|${request.sourceMs}`, fileName);
+      }
       compiled = compileDocument({
         document: snapshot.content,
         resolvedTheme: snapshot.themeDefinition,
         resolvedSkin: resolveVisualSkin(skinRef),
+        videoPlaybackPlans: playbackPlans.byPath,
+        stillResolver: (assetId, sourceMs) => {
+          const fileName = stillFileNameByKey.get(`${assetId}|${sourceMs}`);
+          if (fileName === undefined) {
+            throw new RenderJobError("RENDER_FAILED", "保持フレームを解決できません。");
+          }
+          return `assets/${fileName}`;
+        },
         assetResolver: (assetId) => {
           const fileName = fileById.get(assetId);
-          const asset = assets.find((entry) => entry.assetId === assetId);
+          const asset = assetById.get(assetId);
           if (
             fileName === undefined ||
             asset === undefined ||

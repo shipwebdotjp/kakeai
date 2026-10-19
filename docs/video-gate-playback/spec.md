@@ -86,6 +86,8 @@ type VideoGateAudio =
 - `enabled: true` のAudioで `fadeInMs + fadeOutMs` は、そのGateから次Gate（最後は `sourceEndMs`）までのsource区間を超えてはならない。
 - `loop`、`trimStartMs`、`trimEndMs` と `videoPlayback` は同じメディア参照で併用できない。切替時に編集UIは連続再生用の値を消去する。
 
+検証は2層に分ける。`packages/contracts` は `VideoPlayback` の構造、`loop`/`trim` 排他、`sourceMs` の昇順、Gateが同一SceneのLineを指すことだけを検証する。ready状態・video種別・確定尺・`sourceEndMs`、Cueの実効表示窓、`range: "lines"` 制約、fade尺、Insert Scene禁止はDBを読むAPI層の共有検証に置き、保存・ドラフトプレビュー・Render Job投入で同じ検証を呼ぶ。
+
 画像またはCompositionを選択したNested Visual、削除済み・未readyなAsset、Cue範囲外または順序不正なGateは保存・ドラフトプレビュー・レンダー投入時に拒否する。Audioを有効にしたvideo Assetに音声ストリームがない場合は、映像は再生し音声は出さず、既存のInsert Sceneと同じく警告を返す。
 
 ## 再生規則
@@ -97,6 +99,8 @@ Cueの実効表示窓を `[T0, T1)`、GateをNarration Segment開始時刻順に
 3. `i < n` のとき、`Gi+1` が始まる前にplayheadが `Si+1` へ到達したら、`Si+1` のフレームを保持して待つ。`Gi+1` が始まると保持を解除する。
 4. `Gi+1` が先に始まった場合、`Si+1` は既に通過可能なので、videoは停止もシークもせず等速再生を続ける。
 5. `sourceEndMs` に到達した後は、その最終フレームをCue終端 `T1` まで保持する。Cueが非表示になると映像・音声とも停止する。
+
+先頭・途中・末尾を問わず、実際に発生する保持はすべて同じ規則の静止画像クリップとして描画する。ゼロ長の保持は出力しない。`sourceEndMs` が素材尺より手前でも、指定した終端を越えて video を進めない。
 
 この規則はNarration Segmentの開始を動画の**上限ゲート**にするものであり、動画をその開始時刻へ強制シークしたり、再生速度を変えたりしない。Narration GapはNarration SegmentではないためGateにはできない。
 
@@ -114,10 +118,13 @@ Insert Sceneだけが持つ `embeddedAudio` と `embeddedAudioGainDb` は、Scen
 
 ## コンパイル、プレビュー、レンダー
 
-コンパイラは、Cueの解決済みライン開始時刻とVideo Gateから、連続再生区間・静止区間・音声区間を持つ一つの `VideoPlaybackPlan` を導出する。プレビューとレンダーは同じPlanを使う。
+コンパイラは、Cueの解決済みライン開始時刻とVideo Gateから、連続再生区間・静止区間・音声区間を持つ一つの `VideoPlaybackPlan` を導出する。プレビューとレンダー、Cue MapはこのPlanだけを使い、各所で再導出しない。
 
 - 連続再生区間は、source開始位置とタイムライン上の開始・終了を明示したvideoセグメントとして出力する。
-- 静止区間は、到達したsource時刻のデコード済みフレームを表示する。レンダリング用のCFR入力から最寄りフレームを解決するが、そのフレーム番号は派生物であり正本JSONには保存しない。
+- 静止区間は、`render-content` が返す rendition の実フレームから、基準source時刻以下で最後のPTSを選んで抽出した静止フレームPNGを表示する。抽出結果は `renditionSha256 + 解決PTS + extractorVersion` をキーにキャッシュし、フレーム番号・ローカルパスは正本JSON・DTO・Job snapshotへ保存しない。
+- プレビューは、Plan内の全Holdを先に抽出・キャッシュしてからHTMLを返す。未生成フレームを動画停止で代替したり、プレビュー途中で差し替えたりしない。`GET /assets/:assetId/frame?ms=` はメディアCookie認可を適用し、readyなvideoの確定尺内だけ許可して正規化済みPNGを配信する。
+- Render Jobは、snapshotで固定済みのAsset/Renditionから同じPNGを `projectDir` へ事前生成し、同じPlanでコンパイルする。snapshotには既にRenditionのSHAが含まれるためsnapshot schemaの版上げは不要。
+- CueがScene末尾まで届き次Sceneがcrossfadeする場合、Planはcrossfade延長後まで導出し、延長区間中も最後に有効なplayまたはholdを継続する。Scene終端の延長は映像Planの描画終端だけに加え、ゲート動画の内部play・hold・audio区間は延長しない。
 - 動画要素の実時間 `pause()` / `play()` への依存、wall clock、レンダー時だけ異なるシーク規則を持ち込まない。フレーム抽出・静止フレーム・音声フェードはPlanから決定的に導出する。
 - Render Job snapshotは通常どおり解決済み正本JSON、使用Asset/Renditionとその尺を固定する。後からAudio Takeを差し替えてライン開始時刻が変わった場合、別のScriptVersionをレンダーする。
 

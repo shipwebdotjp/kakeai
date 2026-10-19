@@ -6,7 +6,10 @@ import {
   compileDocument,
   CompositionCompileError,
   collectCompositionWindowIssues,
+  collectGatedMediaReferences,
   collectOffsetRangeWarnings,
+  collectStillFrameRequests,
+  deriveVideoPlaybackPlans,
   collectTimelineIssues,
   resolveCueWindow,
   resolveTimeline,
@@ -48,6 +51,10 @@ import { API_BASE_PATH } from "../http/security.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 import type { DataDirectories } from "../storage/paths.ts";
 import { resolveAssetContent } from "./assets.ts";
+import {
+  ensureStillFramePng,
+  stillFrameCacheDir,
+} from "../media/still-frame.ts";
 import {
   collectCompositionVersionIds,
   CompositionService,
@@ -434,6 +441,7 @@ async function validateAssetReferences(
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
   assertInsertScenes(content, assetById);
+  assertVideoPlayback(content, assetById);
   assertFaceSetReferences(content, faceSetById, assetById);
 }
 
@@ -611,6 +619,194 @@ export function assertInsertScenes(
   }
 }
 
+export function assertVideoPlayback(
+  content: ContentDocument,
+  assetById: Map<string, AssetWithRenditions>,
+): void {
+  interface GatedCue {
+    sceneIndex: number;
+    cueIndex: number;
+    refs: ReturnType<typeof collectGatedMediaReferences>;
+  }
+  const gatedCues: GatedCue[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    scene.visualCues.forEach((cue, cueIndex) => {
+      const cuePath: (string | number)[] = ["scenes", sceneIndex, "visualCues", cueIndex];
+      const refs = collectGatedMediaReferences(cue.input, cuePath);
+      if (refs.length > 0) {
+        gatedCues.push({ sceneIndex, cueIndex, refs });
+      }
+    });
+  });
+  if (gatedCues.length === 0) {
+    return;
+  }
+
+  const issues: ValidationIssue[] = [];
+  let timeline: ReturnType<typeof resolveTimeline>;
+  try {
+    timeline = resolveTimeline(content);
+  } catch (error) {
+    if (error instanceof CompositionCompileError) {
+      throw validationError(error.issues as ValidationIssue[]);
+    }
+    throw error;
+  }
+  const placementBySceneIndex = new Map(
+    timeline.scenes.map((placement) => [placement.sceneIndex, placement]),
+  );
+  for (const gated of gatedCues) {
+    const placement = placementBySceneIndex.get(gated.sceneIndex);
+    const scene = content.scenes[gated.sceneIndex];
+    const cue = scene?.visualCues[gated.cueIndex];
+    if (placement === undefined || scene === undefined || cue === undefined) {
+      continue;
+    }
+    const cuePath: (string | number)[] = [
+      "scenes",
+      gated.sceneIndex,
+      "visualCues",
+      gated.cueIndex,
+    ];
+    if (scene.kind === "insert") {
+      issues.push({
+        path: cuePath,
+        code: "invalid_value",
+        message: "インサートSceneの主動画にはセリフゲート再生を設定できません。",
+      });
+      continue;
+    }
+    const lineIndexById = new Map(scene.lines.map((line, index) => [line.id, index]));
+    const lineStartById = new Map(placement.lines.map((line) => [line.lineId, line.startMs]));
+    let window: ReturnType<typeof resolveCueWindow>;
+    try {
+      window = resolveCueWindow(placement, cue, cuePath);
+    } catch (error) {
+      if (error instanceof CompositionCompileError) {
+        throw validationError(error.issues as ValidationIssue[]);
+      }
+      throw error;
+    }
+    if (window === null) {
+      continue;
+    }
+    const windowStartMs = placement.startMs + window.startMs;
+    const windowEndMs = placement.startMs + window.endMs;
+    let rangeStartIndex = -1;
+    let rangeEndIndex = Number.POSITIVE_INFINITY;
+    if (cue.range.kind === "lines") {
+      rangeStartIndex = lineIndexById.get(cue.range.startLineId) ?? -1;
+      rangeEndIndex = lineIndexById.get(cue.range.endLineId) ?? Number.POSITIVE_INFINITY;
+    }
+    for (const ref of gated.refs) {
+      const asset = assetById.get(ref.assetId);
+      if (asset === undefined) {
+        continue;
+      }
+      if (asset.kind !== "video") {
+        issues.push({
+          path: [...ref.path, "videoPlayback"],
+          code: "invalid_type",
+          message: "セリフゲート再生は動画素材にだけ指定できます。",
+        });
+        continue;
+      }
+      const durationMs = renderSourceDurationMs(asset);
+      if (durationMs === null) {
+        issues.push({
+          path: [...ref.path, "videoPlayback"],
+          code: "invalid_value",
+          message: "尺が確定していない動画にはセリフゲート再生を設定できません。",
+        });
+        continue;
+      }
+      const sourceEndMs = ref.playback.sourceEndMs ?? durationMs;
+      if (sourceEndMs <= 0 || sourceEndMs > durationMs) {
+        issues.push({
+          path: [...ref.path, "videoPlayback", "sourceEndMs"],
+          code: "invalid_value",
+          message: "セリフゲート再生の終端は素材の尺の範囲内にしてください。",
+        });
+        continue;
+      }
+      let previousLineIndex = -1;
+      let previousStartMs = -1;
+      ref.playback.gates.forEach((gate, gateIndex) => {
+        const gatePath = [...ref.path, "videoPlayback", "gates", gateIndex];
+        if (gate.sourceMs >= sourceEndMs) {
+          issues.push({
+            path: [...gatePath, "sourceMs"],
+            code: "invalid_value",
+            message: "Gate の sourceMs は sourceEndMs より前にしてください。",
+          });
+        }
+        const lineIndex = lineIndexById.get(gate.narrationSegmentId);
+        const startMs = lineStartById.get(gate.narrationSegmentId);
+        if (lineIndex === undefined || startMs === undefined) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate の Narration Segment が親Cueと同じSceneにありません。",
+          });
+          return;
+        }
+        if (lineIndex <= previousLineIndex) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate は Scene の登録順に並べてください。",
+          });
+        }
+        if (startMs <= previousStartMs) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate の Narration Segment 開始時刻は昇順にしてください。",
+          });
+        }
+        previousLineIndex = lineIndex;
+        previousStartMs = startMs;
+        if (startMs < windowStartMs || startMs >= windowEndMs) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate の Narration Segment は親Cueの表示区間内にしてください。",
+          });
+        }
+        if (
+          cue.range.kind === "lines" &&
+          (lineIndex < rangeStartIndex || lineIndex > rangeEndIndex)
+        ) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "range: lines のCueではGateをlines範囲内にしてください。",
+          });
+        }
+        const audio = gate.audio;
+        if (audio !== undefined && audio.enabled) {
+          const nextSourceMs =
+            gateIndex + 1 < ref.playback.gates.length
+              ? (ref.playback.gates[gateIndex + 1]?.sourceMs ?? sourceEndMs)
+              : sourceEndMs;
+          const segmentMs = nextSourceMs - gate.sourceMs;
+          const fadeTotalMs = (audio.fadeInMs ?? 0) + (audio.fadeOutMs ?? 0);
+          if (fadeTotalMs > segmentMs) {
+            issues.push({
+              path: [...gatePath, "audio"],
+              code: "invalid_value",
+              message: "フェードの合計がGate区間を超えています。",
+            });
+          }
+        }
+      });
+    }
+  }
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
 export async function collectInsertWarnings(
   client: PrismaClient | Prisma.TransactionClient,
   content: ContentDocument,
@@ -745,6 +941,7 @@ export async function compilePreview(
   const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
   assertInsertScenes(content, assetById);
+  assertVideoPlayback(content, assetById);
   assertFaceSetReferences(content, faceSetById, assetById);
   if (options.strictTakeDurations === true) {
     assertTakeDurations(content, assetById);
@@ -767,9 +964,29 @@ export async function compilePreview(
   let compiled: CompiledComposition;
   let timeline: ReturnType<typeof buildPreviewTimeline>;
   try {
+    const resolveAssetDurationMs = (assetId: string): number | null => {
+      const asset = assetById.get(assetId);
+      return asset === undefined ? null : renderSourceDurationMs(asset);
+    };
+    const playbackPlans = deriveVideoPlaybackPlans(content, { resolveAssetDurationMs });
+    const stillCacheDir = stillFrameCacheDir(directories.tmp);
+    for (const request of collectStillFrameRequests(playbackPlans.plans)) {
+      if (!assetById.has(request.assetId)) {
+        continue;
+      }
+      const location = await resolveAssetContent(prisma, directories, request.assetId, true);
+      await ensureStillFramePng(
+        { filePath: location.path, sha256: location.sha256 },
+        request.sourceMs,
+        stillCacheDir,
+      );
+    }
     compiled = compileDocument({
       document: content,
       resolvedTheme,
+      videoPlaybackPlans: playbackPlans.byPath,
+      stillResolver: (assetId, sourceMs) =>
+        `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/frame?ms=${sourceMs}`,
       compositionResolver: (versionId) => {
         const found = compositionByVersionId.get(versionId);
         if (!found) {

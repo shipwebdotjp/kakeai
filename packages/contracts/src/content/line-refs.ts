@@ -1,5 +1,6 @@
 import type { ContentDocument } from "./document";
 import { getVisualTemplate } from "../templates";
+import { collectVideoPlaybackLineRefs } from "./video-playback";
 
 export interface DocumentLineReference {
   sceneId: string;
@@ -9,20 +10,28 @@ export interface DocumentLineReference {
 
 export function collectLineReferences(document: ContentDocument): DocumentLineReference[] {
   const references: DocumentLineReference[] = [];
+  const seen = new Set<string>();
+
+  const push = (sceneId: string, lineId: string, path: (string | number)[]): void => {
+    const key = `${path.join("/")}|${lineId}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    references.push({ sceneId, lineId, path });
+  };
 
   document.scenes.forEach((scene, sceneIndex) => {
     scene.visualCues.forEach((cue, cueIndex) => {
-      const definition = getVisualTemplate(cue.template.id, cue.template.version);
-      if (definition?.collectLineRefs === undefined) {
-        return;
-      }
       const basePath = ["scenes", sceneIndex, "visualCues", cueIndex, "input"];
-      for (const reference of definition.collectLineRefs(cue.input, basePath)) {
-        references.push({
-          sceneId: scene.id,
-          lineId: reference.lineId,
-          path: reference.path,
-        });
+      const definition = getVisualTemplate(cue.template.id, cue.template.version);
+      if (definition?.collectLineRefs !== undefined) {
+        for (const reference of definition.collectLineRefs(cue.input, basePath)) {
+          push(scene.id, reference.lineId, reference.path);
+        }
+      }
+      for (const reference of collectVideoPlaybackLineRefs(cue.input, basePath)) {
+        push(scene.id, reference.lineId, reference.path);
       }
     });
   });

@@ -5,6 +5,7 @@ import {
   COMPOSITION_ENGINE,
   compileDocument,
   CompositionCompileError,
+  deriveVideoPlaybackPlans,
   type ResolvedAssetKind,
 } from "@kakeai/video";
 import {
@@ -26,6 +27,7 @@ import {
   assertFaceSetReferences,
   assertInsertScenes,
   assertTakeDurations,
+  assertVideoPlayback,
   loadAllReferences,
   renderSourceDurationMs,
 } from "./script-versions.ts";
@@ -104,6 +106,7 @@ export async function createRenderJob(
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
   assertInsertScenes(content, assetById);
+  assertVideoPlayback(content, assetById);
   assertFaceSetReferences(content, faceSetById, assetById);
 
   const snapshotFaceSets: RenderJobSnapshot["faceSets"] = [...faceSetById.values()]
@@ -132,9 +135,18 @@ export async function createRenderJob(
   }
 
   try {
+    const playbackPlans = deriveVideoPlaybackPlans(content, {
+      resolveAssetDurationMs: (assetId) => {
+        const asset = assetById.get(assetId);
+        return asset === undefined ? null : renderSourceDurationMs(asset);
+      },
+    });
     compileDocument({
       document: content,
       resolvedTheme: resolvedThemeDefinition,
+      videoPlaybackPlans: playbackPlans.byPath,
+      stillResolver: (assetId, sourceMs) =>
+        `frame/${encodeURIComponent(assetId)}/${sourceMs}.png`,
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);
         const kind = asset?.kind;

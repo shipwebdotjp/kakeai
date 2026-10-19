@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream, type WriteStream } from "node:fs";
-import { rm } from "node:fs/promises";
+import { rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import Busboy from "busboy";
@@ -15,6 +15,8 @@ import { sendContent } from "../content.ts";
 import { parseBody, pathParam, validationError } from "../validation.ts";
 import * as assets from "../../services/assets.ts";
 import type { UploadInput } from "../../services/assets.ts";
+import { renderSourceDurationMs } from "../../services/script-versions.ts";
+import { ensureStillFramePng, stillFrameCacheDir } from "../../media/still-frame.ts";
 
 export interface AssetsRouterDependencies {
   prisma: PrismaClient;
@@ -204,6 +206,48 @@ export function createAssetsRouter(dependencies: AssetsRouterDependencies): Rout
     asyncHandler(async (req, res, next) => {
       const file = await assets.resolveAssetContent(prisma, directories, pathParam(req, "assetId"), true);
       sendContent(req, res, next, file);
+    }),
+  );
+
+  router.get(
+    "/assets/:assetId/frame",
+    mediaGuard,
+    asyncHandler(async (req, res, next) => {
+      const assetId = pathParam(req, "assetId");
+      const rawMs = req.query.ms;
+      const msText = Array.isArray(rawMs) ? rawMs[0] : rawMs;
+      const ms =
+        typeof msText === "string" && /^-?\d+$/.test(msText) ? Number(msText) : Number.NaN;
+      if (!Number.isInteger(ms) || ms < 0) {
+        throw validationError([
+          { path: ["ms"], code: "invalid_value", message: "ms は0以上の整数で指定してください。" },
+        ]);
+      }
+      const asset = await prisma.asset.findUnique({
+        where: { id: assetId },
+        include: { renditions: true },
+      });
+      if (asset === null || asset.kind !== "video") {
+        throw new ApiError(422, "ASSET_UNAVAILABLE", undefined, { assetIds: [assetId] });
+      }
+      const durationMs = renderSourceDurationMs(asset);
+      if (durationMs === null || ms > durationMs) {
+        throw validationError([
+          {
+            path: ["ms"],
+            code: "invalid_value",
+            message: "ms は動画の確定尺の範囲内にしてください。",
+          },
+        ]);
+      }
+      const location = await assets.resolveAssetContent(prisma, directories, assetId, true);
+      const pngPath = await ensureStillFramePng(
+        { filePath: location.path, sha256: location.sha256 },
+        ms,
+        stillFrameCacheDir(directories.tmp),
+      );
+      const info = await stat(pngPath);
+      sendContent(req, res, next, { path: pngPath, mediaType: "image/png", byteSize: info.size });
     }),
   );
 
