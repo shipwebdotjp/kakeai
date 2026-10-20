@@ -53,7 +53,7 @@
 
 ### [ ] E7 UI のフィールド編集移行
 
-- [ ] `captionText`・`speechText`・`speakerId`・`expressionId`・`gapBeforeMs` を型付き操作へ移す
+- [x] `captionText`・`speechText`・`speakerId`・`expressionId`・`gapBeforeMs` を型付き操作へ移す
 - [ ] Cue 入力と立ち絵・音声設定を操作へ移す
 - [ ] `form.ts` から文書変更のロジックを除き、入力アダプタと表示に縮小する
 - 完了条件: UI が文書を直接変更せず、操作コア経由でのみ編集する。重複した編集意味論が残っていない。

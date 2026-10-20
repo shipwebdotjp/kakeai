@@ -4,7 +4,7 @@ import type {
   Warning,
 } from "@kakeai/contracts";
 import {
-  applyScriptOperation,
+  applyScriptOperations,
   createIdGenerator,
   type ScriptAssetInfo,
   type ScriptContext,
@@ -115,13 +115,13 @@ function removeCueFromValues(
 function applyToDocument(
   document: ContentDocument,
   values: DocumentFormValues,
-  operation: ScriptOperation,
+  operations: readonly ScriptOperation[],
   assets: readonly StructuralAsset[],
 ): StructuralEditResult {
   const drafts = collectDraftCues(values, document);
-  const result = applyScriptOperation(
+  const result = applyScriptOperations(
     document,
-    operation,
+    operations,
     createScriptContext(assets),
   );
   const nextValues = toFormValues(result.document);
@@ -172,18 +172,27 @@ function applyToDocument(
   };
 }
 
+export function applyStructuralOperations(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  operations: readonly ScriptOperation[],
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult {
+  return applyToDocument(
+    buildStructuralDocument(base, values),
+    values,
+    operations,
+    assets,
+  );
+}
+
 export function applyStructuralOperation(
   base: ContentDocument,
   values: DocumentFormValues,
   operation: ScriptOperation,
   assets: readonly StructuralAsset[] = [],
 ): StructuralEditResult {
-  return applyToDocument(
-    buildStructuralDocument(base, values),
-    values,
-    operation,
-    assets,
-  );
+  return applyStructuralOperations(base, values, [operation], assets);
 }
 
 export function removeCueStructural(
@@ -224,7 +233,7 @@ export function removeCueStructural(
   return applyToDocument(
     document,
     values,
-    { op: "cue.remove", sceneId, cueId },
+    [{ op: "cue.remove", sceneId, cueId }],
     assets,
   );
 }

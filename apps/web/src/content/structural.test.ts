@@ -20,7 +20,11 @@ import {
   splitPointScene,
   toFormValues,
 } from "./form";
-import { applyStructuralOperation, removeCueStructural } from "./structural";
+import {
+  applyStructuralOperation,
+  applyStructuralOperations,
+  removeCueStructural,
+} from "./structural";
 
 function pointScene(document: ContentDocument): PointScene {
   const scene = document.scenes.find((entry) => entry.id === DEFAULT_SCENE_IDS.point1);
@@ -249,6 +253,46 @@ describe("structural operation adapter", () => {
     expect(
       result.document.scenes[1]?.visualCues.some((cue) => cue.id === draft.id),
     ).toBe(false);
+  });
+
+  it("行フィールドの変更をまとめて適用できる", () => {
+    const base = createInitialContentDocument();
+    lines(base, ["line-a"]);
+    const values = toFormValues(base);
+
+    const result = applyStructuralOperations(
+      base,
+      values,
+      [
+        {
+          op: "line.setText",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          lineId: "line-a",
+          captionText: "変更後",
+          speechText: "へんこうご",
+        },
+        {
+          op: "line.setSpeaker",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          lineId: "line-a",
+          speakerId: null,
+        },
+        {
+          op: "line.setGap",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          lineId: "line-a",
+          gapBeforeMs: 250,
+        },
+      ],
+      [],
+    );
+    expect(result.values.scenes[1]?.lines[0]).toMatchObject({
+      captionText: "変更後",
+      speechText: "へんこうご",
+      speakerId: null,
+      expressionId: null,
+      gapBeforeMs: 250,
+    });
   });
 
   it("未確定Cueは構造操作後も元の行位置に戻る", () => {

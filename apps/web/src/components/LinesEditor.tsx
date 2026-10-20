@@ -36,7 +36,10 @@ import {
   newSpeakerId,
   type GeneratedTakeSelect,
 } from "../content/form";
-import { applyStructuralOperation } from "../content/structural";
+import {
+  applyStructuralOperation,
+  applyStructuralOperations,
+} from "../content/structural";
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
 import {
@@ -83,7 +86,7 @@ function formatDuration(durationMs: number): string {
 interface LineEditorProps
   extends Omit<
     LinesEditorProps,
-    "sceneId" | "control" | "onSplitScene" | "base" | "onError" | "onWarnings"
+    "control" | "onSplitScene" | "base" | "onError" | "onWarnings"
   > {
   lineIndex: number;
   line: LineFormValue;
@@ -95,6 +98,10 @@ interface LineEditorProps
   onSplit: () => void;
   onRemove: () => void;
   onJumpToLine?: (lineId: string) => void;
+  onCommitLineFields: (
+    lineId: string,
+    operations: ScriptOperation[],
+  ) => void;
 }
 
 interface LineActionsMenuProps {
@@ -230,6 +237,7 @@ function LineEditor({
   getValues,
   setValue,
   sceneIndex,
+  sceneId,
   lineIndex,
   line,
   canMoveUp,
@@ -239,6 +247,7 @@ function LineEditor({
   onSplit,
   onRemove,
   onJumpToLine,
+  onCommitLineFields,
   speakers,
   characters,
   standings,
@@ -375,16 +384,47 @@ function LineEditor({
     }
   };
 
+  const commitExpression = (expressionId: string | null) => {
+    onCommitLineFields(line.id, [
+      {
+        op: "line.setExpression",
+        sceneId,
+        lineId: line.id,
+        expressionId,
+      },
+    ]);
+  };
+
   const onChangeCharacter = (nextId: string) => {
+    const clearExpression: ScriptOperation = {
+      op: "line.setExpression",
+      sceneId,
+      lineId: line.id,
+      expressionId: null,
+    };
     if (nextId === "") {
-      setValue(`${path}.speakerId`, null, { shouldDirty: true });
-      setValue(`${path}.expressionId`, null, { shouldDirty: true });
+      onCommitLineFields(line.id, [
+        {
+          op: "line.setSpeaker",
+          sceneId,
+          lineId: line.id,
+          speakerId: null,
+        },
+        clearExpression,
+      ]);
       return;
     }
     const existing = speakers.find((entry) => entry.characterId === nextId);
     if (existing !== undefined) {
-      setValue(`${path}.speakerId`, existing.id, { shouldDirty: true });
-      setValue(`${path}.expressionId`, null, { shouldDirty: true });
+      onCommitLineFields(line.id, [
+        {
+          op: "line.setSpeaker",
+          sceneId,
+          lineId: line.id,
+          speakerId: existing.id,
+        },
+        clearExpression,
+      ]);
       return;
     }
     const selected = characters.find((entry) => entry.id === nextId);
@@ -402,7 +442,15 @@ function LineEditor({
       ],
       { shouldDirty: true },
     );
-    setValue(`${path}.speakerId`, speakerId, { shouldDirty: true });
+    onCommitLineFields(line.id, [
+      {
+        op: "line.setSpeaker",
+        sceneId,
+        lineId: line.id,
+        speakerId,
+      },
+      clearExpression,
+    ]);
   };
 
   const onGenerate = () => {
@@ -415,7 +463,7 @@ function LineEditor({
         narrationSegmentId: line.id,
         voiceId: effectiveVoiceId.trim(),
         speedScale,
-        speechText: line.speechText,
+        speechText: getValues(`${path}.speechText`) ?? line.speechText,
       },
       {
         onSuccess: (result) => {
@@ -448,6 +496,19 @@ function LineEditor({
         (!manualVoice && voice === undefined)));
   const audioSummary = takes.length === 0 ? "音声なし" : `候補 ${takes.length}件`;
   const [audioOpen, setAudioOpen] = useStoredCollapsible(`line-audio-${line.id}`, false);
+
+  const captionPath = `${path}.captionText` as const;
+  const speechPath = `${path}.speechText` as const;
+  const gapPath = `${path}.gapBeforeMs` as const;
+  const captionFocusRef = useRef(line.captionText);
+  const speechFocusRef = useRef(line.speechText);
+  const gapFocusRef = useRef(line.gapBeforeMs);
+  const captionRegistration = register(captionPath);
+  const speechRegistration = register(speechPath);
+  const gapRegistration = register(gapPath, {
+    valueAsNumber: true,
+    min: 0,
+  });
 
   useEffect(() => {
     if (audioNeedsAttention) {
@@ -489,12 +550,46 @@ function LineEditor({
         rows={2}
         placeholder="字幕テキスト"
         className={`block w-full ${textFieldClass}`}
-        {...register(`scenes.${sceneIndex}.lines.${lineIndex}.captionText`)}
+        {...captionRegistration}
+        onFocus={(event) => {
+          captionFocusRef.current = event.target.value;
+        }}
+        onBlur={(event) => {
+          captionRegistration.onBlur?.(event);
+          if (event.target.value === captionFocusRef.current) {
+            return;
+          }
+          onCommitLineFields(line.id, [
+            {
+              op: "line.setText",
+              sceneId,
+              lineId: line.id,
+              captionText: event.target.value,
+            },
+          ]);
+        }}
       />
       <input
         placeholder="読み上げテキスト（TTS用）"
         className={`block w-full ${textFieldClass}`}
-        {...register(`scenes.${sceneIndex}.lines.${lineIndex}.speechText`)}
+        {...speechRegistration}
+        onFocus={(event) => {
+          speechFocusRef.current = event.target.value;
+        }}
+        onBlur={(event) => {
+          speechRegistration.onBlur?.(event);
+          if (event.target.value === speechFocusRef.current) {
+            return;
+          }
+          onCommitLineFields(line.id, [
+            {
+              op: "line.setText",
+              sceneId,
+              lineId: line.id,
+              speechText: event.target.value,
+            },
+          ]);
+        }}
       />
       <label className="inline-flex items-center gap-1.5 text-sm">
         このセリフの前の間（ms）
@@ -502,10 +597,37 @@ function LineEditor({
           type="number"
           min={0}
           className={`w-24 ${textFieldClass}`}
-          {...register(`scenes.${sceneIndex}.lines.${lineIndex}.gapBeforeMs`, {
-            valueAsNumber: true,
-            min: 0,
-          })}
+          {...gapRegistration}
+          onFocus={(event) => {
+            gapFocusRef.current = event.target.valueAsNumber;
+          }}
+          onBlur={(event) => {
+            gapRegistration.onBlur?.(event);
+            const parsed = event.target.valueAsNumber;
+            if (!Number.isFinite(parsed)) {
+              setValue(
+                gapPath,
+                Number.isFinite(gapFocusRef.current) ? gapFocusRef.current : 0,
+                { shouldDirty: true },
+              );
+              return;
+            }
+            const gapBeforeMs = Math.max(0, Math.floor(parsed));
+            if (gapBeforeMs !== parsed) {
+              setValue(gapPath, gapBeforeMs, { shouldDirty: true });
+            }
+            if (gapBeforeMs === gapFocusRef.current) {
+              return;
+            }
+            onCommitLineFields(line.id, [
+              {
+                op: "line.setGap",
+                sceneId,
+                lineId: line.id,
+                gapBeforeMs,
+              },
+            ]);
+          }}
         />
       </label>
       <label className="inline-flex items-center gap-1.5 text-sm">
@@ -535,7 +657,7 @@ function LineEditor({
           <button
             type="button"
             className={buttonNeutralClass}
-            onClick={() => setValue(`${path}.expressionId`, null, { shouldDirty: true })}
+            onClick={() => commitExpression(null)}
           >
             クリア
           </button>
@@ -547,9 +669,9 @@ function LineEditor({
             className={textFieldClass}
             value={line.expressionId ?? ""}
             onChange={(event) =>
-              setValue(`${path}.expressionId`, event.target.value === "" ? null : event.target.value, {
-                shouldDirty: true,
-              })
+              commitExpression(
+                event.target.value === "" ? null : event.target.value,
+              )
             }
           >
             <option value="">
@@ -794,6 +916,36 @@ export function LinesEditor({
     runStructural({ op: "line.move", sceneId, lineId: line.id, index: to });
   };
 
+  const commitLineFields = (
+    lineId: string,
+    operations: ScriptOperation[],
+  ): void => {
+    try {
+      const next = applyStructuralOperations(
+        base,
+        getValues(),
+        operations,
+        [],
+      );
+      const scene = next.values.scenes.find((entry) => entry.id === sceneId);
+      const line = scene?.lines.find((entry) => entry.id === lineId);
+      const lineIndex = getValues(`scenes.${sceneIndex}.lines`).findIndex(
+        (entry) => entry.id === lineId,
+      );
+      if (line === undefined || lineIndex === -1) {
+        onError("セリフの更新対象が見つかりません。");
+        return;
+      }
+      const path = `scenes.${sceneIndex}.lines.${lineIndex}` as const;
+      setValue(path, line, { shouldDirty: true });
+      onWarnings(next.result.warnings);
+    } catch (error) {
+      onError(
+        error instanceof Error ? error.message : "セリフの更新に失敗しました。",
+      );
+    }
+  };
+
   const duplicateLine = (lineIndex: number) => {
     const line = getValues(`scenes.${sceneIndex}.lines.${lineIndex}`);
     if (line === undefined) {
@@ -853,6 +1005,8 @@ export function LinesEditor({
             onSplit={() => onSplitScene(sceneIndex, lineIndex)}
             onRemove={() => removeLine(lineIndex)}
             onJumpToLine={onJumpToLine}
+            onCommitLineFields={commitLineFields}
+            sceneId={sceneId}
             scriptVersionId={scriptVersionId}
             speakers={speakers}
             characters={characters}
