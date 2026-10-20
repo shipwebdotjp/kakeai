@@ -11,6 +11,7 @@ import {
   MIN_STANDING_SCALE,
   STANDING_SCALE_STEP,
   STANDING_SIDES,
+  STANDING_TRANSITION_POLICY,
   appearanceDisplayName,
   emptyStandingSlots,
   type CharacterFormValue,
@@ -18,13 +19,15 @@ import {
   type StandingFormValue,
   type StandingSide,
 } from "../content/form";
-import { metaTextClass, textFieldClass } from "../ui";
+import { PRESET_LABELS, metaTextClass, textFieldClass } from "../ui";
+import { Collapsible } from "./Collapsible";
 
 interface StandingFieldsProps {
   control: Control<DocumentFormValues>;
   register: UseFormRegister<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
+  sceneId: string;
   characters: CharacterFormValue[];
 }
 
@@ -35,6 +38,7 @@ export function StandingFields({
   register,
   setValue,
   sceneIndex,
+  sceneId,
   characters,
 }: StandingFieldsProps) {
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.standings` });
@@ -69,7 +73,7 @@ export function StandingFields({
 
   return (
     <div className="mt-3 border-t border-dashed border-border pt-2">
-      <span className="text-sm font-medium">立ち絵</span>
+      <h4 className="text-sm font-semibold">立ち絵</h4>
       {characters.length === 0 && (
         <p className={metaTextClass}>
           この作品にキャラクターがありません。上の「キャラクター」から追加してください。
@@ -78,6 +82,9 @@ export function StandingFields({
       {STANDING_SIDES.map((side, index) => {
         const standing = slots[index];
         const characterId = standing?.characterId ?? null;
+        const scale = standing?.scale ?? DEFAULT_STANDING_SCALE;
+        const enterPreset = standing?.enterPreset ?? "none";
+        const exitPreset = standing?.exitPreset ?? "none";
         const character = characters.find((entry) => entry.id === characterId);
         const appearances = character?.appearances ?? [];
         return (
@@ -109,24 +116,32 @@ export function StandingFields({
                 </select>
               </label>
               {character !== undefined && (
-                <>
-                  <label className="inline-flex items-center gap-1.5">
-                    外観
-                    <select
-                      className={textFieldClass}
-                      disabled={appearances.length === 0}
-                      {...register(`scenes.${sceneIndex}.standings.${index}.appearanceId`, {
-                        setValueAs: (value) => (value === "" ? null : value),
-                      })}
-                    >
-                      <option value="">未指定</option>
-                      {appearances.map((appearance) => (
-                        <option key={appearance.id} value={appearance.id}>
-                          {appearanceDisplayName(appearance)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <label className="inline-flex items-center gap-1.5">
+                  外観
+                  <select
+                    className={textFieldClass}
+                    disabled={appearances.length === 0}
+                    {...register(`scenes.${sceneIndex}.standings.${index}.appearanceId`, {
+                      setValueAs: (value) => (value === "" ? null : value),
+                    })}
+                  >
+                    <option value="">未指定</option>
+                    {appearances.map((appearance) => (
+                      <option key={appearance.id} value={appearance.id}>
+                        {appearanceDisplayName(appearance)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            {character !== undefined && (
+              <Collapsible
+                title="表示の調整"
+                summary={`倍率 ${scale} / 入場 ${PRESET_LABELS[enterPreset] ?? enterPreset} / 退場 ${PRESET_LABELS[exitPreset] ?? exitPreset}`}
+                storageKey={`standing-${sceneId}-${side}`}
+              >
+                <div className="flex flex-wrap items-center gap-3">
                   <label className="inline-flex items-center gap-1.5">
                     倍率
                     <input
@@ -143,9 +158,71 @@ export function StandingFields({
                       })}
                     />
                   </label>
-                </>
-              )}
-            </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5">
+                    入場
+                    <select
+                      className={textFieldClass}
+                      {...register(`scenes.${sceneIndex}.standings.${index}.enterPreset`)}
+                    >
+                      {STANDING_TRANSITION_POLICY.presets.map((preset) => (
+                        <option key={preset} value={preset}>
+                          {PRESET_LABELS[preset] ?? preset}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {enterPreset !== "none" && (
+                    <label className="inline-flex items-center gap-1.5">
+                      尺
+                      <input
+                        type="number"
+                        min={0}
+                        max={STANDING_TRANSITION_POLICY.maxDurationMs}
+                        step={50}
+                        className={`w-24 ${textFieldClass}`}
+                        {...register(`scenes.${sceneIndex}.standings.${index}.enterDurationMs`, {
+                          setValueAs: (value) =>
+                            value === "" || Number.isNaN(Number(value)) ? 0 : Number(value),
+                        })}
+                      />
+                      ms
+                    </label>
+                  )}
+                  <label className="inline-flex items-center gap-1.5">
+                    退場
+                    <select
+                      className={textFieldClass}
+                      {...register(`scenes.${sceneIndex}.standings.${index}.exitPreset`)}
+                    >
+                      {STANDING_TRANSITION_POLICY.presets.map((preset) => (
+                        <option key={preset} value={preset}>
+                          {PRESET_LABELS[preset] ?? preset}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {exitPreset !== "none" && (
+                    <label className="inline-flex items-center gap-1.5">
+                      尺
+                      <input
+                        type="number"
+                        min={0}
+                        max={STANDING_TRANSITION_POLICY.maxDurationMs}
+                        step={50}
+                        className={`w-24 ${textFieldClass}`}
+                        {...register(`scenes.${sceneIndex}.standings.${index}.exitDurationMs`, {
+                          setValueAs: (value) =>
+                            value === "" || Number.isNaN(Number(value)) ? 0 : Number(value),
+                        })}
+                      />
+                      ms
+                    </label>
+                  )}
+                </div>
+              </Collapsible>
+            )}
             {character !== undefined && appearances.length === 0 && (
               <p className={metaTextClass}>
                 このキャラクターには外観がありません。ライブラリまたは「キャラクター」欄で外観を追加してください。

@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  HANDMADE_PAPER_SKIN_REF,
+  NEUTRAL_VISUAL_SKIN_REF,
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   THEME_ACCENT_TOKENS,
+  getVisualSkinDefinition,
   getVisualTheme,
+  listVisualSkinDefinitions,
   listVisualThemes,
+  resolveVisualThemeSkin,
+  toVisualThemeDefinitionV2,
   visualThemeDefinitionSchema,
   visualThemeRefSchema,
 } from "./theme";
@@ -77,5 +83,70 @@ describe("visualThemeRegistry", () => {
       accents: { ...theme.accents, primary: "#19736d" },
     };
     expect(visualThemeDefinitionSchema.safeParse(broken).success).toBe(false);
+  });
+});
+
+describe("visualSkinRegistry", () => {
+  it("ships neutral@1 as a known skin", () => {
+    const refs = listVisualSkinDefinitions().map((skin) => `${skin.id}@${skin.version}`);
+    expect(refs).toContain("neutral@1");
+    expect(getVisualSkinDefinition("neutral", 1)?.name).toBe("Neutral");
+    expect(getVisualSkinDefinition("neutral", 2)).toBeUndefined();
+  });
+
+  it("resolves a v1 theme definition to neutral@1 without rewriting it", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    expect(theme.themeDefinitionSchemaVersion).toBe(1);
+    expect(resolveVisualThemeSkin(theme)).toEqual(NEUTRAL_VISUAL_SKIN_REF);
+  });
+
+  it("requires skin on v2 theme definitions", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const withoutSkin = {
+      ...theme,
+      themeDefinitionSchemaVersion: 2,
+    };
+    expect(visualThemeDefinitionSchema.safeParse(withoutSkin).success).toBe(false);
+  });
+
+  it("accepts a v2 definition with a known skin", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const upgraded = {
+      ...theme,
+      themeDefinitionSchemaVersion: 2,
+      skin: { id: "neutral", version: 1 },
+    };
+    const parsed = visualThemeDefinitionSchema.safeParse(upgraded);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(resolveVisualThemeSkin(parsed.data)).toEqual(NEUTRAL_VISUAL_SKIN_REF);
+    }
+  });
+
+  it("rejects a v2 definition with an unknown skin", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const unknown = {
+      ...theme,
+      themeDefinitionSchemaVersion: 2,
+      skin: { id: "no-such-skin", version: 1 },
+    };
+    expect(visualThemeDefinitionSchema.safeParse(unknown).success).toBe(false);
+  });
+
+  it("ships handmade-paper@1 as a known skin and accepts it in v2", () => {
+    expect(getVisualSkinDefinition("handmade-paper", 1)?.name).toBe("Handmade Paper");
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const upgraded = toVisualThemeDefinitionV2(theme, HANDMADE_PAPER_SKIN_REF);
+    expect(upgraded.themeDefinitionSchemaVersion).toBe(2);
+    expect(upgraded.skin).toEqual(HANDMADE_PAPER_SKIN_REF);
+    expect(visualThemeDefinitionSchema.safeParse(upgraded).success).toBe(true);
+  });
+
+  it("upgrades v1 definitions to v2 with neutral by default", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const upgraded = toVisualThemeDefinitionV2(theme);
+    expect(upgraded.skin).toEqual(NEUTRAL_VISUAL_SKIN_REF);
+    const kept = toVisualThemeDefinitionV2(upgraded);
+    expect(kept).toBe(upgraded);
   });
 });

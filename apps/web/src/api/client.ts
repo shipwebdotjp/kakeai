@@ -89,10 +89,18 @@ export async function apiUpload<T>(path: string, file: File): Promise<Envelope<T
   return parseEnvelope<T>(response);
 }
 
+export function scriptSubtitlesUrl(scriptVersionId: string): string {
+  return buildApiUrl(`/script-versions/${encodeURIComponent(scriptVersionId)}/subtitles`);
+}
+
 export function renderContentUrl(assetId: string): string {
   return buildApiUrl(`/assets/${encodeURIComponent(assetId)}/render-content`);
 }
 
 export function assetContentUrl(assetId: string): string {
   return buildApiUrl(`/assets/${encodeURIComponent(assetId)}/content`);
+}
+
+export function thumbnailImageUrl(thumbnailId: string): string {
+  return buildApiUrl(`/thumbnails/${encodeURIComponent(thumbnailId)}/image`);
 }

@@ -195,18 +195,49 @@ describe("asset ingest flow", () => {
     });
     expect(created.tagsJson).toBeNull();
 
-    const updated = await assets.updateAssetTags(prisma, created.id, ["背景", "夏"]);
+    const updated = await assets.updateAsset(prisma, created.id, { tags: ["背景", "夏"] });
     expect(updated.tags).toEqual(["背景", "夏"]);
     expect((await prisma.asset.findUnique({ where: { id: created.id } }))?.tagsJson).toBe(
       JSON.stringify(["背景", "夏"]),
     );
 
-    const cleared = await assets.updateAssetTags(prisma, created.id, []);
+    const cleared = await assets.updateAsset(prisma, created.id, { tags: [] });
     expect(cleared.tags).toEqual([]);
     expect((await prisma.asset.findUnique({ where: { id: created.id } }))?.tagsJson).toBeNull();
 
-    await expect(assets.updateAssetTags(prisma, "missing", [])).rejects.toMatchObject({
+    await expect(assets.updateAsset(prisma, "missing", { tags: [] })).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
     });
+  });
+
+  it("toggles favorite and archive flags", async () => {
+    const created = await prisma.asset.create({
+      data: {
+        kind: "image",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: `assets/test-${randomUUID()}`,
+        originalFilename: "flag.png",
+        mediaType: "image/png",
+        byteSize: BigInt(10),
+        sha256: `sha-${randomUUID()}`,
+      },
+    });
+    expect(created.favoritedAt).toBeNull();
+    expect(created.archivedAt).toBeNull();
+
+    const favorited = await assets.updateAsset(prisma, created.id, { favorited: true });
+    expect(favorited.favoritedAt).not.toBeNull();
+    expect(favorited.archivedAt).toBeNull();
+
+    const archived = await assets.updateAsset(prisma, created.id, { archived: true });
+    expect(archived.favoritedAt).not.toBeNull();
+    expect(archived.archivedAt).not.toBeNull();
+
+    const restored = await assets.updateAsset(prisma, created.id, { archived: false });
+    expect(restored.archivedAt).toBeNull();
+
+    const unfavorited = await assets.updateAsset(prisma, created.id, { favorited: false });
+    expect(unfavorited.favoritedAt).toBeNull();
   });
 });

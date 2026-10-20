@@ -9,7 +9,7 @@ import {
 } from "./form";
 
 function makeLine(partial: Partial<LineFormValue> = {}): LineFormValue {
-  return { ...createEmptyLine("scene-1"), ...partial };
+  return { ...createEmptyLine("scene-1", new Set()), ...partial };
 }
 
 describe("mergeTake", () => {
@@ -52,15 +52,15 @@ describe("bulkTtsCandidateLineIds", () => {
   it("returns only point-scene lines without a selected take", () => {
     const content = createInitialContentDocument();
     content.scenes[0]!.lines = [
-      { id: "intro-line", speakerId: null, captionText: "", speechText: "x", selectedAudioTakeId: null },
+      { id: "intro-line", speakerId: null, captionText: "", speechText: "x", selectedAudioTakeId: null, expressionId: null },
     ];
     const point = content.scenes[1]!;
     point.lines = [
-      { id: "p-open", speakerId: null, captionText: "", speechText: "x", selectedAudioTakeId: null },
-      { id: "p-selected", speakerId: null, captionText: "", speechText: "y", selectedAudioTakeId: "take-1" },
+      { id: "p-open", speakerId: null, captionText: "", speechText: "x", selectedAudioTakeId: null, expressionId: null },
+      { id: "p-selected", speakerId: null, captionText: "", speechText: "y", selectedAudioTakeId: "take-1", expressionId: null },
     ];
     content.scenes[2]!.lines = [
-      { id: "outro-line", speakerId: null, captionText: "", speechText: "z", selectedAudioTakeId: null },
+      { id: "outro-line", speakerId: null, captionText: "", speechText: "z", selectedAudioTakeId: null, expressionId: null },
     ];
     expect(bulkTtsCandidateLineIds(content)).toEqual(["p-open"]);
   });

@@ -15,6 +15,7 @@ import { ensureDataDirectories } from "../storage/paths.ts";
 import { ApiError } from "../http/errors.ts";
 import { createWorker } from "../worker/index.ts";
 import * as assets from "./assets.ts";
+import * as faceSets from "./face-sets.ts";
 import * as scriptVersions from "./script-versions.ts";
 import * as works from "./works.ts";
 
@@ -146,11 +147,103 @@ describe("script version preview", () => {
     expect(preview.timeline.scenes[0]!.cues).toContainEqual({ cueId: "vc-intro-bg", startMs: 0 });
   });
 
-  it("includes a standing appearance image in the preview", async () => {
+  it("renders a character.standing@1 expression switch in the preview", async () => {
     if (!ffmpegReady) {
       return;
     }
-    const image = await readyImage();
+    const base = await readyImage();
+    const brow = await readyImage();
+    const eye = await readyImage();
+    const eyeClosed = await readyImage();
+    const mouth = await readyImage();
+    const layer = (id: string, part: "brow" | "eye" | "mouth", assetId: string) => ({
+      id,
+      part,
+      assetId,
+      blinkLayerId: null,
+      speakingLayerId: null,
+    });
+    const faceSet = await faceSets.createFaceSet(prisma, {
+      name: "プレビュー",
+      layers: [
+        layer("brow", "brow", brow.id),
+        { ...layer("eye", "eye", eye.id), blinkLayerId: "eye-closed" },
+        layer("eye-closed", "eye", eyeClosed.id),
+        layer("mouth", "mouth", mouth.id),
+      ],
+      expressions: [
+        { id: "normal", name: "通常", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
+      ],
+    });
+    const work = await works.createWork(prisma, "表情プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.speakers = [
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: null },
+    ];
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        voices: [],
+        appearances: [
+          { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
+        ],
+      },
+    ];
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-face",
+        speakerId: "speaker-rin",
+        captionText: "表情",
+        speechText: "ひょうじょう",
+        selectedAudioTakeId: null,
+        expressionId: "normal",
+      },
+    ];
+    point.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 1 },
+      range: { kind: "scene" },
+      layer: "standing",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-rin",
+        side: "left",
+        scale: 1,
+      },
+    });
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+    expect(scriptVersionPreviewSchema.safeParse(preview).success).toBe(true);
+    expect(preview.compositionHtml).toContain('class="kakeai-facegroup"');
+    for (const assetId of [base.id, brow.id, eye.id, eyeClosed.id, mouth.id]) {
+      expect(preview.compositionHtml).toContain(
+        `/api/v1/assets/${encodeURIComponent(assetId)}/render-content`,
+      );
+    }
+  });
+
+  it("includes a standing appearance image in the preview", async () => {
+    if (!ffmpegReady) {
+      return;
+    }    const image = await readyImage();
     const work = await works.createWork(prisma, "立ち絵プレビュー", "ja-JP");
     const edition = work.languageEditions[0]!;
     const content = createInitialContentDocument();
@@ -158,8 +251,9 @@ describe("script version preview", () => {
       {
         id: "character-rin",
         name: "リン",
+        voices: [],
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -177,8 +271,7 @@ describe("script version preview", () => {
       input: {
         characterId: "character-rin",
         appearanceId: "appearance-smile",
-        x: 0.85,
-        y: 0.85,
+        side: "right",
         scale: 1,
       },
     });
@@ -193,8 +286,9 @@ describe("script version preview", () => {
       saved.scriptVersion.id,
     );
 
-    expect(preview.compositionHtml).toContain('class="kakeai-standing"');
-    expect(preview.compositionHtml).toContain("left:85%;top:85%;width:480px;");
+    expect(preview.compositionHtml).toContain('class="kakeai-standingv2"');
+    expect(preview.compositionHtml).toContain("left:84.5%;top:86%;");
+    expect(preview.compositionHtml).toContain("width:480px;");
     expect(preview.compositionHtml).toContain(
       `/api/v1/assets/${encodeURIComponent(image.id)}/render-content`,
     );
@@ -226,6 +320,7 @@ describe("script version preview", () => {
         captionText: "音声つき",
         speechText: "おんせいつき",
         selectedAudioTakeId: "take-audio",
+        expressionId: null,
       },
     ];
     content.audioTakes = [
@@ -252,6 +347,99 @@ describe("script version preview", () => {
     expect(preview.compositionHtml).toContain('id="kakeai-audio-take-line-audio"');
     expect(preview.compositionHtml).toContain("kakeai-audio-cue-bgm-");
     expect(preview.assets.map((asset) => asset.assetId)).toEqual([readyAudio.id]);
+  });
+
+  it("shifts the preview line start and scene duration by the narration gap", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const audioAsset = await upload("audio.wav", join(fixturesDir, "audio.wav"));
+    await drainWorker();
+    const readyAudio = await assets.getAsset(prisma, audioAsset.asset.id);
+    expect(readyAudio.status).toBe("ready");
+    if (readyAudio.durationMs === null) {
+      throw new Error("expected audio duration");
+    }
+    const work = await works.createWork(prisma, "間プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-gap",
+        speakerId: null,
+        captionText: "間あき",
+        speechText: "まあき",
+        selectedAudioTakeId: "take-gap",
+        expressionId: null,
+        gapBeforeMs: 700,
+      },
+    ];
+    content.audioTakes = [
+      {
+        id: "take-gap",
+        narrationSegmentId: "line-gap",
+        source: "manual",
+        assetId: readyAudio.id,
+        durationMs: readyAudio.durationMs,
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+    const pointTiming = preview.timeline.scenes.find((scene) => scene.sceneId === point.id);
+    expect(pointTiming).toBeDefined();
+    expect(pointTiming!.durationMs).toBe(500 + 700 + readyAudio.durationMs + 500);
+    expect(pointTiming!.lines).toEqual([
+      { lineId: "line-gap", startMs: pointTiming!.startMs + 1200, durationMs: readyAudio.durationMs },
+    ]);
+  });
+
+  it("includes a scene audio cue with the program role in the preview", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const audioAsset = await upload("audio.wav", join(fixturesDir, "audio.wav"));
+    await drainWorker();
+    const readyAudio = await assets.getAsset(prisma, audioAsset.asset.id);
+    expect(readyAudio.status).toBe("ready");
+    const work = await works.createWork(prisma, "シーン音声プレビュー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    content.audioCues = [
+      {
+        id: "scene-program",
+        role: "program",
+        assetId: readyAudio.id,
+        range: { kind: "scene", sceneId: point.id },
+        gainDb: 0,
+        loop: false,
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const preview = await scriptVersions.getScriptVersionPreview(
+      prisma,
+      config.directories,
+      saved.scriptVersion.id,
+    );
+    expect(preview.compositionHtml).toContain('id="kakeai-audio-cue-scene-program-0"');
+    expect(preview.assets.map((asset) => asset.assetId)).toContain(readyAudio.id);
   });
 
   it("returns 404 for an unknown script version", async () => {
@@ -336,6 +524,7 @@ describe("script version preview", () => {
       captionText: "長い音声",
       speechText: "ながいおんせい",
       selectedAudioTakeId: "take-overflow",
+      expressionId: null,
     });
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
       sourceScriptVersionId: null,

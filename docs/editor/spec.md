@@ -10,7 +10,7 @@
 4. シーン間トランジション（カット／フェード／クロスフェード）。
 5. 前のSceneのまるごと複製（視覚要素と遷移。セリフ・音声は含めない）。
 
-決定は [ADR-0034](../adr/0034-destructive-changes-before-1-0.md)（開発段階の破壊的変更）、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)（スロット廃止・Cue統一）、[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)（シーン間トランジション）、[ADR-0037](../adr/0037-unified-text-template-input-contract.md)（統合テキストテンプレートの入力契約）を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md)、複合ビジュアル基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
+決定は [ADR-0034](../adr/0034-destructive-changes-before-1-0.md)（開発段階の破壊的変更）、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)（スロット廃止・Cue統一）、[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)（シーン間トランジション）、[ADR-0037](../adr/0037-unified-text-template-input-contract.md)（統合テキストテンプレートの入力契約）を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md)、複合ビジュアル基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。未保存時の退出ガード・保存時の診断表示・表示ラベルは [../editor-ux/spec.md](../editor-ux/spec.md) を正とする。
 
 非ゴール：字幕タイミングの自由編集、任意CSS/keyframeの入力、複数ユーザー・共同編集。これらは従来どおり対象外。
 
@@ -59,7 +59,7 @@ Scene の `accent`、`timing`、`lines`、`visualCues` は維持する。字幕�
 
 編集画面（`WorkEditPage`）を次の3ペインに再構成する。
 
-- **左ペイン（静的ナビゲーション）**：Scene・見出し・Cue・セリフの階層ツリー。項目をクリックすると中央ペインの該当位置へジャンプし、右ペインのプレビューを該当区間へシークする。編集内容に応じて構造だけを再生成し、静的メニューとして保つ。
+- **左ペイン（Cue対応マップ）**：Scene・セリフの順序とVisual Cueの範囲・重なりを連続して示す派生ナビゲーション。Scene、Cue、セリフを操作すると中央ペインの該当位置へジャンプし、右ペインのプレビューを該当区間へシークする。詳細は [../cue-map/spec.md](../cue-map/spec.md) を正とする。
 - **中央ペイン（編集）**：Scene編集・セリフ・Cue一覧・テキストテンプレート入力。従来のフォーム編集をここに集約する。
 - **右ペイン（プレビューとレンダー・常時表示）**：保存済み台本のHyperFrames Playerと、レンダー開始・履歴を常時表示する。左・中央の操作で状態を保ったまま更新する。
 
@@ -97,7 +97,7 @@ Scene の境界に、カット／フェードイン・フェードアウト／�
 - **検証**：共通タイムライン解決器で `D <= min(先行Scene尺, 入場Scene尺)` を検証し、はみ出す入力を保存・レンダー投入前に拒否する（`RENDER_INPUT_INVALID`）。
 - **実装**：先行Sceneのclip延長は描画時導出であり正本JSONに表れない。導出規則を解決器に一元化し、プレビューとレンダーで同一にする。
 
-本仕様確定に合わせて `schemaVersion` を `4` に上げる（[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md) と同一の破壊的変更にまとめる）。開発環境に残る v3 の保存版は削除し、移行関数は持たない（[ADR-0034](../adr/0034-destructive-changes-before-1-0.md)）。
+本仕様の破壊的変更は `schemaVersion: 1` の基準契約に含まれる（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で再基準化）。旧版の移行関数は持たない。
 
 ## シーンの複製（前のSceneのまるごと複製）
 
@@ -117,7 +117,7 @@ Scene の境界に、カット／フェードイン・フェードアウト／�
 - 常時操作ボタンは増やさず、各カードの `…` メニューに「上へ」「下へ」「このセリフの前でシーンを分割」「複製」「削除」を集約する。
 - 上・下移動ではLine ID・話者・字幕・読み・Audio Take・選択済み音声をすべて保持し、配列順だけを変える。複製はLine IDを新規発行し、Audio Takeと選択済み音声は複製しない。
 - 分割は選択したセリフを先頭に新しい `point` Sceneを元Sceneの直後へ挿入する。元Sceneは先頭側のセリフと既存Scene IDを保ち、後半のセリフはID・音声参照を保って新Sceneへ移る。新Sceneは既定の要点SceneのCue（見出し・本文）だけを持ち、背景・立ち絵などは自動コピーしない。
-- 分割時のCueは、`scene`/`offset` と分割点より前だけの `lines` を元Sceneに残し、分割点より後だけの `lines` はIDを維持して新Sceneへ移し、分割点をまたぐ `lines` は元Cueを前半へ縮めて新IDの複製を後半へ作る。
+- 分割時のCueは、`scene` と分割点より前だけの `lines` を元Sceneに残し、分割点より後だけの `lines` はIDを維持して新Sceneへ移し、分割点をまたぐ `lines` は元Cueを前半へ縮めて新IDの複製を後半へ作る。`offset` は解決タイムラインの分割点msで前半/後半に分割・移動し（後半は新ID）、タイムライン未取得の場合は元Sceneに残す。
 - Cueの「開始」「終了」セレクトはLine IDを値に、`番号. 話者名 — 字幕先頭` を表示する。開始後は終了候補を開始セリフ以降に絞り、開始を終了より後へ変えたら終了を開始へ補正する。並べ替えで逆転したLine範囲は自動で正規化する。
 
 ## 受け入れ条件

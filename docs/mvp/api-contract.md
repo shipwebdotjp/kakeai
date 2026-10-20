@@ -44,7 +44,7 @@ JSONエラーは次の形式にする。codeはUIの分岐・テストに使う�
         {
           "path": ["content", "locale"],
           "code": "invalid_value",
-          "message": "MVPで利用できる言語は ja-JP です。"
+          "message": "利用できる言語は ja-JP または en-US です。"
         }
       ]
     }
@@ -60,17 +60,22 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | --- | --- | --- |
 | WorkSummary | id, title, originalLocale, updatedAt, languageEditions | 作品一覧用。各Editionには現在の台本版と最新Render Jobの要約を含める。 |
 | Work | WorkSummaryのフィールド、createdAt, parentWorkId | 一覧と管理に使う作品名 `title` を持つ。動画内に表示するタイトルはContentDocument側のSceneスロットであり、こちらとは別である。 |
-| LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。MVPでは1 Workにつき1つのja-JP Editionだけを作る。 |
+| LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。`locale` は `ja-JP` または `en-US`。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt | contentはContentDocumentそのもの。保存後に更新しない。 |
-| Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
-| Composition | id, runtimeCompositionId, name, currentCompositionVersionId, createdAt, updatedAt | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。 |
-| CompositionVersion | id, compositionId, versionNumber, bundleSha256, manifest, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、幅、高さ、既定尺、依存一覧を持つ。bundleの内部storage keyや絶対パスは返さない。 |
+| Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, hasAudio, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。hasAudioは音声ストリームの有無（imageは常にfalse）。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
+| Composition | id, runtimeCompositionId, name, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`, `styleProvenance`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
+| CompositionVersion | id, compositionId, versionNumber, bundleHash, storageKey, manifest, styleProvenance, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、Canvas Profile、その固定寸法、既定尺、依存一覧を持つ。`canvasProfile` は `landscape`（1920×1080、既定）または `portrait`（1080×1920）で、versionごとに不変。`contentHash` は任意。`storageKey` はアプリデータルート相対の内部キーであり、参照やURL生成に使わない（絶対パスは返さない）。`styleProvenance` はauthoring元Theme/Skin/Style Kit hashとFont診断の不変記録で、`authored` / `neutral` / `legacy` の判別union（[../visual-skins/spec.md](../visual-skins/spec.md)）。 |
+| CompositionDraftFiles | entrypoint, files, binaryFiles | draftのentrypointと、bundle相対パスをキーにしたファイル内容のマップ。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列（存在する場合のみ）。seedとAIの更新内容を含む。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
-| Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
-| VoiceProfile | id, name, adapterId, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は `voicevox` または `aivisspeech`（作成後は不変）、`settings` はアダプター専用で両者とも `speakerUuid` と `defaultStyleId`。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| TtsVoice | voiceId, name, styles | 接続中エンジンの話者。`styles` は `styleId` と表示名の配列。`styleId` は 32bit 符号付き整数。 |
+| Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, videoCodec, audioCodec, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。videoCodecとaudioCodecはレンダー時のffprobe結果で、取得できない場合はnull。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
+| VoiceProfile | id, name, adapterId, voiceId, locale, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は登録済みアダプター記述子の ID（作成後は不変）、`voiceId` はアダプター定義の不透明な声 ID、`locale` は声の言語、`settings` はアダプター固有の追加分（OpenAI互換は `{ model }`）。詳細は [../tts/spec.md](../tts/spec.md)。 |
+| VoiceAdapter | id, label, defaultLocale, voiceSelection, modelSelection | 登録済み TTS アダプター記述子。`defaultLocale` は固定言語（無ければnull）、`voiceSelection` は `list` / `list-or-manual`、`modelSelection` はモデル指定の要否。 |
+| TtsVoice | voiceId, name, locale? | 接続中エンジンの声。`voiceId` はアダプター定義の不透明な ID、`locale` は任意の申告言語。 |
 | BulkTtsJobsResult | jobs, excluded | 一括TTS生成の応答。`jobs` は `narrationSegmentId` と Job DTO の組、`excluded` は `narrationSegmentId`・エラーコード・安全な理由。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| CharacterLibraryEntry | id, name, voiceProfileId, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
+| Thumbnail | id, languageEditionId, label, schemaVersion, template, input, isPrimary, createdAt, updatedAt | 言語版のサムネイル候補。`template` は `{ id, version }`、`input` はテンプレート固有のJSON。複数候補を持ち、`isPrimary` が投稿に使う1枚。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
+| ThumbnailPreview | html, width, height | 未保存のサムネイル入力をコンパイルした静止画HTML（1280x720）。DBへ書かない。 |
+| CharacterLibraryEntry | id, name, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
+| FaceSet | id, name, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。
 
@@ -80,9 +85,10 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | --- | --- | --- | --- |
 | GET | /health | 200 | APIとローカルレンダーワーカーの稼働確認 |
 | GET | /works | 200 | 作品一覧 |
-| POST | /works | 201 | Work、ja-JP Edition、ContentDocument v3の初期ScriptVersionを作成 |
+| POST | /works | 201 | Work、初期言語 Edition、ContentDocument v8の初期ScriptVersionを作成 |
 | GET | /works/:workId | 200 | 作品とEditionの取得 |
 | PATCH | /works/:workId | 200 | 管理上の作品名を変更 |
+| POST | /works/:workId/clone | 201 | 元作品の現在版を複製した新しい子Workを作成 |
 | DELETE | /works/:workId | 204 | 作品、版、Job、Artifactを明示削除 |
 | GET | /language-editions/:editionId/current-script-version | 200 | 現在の完全な台本を取得 |
 | GET | /language-editions/:editionId/script-versions | 200 | 台本版のメタデータ履歴を取得 |
@@ -91,14 +97,30 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /assets | 200 | アプリ共通素材ライブラリを取得 |
 | POST | /assets | 202 / 200 | 原本をアップロードし、素材取り込みJobを開始または既存素材を取得 |
 | GET | /assets/:assetId | 200 | 素材メタデータを取得 |
+| PATCH | /assets/:assetId | 200 | タグ・お気に入り・アーカイブを更新 |
 | GET | /assets/:assetId/content | 200 / 206 | 素材ファイルを配信 |
 | GET | /assets/:assetId/render-content | 200 / 206 | readyなrender Renditionを配信 |
+| GET | /assets/:assetId/frame | 200 | セリフゲート保持用の静止フレームPNGを配信 |
 | DELETE | /assets/:assetId | 204 | 未参照の素材を明示削除 |
 | GET | /compositions | 200 | Composition Libraryの一覧を取得 |
+| POST | /compositions | 201 | Compositionとactive draftを作成（AI authoring。任意の `authoringStyle` でStyle Kitをseed） |
+| POST | /composition-authoring-contexts | 200 | 公開Theme RevisionとCanvas Profileから非永続のComposition Authoring Contextを返す（AI authoring） |
 | GET | /compositions/:compositionId | 200 | Compositionとpublish済みversionのメタデータを取得 |
-| GET | /composition-versions/:compositionVersionId/content/*bundlePath | 200 / 206 | published bundleのentrypointまたは相対依存を配信。previewレスポンス内のURLだけを使用する |
+| GET | /compositions/:compositionId/draft/files | 200 | draftのentrypointとファイル内容を取得（AI authoring） |
+| POST | /compositions/:compositionId/draft | 200 | draftのentrypoint・テキスト/バイナリbundleファイル・manifestを更新（AI authoring） |
+| POST | /compositions/:compositionId/publish | 201 / 200 | draftを検証し不変のCompositionVersionを公開。`?dryRun=true` ではversionを作らず検証のみ（200 `{ manifest }`）（AI authoring） |
+| GET | /compositions/versions/:compositionVersionId/content/*bundlePath | 200 / 206 | published bundleのentrypointまたは相対依存を配信。previewレスポンス内のURLだけを使用する |
 | GET | /script-versions/:scriptVersionId/preview | 200 | 信頼済みComposition HTMLと素材URLを取得 |
+| GET | /script-versions/:scriptVersionId/subtitles | 200 | 保存済み版の字幕（SRT）をダウンロード |
 | POST | /language-editions/:editionId/draft-preview | 200 | 未保存の台本案から書込みなしでドラフト・プレビューを合成 |
+| GET | /language-editions/:editionId/thumbnails | 200 | 言語版のサムネイル候補一覧を取得（[../thumbnail/spec.md](../thumbnail/spec.md)） |
+| POST | /language-editions/:editionId/thumbnails | 201 | サムネイル候補を作成 |
+| PUT | /language-editions/:editionId/primary-thumbnail | 200 | 投稿に使うサムネイル候補を選択 |
+| POST | /language-editions/:editionId/thumbnail-preview | 200 | 未保存のサムネイル入力を書込みなしでプレビュー |
+| GET | /thumbnails/:thumbnailId | 200 | サムネイル候補を取得 |
+| PUT | /thumbnails/:thumbnailId | 200 | サムネイル候補を明示保存（上書き） |
+| DELETE | /thumbnails/:thumbnailId | 204 | サムネイル候補を削除 |
+| GET | /thumbnails/:thumbnailId/image | 200 | 候補のPNGをオンデマンド生成して配信 |
 | POST | /script-versions/:scriptVersionId/render-jobs | 202 | 入力スナップショットを持つRender Jobをキューへ追加 |
 | GET | /works/:workId/jobs | 200 | 作品のRender Job履歴を新しい順に取得 |
 | GET | /jobs/:jobId | 200 | Render Jobの状態をポーリング |
@@ -106,17 +128,33 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /artifacts/:artifactId | 200 | Artifactのメタデータを取得 |
 | GET | /artifacts/:artifactId/content | 200 / 206 | Artifactファイルを配信 |
 | DELETE | /artifacts/:artifactId | 204 | 生成済み出力を明示削除 |
+| GET | /voice-adapters | 200 | 登録済みアダプター記述子（`id`・表示名・能力）を取得 |
 | GET | /voice-profiles | 200 | アプリ共通のVoice Profile一覧を取得 |
 | POST | /voice-profiles | 201 | Voice Profileを作成 |
-| PATCH | /voice-profiles/:voiceProfileId | 200 | Voice Profileの表示名と設定を更新 |
+| PATCH | /voice-profiles/:voiceProfileId | 200 | Voice Profileの表示名・声・言語・設定を更新 |
 | DELETE | /voice-profiles/:voiceProfileId | 204 | 未参照のVoice Profileを削除 |
-| GET | /voice-profiles/voices?adapterId=voicevox\|aivisspeech | 200 | 接続中エンジンの話者とスタイルを取得（[../tts/spec.md](../tts/spec.md)） |
+| GET | /voice-profiles/voices?adapterId=<id>[&model=<model>] | 200 | 接続中エンジンの声（`voiceId`・表示名・任意の `locale`）を取得。`model` は声がモデル依存のアダプターで使う（[../tts/spec.md](../tts/spec.md)） |
+| GET | /voice-profiles/models?adapterId=<id> | 200 | 接続中エンジンのモデル候補（`models`）を取得。非対応は空配列 |
 | POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/tts-jobs | 202 | 音声が未選択の要点セリフを一括でTTS Jobへ追加。投入Jobと除外セリフを返す（[../tts/spec.md](../tts/spec.md)） |
 | GET | /characters | 200 | キャラクターライブラリの一覧を取得（[../character-library/spec.md](../character-library/spec.md)） |
 | POST | /characters | 201 | キャラクターを作成 |
 | PATCH | /characters/:characterId | 200 | キャラクターの名前・声・外観を更新 |
 | DELETE | /characters/:characterId | 204 | キャラクターを削除 |
+| GET | /face-sets | 200 | Face Set ライブラリの一覧を取得（[../face-expression/spec.md](../face-expression/spec.md)） |
+| POST | /face-sets | 201 | Face Set（Face Layer と Expression Preset を含む）を作成 |
+| PATCH | /face-sets/:faceSetId | 200 | Face Set の名称・Face Layer・Expression Preset を更新 |
+| DELETE | /face-sets/:faceSetId | 204 | 未参照の Face Set を削除 |
+| GET | /themes | 200 | Theme 一覧（組み込み＋利用者テーマ）を取得（[../theme-customization/spec.md](../theme-customization/spec.md)） |
+| POST | /themes | 201 | Theme の作成・複製 |
+| POST | /themes/preview | 200 | 代表サンプルによる Theme Draft 非永続プレビューを合成（`fontDiagnostics` 付き） |
+| GET | /themes/:themeId | 200 | Theme 詳細と全 Revision / Draft を取得 |
+| PUT | /themes/:themeId/draft | 200 | Theme Draft を保存・更新 |
+| DELETE | /themes/:themeId/draft | 200 | Theme Draft を破棄 |
+| POST | /themes/:themeId/publish | 200 | Theme Draft を検証し、不変の Theme Revision として公開 |
+| POST | /themes/:themeId/archive | 200 | 利用者 Theme をアーカイブ |
+| GET | /fonts | 200 | Font Catalog を取得（[../theme-customization/spec.md](../theme-customization/spec.md)） |
+| POST | /fonts/refresh | 200 | Font Catalog を再検出・更新 |
 
 この一覧のパスはすべて /api/v1 を先頭に持つ。たとえば作品一覧は GET /api/v1/works である。
 
@@ -132,7 +170,7 @@ GET /health は起動確認とUIの初期診断に使う。レンダーワーカ
       "status": "ready"
     },
     "capabilities": {
-      "locales": ["ja-JP"],
+      "locales": ["ja-JP", "en-US"],
       "jobKinds": ["asset_ingest", "render"],
       "assetKinds": ["image", "video", "audio"]
     },
@@ -185,7 +223,7 @@ latestRenderJobはRender Jobがまだないときはnullとする。失敗した
 
 ### 作品作成と名称変更
 
-POST /works は、Work、ja-JPのLanguageEdition、`schemaVersion: 6` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
+POST /works は、Work、`originalLocale` のLanguageEdition、`schemaVersion: 1` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
 
 ~~~http
 POST /api/v1/works
@@ -197,7 +235,7 @@ Content-Type: application/json
 }
 ~~~
 
-originalLocaleは将来の互換性のため必須とするが、MVPで受け付ける値はja-JPだけである。成功時は201 Createdと、作成した完全なWork DTOを返す。
+originalLocaleは必須とし、受け付ける値は `ja-JP` または `en-US` である。成功時は201 Createdと、作成した完全なWork DTOを返す。
 
 ~~~json
 {
@@ -270,13 +308,13 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
 
 ### 台本の保存
 
-POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 6` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
+POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 1` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
 
 ~~~jsonc
 {
   "sourceScriptVersionId": null,
   "content": {
-    "schemaVersion": 6,
+    "schemaVersion": 1,
     "locale": "ja-JP",
     "template": {
       "id": "explanation-scenes",
@@ -293,7 +331,7 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
 }
 ~~~
 
-上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。`composition.full-bleed@1` はScene背景だけに置け、同じCompositionVersionを一つのContentDocument内で複数回参照できない。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
+上の例は構造を示すためのjsoncである。実際の送信値はコメントを含まない完全なContentDocumentでなければならない。APIはEditionのlocale、`explanation-scenes@1` のScene構成、すべてのreadyなAsset参照、publish済みCompositionVersion参照、`faceSetId`／`expressionId` の参照整合、キャラクターの `voices`（`locale` 重複、話者の声との一致）、音声尺とScene尺の制約を検証し、違反は422 VALIDATION_ERRORのdetails.issuesに該当フィールドのJSON Pointerと理由を含める。insert Sceneは主動画Cueが `media.full-bleed@1` のbackground・scene rangeで、readyな `video` Assetを参照し、その確定尺がScene尺と一致することを検証する。`embeddedAudio: true` で音声ストリームを持たない動画は `meta.warnings` に `insert_video_without_audio` を返す。参照先 Voice Profile が欠けた台本も保存でき、生成時にだけ「未設定」として拒否する（[../tts/spec.md](../tts/spec.md)）。`faceSetId` は参照先 Face Set が存在し、その Face Layer が ready な画像 Asset を指し、ベース画像と寸法が一致すること、`normal` preset を含むことを検証する。`expressionId` は、話者（`Speaker.characterId`）に対応するキャラクターの、そのSceneで有効な Character Appearance が参照する Face Set 内に存在することを検証する。`speakerId` が `null` のラインに `expressionId` を指定できない（[../face-expression/spec.md](../face-expression/spec.md)）。`composition.full-bleed@1` はbackground層だけに置け、`scene` / `lines` / `offset` の全 range を使え、Canvas Profileが `landscape` のversionだけを指定できる（`portrait` は422で拒否）。同じCompositionVersionを一つのContentDocument内で複数回参照できない。実効表示窓は `min(range 尺, manifest.durationMs)` とし、Cue transition は実効表示窓内に収め、Scene crossfade で必要窓が child 尺を超える場合は保存・レンダー投入時に422で拒否する。ContentDocumentは対応済みVisualTemplateの複数Cue、`lines`、`offset` の範囲指定も受け入れる。テンプレートごとの最大行数・最小フォントサイズに照らしたテキスト量は、収まらなくても保存を拒否せず、`meta.warnings` に該当フィールドのJSON Pointerと理由を返す。過去版を復元する場合、UIは復元元を `sourceScriptVersionId` に指定してその内容を新しい版として保存する。復元元は同じEditionの版だけを受け入れる。
 
 成功時は201 Createdと、新しい完全なScriptVersion DTOを返す。
 
@@ -303,9 +341,9 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
     "id": "scr_003",
     "languageEditionId": "led_ja_123",
     "versionNumber": 3,
-    "contentSchemaVersion": 5,
+    "contentSchemaVersion": 1,
     "content": {
-      "schemaVersion": 6,
+      "schemaVersion": 1,
       "locale": "ja-JP",
       "template": {
         "id": "explanation-scenes",
@@ -347,7 +385,7 @@ Assetは全Workで再利用できる。アップロードされた原本は不�
 
 ### 一覧とメタデータ
 
-GET /assets は作成日時の降順でAsset配列を返す。任意の kind=image、kind=video、kind=audio クエリで絞り込みできる。存在しないkindは422 VALIDATION_ERRORとする。各Assetは利用者が編集できる `tags` を含む。タグによる絞り込みはサーバーでは行わず、取得済み配列をクライアント側で絞り込む。
+GET /assets は作成日時の降順でAsset配列を返す。任意の kind=image、kind=video、kind=audio クエリで絞り込みできる。存在しないkindは422 VALIDATION_ERRORとする。各Assetは利用者が編集できる `tags`・`favoritedAt`・`archivedAt` を含む。`favoritedAt` はお気に入り、`archivedAt` は一覧・ピッカーから既定で隠すアーカイブを表し、どちらもnullなら未設定。タグ・種類・お気に入り・アーカイブによる絞り込みや並び替えはサーバーでは行わず、取得済み配列をクライアント側で絞り込む。
 
 ~~~json
 {
@@ -364,7 +402,10 @@ GET /assets は作成日時の降順でAsset配列を返す。任意の kind=ima
       "durationMs": null,
       "widthPx": 1920,
       "heightPx": 1080,
+      "hasAudio": false,
       "tags": ["背景", "夏"],
+      "favoritedAt": null,
+      "archivedAt": null,
       "createdAt": "2026-10-08T03:10:00.000Z",
       "contentUrl": "/api/v1/assets/ast_image_001/content"
     }
@@ -374,15 +415,17 @@ GET /assets は作成日時の降順でAsset配列を返す。任意の kind=ima
 
 GET /assets/:assetId は同じ1件のAsset DTOを返す。GET /assets/:assetId/content は原本を検出済みのMIME typeで返し、動画・音声の確認に必要なHTTP Range requestをサポートする。GET /assets/:assetId/render-content は、正規化Renditionがあればそれを、無ければ原本を返す。正常な部分応答は206 Partial Contentとする。両エンドポイントはメディアセッションCookieで認可されるため、`<img>`、`<audio>`、`<video>` の通常の読み込みとシークで利用できる。Compositionで使うURLは後者であり、原本をそのまま使える場合も同じURLから原本が返る。
 
-### タグの更新
+GET /assets/:assetId/frame はセリフゲート動画再生の保持区間に使う静止フレームPNGを返す。`ms` は0以上の整数で、readyなvideoの確定尺内に限る。Renditionの実フレームから `ms` 以下で最後のPTSを選び、`renditionSha256 + 解決PTS + extractorVersion` をキーに正規化したPNGをキャッシュして配信する。未ready・非video・尺超過・未指定の `ms` は422 `VALIDATION_ERROR` または `ASSET_UNAVAILABLE` とする。正本JSON・DTO・Job snapshotにはフレーム番号やローカルパスを保存しない。
 
-PATCH /assets/:assetId は `{ "tags": [string, ...] }` を受け取り、タグ配列を丸ごと置き換えて更新後のAsset DTOを返す。タグは各要素の前後空白を除去し、空文字を除き、重複を1つにまとめる。1素材あたり最大30個、1タグ最大40文字。空配列はタグ無し（`tagsJson` はNULL）として保存する。存在しない素材は404 `RESOURCE_NOT_FOUND`、契約違反は422 `VALIDATION_ERROR` とする。タグは原本の同一性（`sha256`・`storageKey`・`kind`・寸法・長さ）に影響しない。
+### タグとメタデータの更新
+
+PATCH /assets/:assetId は `{ "tags"?: [string, ...], "favorited"?: boolean, "archived"?: boolean }` の部分更新を受け取り、少なくとも1つのフィールドを必須とする。`tags` はタグ配列を丸ごと置き換える。`favorited` はお気に入り（`favoritedAt` を現在時刻またはnullへ）、`archived` はアーカイブ（`archivedAt` を現在時刻またはnullへ）を切り替える。更新後のAsset DTOを返す。タグは各要素の前後空白を除去し、空文字を除き、重複を1つにまとめる。1素材あたり最大30個、1タグ最大40文字。空配列はタグ無し（`tagsJson` はNULL）として保存する。存在しない素材は404 `RESOURCE_NOT_FOUND`、契約違反は422 `VALIDATION_ERROR` とする。タグ・お気に入り・アーカイブは原本の同一性（`sha256`・`storageKey`・`kind`・寸法・長さ）に影響しない。
 
 ~~~http
 PATCH /api/v1/assets/ast_image_001
 Content-Type: application/json
 
-{ "tags": ["背景", "夏"] }
+{ "tags": ["背景", "夏"], "favorited": true }
 ~~~
 
 ### アップロード
@@ -422,6 +465,8 @@ Content-Type: image/png
     "widthPx": 1920,
     "heightPx": 1080,
     "tags": [],
+    "favoritedAt": null,
+    "archivedAt": null,
     "createdAt": "2026-10-08T03:10:00.000Z",
     "contentUrl": "/api/v1/assets/ast_image_001/content"
   },
@@ -434,6 +479,33 @@ Content-Type: image/png
 アップロードサイズの上限はサーバー設定で管理する。既定4GiBを超えた場合は413 FILE_TOO_LARGEとし、details.maxBytesを返す。長さまたは寸法の上限を超えた場合は422 MEDIA_LIMIT_EXCEEDEDとし、detailsには測定値と該当する上限を返す。管理領域が80GiB以上ならhealthのstorage.statusを`warning`にし、UIへ警告するが、書込みは停止しない。
 
 DELETE /assets/:assetId は、残っているScriptVersionまたはqueued/running render Jobの入力スナップショットがそのAssetを参照すると409 `ASSET_IN_USE` を返す。参照がなければ、Asset自身のasset_ingest Job、原本、Rendition、Asset行を削除して204 No Contentを返す。Workの削除後などに残ったAssetは、UIからの明示削除または「未参照素材を清掃」で回収できる。
+
+## Face Set ライブラリ
+
+Face Set は、眉・目・口・前景の Face Layer と Expression Preset を持つアプリ共通の顔素材である。作品の Character Appearance は `faceSetId` で参照し、内容をコピーしない。詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。
+
+- `POST /face-sets` は `{ name, layers, expressions }` を受け取る。`layers` は `{ id, part: "brow"|"eye"|"mouth"|"foreground", assetId, blinkLayerId?, speakingLayerId? }`、`expressions` は `{ id, name, browLayerId?, eyeLayerId?, mouthLayerId? }`。`normal` の preset を必ず1つ含む。`blinkLayerId` は `part: "eye"` にだけ、`speakingLayerId` は `part: "mouth"` にだけ許可する。
+- `PATCH /face-sets/:faceSetId` は `POST` と同じ形で全体を置き換える。`POST`／`PATCH` は、各 `assetId` が ready な画像 Asset であること、全 Face Layer の `widthPx`／`heightPx` が一致すること、preset が同一 Face Set 内の Face Layer だけを参照することを検証する。違反は422 `VALIDATION_ERROR` の `details.issues` で返す。
+- `DELETE /face-sets/:faceSetId` は、いずれかの Character Appearance（ライブラリまたは保存済み ScriptVersion の外観）から `faceSetId` で参照されている間は409 `FACE_SET_IN_USE` を返す。Face Layer を削除・置換しても、それを参照する Expression Preset が残る操作は拒否する。
+- 保存済み ScriptVersion の外観は Face Set をコピーしないため、Face Set の更新は次回のプレビュー／レンダーに反映される。Render Job は投入時に解決した Face Set を入力スナップショットへ固定する（[ADR-0045](../adr/0045-face-set-global-reference.md)）。
+
+## Composition Library
+
+Compositionは再利用するHyperFrames projectの論理単位で、draftを編集してpublishすると不変のCompositionVersionになる。詳細は [../composition-library/spec.md](../composition-library/spec.md) を正とする。AI authoringは次のエンドポイントを使う。入力はZodで検証し、draft・bundleのパスはアプリデータルート相対で解決する。絶対パスと `..` を含むパスは拒否する。
+
+- `POST /composition-authoring-contexts` は `{ visualTheme: { id, version }, canvasProfile? }` を受け、公開Theme Revision（組み込みまたはpublish済みの利用者revision）からSkin、token、Style Kit hash、Font診断を解決した非永続のComposition Authoring Contextを返す。書込みは行わない。draftのみのTheme、未知のTheme、archive済みのみのThemeは422 `VALIDATION_ERROR` で拒否する。同じ入力は同じ `kit.hash` を返す。
+- `POST /compositions` は `{ name, runtimeCompositionId, entrypoint?, canvasProfile?, authoringStyle? }` を受け取り、Compositionとactive draftをdefault `index.html`・`manifest.json` 付きで作成する。`canvasProfile` は `landscape`（既定）または `portrait` で、seed HTMLとmanifestの寸法に反映する。`runtimeCompositionId` はComposition間で一意。`authoringStyle: { visualTheme: { id, version } }` を指定すると、同じContextを再解決し、`kakeai-style/`（`STYLE.md`、`tokens.css`、`fonts.css`、`components.css`、`kit-lock.json`）をseedへ加え、`styleProvenance` を記録する。未指定の新規draftは `neutral` として記録する。
+- `GET /compositions/:compositionId/draft/files` は `{ entrypoint, files, binaryFiles? }` を返し、seedを含むdraftを読み戻せる。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列。
+- `POST /compositions/:compositionId/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取り、指定したファイルだけを上書きする（部分更新、削除なし）。`files` はテキスト、`filesBase64` はbase64文字列のバイナリファイル（画像など）で、同じ正規化パスを両方に含めることはできない。親ディレクトリは自動作成する。`kakeai-style/` は予約された保護パスであり、そこへの更新とentrypoint指定は422 `STYLE_KIT_MODIFIED` で拒否する。`manifest`（`{ durationMs?, dependencies?, canvasProfile? }`）を渡すとサーバが `manifest.json` を生成する。`canvasProfile` 省略時は現在のdraftのプロファイル、無ければ `landscape` を使う。
+- `POST /compositions/:compositionId/publish` は任意の `{ entrypoint? }` でdraftを検証し、CompositionVersionを作る。検証はentrypointの存在、manifestのruntime composition ID・Canvas Profileと一致する寸法・有限尺・依存の実在、外部URLの不在、entryの `data-composition-id` 一致、entry rootの `data-width`／`data-height` とmanifest寸法の一致、音声要素の不在、HyperFrames lintのerror不在（warningは許容）を確認する。`styleProvenance` が `authored` のdraftでは、さらに `kakeai-style/` の各保護ファイルと `kit-lock.json` をseed時のhashと照合し、変更・欠落・余分なファイルを422 `STYLE_KIT_MODIFIED`（`details.issues` に該当path）で拒否する。publishはkitをbundleへコピーし、解決済みの `styleProvenance` をversionへ固定する。`?dryRun=true` ではversionを作らず同じ検証だけを行い、成功時200 `{ manifest }` と `meta.fontDiagnostics` を返す。publish成功時も `meta.fontDiagnostics` に診断結果を返す。同じdraftを再publishすると新しいversionNumberの不変versionが作られる。
+- 検証失敗は422 `VALIDATION_ERROR` と `details.issues`（`path`・`code`・`message`）で返す。`manifest` の `contentHash` は任意で、publish時にサーバが計算した `bundleHash` を保存・返却するmanifestの `contentHash` に設定する。
+- `GET /compositions`、`GET /compositions/:compositionId` は一覧・メタデータを返す。published bundleは `GET /compositions/versions/:compositionVersionId/content/*bundlePath` で配信し、path traversalは403 `LOCAL_ACCESS_DENIED` で拒否する。
+
+台本は `composition.full-bleed@1` の `input.compositionVersionId` としてversion IDだけを参照する。参照はpublish済みversionに限り、同一ContentDocument内で同じversionを複数回参照できない。`composition.full-bleed@1` はCanvas Profileが `landscape` のversionだけをbackgroundに置ける。`portrait` は `scene.device-frame@1` の画面に置き、保存・draft preview・preview・renderはいずれもfull-bleedのportrait参照を422で拒否する。
+
+### Font診断
+
+Composition Authoring Context生成時、Theme Draft代表プレビュー時、Composition publish（dry-run含む）前、Render Job作成時には、KakeaiはHyperFramesと同じChromiumでThemeのFont Faceの`@font-face local()`解決可否を診断し、`fontDiagnostics` 文字列配列として返す。解決できないFaceはStyle Kitの`fonts.css`で定義済みのgeneric stackへフォールバックし、処理は継続する（拒否しない）。`GET /fonts` が返すFaceは、Chromium検証済みのものだけ `verifiedLocalFace: true/false` を持つ（未検証は省略）。Font Catalog自体が利用できない環境では全Font Faceがgeneric stackで描画され、その旨を診断に含める。
 
 ## プレビュー
 
@@ -456,8 +528,7 @@ APIはContentDocument、参照Asset、参照CompositionVersionを検証し、利
     "compositions": [
       {
         "compositionVersionId": "cmpver_001",
-        "entryUrl": "/api/v1/composition-versions/cmpver_001/content/index.html",
-        "bundleSha256": "sha256:beef..."
+        "entryUrl": "/api/v1/compositions/versions/cmpver_001/content/index.html"
       }
     ],
     "renderer": {
@@ -524,7 +595,7 @@ POST /language-editions/:editionId/draft-preview は、未保存のContentDocume
 
 ### Render Jobの作成
 
-POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、参照CompositionVersionのID・bundle hash・manifest、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
+POST /script-versions/:scriptVersionId/render-jobs は、対象の版、参照Assetとreadyなrender Renditionのハッシュ・メタデータ、参照CompositionVersionのID・bundle hash・manifest、解決済みVisual Skin Ref、Font診断（`missingFonts` と `diagnostics`）、テンプレート版、出力設定、実行環境の版、`snapshotSchemaVersion` を固定したJobを作る。Composition HTMLはキュー投入時に固定せず、workerがこのスナップショットJSONを信頼済みコンパイラで実行時に生成する。HTTPリクエスト中にMP4を生成しない。Jobは複数のArtifactを持て、MVPのrender Jobは `role=render` / `format=mp4` のArtifactを1つ生成する。
 
 MVPの出力設定は固定であるため、リクエストボディは空のJSON objectとする。
 
@@ -593,6 +664,8 @@ POST /jobs/:jobId/cancel は `status=queued` のJobだけを `cancelled` に遷�
         "widthPx": 1920,
         "heightPx": 1080,
         "fps": 30,
+        "videoCodec": "h264",
+        "audioCodec": "aac",
         "createdAt": "2026-10-08T03:36:14.000Z",
         "contentUrl": "/api/v1/artifacts/art_001/content"
       }
@@ -628,6 +701,32 @@ POST /jobs/:jobId/cancel は `status=queued` のJobだけを `cancelled` に遷�
 
 GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:artifactId/content は `format` に応じたMIME typeでファイルを配信し、動画にはRange requestをサポートする。このエンドポイントもメディアセッションCookieで認可されるため、`<video>` の再生・シークで利用できる。DELETE /artifacts/:artifactId はファイルとArtifact行を削除して204 No Contentを返す。対応するJobは履歴として残すが、artifactsは空配列となり、出力が削除済みであることをUIへ表示する。Assetへの自動昇格はMVPの対象外である。
 
+## 字幕エクスポート
+
+GET /script-versions/:scriptVersionId/subtitles は、保存済みの版からYouTubeへそのまま取り込めるSubRip（`.srt`）字幕ファイルを生成して返す。レンダーとは独立し、JobもArtifactも作らず、ダウンロードのたびに正本から作り直す。タイミング解決はレンダーと同じ `resolveTimeline` を使い、本文は `NarrationSegment.captionText` とする。詳細は [../subtitle-export/spec.md](../subtitle-export/spec.md) を正とする。
+
+~~~http
+GET /api/v1/script-versions/scr_003/subtitles
+~~~
+
+成功は200 OKとSRTバイト列を返す。`Content-Type` は `application/x-subrip; charset=utf-8`、`Content-Disposition: attachment` でファイル名（Workタイトル由来の `.srt`）を付ける。メディアセッションCookieは要求せず、既存の全リクエスト共通ガード（loopback・same-origin）で保護する。
+
+存在しない版は404 `RESOURCE_NOT_FOUND` とする。固定尺の選択音声合計超過など、タイミングを解決できない入力はレンダー投入時と同じ422 `RENDER_INPUT_INVALID` とする。
+
+## サムネイル
+
+言語版ごとにYouTube投稿用のサムネイル候補を作成・管理する。候補は動画の台本とは別の可変な正本で、明示保存で上書きし、版履歴を持たない。ブランドはその言語版の現行ScriptVersionのVisual Themeを共有する。詳細は [../thumbnail/spec.md](../thumbnail/spec.md) を正とする。
+
+- GET /language-editions/:editionId/thumbnails は候補一覧を返す。各候補に `isPrimary` を含める。
+- POST /language-editions/:editionId/thumbnails は `{ label, template, input }` から候補を作成する。最初の候補は自動的に投稿用になる。
+- PUT /language-editions/:editionId/primary-thumbnail は `{ thumbnailId }`（解除は null）で投稿用の候補を切り替える。
+- PUT /thumbnails/:thumbnailId は `{ label, template, input }` で候補を明示保存（上書き）する。
+- DELETE /thumbnails/:thumbnailId は候補を削除する。投稿用を削除した場合は別の候補へ付け替えるか null にする。
+- POST /language-editions/:editionId/thumbnail-preview は `{ template, input }` のコンパイル済みHTMLを返す。DBへ書かない。
+- GET /thumbnails/:thumbnailId/image は 1280x720 のPNGをオンデマンド生成して返す。JobもArtifactも作らない。
+
+未知のテンプレート参照・入力不整合・素材種別違反は 422 `VALIDATION_ERROR`、静止画へ変換できない場合は 422 `THUMBNAIL_INPUT_INVALID` を返す。存在しない候補・言語版は 404 `RESOURCE_NOT_FOUND`（候補のPNGは `Content-Disposition: attachment` と `Cache-Control: private, max-age=0, must-revalidate` を付け、メディアセッションCookieで認可する）。
+
 ## エラー契約
 
 ### HTTPエラー
@@ -639,6 +738,7 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 404 | RESOURCE_NOT_FOUND | 指定IDのWork、Edition、ScriptVersion、Asset、Job、Artifactがない | resource, id |
 | 409 | ASSET_PROCESSING | 参照Assetの取り込みJobが完了していない | assetIds |
 | 409 | ASSET_IN_USE | Asset削除時に残存する版またはJobが参照している | assetId, references |
+| 409 | FACE_SET_IN_USE | Face Set削除時に外観（ライブラリまたは保存済み版）が参照している | faceSetId, references |
 | 409 | WORK_HAS_CHILDREN | 子Workを持つWorkの削除 | workId, childWorkIds |
 | 409 | JOB_NOT_CANCELLABLE | queued以外のJobをキャンセルしようとした | jobId, status |
 | 413 | FILE_TOO_LARGE | アップロードが設定済み上限を超過 | maxBytes |
@@ -649,8 +749,9 @@ GET /artifacts/:artifactId は完全なArtifact DTOを返す。GET /artifacts/:a
 | 422 | MEDIA_INSPECTION_FAILED | アップロード後にメディア情報を安全に取得できない | 任意 |
 | 422 | MEDIA_LIMIT_EXCEEDED | 長さまたは寸法がサーバー設定の上限を超える | measured, limits |
 | 422 | PREVIEW_INPUT_INVALID | 保存済み台本をCompositionへ変換できない | issues |
-| 422 | RENDER_INPUT_INVALID | レンダー投入時の音声尺超過など | issues |
-| 422 | TTS_INPUT_INVALID | TTS生成要求の空本文・Speaker/Profile未設定・無効スタイル・不正な話速 | issues |
+| 422 | RENDER_INPUT_INVALID | レンダー投入時の音声尺超過など。字幕エクスポートのタイミング解決失敗も同じcode | issues |
+| 422 | THUMBNAIL_INPUT_INVALID | 保存済みまたは編集中のサムネイル入力を静止画へ変換できない | issues |
+| 422 | TTS_INPUT_INVALID | TTS生成要求の空本文・Speaker/Profile未設定・Profileのアダプター外の声・不正な話速 | issues |
 | 503 | TTS_ENGINE_UNAVAILABLE | TTSエンジン未起動または接続失敗 | 任意 |
 | 500 | INTERNAL_ERROR | 予期しないAPI内部エラー | requestIdのみ |
 | 503 | DATABASE_BUSY | busy timeoutを超えるSQLite競合 | 任意のretryAfterMs |
@@ -681,7 +782,7 @@ RENDER_INPUT_INVALIDはキュー投入前の422であり、Job error codeでは�
 - APIはJSON APIとmultipartアップロードで厳密な `Host` と `Origin` を検証する（独自ヘッダ・起動時トークンは用いない）。同一originのUIシェルおよびAPIのGET応答はプロセスごとにランダムな `HttpOnly; SameSite=Strict; Path=/api/v1/` のメディアセッションCookieを発行する。素材・Artifactのcontent配信は、そのCookieとHost（および存在する場合のOrigin／Fetch Site）を検証して、通常のブラウザsubresource・Range requestを許可する。JSON APIはCookieだけを資格情報として受け入れない。
 - 素材とArtifactのstorageKeyは内容ハッシュ由来のパスとし、`originalFilename` をパス生成に使わない。
 - アプリ管理データのルートはOS提供のアプリデータディレクトリ（macOSではApplication Support配下）とし、特定OSの絶対パスをコードへ埋め込まない。開発時は環境変数 `KAKEAI_DATA_DIR` で差し替える。`db/`、`assets/`、`artifacts/`、`tmp/` を分け、`storageKey` はルート相対で解決する。
-- APIがScriptVersionを返すときはDBのcontentJsonを復元・検証してcontentとして返す。現行版は `schemaVersion: 6` とし、v4/v5 は読み出し時に v6 へ移行する（[../scene-labels/spec.md](../scene-labels/spec.md)）。v3 以前の読出し解釈は持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
+- APIがScriptVersionを返すときはDBのcontentJsonを復元・検証してcontentとして返す。現行版は `schemaVersion: 1` とし、旧版の読出し解釈や移行コードは持たない。検証不能なデータは500 INTERNAL_ERRORとして扱い、無検証で返さない。
 - Assetの取り込みは、一時領域への保存、ハッシュ計算とメディア検査、既存SHA-256行とそのstorageKeyの確認、アプリ管理領域への確定、Asset行とasset_ingest Jobの作成の順に行う。workerは原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってからAssetをreadyにする。既存Assetの実体が欠損・破損している場合は、内容ハッシュ由来の同じstorageKeyを上書きして取り込み直す。競合アップロードは一意制約で直列化し、失敗時の一時ファイルは清掃する。
 - すべての書込みはDBトランザクションの単位を [spec.md](./spec.md) の「書込みとJob状態遷移」に合わせる。ファイルシステム操作と完全な原子性は持てないため、確定前のファイルを公開せず、確定に失敗した孤立ファイルは起動時に清掃する。削除時はDBから参照を切った後に実体を隔離し、隔離ファイルは起動時に清掃する。
 - プレビューとレンダーは同じコンパイラと信頼済みVisualTemplateを使い、Asset解決だけを `assetResolver` の注入で切り替えて生成する。render時は正本JSON、Rendition（無ければ原本）、テンプレート版、出力設定をJobスナップショットへ固定し、ワーカーはそのJSONを実行時にコンパイルする。実行ツールの版は診断用に記録するが、完全な再現性は保証しない。

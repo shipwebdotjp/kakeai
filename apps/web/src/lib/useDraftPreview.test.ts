@@ -9,6 +9,7 @@ import {
   isDraftUnreflected,
   requestDraftPreview,
   selectActivePreview,
+  shouldStartDraftRequest,
 } from "./useDraftPreview";
 
 function savedPreview(): ScriptVersionPreview {
@@ -16,6 +17,7 @@ function savedPreview(): ScriptVersionPreview {
     scriptVersionId: "scr_001",
     compositionHtml: "<!doctype html><html></html>",
     assets: [],
+    compositions: [],
     renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
     timeline: { totalDurationMs: 9000, fps: 30, scenes: [] },
   };
@@ -26,6 +28,7 @@ function draftPreview(): DraftPreview {
     source: { kind: "draft" },
     compositionHtml: "<!doctype html><html>draft</html>",
     assets: [],
+    compositions: [],
     renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
     timeline: { totalDurationMs: 9000, fps: 30, scenes: [] },
   };
@@ -41,6 +44,7 @@ describe("requestDraftPreview", () => {
       source: { kind: "draft" },
       compositionHtml: "<!doctype html><html></html>",
       assets: [],
+      compositions: [],
       renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
       timeline: { totalDurationMs: 9000, fps: 30, scenes: [] },
     },
@@ -80,6 +84,32 @@ describe("requestDraftPreview", () => {
     await expect(
       requestDraftPreview("led_1", createInitialContentDocument()),
     ).rejects.toThrow();
+  });
+});
+
+describe("shouldStartDraftRequest", () => {
+  it("starts only when idle with a pending document on a known edition", () => {
+    expect(shouldStartDraftRequest({ inFlight: false, hasPending: true, editionId: "led_1" })).toBe(
+      true,
+    );
+  });
+
+  it("defers while a request is in flight to coalesce onto the latest document", () => {
+    expect(shouldStartDraftRequest({ inFlight: true, hasPending: true, editionId: "led_1" })).toBe(
+      false,
+    );
+  });
+
+  it("does nothing without a pending document or a known edition", () => {
+    expect(shouldStartDraftRequest({ inFlight: false, hasPending: false, editionId: "led_1" })).toBe(
+      false,
+    );
+    expect(
+      shouldStartDraftRequest({ inFlight: false, hasPending: true, editionId: undefined }),
+    ).toBe(false);
+    expect(shouldStartDraftRequest({ inFlight: false, hasPending: true, editionId: "" })).toBe(
+      false,
+    );
   });
 });
 

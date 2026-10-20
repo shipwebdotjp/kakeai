@@ -12,3 +12,5 @@ Job の出力は MP4 専用の `Render` ではなく汎用の `Artifact` とし�
 ## Consequences
 
 API の `/renders` は `/artifacts` に統一する。`Asset`（再利用可能な素材）と `Artifact`（Job の出力）は別概念として扱い、来歴を混同しない。
+
+amended by [ADR-0055](0055-subtitles-on-demand-srt-download.md): 字幕（SRT）はオンデマンド同期生成とし、`role=caption` の Artifact としては保存しない。

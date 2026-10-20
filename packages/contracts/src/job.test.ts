@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { jobInputSnapshotSchema, parseRenderJobSnapshot, renderJobSnapshotSchema } from "./job";
+import {
+  SNAPSHOT_SCHEMA_VERSION,
+  jobInputSnapshotSchema,
+  parseRenderJobSnapshot,
+  renderJobSnapshotSchema,
+} from "./job";
 import { validContentDocument } from "./testing/fixtures";
 
 describe("jobInputSnapshotSchema", () => {
   it("accepts a render snapshot built from a valid document", () => {
     const snapshot = {
-      snapshotSchemaVersion: 1,
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
       kind: "render",
       scriptVersionId: "scr_001",
       versionNumber: 1,
@@ -29,9 +34,24 @@ describe("jobInputSnapshotSchema", () => {
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
 
+  it("accepts a render snapshot with a fixed skin ref", () => {
+    const snapshot = {
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      kind: "render",
+      scriptVersionId: "scr_001",
+      versionNumber: 1,
+      content: validContentDocument(),
+      assets: [],
+      skin: { id: "neutral", version: 1 },
+      template: { id: "explanation-scenes", version: 1 },
+      output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
+    };
+    expect(renderJobSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
   it("accepts an asset_ingest snapshot", () => {
     const snapshot = {
-      snapshotSchemaVersion: 1,
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
       kind: "asset_ingest",
       assetId: "asset-1",
       sha256: "sha256:abc",
@@ -43,7 +63,7 @@ describe("jobInputSnapshotSchema", () => {
 
   it("accepts a tts snapshot", () => {
     const snapshot = {
-      snapshotSchemaVersion: 1,
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
       kind: "tts",
       scriptVersionId: "scr_001",
       narrationSegmentId: "line-p1-1",
@@ -52,7 +72,8 @@ describe("jobInputSnapshotSchema", () => {
       speakerId: "speaker-narrator",
       voiceProfileId: "vp_1",
       adapterId: "voicevox",
-      voice: { voiceId: "uuid-1", styleId: 3 },
+      voice: { voiceId: "uuid-1:3" },
+      settings: {},
       speedScale: 1,
       speechText: "こんにちは",
       engineVersion: "0.19.0",
@@ -60,9 +81,9 @@ describe("jobInputSnapshotSchema", () => {
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
 
-  it("accepts an aivisspeech snapshot with a negative style id", () => {
+  it("accepts an aivisspeech snapshot with an opaque voice id", () => {
     const snapshot = {
-      snapshotSchemaVersion: 1,
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
       kind: "tts",
       scriptVersionId: "scr_001",
       narrationSegmentId: "line-p1-1",
@@ -72,8 +93,9 @@ describe("jobInputSnapshotSchema", () => {
       speakerName: "ナレーター",
       voiceProfileId: "vp_1",
       adapterId: "aivisspeech",
-      voice: { voiceId: "uuid-aivis", styleId: -1 },
-      styleName: "ノーマル",
+      voice: { voiceId: "uuid-aivis:-1" },
+      voiceName: "ノーマル",
+      settings: {},
       speedScale: 1,
       speechText: "こんにちは",
       engineVersion: "1.0.0",
@@ -81,8 +103,47 @@ describe("jobInputSnapshotSchema", () => {
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
 
+  it("accepts an openai-compatible snapshot with model settings", () => {
+    const snapshot = {
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      kind: "tts",
+      scriptVersionId: "scr_001",
+      narrationSegmentId: "line-p1-1",
+      languageEditionId: "led_en",
+      workId: "wrk_1",
+      speakerId: "speaker-narrator",
+      voiceProfileId: "vp_1",
+      adapterId: "openai-compatible",
+      voice: { voiceId: "af_heart" },
+      settings: { model: "kokoro" },
+      speedScale: 1,
+      speechText: "Hello",
+      engineVersion: null,
+    };
+    expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
   it("rejects an unknown job kind", () => {
-    const snapshot = { snapshotSchemaVersion: 1, kind: "translate" };
+    const snapshot = { snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION, kind: "translate" };
+    expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(false);
+  });
+
+  it("rejects a superseded snapshot version", () => {
+    const snapshot = {
+      snapshotSchemaVersion: 1,
+      kind: "tts",
+      scriptVersionId: "scr_001",
+      narrationSegmentId: "line-p1-1",
+      languageEditionId: "led_ja",
+      workId: "wrk_1",
+      speakerId: "speaker-narrator",
+      voiceProfileId: "vp_1",
+      adapterId: "voicevox",
+      voice: { voiceId: "uuid-1:3" },
+      speedScale: 1,
+      speechText: "こんにちは",
+      engineVersion: "0.19.0",
+    };
     expect(jobInputSnapshotSchema.safeParse(snapshot).success).toBe(false);
   });
 });
@@ -90,7 +151,7 @@ describe("jobInputSnapshotSchema", () => {
 describe("parseRenderJobSnapshot", () => {
   function renderSnapshotWith(content: unknown) {
     return {
-      snapshotSchemaVersion: 1,
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
       kind: "render",
       scriptVersionId: "scr_001",
       versionNumber: 1,
@@ -101,26 +162,14 @@ describe("parseRenderJobSnapshot", () => {
     };
   }
 
-  it("migrates v5 snapshot content to the current version", () => {
-    const v5 = validContentDocument() as unknown as Record<string, unknown>;
-    v5.schemaVersion = 5;
-    delete v5.visualTheme;
-    v5.scenes = (v5.scenes as Record<string, unknown>[]).map((scene) => {
-      const copy = { ...scene };
-      copy.accentColor = "#2563EB";
-      delete copy.accent;
-      return copy;
-    });
-    const parsed = parseRenderJobSnapshot(renderSnapshotWith(v5));
-    expect(parsed.content.schemaVersion).toBe(6);
-    expect(parsed.content.visualTheme).toEqual({ id: "soft-editorial", version: 1 });
-    for (const scene of parsed.content.scenes) {
-      expect(scene.accent).toEqual({ kind: "theme", token: "primary" });
-    }
+  it("rejects snapshot content with a non-current schemaVersion", () => {
+    const stale = validContentDocument() as unknown as Record<string, unknown>;
+    stale.schemaVersion = 8;
+    expect(() => parseRenderJobSnapshot(renderSnapshotWith(stale))).toThrow();
   });
 
   it("parses a current snapshot unchanged", () => {
     const parsed = parseRenderJobSnapshot(renderSnapshotWith(validContentDocument()));
-    expect(parsed.content.schemaVersion).toBe(6);
+    expect(parsed.content.schemaVersion).toBe(1);
   });
 });

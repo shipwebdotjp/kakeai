@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import {
+  SNAPSHOT_SCHEMA_VERSION,
   bulkTtsJobsResultSchema,
   createInitialContentDocument,
   type ContentDocument,
@@ -176,7 +177,9 @@ async function createProfile(): Promise<VoiceProfile> {
   return voiceProfiles.createVoiceProfile(prisma, {
     name: "めたん",
     adapterId: "voicevox",
-    settings: { speakerUuid: "uuid-metantan", defaultStyleId: 2 },
+    voiceId: "uuid-metantan:2",
+    locale: "ja-JP",
+    settings: {},
   });
 }
 
@@ -184,7 +187,19 @@ async function createAivisProfile(): Promise<VoiceProfile> {
   return voiceProfiles.createVoiceProfile(prisma, {
     name: "Aivis",
     adapterId: "aivisspeech",
-    settings: { speakerUuid: "uuid-aivis", defaultStyleId: -1 },
+    voiceId: "uuid-aivis:-1",
+    locale: "ja-JP",
+    settings: {},
+  });
+}
+
+async function createOpenAiProfile(): Promise<VoiceProfile> {
+  return voiceProfiles.createVoiceProfile(prisma, {
+    name: "Kokoro",
+    adapterId: "openai-compatible",
+    voiceId: "af_heart",
+    locale: "en-US",
+    settings: { model: "kokoro" },
   });
 }
 
@@ -211,6 +226,7 @@ async function createLineVersion(voiceProfileId: string): Promise<string> {
       captionText: "こんにちは",
       speechText: "こんにちは",
       selectedAudioTakeId: null,
+      expressionId: null,
     },
   ];
   const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
@@ -280,6 +296,7 @@ beforeAll(async () => {
     throw new Error("mock server did not bind");
   }
   config.voiceBaseUrls.voicevox = `http://127.0.0.1:${address.port}`;
+  config.voiceBaseUrls["openai-compatible"] = `http://127.0.0.1:${address.port}`;
 
   aivisServer = createServer(handleAivisMock);
   await new Promise<void>((resolve) => aivisServer.listen(0, "127.0.0.1", resolve));
@@ -300,32 +317,48 @@ afterAll(async () => {
 });
 
 describe("voice profiles", () => {
-  it("lists adapter voices with styles", async () => {
+  it("lists adapter voices as opaque voice ids", async () => {
     const listing = await voiceProfiles.listAdapterVoices(config, "voicevox");
     expect(listing.voices).toEqual([
-      {
-        voiceId: "uuid-metantan",
-        name: "四国めたん",
-        styles: [
-          { styleId: 2, name: "ノーマル" },
-          { styleId: 0, name: "あまあま" },
-        ],
-      },
+      { voiceId: "uuid-metantan:2", name: "四国めたん（ノーマル）", locale: "ja-JP" },
+      { voiceId: "uuid-metantan:0", name: "四国めたん（あまあま）", locale: "ja-JP" },
     ]);
   });
 
   it("lists aivisspeech voices including negative style ids", async () => {
     const listing = await voiceProfiles.listAdapterVoices(config, "aivisspeech");
     expect(listing.voices).toEqual([
-      {
-        voiceId: "uuid-aivis",
-        name: "Aivis話者",
-        styles: [
-          { styleId: -1, name: "ノーマル" },
-          { styleId: 0, name: "喜び" },
-        ],
-      },
+      { voiceId: "uuid-aivis:-1", name: "Aivis話者（ノーマル）", locale: "ja-JP" },
+      { voiceId: "uuid-aivis:0", name: "Aivis話者（喜び）", locale: "ja-JP" },
     ]);
+  });
+
+  it("lists the registered adapters", () => {
+    expect(voiceProfiles.listVoiceAdapters()).toEqual({
+      adapters: [
+        {
+          id: "voicevox",
+          label: "VOICEVOX",
+          defaultLocale: "ja-JP",
+          voiceSelection: "list",
+          modelSelection: false,
+        },
+        {
+          id: "aivisspeech",
+          label: "AivisSpeech",
+          defaultLocale: "ja-JP",
+          voiceSelection: "list",
+          modelSelection: false,
+        },
+        {
+          id: "openai-compatible",
+          label: "OpenAI互換",
+          defaultLocale: null,
+          voiceSelection: "list-or-manual",
+          modelSelection: true,
+        },
+      ],
+    });
   });
 
   it("rejects deletion of a referenced profile", async () => {
@@ -360,7 +393,7 @@ describe("tts job", () => {
     const scriptVersionId = await createLineVersion(profile.id);
 
     const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
-      styleId: 0,
+      voiceId: "uuid-metantan:0",
       speedScale: 0.75,
     });
     expect(job.kind).toBe("tts");
@@ -386,17 +419,16 @@ describe("tts job", () => {
     const provenance = JSON.parse(asset.provenanceJson ?? "{}") as Record<string, unknown>;
     expect(provenance).toMatchObject({
       adapterId: "voicevox",
-      voiceId: "uuid-metantan",
-      styleId: 0,
+      voiceId: "uuid-metantan:0",
       speakerName: "ナレーター",
-      styleName: "あまあま",
+      voiceName: "四国めたん（あまあま）",
       speedScale: 0.75,
       engineVersion: "0.19.0",
       scriptVersionId,
       narrationSegmentId: "line-tts",
     });
     expect(asset.originalFilename).toBe(
-      "tts-voicevox-ナレーター-あまあま-0.75x-line-tts.wav",
+      "tts-voicevox-ナレーター-四国めたん（あまあま）-0.75x-line-tts.wav",
     );
   });
 
@@ -413,7 +445,7 @@ describe("tts job", () => {
     const scriptVersionId = await createLineVersion(profile.id);
 
     const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
-      styleId: -1,
+      voiceId: "uuid-aivis:-1",
       speedScale: 1.25,
     });
     await drainWorker();
@@ -432,18 +464,38 @@ describe("tts job", () => {
     const provenance = JSON.parse(asset.provenanceJson ?? "{}") as Record<string, unknown>;
     expect(provenance).toMatchObject({
       adapterId: "aivisspeech",
-      voiceId: "uuid-aivis",
-      styleId: -1,
+      voiceId: "uuid-aivis:-1",
       speakerName: "ナレーター",
-      styleName: "ノーマル",
+      voiceName: "Aivis話者（ノーマル）",
       speedScale: 1.25,
       engineVersion: "1.0.0",
       scriptVersionId,
       narrationSegmentId: "line-tts",
     });
     expect(asset.originalFilename).toBe(
-      "tts-aivisspeech-ナレーター-ノーマル-1.25x-line-tts.wav",
+      "tts-aivisspeech-ナレーター-Aivis話者（ノーマル）-1.25x-line-tts.wav",
     );
+  });
+
+  it("queues a manual voice for a list-or-manual adapter", async () => {
+    const profile = await createOpenAiProfile();
+    const scriptVersionId = await createLineVersion(profile.id);
+    const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
+      voiceId: "af_heart",
+      speedScale: SPEED,
+    });
+    expect(job.kind).toBe("tts");
+    expect(job.status).toBe("queued");
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = JSON.parse(row.inputSnapshotJson) as {
+      adapterId?: string;
+      settings?: unknown;
+      voice?: { voiceId?: string };
+    };
+    expect(snapshot.adapterId).toBe("openai-compatible");
+    expect(snapshot.settings).toEqual({ model: "kokoro" });
+    expect(snapshot.voice?.voiceId).toBe("af_heart");
+    await jobs.cancelJob(prisma, job.id);
   });
 
   it("reuses an existing asset for identical bytes", async () => {
@@ -455,7 +507,7 @@ describe("tts job", () => {
     const scriptVersionId = await createLineVersion(profile.id);
 
     const first = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
-      styleId: 0,
+      voiceId: "uuid-metantan:0",
       speedScale: 0.75,
     });
     await drainWorker();
@@ -463,7 +515,7 @@ describe("tts job", () => {
     const countAfterFirst = await prisma.asset.count();
 
     const second = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
-      styleId: 0,
+      voiceId: "uuid-metantan:0",
       speedScale: 0.75,
     });
     await drainWorker();
@@ -489,6 +541,7 @@ describe("tts job", () => {
         captionText: "",
         speechText: "   ",
         selectedAudioTakeId: null,
+        expressionId: null,
       },
     ];
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
@@ -509,12 +562,12 @@ describe("tts job", () => {
     ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
   });
 
-  it("rejects a style outside the profile", async () => {
+  it("rejects a voice outside the profile", async () => {
     const profile = await createProfile();
     const scriptVersionId = await createLineVersion(profile.id);
     await expect(
       ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
-        styleId: 99,
+        voiceId: "uuid-metantan:99",
         speedScale: SPEED,
       }),
     ).rejects.toMatchObject({ code: "TTS_INPUT_INVALID" });
@@ -619,6 +672,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "いんとろ",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
       ];
       const point = content.scenes[1]!;
@@ -632,6 +686,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "いち",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
         {
           id: "line-b",
@@ -639,6 +694,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "に",
           selectedAudioTakeId: "take-b",
+          expressionId: null,
         },
         {
           id: "line-empty",
@@ -646,6 +702,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "   ",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
         {
           id: "line-nospeaker",
@@ -653,6 +710,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "よん",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
       ];
       content.audioTakes = [
@@ -705,6 +763,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "ぶい",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
         {
           id: "line-av",
@@ -712,6 +771,7 @@ describe("bulk tts jobs", () => {
           captionText: "",
           speechText: "えーぶい",
           selectedAudioTakeId: null,
+        expressionId: null,
         },
       ];
     });
@@ -736,7 +796,7 @@ describe("bulk tts jobs", () => {
 
 describe("buildTtsFilename", () => {
   const snapshot: TtsJobSnapshot = {
-    snapshotSchemaVersion: 1,
+    snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
     kind: "tts",
     scriptVersionId: "scr_1",
     narrationSegmentId: "line-1",
@@ -746,8 +806,9 @@ describe("buildTtsFilename", () => {
     speakerName: "四国めたん",
     voiceProfileId: "vp_1",
     adapterId: "aivisspeech",
-    voice: { voiceId: "uuid-1", styleId: -1 },
-    styleName: "ノーマル",
+    voice: { voiceId: "uuid-1:-1" },
+    voiceName: "ノーマル",
+    settings: {},
     speedScale: 1,
     speechText: "こんにちは",
     engineVersion: "1.0.0",
@@ -768,7 +829,7 @@ describe("buildTtsFilename", () => {
       "tts-aivisspeech-四国_めたん-ノーマル-line-1.wav",
     );
     expect(
-      buildTtsFilename({ ...snapshot, speakerName: "", styleName: undefined }),
-    ).toBe("tts-aivisspeech-speaker-1-style-1-line-1.wav");
+      buildTtsFilename({ ...snapshot, speakerName: "", voiceName: undefined }),
+    ).toBe("tts-aivisspeech-speaker-1-uuid-1_-1-line-1.wav");
   });
 });

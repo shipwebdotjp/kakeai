@@ -5,7 +5,7 @@ export interface RenderScope {
 
 const FNV_PRIME = 0x01000193;
 
-function fnv1a32(value: string, seed: number): number {
+export function fnv1a32(value: string, seed: number): number {
   let hash = seed >>> 0;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);

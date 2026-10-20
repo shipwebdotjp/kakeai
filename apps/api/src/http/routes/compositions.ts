@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from "express";
-import { join, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import {
   createCompositionRequestSchema,
@@ -7,13 +7,25 @@ import {
   publishCompositionRequestSchema,
 } from "@kakeai/contracts";
 import type { CompositionService } from "../../services/compositions.ts";
+import type { CompositionAuthoringService, ResolvedAuthoringStyle } from "../../services/authoring-context.ts";
 import { sendData } from "../envelope.ts";
 import { parseBody } from "../validation.ts";
 import { ApiError } from "../errors.ts";
 
+export function isPathInside(baseDir: string, target: string): boolean {
+  const base = resolve(baseDir);
+  const resolvedTarget = resolve(target);
+  if (resolvedTarget === base) {
+    return true;
+  }
+  const rel = relative(base, resolvedTarget);
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
 export function createCompositionsRouter(
   compositionService: CompositionService,
   mediaGuard?: RequestHandler,
+  authoringService?: CompositionAuthoringService,
 ): Router {
   const router = Router();
 
@@ -29,13 +41,15 @@ export function createCompositionsRouter(
   const contentHandler = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const versionId = req.params.versionId as string;
-      const subpath = (req.params[0] as string) || "index.html";
+      const rawBundlePath = req.params.bundlePath;
+      const subpath =
+        (Array.isArray(rawBundlePath) ? rawBundlePath.join("/") : rawBundlePath) || "index.html";
       const version = await compositionService.getVersionById(versionId);
       const dataDir = (compositionService as unknown as { dataDir: string }).dataDir;
       const bundleDir = resolve(join(dataDir, version.storageKey));
       const targetFile = resolve(join(bundleDir, subpath));
 
-      if (targetFile !== bundleDir && !targetFile.startsWith(bundleDir + sep)) {
+      if (!isPathInside(bundleDir, targetFile)) {
         throw new ApiError(403, "LOCAL_ACCESS_DENIED", "アクセスが拒否されました");
       }
 
@@ -50,15 +64,35 @@ export function createCompositionsRouter(
   };
 
   if (mediaGuard) {
-    router.get("/versions/:versionId/content/*", mediaGuard, contentHandler);
+    router.get("/versions/:versionId/content/*bundlePath", mediaGuard, contentHandler);
   } else {
-    router.get("/versions/:versionId/content/*", contentHandler);
+    router.get("/versions/:versionId/content/*bundlePath", contentHandler);
   }
 
   router.post("/", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = parseBody(createCompositionRequestSchema, req.body);
-      const composition = await compositionService.createComposition(body);
+      const { authoringStyle, ...compositionInput } = body;
+      let authoringSeed:
+        | {
+            provenance: ResolvedAuthoringStyle["provenance"];
+            kitFiles: Record<string, string>;
+          }
+        | undefined;
+      if (authoringStyle !== undefined) {
+        if (authoringService === undefined) {
+          throw new ApiError(500, "INTERNAL_ERROR", "Composition authoring is not configured.");
+        }
+        const resolved = await authoringService.resolve({
+          visualTheme: authoringStyle.visualTheme,
+          canvasProfile: body.canvasProfile,
+        });
+        authoringSeed = { provenance: resolved.provenance, kitFiles: resolved.kitFiles };
+      }
+      const composition = await compositionService.createComposition({
+        ...compositionInput,
+        authoringStyle: authoringSeed,
+      });
       sendData(res, 201, composition);
     } catch (err) {
       next(err);
@@ -69,6 +103,15 @@ export function createCompositionsRouter(
     try {
       const composition = await compositionService.getCompositionById(req.params.id as string);
       sendData(res, 200, composition);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/:id/draft/files", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const files = await compositionService.getDraftFiles(req.params.id as string);
+      sendData(res, 200, files);
     } catch (err) {
       next(err);
     }
@@ -87,8 +130,43 @@ export function createCompositionsRouter(
   router.post("/:id/publish", async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = parseBody(publishCompositionRequestSchema, req.body);
-      const version = await compositionService.publish(req.params.id as string, body);
-      sendData(res, 201, version);
+      const compositionId = req.params.id as string;
+      const rawDryRun = req.query.dryRun;
+      const dryRun = Array.isArray(rawDryRun) ? rawDryRun[0] : rawDryRun;
+      if (
+        rawDryRun !== undefined &&
+        (typeof dryRun !== "string" || (dryRun !== "true" && dryRun !== "false"))
+      ) {
+        throw new ApiError(422, "VALIDATION_ERROR", undefined, {
+          issues: [{ path: ["dryRun"], code: "invalid_value", message: "dryRun は 'true' または 'false' を指定してください" }],
+        });
+      }
+      const diagnoseFonts = async (): Promise<string[]> => {
+        if (authoringService === undefined) {
+          return [];
+        }
+        try {
+          const composition = await compositionService.getCompositionById(compositionId);
+          return await authoringService.diagnoseStyleFonts(composition.draft?.styleProvenance);
+        } catch (error) {
+          return [
+            `Font診断を省略しました: ${error instanceof Error ? error.message : String(error)}`,
+          ];
+        }
+      };
+      if (dryRun === "true") {
+        const [manifest, fontDiagnostics] = await Promise.all([
+          compositionService.validateDraft(compositionId, body),
+          diagnoseFonts(),
+        ]);
+        sendData(res, 200, { manifest }, { fontDiagnostics });
+        return;
+      }
+      const [version, fontDiagnostics] = await Promise.all([
+        compositionService.publish(compositionId, body),
+        diagnoseFonts(),
+      ]);
+      sendData(res, 201, version, { fontDiagnostics });
     } catch (err) {
       next(err);
     }

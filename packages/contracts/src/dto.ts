@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { idSchema, localeSchema, nonNegativeInt, positiveInt, timestampSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { templateRefSchema } from "./content/nested";
+import { visualThemeDefinitionSchema } from "./content/theme";
 import { assetTagsSchema } from "./asset";
 import { errorCodeSchema } from "./error";
 
@@ -87,7 +89,10 @@ export const assetSchema = z.object({
   durationMs: nonNegativeInt.nullable(),
   widthPx: positiveInt.nullable(),
   heightPx: positiveInt.nullable(),
+  hasAudio: z.boolean(),
   tags: assetTagsSchema,
+  favoritedAt: timestampSchema.nullable(),
+  archivedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
   contentUrl: z.string().min(1),
 });
@@ -102,6 +107,8 @@ export const artifactSchema = z.object({
   widthPx: positiveInt.nullable(),
   heightPx: positiveInt.nullable(),
   fps: z.number().finite().positive().nullable(),
+  videoCodec: z.string().min(1).nullable(),
+  audioCodec: z.string().min(1).nullable(),
   createdAt: timestampSchema,
   contentUrl: z.string().min(1),
 });
@@ -226,6 +233,11 @@ export const previewAssetSchema = z.object({
   sha256: z.string().min(1),
 });
 
+export const previewCompositionSchema = z.object({
+  compositionVersionId: idSchema,
+  entryUrl: z.string().min(1),
+});
+
 export const previewRendererSchema = z.object({
   engine: z.literal("hyperframes"),
   compilerVersion: z.string().min(1),
@@ -260,6 +272,7 @@ export const previewTimelineSchema = z.object({
 const previewBodySchema = z.object({
   compositionHtml: z.string().min(1),
   assets: z.array(previewAssetSchema),
+  compositions: z.array(previewCompositionSchema),
   renderer: previewRendererSchema,
   timeline: previewTimelineSchema,
 });
@@ -274,6 +287,7 @@ export const draftPreviewSourceSchema = z.object({
 
 export const draftPreviewSchema = previewBodySchema.extend({
   source: draftPreviewSourceSchema,
+  fontDiagnostics: z.array(z.string()).optional(),
 });
 
 export type WorkSummary = z.infer<typeof workSummarySchema>;
@@ -288,6 +302,7 @@ export type BulkTtsJobEntry = z.infer<typeof bulkTtsJobEntrySchema>;
 export type BulkTtsJobExclusion = z.infer<typeof bulkTtsJobExclusionSchema>;
 export type BulkTtsJobsResult = z.infer<typeof bulkTtsJobsResultSchema>;
 export type PreviewAsset = z.infer<typeof previewAssetSchema>;
+export type PreviewComposition = z.infer<typeof previewCompositionSchema>;
 export type PreviewRenderer = z.infer<typeof previewRendererSchema>;
 export type PreviewLineTiming = z.infer<typeof previewLineTimingSchema>;
 export type PreviewCueTiming = z.infer<typeof previewCueTimingSchema>;
@@ -296,3 +311,90 @@ export type PreviewTimeline = z.infer<typeof previewTimelineSchema>;
 export type ScriptVersionPreview = z.infer<typeof scriptVersionPreviewSchema>;
 export type DraftPreviewSource = z.infer<typeof draftPreviewSourceSchema>;
 export type DraftPreview = z.infer<typeof draftPreviewSchema>;
+
+export const fontFaceSchema = z.object({
+  platformId: z.string().min(1),
+  family: z.string().min(1),
+  displayName: z.string().min(1),
+  postScriptName: z.string().min(1),
+  weight: z.number().int(),
+  style: z.enum(["normal", "italic", "oblique"]),
+  stretch: z.string(),
+  verifiedLocalFace: z.boolean().optional(),
+  variableAxes: z
+    .array(
+      z.object({
+        tag: z.string(),
+        min: z.number(),
+        max: z.number(),
+        default: z.number(),
+      }),
+    )
+    .optional(),
+  available: z.boolean(),
+});
+export type FontFace = z.infer<typeof fontFaceSchema>;
+
+export const fontCatalogSchema = z.object({
+  supported: z.boolean(),
+  faces: z.array(fontFaceSchema),
+  reason: z.string().nullable(),
+  updatedAt: timestampSchema,
+});
+export type FontCatalog = z.infer<typeof fontCatalogSchema>;
+
+export const themeRevisionSchema = z.object({
+  id: idSchema,
+  themeId: idSchema,
+  version: positiveInt,
+  definition: visualThemeDefinitionSchema,
+  createdAt: timestampSchema,
+});
+export type ThemeRevision = z.infer<typeof themeRevisionSchema>;
+
+export const themeDraftSchema = z.object({
+  id: idSchema,
+  themeId: idSchema,
+  definition: visualThemeDefinitionSchema,
+  updatedAt: timestampSchema,
+});
+export type ThemeDraft = z.infer<typeof themeDraftSchema>;
+
+export const themeSummarySchema = z.object({
+  id: idSchema,
+  isBuiltIn: z.boolean(),
+  name: z.string().min(1),
+  archivedAt: timestampSchema.nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  latestRevision: themeRevisionSchema.nullable(),
+  hasDraft: z.boolean(),
+  missingFonts: z.array(z.string()).optional(),
+});
+export type ThemeSummary = z.infer<typeof themeSummarySchema>;
+
+export const themeDetailSchema = themeSummarySchema.extend({
+  revisions: z.array(themeRevisionSchema),
+  draft: themeDraftSchema.nullable(),
+});
+export type ThemeDetail = z.infer<typeof themeDetailSchema>;
+
+export const thumbnailSchema = z.object({
+  id: idSchema,
+  languageEditionId: idSchema,
+  label: z.string(),
+  schemaVersion: positiveInt,
+  template: templateRefSchema,
+  input: z.unknown(),
+  isPrimary: z.boolean(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+export type Thumbnail = z.infer<typeof thumbnailSchema>;
+
+export const thumbnailPreviewSchema = z.object({
+  html: z.string().min(1),
+  width: positiveInt,
+  height: positiveInt,
+});
+export type ThumbnailPreview = z.infer<typeof thumbnailPreviewSchema>;

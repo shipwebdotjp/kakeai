@@ -62,7 +62,7 @@ export function renderSiteMockup(input: unknown, context: RenderContext): Render
       ? [
           {
             targetId: screenId,
-            preset: animation.preset,
+            action: animation.preset,
             startMs: 0,
             durationMs: Math.min(animation.durationMs, policy.maxDurationMs),
           },

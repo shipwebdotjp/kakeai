@@ -229,6 +229,7 @@ describe("draft preview", () => {
         captionText: "古い尺",
         speechText: "ふるいしゃく",
         selectedAudioTakeId: "take-stale",
+        expressionId: null,
       },
     ];
     content.audioTakes = [
@@ -277,6 +278,7 @@ describe("draft preview", () => {
       captionText: "長い音声",
       speechText: "ながいおんせい",
       selectedAudioTakeId: "take-overflow",
+      expressionId: null,
     });
     await expect(
       scriptVersions.createDraftPreview(prisma, config.directories, edition.id, { content }),

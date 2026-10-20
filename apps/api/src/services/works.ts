@@ -99,6 +99,68 @@ export async function createWork(
   return getWork(prisma, workId);
 }
 
+export async function cloneWork(
+  prisma: PrismaClient,
+  workId: string,
+  title: string,
+): Promise<Work> {
+  const work = await prisma.work.findUnique({
+    where: { id: workId },
+    include: {
+      languageEditions: {
+        include: {
+          currentScriptVersion: true,
+        },
+      },
+    },
+  });
+  if (work === null) {
+    throw resourceNotFound("work", workId);
+  }
+  const primaryEdition =
+    work.languageEditions.find((edition) => edition.locale === work.originalLocale) ??
+    work.languageEditions[0];
+  if (!primaryEdition) {
+    throw resourceNotFound("work", workId);
+  }
+  if (!primaryEdition.currentScriptVersion) {
+    throw new ApiError(500, "INTERNAL_ERROR", "現在の台本版が設定されていません。");
+  }
+  const sourceScript = primaryEdition.currentScriptVersion;
+
+  const newWorkId = await prisma.$transaction(async (tx) => {
+    const newWork = await tx.work.create({
+      data: {
+        title,
+        originalLocale: work.originalLocale,
+        parentWorkId: workId,
+      },
+    });
+    const newEdition = await tx.languageEdition.create({
+      data: {
+        workId: newWork.id,
+        locale: primaryEdition.locale,
+      },
+    });
+    const newScript = await tx.scriptVersion.create({
+      data: {
+        languageEditionId: newEdition.id,
+        versionNumber: 1,
+        contentSchemaVersion: sourceScript.contentSchemaVersion,
+        contentJson: sourceScript.contentJson,
+        sourceScriptVersionId: null,
+      },
+    });
+    await tx.languageEdition.update({
+      where: { id: newEdition.id },
+      data: { currentScriptVersionId: newScript.id },
+    });
+    return newWork.id;
+  });
+
+  return getWork(prisma, newWorkId);
+}
+
 export async function updateWork(
   prisma: PrismaClient,
   workId: string,
@@ -180,6 +242,11 @@ export async function deleteWork(
       data: { sourceScriptVersionId: null },
     });
     await tx.scriptVersion.deleteMany({ where: { languageEditionId: { in: editionIds } } });
+    await tx.languageEdition.updateMany({
+      where: { workId },
+      data: { primaryThumbnailId: null },
+    });
+    await tx.thumbnail.deleteMany({ where: { languageEditionId: { in: editionIds } } });
     await tx.languageEdition.deleteMany({ where: { workId } });
     await tx.work.delete({ where: { id: workId } });
     return removedArtifactKeys;

@@ -6,13 +6,18 @@
 
 Composition manifest に text、color、number、enum、Kakeai Asset を型付き slot として宣言し、VisualCue ごとの値を渡せるようにする。HTML 文字列や任意 URL を slot に渡さず、Asset は compiler が preview / render 用 URL またはローカルパスへ解決する。
 
-## R2: 複数 instance
+## R2: 複数 instance（完了）
 
-同じ CompositionVersion を一つの render project へ複数置けるようにする。AI authoring contract に instance ID placeholder を追加し、DOM ID、CSS、timeline ID、script 内参照を instance ごとに安全に分離する。v1 の「一 version 一参照」制約をこの段階で外す。
+同じ CompositionVersion を一つの render project へ複数置けるようにする。v1 の「一 version 一参照」制約を外した。HyperFrames の native nested composition が、重複ホストへ instance ごとの runtime composition ID（`<id>__hf<index>`）を割り当て、CSS・DOM 参照・timeline 登録・SVG id を instance ごとにスコープするため、AI authoring contract に instance ID placeholder を追加する必要はなかった。
 
 ## R3: 配置と Composite Visual Template
 
-CompositionVersion を full-screen background 以外にも置けるようにする。端末フレーム、サイトモックアップ、カードなどの `NestedVisual` に対応し、canvas 比率、crop、mask、親子 timeline の表示区間を明示した契約にする。
+CompositionVersion を full-screen background 以外にも置けるようにする。端末フレーム、サイトモックアップ、カードなどの `NestedVisual` に対応し、canvas 比率、crop、mask、親子 timeline の表示区間を明示した契約にする。カード・端末枠への埋め込みは、background range 解禁とは別の埋め込み契約として後続で設計する（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md)）。
+
+- 初回対象は `scene.device-frame` の laptop／phone screen のみ（`NestedVisual` の `kind: "composition"`）。`site-mockup`、`media.card`、任意 mask・透視変形は対象外。
+- Canvas Profile（`landscape` = 1920×1080 / `portrait` = 1080×1920）を v1 のプロファイルセットとして実装し、`portrait` を phone screen（9:16）に収める。任意比率・mask・透視変形は後続。
+- `fit`（`contain` / `cover`）、任意 `zoom`、任意 `position` を slot の content box へ適用する。frame ごとの px 定数は持たず、Composition slot を `container-type: size` にして `cqw`/`cqh` と `tan(atan2())` で倍率を求める。
+- 後続の site mockup、TV、独自ベゼルは、同じ `NestedComposition` を受ける screen slot をそれぞれの trusted template に追加して実現する。
 
 ## R4: 音声と派生 cache
 

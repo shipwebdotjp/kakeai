@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idSchema } from "./primitives";
 
-export const audioCueRoleSchema = z.enum(["bgm", "sfx"]);
+export const audioCueRoleSchema = z.enum(["bgm", "sfx", "program"]);
 
 export const audioCueRangeSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("work") }),
@@ -17,4 +17,5 @@ export const audioCueSchema = z.strictObject({
   loop: z.boolean().optional(),
 });
 
+export type AudioCueRole = z.infer<typeof audioCueRoleSchema>;
 export type AudioCue = z.infer<typeof audioCueSchema>;

@@ -1,10 +1,13 @@
 import {
   SCENE_PADDING_MS,
   SILENT_CAPTION_DURATION_MS,
+  compositionFullBleedInputSchema,
+  compositionFullBleedV1,
   type ContentDocument,
   type Scene,
   type SceneTransitionPreset,
   type VisualCue,
+  type Warning,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 
@@ -14,11 +17,38 @@ export interface TimelineIssue {
   message: string;
 }
 
+export const COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE =
+  "composition_crossfade_window_insufficient";
+
+export const COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE =
+  "Scene crossfade に必要な表示窓が Composition の尺を超えています。Composition を長くするか crossfade を短くしてください。";
+
+export function compositionTransitionOverflowMessage(spanMs: number): string {
+  return `transition の合計尺がCue範囲（${spanMs}ms）を超えています。`;
+}
+
+export function compositionClipReachesSceneEnd(
+  windowStartMs: number,
+  effectiveSpanMs: number,
+  placementDurationMs: number,
+): boolean {
+  return windowStartMs + effectiveSpanMs >= placementDurationMs;
+}
+
+export function compositionCrossfadeExceedsChild(
+  effectiveSpanMs: number,
+  crossfadeMs: number,
+  childDurationMs: number,
+): boolean {
+  return effectiveSpanMs + crossfadeMs > childDurationMs;
+}
+
 export interface LinePlacement {
   lineId: string;
   startMs: number;
   durationMs: number;
   endMs: number;
+  gapBeforeMs: number;
 }
 
 export interface ScenePlacement {
@@ -33,6 +63,10 @@ export interface ScenePlacement {
 export interface ResolvedTimeline {
   scenes: ScenePlacement[];
   totalDurationMs: number;
+}
+
+export function narrationGapBeforeMs(line: { gapBeforeMs?: number }): number {
+  return line.gapBeforeMs ?? 0;
 }
 
 function takeDurationById(document: ContentDocument): Map<string, number> {
@@ -69,8 +103,16 @@ function placeAutoLines(
   const placements: LinePlacement[] = [];
   let cursor = sceneStartMs + SCENE_PADDING_MS;
   for (const line of scene.lines) {
+    const gapBeforeMs = narrationGapBeforeMs(line);
+    cursor += gapBeforeMs;
     const durationMs = takeDurationMs(takes, line, sceneIndex) ?? SILENT_CAPTION_DURATION_MS;
-    placements.push({ lineId: line.id, startMs: cursor, durationMs, endMs: cursor + durationMs });
+    placements.push({
+      lineId: line.id,
+      startMs: cursor,
+      durationMs,
+      endMs: cursor + durationMs,
+      gapBeforeMs,
+    });
     cursor += durationMs;
   }
   return placements;
@@ -90,25 +132,31 @@ function placeFixedLines(
     (total, line) => total + (takeDurationMs(takes, line, sceneIndex) ?? 0),
     0,
   );
-  if (audioTotalMs > durationMs) {
+  const gapTotalMs = scene.lines.reduce(
+    (total, line) => total + narrationGapBeforeMs(line),
+    0,
+  );
+  if (audioTotalMs + gapTotalMs > durationMs) {
     return {
       lines: [],
       issues: [
         {
           path: ["scenes", sceneIndex, "timing"],
           code: "fixed_duration_overflow",
-          message: `選択済み音声の合計尺が固定尺を超えています。`,
+          message: `選択済み音声とセリフ前の間の合計尺が固定尺を超えています。`,
         },
       ],
     };
   }
   const silentLines = scene.lines.filter((line) => line.selectedAudioTakeId === null);
-  const remainderMs = durationMs - audioTotalMs;
+  const remainderMs = durationMs - audioTotalMs - gapTotalMs;
   const baseMs = silentLines.length === 0 ? 0 : Math.floor(remainderMs / silentLines.length);
   let extraMs = silentLines.length === 0 ? 0 : remainderMs % silentLines.length;
   const lines: LinePlacement[] = [];
   let cursor = sceneStartMs;
   for (const line of scene.lines) {
+    const gapBeforeMs = narrationGapBeforeMs(line);
+    cursor += gapBeforeMs;
     let lineDurationMs: number;
     if (line.selectedAudioTakeId === null) {
       lineDurationMs = baseMs + (extraMs > 0 ? 1 : 0);
@@ -118,7 +166,13 @@ function placeFixedLines(
     } else {
       lineDurationMs = takeDurationMs(takes, line, sceneIndex) ?? 0;
     }
-    lines.push({ lineId: line.id, startMs: cursor, durationMs: lineDurationMs, endMs: cursor + lineDurationMs });
+    lines.push({
+      lineId: line.id,
+      startMs: cursor,
+      durationMs: lineDurationMs,
+      endMs: cursor + lineDurationMs,
+      gapBeforeMs,
+    });
     cursor += lineDurationMs;
   }
   return { lines, issues: [] };
@@ -148,7 +202,8 @@ export function resolveTimeline(document: ContentDocument): ResolvedTimeline {
     }
     const lines = placeAutoLines(scene, takes, cursor, sceneIndex);
     const linesTotalMs = lines.reduce((total, line) => total + line.durationMs, 0);
-    const durationMs = SCENE_PADDING_MS + linesTotalMs + SCENE_PADDING_MS;
+    const gapsTotalMs = lines.reduce((total, line) => total + line.gapBeforeMs, 0);
+    const durationMs = SCENE_PADDING_MS + gapsTotalMs + linesTotalMs + SCENE_PADDING_MS;
     scenes.push({
       sceneId: scene.id,
       sceneIndex,
@@ -311,10 +366,105 @@ export function collectCueTransitionIssues(
   return cueTransitionIssues(document, timeline);
 }
 
+export function collectOffsetRangeWarnings(
+  document: ContentDocument,
+  timeline: ResolvedTimeline = resolveTimeline(document),
+): Warning[] {
+  const warnings: Warning[] = [];
+  for (const placement of timeline.scenes) {
+    const scene = document.scenes[placement.sceneIndex];
+    if (scene === undefined) {
+      continue;
+    }
+    scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.range.kind !== "offset") {
+        return;
+      }
+      const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
+      if (cue.range.startMs >= placement.durationMs || cue.range.startMs >= cue.range.endMs) {
+        warnings.push({
+          path: cuePath,
+          code: "offset_range_out_of_scene",
+          message: `オフセット表示区間がシーン尺（${placement.durationMs}ms）に収まらないため、このCueは表示されません。`,
+        });
+        return;
+      }
+      if (cue.range.endMs > placement.durationMs) {
+        warnings.push({
+          path: [...cuePath, "range", "endMs"],
+          code: "offset_range_clamped",
+          message: `オフセット表示区間の終了がシーン尺（${placement.durationMs}ms）を超えているため、シーン末尾で切り詰められます。`,
+        });
+      }
+    });
+  }
+  return warnings;
+}
+
 export function collectTimelineIssues(document: ContentDocument): TimelineIssue[] {
   const timeline = resolveTimeline(document);
   return [
     ...cueTransitionIssues(document, timeline),
     ...sceneTransitionIssues(document, timeline),
   ];
+}
+
+export function collectCompositionWindowIssues(
+  document: ContentDocument,
+  durationByCompositionVersionId: ReadonlyMap<string, number>,
+  timeline: ResolvedTimeline = resolveTimeline(document),
+): TimelineIssue[] {
+  const issues: TimelineIssue[] = [];
+  for (const [placementIndex, placement] of timeline.scenes.entries()) {
+    const scene = document.scenes[placement.sceneIndex];
+    if (scene === undefined) {
+      continue;
+    }
+    scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.template.id !== compositionFullBleedV1.id) {
+        return;
+      }
+      const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
+      const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
+      if (!parsedInput.success) {
+        return;
+      }
+      const childDurationMs = durationByCompositionVersionId.get(
+        parsedInput.data.compositionVersionId,
+      );
+      if (childDurationMs === undefined) {
+        return;
+      }
+      const window = resolveCueWindow(placement, cue, cuePath);
+      if (window === null) {
+        return;
+      }
+      const effectiveSpanMs = Math.min(window.endMs - window.startMs, childDurationMs);
+      if (cueTransitionTotalMs(cue) > effectiveSpanMs) {
+        issues.push({
+          path: cuePath,
+          code: "transition_range_overflow",
+          message: compositionTransitionOverflowMessage(effectiveSpanMs),
+        });
+      }
+      const next = timeline.scenes[placementIndex + 1];
+      const nextScene = next === undefined ? undefined : document.scenes[next.sceneIndex];
+      if (next === undefined || nextScene === undefined) {
+        return;
+      }
+      const { preset, durationMs } = sceneTransitionOf(nextScene);
+      if (
+        preset === "crossfade" &&
+        compositionClipReachesSceneEnd(window.startMs, effectiveSpanMs, placement.durationMs) &&
+        compositionCrossfadeExceedsChild(effectiveSpanMs, durationMs, childDurationMs)
+      ) {
+        issues.push({
+          path: ["scenes", next.sceneIndex, "transition", "enter", "durationMs"],
+          code: COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE,
+          message: COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE,
+        });
+      }
+    });
+  }
+  return issues;
 }

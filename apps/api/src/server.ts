@@ -10,13 +10,22 @@ import { createHealthRouter } from "./http/health.ts";
 import { createArtifactsRouter } from "./http/routes/artifacts.ts";
 import { createAssetsRouter } from "./http/routes/assets.ts";
 import { createCharactersRouter } from "./http/routes/characters.ts";
+import { createFaceSetsRouter } from "./http/routes/face-sets.ts";
 import { createJobsRouter } from "./http/routes/jobs.ts";
 import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createVoiceProfilesRouter } from "./http/routes/voice-profiles.ts";
 import { createWorksRouter } from "./http/routes/works.ts";
 import { createCompositionsRouter } from "./http/routes/compositions.ts";
+import { createCompositionAuthoringRouter } from "./http/routes/composition-authoring.ts";
+import { createThemesRouter } from "./http/routes/themes.ts";
+import { createFontsRouter } from "./http/routes/fonts.ts";
+import { createThumbnailsRouter } from "./http/routes/thumbnails.ts";
+import type { Rasterizer } from "./media/rasterize.ts";
 import { CompositionService } from "./services/compositions.ts";
+import { CompositionAuthoringService } from "./services/authoring-context.ts";
+import { ThemeService } from "./services/themes.ts";
+import { getSharedFontCatalogService, type FontCatalogService } from "./services/font-catalog.ts";
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
 import {
   API_BASE_PATH,
@@ -32,8 +41,10 @@ export interface AppDependencies {
   config: AppConfig;
   prisma: PrismaClient;
   mediaSessionToken: string;
+  fontCatalogService?: FontCatalogService;
   getWorkerStatus: () => WorkerStatus;
   getStorageStatus?: () => StorageStatus;
+  rasterizer?: Rasterizer;
 }
 
 interface BodyParserError {
@@ -111,6 +122,14 @@ export function createApp(dependencies: AppDependencies): Express {
 
   const mediaGuard = mediaAccessGuard(policy, dependencies.mediaSessionToken);
 
+  const fontCatalogService = dependencies.fontCatalogService ?? getSharedFontCatalogService();
+  void fontCatalogService.getCatalog().catch((error) => {
+    logger.warn("font_catalog_warmup_failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+  const themeService = new ThemeService(dependencies.prisma, fontCatalogService);
+
   const api = express.Router();
   api.use(express.json({ limit: JSON_BODY_LIMIT }));
   api.use(
@@ -137,6 +156,15 @@ export function createApp(dependencies: AppDependencies): Express {
       prisma: dependencies.prisma,
       directories: dependencies.config.directories,
       config: dependencies.config,
+      fontCatalogService,
+    }),
+  );
+  api.use(
+    createThumbnailsRouter({
+      prisma: dependencies.prisma,
+      directories: dependencies.config.directories,
+      mediaGuard,
+      rasterizer: dependencies.rasterizer,
     }),
   );
   api.use(
@@ -146,6 +174,7 @@ export function createApp(dependencies: AppDependencies): Express {
     }),
   );
   api.use(createCharactersRouter({ prisma: dependencies.prisma }));
+  api.use(createFaceSetsRouter({ prisma: dependencies.prisma }));
   api.use(createJobsRouter(dependencies.prisma));
   api.use(
     createArtifactsRouter({
@@ -167,7 +196,21 @@ export function createApp(dependencies: AppDependencies): Express {
     db: dependencies.prisma,
     dataDir: dependencies.config.directories.root,
   });
-  api.use("/compositions", createCompositionsRouter(compositionService, mediaGuard));
+  const compositionAuthoringService = new CompositionAuthoringService({
+    db: dependencies.prisma,
+    fontCatalogService,
+  });
+  api.use(
+    "/compositions",
+    createCompositionsRouter(compositionService, mediaGuard, compositionAuthoringService),
+  );
+  api.use(
+    "/composition-authoring-contexts",
+    createCompositionAuthoringRouter(compositionAuthoringService),
+  );
+
+  api.use("/themes", createThemesRouter(themeService));
+  api.use("/fonts", createFontsRouter(fontCatalogService));
 
   app.use(API_BASE_PATH, api);
   app.use(API_BASE_PATH, (_req, res) => {

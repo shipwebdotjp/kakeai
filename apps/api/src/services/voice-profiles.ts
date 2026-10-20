@@ -1,13 +1,18 @@
 import {
+  localeSchema,
+  voiceAdapterDescriptorFor,
+  voiceAdapterDescriptors,
   voiceAdapterIdSchema,
-  voiceProfileSettingsSchemaFor,
+  voiceProfileExtrasSchemaFor,
   type ContentDocument,
   type CreateVoiceProfileRequest,
   type UpdateVoiceProfileRequest,
+  type ModelList,
   type VoiceAdapterId,
+  type VoiceAdapterList,
   type VoiceList,
   type VoiceProfile,
-  type VoiceProfileSettings,
+  type VoiceProfileExtras,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent } from "../domain/content-json.ts";
@@ -16,6 +21,18 @@ import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError } from "../http/validation.ts";
 import { getTtsAdapter, TtsEngineUnavailableError } from "../tts/index.ts";
 import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
+
+export function listVoiceAdapters(): VoiceAdapterList {
+  return {
+    adapters: voiceAdapterDescriptors.map((descriptor) => ({
+      id: descriptor.id,
+      label: descriptor.label,
+      defaultLocale: descriptor.defaultLocale,
+      voiceSelection: descriptor.voiceSelection,
+      modelSelection: descriptor.modelSelection,
+    })),
+  };
+}
 
 export async function listVoiceProfiles(prisma: PrismaClient): Promise<VoiceProfile[]> {
   const rows = await prisma.voiceProfile.findMany({ orderBy: { createdAt: "asc" } });
@@ -33,11 +50,11 @@ export async function getVoiceProfile(
   return toVoiceProfile(row);
 }
 
-function parseVoiceProfileSettings(
+function parseVoiceProfileExtras(
   adapterId: VoiceAdapterId,
   settings: unknown,
-): VoiceProfileSettings {
-  const parsed = voiceProfileSettingsSchemaFor(adapterId).safeParse(settings);
+): VoiceProfileExtras {
+  const parsed = voiceProfileExtrasSchemaFor(adapterId).safeParse(settings);
   if (!parsed.success) {
     throw validationError(
       parsed.error.issues.map((issue) => ({
@@ -55,6 +72,16 @@ function parseVoiceProfileSettings(
   return parsed.data;
 }
 
+function parseVoiceProfileLocale(locale: unknown): string {
+  const parsed = localeSchema.safeParse(locale);
+  if (!parsed.success) {
+    throw validationError([
+      { path: ["locale"], code: "invalid_value", message: "未対応の言語です。" },
+    ]);
+  }
+  return parsed.data;
+}
+
 export async function createVoiceProfile(
   prisma: PrismaClient,
   input: CreateVoiceProfileRequest,
@@ -63,7 +90,9 @@ export async function createVoiceProfile(
     data: {
       name: input.name,
       adapterId: input.adapterId,
-      settingsJson: JSON.stringify(parseVoiceProfileSettings(input.adapterId, input.settings)),
+      voiceId: input.voiceId,
+      locale: parseVoiceProfileLocale(input.locale),
+      settingsJson: JSON.stringify(parseVoiceProfileExtras(input.adapterId, input.settings)),
     },
   });
   return toVoiceProfile(row);
@@ -82,12 +111,14 @@ export async function updateVoiceProfile(
   if (!adapterId.success) {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルのアダプターが不正です。");
   }
-  const settings = parseVoiceProfileSettings(adapterId.data, input.settings);
+  const settings = parseVoiceProfileExtras(adapterId.data, input.settings);
   try {
     const row = await prisma.voiceProfile.update({
       where: { id: voiceProfileId },
       data: {
         name: input.name,
+        voiceId: input.voiceId,
+        locale: parseVoiceProfileLocale(input.locale),
         settingsJson: JSON.stringify(settings),
       },
     });
@@ -117,7 +148,12 @@ async function findVoiceProfileReferences(
         scriptVersionId: version.id,
       });
     }
-    if (content.speakers.some((speaker) => speaker.voiceProfileId === voiceProfileId)) {
+    const referenced =
+      content.speakers.some((speaker) => speaker.voiceProfileId === voiceProfileId) ||
+      content.characters.some((character) =>
+        character.voices.some((voice) => voice.voiceProfileId === voiceProfileId),
+      );
+    if (referenced) {
       references.push(version.id);
     }
   }
@@ -134,15 +170,15 @@ export async function deleteVoiceProfile(
       throw resourceNotFound("voice_profile", voiceProfileId);
     }
     const references = await findVoiceProfileReferences(transaction, voiceProfileId);
-    const characters = await transaction.character.findMany({
+    const characters = await transaction.characterVoice.findMany({
       where: { voiceProfileId },
-      select: { id: true },
+      select: { characterId: true },
     });
     if (references.length > 0 || characters.length > 0) {
       throw new ApiError(409, "VOICE_PROFILE_IN_USE", undefined, {
         voiceProfileId,
         scriptVersionIds: references,
-        characterIds: characters.map((character) => character.id),
+        characterIds: characters.map((character) => character.characterId),
       });
     }
     await transaction.voiceProfile.delete({ where: { id: voiceProfileId } });
@@ -159,14 +195,57 @@ export function parseAdapterId(value: string): VoiceAdapterId {
   return parsed.data;
 }
 
+function voiceQuerySettings(
+  adapterId: VoiceAdapterId,
+  model: string | undefined,
+): VoiceProfileExtras | null {
+  if (
+    model === undefined ||
+    model.trim().length === 0 ||
+    !voiceAdapterDescriptorFor(adapterId).modelSelection
+  ) {
+    return null;
+  }
+  const parsed = voiceProfileExtrasSchemaFor(adapterId).safeParse({ model: model.trim() });
+  if (!parsed.success) {
+    throw validationError([
+      { path: ["model"], code: "invalid_value", message: "model が不正です。" },
+    ]);
+  }
+  return parsed.data;
+}
+
 export async function listAdapterVoices(
   config: AppConfig,
   adapterId: VoiceAdapterId,
+  model?: string,
 ): Promise<VoiceList> {
   const adapter = getTtsAdapter(adapterId);
   try {
-    const listing = await adapter.listVoices(resolveVoiceBaseUrl(config, adapterId));
+    const listing = await adapter.listVoices(
+      { baseUrl: resolveVoiceBaseUrl(config, adapterId) },
+      { settings: voiceQuerySettings(adapterId, model) },
+    );
     return { adapterId, voices: listing.voices };
+  } catch (error) {
+    if (error instanceof TtsEngineUnavailableError) {
+      throw new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
+    }
+    throw error;
+  }
+}
+
+export async function listAdapterModels(
+  config: AppConfig,
+  adapterId: VoiceAdapterId,
+): Promise<ModelList> {
+  const adapter = getTtsAdapter(adapterId);
+  if (adapter.listModels === undefined) {
+    return { adapterId, models: [] };
+  }
+  try {
+    const models = await adapter.listModels({ baseUrl: resolveVoiceBaseUrl(config, adapterId) });
+    return { adapterId, models };
   } catch (error) {
     if (error instanceof TtsEngineUnavailableError) {
       throw new ApiError(503, "TTS_ENGINE_UNAVAILABLE");

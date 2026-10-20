@@ -29,6 +29,9 @@ model LanguageEdition {
   currentScriptVersionId String?         @unique
   currentScriptVersion   ScriptVersion?  @relation("EditionCurrent", fields: [currentScriptVersionId], references: [id], onDelete: Restrict)
   scriptVersions         ScriptVersion[] @relation("EditionVersions")
+  thumbnails             Thumbnail[]     @relation("EditionThumbnails")
+  primaryThumbnailId     String?         @unique
+  primaryThumbnail       Thumbnail?      @relation("EditionPrimaryThumbnail", fields: [primaryThumbnailId], references: [id], onDelete: SetNull)
   jobs                   Job[]
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
@@ -66,7 +69,10 @@ model Asset {
   durationMs      Int?
   widthPx         Int?
   heightPx        Int?
+  hasAudio        Boolean          @default(false)
   tagsJson        String?
+  favoritedAt     DateTime?
+  archivedAt      DateTime?
   provenanceJson  String?
   generatedByJobId String?
   generatedByJob  Job?             @relation("GeneratedAssets", fields: [generatedByJobId], references: [id], onDelete: Restrict)
@@ -94,24 +100,40 @@ model AssetRendition {
 }
 
 model VoiceProfile {
-  id           String   @id @default(cuid())
+  id           String           @id @default(cuid())
   name         String
   adapterId    String
+  voiceId      String           @default("")
+  locale       String           @default("ja-JP")
   settingsJson String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  voices       CharacterVoice[]
 
   @@index([adapterId])
 }
 
 model Character {
-  id             String                @id @default(cuid())
-  name           String
-  voiceProfileId String?
-  appearances    CharacterAppearance[]
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  id          String                @id @default(cuid())
+  name        String
+  appearances CharacterAppearance[]
+  voices      CharacterVoice[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
 
+model CharacterVoice {
+  id             String      @id @default(cuid())
+  characterId    String
+  character      Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  locale         String
+  voiceProfileId String
+  voiceProfile   VoiceProfile @relation(fields: [voiceProfileId], references: [id], onDelete: Restrict)
+  position       Int         @default(0)
+  createdAt      DateTime    @default(now())
+
+  @@unique([characterId, locale])
+  @@index([characterId])
   @@index([voiceProfileId])
 }
 
@@ -123,11 +145,51 @@ model CharacterAppearance {
   expression  String
   pose        String
   label       String?
+  faceSetId   String?
   position    Int       @default(0)
   createdAt   DateTime  @default(now())
 
   @@index([characterId])
   @@index([assetId])
+  @@index([faceSetId])
+}
+
+model FaceSet {
+  id          String             @id @default(cuid())
+  name        String
+  layers      FaceLayer[]
+  expressions ExpressionPreset[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model FaceLayer {
+  faceSetId       String
+  id              String
+  faceSet         FaceSet  @relation(fields: [faceSetId], references: [id], onDelete: Cascade)
+  part            String
+  assetId         String
+  blinkLayerId    String?
+  speakingLayerId String?
+  position        Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@id([faceSetId, id])
+  @@index([assetId])
+}
+
+model ExpressionPreset {
+  faceSetId    String
+  id           String
+  faceSet      FaceSet  @relation(fields: [faceSetId], references: [id], onDelete: Cascade)
+  name         String
+  browLayerId  String?
+  eyeLayerId   String?
+  mouthLayerId String?
+  position     Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@id([faceSetId, id])
 }
 
 model Job {
@@ -172,6 +234,8 @@ model Artifact {
   widthPx    Int?
   heightPx   Int?
   fps        Float?
+  videoCodec String?
+  audioCodec String?
   createdAt  DateTime @default(now())
 
   @@index([jobId])
@@ -188,23 +252,70 @@ model Composition {
 }
 
 model CompositionDraft {
-  id            String      @id @default(cuid())
-  compositionId String      @unique
-  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
-  entrypoint    String
-  storageKey    String      @unique
-  updatedAt     DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  compositionId      String      @unique
+  composition        Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
+  entrypoint         String
+  storageKey         String      @unique
+  updatedAt          DateTime    @updatedAt
+  authoringStyleJson String?
 }
 
 model CompositionVersion {
-  id            String      @id @default(cuid())
-  compositionId String
-  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
-  versionNumber Int
-  bundleHash    String
-  storageKey    String      @unique
-  manifestJson  String
-  createdAt     DateTime    @default(now())
+  id                  String      @id @default(cuid())
+  compositionId       String
+  composition         Composition @relation(fields: [compositionId], references: [id], onDelete: Restrict)
+  versionNumber       Int
+  bundleHash          String
+  storageKey          String      @unique
+  manifestJson        String
+  createdAt           DateTime    @default(now())
+  styleProvenanceJson String?
 
   @@unique([compositionId, versionNumber])
+}
+
+model Theme {
+  id         String          @id @default(cuid())
+  name       String
+  archivedAt DateTime?
+  draft      ThemeDraft?
+  revisions  ThemeRevision[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model ThemeDraft {
+  id             String   @id @default(cuid())
+  themeId        String   @unique
+  theme          Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  definitionJson String
+  updatedAt      DateTime @updatedAt
+}
+
+model ThemeRevision {
+  id             String   @id @default(cuid())
+  themeId        String
+  theme          Theme    @relation(fields: [themeId], references: [id], onDelete: Restrict)
+  versionNumber  Int
+  definitionJson String
+  createdAt      DateTime @default(now())
+
+  @@unique([themeId, versionNumber])
+}
+
+model Thumbnail {
+  id                String          @id @default(cuid())
+  languageEditionId String
+  languageEdition   LanguageEdition @relation("EditionThumbnails", fields: [languageEditionId], references: [id], onDelete: Restrict)
+  primaryForEdition LanguageEdition? @relation("EditionPrimaryThumbnail")
+  label             String
+  schemaVersion     Int
+  templateId        String
+  templateVersion   Int
+  inputJson         String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([languageEditionId])
 }

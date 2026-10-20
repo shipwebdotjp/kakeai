@@ -8,6 +8,8 @@ declare module "react" {
         React.HTMLAttributes<HTMLElement> & {
           srcdoc?: string;
           controls?: boolean;
+          autoplay?: boolean;
+          loop?: boolean;
         },
         HTMLElement
       >;

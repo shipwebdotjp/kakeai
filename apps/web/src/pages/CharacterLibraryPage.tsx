@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import type { CharacterLibraryEntry, VoiceProfile } from "@kakeai/contracts";
+import { SUPPORTED_LOCALES } from "@kakeai/contracts";
+import type { CharacterLibraryEntry, CharacterVoice, VoiceProfile } from "@kakeai/contracts";
 import {
   useCharacters,
   useCreateCharacter,
   useDeleteCharacter,
+  useFaceSets,
   useUpdateCharacter,
   useVoiceProfiles,
 } from "../api/hooks";
@@ -22,34 +24,36 @@ type AppearanceDraft = AppearanceFormValue;
 
 interface CharacterDraft {
   name: string;
-  voiceProfileId: string;
+  voices: CharacterVoice[];
   appearances: AppearanceDraft[];
 }
 
 function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
   return {
     name: entry.name,
-    voiceProfileId: entry.voiceProfileId ?? "",
+    voices: entry.voices.map((voice) => ({ ...voice })),
     appearances: entry.appearances.map((appearance) => ({
       id: appearance.id,
       assetId: appearance.assetId,
       expression: appearance.expression,
       pose: appearance.pose,
       label: appearance.label ?? "",
+      faceSetId: appearance.faceSetId,
     })),
   };
 }
 
 function emptyDraft(): CharacterDraft {
-  return { name: "", voiceProfileId: "", appearances: [] };
+  return { name: "", voices: [], appearances: [] };
 }
 
 interface CharacterFormProps {
   entry?: CharacterLibraryEntry;
   voiceProfiles: VoiceProfile[];
+  faceSets: { id: string; name: string }[];
 }
 
-function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
+function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
   const create = useCreateCharacter();
   const update = useUpdateCharacter();
   const remove = useDeleteCharacter();
@@ -68,6 +72,39 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
     setDraft((current) => ({
       ...current,
       appearances: [...current.appearances, createEmptyAppearance()],
+    }));
+  };
+
+  const addVoice = () => {
+    setDraft((current) => {
+      if (current.voices.length >= SUPPORTED_LOCALES.length) {
+        return current;
+      }
+      const used = new Set(current.voices.map((voice) => voice.locale));
+      const next = SUPPORTED_LOCALES.find((locale) => !used.has(locale));
+      if (next === undefined) {
+        return current;
+      }
+      return {
+        ...current,
+        voices: [...current.voices, { locale: next, voiceProfileId: "" }],
+      };
+    });
+  };
+
+  const updateVoice = (index: number, patch: Partial<CharacterVoice>) => {
+    setDraft((current) => ({
+      ...current,
+      voices: current.voices.map((voice, voiceIndex) =>
+        voiceIndex === index ? { ...voice, ...patch } : voice,
+      ),
+    }));
+  };
+
+  const removeVoice = (index: number) => {
+    setDraft((current) => ({
+      ...current,
+      voices: current.voices.filter((_, voiceIndex) => voiceIndex !== index),
     }));
   };
 
@@ -100,17 +137,41 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
       setIssue(`外観 ${missing + 1} の画像を選んでください。`);
       return;
     }
+    const incompleteVoice = draft.voices.findIndex(
+      (voice) => voice.voiceProfileId.length === 0,
+    );
+    if (incompleteVoice !== -1) {
+      setIssue(`声 ${incompleteVoice + 1} の声プロファイルを選んでください。`);
+      return;
+    }
+    const seenLocales = new Set<string>();
+    const duplicateVoice = draft.voices.some((voice) => {
+      if (seenLocales.has(voice.locale)) {
+        return true;
+      }
+      seenLocales.add(voice.locale);
+      return false;
+    });
+    if (duplicateVoice) {
+      setIssue("同じ言語の声が重複しています。");
+      return;
+    }
     setIssue(null);
+    const voices = draft.voices.map((voice) => ({
+      locale: voice.locale,
+      voiceProfileId: voice.voiceProfileId,
+    }));
     const appearances = draft.appearances.map((appearance) => ({
       id: appearance.id,
       assetId: appearance.assetId ?? "",
       expression: appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION,
       pose: appearance.pose.trim() || DEFAULT_APPEARANCE_POSE,
       ...(appearance.label.trim().length === 0 ? {} : { label: appearance.label.trim() }),
+      faceSetId: appearance.faceSetId,
     }));
     const payload = {
       name,
-      voiceProfileId: draft.voiceProfileId.length === 0 ? null : draft.voiceProfileId,
+      voices,
       appearances,
     };
     if (entry === undefined) {
@@ -145,29 +206,61 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
         )}
       </div>
 
-      <label className="mt-2 flex flex-wrap items-center gap-1.5">
-        声プロファイル
-        <select
-          className={textFieldClass}
-          value={draft.voiceProfileId}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, voiceProfileId: event.target.value }))
-          }
-        >
-          <option value="">未設定</option>
-          {voiceProfiles.map((profile) => (
-            <option key={profile.id} value={profile.id}>
-              {profile.name || profile.id}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="mt-2">
+        <p className={metaTextClass}>言語別の声</p>
+        {draft.voices.map((voice, index) => (
+          <div key={`voice-${index}`} className="mt-1 flex flex-wrap items-center gap-1.5">
+            <select
+              className={textFieldClass}
+              value={voice.locale}
+              onChange={(event) => {
+                const next = event.target.value as CharacterVoice["locale"];
+                updateVoice(
+                  index,
+                  next === voice.locale ? { locale: next } : { locale: next, voiceProfileId: "" },
+                );
+              }}
+            >
+              {SUPPORTED_LOCALES.map((locale) => (
+                <option key={locale} value={locale}>
+                  {locale}
+                </option>
+              ))}
+            </select>
+            <select
+              className={textFieldClass}
+              value={voice.voiceProfileId}
+              onChange={(event) => updateVoice(index, { voiceProfileId: event.target.value })}
+            >
+              <option value="">選択してください</option>
+              {voiceProfiles
+                .filter((profile) => profile.locale === voice.locale)
+                .map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name || profile.id}（{profile.locale}）
+                  </option>
+                ))}
+            </select>
+            <button
+              type="button"
+              className={buttonDangerClass}
+              onClick={() => removeVoice(index)}
+            >
+              削除
+            </button>
+          </div>
+        ))}
+        <button type="button" className={buttonPrimaryClass} onClick={addVoice}>
+          声を追加
+        </button>
+      </div>
 
       <AppearanceFields
         appearances={draft.appearances}
         onAdd={addAppearance}
         onPatch={updateAppearance}
         onRemove={removeAppearance}
+        faceSets={faceSets}
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -191,7 +284,9 @@ function CharacterForm({ entry, voiceProfiles }: CharacterFormProps) {
 export function CharacterLibraryPage() {
   const characters = useCharacters();
   const voiceProfiles = useVoiceProfiles();
+  const faceSets = useFaceSets();
   const profiles = voiceProfiles.data ?? [];
+  const sets = faceSets.data ?? [];
 
   return (
     <section>
@@ -206,15 +301,18 @@ export function CharacterLibraryPage() {
       {voiceProfiles.isError && (
         <p className={errorTextClass}>{errorMessage(voiceProfiles.error)}</p>
       )}
+      {faceSets.isError && (
+        <p className={errorTextClass}>{errorMessage(faceSets.error)}</p>
+      )}
       {characters.data !== undefined && characters.data.length === 0 && (
         <p className={metaTextClass}>キャラクターがありません。下のフォームから追加してください。</p>
       )}
 
       {characters.data?.map((entry) => (
-        <CharacterForm key={entry.id} entry={entry} voiceProfiles={profiles} />
+        <CharacterForm key={entry.id} entry={entry} voiceProfiles={profiles} faceSets={sets} />
       ))}
 
-      <CharacterForm voiceProfiles={profiles} />
+      <CharacterForm voiceProfiles={profiles} faceSets={sets} />
     </section>
   );
 }

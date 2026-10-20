@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInitialContentDocument, createPointScene } from "@kakeai/contracts";
+import {
+  SNAPSHOT_SCHEMA_VERSION,
+  createInitialContentDocument,
+  createInsertScene,
+  createPointScene,
+} from "@kakeai/contracts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
@@ -153,6 +158,340 @@ describe("work and script version flow", () => {
     ).rejects.toMatchObject({ code: "ASSET_NOT_FOUND" });
   });
 
+  it("clones a work, creates child work with parentWorkId, copies content, and enforces parent deletion restriction", async () => {
+    const parentWork = await works.createWork(prisma, "親作品", "ja-JP");
+    const parentEdition = parentWork.languageEditions[0]!;
+
+    // Modify parent's current version so we can verify the content is copied
+    const content = createInitialContentDocument();
+    content.scenes[0]!.label = "カスタム導入";
+    await scriptVersions.saveScriptVersion(prisma, parentEdition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+
+    const clonedWork = await works.cloneWork(prisma, parentWork.id, "親作品のコピー");
+    expect(clonedWork.title).toBe("親作品のコピー");
+    expect(clonedWork.parentWorkId).toBe(parentWork.id);
+    expect(clonedWork.languageEditions).toHaveLength(1);
+
+    const clonedEdition = clonedWork.languageEditions[0]!;
+    expect(clonedEdition.locale).toBe("ja-JP");
+    const clonedCurrent = await scriptVersions.getCurrentScriptVersion(prisma, clonedEdition.id);
+    expect(clonedCurrent.versionNumber).toBe(1);
+    expect(clonedCurrent.content.scenes[0]!.label).toBe("カスタム導入");
+
+    // Attempting to delete parentWork while cloned child exists should fail with WORK_HAS_CHILDREN
+    await expect(works.deleteWork(prisma, directories, parentWork.id)).rejects.toMatchObject({
+      code: "WORK_HAS_CHILDREN",
+    });
+
+    // Deleting cloned child work should succeed
+    await works.deleteWork(prisma, directories, clonedWork.id);
+
+    // Now deleting parent work should succeed
+    await works.deleteWork(prisma, directories, parentWork.id);
+  });
+
+  it("restores a past version by saving a new version with sourceScriptVersionId", async () => {
+    const work = await works.createWork(prisma, "復元テスト", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const v1 = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+
+    // Create v2 with a change
+    const v2Content = createInitialContentDocument();
+    v2Content.scenes[0]!.label = "v2導入";
+    await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content: v2Content,
+    });
+
+    // Restore v1 by saving a new v3 version with v1's content and sourceScriptVersionId set to v1.id
+    const v1Full = await scriptVersions.getScriptVersion(prisma, v1.id);
+    const restored = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: v1.id,
+      content: v1Full.content,
+    });
+
+    expect(restored.scriptVersion.versionNumber).toBe(3);
+    expect(restored.scriptVersion.content.scenes[0]!.label).toBe("導入");
+
+    const current = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+    expect(current.versionNumber).toBe(3);
+
+    // Check that v1 and v2 still exist unchanged
+    const history = await scriptVersions.listScriptVersions(prisma, edition.id);
+    expect(history.map((h) => h.versionNumber)).toEqual([3, 2, 1]);
+  });
+
+  it("saves an insert scene and validates its duration against the video asset", async () => {
+    const work = await works.createWork(prisma, "インサート", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const video = await prisma.asset.create({
+      data: {
+        id: "asset-insert-video",
+        kind: "video",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/insert-video.mp4",
+        originalFilename: "insert.mp4",
+        mediaType: "video/mp4",
+        byteSize: BigInt(10),
+        sha256: "insert-video-sha",
+        durationMs: 5000,
+        widthPx: 1920,
+        heightPx: 1080,
+        hasAudio: true,
+      },
+    });
+
+    const content = createInitialContentDocument();
+    content.scenes.splice(
+      1,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", video.id, 5000, true),
+    );
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    expect(saved.warnings).toEqual([]);
+    expect(saved.scriptVersion.content.scenes.map((scene) => scene.kind)).toEqual([
+      "intro",
+      "insert",
+      "point",
+      "outro",
+    ]);
+  });
+
+  it("rejects an insert scene whose duration differs from the video asset", async () => {
+    const work = await works.createWork(prisma, "インサート尺", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const video = await prisma.asset.create({
+      data: {
+        id: "asset-insert-mismatch",
+        kind: "video",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/insert-mismatch.mp4",
+        originalFilename: "insert.mp4",
+        mediaType: "video/mp4",
+        byteSize: BigInt(10),
+        sha256: "insert-mismatch-sha",
+        durationMs: 5000,
+        widthPx: 1920,
+        heightPx: 1080,
+        hasAudio: true,
+      },
+    });
+    const content = createInitialContentDocument();
+    content.scenes.splice(
+      1,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", video.id, 4000, true),
+    );
+    await expect(
+      scriptVersions.saveScriptVersion(prisma, edition.id, {
+        sourceScriptVersionId: null,
+        content,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("warns when an embedded-audio insert scene uses a video without audio", async () => {
+    const work = await works.createWork(prisma, "インサート無音", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const silent = await prisma.asset.create({
+      data: {
+        id: "asset-insert-silent",
+        kind: "video",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/insert-silent.mp4",
+        originalFilename: "silent.mp4",
+        mediaType: "video/mp4",
+        byteSize: BigInt(10),
+        sha256: "insert-silent-sha",
+        durationMs: 5000,
+        widthPx: 1920,
+        heightPx: 1080,
+        hasAudio: false,
+      },
+    });
+    const content = createInitialContentDocument();
+    content.scenes.splice(
+      1,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", silent.id, 5000, true),
+    );
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    expect(saved.warnings.map((warning) => warning.code)).toContain("insert_video_without_audio");
+  });
+
+  it("rejects an insert scene that references a non-video asset", async () => {
+    const work = await works.createWork(prisma, "インサート種別", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const image = await prisma.asset.create({
+      data: {
+        id: "asset-insert-image",
+        kind: "image",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/insert-image.png",
+        originalFilename: "image.png",
+        mediaType: "image/png",
+        byteSize: BigInt(10),
+        sha256: "insert-image-sha",
+        durationMs: null,
+        widthPx: 1920,
+        heightPx: 1080,
+        hasAudio: false,
+      },
+    });
+    const content = createInitialContentDocument();
+    content.scenes.splice(
+      1,
+      0,
+      createInsertScene("scene-insert-1", "動画 1", image.id, 5000, true),
+    );
+    await expect(
+      scriptVersions.saveScriptVersion(prisma, edition.id, {
+        sourceScriptVersionId: null,
+        content,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("saves an insert scene with a trimmed source and matching duration", async () => {
+    const work = await works.createWork(prisma, "トリム", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const video = await prisma.asset.create({
+      data: {
+        id: "asset-insert-trim-video",
+        kind: "video",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/insert-trim.mp4",
+        originalFilename: "trim.mp4",
+        mediaType: "video/mp4",
+        byteSize: BigInt(10),
+        sha256: "insert-trim-sha",
+        durationMs: 5000,
+        widthPx: 1920,
+        heightPx: 1080,
+        hasAudio: true,
+      },
+    });
+    const content = createInitialContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", video.id, 3000, true);
+    insert.visualCues[0]!.input = {
+      assetId: video.id,
+      fit: "cover",
+      trimStartMs: 1000,
+      trimEndMs: 4000,
+    };
+    content.scenes.splice(1, 0, insert);
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    expect(saved.warnings).toEqual([]);
+  });
+
+  it("saves a looping insert scene whose duration is at least the trimmed length", async () => {
+    const work = await works.createWork(prisma, "ループ", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const video = await prisma.asset.create({
+      data: {
+        id: "asset-insert-loop-video",
+        kind: "video",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/insert-loop.mp4",
+        originalFilename: "loop.mp4",
+        mediaType: "video/mp4",
+        byteSize: BigInt(10),
+        sha256: "insert-loop-sha",
+        durationMs: 5000,
+        widthPx: 1920,
+        heightPx: 1080,
+        hasAudio: true,
+      },
+    });
+    const content = createInitialContentDocument();
+    const insert = createInsertScene("scene-insert-1", "動画 1", video.id, 7000, true);
+    insert.visualCues[0]!.input = {
+      assetId: video.id,
+      fit: "cover",
+      trimStartMs: 0,
+      trimEndMs: 2000,
+      loop: true,
+    };
+    content.scenes.splice(1, 0, insert);
+    await expect(
+      scriptVersions.saveScriptVersion(prisma, edition.id, {
+        sourceScriptVersionId: null,
+        content,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("rejects a looping insert scene shorter than the trimmed length", async () => {
+    const work = await works.createWork(prisma, "ループ短", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const insert = createInsertScene(
+      "scene-insert-1",
+      "動画 1",
+      "asset-insert-loop-video",
+      1000,
+      true,
+    );
+    insert.visualCues[0]!.input = {
+      assetId: "asset-insert-loop-video",
+      fit: "cover",
+      trimStartMs: 0,
+      trimEndMs: 2000,
+      loop: true,
+    };
+    content.scenes.splice(1, 0, insert);
+    await expect(
+      scriptVersions.saveScriptVersion(prisma, edition.id, {
+        sourceScriptVersionId: null,
+        content,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("rejects a trim range outside the video duration", async () => {
+    const work = await works.createWork(prisma, "トリム範囲外", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const insert = createInsertScene(
+      "scene-insert-1",
+      "動画 1",
+      "asset-insert-trim-video",
+      3000,
+      true,
+    );
+    insert.visualCues[0]!.input = {
+      assetId: "asset-insert-trim-video",
+      fit: "cover",
+      trimStartMs: 4000,
+      trimEndMs: 6000,
+    };
+    content.scenes.splice(1, 0, insert);
+    await expect(
+      scriptVersions.saveScriptVersion(prisma, edition.id, {
+        sourceScriptVersionId: null,
+        content,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
   it("deletes a work and removes its artifact files", async () => {
     const work = await works.createWork(prisma, "削除テスト", "ja-JP");
     const edition = work.languageEditions[0]!;
@@ -164,7 +503,7 @@ describe("work and script version flow", () => {
         workId: work.id,
         languageEditionId: edition.id,
         scriptVersionId: current.id,
-        snapshotSchemaVersion: 1,
+        snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
         inputSnapshotJson: "{}",
         progressPercent: 100,
         finishedAt: new Date(),

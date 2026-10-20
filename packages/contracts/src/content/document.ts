@@ -5,10 +5,11 @@ import { characterSchema } from "./character";
 import { audioTakeSchema } from "./narration";
 import { sceneSchema } from "./scene";
 import { audioCueSchema } from "./audio";
-import { getVisualTheme, visualThemeRefSchema } from "./theme";
-import { characterStandingV1, characterStandingV2, compositionFullBleedInputSchema } from "../templates";
+import { visualThemeRefSchema } from "./theme";
+import { characterStandingV1, mediaFullBleedV1 } from "../templates";
+import { collectLineReferences } from "./line-refs";
 
-export const CONTENT_SCHEMA_VERSION = 6 as const;
+export const CONTENT_SCHEMA_VERSION = 1 as const;
 
 export const TEMPLATE_ID = "explanation-scenes" as const;
 export const TEMPLATE_VERSION = 1 as const;
@@ -18,11 +19,11 @@ function checkSceneComposition(kinds: readonly string[], ctx: z.RefinementCtx): 
     kinds.length >= 2 &&
     kinds[0] === "intro" &&
     kinds[kinds.length - 1] === "outro" &&
-    kinds.slice(1, -1).every((kind) => kind === "point");
+    kinds.slice(1, -1).every((kind) => kind === "point" || kind === "insert");
   if (!ordered) {
     ctx.addIssue({
       code: "custom",
-      message: `${TEMPLATE_ID}@${TEMPLATE_VERSION} は 導入→要点0件以上→結び の順でシーンを要求します`,
+      message: `${TEMPLATE_ID}@${TEMPLATE_VERSION} は 導入→(要点|インサート)0件以上→結び の順でシーンを要求します`,
       path: ["scenes"],
     });
   }
@@ -73,13 +74,6 @@ const contentDocumentObject = z.strictObject({
 type ContentDocumentBase = z.infer<typeof contentDocumentObject>;
 
 function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx): void {
-  if (getVisualTheme(doc.visualTheme.id, doc.visualTheme.version) === undefined) {
-    ctx.addIssue({
-      code: "custom",
-      message: `未対応のVisual Themeです: ${doc.visualTheme.id}@${doc.visualTheme.version}`,
-      path: ["visualTheme"],
-    });
-  }
   checkUnique(doc.scenes.map((scene) => scene.id), ctx, ["scenes"]);
   const lineIds = doc.scenes.flatMap((scene) => scene.lines.map((line) => line.id));
   checkUnique(lineIds, ctx, ["scenes"]);
@@ -115,29 +109,15 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
     }
   }
 
-  const compositionVersionIdsInDoc = new Set<string>();
   for (const [sIdx, scene] of doc.scenes.entries()) {
     for (const [cIdx, cue] of scene.visualCues.entries()) {
       if (cue.template.id === "composition.full-bleed") {
-        if (cue.range.kind !== "scene" || cue.layer !== "background") {
+        if (cue.layer !== "background") {
           ctx.addIssue({
             code: "custom",
-            message: "composition.full-bleed は Scene 背景 (range: scene, layer: background) にのみ配置できます",
+            message: "composition.full-bleed は background 層にのみ配置できます",
             path: ["scenes", sIdx, "visualCues", cIdx],
           });
-        }
-        const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
-        if (parsedInput.success) {
-          const compositionVersionId = parsedInput.data.compositionVersionId;
-          if (compositionVersionIdsInDoc.has(compositionVersionId)) {
-            ctx.addIssue({
-              code: "custom",
-              message: `同一 CompositionVersion (${compositionVersionId}) は 1 ScriptVersion 内で 1 度しか参照できません`,
-              path: ["scenes", sIdx, "visualCues", cIdx, "input", "compositionVersionId"],
-            });
-          } else {
-            compositionVersionIdsInDoc.add(compositionVersionId);
-          }
         }
       }
     }
@@ -161,7 +141,72 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
       });
     }
     const localLineIds = scene.lines.map((line) => line.id);
-    for (const line of scene.lines) {
+
+    if (scene.kind === "insert") {
+      const mainCueIndex = scene.visualCues.findIndex(
+        (cue) => cue.id === scene.mainVisualCueId,
+      );
+      if (mainCueIndex === -1) {
+        ctx.addIssue({
+          code: "custom",
+          message: `insert Scene ${scene.id} の主動画Cueが存在しません: ${scene.mainVisualCueId}`,
+          path: ["scenes", index, "mainVisualCueId"],
+        });
+      }
+      if (scene.visualCues.length !== 1) {
+        ctx.addIssue({
+          code: "custom",
+          message: `insert Scene ${scene.id} は主動画Cue以外のVisualCueを持てません`,
+          path: ["scenes", index, "visualCues"],
+        });
+      }
+      for (const [cueIndex, cue] of scene.visualCues.entries()) {
+        const cuePath = ["scenes", index, "visualCues", cueIndex];
+        if (cue.layer === "standing") {
+          ctx.addIssue({
+            code: "custom",
+            message: `insert Scene ${scene.id} は立ち絵Cueを持てません`,
+            path: cuePath,
+          });
+        }
+        if (cue.id !== scene.mainVisualCueId) {
+          continue;
+        }
+        if (
+          cue.template.id !== mediaFullBleedV1.id ||
+          cue.template.version !== mediaFullBleedV1.version
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: `insert Scene ${scene.id} の主動画Cueは ${mediaFullBleedV1.id}@${mediaFullBleedV1.version} を要求します`,
+            path: [...cuePath, "template"],
+          });
+        }
+        if (cue.layer !== "background") {
+          ctx.addIssue({
+            code: "custom",
+            message: `insert Scene ${scene.id} の主動画Cueは background 層を要求します`,
+            path: [...cuePath, "layer"],
+          });
+        }
+        if (cue.range.kind !== "scene") {
+          ctx.addIssue({
+            code: "custom",
+            message: `insert Scene ${scene.id} の主動画Cueは range: scene を要求します`,
+            path: [...cuePath, "range"],
+          });
+        }
+      }
+    }
+
+    for (const [lineIndex, line] of scene.lines.entries()) {
+      if (line.speakerId === null && line.expressionId !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: `NarrationSegment ${line.id} は話者が無いため表情を指定できません`,
+          path: ["scenes", index, "lines", lineIndex, "expressionId"],
+        });
+      }
       if (line.speakerId !== null && !speakerIds.has(line.speakerId)) {
         ctx.addIssue({
           code: "custom",
@@ -225,20 +270,12 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
         });
       }
 
-      if (cue.template.id === characterStandingV1.id) {
-        let standingDefinition: typeof characterStandingV1 | typeof characterStandingV2 | undefined;
-        if (cue.template.version === characterStandingV1.version) {
-          standingDefinition = characterStandingV1;
-        } else if (cue.template.version === characterStandingV2.version) {
-          standingDefinition = characterStandingV2;
-        } else {
-          standingDefinition = undefined;
-        }
-        const parsed =
-          standingDefinition === undefined
-            ? undefined
-            : standingDefinition.inputSchema.safeParse(cue.input);
-        if (parsed !== undefined && parsed.success) {
+      if (
+        cue.template.id === characterStandingV1.id &&
+        cue.template.version === characterStandingV1.version
+      ) {
+        const parsed = characterStandingV1.inputSchema.safeParse(cue.input);
+        if (parsed.success) {
           const { characterId, appearanceId } = parsed.data as {
             characterId: string;
             appearanceId: string;
@@ -262,7 +299,8 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
     }
   }
 
-  for (const speaker of doc.speakers) {
+  const characterById = new Map(doc.characters.map((character) => [character.id, character]));
+  doc.speakers.forEach((speaker, speakerIndex) => {
     if (speaker.characterId !== null && !characterIds.has(speaker.characterId)) {
       ctx.addIssue({
         code: "custom",
@@ -270,7 +308,19 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
         path: ["speakers"],
       });
     }
-  }
+    if (speaker.characterId === null || speaker.voiceProfileId === null) {
+      return;
+    }
+    const character = characterById.get(speaker.characterId);
+    const voice = character?.voices.find((entry) => entry.locale === doc.locale);
+    if (voice !== undefined && voice.voiceProfileId !== speaker.voiceProfileId) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Speaker ${speaker.id} の声がキャラクターの ${doc.locale} の声と一致しません`,
+        path: ["speakers", speakerIndex, "voiceProfileId"],
+      });
+    }
+  });
 
   const sceneIds = new Set(doc.scenes.map((scene) => scene.id));
   for (const cue of doc.audioCues) {
@@ -279,6 +329,20 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
         code: "custom",
         message: `AudioCue ${cue.id} の sceneId が存在しません: ${cue.range.sceneId}`,
         path: ["audioCues"],
+      });
+    }
+  }
+
+  const lineIdsBySceneId = new Map(
+    doc.scenes.map((scene) => [scene.id, new Set(scene.lines.map((line) => line.id))]),
+  );
+  for (const reference of collectLineReferences(doc)) {
+    const localLineIds = lineIdsBySceneId.get(reference.sceneId);
+    if (localLineIds === undefined || !localLineIds.has(reference.lineId)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `効果の行トリガーが同一Scene内のラインを指していません: ${reference.lineId}`,
+        path: reference.path,
       });
     }
   }

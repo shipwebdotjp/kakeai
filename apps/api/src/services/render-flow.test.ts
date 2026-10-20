@@ -7,7 +7,10 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import {
   createInitialContentDocument,
+  HANDMADE_PAPER_SKIN_REF,
+  getVisualTheme,
   renderJobSnapshotSchema,
+  toVisualThemeDefinitionV2,
 } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import { loadConfig } from "../config.ts";
@@ -20,10 +23,13 @@ import { createWorker } from "../worker/index.ts";
 import { processAssetIngest } from "../worker/asset-ingest.ts";
 import * as artifacts from "./artifacts.ts";
 import * as assets from "./assets.ts";
+import * as faceSets from "./face-sets.ts";
+import { FakeFontCatalogAdapter, FontCatalogService } from "./font-catalog.ts";
 import * as jobs from "./jobs.ts";
 import * as renderJobs from "./render-jobs.ts";
 import * as scriptVersions from "./script-versions.ts";
 import * as works from "./works.ts";
+import { CompositionService } from "./compositions.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,6 +40,7 @@ let prisma: ReturnType<typeof createPrismaClient>;
 let worker: ReturnType<typeof createWorker>;
 let ffmpegReady = false;
 const renderEnabled = process.env.KAKEAI_RENDER_TEST === "1";
+const testFontCatalog = new FontCatalogService(new FakeFontCatalogAdapter());
 
 async function generateFixtures(): Promise<void> {
   await execFileAsync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30", "-frames:v", "1", join(fixturesDir, "image.png")]);
@@ -149,7 +156,7 @@ describe("render job creation", () => {
     const image = await readyImage();
     const { work, saved } = await versionWithBackground(image.id);
 
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     expect(job.kind).toBe("render");
     expect(job.status).toBe("queued");
@@ -163,6 +170,8 @@ describe("render job creation", () => {
     expect(snapshot.template).toEqual({ id: "explanation-scenes", version: 1 });
     expect(snapshot.output).toEqual({ width: 1920, height: 1080, fps: 30, format: "mp4" });
     expect(snapshot.assets.map((asset) => asset.assetId)).toEqual([image.id]);
+    expect(snapshot.skin).toEqual({ id: "neutral", version: 1 });
+    expect(snapshot.fontDiagnostics).toEqual({ missingFonts: [], diagnostics: [] });
 
     await jobs.cancelJob(prisma, job.id);
   });
@@ -179,8 +188,9 @@ describe("render job creation", () => {
       {
         id: "character-rin",
         name: "リン",
+        voices: [],
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -198,8 +208,7 @@ describe("render job creation", () => {
         input: {
           characterId: "character-rin",
           appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
+          side: "right",
           scale: 1,
         },
       },
@@ -209,7 +218,7 @@ describe("render job creation", () => {
       content,
     });
 
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
     const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
     expect(snapshot.assets.map((asset) => asset.assetId)).toEqual([image.id]);
@@ -237,12 +246,12 @@ describe("render job creation", () => {
     const { saved } = await versionWithBackground(image.id);
 
     await prisma.asset.update({ where: { id: image.id }, data: { status: "processing" } });
-    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id)).rejects.toMatchObject({
+    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog)).rejects.toMatchObject({
       code: "ASSET_PROCESSING",
     });
 
     await prisma.asset.update({ where: { id: image.id }, data: { status: "failed" } });
-    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id)).rejects.toMatchObject({
+    await expect(renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog)).rejects.toMatchObject({
       code: "ASSET_UNAVAILABLE",
     });
 
@@ -281,14 +290,110 @@ describe("render job creation", () => {
       captionText: "長い音声",
       speechText: "ながいおんせい",
       selectedAudioTakeId: "take-overflow",
+      expressionId: null,
     });
     const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
       sourceScriptVersionId: null,
       content,
     });
     await expect(
-      renderJobs.createRenderJob(prisma, saved.scriptVersion.id),
+      renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog),
     ).rejects.toMatchObject({ code: "RENDER_INPUT_INVALID" });
+  });
+
+  it("freezes resolved face sets into the render snapshot", async () => {
+    let assetCounter = 0;
+    const imageRow = () =>
+      prisma.asset.create({
+        data: {
+          kind: "image",
+          origin: "uploaded",
+          status: "ready",
+          storageKey: `assets/face-snap-${(assetCounter += 1)}`,
+          originalFilename: "face.png",
+          mediaType: "image/png",
+          byteSize: BigInt(10),
+          sha256: `face-snap-${assetCounter}`,
+          widthPx: 480,
+          heightPx: 960,
+        },
+      });
+    const [brow, eye, eyeClosed, mouth, mouthOpen, base] = await Promise.all([imageRow(), imageRow(), imageRow(), imageRow(), imageRow(), imageRow()]);
+    const faceSet = await faceSets.createFaceSet(prisma, {
+      name: "スナップショット",
+      layers: [
+        { id: "brow", part: "brow", assetId: brow.id, blinkLayerId: null, speakingLayerId: null },
+        { id: "eye", part: "eye", assetId: eye.id, blinkLayerId: "eye-closed", speakingLayerId: null },
+        { id: "eye-closed", part: "eye", assetId: eyeClosed.id, blinkLayerId: null, speakingLayerId: null },
+        { id: "mouth", part: "mouth", assetId: mouth.id, blinkLayerId: null, speakingLayerId: "mouth-open" },
+        { id: "mouth-open", part: "mouth", assetId: mouthOpen.id, blinkLayerId: null, speakingLayerId: null },
+      ],
+      expressions: [
+        { id: "normal", name: "通常", browLayerId: "brow", eyeLayerId: "eye", mouthLayerId: "mouth" },
+      ],
+    });
+    const work = await works.createWork(prisma, "表情スナップショット", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.speakers = [
+      { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: null },
+    ];
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        voices: [],
+        appearances: [
+          { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
+        ],
+      },
+    ];
+    const point = content.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-normal",
+        speakerId: "speaker-rin",
+        captionText: "普通",
+        speechText: "ふつう",
+        selectedAudioTakeId: null,
+        expressionId: "normal",
+      },
+    ];
+    point.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 1 },
+      range: { kind: "scene" },
+      layer: "standing",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-rin",
+        side: "left",
+        scale: 1,
+      },
+    });
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
+    expect(snapshot.faceSets.map((entry) => entry.id)).toEqual([faceSet.id]);
+    expect(snapshot.faceSets[0]!.layers.map((layer) => layer.assetId).sort()).toEqual(
+      [brow.id, eye.id, eyeClosed.id, mouth.id, mouthOpen.id].sort(),
+    );
+    expect(snapshot.faceSets[0]!.expressions.map((preset) => preset.id)).toEqual(["normal"]);
+    expect(snapshot.assets.map((asset) => asset.assetId)).toEqual(
+      expect.arrayContaining([brow.id, eye.id, eyeClosed.id, mouth.id, mouthOpen.id, base.id]),
+    );
   });
 });
 
@@ -299,8 +404,8 @@ describe("render job polling and cancel", () => {
     }
     const image = await readyImage();
     const { work, saved } = await versionWithBackground(image.id);
-    const first = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
-    const second = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const first = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    const second = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     const history = await jobs.listWorkJobs(prisma, work.id);
     expect(history.map((job) => job.id)).toEqual([second.id, first.id]);
@@ -318,7 +423,7 @@ describe("render job polling and cancel", () => {
     }
     const image = await readyImage();
     const { saved } = await versionWithBackground(image.id);
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     const cancelled = await jobs.cancelJob(prisma, job.id);
     expect(cancelled.status).toBe("cancelled");
@@ -359,7 +464,7 @@ describe("render worker", () => {
     }
     const image = await readyImage();
     const { saved } = await versionWithBackground(image.id);
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
 
     await drainWorker();
 
@@ -371,6 +476,7 @@ describe("render worker", () => {
     expect(artifact.role).toBe("render");
     expect(artifact.format).toBe("mp4");
     expect(artifact.durationMs).toBeGreaterThan(0);
+    expect(artifact.videoCodec).not.toBeNull();
 
     const location = await artifacts.resolveArtifactContent(
       prisma,
@@ -402,8 +508,9 @@ describe("render worker", () => {
       {
         id: "character-rin",
         name: "リン",
+        voices: [],
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front" },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
         ],
       },
     ];
@@ -421,8 +528,7 @@ describe("render worker", () => {
         input: {
           characterId: "character-rin",
           appearanceId: "appearance-smile",
-          x: 0.85,
-          y: 0.85,
+          side: "right",
           scale: 1,
         },
       },
@@ -431,12 +537,187 @@ describe("render worker", () => {
       sourceScriptVersionId: null,
       content,
     });
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     await drainWorker();
 
     const finished = await jobs.getJob(prisma, job.id);
     expect(finished.status).toBe("succeeded");
     const artifact = finished.artifacts[0]!;
+    const location = await artifacts.resolveArtifactContent(
+      prisma,
+      config.directories,
+      artifact.id,
+    );
+    const probe = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v",
+      "-show_entries",
+      "stream=codec_type",
+      "-of",
+      "csv=p=0",
+      location.path,
+    ]);
+    expect(probe.stdout.trim()).toBe("video");
+    await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
+  }, 300000);
+
+  it("renders a handmade-paper representative video into the mp4", async () => {
+    if (!ffmpegReady || !renderEnabled) {
+      return;
+    }
+    const image = await readyImage();
+    const paperTheme = toVisualThemeDefinitionV2(
+      getVisualTheme("soft-editorial", 1)!,
+      HANDMADE_PAPER_SKIN_REF,
+    );
+    const themeRow = await prisma.theme.create({ data: { name: "S5 Paper Theme" } });
+    await prisma.themeRevision.create({
+      data: {
+        themeId: themeRow.id,
+        versionNumber: 1,
+        definitionJson: JSON.stringify({
+          ...paperTheme,
+          id: themeRow.id,
+          name: "S5 Paper Theme",
+          version: 1,
+        }),
+      },
+    });
+
+    const work = await works.createWork(prisma, "紙スキン代表動画", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    content.visualTheme = { id: themeRow.id, version: 1 };
+    content.audioTakes = [];
+    content.audioCues = [];
+    const transition = {
+      enter: { preset: "fade", durationMs: 300 },
+      exit: { preset: "none", durationMs: 0 },
+    } as const;
+    content.scenes = [
+      {
+        id: "scene-title",
+        kind: "intro",
+        label: "導入",
+        accent: { kind: "theme", token: "primary" },
+        timing: { mode: "fixed", durationMs: 3000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-title",
+            template: { id: "text.block", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition,
+            input: { text: "紙のタイトル", role: "title" },
+          },
+        ],
+      },
+      {
+        id: "scene-body",
+        kind: "point",
+        label: "要点",
+        accent: { kind: "theme", token: "secondary" },
+        timing: { mode: "fixed", durationMs: 4000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-photo",
+            template: { id: "media.card", version: 1 },
+            range: { kind: "scene" },
+            layer: "card",
+            order: 0,
+            transition,
+            input: { assetId: image.id, heading: "画像カード", caption: "紙に留めた写真" },
+          },
+          {
+            id: "vc-points",
+            template: { id: "list.callout", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 1,
+            transition,
+            input: { items: [{ text: "ひとつめ" }, { text: "ふたつめ" }, { text: "みっつめ" }] },
+          },
+        ],
+      },
+      {
+        id: "scene-quote",
+        kind: "point",
+        label: "引用と表",
+        accent: { kind: "theme", token: "tertiary" },
+        timing: { mode: "fixed", durationMs: 4000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-quote",
+            template: { id: "quote", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition,
+            input: { quote: "引用の言葉", author: "著者名" },
+          },
+          {
+            id: "vc-table",
+            template: { id: "table.simple", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 1,
+            transition,
+            input: {
+              data: {
+                columns: [
+                  { key: "item", label: "項目", type: "text" },
+                  { key: "value", label: "値", type: "number" },
+                ],
+                rows: [
+                  { item: "A", value: 1 },
+                  { item: "B", value: 2 },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      {
+        id: "scene-outro",
+        kind: "outro",
+        label: "結び",
+        accent: { kind: "theme", token: "primary" },
+        timing: { mode: "fixed", durationMs: 3000 },
+        lines: [],
+        visualCues: [
+          {
+            id: "vc-closing",
+            template: { id: "text.block", version: 1 },
+            range: { kind: "scene" },
+            layer: "overlay",
+            order: 0,
+            transition,
+            input: { text: "まとめ", role: "closing" },
+          },
+        ],
+      },
+    ];
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    const snapshotRow = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(snapshotRow.inputSnapshotJson));
+    expect(snapshot.skin).toEqual(HANDMADE_PAPER_SKIN_REF);
+
+    await drainWorker();
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    const artifact = finished.artifacts[0]!;
+    expect(artifact.format).toBe("mp4");
+    expect(artifact.durationMs).toBeGreaterThan(0);
     const location = await artifacts.resolveArtifactContent(
       prisma,
       config.directories,
@@ -482,6 +763,7 @@ describe("render worker", () => {
         captionText: "音声つき",
         speechText: "おんせいつき",
         selectedAudioTakeId: "take-audio",
+        expressionId: null,
       },
     ];
     content.audioTakes = [
@@ -500,12 +782,13 @@ describe("render worker", () => {
       sourceScriptVersionId: null,
       content,
     });
-    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
     await drainWorker();
 
     const finished = await jobs.getJob(prisma, job.id);
     expect(finished.status).toBe("succeeded");
     const artifact = finished.artifacts[0]!;
+    expect(artifact.audioCodec).not.toBeNull();
     const location = await artifacts.resolveArtifactContent(
       prisma,
       config.directories,
@@ -523,6 +806,70 @@ describe("render worker", () => {
       location.path,
     ]);
     expect(probe.stdout.trim()).toBe("audio");
+    await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
+  }, 300000);
+
+  it("renders a nested CompositionVersion into the mp4", async () => {
+    if (!ffmpegReady || !renderEnabled) {
+      return;
+    }
+    const compositionService = new CompositionService({ db: prisma, dataDir });
+    const composition = await compositionService.createComposition({
+      name: "Nested Render",
+      runtimeCompositionId: "cmp.render.nested",
+    });
+    const version = await compositionService.publish(composition.id, {});
+
+    const work = await works.createWork(prisma, "ネストレンダー", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const intro = content.scenes[0]!;
+    if (intro.kind !== "intro") {
+      throw new Error("expected an intro scene");
+    }
+    intro.visualCues.push({
+      id: "vc-intro-composition",
+      template: { id: "composition.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: { compositionVersionId: version.id },
+    });
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    await drainWorker();
+
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    expect(finished.artifacts).toHaveLength(1);
+    const artifact = finished.artifacts[0]!;
+    expect(artifact.format).toBe("mp4");
+    expect(artifact.durationMs).toBeGreaterThan(0);
+
+    const location = await artifacts.resolveArtifactContent(
+      prisma,
+      config.directories,
+      artifact.id,
+    );
+    const probe = await execFileAsync("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v",
+      "-show_entries",
+      "stream=codec_type",
+      "-of",
+      "csv=p=0",
+      location.path,
+    ]);
+    expect(probe.stdout.trim()).toBe("video");
     await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
   }, 300000);
 });

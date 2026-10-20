@@ -7,21 +7,39 @@ import type {
   BulkTtsJobExclusion,
   BulkTtsJobsResult,
   CharacterLibraryEntry,
+  Composition,
   ContentDocument,
   CreateCharacterRequest,
+  CreateFaceSetRequest,
   CreateVoiceProfileRequest,
+  FaceSet,
   Job,
+  ModelList,
   ScriptVersion,
   ScriptVersionPreview,
+  ScriptVersionSummary,
   TtsJobResult,
   UpdateCharacterRequest,
+  UpdateFaceSetRequest,
   UpdateVoiceProfileRequest,
   VoiceAdapterId,
+  VoiceAdapterList,
   VoiceList,
   VoiceProfile,
   Warning,
   Work,
   WorkSummary,
+  FontCatalog,
+  ThemeDetail,
+  ThemeSummary,
+  CreateThemeRequest,
+  VisualThemeDefinition,
+  DraftPreview,
+  Thumbnail,
+  ThumbnailPreview,
+  CreateThumbnailRequest,
+  SaveThumbnailRequest,
+  ThumbnailPreviewRequest,
 } from "@kakeai/contracts";
 import { type AdapterVoicesState } from "../lib/voiceAdapters";
 import { ApiError, apiRequest, apiUpload, type Envelope } from "./client";
@@ -68,6 +86,23 @@ export function useUpdateWork(workId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["works"] });
       queryClient.invalidateQueries({ queryKey: ["work", workId] });
+    },
+  });
+}
+
+export function useCloneWork() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workId, title }: { workId: string; title: string }) =>
+      (
+        await apiRequest<Work>(`/works/${encodeURIComponent(workId)}/clone`, {
+          method: "POST",
+          body: { title },
+        })
+      ).data,
+    onSuccess: (newWork) => {
+      queryClient.invalidateQueries({ queryKey: ["works"] });
+      queryClient.setQueryData(["work", newWork.id], newWork);
     },
   });
 }
@@ -136,23 +171,44 @@ export function useDeleteAsset() {
   });
 }
 
-export function useUpdateAssetTags() {
+export type UpdateAssetPatch =
+  | { tags: string[]; favorited?: boolean; archived?: boolean }
+  | { tags?: string[]; favorited: boolean; archived?: boolean }
+  | { tags?: string[]; favorited?: boolean; archived: boolean };
+
+export type UpdateAssetInput = { assetId: string } & UpdateAssetPatch;
+
+function applyAssetPatch(asset: Asset, patch: UpdateAssetPatch): Asset {
+  const next = { ...asset };
+  if (patch.tags !== undefined) {
+    next.tags = [...patch.tags];
+  }
+  if (patch.favorited !== undefined) {
+    next.favoritedAt = patch.favorited ? new Date().toISOString() : null;
+  }
+  if (patch.archived !== undefined) {
+    next.archivedAt = patch.archived ? new Date().toISOString() : null;
+  }
+  return next;
+}
+
+export function useUpdateAsset() {
   const queryClient = useQueryClient();
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const mutation = useMutation({
-    mutationFn: async ({ assetId, tags }: { assetId: string; tags: string[] }) =>
+    mutationFn: async ({ assetId, ...patch }: UpdateAssetInput) =>
       (
         await apiRequest<Asset>(`/assets/${encodeURIComponent(assetId)}`, {
           method: "PATCH",
-          body: { tags },
+          body: patch,
         })
       ).data,
-    onMutate: async ({ assetId, tags }) => {
+    onMutate: async ({ assetId, ...patch }) => {
       await queryClient.cancelQueries({ queryKey: ["assets"] });
       setPendingIds((previous) => [...previous, assetId]);
       const previous = queryClient.getQueryData<Asset[]>(["assets"]);
       queryClient.setQueryData<Asset[]>(["assets"], (current) =>
-        current?.map((asset) => (asset.id === assetId ? { ...asset, tags } : asset)),
+        current?.map((asset) => (asset.id === assetId ? applyAssetPatch(asset, patch) : asset)),
       );
       return { previous };
     },
@@ -230,6 +286,66 @@ export function useCurrentScriptVersion(editionId: string | undefined) {
           `/language-editions/${encodeURIComponent(editionId ?? "")}/current-script-version`,
         )
       ).data,
+  });
+}
+
+export function useScriptVersions(editionId: string | undefined) {
+  return useQuery({
+    queryKey: ["script-versions", editionId],
+    enabled: editionId !== undefined && editionId.length > 0,
+    queryFn: async () =>
+      (
+        await apiRequest<ScriptVersionSummary[]>(
+          `/language-editions/${encodeURIComponent(editionId ?? "")}/script-versions`,
+        )
+      ).data,
+  });
+}
+
+export function useScriptVersion(scriptVersionId: string | undefined) {
+  return useQuery({
+    queryKey: ["script-version", scriptVersionId],
+    enabled: scriptVersionId !== undefined && scriptVersionId.length > 0,
+    queryFn: async () =>
+      (
+        await apiRequest<ScriptVersion>(
+          `/script-versions/${encodeURIComponent(scriptVersionId ?? "")}`,
+        )
+      ).data,
+  });
+}
+
+export function useRestoreScriptVersion(workId: string | undefined, editionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (sourceScriptVersionId: string): Promise<SaveScriptVersionResult> => {
+      if (editionId === undefined || editionId.length === 0) {
+        throw new Error("editionId がありません");
+      }
+      const sourceVersion = (
+        await apiRequest<ScriptVersion>(
+          `/script-versions/${encodeURIComponent(sourceScriptVersionId)}`,
+        )
+      ).data;
+
+      const response: Envelope<ScriptVersion> = await apiRequest<ScriptVersion>(
+        `/language-editions/${encodeURIComponent(editionId)}/script-versions`,
+        { method: "POST", body: { sourceScriptVersionId, content: sourceVersion.content } },
+      );
+      const parsedMeta = warningsMetaSchema.safeParse(response.meta);
+      const warnings = parsedMeta.success ? parsedMeta.data.warnings : [];
+      return { scriptVersion: response.data, warnings };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["works"] });
+      if (workId !== undefined && workId.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["work", workId] });
+      }
+      if (editionId !== undefined && editionId.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["current-script-version", editionId] });
+        queryClient.invalidateQueries({ queryKey: ["script-versions", editionId] });
+      }
+    },
   });
 }
 
@@ -330,6 +446,16 @@ export function useCancelJob(workId: string | undefined) {
   });
 }
 
+export function useDeleteArtifact(workId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (artifactId: string) => {
+      await apiRequest(`/artifacts/${encodeURIComponent(artifactId)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["work-jobs", workId] }),
+  });
+}
+
 export function useVoiceProfiles() {
   return useQuery({
     queryKey: ["voice-profiles"],
@@ -370,16 +496,41 @@ export function useDeleteVoiceProfile() {
   });
 }
 
-export function useAdapterVoices(adapterId: VoiceAdapterId | undefined) {
+export function useVoiceAdapters() {
   return useQuery({
-    queryKey: ["adapter-voices", adapterId],
+    queryKey: ["voice-adapters"],
+    staleTime: 60_000,
+    queryFn: async () => (await apiRequest<VoiceAdapterList>("/voice-adapters")).data,
+  });
+}
+
+export function useAdapterVoices(adapterId: VoiceAdapterId | undefined, model?: string) {
+  const normalizedModel = model === undefined || model.trim().length === 0 ? "" : model.trim();
+  return useQuery({
+    queryKey: ["adapter-voices", adapterId, normalizedModel],
+    enabled: adapterId !== undefined,
+    retry: false,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const params = new URLSearchParams({ adapterId: adapterId ?? "" });
+      if (normalizedModel.length > 0) {
+        params.set("model", normalizedModel);
+      }
+      return (await apiRequest<VoiceList>(`/voice-profiles/voices?${params.toString()}`)).data;
+    },
+  });
+}
+
+export function useVoiceModels(adapterId: VoiceAdapterId | undefined) {
+  return useQuery({
+    queryKey: ["adapter-models", adapterId],
     enabled: adapterId !== undefined,
     retry: false,
     staleTime: 60_000,
     queryFn: async () =>
       (
-        await apiRequest<VoiceList>(
-          `/voice-profiles/voices?adapterId=${encodeURIComponent(adapterId ?? "")}`,
+        await apiRequest<ModelList>(
+          `/voice-profiles/models?adapterId=${encodeURIComponent(adapterId ?? "")}`,
         )
       ).data,
   });
@@ -388,7 +539,7 @@ export function useAdapterVoices(adapterId: VoiceAdapterId | undefined) {
 export function useAdapterVoicesMap(): Record<VoiceAdapterId, AdapterVoicesState> {
   const results = useQueries({
     queries: voiceAdapterIdSchema.options.map((adapterId) => ({
-      queryKey: ["adapter-voices", adapterId],
+      queryKey: ["adapter-voices", adapterId, ""],
       retry: false,
       staleTime: 60_000,
       queryFn: async () =>
@@ -467,7 +618,7 @@ async function pollTtsJob(jobId: string): Promise<TtsJobResult> {
 
 export interface GenerateTtsInput {
   narrationSegmentId: string;
-  styleId: number;
+  voiceId: string;
   speedScale: number;
   speechText?: string;
 }
@@ -487,7 +638,7 @@ export function useGenerateTtsTake(scriptVersionId: string | undefined) {
           {
             method: "POST",
             body: {
-              styleId: input.styleId,
+              ...(input.voiceId.trim().length === 0 ? {} : { voiceId: input.voiceId }),
               speedScale: input.speedScale,
               ...(input.speechText === undefined || input.speechText.trim().length === 0
                 ? {}
@@ -609,5 +760,280 @@ export function useDeleteCharacter() {
       await apiRequest(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["characters"] }),
+  });
+}
+
+export function useFaceSets() {
+  return useQuery({
+    queryKey: ["face-sets"],
+    queryFn: async () => (await apiRequest<FaceSet[]>("/face-sets")).data,
+  });
+}
+
+export function useCreateFaceSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateFaceSetRequest) =>
+      (await apiRequest<FaceSet>("/face-sets", { method: "POST", body: input })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["face-sets"] }),
+  });
+}
+
+export function useUpdateFaceSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateFaceSetRequest }) =>
+      (
+        await apiRequest<FaceSet>(`/face-sets/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: input,
+        })
+      ).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["face-sets"] }),
+  });
+}
+
+export function useDeleteFaceSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/face-sets/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["face-sets"] }),
+  });
+}
+
+export function useCompositions() {
+  return useQuery({
+    queryKey: ["compositions"],
+    queryFn: async () => (await apiRequest<Composition[]>("/compositions")).data,
+  });
+}
+
+export function useThemes(includeArchived = false) {
+  return useQuery({
+    queryKey: ["themes", { includeArchived }],
+    queryFn: async () =>
+      (
+        await apiRequest<ThemeSummary[]>(
+          `/themes${includeArchived ? "?includeArchived=true" : ""}`,
+        )
+      ).data,
+  });
+}
+
+export function useTheme(themeId: string | undefined) {
+  return useQuery({
+    queryKey: ["theme", themeId],
+    enabled: themeId !== undefined && themeId.length > 0,
+    queryFn: async () =>
+      (await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId ?? "")}`)).data,
+  });
+}
+
+export function useCreateTheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateThemeRequest) =>
+      (await apiRequest<ThemeDetail>("/themes", { method: "POST", body: input })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["themes"] }),
+  });
+}
+
+export function useUpdateThemeDraft(themeId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (definition: VisualThemeDefinition) => {
+      if (themeId === undefined || themeId.length === 0) {
+        throw new Error("themeId がありません");
+      }
+      return (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/draft`, {
+          method: "PUT",
+          body: { definition },
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function useDiscardThemeDraft(themeId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (themeId === undefined || themeId.length === 0) {
+        throw new Error("themeId がありません");
+      }
+      return (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/draft`, {
+          method: "DELETE",
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function usePublishThemeDraft(themeId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (themeId === undefined || themeId.length === 0) {
+        throw new Error("themeId がありません");
+      }
+      return (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/publish`, {
+          method: "POST",
+          body: {},
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function useArchiveTheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (themeId: string) =>
+      (
+        await apiRequest<ThemeDetail>(`/themes/${encodeURIComponent(themeId)}/archive`, {
+          method: "POST",
+        })
+      ).data,
+    onSuccess: (_data, themeId) => {
+      queryClient.invalidateQueries({ queryKey: ["themes"] });
+      queryClient.invalidateQueries({ queryKey: ["theme", themeId] });
+    },
+  });
+}
+
+export function useFontCatalog() {
+  return useQuery({
+    queryKey: ["font-catalog"],
+    staleTime: 60_000,
+    queryFn: async () => (await apiRequest<FontCatalog>("/fonts")).data,
+  });
+}
+
+export function useRefreshFontCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      (await apiRequest<FontCatalog>("/fonts/refresh", { method: "POST", body: {} })).data,
+    onSuccess: (catalog) => {
+      queryClient.setQueryData(["font-catalog"], catalog);
+    },
+  });
+}
+
+export function usePreviewThemeDraft() {
+  return useMutation({
+    mutationFn: async (definition: VisualThemeDefinition) =>
+      (
+        await apiRequest<DraftPreview>("/themes/preview", {
+          method: "POST",
+          body: { definition },
+        })
+      ).data,
+  });
+}
+
+export function useThumbnails(editionId: string | undefined) {
+  return useQuery({
+    queryKey: ["thumbnails", editionId],
+    enabled: editionId !== undefined && editionId.length > 0,
+    queryFn: async () =>
+      (
+        await apiRequest<Thumbnail[]>(
+          `/language-editions/${encodeURIComponent(editionId ?? "")}/thumbnails`,
+        )
+      ).data,
+  });
+}
+
+export function useCreateThumbnail(editionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateThumbnailRequest) => {
+      if (editionId === undefined || editionId.length === 0) {
+        throw new Error("editionId がありません");
+      }
+      return (
+        await apiRequest<Thumbnail>(
+          `/language-editions/${encodeURIComponent(editionId)}/thumbnails`,
+          { method: "POST", body: input },
+        )
+      ).data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["thumbnails", editionId] }),
+  });
+}
+
+export function useSaveThumbnail(editionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: SaveThumbnailRequest }) =>
+      (
+        await apiRequest<Thumbnail>(`/thumbnails/${encodeURIComponent(id)}`, {
+          method: "PUT",
+          body: input,
+        })
+      ).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["thumbnails", editionId] }),
+  });
+}
+
+export function useDeleteThumbnail(editionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/thumbnails/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["thumbnails", editionId] }),
+  });
+}
+
+export function useSetPrimaryThumbnail(editionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (thumbnailId: string | null) => {
+      if (editionId === undefined || editionId.length === 0) {
+        throw new Error("editionId がありません");
+      }
+      return (
+        await apiRequest<Thumbnail | null>(
+          `/language-editions/${encodeURIComponent(editionId)}/primary-thumbnail`,
+          { method: "PUT", body: { thumbnailId } },
+        )
+      ).data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["thumbnails", editionId] }),
+  });
+}
+
+export function useThumbnailPreview(editionId: string | undefined) {
+  return useMutation({
+    mutationFn: async (input: ThumbnailPreviewRequest): Promise<ThumbnailPreview> => {
+      if (editionId === undefined || editionId.length === 0) {
+        throw new Error("editionId がありません");
+      }
+      return (
+        await apiRequest<ThumbnailPreview>(
+          `/language-editions/${encodeURIComponent(editionId)}/thumbnail-preview`,
+          { method: "POST", body: input },
+        )
+      ).data;
+    },
   });
 }

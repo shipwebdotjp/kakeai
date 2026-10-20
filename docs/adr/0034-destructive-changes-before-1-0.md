@@ -1,5 +1,7 @@
 # 正式リリース前はテンプレート版とschemaVersionの破壊的変更を許容する
 
+Status: amended by ADR-0061
+
 アプリのバージョンが `1.0.0` に達するまでの開発段階では、VisualTemplate の `id@version` と ContentDocument の `schemaVersion` の両方について、破壊的変更を許容する。見た目・レイアウト・入力スキーマを変えるときは既存の版を書き換えてよい。`schemaVersion` を上げるときも、保存済みデータを作り直す前提とし、旧版の読出し解釈や移行関数を先回りして持たない。
 
 `1.0.0` 以降は、[ADR-0009](./0009-template-version-immutability.md)/[ADR-0018](./0018-template-version-gc.md) のテンプレート版不変の規律と、[ADR-0013](./0013-content-schema-version-starts-at-1.md)/[ADR-0029](./0029-content-document-v3-visual-cue.md) の `schemaVersion` 移行の規律へ戻る。境界はアプリのバージョン番号またはリリースタグ（`1.0.0`）で判定する。

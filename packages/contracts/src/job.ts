@@ -1,18 +1,26 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
-import { migrateContentDocument } from "./content/migrate";
-import { styleIdSchema, voiceAdapterIdSchema } from "./voice-profile";
+import { voiceAdapterIdSchema, voiceIdSchema, voiceProfileExtrasSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 import { compositionManifestSchema } from "./composition";
+import { expressionPresetSchema, faceLayerSchema } from "./face-set";
+import { visualSkinRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 
-export const SNAPSHOT_SCHEMA_VERSION = 1 as const;
+export const SNAPSHOT_SCHEMA_VERSION = 3 as const;
 
 export const snapshotCompositionVersionRefSchema = z.object({
   id: idSchema,
   bundleHash: z.string().min(1),
   storageKey: z.string().min(1),
   manifest: compositionManifestSchema,
+});
+
+export const snapshotFaceSetRefSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  layers: z.array(faceLayerSchema),
+  expressions: z.array(expressionPresetSchema),
 });
 
 export const snapshotAssetRefSchema = z.object({
@@ -49,6 +57,15 @@ export const renderJobSnapshotSchema = z.object({
   content: contentDocumentSchema,
   assets: z.array(snapshotAssetRefSchema),
   compositionVersions: z.array(snapshotCompositionVersionRefSchema).optional().default([]),
+  faceSets: z.array(snapshotFaceSetRefSchema).optional().default([]),
+  themeDefinition: visualThemeDefinitionSchema.optional(),
+  skin: visualSkinRefSchema.optional(),
+  fontDiagnostics: z
+    .object({
+      missingFonts: z.array(z.string()),
+      diagnostics: z.array(z.string()).optional().default([]),
+    })
+    .optional(),
   template: z.object({
     id: z.string().min(1),
     version: positiveInt,
@@ -78,10 +95,10 @@ export const ttsJobSnapshotSchema = z.object({
   voiceProfileId: idSchema,
   adapterId: voiceAdapterIdSchema,
   voice: z.object({
-    voiceId: z.string().min(1),
-    styleId: styleIdSchema,
+    voiceId: voiceIdSchema,
   }),
-  styleName: z.string().min(1).max(200).optional(),
+  voiceName: z.string().min(1).max(200).optional(),
+  settings: voiceProfileExtrasSchema,
   speedScale: z.number().finite().min(MIN_TTS_SPEED_SCALE).max(MAX_TTS_SPEED_SCALE),
   speechText: z.string().min(1),
   engineVersion: z.string().nullable(),
@@ -94,17 +111,11 @@ export const jobInputSnapshotSchema = z.discriminatedUnion("kind", [
 ]);
 
 export function parseRenderJobSnapshot(input: unknown): RenderJobSnapshot {
-  if (typeof input === "object" && input !== null && "content" in input) {
-    const record = input as Record<string, unknown>;
-    return renderJobSnapshotSchema.parse({
-      ...record,
-      content: migrateContentDocument(record.content),
-    });
-  }
   return renderJobSnapshotSchema.parse(input);
 }
 
 export type RenderJobSnapshot = z.infer<typeof renderJobSnapshotSchema>;
+export type SnapshotFaceSet = z.infer<typeof snapshotFaceSetRefSchema>;
 export type AssetIngestJobSnapshot = z.infer<typeof assetIngestJobSnapshotSchema>;
 export type TtsJobSnapshot = z.infer<typeof ttsJobSnapshotSchema>;
 export type JobInputSnapshot = z.infer<typeof jobInputSnapshotSchema>;

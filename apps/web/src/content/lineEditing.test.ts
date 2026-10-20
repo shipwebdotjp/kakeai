@@ -27,8 +27,9 @@ function line(
   speechText: string,
   takes: TakeFormValue[] = [],
   selectedAudioTakeId: string | null = null,
+  expressionId: string | null = null,
 ): LineFormValue {
-  return { id, speakerId, captionText, speechText, selectedAudioTakeId, takes };
+  return { id, speakerId, captionText, speechText, selectedAudioTakeId, expressionId, gapBeforeMs: 0, takes };
 }
 
 function speaker(id: string, name: string): SpeakerFormValue {
@@ -76,9 +77,33 @@ function makeScene(lines: LineFormValue[], cues: CueFormValue[] = []): SceneForm
     lines,
     cues,
     standings: [
-      { cueId: null, characterId: null, appearanceId: null, side: "left", scale: 1 },
-      { cueId: null, characterId: null, appearanceId: null, side: "right", scale: 1 },
+      {
+        cueId: null,
+        characterId: null,
+        appearanceId: null,
+        side: "left",
+        scale: 1,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
+      },
+      {
+        cueId: null,
+        characterId: null,
+        appearanceId: null,
+        side: "right",
+        scale: 1,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
+      },
     ],
+    audioCues: [],
+    mainVisualCueId: "",
+    embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 
@@ -210,6 +235,119 @@ describe("removeLineInScene", () => {
     const scene = makeScene([line("l1", null, "A", "a")]);
     expect(removeLineInScene(scene, 3)).toBe(scene);
   });
+
+  it("drops effect triggers that reference the deleted line", () => {    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "row", index: 1 },
+        trigger: { kind: "lines", startLineId: "l3", endLineId: "l3" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "rows" },
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "fade", durationMs: 400 },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [cue("vc-effects", { templateId: "table.simple", fields: { effects } })],
+    );
+
+    const next = removeLineInScene(scene, 1);
+    const remaining = JSON.parse(next.cues[0]!.fields.effects!) as { trigger: { kind: string } }[];
+    expect(remaining).toHaveLength(2);
+    expect(
+      remaining.some(
+        (entry) =>
+          entry.trigger.kind === "lines" &&
+          (entry.trigger as { startLineId?: string }).startLineId === "l2",
+      ),
+    ).toBe(false);
+    expect(
+      remaining.some(
+        (entry) =>
+          entry.trigger.kind === "lines" &&
+          (entry.trigger as { startLineId?: string }).startLineId === "l3",
+      ),
+    ).toBe(true);
+  });
+
+  it("drops a chat effect but keeps its messages when the triggered line is deleted", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "message", index: 1 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "messages" },
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "fade", durationMs: 400 },
+      },
+    ]);
+    const messages = JSON.stringify([{ body: "a" }, { body: "b" }]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc-chat", { templateId: "chat.thread", fields: { messages, effects } })],
+    );
+    const next = removeLineInScene(scene, 1);
+    const fields = next.cues[0]!.fields;
+    const remaining = JSON.parse(fields.effects!) as { trigger: { kind: string } }[];
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.trigger.kind).toBe("cue");
+    expect(JSON.parse(fields.messages!)).toEqual([{ body: "a" }, { body: "b" }]);
+  });
+
+  it("preserves effect fields for an unknown template when dropping deleted-line triggers", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc", { templateId: "unknown.template", fields: { effects } })],
+    );
+    const next = removeLineInScene(scene, 1);
+    expect(next.cues[0]!.fields.effects).toBe(effects);
+  });
+
+  it("drops a non-editable appear trigger held in baseCue when its line is removed", () => {
+    const baseCue: VisualCue = {
+      id: "vc-callout",
+      template: { id: "list.callout", version: 1 },
+      range: { kind: "scene" },
+      layer: "overlay",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        items: [{ text: "a" }],
+        appear: {
+          trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400 },
+        },
+      },
+    };
+    const items = JSON.stringify([{ text: "a" }]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc", { templateId: "list.callout", baseCue, fields: { items } })],
+    );
+    const next = removeLineInScene(scene, 1);
+    const input = next.cues[0]!.baseCue!.input as { appear?: unknown; items: unknown };
+    expect(input.appear).toBeUndefined();
+    expect(input.items).toEqual([{ text: "a" }]);
+  });
 });
 
 describe("countLineCueReferences", () => {
@@ -222,6 +360,22 @@ describe("countLineCueReferences", () => {
     expect(countLineCueReferences(scene, "l3")).toBe(1);
     expect(countLineCueReferences(scene, "l9")).toBe(0);
   });
+
+  it("counts cues whose effect trigger references the line", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l2", endLineId: "l2" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("vc", { templateId: "table.simple", fields: { effects } })],
+    );
+    expect(countLineCueReferences(scene, "l2")).toBe(1);
+    expect(countLineCueReferences(scene, "l1")).toBe(0);
+  });
 });
 
 describe("splitPointScene", () => {
@@ -233,7 +387,7 @@ describe("splitPointScene", () => {
       line("l4", null, "D", "d"),
     ]);
 
-    const { first, second } = splitPointScene(scene, 2, "要点 2");
+    const { first, second } = splitPointScene(scene, 2, "要点 2", new Set(), null);
 
     expect(first.id).toBe("scene-point-1");
     expect(first.lines.map((entry) => entry.id)).toEqual(["l1", "l2"]);
@@ -248,6 +402,53 @@ describe("splitPointScene", () => {
     expect(second.kind).toBe("point");
     expect(second.transitionPreset).toBe("cut");
     expect(second.cues.some((entry) => entry.fields.role === "heading")).toBe(true);
+  });
+
+  it("drops effect triggers whose lines move to the other scene", () => {
+    const effects = JSON.stringify([
+      {
+        target: { kind: "row", index: 0 },
+        trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+      {
+        target: { kind: "row", index: 1 },
+        trigger: { kind: "lines", startLineId: "l3", endLineId: "l3" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [cue("vc", { templateId: "table.simple", rangeKind: "scene", fields: { effects } })],
+    );
+
+    const { first } = splitPointScene(scene, 2, "要点 2", new Set(), null);
+    const remaining = JSON.parse(first.cues.find((entry) => entry.id === "vc")!.fields.effects!) as {
+      trigger: { startLineId: string };
+    }[];
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.trigger.startLineId).toBe("l1");
+  });
+
+  it("keeps callout items without a trigger when splitting", () => {
+    const items = JSON.stringify([
+      { text: "常時表示" },
+      {
+        text: "同期する",
+        trigger: { kind: "lines", startLineId: "l3", endLineId: "l3" },
+        effect: { kind: "emphasize", style: "frame", tone: "primary" },
+      },
+    ]);
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [cue("vc", { templateId: "list.callout", rangeKind: "scene", fields: { items } })],
+    );
+
+    const { first } = splitPointScene(scene, 2, "要点 2", new Set(), null);
+    const remaining = JSON.parse(
+      first.cues.find((entry) => entry.id === "vc")!.fields.items!,
+    ) as { text: string }[];
+    expect(remaining.map((entry) => entry.text)).toEqual(["常時表示"]);
   });
 
   it("routes cues by their line range", () => {
@@ -267,7 +468,7 @@ describe("splitPointScene", () => {
       ],
     );
 
-    const { first, second } = splitPointScene(scene, 2, "要点 2");
+    const { first, second } = splitPointScene(scene, 2, "要点 2", new Set(), null);
 
     expect(first.cues.map((entry) => entry.id)).toEqual(["scene", "offset", "before", "span"]);
     expect(first.cues.find((entry) => entry.id === "span")).toMatchObject({
@@ -307,7 +508,7 @@ describe("splitPointScene", () => {
       [span],
     );
 
-    const { first, second } = splitPointScene(scene, 2, "要点 2");
+    const { first, second } = splitPointScene(scene, 2, "要点 2", new Set(), null);
     const firstSpan = first.cues.find((entry) => entry.id === "span")!;
     const secondSpan = second.cues.find((entry) => entry.rangeKind === "lines")!;
 
@@ -316,12 +517,57 @@ describe("splitPointScene", () => {
     expect(firstSpan.baseCue?.id).toBe("span");
   });
 
+  it("splits and moves offset cues at the split time", () => {
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b"), line("l3", null, "C", "c")],
+      [
+        cue("before", { rangeKind: "offset", startMs: 0, endMs: 100 }),
+        cue("after", { rangeKind: "offset", startMs: 300, endMs: 400 }),
+        cue("span", { rangeKind: "offset", startMs: 50, endMs: 350 }),
+      ],
+    );
+
+    const { first, second } = splitPointScene(scene, 1, "要点 2", new Set(), 200);
+
+    expect(first.cues.find((entry) => entry.id === "before")).toMatchObject({
+      startMs: 0,
+      endMs: 100,
+    });
+    expect(first.cues.find((entry) => entry.id === "span")).toMatchObject({
+      startMs: 50,
+      endMs: 200,
+    });
+    expect(second.cues.find((entry) => entry.id === "after")).toMatchObject({
+      startMs: 100,
+      endMs: 200,
+    });
+    const secondSpan = second.cues.find(
+      (entry) => entry.rangeKind === "offset" && entry.id !== "after",
+    )!;
+    expect(secondSpan.id).not.toBe("span");
+    expect(secondSpan).toMatchObject({ startMs: 0, endMs: 150 });
+    expect(first.cues.some((entry) => entry.id === "after")).toBe(false);
+    expect(second.cues.some((entry) => entry.id === "span")).toBe(false);
+  });
+
+  it("keeps offset cues in the first scene when the split time is unknown", () => {
+    const scene = makeScene(
+      [line("l1", null, "A", "a"), line("l2", null, "B", "b")],
+      [cue("offset", { rangeKind: "offset", startMs: 0, endMs: 100 })],
+    );
+
+    const { first, second } = splitPointScene(scene, 1, "要点 2", new Set(), null);
+
+    expect(first.cues.some((entry) => entry.id === "offset")).toBe(true);
+    expect(second.cues.some((entry) => entry.id === "offset")).toBe(false);
+  });
+
   it("rejects splits at the first line or beyond the last line", () => {
     const scene = makeScene([line("l1", null, "A", "a"), line("l2", null, "B", "b")]);
-    expect(() => splitPointScene(scene, 0, "要点 2")).toThrow();
-    expect(() => splitPointScene(scene, 2, "要点 2")).toThrow();
+    expect(() => splitPointScene(scene, 0, "要点 2", new Set(), null)).toThrow();
+    expect(() => splitPointScene(scene, 2, "要点 2", new Set(), null)).toThrow();
     const single = makeScene([line("l1", null, "A", "a")]);
-    expect(() => splitPointScene(single, 1, "要点 2")).toThrow();
+    expect(() => splitPointScene(single, 1, "要点 2", new Set(), null)).toThrow();
   });
 });
 

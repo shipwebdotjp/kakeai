@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Ellipsis, Play } from "lucide-react";
 import {
   useFieldArray,
   useWatch,
@@ -11,6 +12,8 @@ import {
   MAX_TTS_SPEECH_TEXT_LENGTH,
   MAX_TTS_SPEED_SCALE,
   MIN_TTS_SPEED_SCALE,
+  voiceAdapterDescriptorFor,
+  type FaceSet,
   type VoiceAdapterId,
   type VoiceProfile,
 } from "@kakeai/contracts";
@@ -19,10 +22,12 @@ import type {
   DocumentFormValues,
   LineFormValue,
   SpeakerFormValue,
+  StandingFormValue,
   TakeFormValue,
 } from "../content/form";
 import {
   countLineCueReferences,
+  collectLineIds,
   createEmptyLine,
   duplicateLineFormValue,
   generatedTakePolicy,
@@ -36,12 +41,15 @@ import {
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
 import {
+  buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
+  iconButtonClass,
   metaTextClass,
   textFieldClass,
 } from "../ui";
+import { Collapsible, useStoredCollapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { TakeAudioPlayer } from "./TakeAudioPlayer";
 
@@ -59,6 +67,8 @@ interface LinesEditorProps {
   adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
   bulkRunning: boolean;
+  faceSets: FaceSet[];
+  faceSetsReady: boolean;
   onSplitScene: (sceneIndex: number, lineIndex: number) => void;
   onJumpToLine?: (lineId: string) => void;
 }
@@ -71,6 +81,7 @@ function formatDuration(durationMs: number): string {
 interface LineEditorProps extends Omit<LinesEditorProps, "sceneId" | "control" | "onSplitScene"> {
   lineIndex: number;
   line: LineFormValue;
+  standings: StandingFormValue[];
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMove: (direction: -1 | 1) => void;
@@ -93,6 +104,9 @@ interface LineActionsMenuProps {
 
 const MENU_ITEM_CLASS =
   "block w-full whitespace-nowrap rounded px-2 py-1 text-left text-sm hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40";
+
+const MENU_DANGER_ITEM_CLASS =
+  "block w-full whitespace-nowrap rounded px-2 py-1 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-300 dark:hover:bg-red-950";
 
 function LineActionsMenu({
   canMoveUp,
@@ -141,10 +155,10 @@ function LineActionsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="セリフ操作"
-        className={buttonNeutralClass}
+        className={iconButtonClass}
         onClick={() => setOpen((previous) => !previous)}
       >
-        …
+        <Ellipsis aria-hidden="true" className="h-4 w-4" />
       </button>
       {open && (
         <div
@@ -190,7 +204,7 @@ function LineActionsMenu({
           <button
             type="button"
             role="menuitem"
-            className={MENU_ITEM_CLASS}
+            className={MENU_DANGER_ITEM_CLASS}
             onClick={() => run(onDelete)}
           >
             削除
@@ -221,6 +235,9 @@ function LineEditor({
   onJumpToLine,
   speakers,
   characters,
+  standings,
+  faceSets,
+  faceSetsReady,
   voiceProfiles,
   adapterVoices,
   savedVoiceByLineId,
@@ -229,43 +246,69 @@ function LineEditor({
 }: LineEditorProps) {
   const assets = useAssets();
   const generate = useGenerateTtsTake(scriptVersionId);
-  const [styleId, setStyleId] = useState<number | null>(null);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
   const [speedScale, setSpeedScale] = useState(1);
   const [autoPlayToken, setAutoPlayToken] = useState(0);
   const autoPlayTakeIdRef = useRef<string | null>(null);
+  const manualProfileRef = useRef<string | null>(null);
 
   const speaker = speakers.find((entry) => entry.id === line.speakerId);
   const characterId = speaker?.characterId ?? null;
   const character = characters.find((entry) => entry.id === characterId);
+  const standingAppearanceIds = new Set(
+    (standings ?? [])
+      .filter((standing) => standing?.characterId === characterId)
+      .map((standing) => standing?.appearanceId),
+  );
+  const faceSet = faceSets.find((entry) =>
+    character?.appearances.some(
+      (appearance) => appearance.faceSetId === entry.id && standingAppearanceIds.has(appearance.id),
+    ),
+  );
+  const presets = faceSet?.expressions ?? [];
+  const staleExpression =
+    line.expressionId !== null &&
+    faceSetsReady &&
+    !presets.some((preset) => preset.id === line.expressionId);
   const profileId = character?.voiceProfileId ?? speaker?.voiceProfileId ?? null;
   const profile = voiceProfiles.find((entry) => entry.id === profileId);
   const adapterState = profile === undefined ? undefined : adapterVoices[profile.adapterId];
   const adapterName = profile === undefined ? "" : adapterLabel(profile.adapterId);
-  const voice = adapterState?.voices?.find(
-    (entry) => entry.voiceId === profile?.settings.speakerUuid,
-  );
-  const styles = voice?.styles;
+  const listedVoices = adapterState?.voices;
+  const voices = listedVoices ?? [];
+  const manualVoice =
+    profile !== undefined &&
+    voiceAdapterDescriptorFor(profile.adapterId).voiceSelection === "list-or-manual";
+  const effectiveVoiceId = voiceId ?? profile?.voiceId ?? null;
+  const voice = voices.find((entry) => entry.voiceId === effectiveVoiceId);
 
   useEffect(() => {
     if (profile === undefined) {
-      setStyleId(null);
+      manualProfileRef.current = null;
+      setVoiceId(null);
       return;
     }
-    const available = styles ?? [];
-    setStyleId((previous) => {
-      if (previous !== null && available.some((style) => style.styleId === previous)) {
+    if (manualVoice) {
+      if (manualProfileRef.current !== profile.id) {
+        manualProfileRef.current = profile.id;
+        setVoiceId(profile.voiceId);
+      }
+      return;
+    }
+    manualProfileRef.current = null;
+    setVoiceId((previous) => {
+      if (previous !== null && voices.some((entry) => entry.voiceId === previous)) {
         return previous;
       }
-      const hasDefault = available.some(
-        (style) => style.styleId === profile.settings.defaultStyleId,
-      );
-      return hasDefault ? profile.settings.defaultStyleId : (available[0]?.styleId ?? null);
+      return voices.some((entry) => entry.voiceId === profile.voiceId)
+        ? profile.voiceId
+        : (voices[0]?.voiceId ?? null);
     });
-  }, [profile?.id, profile?.settings.defaultStyleId, voice?.voiceId, styles]);
+  }, [profile?.id, profile?.voiceId, listedVoices, manualVoice]);
 
   useEffect(() => {
     setSpeedScale(1);
-  }, [profile?.id, voice?.voiceId]);
+  }, [profile?.id, effectiveVoiceId]);
 
   const fileName = (assetId: string): string =>
     assets.data?.find((asset) => asset.id === assetId)?.originalFilename ?? assetId;
@@ -329,11 +372,13 @@ function LineEditor({
   const onChangeCharacter = (nextId: string) => {
     if (nextId === "") {
       setValue(`${path}.speakerId`, null, { shouldDirty: true });
+      setValue(`${path}.expressionId`, null, { shouldDirty: true });
       return;
     }
     const existing = speakers.find((entry) => entry.characterId === nextId);
     if (existing !== undefined) {
       setValue(`${path}.speakerId`, existing.id, { shouldDirty: true });
+      setValue(`${path}.expressionId`, null, { shouldDirty: true });
       return;
     }
     const selected = characters.find((entry) => entry.id === nextId);
@@ -355,12 +400,17 @@ function LineEditor({
   };
 
   const onGenerate = () => {
-    if (styleId === null) {
+    if (effectiveVoiceId === null) {
       return;
     }
     const policy = generatedTakePolicy("individual");
     generate.mutate(
-      { narrationSegmentId: line.id, styleId, speedScale, speechText: line.speechText },
+      {
+        narrationSegmentId: line.id,
+        voiceId: effectiveVoiceId.trim(),
+        speedScale,
+        speechText: line.speechText,
+      },
       {
         onSuccess: (result) => {
           const takeId = addTake(result.assetId, result.durationMs, "tts", policy.select);
@@ -380,7 +430,24 @@ function LineEditor({
   const speechLength = line.speechText.trim().length;
   const speechReady = speechLength > 0 && speechLength <= MAX_TTS_SPEECH_TEXT_LENGTH;
   const ttsDisabled =
-    bulkRunning || generate.isPending || styleId === null || !voiceMatches || !speechReady;
+    bulkRunning || generate.isPending || effectiveVoiceId === null || !voiceMatches || !speechReady;
+  const audioNeedsAttention =
+    staleExpression ||
+    generate.isError ||
+    (profileId !== null && profile === undefined) ||
+    (profile !== undefined &&
+      adapterState?.loading !== true &&
+      (adapterState === undefined ||
+        adapterState.failed ||
+        (!manualVoice && voice === undefined)));
+  const audioSummary = takes.length === 0 ? "音声なし" : `候補 ${takes.length}件`;
+  const [audioOpen, setAudioOpen] = useStoredCollapsible(`line-audio-${line.id}`, false);
+
+  useEffect(() => {
+    if (audioNeedsAttention) {
+      setAudioOpen(true);
+    }
+  }, [audioNeedsAttention, setAudioOpen]);
 
   return (
     <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">
@@ -392,12 +459,12 @@ function LineEditor({
           {onJumpToLine !== undefined && (
             <button
               type="button"
-              className={buttonNeutralClass}
+              className={iconButtonClass}
               title="プレビューをこのセリフへ移動"
               aria-label="プレビューをこのセリフへ移動"
               onClick={() => onJumpToLine(line.id)}
             >
-              ▶
+              <Play aria-hidden="true" className="h-4 w-4" />
             </button>
           )}
           <LineActionsMenu
@@ -424,6 +491,18 @@ function LineEditor({
         {...register(`scenes.${sceneIndex}.lines.${lineIndex}.speechText`)}
       />
       <label className="inline-flex items-center gap-1.5 text-sm">
+        このセリフの前の間（ms）
+        <input
+          type="number"
+          min={0}
+          className={`w-24 ${textFieldClass}`}
+          {...register(`scenes.${sceneIndex}.lines.${lineIndex}.gapBeforeMs`, {
+            valueAsNumber: true,
+            min: 0,
+          })}
+        />
+      </label>
+      <label className="inline-flex items-center gap-1.5 text-sm">
         キャラクター
         <select
           className={textFieldClass}
@@ -438,6 +517,48 @@ function LineEditor({
           ))}
         </select>
       </label>
+      <Collapsible
+        title="音声詳細"
+        summary={audioNeedsAttention ? `要確認・${audioSummary}` : audioSummary}
+        open={audioOpen}
+        onOpenChange={setAudioOpen}
+      >
+      {staleExpression ? (
+        <p className={metaTextClass}>
+          表情「{line.expressionId}」は参照先の立ち絵・表情セットにありません。
+          <button
+            type="button"
+            className={buttonNeutralClass}
+            onClick={() => setValue(`${path}.expressionId`, null, { shouldDirty: true })}
+          >
+            クリア
+          </button>
+        </p>
+      ) : presets.length > 0 ? (
+        <label className="inline-flex items-center gap-1.5 text-sm">
+          表情
+          <select
+            className={textFieldClass}
+            value={line.expressionId ?? ""}
+            onChange={(event) =>
+              setValue(`${path}.expressionId`, event.target.value === "" ? null : event.target.value, {
+                shouldDirty: true,
+              })
+            }
+          >
+            <option value="">
+              通常（{presets.find((preset) => preset.id === "normal")?.name ?? "normal"}）
+            </option>
+            {presets
+              .filter((preset) => preset.id !== "normal")
+              .map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name || preset.id}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
 
       <div className="mt-1">
         {takes.length === 0 ? (
@@ -464,38 +585,41 @@ function LineEditor({
                 />
                 <button
                   type="button"
-                  className={buttonNeutralClass}
+                  className={buttonDangerClass}
                   onClick={() => deleteTake(take.id)}
                 >
-                  削除
+                  候補削除
                 </button>
               </li>
             ))}
           </ul>
         )}
-        {line.selectedAudioTakeId !== null && (
-          <button
-            type="button"
-            className={buttonNeutralClass}
-            onClick={() => setValue(`${path}.selectedAudioTakeId`, null, { shouldDirty: true })}
-          >
-            音声を解除
-          </button>
-        )}
-        <MediaPicker
-          label="音声を追加"
-          kinds={["audio"]}
-          selectedAssetId={null}
-          variant="add"
-          onSelect={(assetId) => {
-            if (assetId !== null) {
-              addManualTake(assetId);
-            }
-          }}
-        />
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {line.selectedAudioTakeId !== null && (
+            <button
+              type="button"
+              className={buttonNeutralClass}
+              onClick={() => setValue(`${path}.selectedAudioTakeId`, null, { shouldDirty: true })}
+            >
+              音声解除
+            </button>
+          )}
+          <MediaPicker
+            label="音声追加"
+            inline
+            kinds={["audio"]}
+            selectedAssetId={null}
+            variant="add"
+            onSelect={(assetId) => {
+              if (assetId !== null) {
+                addManualTake(assetId);
+              }
+            }}
+          />
+        </div>
       </div>
 
-      <div className="mt-1 border-t border-dashed border-border pt-2">
+      <div className="mt-2">
         <p className={metaTextClass}>TTS生成</p>
         {profileId === null ? (
           <p className={metaTextClass}>
@@ -511,32 +635,48 @@ function LineEditor({
           <p className={errorTextClass}>
             {adapterName} ENGINE に接続できません。起動しているか確認してください。
           </p>
-        ) : voice === undefined ? (
+        ) : !manualVoice && voice === undefined ? (
           <p className={errorTextClass}>
-            声プロファイルの話者が {adapterName} ENGINE に見つかりません。
+            声プロファイルの声が {adapterName} ENGINE に見つかりません。
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <label className="inline-flex items-center gap-1.5">
-              スタイル
-              <select
-                className={textFieldClass}
-                value={styleId ?? ""}
-                onChange={(event) => {
-                  if (event.target.value === "") {
-                    setStyleId(null);
-                    return;
-                  }
-                  const next = Number(event.target.value);
-                  setStyleId(Number.isInteger(next) ? next : null);
-                }}
-              >
-                {(styles ?? []).map((style) => (
-                  <option key={style.styleId} value={style.styleId}>
-                    {style.name}
-                  </option>
-                ))}
-              </select>
+              声
+              {manualVoice ? (
+                <>
+                  <input
+                    className={textFieldClass}
+                    list={`line-voice-${line.id}`}
+                    value={effectiveVoiceId ?? ""}
+                    onChange={(event) => {
+                      const next = event.target.value.trim();
+                      setVoiceId(next.length === 0 ? null : next);
+                    }}
+                  />
+                  <datalist id={`line-voice-${line.id}`}>
+                    {voices.map((entry) => (
+                      <option key={entry.voiceId} value={entry.voiceId}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <select
+                  className={textFieldClass}
+                  value={effectiveVoiceId ?? ""}
+                  onChange={(event) => {
+                    setVoiceId(event.target.value === "" ? null : event.target.value);
+                  }}
+                >
+                  {voices.map((entry) => (
+                    <option key={entry.voiceId} value={entry.voiceId}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
             <label className="inline-flex items-center gap-1.5">
               話速
@@ -584,6 +724,7 @@ function LineEditor({
         )}
         {generate.isError && <p className={errorTextClass}>{generate.error.message}</p>}
       </div>
+      </Collapsible>
     </div>
   );
 }
@@ -602,6 +743,8 @@ export function LinesEditor({
   adapterVoices,
   savedVoiceByLineId,
   bulkRunning,
+  faceSets,
+  faceSetsReady,
   onSplitScene,
   onJumpToLine,
 }: LinesEditorProps) {
@@ -610,6 +753,7 @@ export function LinesEditor({
     name: `scenes.${sceneIndex}.lines`,
   });
   const watchedLines = useWatch({ control, name: `scenes.${sceneIndex}.lines` }) ?? [];
+  const watchedStandings = useWatch({ control, name: `scenes.${sceneIndex}.standings` }) ?? [];
 
   const moveLine = (from: number, to: number) => {
     const scene = getValues(`scenes.${sceneIndex}`);
@@ -629,7 +773,10 @@ export function LinesEditor({
     if (line === undefined) {
       return;
     }
-    insert(lineIndex + 1, duplicateLineFormValue(line, sceneId));
+    insert(
+      lineIndex + 1,
+      duplicateLineFormValue(line, sceneId, collectLineIds(getValues("scenes"))),
+    );
   };
 
   const removeLine = (lineIndex: number) => {
@@ -679,6 +826,9 @@ export function LinesEditor({
             scriptVersionId={scriptVersionId}
             speakers={speakers}
             characters={characters}
+            standings={watchedStandings}
+            faceSets={faceSets}
+            faceSetsReady={faceSetsReady}
             voiceProfiles={voiceProfiles}
             adapterVoices={adapterVoices}
             savedVoiceByLineId={savedVoiceByLineId}
@@ -689,7 +839,7 @@ export function LinesEditor({
       <button
         type="button"
         className={buttonNeutralClass}
-        onClick={() => append(createEmptyLine(sceneId))}
+        onClick={() => append(createEmptyLine(sceneId, collectLineIds(getValues("scenes"))))}
       >
         セリフを追加
       </button>

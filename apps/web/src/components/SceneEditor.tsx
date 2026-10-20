@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, OctagonAlert, TriangleAlert } from "lucide-react";
 import {
   useFieldArray,
   useForm,
@@ -11,20 +12,25 @@ import {
   contentDocumentSchema,
   DEFAULT_VISUAL_THEME_REF,
   getVisualTheme,
+  type Asset,
   type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
   type ContentDocument,
   type ScriptVersion,
   type ThemeAccentToken,
   type TtsJobResult,
-  type Warning,
 } from "@kakeai/contracts";
+import { ApiError } from "../api/client";
+import { diagnosticTarget, type Diagnostic, type DiagnosticTarget } from "../content/diagnostics";
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
   useAdapterVoicesMap,
+  useAssets,
   useBulkGenerateTtsTakes,
   useCharacters,
+  useFaceSets,
   useSaveScriptVersion,
+  useThemes,
   useVoiceProfiles,
   type BulkTtsFailure,
 } from "../api/hooks";
@@ -32,7 +38,9 @@ import {
   buildContentDocument,
   bulkTtsCandidateLineIds,
   cloneSceneFormValue,
+  collectSceneIds,
   countCharacterFormUsage,
+  createInsertSceneFormValue,
   createPointSceneFormValue,
   generatedTakePolicy,
   mergeTake,
@@ -40,6 +48,7 @@ import {
   newCharacterId,
   newSceneId,
   newSpeakerId,
+  nextInsertLabel,
   nextPointLabel,
   splitPointScene,
   toFormValues,
@@ -48,26 +57,68 @@ import {
   type DocumentFormValues,
   type SceneAccentKind,
   type SceneFormValue,
+  type SpeakerFormValue,
 } from "../content/form";
 import { SCENE_LABELS } from "../content/labels";
+import { AssetThumbnail, assetLabel } from "../lib/assets";
 import { errorMessage } from "../lib/errorMessage";
 import type { UnsavedDocumentState } from "../lib/useDraftPreview";
-import { buttonNeutralClass, buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  badgeInfoClass,
+  badgeNeutralClass,
+  buttonDangerClass,
+  buttonNeutralClass,
+  buttonPrimaryClass,
+  errorTextClass,
+  iconButtonClass,
+  metaTextClass,
+  sectionCardClass,
+  sectionSummaryClass,
+  sectionTitleClass,
+  textFieldClass,
+} from "../ui";
 import { CharacterFields } from "./CharacterFields";
-import { CueList } from "./CueList";
+import { Collapsible, useStoredCollapsible } from "./Collapsible";
+import { CueList, ScriptSkinProvider } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { StandingFields } from "./StandingFields";
+import { SceneAudioFields } from "./SceneAudioFields";
+
+const DRAFT_PREVIEW_DEBOUNCE_MS = 800;
 
 interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
   scriptVersionId: string;
   onSaved?: (scriptVersion: ScriptVersion) => void;
-  onValuesChange?: (scenes: SceneFormValue[]) => void;
+  onValuesChange?: (scenes: SceneFormValue[], speakers: SpeakerFormValue[], characters: CharacterFormValue[]) => void;
   onJumpToLine?: (lineId: string) => void;
+  onJumpToTarget?: (targetId: string, seek: DiagnosticTarget["seek"]) => void;
   onDocumentChange?: (state: UnsavedDocumentState) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+function extractServerErrors(error: unknown): Diagnostic[] {
+  if (
+    error instanceof ApiError &&
+    error.details &&
+    typeof error.details === "object" &&
+    "issues" in error.details &&
+    Array.isArray((error.details as { issues: unknown }).issues)
+  ) {
+    return (
+      error.details as {
+        issues: { path?: (string | number)[]; code?: string; message: string }[];
+      }
+    ).issues.map((issue) => ({
+      path: issue.path,
+      code: issue.code,
+      message: issue.message ?? "入力エラーが発生しました",
+    }));
+  }
+  return [{ message: errorMessage(error) }];
 }
 
 interface TimingFieldsProps {
@@ -75,7 +126,8 @@ interface TimingFieldsProps {
   register: UseFormRegister<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
-  sceneKind: "intro" | "point" | "outro";
+  sceneKind: "intro" | "point" | "outro" | "insert";
+  insertLoop?: boolean;
 }
 
 const THEME_ACCENTS = getVisualTheme(
@@ -89,7 +141,7 @@ const ACCENT_TOKEN_OPTIONS: readonly { value: ThemeAccentToken; label: string }[
   { value: "tertiary", label: `ターシャリ（${THEME_ACCENTS.tertiary}）` },
 ];
 
-function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: TimingFieldsProps) {
+function TimingFields({ control, register, setValue, sceneIndex, sceneKind, insertLoop = false }: TimingFieldsProps) {
   const mode = useWatch({ control, name: `scenes.${sceneIndex}.timingMode` });
   const accentKind = useWatch({ control, name: `scenes.${sceneIndex}.accentKind` });
   const accentColor = useWatch({ control, name: `scenes.${sceneIndex}.accentColor` });
@@ -144,7 +196,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
           <option value="fixed">固定</option>
         </select>
       </label>
-      {mode === "fixed" && (
+      {mode === "fixed" && (sceneKind !== "insert" || insertLoop) && (
         <label className="inline-flex items-center gap-1.5">
           固定尺(ms)
           <input
@@ -185,13 +237,295 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind }: Ti
   );
 }
 
-export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onDocumentChange }: SceneEditorProps) {
+const SCENE_TRANSITION_LABELS: Record<string, string> = {
+  cut: "カット",
+  fade: "フェード",
+  crossfade: "クロスフェード",
+};
+
+function isMiddleScene(kind: SceneFormValue["kind"] | undefined): boolean {
+  return kind === "point" || kind === "insert";
+}
+
+function resolveMainCueIndex(
+  cues: readonly { id: string }[],
+  mainVisualCueId: string,
+): number {
+  return cues.findIndex((cue) => cue.id === mainVisualCueId);
+}
+
+function insertAssetStatusMessage(
+  assetId: string,
+  isLoading: boolean,
+  isError: boolean,
+): string {
+  if (assetId.length === 0) {
+    return "動画を選択してください";
+  }
+  if (isLoading) {
+    return "素材を確認しています…";
+  }
+  if (isError) {
+    return "素材を確認できません";
+  }
+  return "選択中の動画が見つかりません（削除された可能性）";
+}
+
+function assetAudioLabel(asset: Asset | undefined): string {
+  if (asset === undefined) {
+    return "音声ストリーム不明";
+  }
+  return asset.hasAudio ? "音声ストリームあり" : "音声ストリームなし";
+}
+
+function sceneSettingsSummary(scene: SceneFormValue, sceneIndex: number): string {
+  const parts = [scene.accentKind === "custom" ? "自由色" : "テーマ色"];
+  parts.push(scene.timingMode === "fixed" ? `固定 ${scene.durationMs}ms` : "自動");
+  if (sceneIndex > 0) {
+    parts.push(SCENE_TRANSITION_LABELS[scene.transitionPreset] ?? scene.transitionPreset);
+  }
+  return parts.join(" / ");
+}
+
+interface InsertSceneFieldsProps {
+  scene: SceneFormValue;
+  sceneIndex: number;
+  assets: readonly Asset[];
+  assetsLoading: boolean;
+  assetsError: boolean;
+  register: UseFormRegister<DocumentFormValues>;
+  setValue: UseFormSetValue<DocumentFormValues>;
+  onError: (message: string) => void;
+}
+
+function InsertSceneFields({
+  scene,
+  sceneIndex,
+  assets,
+  assetsLoading,
+  assetsError,
+  register,
+  setValue,
+  onError,
+}: InsertSceneFieldsProps) {
+  const mainCueIndex = resolveMainCueIndex(scene.cues, scene.mainVisualCueId);
+  const mainCue = mainCueIndex === -1 ? undefined : scene.cues[mainCueIndex];
+  const fields = mainCue?.fields ?? {};
+  const assetId = fields.assetId ?? "";
+  const asset = assets.find((entry) => entry.id === assetId);
+  const assetDurationMs = asset?.durationMs ?? null;
+  const loop = fields.loop === "true";
+  const rawTrimStart = fields.trimStartMs ?? "";
+  const rawTrimEnd = fields.trimEndMs ?? "";
+  const parsedTrimStart = rawTrimStart === "" ? 0 : Number(rawTrimStart);
+  const parsedTrimEnd = rawTrimEnd === "" ? null : Number(rawTrimEnd);
+  const trimStartMs =
+    Number.isInteger(parsedTrimStart) && parsedTrimStart >= 0 ? parsedTrimStart : 0;
+  const trimEndValid =
+    parsedTrimEnd === null ||
+    (Number.isInteger(parsedTrimEnd) &&
+      parsedTrimEnd > trimStartMs &&
+      (assetDurationMs === null || parsedTrimEnd <= assetDurationMs));
+  const trimStartValid =
+    rawTrimStart === "" ||
+    (Number.isInteger(parsedTrimStart) &&
+      parsedTrimStart >= 0 &&
+      (assetDurationMs === null || parsedTrimStart < assetDurationMs));
+  const trimEndMs =
+    parsedTrimEnd !== null && trimEndValid ? parsedTrimEnd : assetDurationMs;
+  const clipMs =
+    trimStartValid && trimEndValid && trimEndMs !== null && assetDurationMs !== null
+      ? trimEndMs - trimStartMs
+      : null;
+  let trimError: string | null = null;
+  if (!trimStartValid) {
+    trimError = "トリム開始はミリ秒の整数（0以上、動画尺未満）で入力してください。";
+  } else if (!trimEndValid) {
+    trimError =
+      parsedTrimEnd !== null && assetDurationMs !== null && parsedTrimEnd > assetDurationMs
+        ? "トリム終了が動画の尺を超えています。"
+        : "トリム終了は開始より大きく、ミリ秒の整数で入力してください。";
+  }
+
+  useEffect(() => {
+    if (clipMs === null || clipMs <= 0) {
+      return;
+    }
+    if (loop && scene.durationMs >= clipMs) {
+      return;
+    }
+    if (!loop && scene.durationMs === clipMs) {
+      return;
+    }
+    setValue(`scenes.${sceneIndex}.durationMs`, clipMs, { shouldDirty: true });
+  }, [clipMs, loop, scene.durationMs, sceneIndex, setValue]);
+
+  const setField = (key: string, value: string) => {
+    if (mainCueIndex === -1) {
+      return;
+    }
+    setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.${key}`, value, {
+      shouldDirty: true,
+    });
+  };
+
+  return (
+    <div className="my-3 flex flex-col gap-2 rounded border border-border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">インサート動画</span>
+        {asset === undefined ? (
+          <span className={metaTextClass}>
+            {insertAssetStatusMessage(assetId, assetsLoading, assetsError)}
+          </span>
+        ) : (
+          <>
+            <AssetThumbnail asset={asset} />
+            <span className="truncate text-xs">{assetLabel(asset)}</span>
+          </>
+        )}
+        <MediaPicker
+          label="動画を差し替え"
+          kinds={["video"]}
+          selectedAssetId={assetId.length > 0 ? assetId : null}
+          onSelect={(nextId) => {
+            if (nextId === null) {
+              return;
+            }
+            const next = assets.find((entry) => entry.id === nextId);
+            if (next === undefined) {
+              onError("素材一覧を確認できません。読み込み後に選び直してください。");
+              return;
+            }
+            if (next.kind !== "video") {
+              onError("インサートSceneには動画素材だけを指定できます。");
+              return;
+            }
+            if (next.durationMs === null || next.durationMs <= 0) {
+              onError("尺が確定していない動画はインサートSceneに指定できません。");
+              return;
+            }
+            if (mainCue === undefined) {
+              onError("主動画Cueを特定できません。動画を追加し直してください。");
+              return;
+            }
+            setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.assetId`, next.id, {
+              shouldDirty: true,
+            });
+            setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.trimStartMs`, "", {
+              shouldDirty: true,
+            });
+            setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.trimEndMs`, "", {
+              shouldDirty: true,
+            });
+            setValue(`scenes.${sceneIndex}.durationMs`, next.durationMs, { shouldDirty: true });
+          }}
+          inline
+        />
+      </div>
+      <p className={metaTextClass}>
+        動画尺:{" "}
+        {assetDurationMs !== null && Number.isFinite(assetDurationMs)
+          ? `${(assetDurationMs / 1000).toFixed(2)}秒`
+          : "不明"}
+        {clipMs !== null && clipMs > 0 && (
+          <> ／ 使用区間: {(trimStartMs / 1000).toFixed(2)}〜{((trimStartMs + clipMs) / 1000).toFixed(2)}秒（{(clipMs / 1000).toFixed(2)}秒）</>
+        )}
+      </p>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <label className="inline-flex items-center gap-1.5">
+          トリム開始(ms)
+          <input
+            type="number"
+            min={0}
+            step={1}
+            className={`w-24 ${textFieldClass}`}
+            placeholder="0"
+            value={fields.trimStartMs ?? ""}
+            onChange={(event) => setField("trimStartMs", event.target.value)}
+          />
+        </label>
+        <label className="inline-flex items-center gap-1.5">
+          トリム終了(ms)
+          <input
+            type="number"
+            min={0}
+            step={1}
+            className={`w-24 ${textFieldClass}`}
+            placeholder={assetDurationMs !== null ? String(assetDurationMs) : ""}
+            value={fields.trimEndMs ?? ""}
+            onChange={(event) => setField("trimEndMs", event.target.value)}
+          />
+        </label>
+        <label className="inline-flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={loop}
+            onChange={(event) => setField("loop", event.target.checked ? "true" : "")}
+          />
+          ループ再生
+        </label>
+      </div>
+      {trimError !== null && <p className={errorTextClass}>{trimError}</p>}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className={asset?.hasAudio === true ? badgeInfoClass : badgeNeutralClass}>
+          {assetAudioLabel(asset)}
+        </span>
+        <label className="inline-flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            {...register(`scenes.${sceneIndex}.embeddedAudio`)}
+          />
+          埋め込み音声を再生
+        </label>
+        <label className="inline-flex items-center gap-1.5">
+          音量
+          <input
+            type="number"
+            step={1}
+            min={-60}
+            max={12}
+            disabled={!scene.embeddedAudio || asset?.hasAudio !== true}
+            className={`w-20 ${textFieldClass}`}
+            {...register(`scenes.${sceneIndex}.embeddedAudioGainDb`, {
+              setValueAs: (value) => {
+                const parsed = Number(value);
+                return value === "" || !Number.isFinite(parsed) ? 0 : parsed;
+              },
+            })}
+          />
+          dB
+        </label>
+        {scene.embeddedAudio && <span className={badgeNeutralClass}>作品全体BGMをこの区間で抑制</span>}
+        {scene.embeddedAudio && asset !== undefined && asset.hasAudio === false && (
+          <span className={badgeNeutralClass}>この区間は無音になります</span>
+        )}
+      </div>
+      {mainCueIndex === -1 && (
+        <p className={errorTextClass}>主動画Cueが見つかりません。動画を選び直してください。</p>
+      )}
+      {asset !== undefined && asset.kind !== "video" && (
+        <p className={errorTextClass}>動画以外の素材は主動画に指定できません。</p>
+      )}
+      <p className={metaTextClass}>
+        初期版では速度変更・逆再生には対応していません。ループ時は使用区間をScene尺まで繰り返します。
+      </p>
+    </div>
+  );
+}
+
+export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onJumpToTarget, onDocumentChange, onDirtyChange }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
+  const faceSets = useFaceSets();
   const adapterVoices = useAdapterVoicesMap();
-  const [issues, setIssues] = useState<string[]>([]);
-  const [warnings, setWarnings] = useState<Warning[]>([]);
+  const themesQuery = useThemes();
+  const assetsQuery = useAssets();
+  const [diagnostics, setDiagnostics] = useState<{ errors: Diagnostic[]; warnings: Diagnostic[] }>({
+    errors: [],
+    warnings: [],
+  });
+  const [openKind, setOpenKind] = useState<"error" | "warning" | null>(null);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
@@ -214,6 +548,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     useForm<DocumentFormValues>({
       defaultValues: toFormValues(base),
     });
+
+  const isFormDirty = formState.isDirty;
+  const lastEmittedDirtyRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    if (lastEmittedDirtyRef.current !== isFormDirty) {
+      lastEmittedDirtyRef.current = isFormDirty;
+      onDirtyChange?.(isFormDirty);
+    }
+  }, [isFormDirty, onDirtyChange]);
   const { fields, insert, remove, move, replace: replaceScenes } = useFieldArray({
     control,
     name: "scenes",
@@ -223,6 +567,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     append: appendCharacter,
     remove: removeCharacter,
   } = useFieldArray({ control, name: "characters" });
+  const [charactersOpen, setCharactersOpen] = useStoredCollapsible(
+    "characters",
+    characterFields.length === 0,
+  );
+
+  useEffect(() => {
+    if (characterFields.length === 0) {
+      setCharactersOpen(true);
+    }
+  }, [characterFields.length, setCharactersOpen]);
   const watchedScenesValue = useWatch({ control, name: "scenes" });
   const watchedScenes = useMemo(() => watchedScenesValue ?? [], [watchedScenesValue]);
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
@@ -230,8 +584,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
   const navProjection = useMemo(
     () =>
-      JSON.stringify(
-        watchedScenes.map((scene) => ({
+      JSON.stringify({
+        scenes: watchedScenes.map((scene) => ({
           id: scene?.id,
           kind: scene?.kind,
           label: scene?.label,
@@ -240,6 +594,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             templateId: cue?.templateId,
             templateVersion: cue?.templateVersion,
             role: cue?.fields?.role ?? "",
+            text: cue?.fields?.text ?? "",
           })),
           lines: (scene?.lines ?? []).map((line) => ({
             id: line?.id,
@@ -247,8 +602,20 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             captionText: line?.captionText,
           })),
         })),
-      ),
-    [watchedScenes],
+        speakers: (watchedSpeakers ?? []).map((speaker) => ({
+          id: speaker?.id,
+          name: speaker?.name,
+        })),
+        characters: (watchedCharacters ?? []).map((character) => ({
+          id: character?.id,
+          name: character?.name,
+          appearances: (character?.appearances ?? []).map((appearance) => ({
+            id: appearance?.id,
+            assetId: appearance?.assetId,
+          })),
+        })),
+      }),
+    [watchedScenes, watchedSpeakers, watchedCharacters],
   );
   const lastEmittedNavProjection = useRef<string | null>(null);
 
@@ -257,15 +624,17 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       return;
     }
     const snapshot = [...watchedScenes];
+    const speakerSnapshot = [...(watchedSpeakers ?? [])];
+    const characterSnapshot = [...(watchedCharacters ?? [])];
     const timer = setTimeout(() => {
       if (navProjection === lastEmittedNavProjection.current) {
         return;
       }
       lastEmittedNavProjection.current = navProjection;
-      onValuesChange?.(snapshot);
+      onValuesChange?.(snapshot, speakerSnapshot, characterSnapshot);
     }, 150);
     return () => clearTimeout(timer);
-  }, [watchedScenes, navProjection, onValuesChange]);
+  }, [watchedScenes, watchedSpeakers, watchedCharacters, navProjection, onValuesChange]);
   const savedVoiceByLineId = useMemo(() => {
     const speakerById = new Map(base.speakers.map((speaker) => [speaker.id, speaker]));
     const map = new Map<string, string | null>();
@@ -278,9 +647,15 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     return map;
   }, [base]);
 
+  const lastBaseRef = useRef(base);
   useEffect(() => {
-    reset(toFormValues(base));
-  }, [base, reset]);
+    if (lastBaseRef.current !== base) {
+      lastBaseRef.current = base;
+      if (!formState.isDirty) {
+        reset(toFormValues(base));
+      }
+    }
+  }, [base, reset, formState.isDirty]);
 
   const allValues = useWatch({ control }) as DocumentFormValues | undefined;
   useEffect(() => {
@@ -302,7 +677,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         document = null;
       }
       onDocumentChange({ dirty: true, document });
-    }, 500);
+    }, DRAFT_PREVIEW_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [allValues, base, formState.isDirty, onDocumentChange]);
 
@@ -312,25 +687,40 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       try {
         document = buildContentDocument(base, values);
       } catch (error) {
-        setIssues([errorMessage(error)]);
-        setWarnings([]);
+        setDiagnostics({ errors: [{ message: errorMessage(error) }], warnings: [] });
+        setOpenKind("error");
         return;
       }
       const parsed = contentDocumentSchema.safeParse(document);
       if (!parsed.success) {
-        setIssues(
-          parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
-        );
-        setWarnings([]);
+        setDiagnostics({
+          errors: parsed.error.issues.map((issue) => ({
+            path: issue.path as (string | number)[],
+            code: issue.code,
+            message: issue.message,
+          })),
+          warnings: [],
+        });
+        setOpenKind("error");
         return;
       }
-      setIssues([]);
       save.mutate(parsed.data, {
         onSuccess: (result) => {
-          setWarnings(result.warnings);
+          reset(toFormValues(result.scriptVersion.content));
+          const warnings = result.warnings.map((warning) => ({
+            path: warning.path,
+            code: warning.code,
+            message: warning.message,
+          }));
+          setDiagnostics({ errors: [], warnings });
+          setOpenKind(warnings.length > 0 ? "warning" : null);
           setSavedAtMs(Date.now());
           setBulkResult(null);
           onSaved?.(result.scriptVersion);
+        },
+        onError: (error) => {
+          setDiagnostics((prev) => ({ ...prev, errors: extractServerErrors(error) }));
+          setOpenKind("error");
         },
       });
     },
@@ -340,7 +730,10 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     const scenes = getValues("scenes");
     const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
     const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
-    insert(insertIndex, createPointSceneFormValue(nextPointLabel(scenes, insertIndex)));
+    insert(
+      insertIndex,
+      createPointSceneFormValue(nextPointLabel(scenes, insertIndex), collectSceneIds(scenes)),
+    );
   };
 
   const onClonePrevious = (index: number) => {
@@ -353,8 +746,40 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       index,
       cloneSceneFormValue(
         previous as SceneFormValue & { kind: "point" },
-        newSceneId(),
+        newSceneId(collectSceneIds(scenes)),
         nextPointLabel(scenes, index),
+      ),
+    );
+  };
+
+  const onInsertVideo = (assetId: string | null) => {
+    if (assetId === null) {
+      return;
+    }
+    const asset = (assetsQuery.data ?? []).find((entry) => entry.id === assetId);
+    if (
+      asset === undefined ||
+      asset.kind !== "video" ||
+      asset.durationMs === null ||
+      asset.durationMs <= 0
+    ) {
+      setDiagnostics((prev) => ({
+        ...prev,
+        errors: [{ message: "尺が確定した動画だけを挿入できます。素材の取り込み完了後に選び直してください。" }],
+      }));
+      setOpenKind("error");
+      return;
+    }
+    const scenes = getValues("scenes");
+    const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
+    const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
+    insert(
+      insertIndex,
+      createInsertSceneFormValue(
+        nextInsertLabel(scenes, insertIndex),
+        asset.id,
+        asset.durationMs,
+        collectSceneIds(scenes),
       ),
     );
   };
@@ -362,7 +787,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const onMove = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     const scenes = getValues("scenes");
-    if (scenes[index]?.kind !== "point" || scenes[target]?.kind !== "point") {
+    if (!isMiddleScene(scenes[index]?.kind) || !isMiddleScene(scenes[target]?.kind)) {
       return;
     }
     move(index, target);
@@ -374,11 +799,31 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     if (scene === undefined || scene.kind !== "point") {
       return;
     }
+    const placement = placementBySceneId.get(scene.id);
+    const splitLineId = scene.lines[lineIndex]?.id;
+    const splitLineStartMs = placement?.lines.find(
+      (line) => line.lineId === splitLineId,
+    )?.startMs;
+    const rawSplitOffsetMs =
+      placement !== undefined && splitLineStartMs !== undefined
+        ? splitLineStartMs - placement.startMs
+        : null;
+    const splitOffsetMs =
+      rawSplitOffsetMs !== null && Number.isFinite(rawSplitOffsetMs) && rawSplitOffsetMs >= 0
+        ? rawSplitOffsetMs
+        : null;
     let result: ReturnType<typeof splitPointScene>;
     try {
-      result = splitPointScene(scene, lineIndex, nextPointLabel(scenes, sceneIndex + 1));
+      result = splitPointScene(
+        scene,
+        lineIndex,
+        nextPointLabel(scenes, sceneIndex + 1),
+        collectSceneIds(scenes),
+        splitOffsetMs,
+      );
     } catch (error) {
-      setIssues([errorMessage(error)]);
+      setDiagnostics((prev) => ({ ...prev, errors: [{ message: errorMessage(error) }] }));
+      setOpenKind("error");
       return;
     }
     replaceScenes([
@@ -452,25 +897,29 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
   const addCharacterFromLibrary = (entry: CharacterLibraryEntry) => {
     const characterId = newCharacterId();
+    const voiceProfileId =
+      entry.voices.find((voice) => voice.locale === base.locale)?.voiceProfileId ?? null;
     const character: CharacterFormValue = {
       id: characterId,
       name: entry.name,
-      voiceProfileId: entry.voiceProfileId,
+      voiceProfileId,
+      voices: entry.voices.map((voice) => ({ ...voice })),
       appearances: entry.appearances.map((appearance) => ({
         id: newAppearanceId(),
         assetId: appearance.assetId,
         expression: appearance.expression,
         pose: appearance.pose,
         label: appearance.label ?? "",
+        faceSetId: appearance.faceSetId,
       })),
     };
     appendCharacter(character);
-    addSpeakerFor(characterId, entry.name, entry.voiceProfileId);
+    addSpeakerFor(characterId, entry.name, voiceProfileId);
   };
 
   const addVoiceOnlySpeaker = () => {
     const characterId = newCharacterId();
-    appendCharacter({ id: characterId, name: "ナレーター", voiceProfileId: null, appearances: [] });
+    appendCharacter({ id: characterId, name: "ナレーター", voiceProfileId: null, voices: [], appearances: [] });
     addSpeakerFor(characterId, "ナレーター", null);
   };
 
@@ -556,6 +1005,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   return (
     <>
     <form onSubmit={onSubmit}>
+      <fieldset disabled={save.isPending} className="contents border-0 m-0 p-0">
       <div
         id="editor-actionbar"
         className="sticky top-0 z-10 flex flex-wrap items-center gap-3 bg-surface py-2.5"
@@ -567,6 +1017,34 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         >
           保存
         </button>
+        {diagnostics.errors.length > 0 && (
+          <button
+            type="button"
+            className={`inline-flex cursor-pointer items-center gap-1 rounded px-2.5 py-1 text-xs font-medium ${
+              openKind === "error"
+                ? "border border-red-400 bg-red-200 text-red-900 dark:bg-red-900/60 dark:text-red-100"
+                : "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-950/60 dark:text-red-200"
+            }`}
+            onClick={() => setOpenKind(openKind === "error" ? null : "error")}
+          >
+            <OctagonAlert className="h-4 w-4 shrink-0" />
+            <span>エラー({diagnostics.errors.length})</span>
+          </button>
+        )}
+        {diagnostics.warnings.length > 0 && (
+          <button
+            type="button"
+            className={`inline-flex cursor-pointer items-center gap-1 rounded px-2.5 py-1 text-xs font-medium ${
+              openKind === "warning"
+                ? "border border-amber-400 bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100"
+                : "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-200"
+            }`}
+            onClick={() => setOpenKind(openKind === "warning" ? null : "warning")}
+          >
+            <TriangleAlert className="h-4 w-4 shrink-0" />
+            <span>警告({diagnostics.warnings.length})</span>
+          </button>
+        )}
         <button
           type="button"
           className={buttonNeutralClass}
@@ -588,11 +1066,51 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             保存しました（{new Date(savedAtMs).toLocaleTimeString("ja-JP")}）
           </span>
         )}
-        {save.isError && <span className={errorTextClass}>{errorMessage(save.error)}</span>}
         {bulkGenerate.isError && (
           <span className={errorTextClass}>{errorMessage(bulkGenerate.error)}</span>
         )}
       </div>
+
+      {openKind !== null && (
+        <div
+          className={`mt-2 max-h-60 overflow-auto rounded border p-3 text-sm ${
+            openKind === "error"
+              ? "border-red-400 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200"
+              : "border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          }`}
+        >
+          <div className="mb-1 font-semibold">
+            {openKind === "error" ? "エラー一覧" : "警告一覧"}
+          </div>
+          <ul className="m-0 list-disc space-y-1 pl-5">
+            {(openKind === "error" ? diagnostics.errors : diagnostics.warnings).map((diag, index) => {
+              const target = diagnosticTarget(diag.path, watchedScenes);
+              const pathStr = diag.path ? diag.path.join(".") : null;
+              return (
+                <li key={index}>
+                  {pathStr !== null && (
+                    <>
+                      {target !== null ? (
+                        <button
+                          type="button"
+                          className="mr-1.5 cursor-pointer font-mono underline hover:no-underline"
+                          onClick={() => onJumpToTarget?.(target.targetId, target.seek)}
+                        >
+                          {pathStr}
+                        </button>
+                      ) : (
+                        <span className="mr-1.5 font-mono text-muted-foreground">{pathStr}</span>
+                      )}
+                      :{" "}
+                    </>
+                  )}
+                  <span>{diag.message}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {bulkResult !== null && (
         <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
@@ -620,31 +1138,65 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         </div>
       )}
 
-      {warnings.length > 0 && (
-        <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
-          <strong>警告</strong>
-          <ul>
-            {warnings.map((warning, index) => (
-              <li key={index}>
-                {warning.path.join(".")}: {warning.message}
-              </li>
-            ))}
-          </ul>
+      <Collapsible
+        title="テーマ（Visual Theme）"
+        storageKey="theme"
+        summary={(() => {
+          const themeId = allValues?.visualTheme?.id;
+          const themeVersion = allValues?.visualTheme?.version;
+          const theme = (themesQuery.data ?? []).find((entry) => entry.id === themeId);
+          if (theme === undefined || themeId === undefined || themeVersion === undefined) {
+            return "未選択";
+          }
+          return `${theme.name} (v${themeVersion})`;
+        })()}
+        className={sectionCardClass}
+      >
+        <h3 className={sectionTitleClass}>テーマ（Visual Theme）</h3>
+        <p className={sectionSummaryClass}>
+          作品全体の文字デザイン・配色テーマを指定します。選択変更後に「保存」すると新しい台本版が作成されます。
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-1.5 text-sm">
+            選択中テーマ:
+            <select
+              className={textFieldClass}
+              value={`${getValues("visualTheme.id")}@${getValues("visualTheme.version")}`}
+              onChange={(e) => {
+                const [id, verStr] = e.target.value.split("@");
+                if (id && verStr) {
+                  setValue("visualTheme.id", id, { shouldDirty: true });
+                  setValue("visualTheme.version", Number(verStr), { shouldDirty: true });
+                }
+              }}
+            >
+              {(themesQuery.data ?? [])
+                .filter((t) => t.latestRevision !== null)
+                .map((t) => {
+                  const version = t.latestRevision!.version;
+                  const valueKey = `${t.id}@${version}`;
+                  return (
+                    <option key={valueKey} value={valueKey}>
+                      {t.name} (v{version}) {t.isBuiltIn ? "【組み込み】" : ""}
+                    </option>
+                  );
+                })}
+            </select>
+          </label>
         </div>
-      )}
-      {issues.length > 0 && (
-        <div className="rounded border border-red-400 bg-red-50 p-3 text-sm dark:bg-red-950/40">
-          <strong>入力エラー</strong>
-          <ul>
-            {issues.map((issue, index) => (
-              <li key={index}>{issue}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      </Collapsible>
 
-      <section className="my-4 rounded-lg border border-border p-4">
-        <h3 className="mt-0 mb-2 text-lg font-semibold">BGM（作品全体）</h3>
+      <Collapsible
+        title="BGM（作品全体）"
+        storageKey="bgm"
+        summary={
+          watchedBgm?.assetId === null || watchedBgm?.assetId === undefined
+            ? "未設定"
+            : `設定あり（ループ${watchedBgm.loop ? "あり" : "なし"}・${watchedBgm.gainDb}dB）`
+        }
+        className={sectionCardClass}
+      >
+        <h3 className={sectionTitleClass}>BGM（作品全体）</h3>
         <MediaPicker
           label="BGM"
           kinds={["audio"]}
@@ -674,11 +1226,17 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             </label>
           </div>
         )}
-      </section>
+      </Collapsible>
 
-      <section className="my-4 rounded-lg border border-border p-4">
-        <h3 className="mt-0 mb-2 text-lg font-semibold">キャラクター</h3>
-        <p className={metaTextClass}>
+      <Collapsible
+        title="キャラクター"
+        summary={characterFields.length === 0 ? "未登録" : `${characterFields.length}件`}
+        open={charactersOpen}
+        onOpenChange={setCharactersOpen}
+        className={sectionCardClass}
+      >
+        <h3 className={sectionTitleClass}>キャラクター</h3>
+        <p className={sectionSummaryClass}>
           この作品で使うキャラクターです。声プロファイルを割り当てると、そのキャラクターのセリフをTTSで生成できます。外観はライブラリから取り込んだ後に、この作品内で追加・編集できます。
         </p>
         {voiceProfiles.isError && (
@@ -686,6 +1244,9 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         )}
         {characterLibrary.isError && (
           <p className={errorTextClass}>キャラクターライブラリを読み込めませんでした。</p>
+        )}
+        {faceSets.isError && (
+          <p className={errorTextClass}>表情セットを読み込めませんでした。</p>
         )}
         {characterFields.map((field, characterIndex) => (
           <CharacterFields
@@ -696,6 +1257,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             setValue={setValue}
             characterIndex={characterIndex}
             voiceProfiles={voiceProfiles.data ?? []}
+            faceSets={faceSets.data ?? []}
             onDelete={deleteCharacter}
           />
         ))}
@@ -732,8 +1294,9 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             キャラクターがありません。「ライブラリから追加」で追加してください。
           </p>
         )}
-      </section>
+      </Collapsible>
 
+      <ScriptSkinProvider control={control}>
       {fields.map((field, sceneIndex) => {
         const scene = watchedScenes[sceneIndex];
         if (scene === undefined) {
@@ -743,48 +1306,56 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           <section
             key={field.id}
             id={`scene-${scene.id}`}
-            className="my-4 rounded-lg border border-border p-4"
+            className={sectionCardClass}
           >
             <div className="mt-0 mb-2 flex flex-wrap items-center gap-2">
               <input
                 aria-label="シーン名"
                 placeholder="シーン名"
-                className={`min-w-[160px] font-semibold ${textFieldClass}`}
+                className={`min-w-[160px] flex-1 font-semibold ${textFieldClass}`}
                 {...register(`scenes.${sceneIndex}.label`)}
               />
-              <span className="text-xs font-normal text-muted-foreground">
+              <span className={scene.kind === "point" ? badgeInfoClass : badgeNeutralClass}>
                 {SCENE_LABELS[scene.kind] ?? scene.kind}
               </span>
-              <span className="text-xs font-normal text-muted-foreground">{scene.id}</span>
-              {scene.kind === "point" && (
+              <span className="font-mono text-xs text-muted-foreground">{scene.id}</span>
+              {(scene.kind === "point" || scene.kind === "insert") && (
                 <span className="ml-auto flex gap-1">
+                  {scene.kind === "point" && (
+                    <button
+                      type="button"
+                      className={buttonNeutralClass}
+                      disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
+                      onClick={() => onClonePrevious(sceneIndex)}
+                    >
+                      前のシーンを複製
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className={buttonNeutralClass}
-                    disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
-                    onClick={() => onClonePrevious(sceneIndex)}
-                  >
-                    前のシーンを複製
-                  </button>
-                  <button
-                    type="button"
-                    className={buttonNeutralClass}
-                    disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
+                    className={iconButtonClass}
+                    aria-label="上へ移動"
+                    disabled={
+                      !isMiddleScene(watchedScenes[sceneIndex - 1]?.kind)
+                    }
                     onClick={() => onMove(sceneIndex, -1)}
                   >
-                    ↑
+                    <ChevronUp aria-hidden="true" className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    className={buttonNeutralClass}
-                    disabled={watchedScenes[sceneIndex + 1]?.kind !== "point"}
+                    className={iconButtonClass}
+                    aria-label="下へ移動"
+                    disabled={
+                      !isMiddleScene(watchedScenes[sceneIndex + 1]?.kind)
+                    }
                     onClick={() => onMove(sceneIndex, 1)}
                   >
-                    ↓
+                    <ChevronDown aria-hidden="true" className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    className={buttonNeutralClass}
+                    className={buttonDangerClass}
                     onClick={() => remove(sceneIndex)}
                   >
                     削除
@@ -793,19 +1364,21 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               )}
             </div>
 
-            <TimingFields
-              control={control}
-              register={register}
-              setValue={setValue}
-              sceneIndex={sceneIndex}
-              sceneKind={scene.kind}
-            />
+            <Collapsible title="シーン設定" summary={sceneSettingsSummary(scene, sceneIndex)} storageKey={`scene-settings-${scene.id}`}>
+              <TimingFields
+                control={control}
+                register={register}
+                setValue={setValue}
+                sceneIndex={sceneIndex}
+                sceneKind={scene.kind}
+                insertLoop={
+                  scene.kind === "insert" &&
+                  scene.cues.find((cue) => cue.id === scene.mainVisualCueId)?.fields.loop ===
+                    "true"
+                }
+              />
 
-            <details className={`mt-1 text-xs ${metaTextClass}`}>
-              <summary className="cursor-pointer text-muted-foreground select-none">
-                尺を表示
-              </summary>
-              <div className="mt-1">
+              <Collapsible title="尺の内訳" className="mt-1 text-xs" storageKey={`scene-duration-${scene.id}`}>
                 {(() => {
                   const placement = placementBySceneId.get(scene.id);
                   if (placement === undefined) {
@@ -816,38 +1389,75 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                       <p>シーン尺: {(placement.durationMs / 1000).toFixed(1)}秒</p>
                       {placement.lines.length > 0 && (
                         <ol className="my-1 ml-4 list-decimal p-0">
-                          {placement.lines.map((line) => (
-                            <li key={line.lineId}>
-                              {(line.startMs / 1000).toFixed(2)}s 〜{" "}
-                              {(line.endMs / 1000).toFixed(2)}s（
-                              {(line.durationMs / 1000).toFixed(2)}秒）
-                            </li>
+                          {placement.lines.flatMap((line) => {
+                            const entries: { key: string; text: string }[] = [];
+                            if (line.gapBeforeMs > 0) {
+                              entries.push({
+                                key: `${line.lineId}-gap`,
+                                text: `間 ${((line.startMs - line.gapBeforeMs) / 1000).toFixed(2)}s 〜 ${(line.startMs / 1000).toFixed(2)}s（${(line.gapBeforeMs / 1000).toFixed(2)}秒）`,
+                              });
+                            }
+                            entries.push({
+                              key: line.lineId,
+                              text: `${(line.startMs / 1000).toFixed(2)}s 〜 ${(line.endMs / 1000).toFixed(2)}s（${(line.durationMs / 1000).toFixed(2)}秒）`,
+                            });
+                            return entries;
+                          }).map((entry) => (
+                            <li key={entry.key}>{entry.text}</li>
                           ))}
                         </ol>
                       )}
                     </>
                   );
                 })()}
-              </div>
-            </details>
+              </Collapsible>
+            </Collapsible>
 
-            <CueList
+            {scene.kind === "insert" ? (
+              <InsertSceneFields
+                scene={scene}
+                sceneIndex={sceneIndex}
+                assets={assetsQuery.data ?? []}
+                assetsLoading={assetsQuery.isLoading}
+                assetsError={assetsQuery.isError}
+                register={register}
+                setValue={setValue}
+                onError={(message) => {
+                  setDiagnostics((prev) => ({ ...prev, errors: [{ message }] }));
+                  setOpenKind("error");
+                }}
+              />
+            ) : (
+              <CueList
+                control={control}
+                register={register}
+                setValue={setValue}
+                getValues={getValues}
+                sceneIndex={sceneIndex}
+                sceneId={scene.id}
+                lines={scene.lines}
+                speakers={watchedSpeakers}
+                sceneDurationMs={placementBySceneId.get(scene.id)?.durationMs ?? null}
+              />
+            )}
+
+            {scene.kind !== "insert" && (
+              <StandingFields
+                control={control}
+                register={register}
+                setValue={setValue}
+                sceneIndex={sceneIndex}
+                sceneId={scene.id}
+                characters={watchedCharacters}
+              />
+            )}
+
+            <SceneAudioFields
               control={control}
               register={register}
-              setValue={setValue}
               getValues={getValues}
-              sceneIndex={sceneIndex}
-              sceneId={scene.id}
-              lines={scene.lines}
-              speakers={watchedSpeakers}
-            />
-
-            <StandingFields
-              control={control}
-              register={register}
               setValue={setValue}
               sceneIndex={sceneIndex}
-              characters={watchedCharacters}
             />
 
             {scene.kind === "point" && (
@@ -865,6 +1475,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   adapterVoices={adapterVoices}
                   savedVoiceByLineId={savedVoiceByLineId}
                   bulkRunning={bulkGenerate.isPending}
+                  faceSets={faceSets.data ?? []}
+                  faceSetsReady={faceSets.isSuccess}
                   onSplitScene={onSplitScene}
                   onJumpToLine={onJumpToLine}
                 />
@@ -872,11 +1484,20 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           </section>
         );
       })}
+      </ScriptSkinProvider>
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
           要点を追加
         </button>
+        <MediaPicker
+          label="動画を挿入"
+          kinds={["video"]}
+          selectedAssetId={null}
+          onSelect={onInsertVideo}
+          variant="add"
+          inline
+        />
         <button
           type="button"
           className={buttonNeutralClass}
@@ -888,12 +1509,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       {pointCount === 0 && (
         <p className={metaTextClass}>要点Sceneがありません。追加してください。</p>
       )}
+      </fieldset>
     </form>
     <ScriptImportModal
       open={importOpen}
       onClose={() => setImportOpen(false)}
       scenes={watchedScenes}
       speakers={watchedSpeakers}
+      disabled={save.isPending}
       onApply={(nextScenes) => replaceScenes(nextScenes)}
     />
     </>

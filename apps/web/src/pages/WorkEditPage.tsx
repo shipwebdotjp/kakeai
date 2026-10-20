@@ -1,20 +1,44 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useBeforeUnload, useBlocker, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { defaultPointLabel, getVisualTemplate, type ScriptVersion } from "@kakeai/contracts";
+import { defaultPointLabel, type ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
+import { CueMap } from "../components/CueMap";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
+import { CollapsibleStateProvider } from "../components/Collapsible";
 import { errorMessage } from "../lib/errorMessage";
 import { PreviewControllerProvider, usePreviewActions } from "../lib/PreviewController";
 import { useDraftPreview, type UnsavedDocumentState } from "../lib/useDraftPreview";
-import type { CueFormValue, SceneFormValue } from "../content/form";
-import { SCENE_LABELS, TEXT_ROLE_LABELS } from "../content/labels";
-import { buttonPrimaryClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import type { CharacterFormValue, SceneFormValue, SpeakerFormValue } from "../content/form";
+import { SCENE_LABELS } from "../content/labels";
+import {
+  EDITOR_LAYOUT_DEFAULT_RATIOS,
+  EDITOR_LAYOUT_MAX_LEFT_PX,
+  EDITOR_LAYOUT_MIN_LEFT_PX,
+  EDITOR_LAYOUT_MIN_PREVIEW_PX,
+  loadLayoutRatios,
+  resetLayoutRatios,
+  resolvePaneWidths,
+  saveLayoutRatios,
+  shiftLayoutRatio,
+  type EditorLayoutRatios,
+  type LayoutStorage,
+} from "../lib/editorLayout";
+import { EDITOR_WIDE_MEDIA_QUERY, useMediaQuery } from "../lib/useMediaQuery";
+import { thumbnailsRoute } from "../lib/routes";
+import {
+  buttonNeutralClass,
+  buttonPrimaryClass,
+  errorTextClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 
-function clampWidth(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+function renderDownloadName(title: string, versionNumber: number): string {
+  const base = title.trim().replace(/[\\/:*?"<>|]/g, "_");
+  return `${base.length > 0 ? base : "render"}_v${versionNumber}.mp4`;
 }
 
 function escapeId(id: string): string {
@@ -30,6 +54,17 @@ function findTarget(root: HTMLElement, targetId: string): HTMLElement | null {
 function stickyOffset(root: HTMLElement): number {
   const actionBar = root.querySelector<HTMLElement>("#editor-actionbar");
   return (actionBar?.offsetHeight ?? 0) + 8;
+}
+
+function getLayoutStorage(): LayoutStorage | null {
+  try {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function PaneDivider({
@@ -92,93 +127,10 @@ function PaneDivider({
   );
 }
 
-function cueLabel(cue: CueFormValue): string {
-  const definition = getVisualTemplate(cue.templateId, cue.templateVersion);
-  const base = definition?.display.label ?? cue.templateId;
-  if (cue.templateId === "text.block") {
-    const role = cue.fields.role;
-    const roleLabel =
-      role !== undefined && role in TEXT_ROLE_LABELS
-        ? TEXT_ROLE_LABELS[role as keyof typeof TEXT_ROLE_LABELS]
-        : undefined;
-    return roleLabel === undefined ? base : `テキスト: ${roleLabel}`;
-  }
-  return base;
-}
-
 type PreviewSeekTarget =
   | { kind: "scene"; id: string }
   | { kind: "cue"; id: string }
   | { kind: "line"; id: string };
-
-function LeftPane({
-  scenes,
-  sceneLabels,
-  activeTargetId,
-  onJump,
-}: {
-  scenes: SceneFormValue[];
-  sceneLabels: ReadonlyMap<string, string>;
-  activeTargetId: string | null;
-  onJump: (targetId: string, seek: PreviewSeekTarget) => void;
-}) {
-  return (
-    <nav>
-      <ul className="m-0 list-none p-0">
-        {scenes.map((scene) => (
-          <li key={scene.id} className="mb-1.5">
-            <button
-              type="button"
-              aria-current={activeTargetId === `scene-${scene.id}` ? "true" : undefined}
-              className={
-                activeTargetId === `scene-${scene.id}`
-                  ? "w-full rounded bg-border/60 px-1 text-left font-semibold"
-                  : "w-full text-left font-medium hover:underline"
-              }
-              onClick={() => onJump(`scene-${scene.id}`, { kind: "scene", id: scene.id })}
-            >
-              {sceneLabels.get(scene.id) ?? scene.id}
-            </button>
-            <ul className="m-0 ml-3 list-none p-0">
-              {scene.cues.map((cue) => (
-                <li key={cue.id}>
-                  <button
-                    type="button"
-                    aria-current={activeTargetId === `cue-${cue.id}` ? "true" : undefined}
-                    className={
-                      activeTargetId === `cue-${cue.id}`
-                        ? "w-full rounded bg-border/60 px-1 text-left text-xs font-semibold"
-                        : "w-full text-left text-xs text-muted-foreground hover:underline"
-                    }
-                    onClick={() => onJump(`cue-${cue.id}`, { kind: "cue", id: cue.id })}
-                  >
-                    {cueLabel(cue)}
-                  </button>
-                </li>
-              ))}
-              {scene.lines.map((line, lineIndex) => (
-                <li key={line.id}>
-                  <button
-                    type="button"
-                    aria-current={activeTargetId === `line-${line.id}` ? "true" : undefined}
-                    className={
-                      activeTargetId === `line-${line.id}`
-                        ? "w-full truncate rounded bg-border/60 px-1 text-left text-xs font-semibold"
-                        : "w-full truncate text-left text-xs text-muted-foreground hover:underline"
-                    }
-                    onClick={() => onJump(`line-${line.id}`, { kind: "line", id: line.id })}
-                  >
-                    {lineIndex + 1}. {line.captionText.trim() || "(字幕なし)"}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
 
 export function WorkEditPage() {
   const { workId } = useParams<{ workId: string }>();
@@ -187,6 +139,7 @@ export function WorkEditPage() {
   const current = useCurrentScriptVersion(editionId);
   const updateWork = useUpdateWork(workId);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [sceneEditorDirty, setSceneEditorDirty] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState<UnsavedDocumentState>({ dirty: false, document: null });
   const draft = useDraftPreview(editionId, unsaved);
@@ -194,9 +147,50 @@ export function WorkEditPage() {
 
   useEffect(() => {
     setTitleDraft(null);
+    setSceneEditorDirty(false);
     setPreviewVersionId(null);
     setUnsaved({ dirty: false, document: null });
   }, [workId, editionId]);
+
+  const savedTitle = (work.data?.title ?? "").trim();
+  const titleDraftTrimmed = titleDraft !== null ? titleDraft.trim() : null;
+  const isTitleDirty =
+    titleDraftTrimmed !== null &&
+    titleDraftTrimmed.length > 0 &&
+    titleDraftTrimmed !== savedTitle;
+  const isDirty = sceneEditorDirty || isTitleDirty;
+
+  const blocker = useBlocker(isDirty);
+  const handledBlockerRef = useRef<typeof blocker | null>(null);
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      if (handledBlockerRef.current === blocker) {
+        return;
+      }
+      handledBlockerRef.current = blocker;
+      const confirmed = window.confirm("編集内容が保存されていません。移動しますか？");
+      if (confirmed) {
+        blocker.proceed();
+      } else {
+        blocker.reset();
+      }
+    } else {
+      handledBlockerRef.current = null;
+    }
+  }, [blocker]);
+
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (isDirty) {
+          event.preventDefault();
+          event.returnValue = "";
+        }
+      },
+      [isDirty],
+    ),
+  );
 
   const onSaved = useCallback((scriptVersion: ScriptVersion) => {
     setPreviewVersionId(scriptVersion.id);
@@ -246,59 +240,189 @@ export function WorkEditPage() {
         <WorkEditPanes
           workId={workId}
           editionId={editionId}
+          workTitle={title}
           scriptVersionId={scriptVersionId}
           current={current}
           onSaved={onSaved}
           onDocumentChange={setUnsaved}
+          onDirtyChange={setSceneEditorDirty}
         />
       </PreviewControllerProvider>
     </section>
   );
 }
 
-function WorkEditPanes({
-  workId,
-  editionId,
-  scriptVersionId,
-  current,
-  onSaved,
-  onDocumentChange,
-}: {
+interface WorkEditPanesProps {
   workId: string | undefined;
   editionId: string | undefined;
+  workTitle: string;
   scriptVersionId: string | undefined;
   current: UseQueryResult<ScriptVersion, Error>;
   onSaved: (scriptVersion: ScriptVersion) => void;
   onDocumentChange: (state: UnsavedDocumentState) => void;
-}) {
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+function WorkEditPanes(props: WorkEditPanesProps) {
+  return (
+    <CollapsibleStateProvider resetKey={`${props.workId ?? ""}/${props.editionId ?? ""}`}>
+      <WorkEditPanesContent {...props} />
+    </CollapsibleStateProvider>
+  );
+}
+
+function WorkEditPanesContent({
+  workId,
+  editionId,
+  workTitle,
+  scriptVersionId,
+  current,
+  onSaved,
+  onDocumentChange,
+  onDirtyChange,
+}: WorkEditPanesProps) {
   const actions = usePreviewActions();
   const [formScenes, setFormScenes] = useState<SceneFormValue[] | null>(null);
+  const [formCharacters, setFormCharacters] = useState<CharacterFormValue[]>([]);
   const [activeTargetId, setActiveTargetId] = useState<string | null>(null);
-  const [leftWidth, setLeftWidth] = useState(240);
-  const [rightWidth, setRightWidth] = useState(420);
+  const [ratios, setRatios] = useState<EditorLayoutRatios>(() => {
+    const storage = getLayoutStorage();
+    return storage === null ? { ...EDITOR_LAYOUT_DEFAULT_RATIOS } : loadLayoutRatios(storage);
+  });
+  const [workspacePx, setWorkspacePx] = useState(1440);
+  const [view, setView] = useState<"edit" | "preview">("edit");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const wide = useMediaQuery(EDITOR_WIDE_MEDIA_QUERY);
   const centerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [leftPanePx, setLeftPanePx] = useState(288);
+  const ratiosRef = useRef(ratios);
+  const workspaceRef = useRef(workspacePx);
+  const wideRef = useRef(wide);
+  const viewRef = useRef(view);
+  const pendingTargetRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    ratiosRef.current = ratios;
+    workspaceRef.current = workspacePx;
+    wideRef.current = wide;
+    viewRef.current = view;
+  });
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (element === null) {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      if (width > 0) {
+        setWorkspacePx(width);
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const element = asideRef.current;
+    if (element === null) {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      if (width > 0) {
+        setLeftPanePx(width);
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setFormScenes(null);
+    setFormCharacters([]);
   }, [workId, editionId]);
 
-  const onValuesChange = useCallback((scenes: SceneFormValue[]) => {
-    setFormScenes(scenes);
+  const onValuesChange = useCallback(
+    (
+      scenes: SceneFormValue[],
+      _speakers: SpeakerFormValue[],
+      characters: CharacterFormValue[],
+    ) => {
+      setFormScenes(scenes);
+      setFormCharacters(characters);
+    },
+    [],
+  );
+
+  const movePane = useCallback((pane: "left" | "preview", deltaX: number) => {
+    const workspace = Math.max(0, workspaceRef.current - 12);
+    const before = resolvePaneWidths(workspace, ratiosRef.current);
+    const next = shiftLayoutRatio(ratiosRef.current, workspace, pane, deltaX);
+    const after = resolvePaneWidths(workspace, next);
+    if (
+      before.left === after.left &&
+      before.center === after.center &&
+      before.preview === after.preview
+    ) {
+      return;
+    }
+    ratiosRef.current = next;
+    setRatios(next);
+    const storage = getLayoutStorage();
+    if (storage !== null) {
+      saveLayoutRatios(storage, next);
+    }
   }, []);
+
+  const resetLayout = useCallback(() => {
+    const storage = getLayoutStorage();
+    if (storage !== null) {
+      resetLayoutRatios(storage);
+    }
+    const next = { ...EDITOR_LAYOUT_DEFAULT_RATIOS };
+    ratiosRef.current = next;
+    setRatios(next);
+  }, []);
+
+  const scrollToTarget = useCallback((targetId: string) => {
+    const root = centerRef.current;
+    if (root === null) {
+      return;
+    }
+    const element = findTarget(root, targetId);
+    if (element === null) {
+      return;
+    }
+    const top =
+      element.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
+    root.scrollTo({ top: Math.max(0, top - stickyOffset(root)), behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    if (view !== "edit") {
+      return;
+    }
+    const targetId = pendingTargetRef.current;
+    if (targetId === null) {
+      return;
+    }
+    pendingTargetRef.current = null;
+    const frame = requestAnimationFrame(() => scrollToTarget(targetId));
+    return () => cancelAnimationFrame(frame);
+  }, [view, scrollToTarget]);
 
   const jump = useCallback(
     (targetId: string, seek: PreviewSeekTarget) => {
-      const root = centerRef.current;
-      if (root !== null) {
-        const element = findTarget(root, targetId);
-        if (element !== null) {
-          const top =
-            element.getBoundingClientRect().top -
-            root.getBoundingClientRect().top +
-            root.scrollTop;
-          root.scrollTo({ top: Math.max(0, top - stickyOffset(root)), behavior: "smooth" });
-        }
+      if (wideRef.current || viewRef.current === "edit") {
+        scrollToTarget(targetId);
+      } else {
+        pendingTargetRef.current = targetId;
+        setView("edit");
       }
+      setDrawerOpen(false);
       if (seek.kind === "scene") {
         actions.jumpToScene(seek.id);
       } else if (seek.kind === "cue") {
@@ -307,7 +431,7 @@ function WorkEditPanes({
         actions.jumpToLine(seek.id);
       }
     },
-    [actions.jumpToScene, actions.jumpToCue, actions.jumpToLine],
+    [scrollToTarget, actions.jumpToScene, actions.jumpToCue, actions.jumpToLine],
   );
 
   const onJumpToLine = useCallback(
@@ -388,68 +512,168 @@ function WorkEditPanes({
     };
   }, [targetIds]);
 
+  const widths = resolvePaneWidths(Math.max(0, workspacePx - 12), ratios);
+  const maxPreviewPx = Math.max(EDITOR_LAYOUT_MIN_PREVIEW_PX, workspacePx * 0.5);
+  const showCenter = wide || view === "edit";
+  const showPreview = wide || view === "preview";
+
   return (
-    <div className="flex min-h-0 flex-1">
-      <aside
-        style={{ width: leftWidth }}
-        className="min-h-0 shrink-0 overflow-auto rounded border border-border p-2 text-sm"
-      >
-        <h2 className="mb-2 text-sm font-semibold">構成</h2>
-        {formScenes === null ? (
-          <p className={metaTextClass}>読み込み中…</p>
-        ) : (
-          <LeftPane
-            scenes={formScenes}
-            sceneLabels={sceneLabels}
-            activeTargetId={activeTargetId}
-            onJump={jump}
+      <div ref={containerRef} className="flex min-h-0 flex-1 flex-col">
+      {!wide && (
+        <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
+          <button type="button" className={buttonNeutralClass} onClick={() => setDrawerOpen(true)}>
+            構成
+          </button>
+          <div
+            role="group"
+            aria-label="編集と確認の切替"
+            className="inline-flex overflow-hidden rounded-md border border-border"
+          >
+            <button
+              type="button"
+              aria-pressed={view === "edit"}
+              onClick={() => setView("edit")}
+              className={
+                view === "edit"
+                  ? "bg-brand-600 px-3 py-1.5 text-sm font-medium text-white"
+                  : "bg-surface px-3 py-1.5 text-sm text-foreground hover:bg-surface-muted"
+              }
+            >
+              編集
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "preview"}
+              onClick={() => setView("preview")}
+              className={
+                view === "preview"
+                  ? "bg-brand-600 px-3 py-1.5 text-sm font-medium text-white"
+                  : "bg-surface px-3 py-1.5 text-sm text-foreground hover:bg-surface-muted"
+              }
+            >
+              確認
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex min-h-0 flex-1">
+        <aside
+          ref={asideRef}
+          style={wide ? { width: widths.left } : undefined}
+          className={
+            wide
+              ? "min-h-0 shrink-0 overflow-auto rounded border border-border p-2 text-sm"
+              : `fixed inset-y-0 left-0 z-30 min-h-0 w-72 max-w-[85vw] overflow-auto border-r border-border bg-surface p-2 text-sm shadow-xl transition-transform ${
+                  drawerOpen ? "translate-x-0" : "-translate-x-full"
+                }`
+          }
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">構成</h2>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+              onClick={resetLayout}
+            >
+              レイアウトをリセット
+            </button>
+          </div>
+          {formScenes === null ? (
+            <p className={metaTextClass}>読み込み中…</p>
+          ) : (
+            <CueMap
+              scenes={formScenes}
+              characters={formCharacters}
+              sceneLabels={sceneLabels}
+              activeTargetId={activeTargetId}
+              paneWidthPx={leftPanePx}
+              onJump={jump}
+            />
+          )}
+        </aside>
+
+        {!wide && drawerOpen && (
+          <button
+            type="button"
+            aria-label="構成を閉じる"
+            onClick={() => setDrawerOpen(false)}
+            className="fixed inset-0 z-20 cursor-default bg-black/40"
           />
         )}
-      </aside>
 
-      <PaneDivider
-        ariaValue={leftWidth}
-        ariaMin={160}
-        ariaMax={420}
-        onMove={(deltaX) => setLeftWidth((width) => clampWidth(width + deltaX, 160, 420))}
-      />
-
-      <div ref={centerRef} className="min-h-0 min-w-0 flex-1 overflow-auto px-3">
-        {current.isLoading && <p>台本を読み込み中…</p>}
-        {current.isError && <p className={errorTextClass}>{errorMessage(current.error)}</p>}
-        {editionId === undefined && <p>この作品には言語版がありません。</p>}
-        {current.data && editionId !== undefined && (
-          <SceneEditor
-            key={editionId}
-            base={current.data.content}
-            editionId={editionId}
-            scriptVersionId={scriptVersionId ?? current.data.id}
-            onSaved={onSaved}
-            onValuesChange={onValuesChange}
-            onJumpToLine={onJumpToLine}
-            onDocumentChange={onDocumentChange}
+        {wide && (
+          <PaneDivider
+            ariaValue={widths.left}
+            ariaMin={EDITOR_LAYOUT_MIN_LEFT_PX}
+            ariaMax={EDITOR_LAYOUT_MAX_LEFT_PX}
+            onMove={(deltaX) => movePane("left", deltaX)}
           />
         )}
+
+        <div
+          ref={centerRef}
+          className={
+            showCenter
+              ? "min-h-0 min-w-0 flex-1 overflow-auto px-3"
+              : "hidden min-h-0 min-w-0 flex-1 overflow-auto px-3"
+          }
+        >
+          {current.isLoading && <p>台本を読み込み中…</p>}
+          {current.isError && <p className={errorTextClass}>{errorMessage(current.error)}</p>}
+          {editionId === undefined && <p>この作品には言語版がありません。</p>}
+          {current.data && editionId !== undefined && (
+            <SceneEditor
+              key={editionId}
+              base={current.data.content}
+              editionId={editionId}
+              scriptVersionId={scriptVersionId ?? current.data.id}
+              onSaved={onSaved}
+              onValuesChange={onValuesChange}
+              onJumpToLine={onJumpToLine}
+              onJumpToTarget={jump}
+              onDocumentChange={onDocumentChange}
+              onDirtyChange={onDirtyChange}
+            />
+          )}
+        </div>
+
+        {wide && (
+          <PaneDivider
+            ariaValue={widths.preview}
+            ariaMin={EDITOR_LAYOUT_MIN_PREVIEW_PX}
+            ariaMax={Math.round(maxPreviewPx)}
+            onMove={(deltaX) => movePane("preview", deltaX)}
+          />
+        )}
+
+        <aside
+          style={wide ? { width: widths.preview } : undefined}
+          className={
+            !showPreview
+              ? "hidden min-h-0 shrink-0 overflow-auto rounded border border-border p-2"
+              : wide
+                ? "min-h-0 shrink-0 overflow-auto rounded border border-border p-2"
+                : "min-h-0 min-w-0 flex-1 overflow-auto rounded border border-border p-2"
+          }
+        >
+          {current.data && editionId !== undefined && workId !== undefined && (
+            <>
+              <PreviewSection sceneLabels={sceneLabels} />
+              <p className="px-1">
+                <Link className={buttonNeutralClass} to={thumbnailsRoute(workId, editionId)}>
+                  サムネイル
+                </Link>
+              </p>
+              <RenderSection
+                workId={workId}
+                scriptVersionId={scriptVersionId ?? current.data.id}
+                downloadName={renderDownloadName(workTitle, current.data.versionNumber)}
+              />
+            </>
+          )}
+        </aside>
       </div>
-
-      <PaneDivider
-        ariaValue={rightWidth}
-        ariaMin={320}
-        ariaMax={760}
-        onMove={(deltaX) => setRightWidth((width) => clampWidth(width - deltaX, 320, 760))}
-      />
-
-      <aside
-        style={{ width: rightWidth }}
-        className="min-h-0 shrink-0 overflow-auto rounded border border-border p-2"
-      >
-        {current.data && editionId !== undefined && workId !== undefined && (
-          <>
-            <PreviewSection sceneLabels={sceneLabels} />
-            <RenderSection workId={workId} scriptVersionId={scriptVersionId ?? current.data.id} />
-          </>
-        )}
-      </aside>
     </div>
   );
 }

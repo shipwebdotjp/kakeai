@@ -1,21 +1,41 @@
 import {
+  CANVAS_PROFILE_LABELS,
   DEFAULT_ANIMATION_POLICY,
   DEFAULT_SCENE_ACCENT,
   DEFAULT_TRANSITION_POLICY,
   TEMPLATE_ID,
   TEMPLATE_VERSION,
   THEME_ACCENT_TOKENS,
+  canvasProfileOf,
   characterStandingV1,
-  characterStandingV2,
+  createInsertScene,
+  defaultInsertLabel,
   defaultPointLabel,
   getTemplateInputFields,
   getVisualTemplate,
+  MEDIA_ZOOM_MAX,
+  MEDIA_ZOOM_MIN,
   mediaCardV1,
   mediaFullBleedV1,
   pointSceneTextCues,
   sceneDeviceFrameV1,
+  chartDataSchema,
+  chartEffectsSchema,
+  chatEffectsSchema,
+  chatMessagesSchema,
+  CHART_APPEAR_PRESETS,
+  flowDiagramSchema,
+  flowEffectsSchema,
+  listCalloutItemsSchema,
+  quoteEffectsSchema,
+  statEffectsSchema,
+  tableDataSchema,
+  tableEffectsSchema,
+  videoPlaybackSchema,
   type AnimationPreset,
+  type AudioCueRole,
   type Character,
+  type CharacterVoice,
   type ContentDocument,
   type CueLayer,
   type Scene,
@@ -28,7 +48,26 @@ import {
   type TransitionPreset,
   type VisualCue,
   type VisualTemplateDefinition,
+  type CanvasProfile,
+  type Composition,
+  type VideoPlayback,
 } from "@kakeai/contracts";
+
+export function compositionVersionOptions(
+  compositions: readonly Composition[],
+  profiles?: readonly CanvasProfile[],
+): { value: string; label: string }[] {
+  return compositions.flatMap((composition) =>
+    (composition.versions ?? [])
+      .filter(
+        (version) => profiles === undefined || profiles.includes(canvasProfileOf(version.manifest)),
+      )
+      .map((version) => ({
+        value: version.id,
+        label: `${composition.name} v${version.versionNumber}・${CANVAS_PROFILE_LABELS[canvasProfileOf(version.manifest)]}`,
+      })),
+  );
+}
 
 export interface TakeFormValue {
   id: string;
@@ -43,6 +82,8 @@ export interface LineFormValue {
   captionText: string;
   speechText: string;
   selectedAudioTakeId: string | null;
+  expressionId: string | null;
+  gapBeforeMs: number;
   takes: TakeFormValue[];
 }
 
@@ -53,18 +94,28 @@ export interface BgmFormValue {
   loop: boolean;
 }
 
+export interface SceneAudioCueFormValue {
+  cueId: string | null;
+  assetId: string | null;
+  role: AudioCueRole;
+  gainDb: number;
+  loop: boolean;
+}
+
 export interface AppearanceFormValue {
   id: string;
   assetId: string | null;
   expression: string;
   pose: string;
   label: string;
+  faceSetId: string | null;
 }
 
 export interface CharacterFormValue {
   id: string;
   name: string;
   voiceProfileId: string | null;
+  voices: CharacterVoice[];
   appearances: AppearanceFormValue[];
 }
 
@@ -84,6 +135,10 @@ export interface StandingFormValue {
   appearanceId: string | null;
   side: StandingSide;
   scale: number;
+  enterPreset: TransitionPreset;
+  enterDurationMs: number;
+  exitPreset: TransitionPreset;
+  exitDurationMs: number;
 }
 
 export interface CueFormValue {
@@ -109,7 +164,7 @@ export type SceneAccentKind = "theme" | "custom";
 
 export interface SceneFormValue {
   id: string;
-  kind: "intro" | "point" | "outro";
+  kind: "intro" | "point" | "outro" | "insert";
   label: string;
   accentKind: SceneAccentKind;
   accentToken: ThemeAccentToken;
@@ -121,9 +176,16 @@ export interface SceneFormValue {
   lines: LineFormValue[];
   cues: CueFormValue[];
   standings: StandingFormValue[];
+  audioCues: SceneAudioCueFormValue[];
+  mainVisualCueId: string;
+  embeddedAudio: boolean;
+  embeddedAudioGainDb: number;
 }
 
+import type { VisualThemeRef } from "@kakeai/contracts";
+
 export interface DocumentFormValues {
+  visualTheme: VisualThemeRef;
   scenes: SceneFormValue[];
   bgm: BgmFormValue;
   characters: CharacterFormValue[];
@@ -133,6 +195,16 @@ export interface DocumentFormValues {
 const FALLBACK_DURATION_MS = 4000;
 export const DEFAULT_BGM_GAIN_DB = -18;
 export const DEFAULT_BGM_LOOP = true;
+export const AUDIO_CUE_ROLES: readonly AudioCueRole[] = ["bgm", "sfx", "program"];
+export const AUDIO_CUE_ROLE_LABELS: Record<AudioCueRole, string> = {
+  bgm: "BGM",
+  sfx: "効果音",
+  program: "音源",
+};
+
+export function defaultAudioGainDb(role: AudioCueRole): number {
+  return role === "bgm" ? DEFAULT_BGM_GAIN_DB : 0;
+}
 export const DEFAULT_STANDING_SCALE = 1;
 export const MIN_STANDING_SCALE = 0.1;
 export const MAX_STANDING_SCALE = 3;
@@ -145,6 +217,47 @@ export const MEDIA_FULL_BLEED_ID = mediaFullBleedV1.id;
 export const MEDIA_CARD_ID = mediaCardV1.id;
 export const DEVICE_FRAME_ID = sceneDeviceFrameV1.id;
 export const STANDING_TEMPLATE_ID = characterStandingV1.id;
+export const STANDING_TRANSITION_POLICY: TransitionPolicy = characterStandingV1.transitionPolicy;
+
+export const CROP_X_SUFFIX = "__x";
+export const CROP_Y_SUFFIX = "__y";
+export const CROP_ZOOM_SUFFIX = "__zoom";
+export const CROP_CENTER_PERCENT = 50;
+export const CROP_ZOOM_MIN_PERCENT = MEDIA_ZOOM_MIN * 100;
+export const CROP_ZOOM_MAX_PERCENT = MEDIA_ZOOM_MAX * 100;
+
+export const NESTED_MODE_SUFFIX = "__mode";
+export const NESTED_MEDIA_FIT_SUFFIX = "__fit";
+export const NESTED_COMPOSITION_VERSION_SUFFIX = "__compver";
+export const NESTED_COMPOSITION_FIT_SUFFIX = "__compfit";
+export const NESTED_COMPOSITION_ZOOM_SUFFIX = "__compzoom";
+export const NESTED_COMPOSITION_POS_X_SUFFIX = "__compposx";
+export const NESTED_COMPOSITION_POS_Y_SUFFIX = "__compposy";
+export const NESTED_MODE_MEDIA = "media";
+export const NESTED_MODE_COMPOSITION = "composition";
+
+export const VIDEO_PLAYBACK_SUFFIX = "__videoPlayback";
+
+/** フォーム内部フィールドの文字列から VideoPlayback を復元する。無効・不正なら null。 */
+export function parseVideoPlayback(raw: string | undefined): VideoPlayback | null {
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return null;
+  }
+  try {
+    const parsed = videoPlaybackSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** VideoPlayback をフォーム内部フィールドの文字列へ直列化する。null は空文字。 */
+export function serializeVideoPlayback(playback: VideoPlayback | null | undefined): string {
+  if (playback === null || playback === undefined) {
+    return "";
+  }
+  return JSON.stringify(playback);
+}
 
 function readInputObject(cue: VisualCue | null): Record<string, unknown> {
   if (cue === null || typeof cue.input !== "object" || cue.input === null) {
@@ -205,26 +318,8 @@ export interface StandingCueInput {
 }
 
 function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
-  if (cue === undefined) {
-    return null;
-  }
   if (
-    cue.template.id === characterStandingV2.id &&
-    cue.template.version === characterStandingV2.version
-  ) {
-    const parsed = characterStandingV2.inputSchema.safeParse(cue.input);
-    if (!parsed.success) {
-      return null;
-    }
-    const data = parsed.data as StandingCueInput;
-    return {
-      characterId: data.characterId,
-      appearanceId: data.appearanceId,
-      side: data.side,
-      scale: data.scale,
-    };
-  }
-  if (
+    cue === undefined ||
     cue.template.id !== characterStandingV1.id ||
     cue.template.version !== characterStandingV1.version
   ) {
@@ -234,11 +329,11 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
   if (!parsed.success) {
     return null;
   }
-  const data = parsed.data as { characterId: string; appearanceId: string; x: number; scale: number };
+  const data = parsed.data as StandingCueInput;
   return {
     characterId: data.characterId,
     appearanceId: data.appearanceId,
-    side: data.x < 0.5 ? "left" : "right",
+    side: data.side,
     scale: data.scale,
   };
 }
@@ -273,6 +368,10 @@ export function emptyStandingSlots(): StandingFormValue[] {
     appearanceId: null,
     side,
     scale: DEFAULT_STANDING_SCALE,
+    enterPreset: STANDING_TRANSITION_POLICY.defaultEnter.preset,
+    enterDurationMs: STANDING_TRANSITION_POLICY.defaultEnter.durationMs,
+    exitPreset: STANDING_TRANSITION_POLICY.defaultExit.preset,
+    exitDurationMs: STANDING_TRANSITION_POLICY.defaultExit.durationMs,
   }));
 }
 
@@ -285,6 +384,10 @@ function readStandings(scene: Scene): StandingFormValue[] {
       appearanceId: standing.appearanceId,
       side: standing.side,
       scale: standing.scale,
+      enterPreset: cue.transition.enter.preset,
+      enterDurationMs: cue.transition.enter.durationMs,
+      exitPreset: cue.transition.exit.preset,
+      exitDurationMs: cue.transition.exit.durationMs,
     });
   }
   return emptyStandingSlots().map((slot) => bySide.get(slot.side) ?? slot);
@@ -293,16 +396,19 @@ function readStandings(scene: Scene): StandingFormValue[] {
 function readCharacters(content: ContentDocument): CharacterFormValue[] {
   return content.characters.map((character) => {
     const speaker = content.speakers.find((entry) => entry.characterId === character.id);
+    const localeVoice = character.voices.find((entry) => entry.locale === content.locale);
     return {
       id: character.id,
       name: character.name,
-      voiceProfileId: speaker?.voiceProfileId ?? null,
+      voiceProfileId: localeVoice?.voiceProfileId ?? speaker?.voiceProfileId ?? null,
+      voices: character.voices.map((entry) => ({ ...entry })),
       appearances: character.appearances.map((appearance) => ({
         id: appearance.id,
         assetId: appearance.assetId,
         expression: appearance.expression,
         pose: appearance.pose,
         label: appearance.label ?? "",
+        faceSetId: appearance.faceSetId,
       })),
     };
   });
@@ -317,6 +423,96 @@ function readSpeakers(content: ContentDocument): SpeakerFormValue[] {
   }));
 }
 
+const CHART_PRESET_FALLBACK: Record<string, string> = {
+  "slide-up": "fade",
+  "slide-down": "fade",
+  "slide-left": "fade",
+  "slide-right": "fade",
+  "scale-in": "grow",
+};
+const CHART_APPEAR_PRESET_SET = new Set<string>(CHART_APPEAR_PRESETS);
+
+function normalizeChartEffect(entry: unknown): unknown {
+  if (typeof entry !== "object" || entry === null) {
+    return entry;
+  }
+  const effect = (entry as { effect?: unknown }).effect;
+  if (typeof effect !== "object" || effect === null) {
+    return entry;
+  }
+  const preset = (effect as { preset?: unknown }).preset;
+  if (typeof preset !== "string" || CHART_APPEAR_PRESET_SET.has(preset)) {
+    return entry;
+  }
+  return { ...entry, effect: { ...effect, preset: CHART_PRESET_FALLBACK[preset] ?? "grow" } };
+}
+
+function effectsSchemaForVariant(
+  variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat",
+) {
+  switch (variant) {
+    case "chart":
+      return chartEffectsSchema;
+    case "flow":
+      return flowEffectsSchema;
+    case "stat":
+      return statEffectsSchema;
+    case "quote":
+      return quoteEffectsSchema;
+    case "chat":
+      return chatEffectsSchema;
+    case "table":
+      return tableEffectsSchema;
+  }
+}
+
+function defaultEffectsForVariant(
+  variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat",
+): unknown[] {
+  switch (variant) {
+    case "chat":
+      return [];
+    case "chart":
+      return [
+        {
+          target: { kind: "bars" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "grow", durationMs: 600, staggerMs: 120 },
+        },
+      ];
+    case "flow":
+      return [
+        {
+          target: { kind: "nodes" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 120 },
+        },
+      ];
+    case "stat":
+      return [
+        {
+          trigger: { kind: "cue" },
+          effect: { kind: "value", durationMs: 1000 },
+        },
+      ];
+    case "quote":
+      return [
+        {
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400 },
+        },
+      ];
+    case "table":
+      return [
+        {
+          target: { kind: "rows" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "fade", durationMs: 400, staggerMs: 150 },
+        },
+      ];
+  }
+}
+
 function readCueFields(
   input: Record<string, unknown>,
   definition: VisualTemplateDefinition,
@@ -327,23 +523,92 @@ function readCueFields(
     switch (field.kind) {
       case "media":
         result[field.key] = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
+        if (field.videoPlayback === true) {
+          result[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = serializeVideoPlayback(
+            input.videoPlayback as VideoPlayback | undefined,
+          );
+        }
         break;
       case "nestedMedia": {
         const value = input[field.key];
+        if (
+          field.allowComposition === true &&
+          typeof value === "object" &&
+          value !== null &&
+          (value as { kind?: unknown }).kind === "composition"
+        ) {
+          const composition = value as {
+            compositionVersionId?: unknown;
+            fit?: unknown;
+            zoom?: unknown;
+            position?: unknown;
+          };
+          const position =
+            typeof composition.position === "object" && composition.position !== null
+              ? (composition.position as { x?: unknown; y?: unknown })
+              : null;
+          result[field.key] = "";
+          result[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_COMPOSITION;
+          result[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] =
+            typeof composition.compositionVersionId === "string"
+              ? composition.compositionVersionId
+              : "";
+          result[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] =
+            composition.fit === "cover" ? "cover" : "contain";
+          result[`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`] =
+            typeof composition.zoom === "number"
+              ? String(Math.round(composition.zoom * 100))
+              : "";
+          result[`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`] =
+            typeof position?.x === "number" ? String(Math.round(position.x * 100)) : "";
+          result[`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`] =
+            typeof position?.y === "number" ? String(Math.round(position.y * 100)) : "";
+          break;
+        }
         const media =
           typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "media"
             ? (value as { assetId?: unknown; fit?: unknown })
             : null;
         result[field.key] = typeof media?.assetId === "string" ? media.assetId : "";
-        result[`${field.key}__fit`] = media?.fit === "contain" ? "contain" : "cover";
+        result[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] = media?.fit === "contain" ? "contain" : "cover";
+        result[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_MEDIA;
+        if (field.videoPlayback === true) {
+          result[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = serializeVideoPlayback(
+            (media as unknown as { videoPlayback?: VideoPlayback } | null)?.videoPlayback,
+          );
+        }
+        break;
+      }
+      case "mediaCrop": {
+        const value = input[field.key];
+        const point =
+          typeof value === "object" && value !== null
+            ? (value as { x?: unknown; y?: unknown })
+            : null;
+        result[`${field.key}${CROP_X_SUFFIX}`] =
+          typeof point?.x === "number" ? String(Math.round(point.x * 100)) : "";
+        result[`${field.key}${CROP_Y_SUFFIX}`] =
+          typeof point?.y === "number" ? String(Math.round(point.y * 100)) : "";
+        if (field.zoomKey !== undefined) {
+          const zoom = input[field.zoomKey];
+          result[`${field.key}${CROP_ZOOM_SUFFIX}`] =
+            typeof zoom === "number" ? String(Math.round(zoom * 100)) : "";
+        }
         break;
       }
       case "text":
       case "optionalText":
-      case "color":
-        result[field.key] = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
+      case "color": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = typeof value === "string" ? value : "";
         break;
+      }
       case "number": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = typeof value === "number" ? String(value) : "";
+        break;
+      }
+      case "decimal": {
         const value = getAtPath(input, field.key);
         result[field.key] = typeof value === "number" ? String(value) : "";
         break;
@@ -354,13 +619,46 @@ function readCueFields(
         break;
       }
       case "select": {
-        const value = typeof input[field.key] === "string" ? (input[field.key] as string) : "";
+        const value = getAtPath(input, field.key);
+        const text = typeof value === "string" ? value : "";
         const allowed = field.options.map((option) => option.value);
-        result[field.key] = allowed.includes(value)
-          ? value
+        result[field.key] = allowed.includes(text)
+          ? text
           : field.optional
             ? ""
             : (field.options[0]?.value ?? "");
+        break;
+      }
+      case "grid": {
+        const value = getAtPath(input, field.key);
+        result[field.key] =
+          typeof value === "object" && value !== null ? JSON.stringify(value) : "";
+        break;
+      }
+      case "flow": {
+        const value = getAtPath(input, field.key);
+        result[field.key] =
+          typeof value === "object" && value !== null ? JSON.stringify(value) : "";
+        break;
+      }
+      case "effects": {
+        const value = getAtPath(input, field.key);
+        if (!Array.isArray(value) || value.length === 0) {
+          result[field.key] = "";
+          break;
+        }
+        const entries = field.variant === "chart" ? value.map(normalizeChartEffect) : value;
+        result[field.key] = JSON.stringify(entries);
+        break;
+      }
+      case "calloutItems": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = Array.isArray(value) ? JSON.stringify(value) : "";
+        break;
+      }
+      case "messages": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = Array.isArray(value) ? JSON.stringify(value) : "";
         break;
       }
       case "animation": {
@@ -420,6 +718,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
     (cue) => cue.role === "bgm" && cue.range.kind === "work",
   );
   return {
+    visualTheme: content.visualTheme,
     scenes: content.scenes.map((scene) => {
       const cues = scene.visualCues
         .filter((cue) => cue.template.id !== STANDING_TEMPLATE_ID)
@@ -442,10 +741,29 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
           captionText: line.captionText,
           speechText: line.speechText,
           selectedAudioTakeId: line.selectedAudioTakeId,
+          expressionId: line.expressionId,
+          gapBeforeMs: line.gapBeforeMs ?? 0,
           takes: takesByLine.get(line.id) ?? [],
         })),
         cues,
         standings: readStandings(scene),
+        audioCues: content.audioCues
+          .filter((cue) => cue.range.kind === "scene" && cue.range.sceneId === scene.id)
+          .map((cue) => ({
+            cueId: cue.id,
+            assetId: cue.assetId,
+            role: cue.role,
+            gainDb: cue.gainDb ?? defaultAudioGainDb(cue.role),
+            loop: cue.loop ?? false,
+          })),
+        mainVisualCueId: scene.kind === "insert" ? scene.mainVisualCueId : "",
+        embeddedAudio: scene.kind === "insert" ? scene.embeddedAudio : true,
+        embeddedAudioGainDb:
+          scene.kind === "insert" &&
+          typeof scene.embeddedAudioGainDb === "number" &&
+          Number.isFinite(scene.embeddedAudioGainDb)
+            ? scene.embeddedAudioGainDb
+            : 0,
       };
     }),
     bgm: {
@@ -470,13 +788,17 @@ function buildLines(sceneValue: SceneFormValue, speakerIds: ReadonlySet<string>)
       line.takes.some((take) => take.id === line.selectedAudioTakeId && isValidTake(take))
         ? line.selectedAudioTakeId
         : null;
+    const speakerId =
+      line.speakerId !== null && speakerIds.has(line.speakerId) ? line.speakerId : null;
+    const gapBeforeMs = intOrZero(line.gapBeforeMs);
     return {
       id: line.id,
-      speakerId:
-        line.speakerId !== null && speakerIds.has(line.speakerId) ? line.speakerId : null,
+      speakerId,
       captionText: line.captionText,
       speechText: line.speechText,
       selectedAudioTakeId: selected,
+      expressionId: speakerId !== null ? line.expressionId : null,
+      ...(gapBeforeMs > 0 ? { gapBeforeMs } : {}),
     };
   });
 }
@@ -492,6 +814,23 @@ function buildAudioTakes(values: DocumentFormValues): ContentDocument["audioTake
         durationMs: take.durationMs,
       })),
     ),
+  );
+}
+
+export function buildSceneAudioCues(
+  values: DocumentFormValues,
+): ContentDocument["audioCues"] {
+  return values.scenes.flatMap((scene) =>
+    scene.audioCues
+      .filter((cue) => cue.assetId !== null && cue.assetId.length > 0)
+      .map((cue) => ({
+        id: cue.cueId ?? `audio-scene-${randomId()}`,
+        role: cue.role,
+        assetId: cue.assetId as string,
+        range: { kind: "scene" as const, sceneId: scene.id },
+        gainDb: Number.isFinite(cue.gainDb) ? cue.gainDb : defaultAudioGainDb(cue.role),
+        loop: cue.loop,
+      })),
   );
 }
 
@@ -514,10 +853,27 @@ function standingReferencesMissing(
   return !appearanceIds.has(standing.appearanceId);
 }
 
-function buildCharacters(values: CharacterFormValue[]): Character[] {
+function mergeLocaleVoice(
+  voices: CharacterVoice[],
+  locale: CharacterVoice["locale"],
+  voiceProfileId: string | null,
+): CharacterVoice[] {
+  if (voiceProfileId === null) {
+    return voices.filter((entry) => entry.locale !== locale);
+  }
+  const merged = voices.map((entry) =>
+    entry.locale === locale ? { locale, voiceProfileId } : entry,
+  );
+  return merged.some((entry) => entry.locale === locale)
+    ? merged
+    : [...merged, { locale, voiceProfileId }];
+}
+
+function buildCharacters(values: CharacterFormValue[], locale: CharacterVoice["locale"]): Character[] {
   return values.map((character) => ({
     id: character.id,
     name: character.name,
+    voices: mergeLocaleVoice(character.voices, locale, character.voiceProfileId),
     appearances: character.appearances.map((appearance, appearanceIndex) => {
       if (appearance.assetId === null || appearance.assetId.length === 0) {
         const name = character.name.trim() || character.id;
@@ -531,6 +887,7 @@ function buildCharacters(values: CharacterFormValue[]): Character[] {
         expression: appearance.expression.trim() || DEFAULT_APPEARANCE_EXPRESSION,
         pose: appearance.pose.trim() || DEFAULT_APPEARANCE_POSE,
         ...(appearance.label.trim().length === 0 ? {} : { label: appearance.label.trim() }),
+        faceSetId: appearance.faceSetId,
       };
     }),
   }));
@@ -558,21 +915,31 @@ function intOrZero(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
-function buildTransition(cue: CueFormValue, policy: TransitionPolicy): VisualCue["transition"] {
-  const enterPreset = policy.presets.includes(cue.enterPreset)
-    ? cue.enterPreset
+interface TransitionEdgesFormValue {
+  enterPreset: TransitionPreset;
+  enterDurationMs: number;
+  exitPreset: TransitionPreset;
+  exitDurationMs: number;
+}
+
+function buildTransition(
+  transition: TransitionEdgesFormValue,
+  policy: TransitionPolicy,
+): VisualCue["transition"] {
+  const enterPreset = policy.presets.includes(transition.enterPreset)
+    ? transition.enterPreset
     : policy.defaultEnter.preset;
-  const exitPreset = policy.presets.includes(cue.exitPreset)
-    ? cue.exitPreset
+  const exitPreset = policy.presets.includes(transition.exitPreset)
+    ? transition.exitPreset
     : policy.defaultExit.preset;
   return {
     enter: {
       preset: enterPreset,
-      durationMs: enterPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(cue.enterDurationMs)),
+      durationMs: enterPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(transition.enterDurationMs)),
     },
     exit: {
       preset: exitPreset,
-      durationMs: exitPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(cue.exitDurationMs)),
+      durationMs: exitPreset === "none" ? 0 : Math.min(policy.maxDurationMs, intOrZero(transition.exitDurationMs)),
     },
   };
 }
@@ -593,6 +960,36 @@ function buildRange(cue: CueFormValue): VisualCue["range"] {
   return { kind: "scene" };
 }
 
+function parseCropPercent(value: string | undefined, label: string): number | null {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const percent = Number(trimmed);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    throw new Error(`${label}は 0〜100% の範囲で入力してください`);
+  }
+  return percent;
+}
+
+function parseCropZoomPercent(value: string | undefined, label: string): number | null {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const percent = Number(trimmed);
+  if (
+    !Number.isFinite(percent) ||
+    percent < CROP_ZOOM_MIN_PERCENT ||
+    percent > CROP_ZOOM_MAX_PERCENT
+  ) {
+    throw new Error(
+      `${label}の拡大率は ${CROP_ZOOM_MIN_PERCENT}〜${CROP_ZOOM_MAX_PERCENT}% の範囲で入力してください`,
+    );
+  }
+  return percent;
+}
+
 function buildCueInput(
   cue: CueFormValue,
   definition: VisualTemplateDefinition,
@@ -607,11 +1004,61 @@ function buildCueInput(
       case "media":
         if (raw.length === 0) {
           hasMedia = false;
+          if (field.videoPlayback === true) {
+            delete input.videoPlayback;
+          }
         } else {
           input[field.key] = raw;
+          if (field.videoPlayback === true) {
+            const playback = parseVideoPlayback(cue.fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`]);
+            if (playback === null) {
+              delete input.videoPlayback;
+            } else {
+              input.videoPlayback = playback;
+            }
+          }
         }
         break;
       case "nestedMedia": {
+        const mode = cue.fields[`${field.key}${NESTED_MODE_SUFFIX}`] ?? NESTED_MODE_MEDIA;
+        if (mode === NESTED_MODE_COMPOSITION && field.allowComposition === true) {
+          const versionId = cue.fields[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] ?? "";
+          if (versionId.length === 0) {
+            hasMedia = false;
+            break;
+          }
+          const fit =
+            cue.fields[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] === "cover"
+              ? "cover"
+              : "contain";
+          const zoomPercent = parseCropZoomPercent(
+            cue.fields[`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`],
+            field.label,
+          );
+          const posXPercent = parseCropPercent(
+            cue.fields[`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`],
+            field.label,
+          );
+          const posYPercent = parseCropPercent(
+            cue.fields[`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`],
+            field.label,
+          );
+          const node: Record<string, unknown> = {
+            kind: "composition",
+            compositionVersionId: versionId,
+            fit,
+          };
+          if (zoomPercent !== null) {
+            node.zoom = zoomPercent / 100;
+          }
+          if (posXPercent !== null && posYPercent !== null) {
+            node.position = { x: posXPercent / 100, y: posYPercent / 100 };
+          } else if (posXPercent !== null || posYPercent !== null) {
+            throw new Error(`${field.label}の位置は横と縦の両方を指定してください`);
+          }
+          input[field.key] = node;
+          break;
+        }
         if (raw.length === 0) {
           const baseValue = base[field.key];
           const baseIsMedia =
@@ -626,30 +1073,171 @@ function buildCueInput(
             }
           }
         } else {
-          const fit = cue.fields[`${field.key}__fit`] === "contain" ? "contain" : "cover";
-          input[field.key] = { kind: "media", assetId: raw, fit };
+          const fit = cue.fields[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] === "contain" ? "contain" : "cover";
+          const node: Record<string, unknown> = { kind: "media", assetId: raw, fit };
+          if (field.videoPlayback === true) {
+            const playback = parseVideoPlayback(cue.fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`]);
+            if (playback !== null) {
+              node.videoPlayback = playback;
+            }
+          }
+          input[field.key] = node;
+        }
+        break;
+      }
+      case "mediaCrop": {
+        const xPercent = parseCropPercent(
+          cue.fields[`${field.key}${CROP_X_SUFFIX}`],
+          field.label,
+        );
+        const yPercent = parseCropPercent(
+          cue.fields[`${field.key}${CROP_Y_SUFFIX}`],
+          field.label,
+        );
+        if (xPercent === null && yPercent === null) {
+          deleteAtPath(input, field.key);
+        } else if (xPercent === null || yPercent === null) {
+          throw new Error(`${field.label}は横と縦の両方を指定してください`);
+        } else {
+          setAtPath(input, field.key, { x: xPercent / 100, y: yPercent / 100 });
+        }
+        if (field.zoomKey !== undefined) {
+          const zoomPercent = parseCropZoomPercent(
+            cue.fields[`${field.key}${CROP_ZOOM_SUFFIX}`],
+            field.label,
+          );
+          if (zoomPercent === null) {
+            deleteAtPath(input, field.zoomKey);
+          } else {
+            setAtPath(input, field.zoomKey, zoomPercent / 100);
+          }
         }
         break;
       }
       case "text":
-        input[field.key] = raw;
+        setAtPath(input, field.key, raw);
         break;
       case "optionalText":
         if (raw.length > 0) {
-          input[field.key] = raw;
+          setAtPath(input, field.key, raw);
         } else {
-          delete input[field.key];
+          deleteAtPath(input, field.key);
         }
         break;
       case "select": {
         const allowed = field.options.map((option) => option.value);
         if (allowed.includes(raw)) {
-          input[field.key] = raw;
+          setAtPath(input, field.key, raw);
         } else if (field.optional) {
-          delete input[field.key];
+          deleteAtPath(input, field.key);
         } else {
-          input[field.key] = field.options[0]?.value ?? "";
+          setAtPath(input, field.key, field.options[0]?.value ?? "");
         }
+        break;
+      }
+      case "grid": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          deleteAtPath(input, field.key);
+          break;
+        }
+        let parsedJson: unknown;
+        const isChart = field.dataKind === "chart";
+        const errorMessage = isChart
+          ? "グラフデータを正しく入力してください"
+          : "表データを正しく入力してください";
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error(errorMessage);
+        }
+        const schema = isChart ? chartDataSchema : tableDataSchema;
+        const validated = schema.safeParse(parsedJson);
+        if (!validated.success) {
+          throw new Error(errorMessage);
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "flow": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          deleteAtPath(input, field.key);
+          break;
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("ノードと辺を正しく入力してください");
+        }
+        const validated = flowDiagramSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          const detail = validated.error.issues[0];
+          const where = detail && detail.path.length > 0 ? `（${detail.path.join(".")}）` : "";
+          throw new Error(`ノードと辺を正しく入力してください${where}`);
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "effects": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          deleteAtPath(input, field.key);
+          break;
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("セリフ同期の効果を正しく入力してください");
+        }
+        const schema = effectsSchemaForVariant(field.variant);
+        const validated = schema.safeParse(parsedJson);
+        if (!validated.success) {
+          throw new Error("セリフ同期の効果を正しく入力してください");
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "calloutItems": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          throw new Error("ポイントを1つ以上入力してください");
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("ポイントを正しく入力してください");
+        }
+        const validated = listCalloutItemsSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          const detail = validated.error.issues[0];
+          const where = detail && detail.path.length > 0 ? `（${detail.path.join(".")}）` : "";
+          throw new Error(`ポイントを正しく入力してください${where}`);
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "messages": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          throw new Error("メッセージを1つ以上入力してください");
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("メッセージを正しく入力してください");
+        }
+        const validated = chatMessagesSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          const detail = validated.error.issues[0];
+          const where = detail && detail.path.length > 0 ? `（${detail.path.join(".")}）` : "";
+          throw new Error(`メッセージを正しく入力してください${where}`);
+        }
+        setAtPath(input, field.key, validated.data);
         break;
       }
       case "color": {
@@ -672,6 +1260,31 @@ function buildCueInput(
           const value = Number(trimmed);
           if (!Number.isInteger(value)) {
             throw new Error(`${field.label}は整数で入力してください`);
+          }
+          if (
+            (field.min !== undefined && value < field.min) ||
+            (field.max !== undefined && value > field.max)
+          ) {
+            throw new Error(
+              `${field.label}は ${field.min ?? ""}〜${field.max ?? ""} の範囲で入力してください`,
+            );
+          }
+          setAtPath(input, field.key, value);
+        }
+        break;
+      }
+      case "decimal": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          if (field.optional) {
+            deleteAtPath(input, field.key);
+          } else {
+            setAtPath(input, field.key, 0);
+          }
+        } else {
+          const value = Number(trimmed);
+          if (!Number.isFinite(value)) {
+            throw new Error(`${field.label}は数値で入力してください`);
           }
           if (
             (field.min !== undefined && value < field.min) ||
@@ -802,14 +1415,11 @@ function buildStandingCues(
     emittedSides.add(standing.side);
     cues.push({
       id: standing.cueId ?? newVisualCueId(sceneValue.id, `standing-${standing.side}`),
-      template: { id: characterStandingV2.id, version: characterStandingV2.version },
+      template: { id: characterStandingV1.id, version: characterStandingV1.version },
       range: { kind: "scene" },
       layer: "standing",
       order,
-      transition: {
-        enter: { preset: "fade", durationMs: 350 },
-        exit: { preset: "none", durationMs: 0 },
-      },
+      transition: buildTransition(standing, STANDING_TRANSITION_POLICY),
       input: {
         characterId: standing.characterId,
         appearanceId: standing.appearanceId,
@@ -875,7 +1485,7 @@ export function buildContentDocument(
   base: ContentDocument,
   values: DocumentFormValues,
 ): ContentDocument {
-  const characters = buildCharacters(values.characters);
+  const characters = buildCharacters(values.characters, base.locale);
   const characterIds = new Set(characters.map((character) => character.id));
   const appearanceIdsByCharacter = new Map(
     characters.map((character) => [
@@ -938,16 +1548,43 @@ export function buildContentDocument(
     if (sceneValue.kind === "point") {
       return { ...common, kind: "point" };
     }
+    if (sceneValue.kind === "insert") {
+      const mainCues = sceneValue.cues.filter(
+        (cue) => cue.id === sceneValue.mainVisualCueId,
+      );
+      const mainCue = mainCues[0];
+      if (mainCue === undefined) {
+        throw new Error(`insert Scene ${sceneValue.id} の主動画Cueが存在しません`);
+      }
+      return {
+        ...common,
+        kind: "insert",
+        timing: { mode: "fixed", durationMs: fixedDurationMs },
+        lines: [],
+        visualCues: buildVisualCues(baseScene, { ...sceneValue, cues: mainCues, standings: [] }),
+        mainVisualCueId: mainCue.id,
+        embeddedAudio: sceneValue.embeddedAudio,
+        ...(Number.isFinite(sceneValue.embeddedAudioGainDb) &&
+        sceneValue.embeddedAudioGainDb !== 0
+          ? { embeddedAudioGainDb: sceneValue.embeddedAudioGainDb }
+          : {}),
+      };
+    }
     return { ...common, kind: "outro" };
   });
-  const sceneIds = new Set(scenes.map((scene) => scene.id));
   const audioTakes = buildAudioTakes(values);
   const managedBgmId = values.bgm.cueId;
-  const audioCues = base.audioCues.filter(
-    (cue) =>
-      cue.id !== managedBgmId &&
-      (cue.range.kind !== "scene" || sceneIds.has(cue.range.sceneId)),
-  );
+  const preservedAudioCues = base.audioCues.filter((cue) => {
+    if (cue.id === managedBgmId) {
+      return false;
+    }
+    // Scene AudioCue は編集フォームが正本なので、work範囲だけを保持する。
+    return cue.range.kind === "work";
+  });
+  const audioCues: ContentDocument["audioCues"] = [
+    ...preservedAudioCues,
+    ...buildSceneAudioCues(values),
+  ];
   if (values.bgm.assetId !== null) {
     audioCues.push({
       id: managedBgmId ?? `audio-bgm-${randomId()}`,
@@ -960,6 +1597,7 @@ export function buildContentDocument(
   }
   return {
     ...base,
+    visualTheme: values.visualTheme ?? base.visualTheme,
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
     speakers,
     characters,
@@ -969,20 +1607,20 @@ export function buildContentDocument(
   };
 }
 
-let lineCounter = 0;
-
-export function newLineId(sceneId: string): string {
-  lineCounter += 1;
-  return `line-${sceneId}-${Date.now()}-${lineCounter}`;
+export function newLineId(sceneId: string, existing: ReadonlySet<string>): string {
+  const sceneToken = idTail(sceneId);
+  return uniqueShortId((token) => `line-${sceneToken}-${token}`, existing);
 }
 
-export function createEmptyLine(sceneId: string): LineFormValue {
+export function createEmptyLine(sceneId: string, existing: ReadonlySet<string>): LineFormValue {
   return {
-    id: newLineId(sceneId),
+    id: newLineId(sceneId, existing),
     speakerId: null,
     captionText: "",
     speechText: "",
     selectedAudioTakeId: null,
+    expressionId: null,
+    gapBeforeMs: 0,
     takes: [],
   };
 }
@@ -1050,11 +1688,66 @@ export function bulkTtsCandidateLineIds(content: ContentDocument): string[] {
   return ids;
 }
 
-export function newSceneId(): string {
-  return `scene-point-${randomId()}`;
+const SHORT_ID_LENGTH = 3;
+const SHORT_ID_ATTEMPTS = 32;
+const HEX_ALPHABET = "0123456789abcdef";
+
+function randomHexToken(length: number): string {
+  const bytes = new Uint8Array(length);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  let token = "";
+  for (const value of bytes) {
+    token += HEX_ALPHABET[value & 0x0f];
+  }
+  return token;
 }
 
-function randomId(): string {
+function uniqueShortId(
+  build: (token: string) => string,
+  existing: ReadonlySet<string>,
+): string {
+  for (let length = SHORT_ID_LENGTH; ; length += 1) {
+    for (let attempt = 0; attempt < SHORT_ID_ATTEMPTS; attempt += 1) {
+      const candidate = build(randomHexToken(length));
+      if (!existing.has(candidate)) {
+        return candidate;
+      }
+    }
+  }
+}
+
+function idTail(id: string): string {
+  const index = id.lastIndexOf("-");
+  return index === -1 ? id : id.slice(index + 1);
+}
+
+export function newSceneId(existing: ReadonlySet<string>): string {
+  return uniqueShortId((token) => `scene-point-${token}`, existing);
+}
+
+export function collectSceneIds(scenes: readonly { id: string }[]): ReadonlySet<string> {
+  return new Set(scenes.map((scene) => scene.id));
+}
+
+export function collectLineIds(
+  scenes: readonly { lines: readonly { id: string }[] }[],
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const scene of scenes) {
+    for (const line of scene.lines) {
+      ids.add(line.id);
+    }
+  }
+  return ids;
+}
+
+export function randomId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
@@ -1074,7 +1767,31 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         break;
       case "nestedMedia":
         fields[field.key] = "";
-        fields[`${field.key}__fit`] = "cover";
+        fields[`${field.key}${NESTED_MEDIA_FIT_SUFFIX}`] = "cover";
+        fields[`${field.key}${NESTED_MODE_SUFFIX}`] = NESTED_MODE_MEDIA;
+        if (field.videoPlayback === true) {
+          fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = "";
+        }
+        if (field.allowComposition) {
+          fields[`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`] = "";
+          fields[`${field.key}${NESTED_COMPOSITION_FIT_SUFFIX}`] = "contain";
+          fields[`${field.key}${NESTED_COMPOSITION_ZOOM_SUFFIX}`] = "";
+          fields[`${field.key}${NESTED_COMPOSITION_POS_X_SUFFIX}`] = "";
+          fields[`${field.key}${NESTED_COMPOSITION_POS_Y_SUFFIX}`] = "";
+        }
+        break;
+      case "media":
+        fields[field.key] = "";
+        if (field.videoPlayback === true) {
+          fields[`${field.key}${VIDEO_PLAYBACK_SUFFIX}`] = "";
+        }
+        break;
+      case "mediaCrop":
+        fields[`${field.key}${CROP_X_SUFFIX}`] = "";
+        fields[`${field.key}${CROP_Y_SUFFIX}`] = "";
+        if (field.zoomKey !== undefined) {
+          fields[`${field.key}${CROP_ZOOM_SUFFIX}`] = "";
+        }
         break;
       case "animation":
         fields[field.key] = "none";
@@ -1083,11 +1800,45 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
       case "boolean":
         fields[field.key] = "";
         break;
+      case "grid":
+        fields[field.key] = defaultGridDataJson();
+        break;
+      case "decimal":
+        fields[field.key] = "0";
+        break;
+      case "flow":
+        fields[field.key] = JSON.stringify({
+          nodes: [{ label: "開始" }, { label: "完了" }],
+          edges: [{ from: 0, to: 1 }],
+        });
+        break;
+      case "effects":
+        fields[field.key] = JSON.stringify(defaultEffectsForVariant(field.variant));
+        break;
+      case "calloutItems":
+        fields[field.key] = JSON.stringify([{ text: "ポイント" }]);
+        break;
+      case "messages":
+        fields[field.key] = JSON.stringify([
+          { name: "相手", body: "こんにちは", side: "left" },
+          { name: "自分", body: "よろしくお願いします", side: "right" },
+        ]);
+        break;
       default:
         fields[field.key] = "";
     }
   }
   return fields;
+}
+
+export function defaultGridDataJson(): string {
+  return JSON.stringify({
+    columns: [
+      { key: "col1", label: "項目", type: "text" },
+      { key: "col2", label: "値", type: "number" },
+    ],
+    rows: [{ col1: "", col2: "" }],
+  });
 }
 
 export function createCueFormValue(options: {
@@ -1098,6 +1849,9 @@ export function createCueFormValue(options: {
   order: number;
 }): CueFormValue {
   const fields = defaultCueFields(options.templateId, options.templateVersion);
+  const policy =
+    getVisualTemplate(options.templateId, options.templateVersion)?.transitionPolicy ??
+    DEFAULT_TRANSITION_POLICY;
   return {
     id: newVisualCueId(options.sceneId, options.templateId.replace(/\W/g, "-")),
     baseCue: null,
@@ -1110,10 +1864,10 @@ export function createCueFormValue(options: {
     endLineId: "",
     startMs: 0,
     endMs: 0,
-    enterPreset: "fade",
-    enterDurationMs: 350,
-    exitPreset: "none",
-    exitDurationMs: 0,
+    enterPreset: policy.defaultEnter.preset,
+    enterDurationMs: policy.defaultEnter.durationMs,
+    exitPreset: policy.defaultExit.preset,
+    exitDurationMs: policy.defaultExit.durationMs,
     fields,
   };
 }
@@ -1127,8 +1881,49 @@ export function nextPointLabel(
   return defaultPointLabel(ordinal);
 }
 
-export function createPointSceneFormValue(label: string): SceneFormValue {
-  const id = newSceneId();
+export function nextInsertLabel(
+  scenes: readonly SceneFormValue[],
+  insertIndex: number,
+): string {
+  const ordinal =
+    scenes.slice(0, insertIndex).filter((scene) => scene.kind === "insert").length + 1;
+  return defaultInsertLabel(ordinal);
+}
+
+export function createInsertSceneFormValue(
+  label: string,
+  assetId: string,
+  durationMs: number,
+  existingSceneIds: ReadonlySet<string>,
+): SceneFormValue {
+  const id = newSceneId(existingSceneIds);
+  const scene = createInsertScene(id, label, assetId, durationMs, true);
+  return {
+    id,
+    kind: "insert",
+    label,
+    accentKind: "theme",
+    accentToken: "primary",
+    accentColor: "",
+    timingMode: "fixed",
+    durationMs,
+    transitionPreset: "cut",
+    transitionDurationMs: 0,
+    lines: [],
+    cues: scene.visualCues.map(toCueFormValue),
+    standings: [],
+    audioCues: [],
+    mainVisualCueId: scene.mainVisualCueId,
+    embeddedAudio: true,
+    embeddedAudioGainDb: 0,
+  };
+}
+
+export function createPointSceneFormValue(
+  label: string,
+  existingSceneIds: ReadonlySet<string>,
+): SceneFormValue {
+  const id = newSceneId(existingSceneIds);
   return {
     id,
     kind: "point",
@@ -1143,6 +1938,10 @@ export function createPointSceneFormValue(label: string): SceneFormValue {
     lines: [],
     cues: pointSceneTextCues(id).map(toCueFormValue),
     standings: emptyStandingSlots(),
+    audioCues: [],
+    mainVisualCueId: "",
+    embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 
@@ -1177,6 +1976,10 @@ export function cloneSceneFormValue(
       };
     }),
     standings: source.standings.map((standing) => ({ ...standing, cueId: null })),
+    audioCues: [],
+    mainVisualCueId: "",
+    embeddedAudio: true,
+    embeddedAudioGainDb: 0,
   };
 }
 
@@ -1193,7 +1996,7 @@ export function newAppearanceId(): string {
 }
 
 export function createEmptyCharacter(): CharacterFormValue {
-  return { id: newCharacterId(), name: "", voiceProfileId: null, appearances: [] };
+  return { id: newCharacterId(), name: "", voiceProfileId: null, voices: [], appearances: [] };
 }
 
 export function createEmptyAppearance(): AppearanceFormValue {
@@ -1203,6 +2006,7 @@ export function createEmptyAppearance(): AppearanceFormValue {
     expression: DEFAULT_APPEARANCE_EXPRESSION,
     pose: DEFAULT_APPEARANCE_POSE,
     label: "",
+    faceSetId: null,
   };
 }
 
@@ -1377,11 +2181,17 @@ export function nextEndLineId(
   return currentEndLineId;
 }
 
-export function duplicateLineFormValue(line: LineFormValue, sceneId: string): LineFormValue {
-  const copy = createEmptyLine(sceneId);
+export function duplicateLineFormValue(
+  line: LineFormValue,
+  sceneId: string,
+  existing: ReadonlySet<string>,
+): LineFormValue {
+  const copy = createEmptyLine(sceneId, existing);
   copy.speakerId = line.speakerId;
   copy.captionText = line.captionText;
   copy.speechText = line.speechText;
+  copy.expressionId = line.expressionId;
+  copy.gapBeforeMs = line.gapBeforeMs;
   return copy;
 }
 
@@ -1399,6 +2209,39 @@ export function normalizeLineRangeCues(scene: SceneFormValue): SceneFormValue {
     return { ...cue, startLineId: cue.endLineId, endLineId: cue.startLineId };
   });
   return { ...scene, cues };
+}
+
+function pruneVideoPlaybackFields(
+  templateId: string,
+  templateVersion: number,
+  fields: Record<string, string>,
+  isRemoved: (lineId: string) => boolean,
+): Record<string, string> {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  const gated = (definition?.inputFields ?? []).filter(
+    (field) =>
+      (field.kind === "media" || field.kind === "nestedMedia") && field.videoPlayback === true,
+  );
+  if (gated.length === 0) {
+    return fields;
+  }
+  let next = fields;
+  for (const field of gated) {
+    const key = `${field.key}${VIDEO_PLAYBACK_SUFFIX}`;
+    const playback = parseVideoPlayback(next[key]);
+    if (playback === null) {
+      continue;
+    }
+    const gates = playback.gates.filter((gate) => !isRemoved(gate.narrationSegmentId));
+    if (gates.length === playback.gates.length) {
+      continue;
+    }
+    if (next === fields) {
+      next = { ...fields };
+    }
+    next[key] = gates.length === 0 ? "" : serializeVideoPlayback({ ...playback, gates });
+  }
+  return next;
 }
 
 export function removeLineInScene(scene: SceneFormValue, lineIndex: number): SceneFormValue {
@@ -1439,15 +2282,207 @@ export function removeLineInScene(scene: SceneFormValue, lineIndex: number): Sce
       endLineId: lineIndex === high ? lines[high - 1]!.id : lines[high]!.id,
     });
   }
-  return { ...scene, lines: nextLines, cues };
+  return {
+    ...scene,
+    lines: nextLines,
+    cues: cues.map((cue) => ({
+      ...cue,
+      fields: pruneVideoPlaybackFields(
+        cue.templateId,
+        cue.templateVersion,
+        pruneCueEffectFields(
+          cue.templateId,
+          cue.templateVersion,
+          cue.fields,
+          (lineId) => lineId === deletedId,
+        ),
+        (lineId) => lineId === deletedId,
+      ),
+      baseCue: pruneCueBaseCueTriggers(
+        cue.baseCue,
+        cue.templateId,
+        cue.templateVersion,
+        (lineId) => lineId === deletedId,
+      ),
+    })),
+  };
+}
+
+function effectFieldKeys(
+  templateId: string,
+  templateVersion: number,
+): string[] | null {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  if (definition === undefined) {
+    return null;
+  }
+  return (definition.inputFields ?? [])
+    .filter((field) => field.kind === "effects" || field.kind === "calloutItems")
+    .map((field) => field.key);
+}
+
+function pruneLineContainers(
+  definition: VisualTemplateDefinition,
+  input: unknown,
+  isRemoved: (lineId: string) => boolean,
+): unknown {
+  if (
+    definition.collectLineRefs === undefined ||
+    typeof input !== "object" ||
+    input === null ||
+    Array.isArray(input)
+  ) {
+    return input;
+  }
+  const refs = definition.collectLineRefs(input, []);
+  if (refs.length === 0) {
+    return input;
+  }
+  const removedKeys = new Set<string>();
+  const removedIndices = new Map<string, Set<number>>();
+  for (const ref of refs) {
+    if (!isRemoved(ref.lineId)) {
+      continue;
+    }
+    const key = ref.path[0];
+    if (typeof key !== "string") {
+      continue;
+    }
+    const second = ref.path[1];
+    if (typeof second === "number") {
+      const indices = removedIndices.get(key) ?? new Set<number>();
+      indices.add(second);
+      removedIndices.set(key, indices);
+    } else {
+      removedKeys.add(key);
+    }
+  }
+  if (removedKeys.size === 0 && removedIndices.size === 0) {
+    return input;
+  }
+  const source = input as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...source };
+  for (const key of removedKeys) {
+    delete next[key];
+  }
+  for (const [key, indices] of removedIndices) {
+    const value = source[key];
+    if (Array.isArray(value)) {
+      next[key] = value.filter((_entry, index) => !indices.has(index));
+    }
+  }
+  return next;
+}
+
+function pruneCueEffectFields(
+  templateId: string,
+  templateVersion: number,
+  fields: Record<string, string>,
+  isRemoved: (lineId: string) => boolean,
+): Record<string, string> {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  if (definition?.collectLineRefs === undefined) {
+    return fields;
+  }
+  const keys = effectFieldKeys(templateId, templateVersion) ?? [];
+  let changed = false;
+  const next: Record<string, string> = { ...fields };
+  for (const key of keys) {
+    const value = fields[key];
+    if (value === undefined) {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      continue;
+    }
+    const pruned = pruneLineContainers(definition, { [key]: parsed }, isRemoved);
+    if (pruned === null || typeof pruned !== "object") {
+      continue;
+    }
+    const prunedValue = (pruned as Record<string, unknown>)[key];
+    if (prunedValue !== parsed) {
+      next[key] = JSON.stringify(prunedValue);
+      changed = true;
+    }
+  }
+  return changed ? next : fields;
+}
+
+function pruneCueBaseCueTriggers(
+  baseCue: VisualCue | null,
+  templateId: string,
+  templateVersion: number,
+  isRemoved: (lineId: string) => boolean,
+): VisualCue | null {
+  if (baseCue === null) {
+    return baseCue;
+  }
+  const definition = getVisualTemplate(templateId, templateVersion);
+  if (definition?.collectLineRefs === undefined) {
+    return baseCue;
+  }
+  const pruned = pruneLineContainers(definition, baseCue.input, isRemoved);
+  if (pruned === baseCue.input) {
+    return baseCue;
+  }
+  return { ...baseCue, input: pruned };
+}
+
+function cueEffectReferencesLine(
+  templateId: string,
+  templateVersion: number,
+  fields: Record<string, string>,
+  baseCue: VisualCue | null,
+  lineId: string,
+): boolean {
+  const definition = getVisualTemplate(templateId, templateVersion);
+  if (definition?.collectLineRefs === undefined) {
+    return false;
+  }
+  if (
+    baseCue !== null &&
+    definition.collectLineRefs(baseCue.input, []).some((ref) => ref.lineId === lineId)
+  ) {
+    return true;
+  }
+  const keys = effectFieldKeys(templateId, templateVersion) ?? [];
+  for (const key of keys) {
+    const value = fields[key];
+    if (value === undefined) {
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(parsed)) {
+      continue;
+    }
+    if (definition.collectLineRefs({ [key]: parsed }, []).some((ref) => ref.lineId === lineId)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function countLineCueReferences(scene: SceneFormValue, lineId: string): number {
-  return scene.cues.filter(
-    (cue) =>
-      cue.rangeKind === "lines" &&
-      (cue.startLineId === lineId || cue.endLineId === lineId),
-  ).length;
+  return scene.cues.filter((cue) => {
+    if (cue.rangeKind === "lines" && (cue.startLineId === lineId || cue.endLineId === lineId)) {
+      return true;
+    }
+    return cueEffectReferencesLine(
+      cue.templateId,
+      cue.templateVersion,
+      cue.fields,
+      cue.baseCue,
+      lineId,
+    );
+  }).length;
 }
 
 export function moveLineInScene(
@@ -1482,18 +2517,49 @@ export function splitPointScene(
   scene: SceneFormValue,
   splitAt: number,
   secondLabel: string,
+  existingSceneIds: ReadonlySet<string>,
+  splitOffsetMs: number | null,
 ): SplitSceneResult {
   if (scene.kind !== "point" || splitAt <= 0 || splitAt >= scene.lines.length) {
     throw new Error("この位置ではシーンを分割できません。");
   }
   const lines = scene.lines;
   const indexById = new Map(lines.map((line, index) => [line.id, index]));
-  const second = createPointSceneFormValue(secondLabel);
+  const second = createPointSceneFormValue(secondLabel, existingSceneIds);
   const firstCues: CueFormValue[] = [];
   const secondCues: CueFormValue[] = [...second.cues];
   for (const cue of scene.cues) {
-    if (cue.rangeKind !== "lines") {
+    if (cue.rangeKind === "scene") {
       firstCues.push(cue);
+      continue;
+    }
+    if (cue.rangeKind === "offset") {
+      if (splitOffsetMs === null || !Number.isFinite(splitOffsetMs) || splitOffsetMs < 0) {
+        firstCues.push(cue);
+        continue;
+      }
+      if (cue.endMs <= splitOffsetMs) {
+        firstCues.push(cue);
+        continue;
+      }
+      if (cue.startMs >= splitOffsetMs) {
+        secondCues.push({
+          ...cue,
+          startMs: cue.startMs - splitOffsetMs,
+          endMs: cue.endMs - splitOffsetMs,
+        });
+        continue;
+      }
+      const secondCueId = newVisualCueId(second.id, cue.templateId.replace(/\W/g, "-"));
+      firstCues.push({ ...cue, endMs: splitOffsetMs });
+      secondCues.push({
+        ...cue,
+        id: secondCueId,
+        fields: { ...cue.fields },
+        baseCue: cue.baseCue === null ? null : { ...structuredClone(cue.baseCue), id: secondCueId },
+        startMs: 0,
+        endMs: cue.endMs - splitOffsetMs,
+      });
       continue;
     }
     const start = indexById.get(cue.startLineId);
@@ -1527,8 +2593,34 @@ export function splitPointScene(
       endLineId: lines[high]!.id,
     });
   }
+  const firstLineIds = new Set(lines.slice(0, splitAt).map((line) => line.id));
+  const secondLineIds = new Set(lines.slice(splitAt).map((line) => line.id));
+  const toScene = (
+    target: SceneFormValue,
+    targetLines: LineFormValue[],
+    targetCues: CueFormValue[],
+    allowed: ReadonlySet<string>,
+  ): SceneFormValue => ({
+    ...target,
+    lines: targetLines,
+    cues: targetCues.map((cue) => ({
+      ...cue,
+      fields: pruneCueEffectFields(
+        cue.templateId,
+        cue.templateVersion,
+        cue.fields,
+        (lineId) => !allowed.has(lineId),
+      ),
+      baseCue: pruneCueBaseCueTriggers(
+        cue.baseCue,
+        cue.templateId,
+        cue.templateVersion,
+        (lineId) => !allowed.has(lineId),
+      ),
+    })),
+  });
   return {
-    first: { ...scene, lines: lines.slice(0, splitAt), cues: firstCues },
-    second: { ...second, lines: lines.slice(splitAt), cues: secondCues },
+    first: toScene(scene, lines.slice(0, splitAt), firstCues, firstLineIds),
+    second: toScene(second, lines.slice(splitAt), secondCues, secondLineIds),
   };
 }

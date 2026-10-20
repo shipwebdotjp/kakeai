@@ -2,42 +2,66 @@ import {
   COMPOSITION_ENGINE,
   COMPILER_VERSION,
   HYPERFRAMES_PLAYER_VERSION,
+  buildSrt,
   compileDocument,
   CompositionCompileError,
+  collectCompositionWindowIssues,
+  collectGatedMediaReferences,
+  collectOffsetRangeWarnings,
+  collectStillFrameRequests,
+  deriveVideoPlaybackPlans,
   collectTimelineIssues,
   resolveCueWindow,
   resolveTimeline,
   OUTPUT_FPS,
   type CompiledComposition,
+  type CompositionVersionResolved,
   type ResolvedAssetKind,
   type ScenePlacement,
 } from "@kakeai/video";
 import {
   RENDITION_PURPOSE,
+  characterStandingV1InputSchema,
   collectAssetReferences,
+  compositionFullBleedInputSchema,
   computeContentWarnings,
   draftPreviewSchema,
+  mediaFullBleedInputSchema,
   scriptVersionPreviewSchema,
   type AssetKindName,
   type AssetReference,
   type ContentDocument,
   type DraftPreview,
   type DraftPreviewRequest,
+  type InsertScene,
+  type MediaFullBleedInput,
   type PreviewCueTiming,
   type SaveScriptVersionRequest,
   type ScriptVersion as ScriptVersionDto,
   type ScriptVersionPreview,
   type ScriptVersionSummary,
+  type VisualCue,
   type Warning,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent, serializeContent } from "../domain/content-json.ts";
-import { toScriptVersion, toScriptVersionSummary } from "../dto/mappers.ts";
+import { toFaceSet, toScriptVersion, toScriptVersionSummary } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
 import { API_BASE_PATH } from "../http/security.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 import type { DataDirectories } from "../storage/paths.ts";
 import { resolveAssetContent } from "./assets.ts";
+import {
+  ensureStillFramePng,
+  stillFrameCacheDir,
+} from "../media/still-frame.ts";
+import {
+  collectCompositionVersionIds,
+  CompositionService,
+  getCompositionCanvasProfilesByVersionId,
+  getCompositionDurationsByVersionId,
+} from "./compositions.ts";
+import { ThemeResolver } from "./theme-resolver.ts";
 
 export interface SaveScriptVersionResult {
   scriptVersion: ScriptVersionDto;
@@ -75,6 +99,246 @@ export type AssetWithRenditions = Prisma.AssetGetPayload<{ include: { renditions
 export interface LoadedAssetReferences {
   references: AssetReference[];
   assetById: Map<string, AssetWithRenditions>;
+}
+
+export type FaceSetDetails = Prisma.FaceSetGetPayload<{
+  include: { layers: true; expressions: true };
+}>;
+
+export interface LoadedReferences extends LoadedAssetReferences {
+  faceSetById: Map<string, FaceSetDetails>;
+}
+
+export function collectFaceSetIds(content: ContentDocument): string[] {
+  return [
+    ...new Set(
+      content.characters.flatMap((character) =>
+        character.appearances.map((appearance) => appearance.faceSetId),
+      ),
+    ),
+  ].filter((id): id is string => id !== null);
+}
+
+export async function loadFaceSets(
+  client: PrismaClient | Prisma.TransactionClient,
+  content: ContentDocument,
+): Promise<Map<string, FaceSetDetails>> {
+  const ids = collectFaceSetIds(content);
+  const rows =
+    ids.length === 0
+      ? []
+      : await client.faceSet.findMany({
+          where: { id: { in: ids } },
+          include: {
+            layers: { orderBy: { position: "asc" } },
+            expressions: { orderBy: { position: "asc" } },
+          },
+        });
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+export async function loadLayerAssets(
+  client: PrismaClient | Prisma.TransactionClient,
+  faceSetById: Map<string, FaceSetDetails>,
+): Promise<Map<string, AssetWithRenditions>> {
+  const ids = [
+    ...new Set(
+      [...faceSetById.values()].flatMap((faceSet) => faceSet.layers.map((layer) => layer.assetId)),
+    ),
+  ];
+  if (ids.length === 0) {
+    return new Map();
+  }
+  const assets = await client.asset.findMany({
+    where: { id: { in: ids } },
+    include: { renditions: true },
+  });
+  return new Map(assets.map((asset) => [asset.id, asset]));
+}
+
+export function collectFaceLayerReferences(
+  content: ContentDocument,
+  faceSetById: Map<string, FaceSetDetails>,
+): AssetReference[] {
+  const references: AssetReference[] = [];
+  const seen = new Set<string>();
+  content.characters.forEach((character, characterIndex) => {
+    character.appearances.forEach((appearance, appearanceIndex) => {
+      if (appearance.faceSetId === null) {
+        return;
+      }
+      const faceSet = faceSetById.get(appearance.faceSetId);
+      if (faceSet === undefined) {
+        return;
+      }
+      for (const layer of faceSet.layers) {
+        if (seen.has(layer.assetId)) {
+          continue;
+        }
+        seen.add(layer.assetId);
+        references.push({
+          assetId: layer.assetId,
+          allowedKinds: ["image"],
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+        });
+      }
+    });
+  });
+  return references;
+}
+
+export async function loadAllReferences(
+  client: PrismaClient | Prisma.TransactionClient,
+  content: ContentDocument,
+): Promise<LoadedReferences> {
+  const { references, assetById } = await loadAssetReferences(client, content);
+  const faceSetById = await loadFaceSets(client, content);
+  const layerAssets = await loadLayerAssets(client, faceSetById);
+  for (const [id, asset] of layerAssets) {
+    if (!assetById.has(id)) {
+      assetById.set(id, asset);
+    }
+  }
+  return {
+    references: [...references, ...collectFaceLayerReferences(content, faceSetById)],
+    assetById,
+    faceSetById,
+  };
+}
+
+function standingCueTarget(cue: VisualCue): { characterId: string; appearanceId: string } | undefined {
+  if (cue.template.id !== "character.standing") {
+    return undefined;
+  }
+  const parsed = characterStandingV1InputSchema.safeParse(cue.input);
+  if (parsed.success) {
+    return { characterId: parsed.data.characterId, appearanceId: parsed.data.appearanceId };
+  }
+  return undefined;
+}
+
+function readyDimensions(
+  asset: AssetWithRenditions | undefined,
+): { widthPx: number; heightPx: number } | undefined {
+  if (
+    asset === undefined ||
+    asset.status !== "ready" ||
+    asset.widthPx === null ||
+    asset.heightPx === null
+  ) {
+    return undefined;
+  }
+  return { widthPx: asset.widthPx, heightPx: asset.heightPx };
+}
+
+export function assertFaceSetReferences(
+  content: ContentDocument,
+  faceSetById: Map<string, FaceSetDetails>,
+  assetById: Map<string, AssetWithRenditions>,
+): void {
+  const issues: ValidationIssue[] = [];
+  const characterById = new Map(content.characters.map((character) => [character.id, character]));
+  content.characters.forEach((character, characterIndex) => {
+    character.appearances.forEach((appearance, appearanceIndex) => {
+      if (appearance.faceSetId === null) {
+        return;
+      }
+      const faceSet = faceSetById.get(appearance.faceSetId);
+      if (faceSet === undefined) {
+        issues.push({
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+          code: "invalid_value",
+          message: "表情セットが見つかりません。",
+        });
+        return;
+      }
+      const base = readyDimensions(assetById.get(appearance.assetId));
+      const layerDims = faceSet.layers.map((layer) =>
+        readyDimensions(assetById.get(layer.assetId)),
+      );
+      if (
+        faceSet.layers.length > 0 &&
+        (base === undefined || layerDims.some((dims) => dims === undefined))
+      ) {
+        issues.push({
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+          code: "invalid_value",
+          message: "顔レイヤーの寸法を確認できません。",
+        });
+        return;
+      }
+      const mismatch =
+        base !== undefined &&
+        layerDims.some(
+          (dims) =>
+            dims !== undefined &&
+            (dims.widthPx !== base.widthPx || dims.heightPx !== base.heightPx),
+        );
+      if (mismatch) {
+        issues.push({
+          path: ["characters", characterIndex, "appearances", appearanceIndex, "faceSetId"],
+          code: "invalid_value",
+          message: "顔レイヤーはベース画像と同じ寸法にしてください。",
+        });
+      }
+    });
+  });
+
+  const characterIdBySpeakerId = new Map(
+    content.speakers.map((speaker) => [speaker.id, speaker.characterId]),
+  );
+  content.scenes.forEach((scene, sceneIndex) => {
+    scene.lines.forEach((line, lineIndex) => {
+      if (line.expressionId === null || line.speakerId === null) {
+        return;
+      }
+      const path: (string | number)[] = ["scenes", sceneIndex, "lines", lineIndex, "expressionId"];
+      const characterId = characterIdBySpeakerId.get(line.speakerId);
+      const character =
+        characterId === null || characterId === undefined
+          ? undefined
+          : characterById.get(characterId);
+      if (character === undefined) {
+        issues.push({
+          path,
+          code: "invalid_value",
+          message: "表情を指定する台詞にはキャラクターを持つ話者が必要です。",
+        });
+        return;
+      }
+      const appearanceIds = scene.visualCues
+        .map(standingCueTarget)
+        .filter(
+          (target): target is { characterId: string; appearanceId: string } =>
+            target !== undefined && target.characterId === character.id,
+        )
+        .map((target) => target.appearanceId);
+      if (appearanceIds.length === 0) {
+        return;
+      }
+      for (const appearanceId of appearanceIds) {
+        const appearance = character.appearances.find((entry) => entry.id === appearanceId);
+        const faceSet =
+          appearance?.faceSetId === null || appearance?.faceSetId === undefined
+            ? undefined
+            : faceSetById.get(appearance.faceSetId);
+        if (
+          faceSet === undefined ||
+          !faceSet.expressions.some((preset) => preset.id === line.expressionId)
+        ) {
+          issues.push({
+            path,
+            code: "invalid_value",
+            message: "この表情は話者の立ち絵で利用できません。",
+          });
+          return;
+        }
+      }
+    });
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
 }
 
 export async function loadAssetReferences(
@@ -162,12 +426,23 @@ async function validateAssetReferences(
   client: PrismaClient | Prisma.TransactionClient,
   content: ContentDocument,
 ): Promise<void> {
-  if (content.audioTakes.length === 0 && collectAssetReferences(content).length === 0) {
+  const hasExpressions = content.scenes.some((scene) =>
+    scene.lines.some((line) => line.expressionId !== null),
+  );
+  if (
+    content.audioTakes.length === 0 &&
+    collectAssetReferences(content).length === 0 &&
+    collectFaceSetIds(content).length === 0 &&
+    !hasExpressions
+  ) {
     return;
   }
-  const { references, assetById } = await loadAssetReferences(client, content);
+  const { references, assetById, faceSetById } = await loadAllReferences(client, content);
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
+  assertInsertScenes(content, assetById);
+  assertVideoPlayback(content, assetById);
+  assertFaceSetReferences(content, faceSetById, assetById);
 }
 
 export async function getCurrentScriptVersion(
@@ -211,9 +486,363 @@ export async function getScriptVersion(
   return toScriptVersion(row, deserializeContent(row.contentJson));
 }
 
+export interface ScriptVersionSubtitles {
+  filename: string;
+  srt: string;
+}
+
+function subtitleFilename(title: string): string {
+  const cleaned = title
+    .replace(/\s+/g, " ")
+    .replace(/[\\/:*?"<>|\p{C}]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const truncated = [...cleaned]
+    .slice(0, 80)
+    .join("")
+    .replace(/[.\s]+$/u, "")
+    .replace(/^\.+/u, "");
+  const base = truncated.length === 0 ? "subtitles" : truncated;
+  return `${base}.srt`;
+}
+
+export async function getScriptVersionSubtitles(
+  prisma: PrismaClient,
+  scriptVersionId: string,
+): Promise<ScriptVersionSubtitles> {
+  const row = await prisma.scriptVersion.findUnique({
+    where: { id: scriptVersionId },
+    include: { languageEdition: { include: { work: true } } },
+  });
+  if (row === null) {
+    throw resourceNotFound("script_version", scriptVersionId);
+  }
+  let content: ContentDocument;
+  try {
+    content = deserializeContent(row.contentJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
+  }
+  let srt: string;
+  try {
+    srt = buildSrt(content);
+  } catch (error) {
+    if (error instanceof CompositionCompileError) {
+      throw new ApiError(422, "RENDER_INPUT_INVALID", undefined, { issues: error.issues });
+    }
+    throw error;
+  }
+  return { filename: subtitleFilename(row.languageEdition.work.title), srt };
+}
+
 export function renderSourceDurationMs(asset: AssetWithRenditions): number | null {
   const rendition = asset.renditions.find((entry) => entry.purpose === RENDITION_PURPOSE);
   return rendition?.durationMs ?? asset.durationMs;
+}
+
+function insertMainCueInput(scene: InsertScene): MediaFullBleedInput | null {
+  const cue = scene.visualCues.find((entry) => entry.id === scene.mainVisualCueId);
+  if (cue === undefined) {
+    return null;
+  }
+  const parsed = mediaFullBleedInputSchema.safeParse(cue.input);
+  return parsed.success ? parsed.data : null;
+}
+
+function insertMainAssetId(scene: InsertScene): string | null {
+  return insertMainCueInput(scene)?.assetId ?? null;
+}
+
+export function assertInsertScenes(
+  content: ContentDocument,
+  assetById: Map<string, AssetWithRenditions>,
+): void {
+  const issues: ValidationIssue[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    if (scene.kind !== "insert") {
+      return;
+    }
+    const input = insertMainCueInput(scene);
+    if (input === null) {
+      return;
+    }
+    const asset = assetById.get(input.assetId);
+    if (asset === undefined) {
+      return;
+    }
+    if (asset.kind !== "video") {
+      issues.push({
+        path: ["scenes", sceneIndex, "mainVisualCueId"],
+        code: "invalid_type",
+        message: "インサートSceneの主動画には動画素材を指定してください。",
+      });
+      return;
+    }
+    const sourceMs = renderSourceDurationMs(asset);
+    if (sourceMs === null) {
+      issues.push({
+        path: ["scenes", sceneIndex, "timing", "durationMs"],
+        code: "invalid_value",
+        message: "尺が不明な動画はインサートSceneの主動画に指定できません。",
+      });
+      return;
+    }
+    const trimStartMs = input.trimStartMs ?? 0;
+    const trimEndMs = input.trimEndMs ?? sourceMs;
+    if (trimStartMs >= trimEndMs || trimEndMs > sourceMs) {
+      issues.push({
+        path: ["scenes", sceneIndex, "mainVisualCueId"],
+        code: "invalid_value",
+        message: "動画トリムの範囲が素材の尺を超えているか、開始 ≧ 終了です。",
+      });
+      return;
+    }
+    const clipMs = trimEndMs - trimStartMs;
+    if (input.loop === true) {
+      if (scene.timing.durationMs < clipMs) {
+        issues.push({
+          path: ["scenes", sceneIndex, "timing", "durationMs"],
+          code: "invalid_value",
+          message: "ループ再生ではScene尺をトリム後の動画尺以上にしてください。",
+        });
+      }
+    } else if (scene.timing.durationMs !== clipMs) {
+      issues.push({
+        path: ["scenes", sceneIndex, "timing", "durationMs"],
+        code: "invalid_value",
+        message: "Scene尺が主動画のトリム後の尺と一致しません。",
+      });
+    }
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
+export function assertVideoPlayback(
+  content: ContentDocument,
+  assetById: Map<string, AssetWithRenditions>,
+): void {
+  interface GatedCue {
+    sceneIndex: number;
+    cueIndex: number;
+    refs: ReturnType<typeof collectGatedMediaReferences>;
+  }
+  const gatedCues: GatedCue[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    scene.visualCues.forEach((cue, cueIndex) => {
+      const cuePath: (string | number)[] = ["scenes", sceneIndex, "visualCues", cueIndex];
+      const refs = collectGatedMediaReferences(cue.input, cuePath);
+      if (refs.length > 0) {
+        gatedCues.push({ sceneIndex, cueIndex, refs });
+      }
+    });
+  });
+  if (gatedCues.length === 0) {
+    return;
+  }
+
+  const issues: ValidationIssue[] = [];
+  let timeline: ReturnType<typeof resolveTimeline>;
+  try {
+    timeline = resolveTimeline(content);
+  } catch (error) {
+    if (error instanceof CompositionCompileError) {
+      throw validationError(error.issues as ValidationIssue[]);
+    }
+    throw error;
+  }
+  const placementBySceneIndex = new Map(
+    timeline.scenes.map((placement) => [placement.sceneIndex, placement]),
+  );
+  for (const gated of gatedCues) {
+    const placement = placementBySceneIndex.get(gated.sceneIndex);
+    const scene = content.scenes[gated.sceneIndex];
+    const cue = scene?.visualCues[gated.cueIndex];
+    if (placement === undefined || scene === undefined || cue === undefined) {
+      continue;
+    }
+    const cuePath: (string | number)[] = [
+      "scenes",
+      gated.sceneIndex,
+      "visualCues",
+      gated.cueIndex,
+    ];
+    if (scene.kind === "insert") {
+      issues.push({
+        path: cuePath,
+        code: "invalid_value",
+        message: "インサートSceneの主動画にはセリフゲート再生を設定できません。",
+      });
+      continue;
+    }
+    const lineIndexById = new Map(scene.lines.map((line, index) => [line.id, index]));
+    const lineStartById = new Map(placement.lines.map((line) => [line.lineId, line.startMs]));
+    let window: ReturnType<typeof resolveCueWindow>;
+    try {
+      window = resolveCueWindow(placement, cue, cuePath);
+    } catch (error) {
+      if (error instanceof CompositionCompileError) {
+        throw validationError(error.issues as ValidationIssue[]);
+      }
+      throw error;
+    }
+    if (window === null) {
+      continue;
+    }
+    const windowStartMs = placement.startMs + window.startMs;
+    const windowEndMs = placement.startMs + window.endMs;
+    let rangeStartIndex = -1;
+    let rangeEndIndex = Number.POSITIVE_INFINITY;
+    if (cue.range.kind === "lines") {
+      rangeStartIndex = lineIndexById.get(cue.range.startLineId) ?? -1;
+      rangeEndIndex = lineIndexById.get(cue.range.endLineId) ?? Number.POSITIVE_INFINITY;
+    }
+    for (const ref of gated.refs) {
+      const asset = assetById.get(ref.assetId);
+      if (asset === undefined) {
+        continue;
+      }
+      if (asset.kind !== "video") {
+        issues.push({
+          path: [...ref.path, "videoPlayback"],
+          code: "invalid_type",
+          message: "セリフゲート再生は動画素材にだけ指定できます。",
+        });
+        continue;
+      }
+      const durationMs = renderSourceDurationMs(asset);
+      if (durationMs === null) {
+        issues.push({
+          path: [...ref.path, "videoPlayback"],
+          code: "invalid_value",
+          message: "尺が確定していない動画にはセリフゲート再生を設定できません。",
+        });
+        continue;
+      }
+      const sourceEndMs = ref.playback.sourceEndMs ?? durationMs;
+      if (sourceEndMs <= 0 || sourceEndMs > durationMs) {
+        issues.push({
+          path: [...ref.path, "videoPlayback", "sourceEndMs"],
+          code: "invalid_value",
+          message: "セリフゲート再生の終端は素材の尺の範囲内にしてください。",
+        });
+        continue;
+      }
+      let previousLineIndex = -1;
+      let previousStartMs = -1;
+      ref.playback.gates.forEach((gate, gateIndex) => {
+        const gatePath = [...ref.path, "videoPlayback", "gates", gateIndex];
+        if (gate.sourceMs >= sourceEndMs) {
+          issues.push({
+            path: [...gatePath, "sourceMs"],
+            code: "invalid_value",
+            message: "Gate の sourceMs は sourceEndMs より前にしてください。",
+          });
+        }
+        const lineIndex = lineIndexById.get(gate.narrationSegmentId);
+        const startMs = lineStartById.get(gate.narrationSegmentId);
+        if (lineIndex === undefined || startMs === undefined) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate の Narration Segment が親Cueと同じSceneにありません。",
+          });
+          return;
+        }
+        if (lineIndex <= previousLineIndex) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate は Scene の登録順に並べてください。",
+          });
+        }
+        if (startMs <= previousStartMs) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate の Narration Segment 開始時刻は昇順にしてください。",
+          });
+        }
+        previousLineIndex = lineIndex;
+        previousStartMs = startMs;
+        if (startMs < windowStartMs || startMs >= windowEndMs) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "Gate の Narration Segment は親Cueの表示区間内にしてください。",
+          });
+        }
+        if (
+          cue.range.kind === "lines" &&
+          (lineIndex < rangeStartIndex || lineIndex > rangeEndIndex)
+        ) {
+          issues.push({
+            path: [...gatePath, "narrationSegmentId"],
+            code: "invalid_value",
+            message: "range: lines のCueではGateをlines範囲内にしてください。",
+          });
+        }
+        const audio = gate.audio;
+        if (audio !== undefined && audio.enabled) {
+          const nextSourceMs =
+            gateIndex + 1 < ref.playback.gates.length
+              ? (ref.playback.gates[gateIndex + 1]?.sourceMs ?? sourceEndMs)
+              : sourceEndMs;
+          const segmentMs = nextSourceMs - gate.sourceMs;
+          const fadeTotalMs = (audio.fadeInMs ?? 0) + (audio.fadeOutMs ?? 0);
+          if (fadeTotalMs > segmentMs) {
+            issues.push({
+              path: [...gatePath, "audio"],
+              code: "invalid_value",
+              message: "フェードの合計がGate区間を超えています。",
+            });
+          }
+        }
+      });
+    }
+  }
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
+export async function collectInsertWarnings(
+  client: PrismaClient | Prisma.TransactionClient,
+  content: ContentDocument,
+): Promise<Warning[]> {
+  const assetIds = [
+    ...new Set(
+      content.scenes
+        .filter((scene): scene is InsertScene => scene.kind === "insert" && scene.embeddedAudio)
+        .map((scene) => insertMainAssetId(scene))
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  if (assetIds.length === 0) {
+    return [];
+  }
+  const assets = await client.asset.findMany({
+    where: { id: { in: assetIds } },
+  });
+  const assetById = new Map(assets.map((asset) => [asset.id, asset]));
+  const warnings: Warning[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    if (scene.kind !== "insert" || !scene.embeddedAudio) {
+      return;
+    }
+    const assetId = insertMainAssetId(scene);
+    const asset = assetId === null ? undefined : assetById.get(assetId);
+    if (asset === undefined || asset.kind !== "video" || asset.hasAudio) {
+      return;
+    }
+    warnings.push({
+      path: ["scenes", sceneIndex, "embeddedAudio"],
+      code: "insert_video_without_audio",
+      message: "この動画には音声ストリームがないため、インサート区間は無音になります。",
+    });
+  });
+  return warnings;
 }
 
 function previewCueTimings(content: ContentDocument, placement: ScenePlacement): PreviewCueTiming[] {
@@ -257,26 +886,128 @@ export interface CompilePreviewOptions {
   strictTakeDurations?: boolean;
 }
 
+export interface PreviewCompositionResolution {
+  compositionVersionId: string;
+  entryUrl: string;
+  resolved: CompositionVersionResolved;
+}
+
+function compositionEntryUrl(versionId: string, entrypoint: string): string {
+  const encodedPath = entrypoint
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${API_BASE_PATH}/compositions/versions/${encodeURIComponent(versionId)}/content/${encodedPath}`;
+}
+
+export async function resolvePreviewCompositions(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  content: ContentDocument,
+): Promise<PreviewCompositionResolution[]> {
+  const compositionService = new CompositionService({ db: prisma, dataDir: directories.root });
+  const resolutions: PreviewCompositionResolution[] = [];
+  for (const versionId of collectCompositionVersionIds(content)) {
+    let bundle;
+    try {
+      bundle = await compositionService.resolvePublishedBundle(versionId);
+    } catch {
+      throw new ApiError(422, "COMPOSITION_UNAVAILABLE", "参照先のCompositionVersionを利用できません。");
+    }
+    const entryUrl = compositionEntryUrl(bundle.version.id, bundle.version.manifest.entrypoint);
+    resolutions.push({
+      compositionVersionId: bundle.version.id,
+      entryUrl,
+      resolved: {
+        id: bundle.version.id,
+        runtimeCompositionId: bundle.version.manifest.runtimeCompositionId,
+        entrypoint: entryUrl,
+        previewUrl: entryUrl,
+        bundleHash: bundle.version.bundleHash,
+        storageKey: bundle.version.storageKey,
+        manifest: bundle.version.manifest,
+      },
+    });
+  }
+  return resolutions;
+}
+
 export async function compilePreview(
   prisma: PrismaClient,
   directories: DataDirectories,
   content: ContentDocument,
   options: CompilePreviewOptions = {},
 ): Promise<CompiledPreview> {
-  const { references, assetById } = await loadAssetReferences(prisma, content);
+  const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
+  assertInsertScenes(content, assetById);
+  assertVideoPlayback(content, assetById);
+  assertFaceSetReferences(content, faceSetById, assetById);
   if (options.strictTakeDurations === true) {
     assertTakeDurations(content, assetById);
+  }
+
+  const themeResolver = new ThemeResolver(prisma);
+  const resolvedTheme = await themeResolver.resolve(content.visualTheme.id, content.visualTheme.version);
+  if (!resolvedTheme) {
+    throw new ApiError(422, "PREVIEW_INPUT_INVALID", `Visual Themeが見つかりません: ${content.visualTheme.id}@${content.visualTheme.version}`);
   }
 
   const renderContentUrl = (assetId: string): string =>
     `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/render-content`;
 
+  const previewCompositions = await resolvePreviewCompositions(prisma, directories, content);
+  const compositionByVersionId = new Map(
+    previewCompositions.map((entry) => [entry.compositionVersionId, entry.resolved]),
+  );
+
   let compiled: CompiledComposition;
   let timeline: ReturnType<typeof buildPreviewTimeline>;
   try {
+    const resolveAssetDurationMs = (assetId: string): number | null => {
+      const asset = assetById.get(assetId);
+      return asset === undefined ? null : renderSourceDurationMs(asset);
+    };
+    const playbackPlans = deriveVideoPlaybackPlans(content, { resolveAssetDurationMs });
+    const stillCacheDir = stillFrameCacheDir(directories.tmp);
+    for (const request of collectStillFrameRequests(playbackPlans.plans)) {
+      if (!assetById.has(request.assetId)) {
+        continue;
+      }
+      const location = await resolveAssetContent(prisma, directories, request.assetId, true);
+      await ensureStillFramePng(
+        { filePath: location.path, sha256: location.sha256 },
+        request.sourceMs,
+        stillCacheDir,
+      );
+    }
     compiled = compileDocument({
       document: content,
+      resolvedTheme,
+      videoPlaybackPlans: playbackPlans.byPath,
+      stillResolver: (assetId, sourceMs) =>
+        `${API_BASE_PATH}/assets/${encodeURIComponent(assetId)}/frame?ms=${sourceMs}`,
+      compositionResolver: (versionId) => {
+        const found = compositionByVersionId.get(versionId);
+        if (!found) {
+          throw new Error(`CompositionVersionを解決できません: ${versionId}`);
+        }
+        return found;
+      },
+      faceSetResolver: (faceSetId) => {
+        const row = faceSetById.get(faceSetId);
+        if (row === undefined) {
+          throw new CompositionCompileError([
+            {
+              path: ["faceSets", faceSetId],
+              code: "unresolvable_face_set",
+              message: "表情セットを解決できません。",
+            },
+          ]);
+        }
+        const dto = toFaceSet(row);
+        return { id: dto.id, name: dto.name, layers: dto.layers, expressions: dto.expressions };
+      },
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);
         const kind = asset?.kind;
@@ -295,7 +1026,7 @@ export async function compilePreview(
         return {
           url: renderContentUrl(assetId),
           kind: kind as ResolvedAssetKind,
-          durationMs: kind === "audio" ? renderSourceDurationMs(asset) : null,
+          durationMs: kind === "image" ? null : renderSourceDurationMs(asset),
         };
       },
     });
@@ -317,6 +1048,10 @@ export async function compilePreview(
   return {
     compositionHtml: compiled.html,
     assets: previewAssets,
+    compositions: compiled.compositionVersions.map((resolved) => ({
+      compositionVersionId: resolved.id,
+      entryUrl: resolved.previewUrl ?? compositionEntryUrl(resolved.id, resolved.manifest.entrypoint),
+    })),
     renderer: {
       engine: COMPOSITION_ENGINE,
       compilerVersion: COMPILER_VERSION,
@@ -381,6 +1116,22 @@ export async function createDraftPreview(
   return parsed.data;
 }
 
+function throwIfFatalTimelineError(error: unknown): void {
+  if (!(error instanceof CompositionCompileError)) {
+    throw error;
+  }
+  const fatal = error.issues.filter((issue) => issue.code !== "fixed_duration_overflow");
+  if (fatal.length > 0) {
+    throw validationError(
+      fatal.map((issue) => ({
+        path: issue.path,
+        code: issue.code,
+        message: issue.message,
+      })),
+    );
+  }
+}
+
 export async function saveScriptVersion(
   prisma: PrismaClient,
   editionId: string,
@@ -403,23 +1154,95 @@ export async function saveScriptVersion(
   try {
     transitionIssues = collectTimelineIssues(content);
   } catch (error) {
-    if (!(error instanceof CompositionCompileError)) {
-      throw error;
-    }
-    const fatal = error.issues.filter((issue) => issue.code !== "fixed_duration_overflow");
-    if (fatal.length > 0) {
-      throw validationError(
-        fatal.map((issue) => ({
-          path: issue.path,
-          code: issue.code,
-          message: issue.message,
-        })),
-      );
-    }
+    throwIfFatalTimelineError(error);
   }
   if (transitionIssues.length > 0) {
     throw validationError(
       transitionIssues.map((issue) => ({
+        path: issue.path,
+        code: issue.code,
+        message: issue.message,
+      })),
+    );
+  }
+
+  const compositionVersionIds = collectCompositionVersionIds(content);
+  const compositionDurations = await getCompositionDurationsByVersionId(
+    prisma,
+    compositionVersionIds,
+  );
+  const missingCompositionVersionIds = compositionVersionIds.filter(
+    (versionId) => !compositionDurations.has(versionId),
+  );
+  if (missingCompositionVersionIds.length > 0) {
+    const cuePathByVersionId = new Map<string, (string | number)[]>();
+    content.scenes.forEach((scene, sceneIndex) => {
+      scene.visualCues.forEach((cue, cueIndex) => {
+        if (cue.template.id !== "composition.full-bleed") {
+          return;
+        }
+        const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
+        if (!parsedInput.success) {
+          return;
+        }
+        const versionId = parsedInput.data.compositionVersionId;
+        if (!cuePathByVersionId.has(versionId)) {
+          cuePathByVersionId.set(versionId, [
+            "scenes",
+            sceneIndex,
+            "visualCues",
+            cueIndex,
+            "input",
+            "compositionVersionId",
+          ]);
+        }
+      });
+    });
+    throw validationError(
+      missingCompositionVersionIds.map((versionId) => ({
+        path: cuePathByVersionId.get(versionId) ?? ["compositions", versionId],
+        code: "invalid_value",
+        message: `CompositionVersionが見つかりません: ${versionId}`,
+      })),
+    );
+  }
+
+  const compositionProfiles = await getCompositionCanvasProfilesByVersionId(
+    prisma,
+    compositionVersionIds,
+  );
+  const portraitIssues: ValidationIssue[] = [];
+  content.scenes.forEach((scene, sceneIndex) => {
+    scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.template.id !== "composition.full-bleed") {
+        return;
+      }
+      const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
+      if (!parsedInput.success) {
+        return;
+      }
+      if (compositionProfiles.get(parsedInput.data.compositionVersionId) === "portrait") {
+        portraitIssues.push({
+          path: ["scenes", sceneIndex, "visualCues", cueIndex, "input", "compositionVersionId"],
+          code: "invalid_value",
+          message:
+            "composition.full-bleed@1 には横長(landscape)のCompositionVersionだけを指定できます。縦型はscene.device-frame@1の画面に配置してください。",
+        });
+      }
+    });
+  });
+  if (portraitIssues.length > 0) {
+    throw validationError(portraitIssues);
+  }
+  let compositionWindowIssues: ReturnType<typeof collectCompositionWindowIssues> = [];
+  try {
+    compositionWindowIssues = collectCompositionWindowIssues(content, compositionDurations);
+  } catch (error) {
+    throwIfFatalTimelineError(error);
+  }
+  if (compositionWindowIssues.length > 0) {
+    throw validationError(
+      compositionWindowIssues.map((issue) => ({
         path: issue.path,
         code: issue.code,
         message: issue.message,
@@ -443,13 +1266,37 @@ export async function saveScriptVersion(
     }
   }
 
-  const warnings = computeContentWarnings(content);
+  let offsetWarnings: Warning[] = [];
+  try {
+    offsetWarnings = collectOffsetRangeWarnings(content);
+  } catch (error) {
+    throwIfFatalTimelineError(error);
+  }
+  const warnings = [
+    ...computeContentWarnings(content),
+    ...offsetWarnings,
+    ...(await collectInsertWarnings(prisma, content)),
+  ];
   const contentJson = serializeContent(content);
 
   const maxAttempts = 5;
   for (let attempt = 1; ; attempt += 1) {
     try {
       const created = await prisma.$transaction(async (tx) => {
+        const themeResolver = new ThemeResolver(tx);
+        const resolvedTheme = await themeResolver.resolve(
+          content.visualTheme.id,
+          content.visualTheme.version,
+        );
+        if (!resolvedTheme) {
+          throw validationError([
+            {
+              path: ["visualTheme"],
+              code: "invalid_value",
+              message: `Visual Themeが見つかりません: ${content.visualTheme.id}@${content.visualTheme.version}`,
+            },
+          ]);
+        }
         await validateAssetReferences(tx, content);
         const aggregate = await tx.scriptVersion.aggregate({
           where: { languageEditionId: editionId },

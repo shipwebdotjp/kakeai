@@ -1,0 +1,88 @@
+# エディタの退出ガード・診断表示・ラベル 実装TODO
+
+仕様は [spec.md](./spec.md) を正とする。上から順に進め、各フェーズで `npm run typecheck`・`npm test`・OCRレビューを実行し、妥当な指摘を修正してコミットする。保存は引き続き明示操作のみ。
+
+## P1 未保存の退出ガード
+
+- [x] `apps/web/src/main.tsx` を `createBrowserRouter` + `RouterProvider` へ移行する（[../adr/0044-editor-navigation-guard-data-router.md](../adr/0044-editor-navigation-guard-data-router.md)）
+- [x] `apps/web/src/App.tsx` の `<Routes>` を route 定義へ置き換える（ルートレイアウト＋`PageLayout` 子。URL・レイアウトは不変）
+- [x] `SceneEditor` に `onDirtyChange(boolean)` を追加し、`formState.isDirty` を即時伝播する（保存用ドラフト送信のデバウンスとは別系統）
+- [x] `WorkEditPage` に `useBlocker(dirty)` と `useBeforeUnload` を導入し、確認ダイアログで `proceed()`/`reset()` する
+- [x] 作品名の未保存（`titleDraft !== null`）も dirty に含める
+- [x] 保存成功で未保存が解除され、ガードも解除されることを確認する
+- 完了条件: 未保存編集があるままの画面内遷移・戻る/進む・リロード/タブ閉じで確認が出て、保存後は出ない。URLと画面レイアウトは従来どおり。
+
+## P2 保存時の診断サマリとジャンプ
+
+- [x] `SceneEditor` の `issues: string[]` を `Diagnostic[]` へ変更し、Zod issues の `path` を保持する
+- [x] サーバー拒否時の `ApiError.details.issues` を `Diagnostic` へ展開する（`details` 無しはメッセージ1件）
+- [x] 保存成功時の `result.warnings` を `Diagnostic` として保持する
+- [x] 固定バー `#editor-actionbar` に「エラー(N)」「警告(N)」チップ（`lucide-react`）を追加し、0件は非表示にする
+- [x] チップクリックでバー直下に折りたたみパネルを展開し、既存の警告・エラーボックスを統合する
+- [x] 純関数 `diagnosticTarget(path, scenes)` を `apps/web/src/content/` に追加する（`scenes`→`scene-` / `lines`→`line-` / `visualCues`→`cue-`）
+- [x] パスクリックで `WorkEditPanes.jump()` を呼び、中央ペインのスクロールとプレビューシークを行う
+- [x] 対応要素の無いパス（characters/speakers 等）はリンクにせず表示のみにする
+- [x] テスト: `diagnosticTarget` の対応（scene/line/cue、範囲外、未知セグメント）のみを対象にする。UI文言は検証しない
+- 完了条件: 保存実行後に件数が固定バーへ出て展開でき、警告・検証エラーのパスクリックで該当箇所へ移動できる。
+
+## P3 表示ラベルの日本語化
+
+- [x] `packages/contracts/src/templates/index.ts` の `FIT_OPTIONS` ラベルを日本語化し、`fit` フィールドのラベルを「表示方法」にする
+- [x] `apps/web/src/components/CueList.tsx` の `nestedMedia` の fit セレクトを同じ日本語ラベルへ揃える
+- [x] `Composition Version ID` のラベルを「Composition バージョン」にする
+- [x] ドキュメント同期: [./spec.md](./spec.md)、必要ならユーザーガイド（実装後に反映）
+- 完了条件: `fit` のセレクトと `Composition Version ID` が日本語で表示される。
+
+## P4 エディタの視認性・操作性刷新
+
+仕様は [spec.md](./spec.md) の「Phase 4」を正とする。上から順に進め、各フェーズで `npm run typecheck`・`npm test`・OCRレビューを実行し、妥当な指摘を修正してコミットする。HTTP API・ContentDocument・DB・VisualTemplate契約の変更は行わない。UI文言そのものを検証するテストは追加しない。
+
+### P4-1 レイアウト純関数
+
+- [x] `apps/web/src/lib/editorLayout.ts` を追加する（キー `kakeai-editor-layout-v1`、既定比率 左0.2・プレビュー0.36、左192〜360px・中央最低480px・プレビュー最低360px・最大50%）
+- [x] 読込・保存・不正値の無視・幅変更時のクランプを純関数として `editorLayout.test.ts` に追加する
+- [x] 1280px判定の `useMediaQuery` を追加する
+- 完了条件: 不正値が既定値へ戻り、幅変更で制約内へ丸まる。
+
+### P4-2 広幅3ペインと永続化
+
+- [x] `WorkEditPanes` を比率ベースへ変更する（`ResizeObserver` でワークスペース幅を取得し、pxへ解決する）
+- [x] ドラッグ・キーボード操作で比率を更新し `localStorage` へ保存する
+- [x] 「レイアウトをリセット」で保存値を破棄し既定比率へ戻す
+- 完了条件: プレビューを760px以上へ広げられ、再読込後も比率が安全に復元される。
+
+### P4-3 狭幅ドロワーと編集／確認切替
+
+- [x] 1280px未満で左ペインをドロワー化し、「編集／確認」切替を出す（3ペインは常時マウントし、CSSで表示制御する）
+- [x] ドロワーのジャンプは編集表示へ戻した上でスクロールとシークを行う
+- 完了条件: 切替でフォーム入力・未保存状態・プレビュー位置が失われない。
+
+### P4-4 共通プリミティブ
+
+- [x] `apps/web/src/ui.ts` にセクション・見出し・バッジ・詳細表示・アイコン操作の共通スタイルを追加する
+- [x] 子を常時マウントする `Collapsible` を追加する
+- [x] 既存のScene・作品設定・Cue・立ち絵・セリフ・プレビュー・レンダーへ共通スタイルを適用する
+- 完了条件: 見出し階層・フォーカス表示・文字コントラスト・アイコン操作のラベルが統一される。
+
+### P4-5 シーンと作品設定
+
+- [x] シーン見出しを名称・種別バッジ・ID・複製／移動／削除のヘッダーへ集約し、削除を危険操作として区別する
+- [x] アクセント・尺・遷移と尺の内訳を「シーン設定」に畳む（全シーンは展開状態を維持）
+- [x] テーマ・BGM・キャラクターを要約付きの折りたたみへ移す（既定閉。キャラクター未登録時だけ追加導線を開く）
+- 完了条件: 全Sceneが表示されたまま、開閉しても既存値・保存・診断ジャンプが維持される。
+
+### P4-6 Cue・立ち絵・セリフ
+
+- [x] Cueは内容入力を先に表示し、レイヤー・順序・表示区間・入退場を「表示の詳細」に移す
+- [x] `text.block` はテキストと役割を常時にし、位置・フォント・色・装飾を「文字スタイル」に畳む
+- [x] 立ち絵はキャラクター／外観を主表示にし、倍率・入退場を詳細へ移す
+- [x] セリフは字幕・読み上げ・話者・プレビュージャンプを主表示にし、Take管理と表情・TTSの声・話速設定を「音声詳細」へ整理する
+- 完了条件: 開閉しても既存値・保存・ドラフトプレビューが維持される。
+
+### P4-7 左ペイン・プレビュー・レンダー
+
+- [x] 左ペインに現在位置・Scene種別バッジ・Cue・セリフの要約を明確にし、テキストCueは役割と本文先頭を表示する
+- [x] プレビューを再生・移動優先のツールバーに整理し、レンダー履歴は出力操作を残して低優先表示にする
+- [x] 診断チップ・未保存・保存成功状態を固定バーで明確に表示する
+- [x] ユーザーガイド（編集画面・プレビュー節）を新しい折りたたみ・レイアウト切替・レイアウト復元に合わせて更新する
+- 完了条件: 編集中に必要な確認操作が埋もれず、診断・保存状態が見える。

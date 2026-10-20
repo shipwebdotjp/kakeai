@@ -1,9 +1,10 @@
 import { CONTENT_SCHEMA_VERSION, TEMPLATE_ID, TEMPLATE_VERSION, type ContentDocument } from "./document";
 import { SUPPORTED_LOCALES } from "./primitives";
-import type { PointScene, SceneAccent } from "./scene";
+import type { InsertScene, PointScene, SceneAccent } from "./scene";
 import type { VisualCue } from "./visual";
 import { DEFAULT_VISUAL_THEME_REF, type VisualThemeRef } from "./theme";
-import { textBlockV1, type TextRole } from "../templates";
+import { DEFAULT_TRANSITION_POLICY } from "./layers";
+import { mediaFullBleedV1, textBlockV1, type TextRole } from "../templates";
 
 export const DEFAULT_SCENE_IDS = {
   intro: "scene-intro",
@@ -17,6 +18,10 @@ export const DEFAULT_VISUAL_THEME: VisualThemeRef = { ...DEFAULT_VISUAL_THEME_RE
 
 export function defaultPointLabel(ordinal: number): string {
   return `要点 ${ordinal}`;
+}
+
+export function defaultInsertLabel(ordinal: number): string {
+  return `動画 ${ordinal}`;
 }
 
 export const DEFAULT_SCENE_LABELS = {
@@ -43,8 +48,8 @@ function textCue(
     layer: "overlay",
     order,
     transition: {
-      enter: { preset: "fade", durationMs: 350 },
-      exit: { preset: "none", durationMs: 0 },
+      enter: { ...DEFAULT_TRANSITION_POLICY.defaultEnter },
+      exit: { ...DEFAULT_TRANSITION_POLICY.defaultExit },
     },
     input: { text: "", role },
   };
@@ -63,6 +68,44 @@ export function createPointScene(sceneId: string, label: string): PointScene {
     timing: { mode: "auto" },
     lines: [],
     visualCues: pointSceneTextCues(sceneId),
+  };
+}
+
+export function insertMainCueId(sceneId: string): string {
+  return `visual-${sceneId}-main-video`;
+}
+
+export function createInsertScene(
+  sceneId: string,
+  label: string,
+  assetId: string,
+  durationMs: number,
+  embeddedAudio = true,
+): InsertScene {
+  const mainVisualCueId = insertMainCueId(sceneId);
+  return {
+    id: sceneId,
+    kind: "insert",
+    label,
+    accent: { ...DEFAULT_SCENE_ACCENT },
+    timing: { mode: "fixed", durationMs },
+    lines: [],
+    mainVisualCueId,
+    embeddedAudio,
+    visualCues: [
+      {
+        id: mainVisualCueId,
+        template: { id: mediaFullBleedV1.id, version: mediaFullBleedV1.version },
+        range: { kind: "scene" },
+        layer: "background",
+        order: 0,
+        transition: {
+          enter: { ...DEFAULT_TRANSITION_POLICY.defaultEnter },
+          exit: { ...DEFAULT_TRANSITION_POLICY.defaultExit },
+        },
+        input: { assetId, fit: "cover" },
+      },
+    ],
   };
 }
 

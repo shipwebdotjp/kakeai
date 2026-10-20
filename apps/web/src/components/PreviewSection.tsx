@@ -116,10 +116,15 @@ export const PreviewSection = memo(function PreviewSection({
 
           {timeline !== undefined && (
             <>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <div
+                role="group"
+                aria-label="再生操作"
+                className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-surface-muted p-1.5"
+              >
                 <button type="button" className={buttonNeutralClass} onClick={actions.togglePlay}>
                   {paused ? "再生" : "一時停止"}
                 </button>
+                <span aria-hidden="true" className="h-5 w-px bg-border" />
                 <button
                   type="button"
                   className={buttonNeutralClass}
@@ -134,6 +139,7 @@ export const PreviewSection = memo(function PreviewSection({
                 >
                   コマ送り
                 </button>
+                <span aria-hidden="true" className="h-5 w-px bg-border" />
                 <button
                   type="button"
                   className={buttonNeutralClass}
@@ -162,9 +168,7 @@ export const PreviewSection = memo(function PreviewSection({
                 >
                   次のシーン
                 </button>
-              </div>
-
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span aria-hidden="true" className="h-5 w-px bg-border" />
                 <button
                   type="button"
                   className={buttonNeutralClass}
@@ -179,7 +183,7 @@ export const PreviewSection = memo(function PreviewSection({
                 >
                   ＋{stepSeconds}秒
                 </button>
-                <label className="inline-flex items-center gap-1.5">
+                <label className="inline-flex items-center gap-1.5 text-sm">
                   移動量
                   <select
                     className={textFieldClass}
@@ -193,12 +197,12 @@ export const PreviewSection = memo(function PreviewSection({
                     ))}
                   </select>
                 </label>
-                <span className={metaTextClass}>
+                <span className={`ml-auto ${metaTextClass}`}>
                   {formatTime(currentTime)} / {formatTime(durationSeconds)}
                 </span>
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-1">
+              <div role="group" className="mt-2 flex flex-wrap items-center gap-1" aria-label="シーンへ移動">
                 {timeline.scenes.map((scene, index) => (
                   <button
                     key={scene.sceneId}

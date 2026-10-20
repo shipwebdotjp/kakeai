@@ -1,0 +1,10 @@
+{
+  "entrypoint": "index.html",
+  "contentHash": "draft",
+  "runtimeCompositionId": "cmp.motion.starter",
+  "canvasProfile": "landscape",
+  "width": 1920,
+  "height": 1080,
+  "durationMs": 5000,
+  "dependencies": ["vendor/gsap.min.js"]
+}

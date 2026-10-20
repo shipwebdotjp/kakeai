@@ -6,20 +6,25 @@ import {
   assetOriginSchema,
   assetStatusSchema,
   assetTagsSchema,
+  faceLayerPartSchema,
   jobErrorCodeSchema,
   jobKindSchema,
   jobStatusSchema,
   localeSchema,
+  thumbnailDocumentSchema,
   ttsJobResultSchema,
   voiceAdapterIdSchema,
-  voiceProfileSettingsSchemaFor,
+  voiceIdSchema,
+  voiceProfileExtrasSchemaFor,
   type Artifact,
   type Asset,
   type CharacterLibraryEntry,
+  type FaceSet,
   type Job,
   type LanguageEditionSummary,
   type ScriptVersion,
   type ScriptVersionSummary,
+  type Thumbnail,
   type TtsJobResult,
   type VoiceProfile,
   type Work,
@@ -30,9 +35,13 @@ import type {
   Asset as AssetRow,
   Character as CharacterRow,
   CharacterAppearance as CharacterAppearanceRow,
+  ExpressionPreset as ExpressionPresetRow,
+  FaceLayer as FaceLayerRow,
+  FaceSet as FaceSetRow,
   Job as JobRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
+  Thumbnail as ThumbnailRow,
   VoiceProfile as VoiceProfileRow,
   Work as WorkRow,
 } from "../generated/prisma/client.ts";
@@ -87,7 +96,10 @@ export function toAsset(row: AssetRow): Asset {
     durationMs: row.durationMs,
     widthPx: row.widthPx,
     heightPx: row.heightPx,
+    hasAudio: row.hasAudio,
     tags: parseAssetTags(row.tagsJson),
+    favoritedAt: row.favoritedAt === null ? null : toIso(row.favoritedAt),
+    archivedAt: row.archivedAt === null ? null : toIso(row.archivedAt),
     createdAt: toIso(row.createdAt),
     contentUrl: `${API_BASE_PATH}/assets/${encodeURIComponent(row.id)}/content`,
   };
@@ -207,6 +219,8 @@ export function toArtifact(row: ArtifactRow): Artifact {
     widthPx: row.widthPx,
     heightPx: row.heightPx,
     fps: row.fps,
+    videoCodec: row.videoCodec,
+    audioCodec: row.audioCodec,
     createdAt: toIso(row.createdAt),
     contentUrl: `${API_BASE_PATH}/artifacts/${encodeURIComponent(row.id)}/content`,
   };
@@ -265,7 +279,7 @@ export function toVoiceProfile(row: VoiceProfileRow): VoiceProfile {
   } catch {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定を解釈できません。");
   }
-  const parsedSettings = voiceProfileSettingsSchemaFor(adapterId).safeParse(settings);
+  const parsedSettings = voiceProfileExtrasSchemaFor(adapterId).safeParse(settings);
   if (!parsedSettings.success) {
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定が不正です。");
   }
@@ -273,26 +287,96 @@ export function toVoiceProfile(row: VoiceProfileRow): VoiceProfile {
     id: row.id,
     name: row.name,
     adapterId,
+    voiceId: parseEnum(voiceIdSchema, row.voiceId, "VoiceProfile.voiceId"),
+    locale: parseEnum(localeSchema, row.locale, "VoiceProfile.locale"),
     settings: parsedSettings.data,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };
 }
 
-export type CharacterWithAppearances = CharacterRow & { appearances: CharacterAppearanceRow[] };
+export type CharacterVoiceRow = {
+  locale: string;
+  voiceProfileId: string;
+  position: number;
+};
+
+export type CharacterWithAppearances = CharacterRow & {
+  appearances: CharacterAppearanceRow[];
+  voices: CharacterVoiceRow[];
+};
 
 export function toCharacterLibraryEntry(row: CharacterWithAppearances): CharacterLibraryEntry {
+  const voices = [...row.voices]
+    .sort((left, right) => left.position - right.position)
+    .map((voice) => ({
+      locale: parseEnum(localeSchema, voice.locale, "CharacterVoice.locale"),
+      voiceProfileId: voice.voiceProfileId,
+    }));
   return {
     id: row.id,
     name: row.name,
-    voiceProfileId: row.voiceProfileId,
+    voices,
     appearances: row.appearances.map((appearance) => ({
       id: appearance.id,
       assetId: appearance.assetId,
       expression: appearance.expression,
       pose: appearance.pose,
       ...(appearance.label === null ? {} : { label: appearance.label }),
+      faceSetId: appearance.faceSetId,
     })),
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export type FaceSetWithDetails = FaceSetRow & {
+  layers: FaceLayerRow[];
+  expressions: ExpressionPresetRow[];
+};
+
+export function toFaceSet(row: FaceSetWithDetails): FaceSet {
+  return {
+    id: row.id,
+    name: row.name,
+    layers: row.layers.map((layer) => ({
+      id: layer.id,
+      part: parseEnum(faceLayerPartSchema, layer.part, "FaceLayer.part"),
+      assetId: layer.assetId,
+      blinkLayerId: layer.blinkLayerId,
+      speakingLayerId: layer.speakingLayerId,
+    })),
+    expressions: row.expressions.map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      browLayerId: preset.browLayerId,
+      eyeLayerId: preset.eyeLayerId,
+      mouthLayerId: preset.mouthLayerId,
+    })),
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export function toThumbnail(row: ThumbnailRow, isPrimary: boolean): Thumbnail {
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(row.inputJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", `サムネイルの入力を解釈できません: ${row.id}`);
+  }
+  const document = thumbnailDocumentSchema.safeParse(parsedJson);
+  if (!document.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", `サムネイルの入力が不正です: ${row.id}`);
+  }
+  return {
+    id: row.id,
+    languageEditionId: row.languageEditionId,
+    label: row.label,
+    schemaVersion: document.data.schemaVersion,
+    template: document.data.template,
+    input: document.data.input,
+    isPrimary,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
   };

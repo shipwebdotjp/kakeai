@@ -95,6 +95,24 @@ export async function requestDraftPreview(
   return parsed.data;
 }
 
+export function shouldStartDraftRequest(input: {
+  inFlight: boolean;
+  hasPending: boolean;
+  editionId: string | undefined;
+}): boolean {
+  return (
+    !input.inFlight &&
+    input.hasPending &&
+    input.editionId !== undefined &&
+    input.editionId !== ""
+  );
+}
+
+interface PendingDraftRequest {
+  document: ContentDocument;
+  key: string;
+}
+
 export function useDraftPreview(
   editionId: string | undefined,
   unsaved: UnsavedDocumentState,
@@ -106,15 +124,99 @@ export function useDraftPreview(
   const [retryToken, setRetryToken] = useState(0);
   const [seq, setSeq] = useState(0);
   const seqRef = useRef(0);
+  const generationRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const inFlightRef = useRef(false);
+  const pendingRef = useRef<PendingDraftRequest | null>(null);
+  const editionIdRef = useRef<string | undefined>(editionId);
 
   const document = unsaved.document;
   const key = useMemo(() => draftDocumentKey(document), [document]);
 
+  const pump = useCallback(() => {
+    const requestEditionId = editionIdRef.current;
+    if (
+      !shouldStartDraftRequest({
+        inFlight: inFlightRef.current,
+        hasPending: pendingRef.current !== null,
+        editionId: requestEditionId,
+      })
+    ) {
+      return;
+    }
+    const next = pendingRef.current;
+    if (next === null || requestEditionId === undefined || requestEditionId === "") {
+      return;
+    }
+    pendingRef.current = null;
+    inFlightRef.current = true;
+    const generation = generationRef.current;
+    const requestSeq = seqRef.current + 1;
+    seqRef.current = requestSeq;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsPending(true);
+    setError(null);
+    requestDraftPreview(requestEditionId, next.document, controller.signal)
+      .then((preview) => {
+        if (generationRef.current !== generation || abortRef.current !== controller) {
+          return;
+        }
+        inFlightRef.current = false;
+        abortRef.current = null;
+        setData(preview);
+        setError(null);
+        setAppliedKey(next.key);
+        setSeq(requestSeq);
+        setIsPending(pendingRef.current !== null);
+        pump();
+      })
+      .catch((requestError: unknown) => {
+        if (generationRef.current !== generation || abortRef.current !== controller) {
+          return;
+        }
+        inFlightRef.current = false;
+        abortRef.current = null;
+        if (controller.signal.aborted) {
+          return;
+        }
+        setError(requestError);
+        if (pendingRef.current !== null) {
+          setIsPending(true);
+          pump();
+        } else {
+          setIsPending(false);
+        }
+      });
+  }, []);
+
   useEffect(() => {
+    editionIdRef.current = editionId;
+    generationRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
+    inFlightRef.current = false;
+    pendingRef.current = null;
+    setData(null);
+    setError(null);
+    setIsPending(false);
+    setAppliedKey(null);
+    return () => {
+      generationRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      inFlightRef.current = false;
+      pendingRef.current = null;
+    };
+  }, [editionId]);
+
+  useEffect(() => {
     if (!unsaved.dirty) {
+      generationRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      inFlightRef.current = false;
+      pendingRef.current = null;
       seqRef.current += 1;
       setData(null);
       setError(null);
@@ -123,39 +225,17 @@ export function useDraftPreview(
       return;
     }
     if (editionId === undefined || editionId === "" || key === null || document === null) {
+      generationRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      inFlightRef.current = false;
+      pendingRef.current = null;
       setIsPending(false);
       return;
     }
-    const requestSeq = seqRef.current + 1;
-    seqRef.current = requestSeq;
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setIsPending(true);
-    setError(null);
-    requestDraftPreview(editionId, document, controller.signal)
-      .then((preview) => {
-        if (seqRef.current !== requestSeq) {
-          return;
-        }
-        abortRef.current = null;
-        setData(preview);
-        setError(null);
-        setIsPending(false);
-        setAppliedKey(key);
-        setSeq(requestSeq);
-      })
-      .catch((requestError: unknown) => {
-        if (controller.signal.aborted || seqRef.current !== requestSeq) {
-          return;
-        }
-        abortRef.current = null;
-        setError(requestError);
-        setIsPending(false);
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [editionId, unsaved.dirty, key, retryToken]);
+    pendingRef.current = { document, key };
+    pump();
+  }, [editionId, unsaved.dirty, key, retryToken, pump]);
 
   const retry = useCallback(() => {
     setRetryToken((token) => token + 1);

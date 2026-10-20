@@ -3,15 +3,17 @@ import {
   type TextRole,
   type ThemeFontCategory,
   type VisualThemeTextToken,
+  type TextSurface,
+  type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
-import { THEME_FONT_STACKS } from "../theme";
+import { hexToRgb, resolveFontFamilyCss } from "../theme";
 
-type TextAnchor = "left" | "center" | "right";
-type VerticalAlign = "top" | "middle" | "bottom";
+export type TextAnchor = "left" | "center" | "right";
+export type VerticalAlign = "top" | "middle" | "bottom";
 
-interface TextDecoration {
+export interface TextDecoration {
   bold: boolean;
   italic: boolean;
   outline: boolean;
@@ -28,7 +30,7 @@ interface RoleDefault {
   decoration: TextDecoration;
 }
 
-const ROLE_DEFAULTS: Record<TextRole, RoleDefault> = {
+const ROLE_DEFAULTS: Record<string, RoleDefault> = {
   title: {
     anchor: "center",
     verticalAlign: "middle",
@@ -74,21 +76,48 @@ const ROLE_DEFAULTS: Record<TextRole, RoleDefault> = {
     lineHeight: 1.4,
     decoration: { bold: true, italic: false, outline: false, shadow: false },
   },
+  caption: {
+    anchor: "center",
+    verticalAlign: "bottom",
+    font: "sans",
+    fontSize: 40,
+    color: "#FFFFFF",
+    lineHeight: 1.5,
+    decoration: { bold: false, italic: false, outline: false, shadow: true },
+  },
+  label: {
+    anchor: "left",
+    verticalAlign: "bottom",
+    font: "sans",
+    fontSize: 28,
+    color: "#4E5A6B",
+    lineHeight: 1.4,
+    decoration: { bold: true, italic: false, outline: false, shadow: false },
+  },
+  code: {
+    anchor: "left",
+    verticalAlign: "middle",
+    font: "mono",
+    fontSize: 34,
+    color: "#232B3D",
+    lineHeight: 1.6,
+    decoration: { bold: false, italic: false, outline: false, shadow: false },
+  },
 };
 
-const JUSTIFY: Record<TextAnchor, string> = {
+export const JUSTIFY: Record<TextAnchor, string> = {
   left: "flex-start",
   center: "center",
   right: "flex-end",
 };
 
-const ALIGN_ITEMS: Record<VerticalAlign, string> = {
+export const ALIGN_ITEMS: Record<VerticalAlign, string> = {
   top: "flex-start",
   middle: "center",
   bottom: "flex-end",
 };
 
-function textShadow(decoration: TextDecoration): string {
+export function textShadow(decoration: TextDecoration): string {
   const parts: string[] = [];
   if (decoration.shadow) {
     parts.push("0 2px 16px rgba(0,0,0,.55)");
@@ -103,49 +132,129 @@ function textShadow(decoration: TextDecoration): string {
   return parts.length === 0 ? "none" : parts.join(",");
 }
 
-export function renderTextBlock(
+export function textSurfaceCss(surface: TextSurface | undefined): string {
+  if (!surface || !surface.enabled) {
+    return "";
+  }
+  const { r, g, b } = hexToRgb(surface.backgroundColor);
+  const bg = `rgba(${r},${g},${b},${surface.backgroundOpacity})`;
+  const styles = [
+    `background:${bg}`,
+    `padding:${surface.paddingVertical}px ${surface.paddingHorizontal}px`,
+    `border-radius:${surface.borderRadius}px`,
+  ];
+  if (surface.border) {
+    styles.push(`border:${surface.border.width}px solid ${surface.border.color}`);
+  }
+  return styles.join(";");
+}
+
+export interface TextBlockRenderSpec {
+  text: string;
+  role: string;
+  anchor: TextAnchor;
+  verticalAlign: VerticalAlign;
+  fontFamilyCss: string;
+  fontSize: number;
+  color: string;
+  lineHeight: number;
+  decoration: TextDecoration;
+  cueSurface: TextSurface | undefined;
+  themeSurface: TextSurface | undefined;
+}
+
+export function resolveTextBlockSpec(
   input: unknown,
   path: (string | number)[],
-  theme: { textRoles: Record<TextRole, VisualThemeTextToken> },
-): string {
+  theme: VisualThemeDefinition,
+): TextBlockRenderSpec | null {
   const parsed = textBlockInputSchema.safeParse(input);
+
   if (!parsed.success) {
     throw new CompositionCompileError([
       { path, code: "invalid_input", message: "text.block の入力が不正です。" },
     ]);
   }
-  const { text, role } = parsed.data;
+
+  const data: {
+    text: string;
+    role: string;
+    anchor?: TextAnchor;
+    verticalAlign?: VerticalAlign;
+    font?: ThemeFontCategory;
+    fontSize?: number;
+    color?: string;
+    lineHeight?: number;
+    decoration?: Partial<TextDecoration>;
+    fontFace?: { family: string; platformId?: string };
+    surface?: TextSurface;
+  } = parsed.data;
+
+  const { text, role } = data;
   if (text.trim().length === 0) {
+    return null;
+  }
+
+  const themeToken = (theme.textRoles as Record<string, VisualThemeTextToken | undefined>)[role];
+  const fallback = ROLE_DEFAULTS[role] ?? ROLE_DEFAULTS.body;
+  const anchor = data.anchor ?? fallback.anchor;
+  const verticalAlign = data.verticalAlign ?? fallback.verticalAlign;
+  const font = data.font ?? themeToken?.font ?? fallback.font;
+  const fontSize = data.fontSize ?? themeToken?.fontSize ?? fallback.fontSize;
+  const color = (data.color ?? themeToken?.color ?? fallback.color).toUpperCase();
+  const lineHeight = ("lineHeight" in data && typeof data.lineHeight === "number")
+    ? data.lineHeight
+    : themeToken?.lineHeight ?? fallback.lineHeight;
+
+  const fontFaceSpec = "fontFace" in data ? data.fontFace : undefined;
+  const themeFontFace = themeToken?.fontFace;
+  const selectedFontFace = fontFaceSpec ?? themeFontFace;
+
+  const fontFamilyCss = resolveFontFamilyCss(selectedFontFace, font);
+
+  const decoration: TextDecoration = {
+    bold: data.decoration?.bold ?? themeToken?.decoration.bold ?? fallback.decoration.bold,
+    italic: data.decoration?.italic ?? themeToken?.decoration.italic ?? fallback.decoration.italic,
+    outline: data.decoration?.outline ?? themeToken?.decoration.outline ?? fallback.decoration.outline,
+    shadow: data.decoration?.shadow ?? themeToken?.decoration.shadow ?? fallback.decoration.shadow,
+  };
+
+  const surfaceFromCue = "surface" in data ? data.surface : undefined;
+  const surfaceFromTheme = role === "caption" ? theme.surfaces?.caption : role === "label" ? theme.surfaces?.label : undefined;
+
+  return {
+    text,
+    role,
+    anchor,
+    verticalAlign,
+    fontFamilyCss,
+    fontSize,
+    color,
+    lineHeight,
+    decoration,
+    cueSurface: surfaceFromCue,
+    themeSurface: surfaceFromTheme,
+  };
+}
+
+export function renderTextBlock(
+  input: unknown,
+  path: (string | number)[],
+  theme: VisualThemeDefinition,
+): string {
+  const spec = resolveTextBlockSpec(input, path, theme);
+  if (spec === null) {
     return "";
   }
-  const themeToken = theme.textRoles[role];
-  const fallback = ROLE_DEFAULTS[role];
-  const anchor = parsed.data.anchor ?? fallback.anchor;
-  const verticalAlign = parsed.data.verticalAlign ?? fallback.verticalAlign;
-  const font = parsed.data.font ?? themeToken.font ?? fallback.font;
-  const fontSize = parsed.data.fontSize ?? themeToken.fontSize ?? fallback.fontSize;
-  const color = (parsed.data.color ?? themeToken.color ?? fallback.color).toUpperCase();
-  const lineHeight = themeToken.lineHeight ?? fallback.lineHeight;
-  const decoration: TextDecoration = {
-    bold: parsed.data.decoration?.bold ?? themeToken.decoration.bold ?? fallback.decoration.bold,
-    italic:
-      parsed.data.decoration?.italic ?? themeToken.decoration.italic ?? fallback.decoration.italic,
-    outline:
-      parsed.data.decoration?.outline ??
-      themeToken.decoration.outline ??
-      fallback.decoration.outline,
-    shadow:
-      parsed.data.decoration?.shadow ??
-      themeToken.decoration.shadow ??
-      fallback.decoration.shadow,
-  };
+
+  const surfaceCss = textSurfaceCss(spec.cueSurface ?? spec.themeSurface);
 
   const wrapperStyle = [
     "position:absolute",
     "inset:0",
     "display:flex",
-    `justify-content:${JUSTIFY[anchor]}`,
-    `align-items:${ALIGN_ITEMS[verticalAlign]}`,
+    `justify-content:${JUSTIFY[spec.anchor]}`,
+    `align-items:${ALIGN_ITEMS[spec.verticalAlign]}`,
     "padding:120px 140px",
     "box-sizing:border-box",
   ].join(";");
@@ -153,16 +262,17 @@ export function renderTextBlock(
   const textStyle = [
     "margin:0",
     "max-width:1600px",
-    `font-family:${THEME_FONT_STACKS[font]}`,
-    `font-size:${fontSize}px`,
-    `color:${color}`,
-    `font-weight:${decoration.bold ? "700" : "400"}`,
-    `font-style:${decoration.italic ? "italic" : "normal"}`,
-    `line-height:${lineHeight}`,
+    `font-family:${spec.fontFamilyCss}`,
+    `font-size:${spec.fontSize}px`,
+    `color:${spec.color}`,
+    `font-weight:${spec.decoration.bold ? "700" : "400"}`,
+    `font-style:${spec.decoration.italic ? "italic" : "normal"}`,
+    `line-height:${spec.lineHeight}`,
     "white-space:pre-line",
-    `text-align:${anchor}`,
-    `text-shadow:${textShadow(decoration)}`,
-  ].join(";");
+    `text-align:${spec.anchor}`,
+    `text-shadow:${textShadow(spec.decoration)}`,
+    surfaceCss,
+  ].filter((s) => s.length > 0).join(";");
 
-  return `<div class="kakeai-textblock" style="${wrapperStyle}"><p class="kakeai-textblock-text" style="${textStyle}">${escapeHtmlText(text)}</p></div>`;
+  return `<div class="kakeai-textblock" style="${wrapperStyle}"><p class="kakeai-textblock-text" style="${textStyle}">${escapeHtmlText(spec.text)}</p></div>`;
 }

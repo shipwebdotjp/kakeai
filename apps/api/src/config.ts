@@ -1,7 +1,11 @@
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { VoiceAdapterId } from "@kakeai/contracts";
+import {
+  voiceAdapterDescriptorFor,
+  voiceAdapterDescriptors,
+  type VoiceAdapterId,
+} from "@kakeai/contracts";
 import {
   type DataDirectories,
   dataDirectories,
@@ -34,8 +38,9 @@ const GIB = 1024 ** 3;
 
 export const LOOPBACK_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 4317;
-export const DEFAULT_VOICEVOX_BASE_URL = "http://127.0.0.1:50021";
-export const DEFAULT_AIVISSPEECH_BASE_URL = "http://127.0.0.1:10101";
+export const DEFAULT_VOICEVOX_BASE_URL = voiceAdapterDescriptorFor("voicevox").defaultBaseUrl;
+export const DEFAULT_AIVISSPEECH_BASE_URL =
+  voiceAdapterDescriptorFor("aivisspeech").defaultBaseUrl;
 
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
 
@@ -114,16 +119,16 @@ export function parseVoiceBaseUrl(
   return url.origin;
 }
 
-export function parseVoicevoxBaseUrl(value: string | undefined): string {
-  return parseVoiceBaseUrl("KAKEAI_VOICEVOX_BASE_URL", value, DEFAULT_VOICEVOX_BASE_URL);
-}
-
-export function parseAivisspeechBaseUrl(value: string | undefined): string {
-  return parseVoiceBaseUrl("KAKEAI_AIVISSPEECH_BASE_URL", value, DEFAULT_AIVISSPEECH_BASE_URL);
-}
-
 export function resolveVoiceBaseUrl(config: AppConfig, adapterId: VoiceAdapterId): string {
   return config.voiceBaseUrls[adapterId];
+}
+
+function resolveVoiceBaseUrls(env: NodeJS.ProcessEnv): Record<VoiceAdapterId, string> {
+  const entries = voiceAdapterDescriptors.map((descriptor) => [
+    descriptor.id,
+    parseVoiceBaseUrl(descriptor.envName, env[descriptor.envName], descriptor.defaultBaseUrl),
+  ]);
+  return Object.fromEntries(entries) as Record<VoiceAdapterId, string>;
 }
 
 export function loadConfig(
@@ -146,10 +151,7 @@ export function loadConfig(
         ? resolve(webDistOverride.trim())
         : DEFAULT_WEB_DIST_DIR,
     allowedOrigins: allowedOriginsForPort(port),
-    voiceBaseUrls: {
-      voicevox: parseVoicevoxBaseUrl(env.KAKEAI_VOICEVOX_BASE_URL),
-      aivisspeech: parseAivisspeechBaseUrl(env.KAKEAI_AIVISSPEECH_BASE_URL),
-    },
+    voiceBaseUrls: resolveVoiceBaseUrls(env),
     limits: { ...DEFAULT_LIMITS },
   };
 }

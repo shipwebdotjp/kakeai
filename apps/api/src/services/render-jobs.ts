@@ -5,28 +5,35 @@ import {
   COMPOSITION_ENGINE,
   compileDocument,
   CompositionCompileError,
+  deriveVideoPlaybackPlans,
   type ResolvedAssetKind,
 } from "@kakeai/video";
 import {
   RENDITION_PURPOSE,
   SNAPSHOT_SCHEMA_VERSION,
   renderJobSnapshotSchema,
+  resolveVisualThemeSkin,
   type ContentDocument,
   type Job as JobDto,
   type RenderJobSnapshot,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent } from "../domain/content-json.ts";
-import { bigIntToSafeNumber, toJob } from "../dto/mappers.ts";
+import { bigIntToSafeNumber, toFaceSet, toJob } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 import {
   assertAssetsAvailable,
+  assertFaceSetReferences,
+  assertInsertScenes,
   assertTakeDurations,
-  loadAssetReferences,
+  assertVideoPlayback,
+  loadAllReferences,
   renderSourceDurationMs,
 } from "./script-versions.ts";
-import { CompositionService } from "./compositions.ts";
+import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
+import { ThemeResolver } from "./theme-resolver.ts";
+import { FontCatalogService, getSharedFontCatalogService } from "./font-catalog.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -53,6 +60,7 @@ export function getProducerVersion(): string | undefined {
 export async function createRenderJob(
   prisma: PrismaClient,
   scriptVersionId: string,
+  fontCatalogService: FontCatalogService = getSharedFontCatalogService(),
 ): Promise<JobDto> {
   const row = await prisma.scriptVersion.findUnique({
     where: { id: scriptVersionId },
@@ -68,26 +76,50 @@ export async function createRenderJob(
     throw new ApiError(500, "INTERNAL_ERROR", "保存済みの台本を解釈できません。");
   }
 
-  const { references, assetById } = await loadAssetReferences(prisma, content);
+  const themeResolver = new ThemeResolver(prisma);
+  const resolvedThemeDefinition = await themeResolver.resolve(
+    content.visualTheme.id,
+    content.visualTheme.version,
+  );
+  if (!resolvedThemeDefinition) {
+    throw new ApiError(422, "RENDER_INPUT_INVALID", `Visual Themeが見つかりません: ${content.visualTheme.id}@${content.visualTheme.version}`);
+  }
+
+  let fontResolution: { missingFonts: string[]; diagnostics: string[] } = {
+    missingFonts: [],
+    diagnostics: [],
+  };
+  try {
+    fontResolution = await fontCatalogService.resolveThemeFonts(resolvedThemeDefinition, {
+      verify: true,
+    });
+  } catch (error) {
+    fontResolution = {
+      missingFonts: [],
+      diagnostics: [
+        `Font診断を省略しました: ${error instanceof Error ? error.message : String(error)}`,
+      ],
+    };
+  }
+
+  const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
+  assertInsertScenes(content, assetById);
+  assertVideoPlayback(content, assetById);
+  assertFaceSetReferences(content, faceSetById, assetById);
 
-  const compositionVersionIds = new Set<string>();
-  for (const scene of content.scenes) {
-    for (const cue of scene.visualCues) {
-      if (cue.template.id === "composition.full-bleed") {
-        const input = cue.input as { compositionVersionId?: string };
-        if (input?.compositionVersionId) {
-          compositionVersionIds.add(input.compositionVersionId);
-        }
-      }
-    }
-  }
+  const snapshotFaceSets: RenderJobSnapshot["faceSets"] = [...faceSetById.values()]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((faceSet) => {
+      const dto = toFaceSet(faceSet);
+      return { id: dto.id, name: dto.name, layers: dto.layers, expressions: dto.expressions };
+    });
 
   const compositionService = new CompositionService({ db: prisma, dataDir: "" });
   const snapshotCompositions: RenderJobSnapshot["compositionVersions"] = [];
 
-  for (const compVerId of compositionVersionIds) {
+  for (const compVerId of collectCompositionVersionIds(content)) {
     let compVer;
     try {
       compVer = await compositionService.getVersionById(compVerId);
@@ -103,8 +135,18 @@ export async function createRenderJob(
   }
 
   try {
+    const playbackPlans = deriveVideoPlaybackPlans(content, {
+      resolveAssetDurationMs: (assetId) => {
+        const asset = assetById.get(assetId);
+        return asset === undefined ? null : renderSourceDurationMs(asset);
+      },
+    });
     compileDocument({
       document: content,
+      resolvedTheme: resolvedThemeDefinition,
+      videoPlaybackPlans: playbackPlans.byPath,
+      stillResolver: (assetId, sourceMs) =>
+        `frame/${encodeURIComponent(assetId)}/${sourceMs}.png`,
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);
         const kind = asset?.kind;
@@ -123,7 +165,7 @@ export async function createRenderJob(
         return {
           url: "",
           kind: kind as ResolvedAssetKind,
-          durationMs: kind === "audio" ? renderSourceDurationMs(asset) : null,
+          durationMs: kind === "image" ? null : renderSourceDurationMs(asset),
         };
       },
       compositionResolver: (versionId) => {
@@ -145,6 +187,19 @@ export async function createRenderJob(
           storageKey: found.storageKey,
           manifest: found.manifest,
         };
+      },
+      faceSetResolver: (faceSetId) => {
+        const found = snapshotFaceSets.find((faceSet) => faceSet.id === faceSetId);
+        if (!found) {
+          throw new CompositionCompileError([
+            {
+              path: ["faceSets", faceSetId],
+              code: "unresolvable_face_set",
+              message: "表情セットを解決できません。",
+            },
+          ]);
+        }
+        return found;
       },
     });
   } catch (error) {
@@ -184,6 +239,13 @@ export async function createRenderJob(
     content,
     assets: snapshotAssets,
     compositionVersions: snapshotCompositions,
+    faceSets: snapshotFaceSets,
+    themeDefinition: resolvedThemeDefinition,
+    skin: resolveVisualThemeSkin(resolvedThemeDefinition),
+    fontDiagnostics: {
+      missingFonts: fontResolution.missingFonts,
+      diagnostics: fontResolution.diagnostics,
+    },
     template: { id: content.template.id, version: content.template.version },
     output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
     renderer: {

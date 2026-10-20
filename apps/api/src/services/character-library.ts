@@ -7,7 +7,19 @@ import type { PrismaClient } from "../generated/prisma/client.ts";
 import { toCharacterLibraryEntry } from "../dto/mappers.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 
-type AppearanceInput = { id: string; assetId: string; expression: string; pose: string; label?: string };
+type AppearanceInput = {
+  id: string;
+  assetId: string;
+  expression: string;
+  pose: string;
+  label?: string;
+  faceSetId: string | null;
+};
+
+type VoiceInput = {
+  locale: string;
+  voiceProfileId: string;
+};
 
 async function assertAppearancesUsable(
   prisma: PrismaClient,
@@ -54,25 +66,78 @@ async function assertAppearancesUsable(
   }
 }
 
-async function assertVoiceProfileExists(
+async function assertVoiceProfilesExist(
   prisma: PrismaClient,
-  voiceProfileId: string | null,
+  voices: readonly VoiceInput[],
 ): Promise<void> {
-  if (voiceProfileId === null) {
+  const ids = [...new Set(voices.map((voice) => voice.voiceProfileId))];
+  if (ids.length === 0) {
     return;
   }
-  const profile = await prisma.voiceProfile.findUnique({
-    where: { id: voiceProfileId },
-    select: { id: true },
+  const rows = await prisma.voiceProfile.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, locale: true },
   });
-  if (profile === null) {
-    throw validationError([
-      {
-        path: ["voiceProfileId"],
+  const localeById = new Map(rows.map((row) => [row.id, row.locale]));
+  const issues: ValidationIssue[] = [];
+  const seenLocales = new Set<string>();
+  voices.forEach((voice, index) => {
+    if (seenLocales.has(voice.locale)) {
+      issues.push({
+        path: ["voices", index, "locale"],
+        code: "invalid_value",
+        message: "言語が重複しています。",
+      });
+      return;
+    }
+    seenLocales.add(voice.locale);
+    const profileLocale = localeById.get(voice.voiceProfileId);
+    if (profileLocale === undefined) {
+      issues.push({
+        path: ["voices", index, "voiceProfileId"],
         code: "invalid_value",
         message: "声プロファイルが見つかりません。",
-      },
-    ]);
+      });
+    } else if (profileLocale !== voice.locale) {
+      issues.push({
+        path: ["voices", index, "voiceProfileId"],
+        code: "invalid_value",
+        message: "声プロファイルの言語と一致しません。",
+      });
+    }
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
+async function assertFaceSetsExist(
+  prisma: PrismaClient,
+  appearances: readonly AppearanceInput[],
+): Promise<void> {
+  const ids = [...new Set(appearances.map((appearance) => appearance.faceSetId))].filter(
+    (faceSetId): faceSetId is string => faceSetId !== null,
+  );
+  if (ids.length === 0) {
+    return;
+  }
+  const rows = await prisma.faceSet.findMany({
+    where: { id: { in: ids } },
+    select: { id: true },
+  });
+  const found = new Set(rows.map((row) => row.id));
+  const issues: ValidationIssue[] = [];
+  appearances.forEach((appearance, index) => {
+    if (appearance.faceSetId !== null && !found.has(appearance.faceSetId)) {
+      issues.push({
+        path: ["appearances", index, "faceSetId"],
+        code: "invalid_value",
+        message: "表情セットが見つかりません。",
+      });
+    }
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
   }
 }
 
@@ -127,6 +192,7 @@ function toAppearanceData(appearance: AppearanceInput, position: number) {
     expression: appearance.expression,
     pose: appearance.pose,
     label: appearance.label === undefined || appearance.label.length === 0 ? null : appearance.label,
+    faceSetId: appearance.faceSetId,
     position,
   };
 }
@@ -135,9 +201,22 @@ function toAppearanceCreate(appearances: readonly AppearanceInput[]) {
   return appearances.map((appearance, index) => toAppearanceData(appearance, index));
 }
 
+function toVoiceCreate(voices: readonly VoiceInput[]) {
+  return voices.map((voice, index) => ({
+    locale: voice.locale,
+    voiceProfileId: voice.voiceProfileId,
+    position: index,
+  }));
+}
+
+const characterInclude = {
+  appearances: { orderBy: { position: "asc" } },
+  voices: { orderBy: { position: "asc" } },
+} as const;
+
 export async function listCharacters(prisma: PrismaClient): Promise<CharacterLibraryEntry[]> {
   const rows = await prisma.character.findMany({
-    include: { appearances: { orderBy: { position: "asc" } } },
+    include: characterInclude,
     orderBy: { createdAt: "asc" },
   });
   return rows.map(toCharacterLibraryEntry);
@@ -149,7 +228,7 @@ export async function getCharacter(
 ): Promise<CharacterLibraryEntry> {
   const row = await prisma.character.findUnique({
     where: { id: characterId },
-    include: { appearances: { orderBy: { position: "asc" } } },
+    include: characterInclude,
   });
   if (row === null) {
     throw resourceNotFound("character", characterId);
@@ -163,15 +242,16 @@ export async function createCharacter(
 ): Promise<CharacterLibraryEntry> {
   await assertAppearancesUsable(prisma, input.appearances);
   await assertAppearanceIdsUsable(prisma, null, input.appearances);
-  await assertVoiceProfileExists(prisma, input.voiceProfileId);
+  await assertFaceSetsExist(prisma, input.appearances);
+  await assertVoiceProfilesExist(prisma, input.voices);
   try {
     const row = await prisma.character.create({
       data: {
         name: input.name,
-        voiceProfileId: input.voiceProfileId,
+        voices: { create: toVoiceCreate(input.voices) },
         appearances: { create: toAppearanceCreate(input.appearances) },
       },
-      include: { appearances: { orderBy: { position: "asc" } } },
+      include: characterInclude,
     });
     return toCharacterLibraryEntry(row);
   } catch (error) {
@@ -195,7 +275,8 @@ export async function updateCharacter(
 ): Promise<CharacterLibraryEntry> {
   await assertAppearancesUsable(prisma, input.appearances);
   await assertAppearanceIdsUsable(prisma, characterId, input.appearances);
-  await assertVoiceProfileExists(prisma, input.voiceProfileId);
+  await assertFaceSetsExist(prisma, input.appearances);
+  await assertVoiceProfilesExist(prisma, input.voices);
   const existing = await prisma.character.findUnique({
     where: { id: characterId },
     select: { id: true },
@@ -206,14 +287,15 @@ export async function updateCharacter(
   try {
     const row = await prisma.$transaction(async (transaction) => {
       await transaction.characterAppearance.deleteMany({ where: { characterId } });
+      await transaction.characterVoice.deleteMany({ where: { characterId } });
       return transaction.character.update({
         where: { id: characterId },
         data: {
           name: input.name,
-          voiceProfileId: input.voiceProfileId,
+          voices: { create: toVoiceCreate(input.voices) },
           appearances: { create: toAppearanceCreate(input.appearances) },
         },
-        include: { appearances: { orderBy: { position: "asc" } } },
+        include: characterInclude,
       });
     });
     return toCharacterLibraryEntry(row);

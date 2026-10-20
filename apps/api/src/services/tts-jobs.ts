@@ -3,8 +3,10 @@ import {
   MAX_TTS_SPEECH_TEXT_LENGTH,
   SNAPSHOT_SCHEMA_VERSION,
   ttsJobSnapshotSchema,
+  openAiAdapterExtrasSchema,
+  voiceAdapterDescriptorFor,
   voiceAdapterIdSchema,
-  voiceProfileSettingsSchemaFor,
+  voiceProfileExtrasSchemaFor,
   type BulkTtsJobEntry,
   type BulkTtsJobExclusion,
   type BulkTtsJobsResult,
@@ -16,6 +18,7 @@ import {
   type TtsVoice,
   type TtsVoiceListing,
   type VoiceAdapterId,
+  type VoiceProfileExtras,
 } from "@kakeai/contracts";
 import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
 import { deserializeContent } from "../domain/content-json.ts";
@@ -32,8 +35,14 @@ interface LoadedScriptVersion {
 }
 
 interface TtsJobCaches {
-  voiceListings: Map<VoiceAdapterId, TtsVoiceListing>;
-  voiceListingErrors: Map<VoiceAdapterId, ApiError>;
+  voiceListings: Map<string, TtsVoiceListing>;
+  voiceListingErrors: Map<string, ApiError>;
+}
+
+function voiceCacheKey(adapterId: VoiceAdapterId, settings: VoiceProfileExtras | null): string {
+  const parsedModel = settings === null ? null : openAiAdapterExtrasSchema.safeParse(settings);
+  const model = parsedModel !== null && parsedModel.success ? parsedModel.data.model.trim() : "";
+  return `${adapterId}\u0000${model}`;
 }
 
 function emptyCaches(): TtsJobCaches {
@@ -118,29 +127,34 @@ function exclusionMessage(error: ApiError): string {
 async function listVoicesCached(
   config: AppConfig,
   adapterId: VoiceAdapterId,
+  settings: VoiceProfileExtras | null,
   caches: TtsJobCaches,
 ): Promise<TtsVoiceListing> {
-  const cached = caches.voiceListings.get(adapterId);
+  const key = voiceCacheKey(adapterId, settings);
+  const cached = caches.voiceListings.get(key);
   if (cached !== undefined) {
     return cached;
   }
-  const cachedError = caches.voiceListingErrors.get(adapterId);
+  const cachedError = caches.voiceListingErrors.get(key);
   if (cachedError !== undefined) {
     throw cachedError;
   }
   const adapter = getTtsAdapter(adapterId);
   let listing: TtsVoiceListing;
   try {
-    listing = await adapter.listVoices(resolveVoiceBaseUrl(config, adapterId));
+    listing = await adapter.listVoices(
+      { baseUrl: resolveVoiceBaseUrl(config, adapterId) },
+      { settings },
+    );
   } catch (error) {
     if (error instanceof TtsEngineUnavailableError) {
       const apiError = new ApiError(503, "TTS_ENGINE_UNAVAILABLE");
-      caches.voiceListingErrors.set(adapterId, apiError);
+      caches.voiceListingErrors.set(key, apiError);
       throw apiError;
     }
     throw error;
   }
-  caches.voiceListings.set(adapterId, listing);
+  caches.voiceListings.set(key, listing);
   return listing;
 }
 
@@ -181,31 +195,31 @@ async function prepareTtsJobSnapshot(
   if (!adapterId.success) {
     throw ttsInputIssue(["adapterId"], "未対応の音声アダプターです。");
   }
-  let settings: { speakerUuid: string; defaultStyleId: number };
+
   let rawSettings: unknown;
   try {
     rawSettings = JSON.parse(profileRow.settingsJson);
   } catch {
-    throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定を解釈できません。");
+    throw ttsInputIssue(["voiceProfileId"], "声プロファイルの設定を解釈できません。設定を見直してください。");
   }
-  const parsedSettings = voiceProfileSettingsSchemaFor(adapterId.data).safeParse(rawSettings);
+  const parsedSettings = voiceProfileExtrasSchemaFor(adapterId.data).safeParse(rawSettings);
   if (!parsedSettings.success) {
-    throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルの設定が不正です。");
+    throw ttsInputIssue(["voiceProfileId"], "声プロファイルの設定が不正です。設定を見直してください。");
   }
-  settings = parsedSettings.data;
+  const settings = parsedSettings.data;
 
-  const styleId = input.styleId ?? settings.defaultStyleId;
-  const listing = await listVoicesCached(config, adapterId.data, caches);
-  const voice = findVoice(listing.voices, settings.speakerUuid);
-  if (voice === undefined) {
+  const descriptor = voiceAdapterDescriptorFor(adapterId.data);
+  const voiceId = (input.voiceId ?? profileRow.voiceId).trim();
+  if (voiceId.length === 0) {
+    throw ttsInputIssue(["voiceProfileId"], "声の指定が空です。");
+  }
+  const listing = await listVoicesCached(config, adapterId.data, settings, caches);
+  const voice = findVoice(listing.voices, voiceId);
+  if (voice === undefined && descriptor.voiceSelection !== "list-or-manual") {
     throw ttsInputIssue(
       ["voiceProfileId"],
-      "選択した話者が現在のエンジンに見つかりません。声プロファイルを見直してください。",
+      "選択した声が現在のエンジンに見つかりません。声プロファイルを見直してください。",
     );
-  }
-  const selectedStyle = voice.styles.find((style) => style.styleId === styleId);
-  if (selectedStyle === undefined) {
-    throw ttsInputIssue(["styleId"], "この話者で使えないスタイルです。");
   }
 
   const snapshot = ttsJobSnapshotSchema.safeParse({
@@ -219,8 +233,9 @@ async function prepareTtsJobSnapshot(
     speakerName: truncateName(speaker.name),
     voiceProfileId: speaker.voiceProfileId,
     adapterId: adapterId.data,
-    voice: { voiceId: voice.voiceId, styleId },
-    styleName: truncateName(selectedStyle.name),
+    voice: { voiceId },
+    voiceName: voice === undefined ? undefined : truncateName(voice.name),
+    settings,
     speedScale: input.speedScale,
     speechText,
     engineVersion: listing.engineVersion,

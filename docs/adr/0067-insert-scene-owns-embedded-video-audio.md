@@ -1,0 +1,17 @@
+# インサートSceneだけが動画の埋め込み音声を自動再生する
+
+> amended by [ADR-0072](0072-video-gate-playback-as-common-media-capability.md)
+
+動画を会話の途中で見せる編集意図は、背景として無音動画を表示する意図とは別である。そのため `insert` Sceneを設け、その主動画Cueが参照するvideo Assetの埋め込み音声を既定で映像と同期して再生する。通常の `media.full-bleed` / `media.card` 動画Cueは無音のまま維持し、利用者に別Audio Assetの抽出・配置を求めない。作品全体BGMは埋め込み音声が有効なinsert Scene区間では抑制する。
+
+## Considered Options
+
+- すべての動画Cueを非ミュートにする。→ 背景動画・カード動画の既存の無音意図を壊し、複数Cueの音声が意図せず重なるため不採用。
+- 埋め込み音声を使うたび、利用者が音声を別Assetとして抽出してAudioCueへ配置する。→ 動画を見せる基本操作に不要な手順と同期ずれを持ち込むため不採用。
+- 主動画Cueへ汎用の非ミュート切替を置く。→ 背景とインサートの編集意図が混ざり、BGM抑制の境界も曖昧になるため不採用。
+
+## Consequences
+
+- insert Sceneは主動画Cueを明示参照し、映像・埋め込み音声・Scene尺を同じAssetの確定尺へ揃える。
+- 埋め込み音声がない動画は無音で再生し、UIと診断で知らせる。
+- Scene AudioCueは、動画の元音声とは別に追加する音声に使う。

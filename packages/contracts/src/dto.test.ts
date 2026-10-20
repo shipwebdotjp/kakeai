@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { characterAppearanceSchema } from "./content/character";
 import { bulkTtsJobsResultSchema } from "./dto";
 import { createBulkTtsJobsRequestSchema } from "./requests";
 
@@ -52,5 +53,20 @@ describe("createBulkTtsJobsRequestSchema", () => {
   it("accepts an empty body and rejects unknown keys", () => {
     expect(createBulkTtsJobsRequestSchema.safeParse({}).success).toBe(true);
     expect(createBulkTtsJobsRequestSchema.safeParse({ speechText: "x" }).success).toBe(false);
+  });
+});
+
+describe("characterAppearanceSchema", () => {
+  it("defaults an omitted faceSetId to null", () => {
+    const parsed = characterAppearanceSchema.safeParse({
+      id: "appearance-1",
+      assetId: "asset-1",
+      expression: "smile",
+      pose: "front",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.faceSetId).toBeNull();
+    }
   });
 });

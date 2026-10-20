@@ -6,7 +6,7 @@
 
 - 「Composition」はアプリが管理する信頼済み `VisualTemplate` の合成を意味する。利用者・外部AIが生成した任意の HyperFrames/HTML/JavaScript を Work に保存・実行しない。HyperFrames の外部HTMLサブComposition読込は使わない。
 - AIの将来入力も、信頼済みテンプレートの入力Zodスキーマに適合するパラメータJSONだけを受け入れる。
-- 保存済み `ScriptVersion` が存在しない前提で ContentDocument を `schemaVersion: 3` へ切り替える。v1/v2 の読出し・移行コードは持たない。着手前に保存済み版が無いことを確認し、存在した場合は本基盤ではなく移行計画へ戻す。
+- 保存済み `ScriptVersion` が存在しない前提で ContentDocument を切り替える。旧版の読出し・移行コードは持たない（現行は `schemaVersion: 1` の基準契約に含まれる）。
 
 ## VisualCue v3
 
@@ -41,16 +41,20 @@
 | Composite Visual Template | 内部レイアウトと、入力スキーマで許可した内部アニメーション |
 | NestedVisual | 親テンプレート内に描画される子。独自の range・layer・transition を持たない |
 
-- テンプレート定義は `transitionPolicy` を持ち、許可preset・既定値・最大尺を定める。既定値はCue作成時に明示値として書き込み、レンダー時に暗黙導出しない。
+- テンプレート定義は `transitionPolicy` を持ち、許可preset・既定値・最大尺を定める。既定値はCue作成時に明示値として書き込み、レンダー時に暗黙導出しない。既定は入場・退場とも `none`（尺0）とする。
 - テンプレート固有の動きは入力スキーマ内の有限presetと数値だけで表す。汎用keyframe、任意CSS値、任意easing、スクリプト文字列は追加しない。
 
 ## NestedVisual と再帰
 
 ```jsonc
 NestedVisual =
-  | { "kind": "media", "assetId": "...", "fit"?: "cover" | "contain", "focalPoint"?: { "x": 0.5, "y": 0.5 } }
+  | { "kind": "media", "assetId": "...", "fit"?: "cover" | "contain", "focalPoint"?: { "x": 0.5, "y": 0.5 }, "videoPlayback"?: VideoPlayback }
   | { "kind": "template", "template": { "id": "...", "version": 1 }, "input": {} }
+  | { "kind": "composition", "compositionVersionId": "...", "fit": "contain" | "cover", "zoom"?: 0.5..3, "position"?: { "x": 0..1, "y": 0..1 } }
 ```
+
+- `kind: "composition"` はpublish済み `CompositionVersion` を親テンプレート内のslotに埋め込む（[../composition-library/spec.md](../composition-library/spec.md)）。`compositionVersionId` はAssetではなくCompositionVersionを参照する。`fit` は必須、`zoom`（0.5〜3、省略時等倍）と `position`（省略時中央）は任意。素材参照は持たない。
+- `kind: "media"` がvideo Assetを参照するときだけ、任意の `videoPlayback` を持てる。これはNested Visual固有のrangeやtransitionではなく、参照videoの共通再生規則である。Video Gate Playbackの契約は [../video-gate-playback/spec.md](../video-gate-playback/spec.md) を正とする。
 
 - 再帰はテンプレートの `input` 内だけに閉じる。
 - 深さ8・総ノード数64を上限とする。子Visualのテンプレート存在・入力・素材参照はDocumentの再帰walkerで検証する。
@@ -66,14 +70,13 @@ NestedVisual =
 
 | VisualTemplate | layer | 入力 | 状態 |
 | --- | --- | --- | --- |
-| `text.title@1` | overlay | title, subtitle, anchor? | 対応（inputFieldsで編集） |
-| `text.body@1` | overlay | heading, body | 対応（inputFieldsで編集） |
-| `media.full-bleed@1` | background | assetId, fit, focalPoint? | 対応 |
-| `media.card@1` | card | assetId, heading, caption?, focalPoint? | 対応 |
-| `character.standing@1` | standing | characterId, appearanceId, x, y, scale | 読出しのみ |
-| `character.standing@2` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体） |
-| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor? | 対応（複合ビジュアル） |
-| `scene.device-frame@2` | background, card | `@1` ＋ animation? | 対応（画面の登場アニメーション） |
+| `text.block@1` | overlay | text, role, 配置, font, decoration ほか | 対応（inputFieldsで編集） |
+| `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
+| `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
+| `character.standing@1` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体）。Face Set を持つ外観の表情合成（台詞区間ごと）は [../face-expression/spec.md](../face-expression/spec.md) |
+| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor?, animation?, statusBar?, keyboard? | 対応（複合ビジュアル、画面の登場アニメーション。screen は素材または `kind: "composition"`） |
+
+`scene.device-frame@1` は端末クロームを重ねられる。`frame: "phone"` では既定で画面の上に静的なステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）を重ねる（`statusBar: false` で消せる）。`frame: "laptop"` では既定で画面の下にキーボードベースを描く（`keyboard: false` で消せる。画面＋ベースがキャンバスに収まるよう画面幅を縮める）。どちらも**既定オンの任意入力**（`.default(true)`）であり、正式リリース前は見た目の変更を版の追加なしで行える（[ADR-0071](../adr/0071-pre-release-appearance-changes-without-version-bump.md)）。クロームは `chat.thread@1` と共通の描画（`device-chrome`）を使い、寸法は画面の大きさに追従するコンテナ相対で表す。
 
 ## テンプレート入力メタデータと汎用エディタ
 
@@ -81,17 +84,19 @@ NestedVisual =
 
 ```ts
 type TemplateFieldSpec =
-  | { kind: "media"; key; label; assetKinds }        // トップレベルの assetId
-  | { kind: "nestedMedia"; key; label; assetKinds }  // NestedVisual を media として編集
+  | { kind: "media"; key; label; assetKinds; videoPlayback? }        // トップレベルの assetId
+  | { kind: "nestedMedia"; key; label; assetKinds; allowComposition?; videoPlayback? }  // NestedVisual を media または composition として編集
   | { kind: "text"; key; label }
   | { kind: "optionalText"; key; label }             // 空なら key を削除
   | { kind: "select"; key; label; options }
   | { kind: "color"; key; label }                    // #RRGGBB を検証
+  | { kind: "mediaCrop"; key; label; zoomKey? }      // 焦点位置と拡大率
   | { kind: "animation"; key; label }                // preset と durationMs
 ```
 
 - `inputFields` を持つテンプレートは編集可能、持たないテンプレートは読み取り専用で非破壊に保持する。
 - `nestedMedia` は、既存の `input` が `media` 以外（入れ子テンプレート）の場合は元の値を保持し、`media` のときだけ素材の解除でCueを消す。
+- `videoPlayback: true` のmedia／nestedMediaは、選択Assetがreadyなvideoで確定尺を持つときだけ、共通のVideo Playback編集部品を表示する。詳細は [../video-gate-playback/spec.md](../video-gate-playback/spec.md) を正とする。
 - `collectAssetRefs` はテンプレート定義に集約し、`inputFields` とは独立して素材参照を走査する。
 
 ## アニメーションpreset
@@ -101,12 +106,13 @@ type TemplateFieldSpec =
 - preset: `none` / `fade` / `slide-up` / `slide-down` / `slide-left` / `slide-right` / `scale-in`（入退場）、加えて内部用に `pulse`。
 - 入退場は `transitionPolicy`（許可preset・既定値・最大尺）に照合し、`enter + exit <= Cue範囲` を共通タイムライン解決器で検証する。
 - テンプレート内部アニメーションは `animationPolicy`（許可preset・既定尺・最大尺）に照合し、テンプレート入力を経由して `AnimationPlan`（対象要素ID・preset・ローカル時刻・尺）としてコンパイラへ渡す。コンパイラだけがGSAPタイムラインを生成する。
-- `scene.device-frame@2` は任意の `animation` を画面要素に適用する。`@1` はアニメーションを持たず、描画を変えない。
+- `scene.device-frame@1` は任意の `animation` を画面要素に適用する。
 
 ## 編集UI
 
 - 各Sceneに **Cue一覧** を表示し、追加・削除・レイヤー・順序・表示区間・入場/退場を編集する。
 - テンプレート固有の入力は `inputFields` から生成する。素材はピッカーで画像・動画を選び、色・選択・数値・テキスト・アニメーションを編集する。
+- `mediaCrop` は焦点位置（横・縦）をスライダーで編集し、中央へ戻すと `focalPoint` を省略する。`zoomKey` を持つ場合は拡大率も編集し、等倍に戻すと `zoom` を省略する。詳細は [../focal-point/spec.md](../focal-point/spec.md) と [../media-zoom/spec.md](../media-zoom/spec.md) を正とする。
 - 「Cueを追加」は編集可能なテンプレート（背景・カード・デバイスフレーム・タイトル・本文）の最新版を提示する。
 - 立ち絵は一覧内に「左」「右」の固定2行として表示し、side一意・最大2の制約を保つ。
 - UI未対応のテンプレート・Cueは読み取り専用で非破壊に保持する。

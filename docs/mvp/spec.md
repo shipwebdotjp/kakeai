@@ -10,12 +10,12 @@
 
 - 利用者は単一の個人。認証、共有、共同編集、テナント分離は対象外。
 - 開発者がMac上でローカル起動するWebアプリである。配布可能なデスクトップアプリ、インストーラ、自動更新、常駐起動はMVPの対象外とする。
-- ネットワークや外部AIサービスなしで動画を作成・出力できる。
+- 基本的な動画制作はローカルで完結する。AI機能はネットワークや外部サービスを使える。AIの出力は提案として扱い、人の明示的な採用なしに正本へ反映しない。
 - 素材、BGM、音声の利用許諾は利用者が確認する。
 
 ## MVPでできること
 
-1. 作品を新規作成し、名前を付けて保存・再編集する。
+1. 作品を新規作成し、名前を付けて保存・再編集する。また、既存作品の複製や版履歴からの復元ができる。
 2. 日本語（`ja-JP`）の制作版を作る。
 3. 導入、0件以上の要点、結びからなるSceneを編集する。新規作品は導入＋要点1つ＋結びで開始し、要点Sceneは追加・削除・並べ替えできる。各Sceneは編集用の名称 `label` を持つ。
 4. 各Sceneに画像または動画の背景とカードを各1件まで、画像の立ち絵を1体まで指定し、アクセント色を設定する。描画順は背景、カード、立ち絵、Scene本文・字幕とする。要点Sceneの表示尺は音声を主として自動計算し、必要なときだけ固定尺へ切り替える。
@@ -28,7 +28,7 @@
 
 - AIによる調査、台本生成、翻訳、TTS、画像・サムネイル・背景生成
 - 字幕のタイミング・スタイルの自由編集、音声認識、波形編集、音声・動画のトリミング、自由なタイムライン編集
-- 複数VisualCueの編集、VisualCueのセリフ区間・offset区間の編集、背景とカードの焦点位置編集、立ち絵の表情自動切替・口パク、複数テンプレート、縦型出力
+- 複数VisualCueの編集、VisualCueのセリフ区間・offset区間の編集、立ち絵の表情自動切替・口パク、複数テンプレート、縦型出力
 - クラウド保存、外部公開、共同編集、認証、通知
 
 ## 出力仕様と入力制約
@@ -44,7 +44,7 @@
 | 字幕 | セリフごとの `captionText` を、音声区間または音声なしセリフへ割り当てた区間に同期して焼き込む |
 | 背景・カード | 各Sceneに画像または動画を各1件まで指定する。未指定時はテンプレート既定の単色背景を使用する |
 | 立ち絵 | 各Sceneに画像のCharacter Appearanceを1件まで、Scene全区間に指定する。位置と倍率は正規化座標で編集する。表情切替・口パクは行わない |
-| 背景クロップ | `fit: cover` の素材は未指定の `focalPoint` により中央でクロップする。焦点位置の編集はMVP後とする |
+| 背景クロップ | `fit: cover` の素材は未指定の `focalPoint` により中央でクロップする。編集画面で焦点位置と拡大率を編集できる（[../focal-point/spec.md](../focal-point/spec.md)、[../media-zoom/spec.md](../media-zoom/spec.md)） |
 | テキスト量 | テンプレートごとの最大行数・最小フォントサイズを目安とする。超える場合も保存は通し、警告として返してプレビューで確認する |
 
 アップロード時に、ファイル形式とサイズを検証する。動画・音声の長さは取り込み時に取得して保存する。原本はそのまま保持し、原則そのままプレビューとレンダーに使う。互換性が不安定なコーデック、可変フレームレート、回転メタデータなど原本を直接レンダーに渡せない入力に限り、必要時にRenditionへ正規化する。テキストの長さは、テンプレートごとの最大行数・最小フォントサイズに照らして台本保存時に検証し、収まらない場合は保存を通したうえで警告として返す。
@@ -60,7 +60,7 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 | 用語 | 意味 |
 | --- | --- |
 | `Work` | 作品の親単位。原本言語、作品名、任意の親作品を持つ。 |
-| `LanguageEdition` | ある言語での制作版。MVPでは `ja-JP` のみ作成・出力できる。 |
+| `LanguageEdition` | ある言語での制作版。作成可能な `locale` は `ja-JP` と `en-US`。 |
 | `ScriptVersion` | シーンとセリフを持つ台本の不変版。編集保存時に新しい版を作る。 |
 | `NarrationSegment` | 読み上げる最小単位。字幕用文章、読み上げ用文章、話者、選択音声（または音声なし）を持つ。 |
 | `Speaker` | 音声上の話者。画面に出ないナレーターも表せる。 |
@@ -95,11 +95,11 @@ SQLiteでリレーションとして管理するのは、作品の一覧・版�
 - セリフやVisualTemplateの入力構造を将来増やしても、台本のテーブル移行を毎回必要としない。
 - 素材、作品、Artifact、JobはJSON内だけでなく横断して扱うため、外部キーと通常カラムで管理できる。
 
-`contentJson`、`provenanceJson`、`inputSnapshotJson`、`resultJson` は、SQLiteではJSON型ではなくJSON文字列として保存する。保存前と読出時に `packages/contracts` のZodスキーマで検証する。`contentSchemaVersion` は保存時点の `contentJson.schemaVersion` と同じ値を重複して保持し、移行対象をJSON解析なしで特定できるようにする。読出し時に旧版（v4/v5）を現行版（v6）へ移行する場合、保存カラムは旧版のまま、返す `content.schemaVersion` は現行版になり得る。
+`contentJson`、`provenanceJson`、`inputSnapshotJson`、`resultJson` は、SQLiteではJSON型ではなくJSON文字列として保存する。保存前と読出時に `packages/contracts` のZodスキーマで検証する。`contentSchemaVersion` は保存時点の `contentJson.schemaVersion` と同じ値を重複して保持し、移行対象をJSON解析なしで特定できるようにする。読出し時に旧版（v4/v5/v6）を現行版（v7）へ移行する場合、保存カラムは旧版のまま、返す `content.schemaVersion` は現行版になり得る。
 
-`contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化と `contentHash` は持たない。同一内容の検出や変更追跡は版IDと `sourceScriptVersionId` で行う。同一MP4バイト列を将来も再生成することはMVPの要件にしない。`ScriptVersion` は不変であり、`contentSchemaVersion` の移行は保存済みの版を書き換えずに新しい `ScriptVersion` を作って行う。MVPの保存済み版は `schemaVersion: 6` とし、v4/v5 は読み出し時に v6 へ移行する（v5 → v6 は `visualTheme: soft-editorial@1` と全Sceneの `theme.primary` を補う。[../visual-themes/spec.md](../visual-themes/spec.md)）。v3 以前の解釈コードは持たない。
+`contentJson` はキー順を安定させたJSON文字列として保存する。JCS正規化と `contentHash` は持たない。同一内容の検出や変更追跡は版IDと `sourceScriptVersionId` で行う。同一MP4バイト列を将来も再生成することはMVPの要件にしない。`ScriptVersion` は不変であり、`contentSchemaVersion` の移行は保存済みの版を書き換えずに新しい `ScriptVersion` を作って行う。MVPの保存済み版は `schemaVersion: 1` とし、旧版の読出し解釈や移行コードは持たない。
 
-Assetは作品に所属させず、ローカルアプリ全体で再利用できる素材ライブラリとする。ScriptVersionのJSONはAssetのIDと、対応VisualTemplateに限ってCompositionVersionのIDを参照する。Assetの論理的なID・原本メタデータ・バイト列は取り込み後に不変とし、`status` とreadyなRendition由来の表示メタデータだけは取り込み処理により更新される。利用者が後から編集できるのは分類用のタグ（`tagsJson`）だけであり、これは原本の同一性に影響しない（[ADR 0039](../adr/0039-asset-tags-mutable-metadata.md)）。実体ファイルが欠損・改変された場合は、同じSHA-256の再アップロードで内容ハッシュ由来の同じパスへ上書きして取り込み直す。原本とは別に、レンダー入力として使う不変の `AssetRendition` を持てる。
+Assetは作品に所属させず、ローカルアプリ全体で再利用できる素材ライブラリとする。ScriptVersionのJSONはAssetのIDと、対応VisualTemplateに限ってCompositionVersionのIDを参照する。Assetの論理的なID・原本メタデータ・バイト列は取り込み後に不変とし、`status` とreadyなRendition由来の表示メタデータだけは取り込み処理により更新される。利用者が後から編集できるのは、分類用のタグ（`tagsJson`）とお気に入り（`favoritedAt`）・アーカイブ（`archivedAt`）だけで、これらは原本の同一性に影響しない（[ADR 0039](../adr/0039-asset-tags-mutable-metadata.md)、[ADR 0054](../adr/0054-asset-favorite-archive-metadata.md)）。実体ファイルが欠損・改変された場合は、同じSHA-256の再アップロードで内容ハッシュ由来の同じパスへ上書きして取り込み直す。原本とは別に、レンダー入力として使う不変の `AssetRendition` を持てる。
 
 履歴と実体を永久保持することはMVPの要件にしない。Workが存続する間は全ScriptVersionを保持し、個別の版削除・履歴圧縮は提供しない。不要になった作品はWorkの明示削除で、そのEdition、ScriptVersion、render Job、Artifactをまとめて削除する。Assetは残存するScriptVersionまたはキュー・実行中のrender Jobの入力スナップショットから参照されている間は削除できず、参照がない場合だけ明示削除または未参照データ清掃で実体と行を削除できる。CompositionVersionも同様に参照中は削除できず、draftだけはいつでも破棄できる。Asset自身のasset_ingest JobはAssetとともに削除する。Artifactは個別に削除できる。削除された版やRenditionを必要とする過去Jobは、再プレビュー・再レンダーできないものとして扱い、履歴を偽って保持しない。
 
@@ -110,15 +110,15 @@ Prismaモデル名は以下のとおりとする。IDはアプリ生成の文字
 | モデル | 主な列 | 制約・用途 |
 | --- | --- | --- |
 | `Work` | `id`, `title`, `originalLocale`, `parentWorkId?`, `createdAt`, `updatedAt` | 親作品。`parentWorkId` は将来のショートなど派生Work用で、MVPでは通常NULL。子Workを持つWorkは削除できない。 |
-| `LanguageEdition` | `id`, `workId`, `locale`, `currentScriptVersionId?`, `createdAt`, `updatedAt` | 作品の言語別制作版。`@@unique([workId, locale])`。循環参照を避けるため作成途中だけNULLを許し、同一トランザクション内で初期ScriptVersionを作成後に必ず設定する。`currentScriptVersionId` が編集画面の現在版を明示し、最大版番号から推測しない。参照先は同じEditionでなければならない。MVPでは作成可能なlocaleは `ja-JP` のみ。 |
+| `LanguageEdition` | `id`, `workId`, `locale`, `currentScriptVersionId?`, `createdAt`, `updatedAt` | 作品の言語別制作版。`@@unique([workId, locale])`。循環参照を避けるため作成途中だけNULLを許し、同一トランザクション内で初期ScriptVersionを作成後に必ず設定する。`currentScriptVersionId` が編集画面の現在版を明示し、最大版番号から推測しない。参照先は同じEditionでなければならない。作成可能なlocaleは `ja-JP` と `en-US`。 |
 | `ScriptVersion` | `id`, `languageEditionId`, `versionNumber`, `contentSchemaVersion`, `contentJson`, `sourceScriptVersionId?`, `author`, `authorAgentId?`, `createdAt` | 不変の編集データ。`@@unique([languageEditionId, versionNumber])`。版番号は表示・並び替えのため単調増加させる。`sourceScriptVersionId` は手動復元、翻訳、下書きなどの派生元を示す。`author` は作成者が利用者（`human`）かエージェント（`agent`）かを示し、`authorAgentId` はエージェントを識別する任意値である（[Agent Access](../agent-access/spec.md)）。 |
-| `Asset` | `id`, `kind`, `origin`, `status`, `storageKey`, `originalFilename`, `mediaType`, `byteSize`, `sha256`, `durationMs?`, `widthPx?`, `heightPx?`, `tagsJson?`, `provenanceJson?`, `generatedByJobId?`, `createdAt` | 再利用可能な原本ファイル。`status` は `processing` / `ready` / `failed`。`kind` は `image` / `video` / `audio`、`origin` は `uploaded` / `generated`。`storageKey` と `sha256` はそれぞれ一意にし、同一バイト列の重複保存を避ける。`tagsJson` は利用者編集の分類タグで、取り込み後も更新されうる唯一のメタデータ。 |
+| `Asset` | `id`, `kind`, `origin`, `status`, `storageKey`, `originalFilename`, `mediaType`, `byteSize`, `sha256`, `durationMs?`, `widthPx?`, `heightPx?`, `tagsJson?`, `favoritedAt?`, `archivedAt?`, `provenanceJson?`, `generatedByJobId?`, `createdAt` | 再利用可能な原本ファイル。`status` は `processing` / `ready` / `failed`。`kind` は `image` / `video` / `audio`、`origin` は `uploaded` / `generated`。`storageKey` と `sha256` はそれぞれ一意にし、同一バイト列の重複保存を避ける。`tagsJson` は利用者編集の分類タグ、`favoritedAt` はお気に入り、`archivedAt` は一覧・ピッカーから既定で隠すアーカイブで、取り込み後も更新されうるユーザー編集メタデータ。 |
 | `AssetRendition` | `id`, `assetId`, `purpose`, `storageKey`, `mediaType`, `sha256`, `byteSize`, `durationMs?`, `widthPx?`, `heightPx?`, `codecJson?`, `createdAt` | 原本をレンダーに直接使えない場合に必要時だけ作る、レンダー用の正規化派生物。MVPの `purpose` は `render`。画像は適用済みの向き、動画はH.264/AAC・CFR、音声はWAVへ正規化する。アルファ付き動画（VP8/VP9）は透過保持のため原本をそのまま使い、Renditionを作らない。`@@unique([assetId, purpose])`。 |
-| `Composition` | `id`, `runtimeCompositionId`, `name`, `currentCompositionVersionId?`, `createdAt`, `updatedAt` | AIが作業する再利用可能なHyperFrames projectの論理単位。`runtimeCompositionId` は安定し、異なるComposition間で一意。 |
-| `CompositionDraft` | `id`, `compositionId`, `storageKey`, `createdAt`, `updatedAt` | AIが更新する可変の作業コピー。ScriptVersionとJobから参照しない。Compositionごとに高々1つのactive draftを持つ。 |
-| `CompositionVersion` | `id`, `compositionId`, `versionNumber`, `bundleStorageKey`, `bundleSha256`, `manifestJson`, `createdAt` | publish済みの不変bundle。`@@unique([compositionId, versionNumber])`。bundle hashとmanifestは作成後に変更しない。詳細は[Composition Library仕様](../composition-library/spec.md)。 |
+| `Composition` | `id`, `runtimeCompositionId`, `name`, `createdAt`, `updatedAt` | AIが作業する再利用可能なHyperFrames projectの論理単位。`runtimeCompositionId` は安定し、異なるComposition間で一意。 |
+| `CompositionDraft` | `id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt` | AIが更新する可変の作業コピー。ScriptVersionとJobから参照しない。Compositionごとに高々1つのactive draftを持つ。 |
+| `CompositionVersion` | `id`, `compositionId`, `versionNumber`, `bundleHash`, `storageKey`, `manifestJson`, `createdAt` | publish済みの不変bundle。`@@unique([compositionId, versionNumber])`、`storageKey` は一意。bundle hashとmanifestは作成後に変更しない。詳細は[Composition Library仕様](../composition-library/spec.md)。 |
 | `Job` | `id`, `kind`, `status`, `workId?`, `assetId?`, `languageEditionId?`, `scriptVersionId?`, `snapshotSchemaVersion`, `inputSnapshotJson`, `resultJson?`, `progressPercent`, `errorCode?`, `errorMessage?`, `createdAt`, `startedAt?`, `finishedAt?` | 非同期実行の記録。statusは `queued` / `running` / `succeeded` / `failed` / `cancelled`。MVPの `kind` は `asset_ingest` / `render`。renderは `workId` と `scriptVersionId` を必須、asset_ingestは `assetId` を必須とする。`inputSnapshotJson` はkindごとの判別unionで定義し、`snapshotSchemaVersion` で解釈版を特定する。`@@index([status, createdAt])`、`@@index([workId, createdAt])`、`@@index([assetId, createdAt])` を置く。 |
-| `Artifact` | `id`, `jobId`, `role`, `format`, `storageKey`, `sha256`, `byteSize`, `durationMs?`, `widthPx?`, `heightPx?`, `fps?`, `createdAt` | Jobが生成した出力ファイル。`role` は `render` / `thumbnail` / `caption` などの用途、`format` は `mp4` などの形式。MVPはrender Jobが `role=render`、`format=mp4` のArtifactを1つ生成する。1 Jobは複数Artifactを持てる。`storageKey` は一意とし、`@@index([jobId])` を置く。 |
+| `Artifact` | `id`, `jobId`, `role`, `format`, `storageKey`, `sha256`, `byteSize`, `durationMs?`, `widthPx?`, `heightPx?`, `fps?`, `videoCodec?`, `audioCodec?`, `createdAt` | Jobが生成した出力ファイル。`role` は `render` / `thumbnail` / `caption` などの用途、`format` は `mp4` などの形式。MVPはrender Jobが `role=render`、`format=mp4` のArtifactを1つ生成する。1 Jobは複数Artifactを持てる。`storageKey` は一意とし、`@@index([jobId])` を置く。 |
 
 Jobの対象はkindで決める。renderは `workId`、`languageEditionId`、`scriptVersionId` を必須とし、asset_ingestは `assetId` を必須とする。TTSや画像生成はLanguageEditionまたはScriptVersionに結び、調査のように作品全体に対するJobは `workId` だけを持てる。`Asset.generatedByJobId` は将来の生成Assetの来歴を示す任意の外部キーである。
 
@@ -158,7 +158,7 @@ Render Jobを作る時点で、次を `inputSnapshotJson` に不変の値とし�
 
 ### 書込みとJob状態遷移
 
-1. **作品作成**：1つのWork、`ja-JP`のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accent`（`theme.primary`）・`label` を設定した導入、要点1件、結びを持ち、`visualTheme: soft-editorial@1` を固定した、`schemaVersion: 6` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
+1. **作品作成**：1つのWork、`originalLocale` のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accent`（`theme.primary`）・`label` を設定した導入、要点1件、結びを持ち、`visualTheme: soft-editorial@1` を固定した、`schemaVersion: 1` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
 2. **台本保存**：利用者は明示的に保存する（自動保存はしない）。フォーム値をZodで検証し、`ready` のAsset参照を確認して、新しいScriptVersionを追加する。過去の版は更新しない。テキスト量の目安を超える入力は保存を拒否せず、警告を返す。保存はlast-write-winsとし、クライアントは版番号を送らない。同一トランザクションで新しい版をcurrentへ進める。過去版の復元は、その内容を新しい版として保存し、復元元を `sourceScriptVersionId` に記録する。
 3. **素材取り込み**：アップロードで原本Assetを作成し、`asset_ingest` Jobをキューへ追加する。Jobは形式・長さ・寸法を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってAssetを `ready` にする。失敗時は `failed` にし、台本保存・プレビュー・レンダーでそのAssetを使わせない。
 4. **レンダー投入**：特定のScriptVersionとreadyなRenditionから、入力スナップショットを持つ `queued` Jobを追加する。MVPでは「現在版をレンダー」がUIの入口だが、Job自体は必ず版IDと素材Renditionを固定する。
@@ -175,7 +175,7 @@ Jobの状態遷移は `queued → running → succeeded | failed` と `queued �
 
 VisualCueの表示区間はフレーム番号ではなく判別union（Scene全体、セリフ区間、Scene先頭からのオフセット）で指定する。レンダー時に選択音声の尺から実時間とフレームを解決するため、将来TTSで音声尺が変わっても視覚演出がセリフに追従する。
 
-背景メディアのクロップは、出力ピクセルではなく正規化した `focalPoint` で指定する。未指定時は中央とし、素材の重要な部分が端にある場合も編集画面で位置を調整できる。
+背景メディアのクロップは、出力ピクセルではなく正規化した `focalPoint` で指定する。未指定時は中央とし、素材の重要な部分が端にある場合も編集画面で位置を調整できる。編集操作は [../focal-point/spec.md](../focal-point/spec.md) を正とする。
 
 詳細なJSON契約は [content-schema.md](./content-schema.md) を参照する。
 

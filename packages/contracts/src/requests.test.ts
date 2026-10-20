@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cloneWorkRequestSchema,
   createWorkRequestSchema,
   draftPreviewRequestSchema,
   saveScriptVersionRequestSchema,
@@ -8,6 +9,22 @@ import {
 import { draftPreviewSchema } from "./dto";
 import { assetTagsSchema, MAX_ASSET_TAG_LENGTH, MAX_ASSET_TAGS } from "./asset";
 import { validContentDocument } from "./testing/fixtures";
+
+describe("cloneWorkRequestSchema", () => {
+  it("accepts a valid request", () => {
+    expect(cloneWorkRequestSchema.safeParse({ title: "作品のコピー" }).success).toBe(true);
+  });
+
+  it("rejects unknown fields", () => {
+    expect(
+      cloneWorkRequestSchema.safeParse({ title: "作品のコピー", extra: "bar" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects blank title", () => {
+    expect(cloneWorkRequestSchema.safeParse({ title: "   " }).success).toBe(false);
+  });
+});
 
 describe("createWorkRequestSchema", () => {
   it("accepts a valid request", () => {
@@ -22,9 +39,15 @@ describe("createWorkRequestSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects an unsupported locale", () => {
+  it("accepts a supported non-default locale", () => {
     expect(
       createWorkRequestSchema.safeParse({ title: "作品", originalLocale: "en-US" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unsupported locale", () => {
+    expect(
+      createWorkRequestSchema.safeParse({ title: "作品", originalLocale: "fr-FR" }).success,
     ).toBe(false);
   });
 });
@@ -60,6 +83,7 @@ describe("draftPreviewSchema", () => {
     const base = {
       compositionHtml: "<!doctype html><html></html>",
       assets: [],
+      compositions: [],
       renderer: { engine: "hyperframes", compilerVersion: "app-1", playerVersion: "0.8.141" },
       timeline: { totalDurationMs: 0, fps: 30, scenes: [] },
     };
@@ -90,11 +114,16 @@ describe("updateAssetRequestSchema", () => {
     expect(updateAssetRequestSchema.parse({ tags: ["背景"] })).toEqual({ tags: ["背景"] });
   });
 
+  it("accepts favorite and archive flags", () => {
+    expect(updateAssetRequestSchema.parse({ favorited: true })).toEqual({ favorited: true });
+    expect(updateAssetRequestSchema.parse({ archived: false })).toEqual({ archived: false });
+  });
+
   it("rejects unknown fields", () => {
     expect(updateAssetRequestSchema.safeParse({ tags: [], extra: 1 }).success).toBe(false);
   });
 
-  it("rejects a missing tags field", () => {
+  it("rejects an empty patch", () => {
     expect(updateAssetRequestSchema.safeParse({}).success).toBe(false);
   });
 });

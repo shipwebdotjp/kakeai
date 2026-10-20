@@ -1,5 +1,7 @@
 # Assetにユーザー編集可能なタグを持たせ、不変原則の例外とする
 
+Status: amended by ADR-0054
+
 再利用可能な素材ライブラリで素材を見つけやすくするため、Assetにユーザーが編集できるタグを持たせる。タグは素材の原本メタデータやバイト列ではなく、ユーザーが後から追加・削除できるメタデータとし、取り込み後の不変原則（[spec.md](../mvp/spec.md) の「Assetは取り込み後に不変」）に対する唯一の例外とする。
 
 保存は `Asset.tagsJson`（JSON文字列のタグ配列）で行い、SQLiteでは独立した `Tag` / `AssetTag` テーブルを作らない。読み書きは `packages/contracts` のZodスキーマで検証する。更新は `PATCH /assets/:assetId` でタグ配列を丸ごと置き換える。
