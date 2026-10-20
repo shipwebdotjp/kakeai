@@ -18,6 +18,7 @@ import {
   type ContentDocument,
   type ScriptOperation,
   type ScriptVersion,
+  type Warning,
   type ThemeAccentToken,
   type TtsJobResult,
 } from "@kakeai/contracts";
@@ -56,7 +57,7 @@ import {
   type SceneFormValue,
   type SpeakerFormValue,
 } from "../content/form";
-import { applyStructuralOperation } from "../content/structural";
+import { applyStructuralOperation, removeCueStructural } from "../content/structural";
 import { SCENE_LABELS } from "../content/labels";
 import { AssetThumbnail, assetLabel } from "../lib/assets";
 import { errorMessage } from "../lib/errorMessage";
@@ -724,6 +725,31 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     },
   );
 
+  const showMessage = (message: string): void => {
+    setDiagnostics((prev) => ({ ...prev, errors: [{ message }] }));
+    setOpenKind("error");
+  };
+
+  const showError = (error: unknown): void => {
+    showMessage(errorMessage(error));
+  };
+
+  const showWarnings = (warnings: Warning[]): void => {
+    setDiagnostics((prev) => ({
+      ...prev,
+      warnings: warnings.map((warning) => ({
+        path: warning.path,
+        code: warning.code,
+        message: warning.message,
+      })),
+    }));
+    if (warnings.length > 0) {
+      setOpenKind("warning");
+      return;
+    }
+    setOpenKind((prev) => (prev === "warning" ? null : prev));
+  };
+
   const runStructural = (operation: ScriptOperation): void => {
     try {
       const next = applyStructuralOperation(
@@ -733,12 +759,33 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         assetsQuery.data ?? [],
       );
       replaceScenes(next.values.scenes);
+      showWarnings(next.result.warnings);
     } catch (error) {
-      setDiagnostics((prev) => ({
-        ...prev,
-        errors: [{ message: errorMessage(error) }],
-      }));
-      setOpenKind("error");
+      showError(error);
+    }
+  };
+
+  const onRemoveCue = (sceneIndex: number, cueId: string) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    try {
+      const next = removeCueStructural(
+        base,
+        getValues(),
+        scene.id,
+        cueId,
+        assetsQuery.data ?? [],
+      );
+      if (next === null) {
+        showMessage("Cueを削除できませんでした。Sceneの状態を確認してください。");
+        return;
+      }
+      replaceScenes(next.values.scenes);
+      showWarnings(next.result.warnings);
+    } catch (error) {
+      showError(error);
     }
   };
 
@@ -776,11 +823,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       asset.durationMs === null ||
       asset.durationMs <= 0
     ) {
-      setDiagnostics((prev) => ({
-        ...prev,
-        errors: [{ message: "尺が確定した動画だけを挿入できます。素材の取り込み完了後に選び直してください。" }],
-      }));
-      setOpenKind("error");
+      showMessage("尺が確定した動画だけを挿入できます。素材の取り込み完了後に選び直してください。");
       return;
     }
     const scenes = getValues("scenes");
@@ -1419,10 +1462,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                 assetsError={assetsQuery.isError}
                 register={register}
                 setValue={setValue}
-                onError={(message) => {
-                  setDiagnostics((prev) => ({ ...prev, errors: [{ message }] }));
-                  setOpenKind("error");
-                }}
+                onError={showMessage}
               />
             ) : (
               <CueList
@@ -1435,6 +1475,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                 lines={scene.lines}
                 speakers={watchedSpeakers}
                 sceneDurationMs={placementBySceneId.get(scene.id)?.durationMs ?? null}
+                onRemoveCue={(cueId) => onRemoveCue(sceneIndex, cueId)}
               />
             )}
 
@@ -1464,13 +1505,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   getValues={getValues}
                   setValue={setValue}
                   base={base}
-                  onError={(message) => {
-                    setDiagnostics((prev) => ({
-                      ...prev,
-                      errors: [{ message }],
-                    }));
-                    setOpenKind("error");
-                  }}
+                  onError={showMessage}
                   sceneIndex={sceneIndex}
                   sceneId={scene.id}
                   scriptVersionId={scriptVersionId}
@@ -1484,6 +1519,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   faceSetsReady={faceSets.isSuccess}
                   onSplitScene={onSplitScene}
                   onJumpToLine={onJumpToLine}
+                  onWarnings={showWarnings}
                 />
             )}
           </section>

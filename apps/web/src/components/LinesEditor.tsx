@@ -17,6 +17,7 @@ import {
   type FaceSet,
   type ScriptOperation,
   type VoiceAdapterId,
+  type Warning,
   type VoiceProfile,
 } from "@kakeai/contracts";
 import type {
@@ -58,6 +59,7 @@ interface LinesEditorProps {
   setValue: UseFormSetValue<DocumentFormValues>;
   base: ContentDocument;
   onError: (message: string) => void;
+  onWarnings: (warnings: Warning[]) => void;
   sceneIndex: number;
   sceneId: string;
   scriptVersionId: string;
@@ -81,7 +83,7 @@ function formatDuration(durationMs: number): string {
 interface LineEditorProps
   extends Omit<
     LinesEditorProps,
-    "sceneId" | "control" | "onSplitScene" | "base" | "onError"
+    "sceneId" | "control" | "onSplitScene" | "base" | "onError" | "onWarnings"
   > {
   lineIndex: number;
   line: LineFormValue;
@@ -740,6 +742,7 @@ export function LinesEditor({
   setValue,
   base,
   onError,
+  onWarnings,
   sceneIndex,
   sceneId,
   scriptVersionId,
@@ -777,6 +780,7 @@ export function LinesEditor({
       }
       replace(scene.lines);
       setValue(`scenes.${sceneIndex}.cues`, scene.cues, { shouldDirty: true });
+      onWarnings(next.result.warnings);
     } catch (error) {
       onError(error instanceof Error ? error.message : "構造操作に失敗しました。");
     }

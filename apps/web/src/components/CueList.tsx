@@ -158,6 +158,7 @@ interface CueListProps {
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
   sceneDurationMs: number | null;
+  onRemoveCue: (cueId: string) => void;
 }
 
 interface CueRowProps {
@@ -1089,8 +1090,9 @@ export function CueList({
   lines,
   speakers,
   sceneDurationMs,
+  onRemoveCue,
 }: CueListProps) {
-  const { fields, append, remove } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
+  const { fields, append } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.cues` }) ?? [];
   const templates = addableTemplates();
   const [addTemplate, setAddTemplate] = useState<string>(templates[0]?.id ?? "");
@@ -1137,7 +1139,7 @@ export function CueList({
             lines={lines}
             speakers={speakers}
             sceneDurationMs={sceneDurationMs}
-            onRemove={() => remove(cueIndex)}
+            onRemove={() => onRemoveCue(cue.id)}
           />
         );
       })}

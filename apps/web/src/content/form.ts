@@ -1327,9 +1327,62 @@ function buildCueInput(
   return input;
 }
 
+interface BuildCueOptions {
+  tolerant?: boolean;
+}
+
+class IncompleteCueError extends Error {}
+
+function buildVisualCue(
+  cue: CueFormValue,
+  managedIds: ReadonlySet<string>,
+): VisualCue | null {
+  const definition = getVisualTemplate(cue.templateId, cue.templateVersion);
+  const fields = definition?.inputFields;
+  if (definition !== undefined && fields !== undefined && fields.length > 0) {
+    const input = buildCueInput(cue, definition);
+    if (input === null) {
+      if (cue.baseCue === null) {
+        throw new IncompleteCueError("追加したCueの素材を選択してください");
+      }
+      return null;
+    }
+    const layer =
+      definition.layers.includes(cue.layer) ? cue.layer : (definition.layers[0] ?? "background");
+    return {
+      id: cue.id,
+      template: { id: cue.templateId, version: cue.templateVersion },
+      range: buildRange(cue),
+      layer,
+      order: intOrZero(cue.order),
+      transition: buildTransition(cue, definition.transitionPolicy),
+      input,
+    };
+  }
+  if (cue.baseCue !== null && !managedIds.has(cue.baseCue.id)) {
+    const baseDefinition = getVisualTemplate(
+      cue.baseCue.template.id,
+      cue.baseCue.template.version,
+    );
+    const allowedBaseLayers = baseDefinition?.layers;
+    return {
+      ...cue.baseCue,
+      range: buildRange(cue),
+      layer:
+        allowedBaseLayers !== undefined && allowedBaseLayers.includes(cue.layer)
+          ? cue.layer
+          : cue.baseCue.layer,
+      order: intOrZero(cue.order),
+      transition: buildTransition(cue, baseDefinition?.transitionPolicy ?? DEFAULT_TRANSITION_POLICY),
+    };
+  }
+  return null;
+}
+
 function buildVisualCues(
   baseScene: Scene | undefined,
   sceneValue: SceneFormValue,
+  options: BuildCueOptions = {},
 ): VisualCue[] {
   const managedStandingIds = (
     baseScene === undefined ? [] : selectManagedStandingCues(baseScene)
@@ -1337,45 +1390,18 @@ function buildVisualCues(
   const managedIds = new Set<string>(managedStandingIds);
   const cues: VisualCue[] = [];
   for (const cue of sceneValue.cues) {
-    const definition = getVisualTemplate(cue.templateId, cue.templateVersion);
-    const fields = definition?.inputFields;
-    if (definition !== undefined && fields !== undefined && fields.length > 0) {
-      const input = buildCueInput(cue, definition);
-      if (input === null) {
-        if (cue.baseCue === null) {
-          throw new Error("追加したCueの素材を選択してください");
-        }
-        continue;
+    try {
+      const built = buildVisualCue(cue, managedIds);
+      if (built !== null) {
+        cues.push(built);
       }
-      const layer =
-        definition.layers.includes(cue.layer) ? cue.layer : (definition.layers[0] ?? "background");
-      cues.push({
-        id: cue.id,
-        template: { id: cue.templateId, version: cue.templateVersion },
-        range: buildRange(cue),
-        layer,
-        order: intOrZero(cue.order),
-        transition: buildTransition(cue, definition.transitionPolicy),
-        input,
-      });
-      continue;
-    }
-    if (cue.baseCue !== null && !managedIds.has(cue.baseCue.id)) {
-      const baseDefinition = getVisualTemplate(
-        cue.baseCue.template.id,
-        cue.baseCue.template.version,
-      );
-      const allowedBaseLayers = baseDefinition?.layers;
-      cues.push({
-        ...cue.baseCue,
-        range: buildRange(cue),
-        layer:
-          allowedBaseLayers !== undefined && allowedBaseLayers.includes(cue.layer)
-            ? cue.layer
-            : cue.baseCue.layer,
-        order: intOrZero(cue.order),
-        transition: buildTransition(cue, baseDefinition?.transitionPolicy ?? DEFAULT_TRANSITION_POLICY),
-      });
+    } catch (error) {
+      if (!(error instanceof IncompleteCueError)) {
+        throw error;
+      }
+      if (!options.tolerant) {
+        throw error;
+      }
     }
   }
   return cues;
@@ -1484,6 +1510,7 @@ function buildSpeakers(
 export function buildContentDocument(
   base: ContentDocument,
   values: DocumentFormValues,
+  options: BuildCueOptions = {},
 ): ContentDocument {
   const characters = buildCharacters(values.characters, base.locale);
   const characterIds = new Set(characters.map((character) => character.id));
@@ -1516,7 +1543,7 @@ export function buildContentDocument(
         ? { mode: "auto" }
         : { mode: "fixed", durationMs: fixedDurationMs };
     const visualCues = [
-      ...buildVisualCues(baseScene, sceneValue),
+      ...buildVisualCues(baseScene, sceneValue, options),
       ...buildStandingCues(baseScene, sceneValue, characterIds, appearanceIdsByCharacter),
     ];
     const transitionPreset = sceneValue.transitionPreset;
@@ -1556,12 +1583,16 @@ export function buildContentDocument(
       if (mainCue === undefined) {
         throw new Error(`insert Scene ${sceneValue.id} の主動画Cueが存在しません`);
       }
+      const mainVisualCues = visualCues.filter((cue) => cue.id === mainCue.id);
+      if (mainVisualCues.length === 0 && options.tolerant !== true) {
+        throw new Error("insert Sceneの主動画Cueの素材を選択してください");
+      }
       return {
         ...common,
         kind: "insert",
         timing: { mode: "fixed", durationMs: fixedDurationMs },
         lines: [],
-        visualCues: buildVisualCues(baseScene, { ...sceneValue, cues: mainCues, standings: [] }),
+        visualCues: mainVisualCues,
         mainVisualCueId: mainCue.id,
         embeddedAudio: sceneValue.embeddedAudio,
         ...(Number.isFinite(sceneValue.embeddedAudioGainDb) &&
@@ -2622,5 +2653,32 @@ export function splitPointScene(
   return {
     first: toScene(scene, lines.slice(0, splitAt), firstCues, firstLineIds),
     second: toScene(second, lines.slice(splitAt), secondCues, secondLineIds),
+  };
+}
+
+export function pruneDraftCueForLines(
+  cue: CueFormValue,
+  allowedLineIds: ReadonlySet<string>,
+): CueFormValue {
+  const isRemoved = (lineId: string): boolean => !allowedLineIds.has(lineId);
+  return {
+    ...cue,
+    fields: pruneVideoPlaybackFields(
+      cue.templateId,
+      cue.templateVersion,
+      pruneCueEffectFields(
+        cue.templateId,
+        cue.templateVersion,
+        cue.fields,
+        isRemoved,
+      ),
+      isRemoved,
+    ),
+    baseCue: pruneCueBaseCueTriggers(
+      cue.baseCue,
+      cue.templateId,
+      cue.templateVersion,
+      isRemoved,
+    ),
   };
 }

@@ -13,13 +13,14 @@ import {
   buildContentDocument,
   collectSceneIds,
   createPointSceneFormValue,
+  createCueFormValue,
   moveLineInScene,
   nextPointLabel,
   removeLineInScene,
   splitPointScene,
   toFormValues,
 } from "./form";
-import { applyStructuralOperation } from "./structural";
+import { applyStructuralOperation, removeCueStructural } from "./structural";
 
 function pointScene(document: ContentDocument): PointScene {
   const scene = document.scenes.find((entry) => entry.id === DEFAULT_SCENE_IDS.point1);
@@ -221,5 +222,111 @@ describe("structural operation adapter", () => {
     expect(newSecond.label).toBe(oldSecond.label);
     expect(cueShape(newFirst)).toEqual(cueShape(oldFirst));
     expect(cueShape(newSecond)).toEqual(cueShape(oldSecond));
+  });
+
+  it("未確定Cueがあっても構造操作でき、Cueはフォームに残る", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const draft = createCueFormValue({
+      sceneId: DEFAULT_SCENE_IDS.point1,
+      templateId: "media.full-bleed",
+      templateVersion: 1,
+      layer: "background",
+      order: 10,
+    });
+    values.scenes[1]!.cues.push(draft);
+
+    const result = applyStructuralOperation(
+      base,
+      values,
+      { op: "line.add", sceneId: DEFAULT_SCENE_IDS.point1, captionText: "追加" },
+      [],
+    );
+
+    const scene = result.values.scenes[1]!;
+    expect(scene.lines).toHaveLength(1);
+    expect(scene.cues.some((cue) => cue.id === draft.id)).toBe(true);
+    expect(
+      result.document.scenes[1]?.visualCues.some((cue) => cue.id === draft.id),
+    ).toBe(false);
+  });
+
+  it("未確定Cueは構造操作後も元の行位置に戻る", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const draft = createCueFormValue({
+      sceneId: DEFAULT_SCENE_IDS.point1,
+      templateId: "media.full-bleed",
+      templateVersion: 1,
+      layer: "background",
+      order: 10,
+    });
+    values.scenes[1]!.cues.splice(1, 0, draft);
+
+    const result = applyStructuralOperation(
+      base,
+      values,
+      { op: "line.add", sceneId: DEFAULT_SCENE_IDS.point1, captionText: "追加" },
+      [],
+    );
+    expect(result.values.scenes[1]!.cues[1]?.id).toBe(draft.id);
+  });
+
+  it("未確定Cueの行範囲は行削除後にScene範囲へ戻し、警告を返す", () => {
+    const base = createInitialContentDocument();
+    lines(base, ["line-a", "line-b"]);
+    const values = toFormValues(base);
+    const draft = createCueFormValue({
+      sceneId: DEFAULT_SCENE_IDS.point1,
+      templateId: "media.full-bleed",
+      templateVersion: 1,
+      layer: "background",
+      order: 10,
+    });
+    values.scenes[1]!.cues.push({
+      ...draft,
+      rangeKind: "lines",
+      startLineId: "line-a",
+      endLineId: "line-b",
+    });
+
+    const result = applyStructuralOperation(
+      base,
+      values,
+      { op: "line.remove", sceneId: DEFAULT_SCENE_IDS.point1, lineId: "line-a" },
+      [],
+    );
+    const cue = result.values.scenes[1]!.cues.find((entry) => entry.id === draft.id);
+    expect(cue?.rangeKind).toBe("scene");
+    expect(
+      result.result.warnings.some(
+        (warning) => warning.code === "draft_cue_range_reset",
+      ),
+    ).toBe(true);
+  });
+
+  it("未確定Cueは操作コアを通さずフォームから削除できる", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const draft = createCueFormValue({
+      sceneId: DEFAULT_SCENE_IDS.point1,
+      templateId: "media.full-bleed",
+      templateVersion: 1,
+      layer: "background",
+      order: 10,
+    });
+    values.scenes[1]!.cues.push(draft);
+
+    const result = removeCueStructural(
+      base,
+      values,
+      DEFAULT_SCENE_IDS.point1,
+      draft.id,
+      [],
+    );
+    expect(result).not.toBeNull();
+    expect(
+      result?.values.scenes[1]?.cues.some((cue) => cue.id === draft.id),
+    ).toBe(false);
   });
 });
