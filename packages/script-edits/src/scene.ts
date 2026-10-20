@@ -4,7 +4,6 @@ import {
   defaultInsertLabel,
   defaultPointLabel,
   type ContentDocument,
-  type NarrationSegment,
   type PointScene,
   type Scene,
   type SceneAccent,
@@ -12,11 +11,11 @@ import {
   type SceneTransitionEdge,
   type SceneAddInsertOperation,
   type SceneAddPointOperation,
-  type NewNarrationLineInput,
 } from "@kakeai/contracts";
 import { resolveTimeline } from "@kakeai/video/timeline";
 import type { ScriptContext } from "./context.ts";
 import { invalidOperation, preconditionFailed, targetNotFound } from "./errors.ts";
+import { createLine } from "./line-utils.ts";
 
 export interface SceneEditResult {
   document: ContentDocument;
@@ -90,36 +89,6 @@ function nextLabel(
   const before = document.scenes.slice(1, at);
   const ordinal = before.filter((scene) => scene.kind === kind).length + 1;
   return kind === "point" ? defaultPointLabel(ordinal) : defaultInsertLabel(ordinal);
-}
-
-function createLine(
-  sceneId: string,
-  input: NewNarrationLineInput,
-  context: ScriptContext,
-  existing: Set<string>,
-): NarrationSegment {
-  const id = context.ids.line(sceneId, existing);
-  existing.add(id);
-  const speakerId = input.speakerId ?? null;
-  const expressionId = input.expressionId ?? null;
-  if (speakerId === null && expressionId !== null) {
-    throw invalidOperation(
-      ["expressionId"],
-      "話者のいない行に表情は指定できません。",
-    );
-  }
-  const line: NarrationSegment = {
-    id,
-    speakerId,
-    captionText: input.captionText ?? "",
-    speechText: input.speechText ?? "",
-    selectedAudioTakeId: null,
-    expressionId,
-  };
-  if (input.gapBeforeMs !== undefined && input.gapBeforeMs > 0) {
-    line.gapBeforeMs = input.gapBeforeMs;
-  }
-  return line;
 }
 
 function requireVideoAsset(

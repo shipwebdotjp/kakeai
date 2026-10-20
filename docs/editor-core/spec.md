@@ -89,7 +89,7 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `line.add` | `sceneId`、任意の挿入位置、任意の初期値 | `point` のみ。ID は `<sceneの短縮トークン>` を含む。`speakerId: null` なら `expressionId: null` |
+| `line.add` | `sceneId`、任意の挿入位置、任意の初期値 | `point` のみ。ID は `<sceneの短縮トークン>` を含む。`speakerId: null` なら `expressionId: null`。空の行も作れる |
 | `line.remove` | `sceneId`、`lineId` | Cue 範囲の端点を詰め、単一行の Cue を削除し、効果トリガーと `videoPlayback.gates` から当該行への参照を外す。当該行の Audio Take を削除する |
 | `line.move` | `sceneId`、`lineId`、移動先 | 同一 Scene 内。`range: lines` の開始・終了が逆転したら入れ替える |
 | `line.split` | `sceneId`、`lineId`、前半と後半の `captionText`/`speechText` | 後述の解決規則に従う |
@@ -165,11 +165,11 @@ type ScriptOperation =
 - 範囲がその行だけなら Cue を削除する。
 - 範囲の端がその行なら、隣接する行へ端点を詰める。
 - 範囲の内側なら、範囲を維持する（行 ID は変わらない）。
-- 効果トリガーと `videoPlayback.gates` から当該行への参照を外す。
+- 効果トリガーと `videoPlayback.gates` から当該行への参照を外す。剪定の結果、テンプレートの必須入力を満たさなくなった Cue は削除し、`cue_removed_after_line_removal` 警告を返す。
 
 ### 変更しないもの
 
-操作コアは、Scene の `label` の重複、行の話速、テキストの自動改行、フォントの実測を行わない。テキスト量の警告は保存と同じ近似規則で返す。Face Set・CompositionVersion・Asset のグローバル整合は保存時に検証する。
+操作コアは、Scene の `label` の重複、行の話速、テキストの自動改行、フォントの実測を行わない。テキスト量の警告は保存と同じ近似規則で返す。固定尺の Scene では、行の追加・間の変更・音声の割り当て・選択・削除の後に `A + G <= D` を再検証し、超える操作を拒否する。Face Set・CompositionVersion・Asset のグローバル整合は保存時に検証する。
 
 ## タイミングの解決
 

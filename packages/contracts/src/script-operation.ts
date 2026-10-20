@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
+import { audioTakeSourceSchema } from "./content/narration";
 import { sceneAccentSchema, sceneTransitionEdgeSchema } from "./content/scene";
 import { sceneTimingSchema } from "./content/timing";
 
@@ -100,6 +101,88 @@ export const lineSplitOperationSchema = z.strictObject({
   second: lineSplitPartSchema,
 });
 
+export const lineAddOperationSchema = z.strictObject({
+  op: z.literal("line.add"),
+  key: scriptKeySchema.optional(),
+  sceneId: scriptIdRefSchema,
+  index: nonNegativeInt.optional(),
+  captionText: z.string().optional(),
+  speechText: z.string().optional(),
+  speakerId: z.string().min(1).nullable().optional(),
+  expressionId: z.string().min(1).nullable().optional(),
+  gapBeforeMs: nonNegativeInt.optional(),
+});
+
+export const lineRemoveOperationSchema = z.strictObject({
+  op: z.literal("line.remove"),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+});
+
+export const lineMoveOperationSchema = z.strictObject({
+  op: z.literal("line.move"),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  index: nonNegativeInt,
+});
+
+export const lineSetTextOperationSchema = z
+  .strictObject({
+    op: z.literal("line.setText"),
+    sceneId: scriptIdRefSchema,
+    lineId: scriptIdRefSchema,
+    captionText: z.string().optional(),
+    speechText: z.string().optional(),
+  })
+  .refine(
+    (value) => value.captionText !== undefined || value.speechText !== undefined,
+    { message: "captionTextまたはspeechTextが必要です", path: ["captionText"] },
+  );
+
+export const lineSetSpeakerOperationSchema = z.strictObject({
+  op: z.literal("line.setSpeaker"),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  speakerId: z.string().min(1).nullable(),
+});
+
+export const lineSetExpressionOperationSchema = z.strictObject({
+  op: z.literal("line.setExpression"),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  expressionId: z.string().min(1).nullable(),
+});
+
+export const lineSetGapOperationSchema = z.strictObject({
+  op: z.literal("line.setGap"),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  gapBeforeMs: nonNegativeInt,
+});
+
+export const lineAssignTakeOperationSchema = z.strictObject({
+  op: z.literal("line.assignTake"),
+  key: scriptKeySchema.optional(),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  assetId: idSchema,
+  source: audioTakeSourceSchema,
+});
+
+export const lineSelectTakeOperationSchema = z.strictObject({
+  op: z.literal("line.selectTake"),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  takeId: scriptIdRefSchema.nullable(),
+});
+
+export const lineRemoveTakeOperationSchema = z.strictObject({
+  op: z.literal("line.removeTake"),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  takeId: scriptIdRefSchema,
+});
+
 export const scriptOperationSchema = z.union([
   sceneAddPointOperationSchema,
   sceneAddInsertOperationSchema,
@@ -111,6 +194,16 @@ export const scriptOperationSchema = z.union([
   sceneSetTransitionOperationSchema,
   sceneSplitAtLineOperationSchema,
   lineSplitOperationSchema,
+  lineAddOperationSchema,
+  lineRemoveOperationSchema,
+  lineMoveOperationSchema,
+  lineSetTextOperationSchema,
+  lineSetSpeakerOperationSchema,
+  lineSetExpressionOperationSchema,
+  lineSetGapOperationSchema,
+  lineAssignTakeOperationSchema,
+  lineSelectTakeOperationSchema,
+  lineRemoveTakeOperationSchema,
 ]);
 export type ScriptOperation = z.infer<typeof scriptOperationSchema>;
 export type SceneAddPointOperation = z.infer<typeof sceneAddPointOperationSchema>;
@@ -123,5 +216,15 @@ export type SceneSetTimingOperation = z.infer<typeof sceneSetTimingOperationSche
 export type SceneSetTransitionOperation = z.infer<typeof sceneSetTransitionOperationSchema>;
 export type SceneSplitAtLineOperation = z.infer<typeof sceneSplitAtLineOperationSchema>;
 export type LineSplitOperation = z.infer<typeof lineSplitOperationSchema>;
+export type LineAddOperation = z.infer<typeof lineAddOperationSchema>;
+export type LineRemoveOperation = z.infer<typeof lineRemoveOperationSchema>;
+export type LineMoveOperation = z.infer<typeof lineMoveOperationSchema>;
+export type LineSetTextOperation = z.infer<typeof lineSetTextOperationSchema>;
+export type LineSetSpeakerOperation = z.infer<typeof lineSetSpeakerOperationSchema>;
+export type LineSetExpressionOperation = z.infer<typeof lineSetExpressionOperationSchema>;
+export type LineSetGapOperation = z.infer<typeof lineSetGapOperationSchema>;
+export type LineAssignTakeOperation = z.infer<typeof lineAssignTakeOperationSchema>;
+export type LineSelectTakeOperation = z.infer<typeof lineSelectTakeOperationSchema>;
+export type LineRemoveTakeOperation = z.infer<typeof lineRemoveTakeOperationSchema>;
 
 export const scriptOperationsSchema = z.array(scriptOperationSchema);
