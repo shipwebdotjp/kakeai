@@ -10,7 +10,7 @@
 4. シーン間トランジション（カット／フェード／クロスフェード）。
 5. 前のSceneのまるごと複製（視覚要素と遷移。セリフ・音声は含めない）。
 
-決定は [ADR-0034](../adr/0034-destructive-changes-before-1-0.md)（開発段階の破壊的変更）、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)（スロット廃止・Cue統一）、[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)（シーン間トランジション）、[ADR-0037](../adr/0037-unified-text-template-input-contract.md)（統合テキストテンプレートの入力契約）を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md)、複合ビジュアル基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。未保存時の退出ガード・保存時の診断表示・表示ラベルは [../editor-ux/spec.md](../editor-ux/spec.md) を正とする。
+決定は [ADR-0034](../adr/0034-destructive-changes-before-1-0.md)（開発段階の破壊的変更）、[ADR-0035](../adr/0035-remove-scene-slots-unify-text-cues.md)（スロット廃止・Cue統一）、[ADR-0036](../adr/0036-scene-transition-owned-by-entering-scene.md)（シーン間トランジション）、[ADR-0037](../adr/0037-unified-text-template-input-contract.md)（統合テキストテンプレートの入力契約）を参照する。台本契約は [../mvp/content-schema.md](../mvp/content-schema.md)、複合ビジュアル基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。未保存時の退出ガード・保存時の診断表示・表示ラベルは [../editor-ux/spec.md](../editor-ux/spec.md) を正とする。文書への構造操作（Scene・行・Cueの追加、削除、移動、分割、範囲変更）の意味論は [台本編集操作コア](../editor-core/spec.md) を正とし、編集画面は同じ操作を呼ぶ（[ADR-0076](../adr/0076-shared-script-operation-core.md)）。
 
 非ゴール：字幕タイミングの自由編集、任意CSS/keyframeの入力、複数ユーザー・共同編集。これらは従来どおり対象外。
 

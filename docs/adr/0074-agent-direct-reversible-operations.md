@@ -11,4 +11,4 @@ Kakeai は保存のたびに新しい不変の Script Version を追加し、過
 
 ## Consequences
 
-AI が作った版は帰属（Version Author）を記録し、履歴で識別と巻き戻しができるようにする。roadmap の「AI が作品の正本を自動更新しない」記述は本 ADR で置き換える。`ScriptVersion` に帰属列を追加する。操作の入口と接続方式は [ADR 0044](./0044-agent-local-socket-single-writer.md) と [Agent Access 仕様](../agent-access/spec.md) を正とする。
+AI が作った版は帰属（Version Author）を記録し、履歴で識別と巻き戻しができるようにする。roadmap の「AI が作品の正本を自動更新しない」記述は本 ADR で置き換える。`ScriptVersion` に帰属列を追加する。操作の入口と接続方式は [ADR 0075](./0075-agent-local-socket-single-writer.md) と [Agent Access 仕様](../agent-access/spec.md) を正とする。

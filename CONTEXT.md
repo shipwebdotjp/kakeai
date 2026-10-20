@@ -24,6 +24,14 @@ _Avoid_: owner, editor
 An external, user-controlled AI client that operates Kakeai through the app's local agent interface.
 _Avoid_: bot, LLM, model
 
+**Script Operation**:
+A named, reversible edit applied to a Content Document, such as adding a scene, splitting a line, or changing a cue range. Operations are applied to a document and never persist themselves.
+_Avoid_: JSON patch, mutation, form update
+
+**Script Operation Core**:
+The single implementation of Script Operations shared by the Web UI, the API, and agent bindings. It owns editing semantics but not storage.
+_Avoid_: editor service, form logic
+
 **Narration Segment**:
 The smallest unit of spoken content, with separate caption and spoken text, an optional selected Audio Take, and an optional per-line Expression Preset reference.
 _Avoid_: Subtitle, audio file

@@ -308,7 +308,7 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
 
 ### 台本の保存
 
-POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 1` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。
+POST /language-editions/:editionId/script-versions は既存の版を更新しない。クライアントはContentDocument全体をcontentに渡す。保存はlast-write-winsとし、受理時は表示用に単調増加のversionNumberを割り当て、新版のIDへ `currentScriptVersionId` を進める。書込みで受け入れるContentDocumentは `schemaVersion: 1` とする。contentの完全な契約は [content-schema.md](./content-schema.md) に従う。Scene・行・Cueの追加、削除、移動、分割、範囲変更の意味論は [台本編集操作コア](../editor-core/spec.md) を正とし、このHTTP APIは要素単位の操作を公開せず、編集済みの文書全体だけを受け取る。
 
 ~~~jsonc
 {
