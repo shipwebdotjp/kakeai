@@ -4,17 +4,17 @@
 
 ## フェーズ
 
-### [ ] E1 契約とパッケージ
+### [x] E1 契約とパッケージ
 
-- [ ] `packages/script-edits` を作り、`ScriptContext`・`ScriptOperation`・`ScriptOperationResult`・エラーコードを定義する
-- [ ] 各操作の Zod スキーマと型を `packages/contracts` に置き、`op` の判別 union にする
-- [ ] ID 生成器と `key` 参照の解決をテスト可能な形にする
+- [x] `packages/script-edits` を作り、`ScriptContext`・`ScriptOperation`・`ScriptOperationResult`・エラーコードを定義する
+- [x] 各操作の Zod スキーマと型を `packages/contracts` に置き、`op` の判別 union にする
+- [x] ID 生成器と `key` 参照の解決をテスト可能な形にする
 - 完了条件: 型検査が通り、未対応操作と未解決 `key` が安定したコードで失敗する。
 
 ### [ ] E2 Scene 操作
 
-- [ ] `scene.add`（point / insert）、`scene.remove`、`scene.move`、`scene.setLabel`、`scene.setAccent`
-- [ ] `scene.setTiming` と `scene.setTransition`（尺の等式・遷移上限）
+- [x] `scene.add`（point / insert）、`scene.remove`、`scene.move`、`scene.setLabel`、`scene.setAccent`
+- [x] `scene.setTiming` と `scene.setTransition`（尺の等式・遷移上限）
 - [ ] `scene.splitAtLine`（Cue の分割・複製、効果トリガーの剪定、解決済みミリ秒）
 - 完了条件: UI の既存 Scene 操作と同じ結果を返し、導入・結びの順序と insert の主動画が保存検証を通る。
 

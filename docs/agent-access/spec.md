@@ -113,7 +113,7 @@
 | `AGENT_OPERATION_UNKNOWN` | 未登録の操作名 |
 | `SCRIPT_BASE_STALE` | `baseScriptVersionId` が current と一致しない |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` が異なる入力で使われた |
-| `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` | 操作コアのエラー（[../editor-core/spec.md](../editor-core/spec.md)） |
+| `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` / `EDIT_ID_GENERATION_FAILED` | 操作コアのエラー（[../editor-core/spec.md](../editor-core/spec.md)） |
 | `VALIDATION_ERROR` | 保存検証に適合しない。`details.issues` に JSON Pointer と理由を含める |
 | `ASSET_UNAVAILABLE` | 取り込み・レンダー・編集で参照する Asset が ready でない、または欠損している |
 | `COMPOSITION_UNAVAILABLE` | 参照する Composition Version が publish 済みでない、または bundle が欠損している |

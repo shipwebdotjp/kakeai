@@ -77,7 +77,7 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `scene.add` | `kind` (`point` / `insert`)、挿入位置、任意の `label`、`point` の任意の初期 `lines`・`cues`、`insert` の `assetId`・`durationMs` | 導入は先頭、結びは末尾、`point`/`insert` はその間。`label` 省略時は連番。`accent` は `theme.primary`、`timing` は `point` が `auto`、`insert` が `fixed`、`transition` は `cut`。`point` は既定のテキスト Cue を持つ。`insert` は ready な `video` Asset を参照し、主動画 Cue を 1 件だけ持つ |
+| `scene.add` | `kind` (`point` / `insert`)、挿入位置、任意の `label`、`point` の任意の初期 `lines`、`insert` の `assetId`・`durationMs`・`embeddedAudio` | 導入は先頭、結びは末尾、`point`/`insert` はその間。挿入位置は文書全体の 0 始まり位置（導入の直後が 1、結びの直前が末尾）。`label` 省略時は連番。`accent` は `theme.primary`、`timing` は `point` が `auto`、`insert` が `fixed`、`transition` は `cut`。`point` は既定のテキスト Cue を持つ。`insert` は ready な `video` Asset を参照し、主動画 Cue を 1 件だけ持つ。音声のない Asset では `embeddedAudio: true` を拒否する |
 | `scene.remove` | `sceneId` | 導入・結びは削除できない。参照する AudioCue も削除する |
 | `scene.move` | `sceneId`、移動先 | 導入・結びの位置は変えられない。`point`/`insert` のみ移動できる |
 | `scene.splitAtLine` | `sceneId`、分割する行、任意の `label` | 後述の解決規則に従う。`point` のみ |
@@ -193,6 +193,7 @@ type ScriptOperation =
 | `EDIT_PRECONDITION_FAILED` | 尺の不足、固定尺の等式違反、Scene 順序、layer 制約など、文書の状態が操作を許さない |
 | `EDIT_INVALID_INPUT` | 入力が操作の Zod スキーマに適合しない、または ID 参照 `key` が解決できない |
 | `EDIT_UNSUPPORTED_TEMPLATE` | 指定した VisualTemplate の版が存在しない、または操作が未対応 |
+| `EDIT_ID_GENERATION_FAILED` | 衝突を避けて ID を生成できなかった（通常は発生しない） |
 
 束縛はこれらを安定したコードのまま返し、保存検証の `VALIDATION_ERROR` と区別する。
 
