@@ -368,6 +368,9 @@ export function collectCueTransitionIssues(
   return cueTransitionIssues(document, timeline);
 }
 
+export const OFFSET_RANGE_OUT_OF_SCENE_CODE = "offset_range_out_of_scene";
+export const OFFSET_RANGE_CLAMPED_CODE = "offset_range_clamped";
+
 export function collectOffsetRangeWarnings(
   document: ContentDocument,
   timeline: ResolvedTimeline = resolveTimeline(document),
@@ -386,7 +389,7 @@ export function collectOffsetRangeWarnings(
       if (cue.range.startMs >= placement.durationMs || cue.range.startMs >= cue.range.endMs) {
         warnings.push({
           path: cuePath,
-          code: "offset_range_out_of_scene",
+          code: OFFSET_RANGE_OUT_OF_SCENE_CODE,
           message: `オフセット表示区間がシーン尺（${placement.durationMs}ms）に収まらないため、このCueは表示されません。`,
         });
         return;
@@ -394,7 +397,7 @@ export function collectOffsetRangeWarnings(
       if (cue.range.endMs > placement.durationMs) {
         warnings.push({
           path: [...cuePath, "range", "endMs"],
-          code: "offset_range_clamped",
+          code: OFFSET_RANGE_CLAMPED_CODE,
           message: `オフセット表示区間の終了がシーン尺（${placement.durationMs}ms）を超えているため、シーン末尾で切り詰められます。`,
         });
       }

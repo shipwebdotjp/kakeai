@@ -1,7 +1,9 @@
 import type {
   ContentDocument,
+  ScriptCueRange,
   ScriptIdRef,
   ScriptOperation,
+  VisualCueRange,
   Warning,
 } from "@kakeai/contracts";
 import type { ScriptContext } from "./context.ts";
@@ -94,6 +96,20 @@ function registerKey(
     throw invalidOperation(["key"], `keyが重複しています: ${key}`);
   }
   keys.set(key, id);
+}
+
+function resolveCueRange(
+  range: ScriptCueRange,
+  keys: ReadonlyMap<string, string>,
+): VisualCueRange {
+  if (range.kind !== "lines") {
+    return range;
+  }
+  return {
+    kind: "lines",
+    startLineId: resolveId(range.startLineId, keys, ["range", "startLineId"]),
+    endLineId: resolveId(range.endLineId, keys, ["range", "endLineId"]),
+  };
 }
 
 function toResult(
@@ -283,7 +299,7 @@ export function applyScriptOperation(
         sceneId,
         {
           template: operation.template,
-          range: operation.range,
+          range: resolveCueRange(operation.range, keys),
           layer: operation.layer,
           order: operation.order,
           transition: operation.transition,
@@ -302,7 +318,14 @@ export function applyScriptOperation(
     case "cue.setRange": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
       const cueId = resolveId(operation.cueId, keys, ["cueId"]);
-      return toResult(setCueRange(document, sceneId, cueId, operation.range));
+      return toResult(
+        setCueRange(
+          document,
+          sceneId,
+          cueId,
+          resolveCueRange(operation.range, keys),
+        ),
+      );
     }
     case "cue.setInput": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);

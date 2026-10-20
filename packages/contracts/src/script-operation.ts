@@ -3,7 +3,6 @@ import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { audioTakeSourceSchema } from "./content/narration";
 import { audioCueRangeSchema, audioCueRoleSchema } from "./content/audio";
 import { cueLayerSchema, cueTransitionSchema, transitionEdgeSchema } from "./content/layers";
-import { visualCueRangeSchema } from "./content/visual";
 import { templateRefSchema } from "./content/nested";
 import { standingSideSchema } from "./templates";
 import { sceneAccentSchema, sceneTransitionEdgeSchema } from "./content/scene";
@@ -14,6 +13,21 @@ export const scriptIdRefSchema = z.union([
   z.strictObject({ key: z.string().min(1) }),
 ]);
 export type ScriptIdRef = z.infer<typeof scriptIdRefSchema>;
+
+export const scriptCueRangeSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("scene") }),
+  z.strictObject({
+    kind: z.literal("lines"),
+    startLineId: scriptIdRefSchema,
+    endLineId: scriptIdRefSchema,
+  }),
+  z.strictObject({
+    kind: z.literal("offset"),
+    startMs: nonNegativeInt,
+    endMs: nonNegativeInt,
+  }),
+]);
+export type ScriptCueRange = z.infer<typeof scriptCueRangeSchema>;
 
 const scriptKeySchema = z.string().min(1);
 const sceneIndexSchema = nonNegativeInt;
@@ -193,7 +207,7 @@ export const cueAddOperationSchema = z.strictObject({
   key: scriptKeySchema.optional(),
   sceneId: scriptIdRefSchema,
   template: templateRefSchema,
-  range: visualCueRangeSchema,
+  range: scriptCueRangeSchema,
   layer: cueLayerSchema,
   order: nonNegativeInt.optional(),
   transition: cueTransitionSchema.optional(),
@@ -210,7 +224,7 @@ export const cueSetRangeOperationSchema = z.strictObject({
   op: z.literal("cue.setRange"),
   sceneId: scriptIdRefSchema,
   cueId: scriptIdRefSchema,
-  range: visualCueRangeSchema,
+  range: scriptCueRangeSchema,
 });
 
 export const cueSetInputOperationSchema = z.strictObject({

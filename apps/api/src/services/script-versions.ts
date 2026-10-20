@@ -1116,7 +1116,7 @@ export async function createDraftPreview(
   return parsed.data;
 }
 
-function throwIfFatalTimelineError(error: unknown): void {
+export function throwIfFatalTimelineError(error: unknown): void {
   if (!(error instanceof CompositionCompileError)) {
     throw error;
   }
