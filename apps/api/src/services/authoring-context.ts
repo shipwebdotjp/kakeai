@@ -74,6 +74,21 @@ export class CompositionAuthoringService {
     return { context, provenance, kitFiles: contents.files };
   }
 
+  /**
+   * The seed written into a new Composition draft. Composition creation needs
+   * only the provenance and the Style Kit files, not the agent-facing context.
+   */
+  async resolveSeed(input: {
+    visualTheme: VisualThemeRef;
+    canvasProfile?: CanvasProfile;
+  }): Promise<{
+    provenance: CompositionAuthoredStyleProvenance;
+    kitFiles: Record<string, string>;
+  }> {
+    const resolved = await this.resolve(input);
+    return { provenance: resolved.provenance, kitFiles: resolved.kitFiles };
+  }
+
   async diagnoseStyleFonts(
     provenance: CompositionStyleProvenance | undefined,
   ): Promise<string[]> {

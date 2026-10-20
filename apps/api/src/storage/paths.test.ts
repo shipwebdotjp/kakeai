@@ -46,6 +46,7 @@ describe("dataDirectories", () => {
       artifacts: "/root/artifacts",
       compositions: "/root/compositions",
       tmp: "/root/tmp",
+      agent: "/root/agent",
     });
   });
 });

@@ -7,6 +7,7 @@ export type {
   ScriptIdGenerator,
 } from "./context.ts";
 export {
+  SCRIPT_EDIT_ERROR_CODES,
   ScriptEditError,
   scriptEditErrorCodes,
   type ScriptEditErrorCode,

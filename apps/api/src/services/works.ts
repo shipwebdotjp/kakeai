@@ -88,6 +88,7 @@ export async function createWork(
         versionNumber: 1,
         contentSchemaVersion: CONTENT_SCHEMA_VERSION,
         contentJson,
+        author: "human",
       },
     });
     await tx.languageEdition.update({
@@ -149,6 +150,7 @@ export async function cloneWork(
         contentSchemaVersion: sourceScript.contentSchemaVersion,
         contentJson: sourceScript.contentJson,
         sourceScriptVersionId: null,
+        author: "human",
       },
     });
     await tx.languageEdition.update({

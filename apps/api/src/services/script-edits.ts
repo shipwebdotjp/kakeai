@@ -49,7 +49,7 @@ function warningKey(warning: Warning): string {
   return `${warning.code}|${warning.path.join("/")}|${warning.message}`;
 }
 
-function mergeWarnings(first: Warning[], second: Warning[]): Warning[] {
+export function mergeWarnings(first: Warning[], second: Warning[]): Warning[] {
   const seen = new Set(first.map(warningKey));
   const merged = [...first];
   for (const warning of second) {

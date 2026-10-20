@@ -38,6 +38,8 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 - `packages/script-edits`: 台本編集の共有操作コア。Web UI・API・エージェント束縛は同じ操作を呼ぶ。
 - `packages/video`: Compositionコンパイラと信頼済みVisualTemplate（P4で追加）。
 - `apps/api`: Express + Prisma。workerループを内蔵し、単一プロセスで起動する（P1以降）。
+- `apps/mcp`: MCP stdio サーバー。`@kakeai/agent-client` でローカル制御ソケットへ接続する薄い束縛。
+- `apps/cli`: CLI（`kakeai-agent`）。操作名をサブコマンドとして公開し、MCP と同じ `@kakeai/agent-client` でソケットへ接続する薄い束縛。
 - `apps/web`: Vite + React + TypeScript + Tailwind CSS（P2以降）。
 
 

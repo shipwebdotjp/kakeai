@@ -24,6 +24,14 @@ _Avoid_: owner, editor
 An external, user-controlled AI client that operates Kakeai through the app's local agent interface.
 _Avoid_: bot, LLM, model
 
+**MCP Binding**:
+The MCP stdio surface through which a coding agent calls Agent Access operations. It forwards operations and holds no Kakeai business logic.
+_Avoid_: plugin, server API
+
+**CLI Binding**:
+The `kakeai-agent` command surface through which a user or agent calls Agent Access operations from a shell. It shares the MCP Binding's client, validation and job polling, and holds no Kakeai business logic.
+_Avoid_: admin command, shell API
+
 **Script Operation**:
 A named, reversible edit applied to a Content Document, such as adding a scene, splitting a line, or changing a cue range. Operations are applied to a document and never persist themselves.
 _Avoid_: JSON patch, mutation, form update

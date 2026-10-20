@@ -36,8 +36,10 @@ import {
   type InsertScene,
   type MediaFullBleedInput,
   type PreviewCueTiming,
+  type PreviewTimeline,
   type SaveScriptVersionRequest,
   type ScriptVersion as ScriptVersionDto,
+  type ScriptVersionAuthor,
   type ScriptVersionPreview,
   type ScriptVersionSummary,
   type VisualCue,
@@ -66,6 +68,62 @@ import { ThemeResolver } from "./theme-resolver.ts";
 export interface SaveScriptVersionResult {
   scriptVersion: ScriptVersionDto;
   warnings: Warning[];
+}
+
+/**
+ * Attribution for a newly created ScriptVersion. UI and HTTP save paths omit
+ * this and therefore record a human author with no agent request identity.
+ */
+export interface ScriptVersionAttribution {
+  author?: ScriptVersionAuthor;
+  authorAgentId?: string | null;
+  agentRequestId?: string | null;
+  agentRequestHash?: string | null;
+}
+
+interface NormalizedScriptVersionAttribution {
+  author: ScriptVersionAuthor;
+  authorAgentId: string | null;
+  agentRequestId: string | null;
+  agentRequestHash: string | null;
+}
+
+/**
+ * Optional compare-and-set guard for callers that must not overwrite a newer
+ * current version (Agent Access `script.edit`). It is checked inside the save
+ * transaction, not only before it.
+ */
+export interface SaveScriptVersionGuard {
+  expectedCurrentScriptVersionId: string;
+  staleError: () => Error;
+}
+
+function nonEmptyOrNull(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+function normalizeScriptVersionAttribution(
+  attribution: ScriptVersionAttribution | undefined,
+): NormalizedScriptVersionAttribution {
+  const author = attribution?.author ?? "human";
+  if (author === "human") {
+    return {
+      author,
+      authorAgentId: null,
+      agentRequestId: null,
+      agentRequestHash: null,
+    };
+  }
+  return {
+    author,
+    authorAgentId: nonEmptyOrNull(attribution?.authorAgentId),
+    agentRequestId: nonEmptyOrNull(attribution?.agentRequestId),
+    agentRequestHash: nonEmptyOrNull(attribution?.agentRequestHash),
+  };
 }
 
 async function requireEdition(prisma: PrismaClient, editionId: string) {
@@ -861,7 +919,7 @@ function previewCueTimings(content: ContentDocument, placement: ScenePlacement):
   return timings;
 }
 
-function buildPreviewTimeline(content: ContentDocument) {
+export function buildPreviewTimeline(content: ContentDocument): PreviewTimeline {
   const timeline = resolveTimeline(content);
   return {
     totalDurationMs: timeline.totalDurationMs,
@@ -1136,9 +1194,12 @@ export async function saveScriptVersion(
   prisma: PrismaClient,
   editionId: string,
   input: SaveScriptVersionRequest,
+  attribution?: ScriptVersionAttribution,
+  guard?: SaveScriptVersionGuard,
 ): Promise<SaveScriptVersionResult> {
   const edition = await requireEdition(prisma, editionId);
   const { content, sourceScriptVersionId } = input;
+  const versionAttribution = normalizeScriptVersionAttribution(attribution);
 
   if (content.locale !== edition.locale) {
     throw validationError([
@@ -1283,6 +1344,18 @@ export async function saveScriptVersion(
   for (let attempt = 1; ; attempt += 1) {
     try {
       const created = await prisma.$transaction(async (tx) => {
+        if (guard !== undefined) {
+          const current = await tx.languageEdition.findUnique({
+            where: { id: editionId },
+            select: { currentScriptVersionId: true },
+          });
+          if (
+            current === null ||
+            current.currentScriptVersionId !== guard.expectedCurrentScriptVersionId
+          ) {
+            throw guard.staleError();
+          }
+        }
         const themeResolver = new ThemeResolver(tx);
         const resolvedTheme = await themeResolver.resolve(
           content.visualTheme.id,
@@ -1310,12 +1383,27 @@ export async function saveScriptVersion(
             contentSchemaVersion: content.schemaVersion,
             contentJson,
             sourceScriptVersionId,
+            author: versionAttribution.author,
+            authorAgentId: versionAttribution.authorAgentId,
+            agentRequestId: versionAttribution.agentRequestId,
+            agentRequestHash: versionAttribution.agentRequestHash,
           },
         });
-        await tx.languageEdition.update({
-          where: { id: editionId },
+        const advanced = await tx.languageEdition.updateMany({
+          where:
+            guard === undefined
+              ? { id: editionId }
+              : {
+                  id: editionId,
+                  currentScriptVersionId: guard.expectedCurrentScriptVersionId,
+                },
           data: { currentScriptVersionId: row.id },
         });
+        if (advanced.count === 0) {
+          throw guard === undefined
+            ? resourceNotFound("language_edition", editionId)
+            : guard.staleError();
+        }
         await tx.work.update({ where: { id: edition.workId }, data: { updatedAt: new Date() } });
         return row;
       });

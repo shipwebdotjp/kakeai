@@ -1,18 +1,28 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { WorkSummary } from "@kakeai/contracts";
+import type { ScriptVersionSummary, WorkSummary } from "@kakeai/contracts";
 import {
   useCloneWork,
   useCreateWork,
   useDeleteWork,
   useRestoreScriptVersion,
+  useScriptVersion,
   useScriptVersions,
   useWorks,
 } from "../api/hooks";
 import { Modal } from "../components/Modal";
+import { SCENE_LABELS } from "../content/labels";
 import { errorMessage } from "../lib/errorMessage";
 import { workRoute } from "../lib/routes";
 import {
+  abbreviateAgentId,
+  buildVersionOutline,
+  isAgentAuthored,
+  lineDisplayText,
+} from "../lib/versionHistory";
+import {
+  badgeInfoClass,
+  badgeNeutralClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
@@ -106,6 +116,154 @@ interface HistoryModalProps {
   work: WorkSummary | null;
 }
 
+function CurrentVersionBadge() {
+  return (
+    <span className="rounded bg-brand-100 px-2 py-1 text-xs font-semibold text-brand-800 dark:bg-brand-950 dark:text-brand-300">
+      現在版
+    </span>
+  );
+}
+
+function AuthorBadge({ version }: { version: Pick<ScriptVersionSummary, "author"> }) {
+  return (
+    <span className={isAgentAuthored(version.author) ? badgeInfoClass : badgeNeutralClass}>
+      {isAgentAuthored(version.author) ? "エージェント作" : "利用者"}
+    </span>
+  );
+}
+
+function AgentIdText({ agentId, full }: { agentId: string; full?: boolean }) {
+  return (
+    <p className={`mt-1 break-all ${metaTextClass}`} title={agentId}>
+      エージェントID: {full === true ? agentId : abbreviateAgentId(agentId)}
+    </p>
+  );
+}
+
+function OutlineStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-base font-semibold tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+interface VersionInspectPanelProps {
+  version: ScriptVersionSummary;
+  isCurrent: boolean;
+  onBack: () => void;
+  onRestore: (version: ScriptVersionSummary) => void;
+  restorePending: boolean;
+  restoreError: unknown;
+}
+
+function VersionInspectPanel({
+  version,
+  isCurrent,
+  onBack,
+  onRestore,
+  restorePending,
+  restoreError,
+}: VersionInspectPanelProps) {
+  const detail = useScriptVersion(version.id);
+  const outline = useMemo(
+    () => (detail.data === undefined ? null : buildVersionOutline(detail.data.content)),
+    [detail.data],
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" className={buttonNeutralClass} onClick={onBack}>
+          ← 履歴に戻る
+        </button>
+        {!isCurrent && (
+          <button
+            type="button"
+            className={buttonPrimaryClass}
+            disabled={restorePending}
+            onClick={() => onRestore(version)}
+          >
+            {restorePending ? "復元中…" : "この版から復元"}
+          </button>
+        )}
+      </div>
+
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-semibold">v{version.versionNumber}</h3>
+          <AuthorBadge version={version} />
+          {isCurrent && <CurrentVersionBadge />}
+          <span className={metaTextClass}>
+            {new Date(version.createdAt).toLocaleString("ja-JP")}
+          </span>
+        </div>
+        {version.authorAgentId !== null && <AgentIdText agentId={version.authorAgentId} full />}
+        {version.agentRequestId !== null && (
+          <p className={`mt-1 break-all ${metaTextClass}`}>要求ID: {version.agentRequestId}</p>
+        )}
+        <p className={`mt-1 ${metaTextClass}`}>
+          この画面は保存済みの内容を読み取り専用で表示しています。
+          {!isCurrent && "「この版から復元」は既存の版を上書きせず、新しい版を作成します。"}
+        </p>
+      </div>
+
+      {restoreError !== null && <p className={errorTextClass}>{errorMessage(restoreError)}</p>}
+
+      {detail.isLoading && <p>内容を読み込み中…</p>}
+      {detail.isError && <p className={errorTextClass}>{errorMessage(detail.error)}</p>}
+
+      {outline !== null && (
+        <>
+          <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <OutlineStat label="シーン" value={outline.sceneCount} />
+            <OutlineStat label="セリフ" value={outline.lineCount} />
+            <OutlineStat label="音声テイク" value={outline.audioTakeCount} />
+            <OutlineStat label="演出Cue" value={outline.visualCueCount + outline.audioCueCount} />
+          </dl>
+
+          <p className={metaTextClass}>
+            テーマ: {outline.visualTheme.id} v{outline.visualTheme.version} ・ テンプレート:{" "}
+            {outline.template.id}@{outline.template.version} ・ 言語: {outline.locale}
+          </p>
+
+          <ol className="m-0 list-none divide-y divide-border rounded-md border border-border p-0">
+            {outline.scenes.map((scene) => (
+              <li key={scene.id} className="p-3">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="rounded bg-surface-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                    {SCENE_LABELS[scene.kind]}
+                  </span>
+                  <span className="min-w-0 font-semibold break-words">{scene.label}</span>
+                  <span className={metaTextClass}>セリフ {scene.lineCount}件</span>
+                </div>
+                {scene.lines.length === 0 ? (
+                  <p className={`mt-1 ${metaTextClass}`}>セリフはありません。</p>
+                ) : (
+                  <ul className="m-0 mt-1 list-none space-y-1 p-0">
+                    {scene.lines.map((line, index) => {
+                      const text = lineDisplayText(line);
+                      return (
+                        <li key={line.id} className="flex gap-2 text-sm">
+                          <span className="w-5 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                            {index + 1}
+                          </span>
+                          <span className="min-w-0 break-words">{text}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </div>
+  );
+}
+
 function HistoryModal({ open, onClose, work }: HistoryModalProps) {
   const edition = work?.languageEditions[0];
   const editionId = edition?.id;
@@ -113,71 +271,109 @@ function HistoryModal({ open, onClose, work }: HistoryModalProps) {
 
   const versionsQuery = useScriptVersions(editionId);
   const restoreMutation = useRestoreScriptVersion(work?.id, editionId);
+  const [inspecting, setInspecting] = useState<ScriptVersionSummary | null>(null);
+  const resetRestore = restoreMutation.reset;
+
+  // A new work (or a reopened modal) must not show another work's version or
+  // a restore error left over from a previous attempt.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setInspecting(null);
+    resetRestore();
+  }, [open, editionId, resetRestore]);
 
   if (work === null) {
     return null;
   }
 
-  const onRestore = (versionNumber: number, versionId: string) => {
+  const onRestore = (version: ScriptVersionSummary) => {
     if (
       window.confirm(
-        `v${versionNumber} から復元しますか？\n※既存の版は上書きせず、新しい版を作成します。`,
+        `v${version.versionNumber} から復元しますか？\n※既存の版は上書きせず、新しい版を作成します。`,
       )
     ) {
-      restoreMutation.mutate(versionId);
+      restoreMutation.mutate(version.id, { onSuccess: () => setInspecting(null) });
     }
   };
 
   return (
     <Modal open={open} onClose={onClose} title={`「${work.title}」の版履歴・復元`}>
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          過去の版を選択して「復元」を押すと、その内容で新しい版を作成して最新の現在版にします。
-        </p>
+      {inspecting !== null ? (
+        <VersionInspectPanel
+          version={inspecting}
+          isCurrent={inspecting.id === currentScriptVersionId}
+          onBack={() => setInspecting(null)}
+          onRestore={onRestore}
+          restorePending={restoreMutation.isPending}
+          restoreError={restoreMutation.isError ? restoreMutation.error : null}
+        />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            各版には作成者（利用者／エージェント）を表示します。「内容を確認」で保存済みの内容を読み取り専用で確認でき、そこから新しい版として復元できます。
+          </p>
 
-        {restoreMutation.isError && (
-          <p className={errorTextClass}>{errorMessage(restoreMutation.error)}</p>
-        )}
+          {restoreMutation.isError && (
+            <p className={errorTextClass}>{errorMessage(restoreMutation.error)}</p>
+          )}
 
-        {versionsQuery.isLoading && <p>履歴を読み込み中…</p>}
-        {versionsQuery.isError && (
-          <p className={errorTextClass}>{errorMessage(versionsQuery.error)}</p>
-        )}
+          {versionsQuery.isLoading && <p>履歴を読み込み中…</p>}
+          {versionsQuery.isError && (
+            <p className={errorTextClass}>{errorMessage(versionsQuery.error)}</p>
+          )}
 
-        {versionsQuery.data !== undefined && (
-          <ul className="divide-y divide-border rounded-md border border-border">
-            {versionsQuery.data.map((version) => {
-              const isCurrent = version.id === currentScriptVersionId;
-              return (
-                <li key={version.id} className="flex items-center justify-between p-3">
-                  <div>
-                    <span className="font-semibold">v{version.versionNumber}</span>
-                    <span className={`ml-3 ${metaTextClass}`}>
-                      {new Date(version.createdAt).toLocaleString("ja-JP")}
-                    </span>
-                  </div>
-                  <div>
-                    {isCurrent ? (
-                      <span className="rounded bg-brand-100 px-2 py-1 text-xs font-semibold text-brand-800 dark:bg-brand-950 dark:text-brand-300">
-                        現在版
-                      </span>
-                    ) : (
+          {versionsQuery.data !== undefined && (
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {versionsQuery.data.map((version) => {
+                const isCurrent = version.id === currentScriptVersionId;
+                return (
+                  <li
+                    key={version.id}
+                    className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">v{version.versionNumber}</span>
+                        <AuthorBadge version={version} />
+                        {isCurrent && <CurrentVersionBadge />}
+                        <span className={metaTextClass}>
+                          {new Date(version.createdAt).toLocaleString("ja-JP")}
+                        </span>
+                      </div>
+                      {version.authorAgentId !== null && (
+                        <AgentIdText agentId={version.authorAgentId} />
+                      )}
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <button
                         type="button"
                         className={buttonNeutralClass}
-                        disabled={restoreMutation.isPending}
-                        onClick={() => onRestore(version.versionNumber, version.id)}
+                        aria-label={`v${version.versionNumber} の内容を確認`}
+                        onClick={() => setInspecting(version)}
                       >
-                        {restoreMutation.isPending ? "復元中…" : "復元"}
+                        内容を確認
                       </button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+                      {!isCurrent && (
+                        <button
+                          type="button"
+                          className={buttonNeutralClass}
+                          aria-label={`v${version.versionNumber} から復元`}
+                          disabled={restoreMutation.isPending}
+                          onClick={() => onRestore(version)}
+                        >
+                          {restoreMutation.isPending ? "復元中…" : "復元"}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }

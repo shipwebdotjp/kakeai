@@ -11,6 +11,7 @@ import {
   jobKindSchema,
   jobStatusSchema,
   localeSchema,
+  scriptVersionAuthorSchema,
   thumbnailDocumentSchema,
   ttsJobResultSchema,
   voiceAdapterIdSchema,
@@ -188,6 +189,10 @@ export function toScriptVersionSummary(row: ScriptVersionRow): ScriptVersionSumm
     languageEditionId: row.languageEditionId,
     versionNumber: row.versionNumber,
     contentSchemaVersion: row.contentSchemaVersion,
+    author: parseEnum(scriptVersionAuthorSchema, row.author, "ScriptVersion.author"),
+    authorAgentId: row.authorAgentId,
+    agentRequestId: row.agentRequestId,
+    agentRequestHash: row.agentRequestHash,
     createdAt: toIso(row.createdAt),
   };
 }

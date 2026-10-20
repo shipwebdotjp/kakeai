@@ -61,7 +61,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | WorkSummary | id, title, originalLocale, updatedAt, languageEditions | 作品一覧用。各Editionには現在の台本版と最新Render Jobの要約を含める。 |
 | Work | WorkSummaryのフィールド、createdAt, parentWorkId | 一覧と管理に使う作品名 `title` を持つ。動画内に表示するタイトルはContentDocument側のSceneスロットであり、こちらとは別である。 |
 | LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。`locale` は `ja-JP` または `en-US`。 |
-| ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt | contentはContentDocumentそのもの。保存後に更新しない。 |
+| ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt, author, authorAgentId, agentRequestId, agentRequestHash | contentはContentDocumentそのもの。保存後に更新しない。`author` は `human` / `agent` で作成時に確定し、以後変更しない。`authorAgentId`・`agentRequestId`・`agentRequestHash` は該当しない場合null。詳細は [Agent Access 仕様](../agent-access/spec.md) の帰属を正とする。 |
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, hasAudio, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。hasAudioは音声ストリームの有無（imageは常にfalse）。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
 | Composition | id, runtimeCompositionId, name, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`, `styleProvenance`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
 | CompositionVersion | id, compositionId, versionNumber, bundleHash, storageKey, manifest, styleProvenance, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、Canvas Profile、その固定寸法、既定尺、依存一覧を持つ。`canvasProfile` は `landscape`（1920×1080、既定）または `portrait`（1080×1920）で、versionごとに不変。`contentHash` は任意。`storageKey` はアプリデータルート相対の内部キーであり、参照やURL生成に使わない（絶対パスは返さない）。`styleProvenance` はauthoring元Theme/Skin/Style Kit hashとFont診断の不変記録で、`authored` / `neutral` / `legacy` の判別union（[../visual-skins/spec.md](../visual-skins/spec.md)）。 |
@@ -293,6 +293,10 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
       "languageEditionId": "led_ja_123",
       "versionNumber": 2,
       "contentSchemaVersion": 3,
+      "author": "human",
+      "authorAgentId": null,
+      "agentRequestId": null,
+      "agentRequestHash": null,
       "createdAt": "2026-10-08T03:20:00.000Z"
     },
     {
@@ -300,6 +304,10 @@ GET /language-editions/:editionId/script-versions は、本文を含まない版
       "languageEditionId": "led_ja_123",
       "versionNumber": 1,
       "contentSchemaVersion": 3,
+      "author": "human",
+      "authorAgentId": null,
+      "agentRequestId": null,
+      "agentRequestHash": null,
       "createdAt": "2026-10-08T03:00:00.000Z"
     }
   ]
@@ -355,6 +363,10 @@ POST /language-editions/:editionId/script-versions は既存の版を更新し�
       "scenes": [],
       "audioCues": []
     },
+    "author": "human",
+    "authorAgentId": null,
+    "agentRequestId": null,
+    "agentRequestHash": null,
     "createdAt": "2026-10-08T03:30:00.000Z"
   }
 }

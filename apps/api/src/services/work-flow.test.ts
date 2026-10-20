@@ -44,6 +44,7 @@ describe("work and script version flow", () => {
     const edition = work.languageEditions[0]!;
     const current = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
     expect(current.versionNumber).toBe(1);
+    expect(current.author).toBe("human");
     expect(current.content.template).toEqual({ id: "explanation-scenes", version: 1 });
     expect(current.content.scenes.map((scene) => scene.kind)).toEqual([
       "intro",
@@ -107,6 +108,76 @@ describe("work and script version flow", () => {
     expect(current.versionNumber).toBe(2);
     const list = await scriptVersions.listScriptVersions(prisma, edition.id);
     expect(list.map((version) => version.versionNumber)).toEqual([2, 1]);
+  });
+
+  it("records attribution and enforces request ids per edition", async () => {
+    const work = await works.createWork(prisma, "帰属テスト", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+
+    const human = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    expect(human.scriptVersion).toMatchObject({
+      author: "human",
+      authorAgentId: null,
+      agentRequestId: null,
+      agentRequestHash: null,
+    });
+
+    const agent = await scriptVersions.saveScriptVersion(
+      prisma,
+      edition.id,
+      { sourceScriptVersionId: null, content },
+      {
+        author: "agent",
+        authorAgentId: "agent-1",
+        agentRequestId: "edit-1",
+        agentRequestHash: "hash-1",
+      },
+    );
+    expect(agent.scriptVersion).toMatchObject({
+      author: "agent",
+      authorAgentId: "agent-1",
+      agentRequestId: "edit-1",
+      agentRequestHash: "hash-1",
+    });
+
+    const read = await scriptVersions.getScriptVersion(prisma, agent.scriptVersion.id);
+    expect(read).toMatchObject({
+      id: agent.scriptVersion.id,
+      author: "agent",
+      authorAgentId: "agent-1",
+      agentRequestId: "edit-1",
+      agentRequestHash: "hash-1",
+    });
+    const listed = await scriptVersions.listScriptVersions(prisma, edition.id);
+    expect(listed.find((version) => version.id === agent.scriptVersion.id)).toMatchObject({
+      author: "agent",
+      agentRequestId: "edit-1",
+    });
+
+    const anonymous = await scriptVersions.saveScriptVersion(
+      prisma,
+      edition.id,
+      { sourceScriptVersionId: null, content },
+      { author: "agent", authorAgentId: "   ", agentRequestId: "edit-2" },
+    );
+    expect(anonymous.scriptVersion.authorAgentId).toBeNull();
+
+    await expect(
+      scriptVersions.saveScriptVersion(
+        prisma,
+        edition.id,
+        { sourceScriptVersionId: null, content },
+        {
+          author: "agent",
+          agentRequestId: "edit-1",
+          agentRequestHash: "different-hash",
+        },
+      ),
+    ).rejects.toMatchObject({ code: "P2002" });
   });
 
   it("returns warnings but still saves overflowing text", async () => {

@@ -1,12 +1,10 @@
-export const scriptEditErrorCodes = [
-  "EDIT_TARGET_NOT_FOUND",
-  "EDIT_PRECONDITION_FAILED",
-  "EDIT_INVALID_INPUT",
-  "EDIT_UNSUPPORTED_TEMPLATE",
-  "EDIT_ID_GENERATION_FAILED",
-] as const;
+import {
+  SCRIPT_EDIT_ERROR_CODES,
+  scriptEditErrorCodes,
+  type ScriptEditErrorCode,
+} from "@kakeai/contracts";
 
-export type ScriptEditErrorCode = (typeof scriptEditErrorCodes)[number];
+export { SCRIPT_EDIT_ERROR_CODES, scriptEditErrorCodes, type ScriptEditErrorCode };
 
 export interface ScriptEditIssue {
   path: (string | number)[];
@@ -27,7 +25,7 @@ export class ScriptEditError extends Error {
 }
 
 export function targetNotFound(path: (string | number)[], message: string): ScriptEditError {
-  return new ScriptEditError("EDIT_TARGET_NOT_FOUND", [
+  return new ScriptEditError(SCRIPT_EDIT_ERROR_CODES.TARGET_NOT_FOUND, [
     { path, code: "target_not_found", message },
   ]);
 }
@@ -36,7 +34,7 @@ export function preconditionFailed(
   path: (string | number)[],
   message: string,
 ): ScriptEditError {
-  return new ScriptEditError("EDIT_PRECONDITION_FAILED", [
+  return new ScriptEditError(SCRIPT_EDIT_ERROR_CODES.PRECONDITION_FAILED, [
     { path, code: "precondition_failed", message },
   ]);
 }
@@ -45,13 +43,13 @@ export function invalidOperation(
   path: (string | number)[],
   message: string,
 ): ScriptEditError {
-  return new ScriptEditError("EDIT_INVALID_INPUT", [
+  return new ScriptEditError(SCRIPT_EDIT_ERROR_CODES.INVALID_INPUT, [
     { path, code: "invalid_input", message },
   ]);
 }
 
 export function idGenerationFailed(): ScriptEditError {
-  return new ScriptEditError("EDIT_ID_GENERATION_FAILED", [
+  return new ScriptEditError(SCRIPT_EDIT_ERROR_CODES.ID_GENERATION_FAILED, [
     { path: [], code: "id_generation_failed", message: "IDを生成できませんでした。" },
   ]);
 }

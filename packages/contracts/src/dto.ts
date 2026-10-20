@@ -65,11 +65,17 @@ export const workSchema = workSummarySchema.extend({
   parentWorkId: idSchema.nullable(),
 });
 
+export const scriptVersionAuthorSchema = z.enum(["human", "agent"]);
+
 export const scriptVersionSummarySchema = z.object({
   id: idSchema,
   languageEditionId: idSchema,
   versionNumber: positiveInt,
   contentSchemaVersion: positiveInt,
+  author: scriptVersionAuthorSchema,
+  authorAgentId: z.string().min(1).nullable(),
+  agentRequestId: z.string().min(1).nullable(),
+  agentRequestHash: z.string().min(1).nullable(),
   createdAt: timestampSchema,
 });
 
@@ -293,6 +299,7 @@ export const draftPreviewSchema = previewBodySchema.extend({
 export type WorkSummary = z.infer<typeof workSummarySchema>;
 export type Work = z.infer<typeof workSchema>;
 export type LanguageEditionSummary = z.infer<typeof languageEditionSummarySchema>;
+export type ScriptVersionAuthor = z.infer<typeof scriptVersionAuthorSchema>;
 export type ScriptVersionSummary = z.infer<typeof scriptVersionSummarySchema>;
 export type ScriptVersion = z.infer<typeof scriptVersionSchema>;
 export type Asset = z.infer<typeof assetSchema>;

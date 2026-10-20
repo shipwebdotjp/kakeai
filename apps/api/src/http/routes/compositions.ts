@@ -7,7 +7,8 @@ import {
   publishCompositionRequestSchema,
 } from "@kakeai/contracts";
 import type { CompositionService } from "../../services/compositions.ts";
-import type { CompositionAuthoringService, ResolvedAuthoringStyle } from "../../services/authoring-context.ts";
+import type { CompositionAuthoringService } from "../../services/authoring-context.ts";
+import { publishOrValidateComposition } from "../../services/composition-publishing.ts";
 import { sendData } from "../envelope.ts";
 import { parseBody } from "../validation.ts";
 import { ApiError } from "../errors.ts";
@@ -74,20 +75,16 @@ export function createCompositionsRouter(
       const body = parseBody(createCompositionRequestSchema, req.body);
       const { authoringStyle, ...compositionInput } = body;
       let authoringSeed:
-        | {
-            provenance: ResolvedAuthoringStyle["provenance"];
-            kitFiles: Record<string, string>;
-          }
+        | Awaited<ReturnType<CompositionAuthoringService["resolveSeed"]>>
         | undefined;
       if (authoringStyle !== undefined) {
         if (authoringService === undefined) {
           throw new ApiError(500, "INTERNAL_ERROR", "Composition authoring is not configured.");
         }
-        const resolved = await authoringService.resolve({
+        authoringSeed = await authoringService.resolveSeed({
           visualTheme: authoringStyle.visualTheme,
           canvasProfile: body.canvasProfile,
         });
-        authoringSeed = { provenance: resolved.provenance, kitFiles: resolved.kitFiles };
       }
       const composition = await compositionService.createComposition({
         ...compositionInput,
@@ -141,32 +138,20 @@ export function createCompositionsRouter(
           issues: [{ path: ["dryRun"], code: "invalid_value", message: "dryRun は 'true' または 'false' を指定してください" }],
         });
       }
-      const diagnoseFonts = async (): Promise<string[]> => {
-        if (authoringService === undefined) {
-          return [];
-        }
-        try {
-          const composition = await compositionService.getCompositionById(compositionId);
-          return await authoringService.diagnoseStyleFonts(composition.draft?.styleProvenance);
-        } catch (error) {
-          return [
-            `Font診断を省略しました: ${error instanceof Error ? error.message : String(error)}`,
-          ];
-        }
-      };
-      if (dryRun === "true") {
-        const [manifest, fontDiagnostics] = await Promise.all([
-          compositionService.validateDraft(compositionId, body),
-          diagnoseFonts(),
-        ]);
-        sendData(res, 200, { manifest }, { fontDiagnostics });
+      const result = await publishOrValidateComposition(
+        compositionService,
+        authoringService,
+        compositionId,
+        body,
+        { dryRun: dryRun === "true" },
+      );
+      if (result.dryRun) {
+        sendData(res, 200, { manifest: result.manifest }, {
+          fontDiagnostics: result.fontDiagnostics,
+        });
         return;
       }
-      const [version, fontDiagnostics] = await Promise.all([
-        compositionService.publish(compositionId, body),
-        diagnoseFonts(),
-      ]);
-      sendData(res, 201, version, { fontDiagnostics });
+      sendData(res, 201, result.version, { fontDiagnostics: result.fontDiagnostics });
     } catch (err) {
       next(err);
     }

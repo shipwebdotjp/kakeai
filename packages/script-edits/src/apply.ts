@@ -3,6 +3,7 @@ import type {
   ScriptCueRange,
   ScriptIdRef,
   ScriptOperation,
+  ScriptOperationCreated,
   VisualCueRange,
   Warning,
 } from "@kakeai/contracts";
@@ -45,13 +46,7 @@ import { removeStanding, setStanding } from "./standing.ts";
 import { addAudio, removeAudio, setAudio } from "./audio.ts";
 import { setVisualTheme } from "./theme.ts";
 
-export interface ScriptOperationCreated {
-  sceneIds: string[];
-  lineIds: string[];
-  cueIds: string[];
-  audioCueIds: string[];
-  audioTakeIds: string[];
-}
+export type { ScriptOperationCreated };
 
 export interface ScriptOperationResult {
   document: ContentDocument;

@@ -46,6 +46,10 @@ model ScriptVersion {
   versionNumber       Int
   contentSchemaVersion Int
   contentJson         String
+  author              String          @default("human")
+  authorAgentId       String?
+  agentRequestId      String?
+  agentRequestHash    String?
   sourceScriptVersionId String?
   sourceScriptVersion ScriptVersion?  @relation("ScriptSource", fields: [sourceScriptVersionId], references: [id], onDelete: Restrict)
   derivedVersions     ScriptVersion[] @relation("ScriptSource")
@@ -54,6 +58,7 @@ model ScriptVersion {
   createdAt           DateTime        @default(now())
 
   @@unique([languageEditionId, versionNumber])
+  @@unique([languageEditionId, agentRequestId])
 }
 
 model Asset {

@@ -1,0 +1,52 @@
+export {
+  AGENT_ERROR_CODES,
+  AGENT_MAX_REQUEST_BYTES,
+  AGENT_MUTATION_TIMEOUT_MS,
+  AGENT_PROTOCOL_VERSION,
+  AGENT_READ_TIMEOUT_MS,
+  AGENT_SOCKET_DIRECTORY,
+  AGENT_SOCKET_FILENAME,
+  agentSocketPath,
+  isAgentMutationOperation,
+  type AgentAssetProvenance,
+  type AgentErrorCode,
+  type AgentErrorIssue,
+  type AgentHandshake,
+  type AgentOperationInputMap,
+  type AgentOperationName,
+  type AgentOperationOutputMap,
+  type AgentRequestEnvelope,
+  type AgentResponse,
+} from "@kakeai/contracts";
+export {
+  AgentClientError,
+  createAgentClient,
+  requestAgentOperation,
+  type AgentClient,
+  type AgentClientOptions,
+} from "./client.ts";
+export {
+  BINDING_VALIDATION_ERROR_CODE,
+  bindingErrorPayload,
+  bindingErrorText,
+  zodIssues,
+  type BindingErrorPayload,
+} from "./errors.ts";
+export {
+  DEFAULT_JOB_WAIT_INTERVAL_MS,
+  DEFAULT_JOB_WAIT_TIMEOUT_MS,
+  MAX_JOB_WAIT_INTERVAL_MS,
+  MAX_JOB_WAIT_TIMEOUT_MS,
+  MIN_JOB_WAIT_INTERVAL_MS,
+  TERMINAL_JOB_STATUSES,
+  createJobGetter,
+  isTerminalJobStatus,
+  jobWaitInputSchema,
+  jobWaitResultSchema,
+  waitForJob,
+  type JobPollingRequester,
+  type JobWaitDependencies,
+  type JobWaitInput,
+  type JobWaitResult,
+} from "./job-wait.ts";
+export { defaultAgentDataRoot, resolveAgentSocketPath } from "./paths.ts";

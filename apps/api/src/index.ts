@@ -1,3 +1,4 @@
+import { startAgentSocketServer, type AgentSocketServer } from "./agent/socket-server.ts";
 import { loadConfig } from "./config.ts";
 import { createPrismaClient } from "./db/client.ts";
 import { runMigrations } from "./db/migrate.ts";
@@ -5,6 +6,7 @@ import { applySqlitePragmas } from "./db/pragmas.ts";
 import { generateMediaSessionToken } from "./http/security.ts";
 import { logger } from "./logger.ts";
 import { createApp } from "./server.ts";
+import { getSharedFontCatalogService } from "./services/font-catalog.ts";
 import { runStartupMaintenance } from "./services/lifecycle.ts";
 import { ensureDataDirectories } from "./storage/paths.ts";
 import { createWorker } from "./worker/index.ts";
@@ -25,12 +27,23 @@ async function main(): Promise<void> {
     throw error;
   }
 
+  const fontCatalogService = getSharedFontCatalogService();
   const app = createApp({
     config,
     prisma,
     mediaSessionToken: generateMediaSessionToken(),
     getWorkerStatus: worker.status,
+    fontCatalogService,
   });
+
+  let agentServer: AgentSocketServer | undefined;
+  try {
+    agentServer = await startAgentSocketServer({ config, prisma, fontCatalogService });
+  } catch (error) {
+    logger.warn("agent_socket_start_failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   const server = app.listen(config.port, config.host, () => {
     logger.info("api_listening", {
@@ -46,6 +59,15 @@ async function main(): Promise<void> {
     }
     shuttingDown = true;
     logger.info("shutting_down", { signal });
+    if (agentServer !== undefined) {
+      try {
+        await agentServer.close();
+      } catch (error) {
+        logger.warn("agent_socket_close_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     try {
       await worker.stop();
     } catch (error) {

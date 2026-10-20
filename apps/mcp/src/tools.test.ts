@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import {
+  agentLongRunningOperationNames,
+  agentMutationOperationNames,
+  agentOperationNames,
+  agentReadOperationNames,
+  isAgentLongRunningOperation,
+  isAgentMutationOperation,
+} from "@kakeai/contracts";
+import {
+  MCP_TOOL_NAME_PATTERN,
+  jobWaitToolEntry,
+  mcpToolEntries,
+  mcpToolName,
+  operationToolEntries,
+} from "./tools.ts";
+
+describe("MCP tool catalog", () => {
+  it("exposes every agent operation exactly once", () => {
+    expect(operationToolEntries).toHaveLength(agentOperationNames.length);
+    expect(new Set(operationToolEntries.map((entry) => entry.operation))).toEqual(
+      new Set(agentOperationNames),
+    );
+    expect([...operationToolEntries.map((entry) => entry.operation)].sort()).toEqual(
+      [...agentOperationNames].sort(),
+    );
+  });
+
+  it("classifies reads, mutations and job-based operations from contracts", () => {
+    for (const entry of operationToolEntries) {
+      expect(entry.kind).toBe("operation");
+      expect(entry.readOnly).toBe(!isAgentMutationOperation(entry.operation));
+      expect(entry.longRunning).toBe(isAgentLongRunningOperation(entry.operation));
+      expect(entry.annotations.readOnlyHint).toBe(entry.readOnly);
+      expect(entry.annotations.destructiveHint).toBe(false);
+    }
+    expect(operationToolEntries.filter((entry) => entry.longRunning).map((entry) => entry.operation))
+      .toEqual([...agentLongRunningOperationNames]);
+    expect(agentLongRunningOperationNames).toEqual(["asset.import", "render.start"]);
+    expect(agentReadOperationNames.length + agentMutationOperationNames.length).toBe(
+      agentOperationNames.length,
+    );
+  });
+
+  it("uses unique MCP-safe names with the canonical operation in the description", () => {
+    const names = mcpToolEntries.map((entry) => entry.toolName);
+    expect(new Set(names).size).toBe(names.length);
+    for (const entry of mcpToolEntries) {
+      expect(entry.toolName).toMatch(MCP_TOOL_NAME_PATTERN);
+      expect(entry.toolName.startsWith("kakeai_")).toBe(true);
+      expect(entry.toolName).not.toContain(".");
+      expect(entry.toolName).not.toContain("-");
+      expect(entry.toolName).toBe(entry.toolName.toLowerCase());
+    }
+    for (const entry of operationToolEntries) {
+      expect(entry.toolName).toBe(mcpToolName(entry.operation));
+      expect(entry.description).toContain(entry.operation);
+      if (entry.longRunning) {
+        expect(entry.description).toContain("kakeai_job_wait");
+      }
+    }
+    expect(mcpToolName("composition.authoringContext")).toBe(
+      "kakeai_composition_authoring_context",
+    );
+    expect(mcpToolName("script.edit")).toBe("kakeai_script_edit");
+  });
+
+  it("generates an object input and output schema for every tool", () => {
+    for (const entry of mcpToolEntries) {
+      expect(entry.inputSchema.type).toBe("object");
+      expect(entry.outputSchema.type).toBe("object");
+      expect(entry.description.length).toBeGreaterThan(0);
+    }
+    const workGet = operationToolEntries.find((entry) => entry.operation === "work.get");
+    expect(workGet?.inputSchema.properties).toHaveProperty("workId");
+    const scriptEdit = operationToolEntries.find((entry) => entry.operation === "script.edit");
+    expect(scriptEdit?.inputSchema.properties).toHaveProperty("baseScriptVersionId");
+    expect(scriptEdit?.inputSchema.properties).toHaveProperty("operations");
+    expect(scriptEdit?.inputSchema.required).toEqual(
+      expect.arrayContaining(["baseScriptVersionId", "requestId", "operations"]),
+    );
+    const validate = operationToolEntries.find(
+      (entry) => entry.operation === "script.validate",
+    );
+    expect(validate?.inputSchema.anyOf).toBeDefined();
+  });
+
+  it("includes the job_wait convenience tool and no irreversible tools", () => {
+    expect(jobWaitToolEntry.toolName).toBe("kakeai_job_wait");
+    expect(mcpToolEntries).toContain(jobWaitToolEntry);
+    for (const entry of mcpToolEntries) {
+      expect(entry.toolName).not.toMatch(/(delete|remove|destroy|purge|publish_external)/u);
+    }
+    expect(
+      agentOperationNames.filter((name) => /(delete|remove|destroy|purge)/u.test(name)),
+    ).toEqual([]);
+  });
+});

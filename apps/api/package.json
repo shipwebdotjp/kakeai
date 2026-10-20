@@ -25,6 +25,10 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@kakeai/agent-client": "*",
+    "@kakeai/cli": "*",
+    "@kakeai/mcp": "*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/busboy": "^1.5.4",
     "@types/express": "^5.0.6",

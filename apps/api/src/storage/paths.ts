@@ -1,6 +1,7 @@
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { AGENT_SOCKET_DIRECTORY, AGENT_SOCKET_FILENAME } from "@kakeai/contracts";
 
 export interface DataDirectories {
   root: string;
@@ -9,6 +10,7 @@ export interface DataDirectories {
   artifacts: string;
   compositions: string;
   tmp: string;
+  agent: string;
 }
 
 export function resolveDataRoot(
@@ -43,7 +45,17 @@ export function dataDirectories(root: string): DataDirectories {
     artifacts: join(root, "artifacts"),
     compositions: join(root, "compositions"),
     tmp: join(root, "tmp"),
+    agent: join(root, AGENT_SOCKET_DIRECTORY),
   };
+}
+
+/**
+ * The control socket directory is owner-only. `mkdir` alone is affected by the
+ * process umask, so chmod explicitly after creation.
+ */
+export async function ensureAgentDirectory(directory: string): Promise<void> {
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await chmod(directory, 0o700);
 }
 
 export async function ensureDataDirectories(directories: DataDirectories): Promise<void> {
@@ -57,6 +69,11 @@ export async function ensureDataDirectories(directories: DataDirectories): Promi
       directories.tmp,
     ].map((directory) => mkdir(directory, { recursive: true })),
   );
+  await ensureAgentDirectory(directories.agent);
+}
+
+export function agentSocketFilePath(directories: DataDirectories): string {
+  return join(directories.agent, AGENT_SOCKET_FILENAME);
 }
 
 export function databaseFilePath(directories: DataDirectories): string {

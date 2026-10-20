@@ -28,7 +28,9 @@ import {
 } from "../lib/editorLayout";
 import { EDITOR_WIDE_MEDIA_QUERY, useMediaQuery } from "../lib/useMediaQuery";
 import { thumbnailsRoute } from "../lib/routes";
+import { isAgentAuthored } from "../lib/versionHistory";
 import {
+  badgeInfoClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
@@ -216,6 +218,20 @@ export function WorkEditPage() {
           ← 作品一覧
         </Link>
       </p>
+
+      {current.data !== undefined && isAgentAuthored(current.data.author) && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 text-sm">
+          <span className={badgeInfoClass}>現在版はエージェント作</span>
+          {current.data.authorAgentId !== null && (
+            <span
+              className={`min-w-0 break-all ${metaTextClass}`}
+              title={current.data.authorAgentId}
+            >
+              ID: {current.data.authorAgentId}
+            </span>
+          )}
+        </div>
+      )}
 
       {work.isLoading && <p className="shrink-0">読み込み中…</p>}
       {work.isError && <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(work.error)}</p>}

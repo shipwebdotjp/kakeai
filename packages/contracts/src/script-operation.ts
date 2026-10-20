@@ -8,6 +8,31 @@ import { standingSideSchema } from "./templates";
 import { sceneAccentSchema, sceneTransitionEdgeSchema } from "./content/scene";
 import { sceneTimingSchema } from "./content/timing";
 
+export const SCRIPT_EDIT_ERROR_CODES = {
+  TARGET_NOT_FOUND: "EDIT_TARGET_NOT_FOUND",
+  PRECONDITION_FAILED: "EDIT_PRECONDITION_FAILED",
+  INVALID_INPUT: "EDIT_INVALID_INPUT",
+  UNSUPPORTED_TEMPLATE: "EDIT_UNSUPPORTED_TEMPLATE",
+  ID_GENERATION_FAILED: "EDIT_ID_GENERATION_FAILED",
+} as const;
+
+export type ScriptEditErrorCode =
+  (typeof SCRIPT_EDIT_ERROR_CODES)[keyof typeof SCRIPT_EDIT_ERROR_CODES];
+
+export const scriptEditErrorCodes = Object.values(SCRIPT_EDIT_ERROR_CODES) as [
+  ScriptEditErrorCode,
+  ...ScriptEditErrorCode[],
+];
+
+export const scriptOperationCreatedSchema = z.strictObject({
+  sceneIds: z.array(idSchema),
+  lineIds: z.array(idSchema),
+  cueIds: z.array(idSchema),
+  audioCueIds: z.array(idSchema),
+  audioTakeIds: z.array(idSchema),
+});
+export type ScriptOperationCreated = z.infer<typeof scriptOperationCreatedSchema>;
+
 export const scriptIdRefSchema = z.union([
   idSchema,
   z.strictObject({ key: z.string().min(1) }),
@@ -313,7 +338,7 @@ export const documentSetVisualThemeOperationSchema = z.strictObject({
   version: positiveInt,
 });
 
-export const scriptOperationSchema = z.union([
+const scriptOperationSchemas = [
   sceneAddPointOperationSchema,
   sceneAddInsertOperationSchema,
   sceneRemoveOperationSchema,
@@ -346,8 +371,19 @@ export const scriptOperationSchema = z.union([
   audioSetOperationSchema,
   audioRemoveOperationSchema,
   documentSetVisualThemeOperationSchema,
-]);
+] as const;
+
+export const scriptOperationSchema = z.union(scriptOperationSchemas);
 export type ScriptOperation = z.infer<typeof scriptOperationSchema>;
+export type ScriptOperationName = ScriptOperation["op"];
+
+/**
+ * Both scene.add variants share the same operation name, so the catalog is
+ * de-duplicated. Consumers must see one entry per `op` value.
+ */
+export const scriptOperationNames = [
+  ...new Set(scriptOperationSchemas.map((schema) => schema.shape.op.value)),
+] as [ScriptOperationName, ...ScriptOperationName[]];
 export type SceneAddPointOperation = z.infer<typeof sceneAddPointOperationSchema>;
 export type SceneAddInsertOperation = z.infer<typeof sceneAddInsertOperationSchema>;
 export type SceneRemoveOperation = z.infer<typeof sceneRemoveOperationSchema>;

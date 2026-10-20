@@ -14,6 +14,7 @@ import type { ScriptContext } from "./context.ts";
 import {
   invalidOperation,
   preconditionFailed,
+  SCRIPT_EDIT_ERROR_CODES,
   ScriptEditError,
   targetNotFound,
 } from "./errors.ts";
@@ -60,7 +61,7 @@ export function parseCue(cue: VisualCue): VisualCue {
   const parsed = visualCueSchema.safeParse(cue);
   if (!parsed.success) {
     throw new ScriptEditError(
-      "EDIT_INVALID_INPUT",
+      SCRIPT_EDIT_ERROR_CODES.INVALID_INPUT,
       parsed.error.issues.map((issue) => ({
         path: issue.path.filter(
           (segment): segment is string | number =>
@@ -199,7 +200,7 @@ export function addCue(
     input.template.version,
   );
   if (definition === undefined) {
-    throw new ScriptEditError("EDIT_UNSUPPORTED_TEMPLATE", [
+    throw new ScriptEditError(SCRIPT_EDIT_ERROR_CODES.UNSUPPORTED_TEMPLATE, [
       {
         path: ["template"],
         code: "unsupported_template",
@@ -339,7 +340,7 @@ export function setCuePlacement(
   const cue = findCue(scene, cueId);
   const definition = getVisualTemplate(cue.template.id, cue.template.version);
   if (definition === undefined) {
-    throw new ScriptEditError("EDIT_UNSUPPORTED_TEMPLATE", [
+    throw new ScriptEditError(SCRIPT_EDIT_ERROR_CODES.UNSUPPORTED_TEMPLATE, [
       {
         path: ["cueId"],
         code: "unsupported_template",

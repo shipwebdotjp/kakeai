@@ -33,12 +33,18 @@ export interface UploadInput {
   originalFilename: string;
   sha256: string;
   byteSize: number;
+  /** Defaults to `uploaded`. Agent imports with provenance are `generated`. */
+  origin?: "uploaded" | "generated";
+  /** Optional JSON provenance (model, prompt, generation parameters). */
+  provenanceJson?: string;
 }
 
 export interface IngestOutcome {
   asset: Asset;
   deduplicated: boolean;
   httpStatus: 200 | 202;
+  /** The enqueued ingest job, or null when an already-ready asset was reused. */
+  jobId: string | null;
 }
 
 export interface ContentLocation {
@@ -118,19 +124,75 @@ async function inspectUpload(
   return { kind: detected.kind, mediaType: detected.mediaType, probe };
 }
 
+/**
+ * Reuses an existing asset. Provenance is additive: the first metadata that
+ * described the bytes wins, so a later agent import never relabels a human
+ * upload or replaces TTS generation metadata.
+ */
 async function requeueExisting(
   prisma: PrismaClient,
-  existing: { id: string; sha256: string; mediaType: string; storageKey: string },
+  existing: {
+    id: string;
+    sha256: string;
+    mediaType: string;
+    storageKey: string;
+    provenanceJson: string | null;
+  },
+  provenanceJson?: string,
 ): Promise<IngestOutcome> {
-  const updated = await prisma.$transaction(async (transaction) => {
+  const { asset: updated, job } = await prisma.$transaction(async (transaction) => {
     const asset = await transaction.asset.update({
       where: { id: existing.id },
       data: { status: "processing" },
     });
-    await createIngestJob(transaction, asset);
-    return asset;
+    if (provenanceJson !== undefined) {
+      // Conditional update: never replace provenance that already exists.
+      await transaction.asset.updateMany({
+        where: { id: existing.id, provenanceJson: null },
+        data: { provenanceJson },
+      });
+    }
+    const job = await createIngestJob(transaction, asset);
+    return { asset, job };
   });
-  return { asset: toAsset(updated), deduplicated: true, httpStatus: 202 };
+  return {
+    asset: toAsset(updated),
+    deduplicated: true,
+    httpStatus: 202,
+    jobId: job.id,
+  };
+}
+
+async function storeProvenance(
+  prisma: PrismaClient,
+  existing: { id: string; provenanceJson: string | null },
+  provenanceJson: string | undefined,
+): Promise<void> {
+  if (existing.provenanceJson !== null || provenanceJson === undefined) {
+    return;
+  }
+  // Conditional update: only the first provenance that describes these bytes wins.
+  await prisma.asset.updateMany({
+    where: { id: existing.id, provenanceJson: null },
+    data: { provenanceJson },
+  });
+}
+
+/** The in-flight ingest Job for an asset that is still processing, if any. */
+async function pendingIngestJobId(
+  prisma: PrismaClient,
+  assetId: string,
+): Promise<string | null> {
+  const job = await prisma.job.findFirst({
+    where: {
+      assetId,
+      kind: "asset_ingest",
+      status: { in: ["queued", "running"] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  return job?.id ?? null;
 }
 
 export async function ingestUpload(
@@ -147,10 +209,15 @@ export async function ingestUpload(
     const matches = await fileMatches(filePath, existing.sha256, bigIntToSafeNumber(existing.byteSize));
     if (matches && existing.status !== "failed") {
       await rm(input.tempPath, { force: true });
+      await storeProvenance(prisma, existing, input.provenanceJson);
       return {
         asset: toAsset(existing),
         deduplicated: true,
         httpStatus: existing.status === "ready" ? 200 : 202,
+        jobId:
+          existing.status === "ready"
+            ? null
+            : await pendingIngestJobId(prisma, existing.id),
       };
     }
     await inspectUpload(input.tempPath, limits);
@@ -159,34 +226,37 @@ export async function ingestUpload(
     } else {
       await commitFile(input.tempPath, existing.storageKey, directories);
     }
-    return requeueExisting(prisma, existing);
+    return requeueExisting(prisma, existing, input.provenanceJson);
   }
 
   const { kind, mediaType } = await inspectUpload(input.tempPath, limits);
   await commitFile(input.tempPath, storageKey, directories);
   try {
-    const created = await prisma.$transaction(async (transaction) => {
+    const { asset: created, jobId } = await prisma.$transaction(async (transaction) => {
       const asset = await transaction.asset.create({
         data: {
           kind,
-          origin: "uploaded",
+          origin: input.origin ?? "uploaded",
           status: "processing",
           storageKey,
           originalFilename: input.originalFilename,
           mediaType,
           byteSize: BigInt(input.byteSize),
           sha256: input.sha256,
+          ...(input.provenanceJson === undefined
+            ? {}
+            : { provenanceJson: input.provenanceJson }),
         },
       });
-      await createIngestJob(transaction, asset);
-      return asset;
+      const job = await createIngestJob(transaction, asset);
+      return { asset, jobId: job.id };
     });
-    return { asset: toAsset(created), deduplicated: false, httpStatus: 202 };
+    return { asset: toAsset(created), deduplicated: false, httpStatus: 202, jobId };
   } catch (error) {
     if (isPrismaCode(error, "P2002")) {
       const raced = await prisma.asset.findUnique({ where: { sha256: input.sha256 } });
       if (raced !== null) {
-        return requeueExisting(prisma, raced);
+        return requeueExisting(prisma, raced, input.provenanceJson);
       }
     }
     const claimed = await prisma.asset

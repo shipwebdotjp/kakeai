@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./testing/fixtures": "./src/testing/fixtures.ts"
+    "./testing/fixtures": "./src/testing/fixtures.ts",
+    "./testing/agent-fixtures": "./src/testing/agent-fixtures.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
