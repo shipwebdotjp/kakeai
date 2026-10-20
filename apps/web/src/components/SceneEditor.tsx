@@ -16,6 +16,7 @@ import {
   type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
   type ContentDocument,
+  type ScriptOperation,
   type ScriptVersion,
   type ThemeAccentToken,
   type TtsJobResult,
@@ -40,17 +41,13 @@ import {
   cloneSceneFormValue,
   collectSceneIds,
   countCharacterFormUsage,
-  createInsertSceneFormValue,
-  createPointSceneFormValue,
   generatedTakePolicy,
   mergeTake,
   newAppearanceId,
   newCharacterId,
   newSceneId,
   newSpeakerId,
-  nextInsertLabel,
   nextPointLabel,
-  splitPointScene,
   toFormValues,
   DEFAULT_BGM_GAIN_DB,
   type CharacterFormValue,
@@ -59,6 +56,7 @@ import {
   type SceneFormValue,
   type SpeakerFormValue,
 } from "../content/form";
+import { applyStructuralOperation } from "../content/structural";
 import { SCENE_LABELS } from "../content/labels";
 import { AssetThumbnail, assetLabel } from "../lib/assets";
 import { errorMessage } from "../lib/errorMessage";
@@ -558,7 +556,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       onDirtyChange?.(isFormDirty);
     }
   }, [isFormDirty, onDirtyChange]);
-  const { fields, insert, remove, move, replace: replaceScenes } = useFieldArray({
+  const { fields, insert, replace: replaceScenes } = useFieldArray({
     control,
     name: "scenes",
   });
@@ -726,14 +724,29 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     },
   );
 
+  const runStructural = (operation: ScriptOperation): void => {
+    try {
+      const next = applyStructuralOperation(
+        base,
+        getValues(),
+        operation,
+        assetsQuery.data ?? [],
+      );
+      replaceScenes(next.values.scenes);
+    } catch (error) {
+      setDiagnostics((prev) => ({
+        ...prev,
+        errors: [{ message: errorMessage(error) }],
+      }));
+      setOpenKind("error");
+    }
+  };
+
   const onAddPoint = () => {
     const scenes = getValues("scenes");
     const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
     const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
-    insert(
-      insertIndex,
-      createPointSceneFormValue(nextPointLabel(scenes, insertIndex), collectSceneIds(scenes)),
-    );
+    runStructural({ op: "scene.add", kind: "point", index: insertIndex });
   };
 
   const onClonePrevious = (index: number) => {
@@ -773,65 +786,49 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     const scenes = getValues("scenes");
     const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
     const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
-    insert(
-      insertIndex,
-      createInsertSceneFormValue(
-        nextInsertLabel(scenes, insertIndex),
-        asset.id,
-        asset.durationMs,
-        collectSceneIds(scenes),
-      ),
-    );
+    runStructural({
+      op: "scene.add",
+      kind: "insert",
+      index: insertIndex,
+      assetId: asset.id,
+      durationMs: asset.durationMs,
+      embeddedAudio: asset.hasAudio,
+    });
   };
 
   const onMove = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     const scenes = getValues("scenes");
-    if (!isMiddleScene(scenes[index]?.kind) || !isMiddleScene(scenes[target]?.kind)) {
+    const scene = scenes[index];
+    if (
+      scene === undefined ||
+      !isMiddleScene(scene.kind) ||
+      !isMiddleScene(scenes[target]?.kind)
+    ) {
       return;
     }
-    move(index, target);
+    runStructural({ op: "scene.move", sceneId: scene.id, index: target });
+  };
+
+  const onRemoveScene = (sceneIndex: number) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    runStructural({ op: "scene.remove", sceneId: scene.id });
   };
 
   const onSplitScene = (sceneIndex: number, lineIndex: number) => {
-    const scenes = getValues("scenes");
-    const scene = scenes[sceneIndex];
-    if (scene === undefined || scene.kind !== "point") {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    const lineId = scene?.lines[lineIndex]?.id;
+    if (scene === undefined || scene.kind !== "point" || lineId === undefined) {
       return;
     }
-    const placement = placementBySceneId.get(scene.id);
-    const splitLineId = scene.lines[lineIndex]?.id;
-    const splitLineStartMs = placement?.lines.find(
-      (line) => line.lineId === splitLineId,
-    )?.startMs;
-    const rawSplitOffsetMs =
-      placement !== undefined && splitLineStartMs !== undefined
-        ? splitLineStartMs - placement.startMs
-        : null;
-    const splitOffsetMs =
-      rawSplitOffsetMs !== null && Number.isFinite(rawSplitOffsetMs) && rawSplitOffsetMs >= 0
-        ? rawSplitOffsetMs
-        : null;
-    let result: ReturnType<typeof splitPointScene>;
-    try {
-      result = splitPointScene(
-        scene,
-        lineIndex,
-        nextPointLabel(scenes, sceneIndex + 1),
-        collectSceneIds(scenes),
-        splitOffsetMs,
-      );
-    } catch (error) {
-      setDiagnostics((prev) => ({ ...prev, errors: [{ message: errorMessage(error) }] }));
-      setOpenKind("error");
-      return;
-    }
-    replaceScenes([
-      ...scenes.slice(0, sceneIndex),
-      result.first,
-      result.second,
-      ...scenes.slice(sceneIndex + 1),
-    ]);
+    runStructural({
+      op: "scene.splitAtLine",
+      sceneId: scene.id,
+      lineId,
+    });
   };
 
   const bulkCandidateCount = useMemo(() => bulkTtsCandidateLineIds(base).length, [base]);
@@ -1356,7 +1353,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   <button
                     type="button"
                     className={buttonDangerClass}
-                    onClick={() => remove(sceneIndex)}
+                    onClick={() => onRemoveScene(sceneIndex)}
                   >
                     削除
                   </button>
@@ -1466,6 +1463,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   register={register}
                   getValues={getValues}
                   setValue={setValue}
+                  base={base}
+                  onError={(message) => {
+                    setDiagnostics((prev) => ({
+                      ...prev,
+                      errors: [{ message }],
+                    }));
+                    setOpenKind("error");
+                  }}
                   sceneIndex={sceneIndex}
                   sceneId={scene.id}
                   scriptVersionId={scriptVersionId}

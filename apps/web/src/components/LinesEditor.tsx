@@ -13,7 +13,9 @@ import {
   MAX_TTS_SPEED_SCALE,
   MIN_TTS_SPEED_SCALE,
   voiceAdapterDescriptorFor,
+  type ContentDocument,
   type FaceSet,
+  type ScriptOperation,
   type VoiceAdapterId,
   type VoiceProfile,
 } from "@kakeai/contracts";
@@ -27,17 +29,13 @@ import type {
 } from "../content/form";
 import {
   countLineCueReferences,
-  collectLineIds,
-  createEmptyLine,
-  duplicateLineFormValue,
   generatedTakePolicy,
   lineSummary,
   mergeTake,
-  moveLineInScene,
   newSpeakerId,
-  removeLineInScene,
   type GeneratedTakeSelect,
 } from "../content/form";
+import { applyStructuralOperation } from "../content/structural";
 import { useAssets, useGenerateTtsTake } from "../api/hooks";
 import { type AdapterVoicesState, adapterLabel } from "../lib/voiceAdapters";
 import {
@@ -58,6 +56,8 @@ interface LinesEditorProps {
   register: UseFormRegister<DocumentFormValues>;
   getValues: UseFormGetValues<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
+  base: ContentDocument;
+  onError: (message: string) => void;
   sceneIndex: number;
   sceneId: string;
   scriptVersionId: string;
@@ -78,7 +78,11 @@ function formatDuration(durationMs: number): string {
   return `${seconds.toFixed(seconds < 10 ? 1 : 0)}秒`;
 }
 
-interface LineEditorProps extends Omit<LinesEditorProps, "sceneId" | "control" | "onSplitScene"> {
+interface LineEditorProps
+  extends Omit<
+    LinesEditorProps,
+    "sceneId" | "control" | "onSplitScene" | "base" | "onError"
+  > {
   lineIndex: number;
   line: LineFormValue;
   standings: StandingFormValue[];
@@ -734,6 +738,8 @@ export function LinesEditor({
   register,
   getValues,
   setValue,
+  base,
+  onError,
   sceneIndex,
   sceneId,
   scriptVersionId,
@@ -748,24 +754,40 @@ export function LinesEditor({
   onSplitScene,
   onJumpToLine,
 }: LinesEditorProps) {
-  const { fields, append, insert, replace } = useFieldArray({
+  const { fields, replace } = useFieldArray({
     control,
     name: `scenes.${sceneIndex}.lines`,
   });
   const watchedLines = useWatch({ control, name: `scenes.${sceneIndex}.lines` }) ?? [];
   const watchedStandings = useWatch({ control, name: `scenes.${sceneIndex}.standings` }) ?? [];
 
+  const runStructural = (operation: ScriptOperation): void => {
+    try {
+      const next = applyStructuralOperation(base, getValues(), operation);
+      const operationSceneId =
+        "sceneId" in operation && typeof operation.sceneId === "string"
+          ? operation.sceneId
+          : sceneId;
+      const scene = next.values.scenes.find(
+        (entry) => entry.id === operationSceneId,
+      );
+      if (scene === undefined) {
+        onError("構造操作の対象Sceneが見つかりません。");
+        return;
+      }
+      replace(scene.lines);
+      setValue(`scenes.${sceneIndex}.cues`, scene.cues, { shouldDirty: true });
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "構造操作に失敗しました。");
+    }
+  };
+
   const moveLine = (from: number, to: number) => {
-    const scene = getValues(`scenes.${sceneIndex}`);
-    if (scene === undefined) {
+    const line = getValues(`scenes.${sceneIndex}.lines.${from}`);
+    if (line === undefined) {
       return;
     }
-    const moved = moveLineInScene(scene, from, to);
-    if (moved === scene) {
-      return;
-    }
-    replace(moved.lines);
-    setValue(`scenes.${sceneIndex}.cues`, moved.cues, { shouldDirty: true });
+    runStructural({ op: "line.move", sceneId, lineId: line.id, index: to });
   };
 
   const duplicateLine = (lineIndex: number) => {
@@ -773,10 +795,16 @@ export function LinesEditor({
     if (line === undefined) {
       return;
     }
-    insert(
-      lineIndex + 1,
-      duplicateLineFormValue(line, sceneId, collectLineIds(getValues("scenes"))),
-    );
+    runStructural({
+      op: "line.add",
+      sceneId,
+      index: lineIndex + 1,
+      captionText: line.captionText,
+      speechText: line.speechText,
+      speakerId: line.speakerId,
+      expressionId: line.expressionId,
+      gapBeforeMs: Number.isFinite(line.gapBeforeMs) ? line.gapBeforeMs : 0,
+    });
   };
 
   const removeLine = (lineIndex: number) => {
@@ -794,9 +822,7 @@ export function LinesEditor({
     ) {
       return;
     }
-    const next = removeLineInScene(scene, lineIndex);
-    replace(next.lines);
-    setValue(`scenes.${sceneIndex}.cues`, next.cues, { shouldDirty: true });
+    runStructural({ op: "line.remove", sceneId, lineId: line.id });
   };
 
   return (
@@ -839,7 +865,7 @@ export function LinesEditor({
       <button
         type="button"
         className={buttonNeutralClass}
-        onClick={() => append(createEmptyLine(sceneId, collectLineIds(getValues("scenes"))))}
+        onClick={() => runStructural({ op: "line.add", sceneId })}
       >
         セリフを追加
       </button>
