@@ -20,6 +20,7 @@ function createContext(
       scene: () => `scene-point-new-${(sceneCount += 1)}`,
       line: (sceneId) => `line-${sceneId}-${(lineCount += 1)}`,
       cue: (sceneId, suffix) => `visual-${sceneId}-${suffix}`,
+      audioCue: () => `audio-test`,
       audioTake: (lineId) => `take-${lineId}-1`,
     },
   };

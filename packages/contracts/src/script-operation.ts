@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { audioTakeSourceSchema } from "./content/narration";
+import { audioCueRangeSchema, audioCueRoleSchema } from "./content/audio";
+import { cueLayerSchema, cueTransitionSchema, transitionEdgeSchema } from "./content/layers";
+import { visualCueRangeSchema } from "./content/visual";
+import { templateRefSchema } from "./content/nested";
+import { standingSideSchema } from "./templates";
 import { sceneAccentSchema, sceneTransitionEdgeSchema } from "./content/scene";
 import { sceneTimingSchema } from "./content/timing";
 
@@ -183,6 +188,117 @@ export const lineRemoveTakeOperationSchema = z.strictObject({
   takeId: scriptIdRefSchema,
 });
 
+export const cueAddOperationSchema = z.strictObject({
+  op: z.literal("cue.add"),
+  key: scriptKeySchema.optional(),
+  sceneId: scriptIdRefSchema,
+  template: templateRefSchema,
+  range: visualCueRangeSchema,
+  layer: cueLayerSchema,
+  order: nonNegativeInt.optional(),
+  transition: cueTransitionSchema.optional(),
+  input: z.unknown(),
+});
+
+export const cueRemoveOperationSchema = z.strictObject({
+  op: z.literal("cue.remove"),
+  sceneId: scriptIdRefSchema,
+  cueId: scriptIdRefSchema,
+});
+
+export const cueSetRangeOperationSchema = z.strictObject({
+  op: z.literal("cue.setRange"),
+  sceneId: scriptIdRefSchema,
+  cueId: scriptIdRefSchema,
+  range: visualCueRangeSchema,
+});
+
+export const cueSetInputOperationSchema = z.strictObject({
+  op: z.literal("cue.setInput"),
+  sceneId: scriptIdRefSchema,
+  cueId: scriptIdRefSchema,
+  input: z.unknown(),
+  replace: z.boolean().optional(),
+});
+
+export const cueSetPlacementOperationSchema = z.strictObject({
+  op: z.literal("cue.setPlacement"),
+  sceneId: scriptIdRefSchema,
+  cueId: scriptIdRefSchema,
+  layer: cueLayerSchema,
+  order: nonNegativeInt,
+});
+
+export const cueSetTransitionOperationSchema = z
+  .strictObject({
+    op: z.literal("cue.setTransition"),
+    sceneId: scriptIdRefSchema,
+    cueId: scriptIdRefSchema,
+    enter: transitionEdgeSchema.optional(),
+    exit: transitionEdgeSchema.optional(),
+  })
+  .refine((value) => value.enter !== undefined || value.exit !== undefined, {
+    message: "enterまたはexitが必要です",
+    path: ["enter"],
+  });
+
+export const standingSetOperationSchema = z.strictObject({
+  op: z.literal("standing.set"),
+  key: scriptKeySchema.optional(),
+  sceneId: scriptIdRefSchema,
+  side: standingSideSchema,
+  characterId: idSchema,
+  appearanceId: idSchema,
+  scale: z.number().finite().positive().optional(),
+});
+
+export const standingRemoveOperationSchema = z.strictObject({
+  op: z.literal("standing.remove"),
+  sceneId: scriptIdRefSchema,
+  side: standingSideSchema,
+});
+
+export const audioAddOperationSchema = z.strictObject({
+  op: z.literal("audio.add"),
+  key: scriptKeySchema.optional(),
+  role: audioCueRoleSchema,
+  assetId: idSchema,
+  range: audioCueRangeSchema,
+  gainDb: z.number().finite().optional(),
+  loop: z.boolean().optional(),
+});
+
+export const audioSetOperationSchema = z
+  .strictObject({
+    op: z.literal("audio.set"),
+    audioCueId: scriptIdRefSchema,
+    role: audioCueRoleSchema.optional(),
+    assetId: idSchema.optional(),
+    range: audioCueRangeSchema.optional(),
+    gainDb: z.number().finite().nullable().optional(),
+    loop: z.boolean().nullable().optional(),
+  })
+  .refine(
+    (value) =>
+      value.role !== undefined ||
+      value.assetId !== undefined ||
+      value.range !== undefined ||
+      value.gainDb !== undefined ||
+      value.loop !== undefined,
+    { message: "変更する項目が必要です", path: ["role"] },
+  );
+
+export const audioRemoveOperationSchema = z.strictObject({
+  op: z.literal("audio.remove"),
+  audioCueId: scriptIdRefSchema,
+});
+
+export const documentSetVisualThemeOperationSchema = z.strictObject({
+  op: z.literal("document.setVisualTheme"),
+  id: idSchema,
+  version: positiveInt,
+});
+
 export const scriptOperationSchema = z.union([
   sceneAddPointOperationSchema,
   sceneAddInsertOperationSchema,
@@ -204,6 +320,18 @@ export const scriptOperationSchema = z.union([
   lineAssignTakeOperationSchema,
   lineSelectTakeOperationSchema,
   lineRemoveTakeOperationSchema,
+  cueAddOperationSchema,
+  cueRemoveOperationSchema,
+  cueSetRangeOperationSchema,
+  cueSetInputOperationSchema,
+  cueSetPlacementOperationSchema,
+  cueSetTransitionOperationSchema,
+  standingSetOperationSchema,
+  standingRemoveOperationSchema,
+  audioAddOperationSchema,
+  audioSetOperationSchema,
+  audioRemoveOperationSchema,
+  documentSetVisualThemeOperationSchema,
 ]);
 export type ScriptOperation = z.infer<typeof scriptOperationSchema>;
 export type SceneAddPointOperation = z.infer<typeof sceneAddPointOperationSchema>;
@@ -226,5 +354,19 @@ export type LineSetGapOperation = z.infer<typeof lineSetGapOperationSchema>;
 export type LineAssignTakeOperation = z.infer<typeof lineAssignTakeOperationSchema>;
 export type LineSelectTakeOperation = z.infer<typeof lineSelectTakeOperationSchema>;
 export type LineRemoveTakeOperation = z.infer<typeof lineRemoveTakeOperationSchema>;
+export type CueAddOperation = z.infer<typeof cueAddOperationSchema>;
+export type CueRemoveOperation = z.infer<typeof cueRemoveOperationSchema>;
+export type CueSetRangeOperation = z.infer<typeof cueSetRangeOperationSchema>;
+export type CueSetInputOperation = z.infer<typeof cueSetInputOperationSchema>;
+export type CueSetPlacementOperation = z.infer<typeof cueSetPlacementOperationSchema>;
+export type CueSetTransitionOperation = z.infer<typeof cueSetTransitionOperationSchema>;
+export type StandingSetOperation = z.infer<typeof standingSetOperationSchema>;
+export type StandingRemoveOperation = z.infer<typeof standingRemoveOperationSchema>;
+export type AudioAddOperation = z.infer<typeof audioAddOperationSchema>;
+export type AudioSetOperation = z.infer<typeof audioSetOperationSchema>;
+export type AudioRemoveOperation = z.infer<typeof audioRemoveOperationSchema>;
+export type DocumentSetVisualThemeOperation = z.infer<
+  typeof documentSetVisualThemeOperationSchema
+>;
 
 export const scriptOperationsSchema = z.array(scriptOperationSchema);

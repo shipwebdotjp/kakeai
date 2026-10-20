@@ -31,6 +31,17 @@ import {
   splitLine,
 } from "./line.ts";
 import { splitPointSceneAtLine } from "./split.ts";
+import {
+  addCue,
+  removeCue,
+  setCueInput,
+  setCuePlacement,
+  setCueRange,
+  setCueTransition,
+} from "./cue.ts";
+import { removeStanding, setStanding } from "./standing.ts";
+import { addAudio, removeAudio, setAudio } from "./audio.ts";
+import { setVisualTheme } from "./theme.ts";
 
 export interface ScriptOperationCreated {
   sceneIds: string[];
@@ -86,7 +97,11 @@ function registerKey(
 }
 
 function toResult(
-  result: SceneEditResult & { warnings?: Warning[]; audioTakeIds?: string[] },
+  result: SceneEditResult & {
+    warnings?: Warning[];
+    audioTakeIds?: string[];
+    audioCueIds?: string[];
+  },
 ): ScriptOperationResult {
   return {
     document: result.document,
@@ -95,6 +110,7 @@ function toResult(
       sceneIds: result.sceneIds,
       lineIds: result.lineIds,
       cueIds: result.cueIds,
+      audioCueIds: result.audioCueIds ?? [],
       audioTakeIds: result.audioTakeIds ?? [],
     },
     warnings: result.warnings ?? [],
@@ -259,6 +275,130 @@ export function applyScriptOperation(
       const lineId = resolveId(operation.lineId, keys, ["lineId"]);
       const takeId = resolveId(operation.takeId, keys, ["takeId"]);
       return toResult(removeTake(document, sceneId, lineId, takeId));
+    }
+    case "cue.add": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const result = addCue(
+        document,
+        sceneId,
+        {
+          template: operation.template,
+          range: operation.range,
+          layer: operation.layer,
+          order: operation.order,
+          transition: operation.transition,
+          input: operation.input,
+        },
+        context,
+      );
+      registerKey(operation.key, keys, result.primaryId);
+      return toResult(result);
+    }
+    case "cue.remove": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      return toResult(removeCue(document, sceneId, cueId));
+    }
+    case "cue.setRange": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      return toResult(setCueRange(document, sceneId, cueId, operation.range));
+    }
+    case "cue.setInput": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      return toResult(
+        setCueInput(
+          document,
+          sceneId,
+          cueId,
+          operation.input,
+          operation.replace ?? false,
+        ),
+      );
+    }
+    case "cue.setPlacement": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      return toResult(
+        setCuePlacement(
+          document,
+          sceneId,
+          cueId,
+          operation.layer,
+          operation.order,
+        ),
+      );
+    }
+    case "cue.setTransition": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      return toResult(
+        setCueTransition(
+          document,
+          sceneId,
+          cueId,
+          operation.enter,
+          operation.exit,
+        ),
+      );
+    }
+    case "standing.set": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const result = setStanding(
+        document,
+        sceneId,
+        operation.side,
+        operation.characterId,
+        operation.appearanceId,
+        operation.scale,
+        context,
+      );
+      registerKey(operation.key, keys, result.primaryId);
+      return toResult(result);
+    }
+    case "standing.remove": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      return toResult(removeStanding(document, sceneId, operation.side));
+    }
+    case "audio.add": {
+      const result = addAudio(
+        document,
+        operation.role,
+        operation.assetId,
+        operation.range,
+        operation.gainDb,
+        operation.loop,
+        context,
+      );
+      registerKey(operation.key, keys, result.primaryId);
+      return toResult(result);
+    }
+    case "audio.set": {
+      const audioCueId = resolveId(operation.audioCueId, keys, ["audioCueId"]);
+      return toResult(
+        setAudio(
+          document,
+          audioCueId,
+          {
+            role: operation.role,
+            assetId: operation.assetId,
+            range: operation.range,
+            gainDb: operation.gainDb,
+            loop: operation.loop,
+          },
+          context,
+        ),
+      );
+    }
+    case "audio.remove": {
+      const audioCueId = resolveId(operation.audioCueId, keys, ["audioCueId"]);
+      return toResult(removeAudio(document, audioCueId));
+    }
+    case "document.setVisualTheme": {
+      return toResult(
+        setVisualTheme(document, operation.id, operation.version),
+      );
     }
     default: {
       throw invalidOperation([], "未対応の操作です。");

@@ -16,6 +16,7 @@ export interface ScriptIdGenerator {
   scene(existing: ReadonlySet<string>): string;
   line(sceneId: string, existing: ReadonlySet<string>): string;
   cue(sceneId: string, suffix: string, existing: ReadonlySet<string>): string;
+  audioCue(existing: ReadonlySet<string>): string;
   audioTake(lineId: string, existing: ReadonlySet<string>): string;
 }
 

@@ -3,6 +3,7 @@ import type {
   NarrationSegment,
   NewNarrationLineInput,
   PointScene,
+  Scene,
 } from "@kakeai/contracts";
 import type { ScriptContext } from "./context.ts";
 import { invalidOperation, preconditionFailed, targetNotFound } from "./errors.ts";
@@ -74,7 +75,7 @@ export function createLine(
 export function withScene(
   document: ContentDocument,
   sceneIndex: number,
-  scene: PointScene,
+  scene: Scene,
 ): ContentDocument {
   const scenes = [...document.scenes];
   scenes[sceneIndex] = scene;

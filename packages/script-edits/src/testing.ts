@@ -6,6 +6,7 @@ export function createTestContext(
   let sceneCount = 0;
   let lineCount = 0;
   let cueCount = 0;
+  let audioCount = 0;
   return {
     assets: { get: (assetId) => assets[assetId] ?? null },
     ids: {
@@ -27,6 +28,13 @@ export function createTestContext(
         let id = `visual-${sceneId}-${suffix}-${(cueCount += 1)}`;
         while (existing.has(id)) {
           id = `visual-${sceneId}-${suffix}-${(cueCount += 1)}`;
+        }
+        return id;
+      },
+      audioCue: (existing) => {
+        let id = `audio-new-${(audioCount += 1)}`;
+        while (existing.has(id)) {
+          id = `audio-new-${(audioCount += 1)}`;
         }
         return id;
       },

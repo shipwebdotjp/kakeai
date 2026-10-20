@@ -33,6 +33,7 @@ export function createIdGenerator(random: () => number = Math.random): ScriptIdG
       unique((value) => `line-${idTail(sceneId)}-${value}`, existing),
     cue: (sceneId, suffix, existing) =>
       unique((value) => `visual-${sceneId}-${suffix}-${value}`, existing),
+    audioCue: (existing) => unique((value) => `audio-${value}`, existing),
     audioTake: (lineId, existing) =>
       unique((value) => `take-${lineId}-${value}`, existing),
   };

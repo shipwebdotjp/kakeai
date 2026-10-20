@@ -25,13 +25,13 @@
 - [x] `line.split`（ID の維持、Audio Take の破棄、Cue 範囲とトリガーの付け替え）
 - 完了条件: 行の削除・移動・分割の後も、すべての `range: lines`、効果トリガー、`videoPlayback.gates` が実在行を指す。
 
-### [ ] E4 Cue・音声・文書操作
+### [x] E4 Cue・音声・文書操作
 
-- [ ] `cue.add`、`cue.remove`、`cue.setRange`、`cue.setInput`、`cue.setPlacement`、`cue.setTransition`
-- [ ] `standing.set` / `standing.remove`（左右 1 体ずつの内部 Cue 生成）
-- [ ] `audio.add`、`audio.set`、`audio.remove`
-- [ ] `document.setVisualTheme`
-- [ ] 未知の VisualTemplate と UI が解釈しない Cue を保持する
+- [x] `cue.add`、`cue.remove`、`cue.setRange`、`cue.setInput`、`cue.setPlacement`、`cue.setTransition`
+- [x] `standing.set` / `standing.remove`（左右 1 体ずつの内部 Cue 生成）
+- [x] `audio.add`、`audio.set`、`audio.remove`
+- [x] `document.setVisualTheme`
+- [x] 未知の VisualTemplate と UI が解釈しない Cue を保持する
 - 完了条件: 代表的なテンプレート（text / media / composition / device-frame / data 系）で、追加・範囲変更・入力更新が保存検証を通る。
 
 ### [ ] E5 保存検証との統合

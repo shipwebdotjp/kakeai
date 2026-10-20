@@ -11,6 +11,8 @@ import {
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 
+export { CompositionCompileError } from "./compile-error";
+
 export interface TimelineIssue {
   path: (string | number)[];
   code: string;

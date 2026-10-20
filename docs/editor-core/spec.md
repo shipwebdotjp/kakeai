@@ -112,19 +112,29 @@ type ScriptOperation =
 | `cue.setPlacement` | `sceneId`、`cueId`、`layer`、`order` | テンプレートが許可する layer。描画順は layer と order で決まる |
 | `cue.setTransition` | `sceneId`、`cueId`、`enter` / `exit` | テンプレートの `transitionPolicy` に適合する。尺は実効表示窓内 |
 
-`character.standing@1` は 1 Scene に左右 1 体ずつ最大 2 件である。操作コアは立ち絵を通常の Cue として扱わず、次の操作で編集し、内部で Cue を生成する。UI の「左」「右」固定行と一致させる。
+`character.standing@1` は 1 Scene に左右 1 体ずつ最大 2 件である。操作コアは立ち絵を通常の Cue として扱わず、次の操作で編集し、内部で Cue を生成する。UI の「左」「右」固定行と一致させる。同じ `side` への `standing.set` は既存 Cue の ID と order を維持して入力を置き換える。
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率 | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する |
+| `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率 | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1 |
 | `standing.remove` | `sceneId`、`side` | 対応する `character.standing@1` Cue を削除する |
+
+### Cue操作の補足
+
+- `cue.*` は insert Scene の主動画 Cue を対象外とする。insert Scene は `scene.add` で作り、主動画は固定である。
+- `cue.add` の `order` 省略時は同一 layer の末尾へ置く。`order` は layer 内で一意でなければならない。
+- `cue.add` と `cue.setInput` は、入力の効果トリガーと `videoPlayback.gates` が同じ Scene の実在行を指すことを検証する。
+- `cue.add` と `cue.setRange` の範囲は、行範囲なら開始行が終了行以前、offset なら `startMs < endMs` でなければならない。逆転した範囲は自動補正しない。
+- `cue.setInput` は入力の部分更新である。plain object は深くマージし、配列・プリミティブ・`null` は置換する。`replace: true` のときは入力全体を置換する。マージ後の入力をテンプレートの入力スキーマで検証する。
+- `cue.setRange` の `offset` が Scene 尺を超える場合は、保存・プレビューと同じ警告コード（`offset_range_clamped` / `offset_range_out_of_scene`）を返す。
+- `cue.setTransition` はテンプレートの `transitionPolicy` に適合する範囲だけを許可する。
 
 ### AudioCue
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `audio.add` | `role`、`assetId`、`range`、任意の `gainDb`・`loop` | ready な `audio` Asset。作品全体の `bgm` は 1 件だけ。`range: work` は `bgm` のみ |
-| `audio.set` | `audioCueId`、部分更新 | 同上 |
+| `audio.add` | `role`、`assetId`、`range`、任意の `gainDb`・`loop` | ready な `audio` Asset。`range: work` の `bgm` は 1 件だけ。`range: work` は `bgm` のみ。`range: scene` は実在 Scene を指す |
+| `audio.set` | `audioCueId`、部分更新 | 同上。`gainDb: null` と `loop: null` は値を削除する |
 | `audio.remove` | `audioCueId` | 作品全体 BGM は削除できるが、UI では既定値へ戻す |
 
 ### 文書
