@@ -11,18 +11,18 @@
 - [x] ID 生成器と `key` 参照の解決をテスト可能な形にする
 - 完了条件: 型検査が通り、未対応操作と未解決 `key` が安定したコードで失敗する。
 
-### [ ] E2 Scene 操作
+### [x] E2 Scene 操作
 
 - [x] `scene.add`（point / insert）、`scene.remove`、`scene.move`、`scene.setLabel`、`scene.setAccent`
 - [x] `scene.setTiming` と `scene.setTransition`（尺の等式・遷移上限）
-- [ ] `scene.splitAtLine`（Cue の分割・複製、効果トリガーの剪定、解決済みミリ秒）
+- [x] `scene.splitAtLine`（Cue の分割・複製、効果トリガーの剪定、解決済みミリ秒）
 - 完了条件: UI の既存 Scene 操作と同じ結果を返し、導入・結びの順序と insert の主動画が保存検証を通る。
 
 ### [ ] E3 行操作
 
 - [ ] `line.add`、`line.remove`、`line.move`、`line.setText`、`line.setSpeaker`、`line.setExpression`、`line.setGap`
 - [ ] `line.assignTake`、`line.selectTake`、`line.removeTake`
-- [ ] `line.split`（ID の維持、Audio Take の破棄、Cue 範囲とトリガーの付け替え）
+- [x] `line.split`（ID の維持、Audio Take の破棄、Cue 範囲とトリガーの付け替え）
 - 完了条件: 行の削除・移動・分割の後も、すべての `range: lines`、効果トリガー、`videoPlayback.gates` が実在行を指す。
 
 ### [ ] E4 Cue・音声・文書操作

@@ -77,6 +77,29 @@ export const sceneSetTransitionOperationSchema = z.strictObject({
   enter: sceneTransitionEdgeSchema,
 });
 
+export const sceneSplitAtLineOperationSchema = z.strictObject({
+  op: z.literal("scene.splitAtLine"),
+  key: scriptKeySchema.optional(),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  label: z.string().optional(),
+});
+
+export const lineSplitPartSchema = z.strictObject({
+  captionText: z.string(),
+  speechText: z.string(),
+});
+export type LineSplitPart = z.infer<typeof lineSplitPartSchema>;
+
+export const lineSplitOperationSchema = z.strictObject({
+  op: z.literal("line.split"),
+  key: scriptKeySchema.optional(),
+  sceneId: scriptIdRefSchema,
+  lineId: scriptIdRefSchema,
+  first: lineSplitPartSchema,
+  second: lineSplitPartSchema,
+});
+
 export const scriptOperationSchema = z.union([
   sceneAddPointOperationSchema,
   sceneAddInsertOperationSchema,
@@ -86,6 +109,8 @@ export const scriptOperationSchema = z.union([
   sceneSetAccentOperationSchema,
   sceneSetTimingOperationSchema,
   sceneSetTransitionOperationSchema,
+  sceneSplitAtLineOperationSchema,
+  lineSplitOperationSchema,
 ]);
 export type ScriptOperation = z.infer<typeof scriptOperationSchema>;
 export type SceneAddPointOperation = z.infer<typeof sceneAddPointOperationSchema>;
@@ -96,5 +121,7 @@ export type SceneSetLabelOperation = z.infer<typeof sceneSetLabelOperationSchema
 export type SceneSetAccentOperation = z.infer<typeof sceneSetAccentOperationSchema>;
 export type SceneSetTimingOperation = z.infer<typeof sceneSetTimingOperationSchema>;
 export type SceneSetTransitionOperation = z.infer<typeof sceneSetTransitionOperationSchema>;
+export type SceneSplitAtLineOperation = z.infer<typeof sceneSplitAtLineOperationSchema>;
+export type LineSplitOperation = z.infer<typeof lineSplitOperationSchema>;
 
 export const scriptOperationsSchema = z.array(scriptOperationSchema);

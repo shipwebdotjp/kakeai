@@ -17,6 +17,8 @@ import {
   setSceneTransition,
   type SceneEditResult,
 } from "./scene.ts";
+import { splitLine } from "./line.ts";
+import { splitPointSceneAtLine } from "./split.ts";
 
 export interface ScriptOperationCreated {
   sceneIds: string[];
@@ -71,7 +73,9 @@ function registerKey(
   keys.set(key, id);
 }
 
-function toResult(result: SceneEditResult): ScriptOperationResult {
+function toResult(
+  result: SceneEditResult & { warnings?: Warning[] },
+): ScriptOperationResult {
   return {
     document: result.document,
     created: {
@@ -80,7 +84,7 @@ function toResult(result: SceneEditResult): ScriptOperationResult {
       lineIds: result.lineIds,
       cueIds: result.cueIds,
     },
-    warnings: [],
+    warnings: result.warnings ?? [],
   };
 }
 
@@ -124,6 +128,33 @@ export function applyScriptOperation(
     case "scene.setTransition": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
       return toResult(setSceneTransition(document, sceneId, operation.enter));
+    }
+    case "scene.splitAtLine": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const lineId = resolveId(operation.lineId, keys, ["lineId"]);
+      const result = splitPointSceneAtLine(
+        document,
+        sceneId,
+        lineId,
+        operation.label,
+        context,
+      );
+      registerKey(operation.key, keys, result.primaryId);
+      return toResult(result);
+    }
+    case "line.split": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const lineId = resolveId(operation.lineId, keys, ["lineId"]);
+      const result = splitLine(
+        document,
+        sceneId,
+        lineId,
+        operation.first,
+        operation.second,
+        context,
+      );
+      registerKey(operation.key, keys, result.primaryId);
+      return toResult(result);
     }
     default: {
       throw invalidOperation([], "未対応の操作です。");
