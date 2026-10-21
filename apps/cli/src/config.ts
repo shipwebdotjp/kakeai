@@ -5,6 +5,7 @@ import {
   MAX_JOB_WAIT_TIMEOUT_MS,
   MIN_JOB_WAIT_INTERVAL_MS,
 } from "@kakeai/agent-client";
+import { agentLongRunningOperationNames } from "@kakeai/contracts";
 import { usageError } from "./errors.ts";
 import { resolveCliCommand, type CliCommand } from "./commands.ts";
 
@@ -173,7 +174,7 @@ export function parseCliArgs(
   const wait = values.wait === true;
   if (wait && (command.kind === "jobWait" || !command.longRunning)) {
     throw usageError(
-      "--wait は Job を返す操作（asset.import / render.start）だけに指定できます。",
+      `--wait は Job を投入する操作（${agentLongRunningOperationNames.join(" / ")}）だけに指定できます。`,
     );
   }
   const waitTimeoutMs = integerOption(

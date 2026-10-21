@@ -50,6 +50,9 @@ function createContext(): ScriptContext {
   let cueCount = 0;
   let takeCount = 0;
   let audioCount = 0;
+  let characterCount = 0;
+  let appearanceCount = 0;
+  let speakerCount = 0;
   return {
     assets: {
       get: (assetId) => {
@@ -78,6 +81,9 @@ function createContext(): ScriptContext {
       cue: (sceneId, suffix) => `visual-${sceneId}-${suffix}-${(cueCount += 1)}`,
       audioCue: () => `audio-edit-${(audioCount += 1)}`,
       audioTake: (lineId) => `take-${lineId}-${(takeCount += 1)}`,
+      character: () => `character-edit-${(characterCount += 1)}`,
+      appearance: () => `appearance-edit-${(appearanceCount += 1)}`,
+      speaker: () => `speaker-edit-${(speakerCount += 1)}`,
     },
   };
 }

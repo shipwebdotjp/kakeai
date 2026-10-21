@@ -1,0 +1,258 @@
+---
+name: kakeai-production
+description: >
+  Produce or revise a complete Kakeai video through Agent Access: create the Work,
+  author or import the script, copy library characters, find/import/tag assets,
+  add visuals and BGM, synthesize narration with TTS, attach Takes, validate and
+  queue the render. Use for any end-to-end video production with Kakeai's MCP
+  tools (kakeai_*) or the kakeai-agent CLI. Start here; use kakeai-composition
+  only when the video needs a new reusable CompositionVersion.
+---
+
+# Kakeai production flow
+
+This skill is the end-to-end order of operations for one Kakeai video, plus the
+rules that keep edits idempotent. It deliberately does **not** copy template
+contracts or operation JSON schemas:
+
+- Call `schema.get` first. It is the single source of truth for
+  `contentSchemaVersion`, Visual Templates (`layers`, `inputFields`, constraints),
+  `warningCodes`, `assetKinds`, the operation catalog (`agentOperations` with
+  `kind` and `longRunning`) and `schemaDigest`.
+- Read each operation's input fields from the binding's published input schema:
+  the MCP tool `inputSchema` (from `tools/list`) or the CLI's validation.
+- Never guess field names, option values, or asset kinds.
+
+Work only through Agent Access. Do not call Kakeai's HTTP API, do not open the
+local control socket yourself, and never touch its Prisma database or app data
+files.
+
+## 1. Preflight
+
+1. Confirm Kakeai is running as the same macOS user. Agent Access connects to a
+   local socket; it does not launch the app. `AGENT_APP_UNAVAILABLE` means ask
+   the user to start Kakeai — do not retry forever or switch transports.
+2. Call `schema.get`:
+   - MCP: `kakeai_schema_get` with `{}`
+   - CLI: `kakeai-agent schema.get --pretty`
+3. Record `schemaDigest` and `contentSchemaVersion`. If the digest changes later
+   (app restarted or upgraded), re-read `schema.get` and the current script
+   before the next mutation instead of trusting cached templates or IDs.
+4. Pick one binding for the session and stay with it. MCP tools are
+   `kakeai_<domain>_<verb>` (`kakeai_tts_create_bulk`); CLI subcommands are the
+   canonical `domain.verb` (`kakeai-agent tts.createBulk`). Same operations, same
+   validation, same error codes.
+   `kakeai-agent operations --pretty` lists the catalog with `kind` and
+   `longRunning` if you need it without a schema fetch.
+
+## 2. Order of work
+
+| # | Phase | Operations | Decision point |
+| --- | --- | --- | --- |
+| 1 | Preflight | `schema.get` | Digest and catalog confirmed |
+| 2 | Work and script | `work.create`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
+| 3 | Characters | `character.list`, `character.get`, `script.edit` + `character.addFromLibrary` | Library entry with a voice for this locale |
+| 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
+| 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
+| 6 | TTS | `tts.create` or `tts.createBulk`, `job.get` / `job.wait`, `script.edit` + `line.assignTake` | Which lines actually need a voice |
+| 7 | Validate | `script.validate` | No errors, warnings understood |
+| 8 | Render | `render.start`, `job.get` / `job.wait` | Target version fixed |
+
+Do not interleave a later phase into an earlier one unless the earlier phase is
+saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
+
+## 3. Work and script
+
+- `work.create` returns the Work with its `languageEditions`. Use the first
+  edition (default locale `ja-JP`) unless the user asked for another locale.
+- `script.get` with `languageEditionId` returns that edition's current version;
+  with `scriptVersionId` it returns one specific version. Keep the returned
+  `scriptVersion.id` as the base for the next edit.
+- **Full import** — `script.save` with `languageEditionId` and a complete
+  `ContentDocument`. Use it when the script was authored outside Kakeai. It is a
+  whole-document replacement and one new version. Validate before sending if the
+  document is machine-generated.
+- **Structural edits** — `script.edit` with `baseScriptVersionId`, a unique
+  `requestId`, and the operation array. Use it for scenes, lines, cues, standing,
+  audio and takes.
+- Batch related operations into one `script.edit` call. One call = one new
+  ScriptVersion; do not create a version per field change. Creation operations
+  can carry a `key`, and later operations in the same call can reference that
+  creation as `{ "key": "..." }`.
+- One call should express one intended change. If two changes are independent
+  and either may fail, split them so a failure does not discard both.
+- The default script already has intro / point / outro scenes. Add scenes with
+  `scene.add` (`point` for narration, `insert` for a source video), split long
+  ones with `scene.splitAtLine` or `line.split`, and add narration with
+  `line.add`.
+
+## 4. Characters
+
+The character library is **read-only** on the agent surface.
+
+1. `character.list` returns all library entries; `character.get` returns one by
+   `characterId`. Each entry carries `name`, locale-keyed `voices`, and
+   appearances (`assetId`, `expression`, `pose`, optional `label`, `faceSetId`).
+2. Choose an entry that has a voice for the edition's locale. A copy without a
+   matching voice gets `voiceProfileId: null`, and TTS on its lines fails with
+   `TTS_INPUT_INVALID`; ask the user instead of guessing a voice.
+3. In the **first** `script.edit`, include
+   `{ "op": "character.addFromLibrary", "libraryCharacterId": "..." }`. This
+   copies the character into new local Character / Appearance / Speaker IDs.
+   The operation has no `key`.
+4. Read `created.characterIds`, `created.appearanceIds`, `created.speakerIds`
+   from the result.
+5. In a **second** `script.edit`, use those IDs with `line.setSpeaker` and
+   `standing.set`. Same-call `{ "key": ... }` references cannot point at a
+   `character.addFromLibrary` result.
+
+Never create, update or delete library characters, voices or face sets. Library
+changes are the user's job; agents only copy into the script.
+
+## 5. Assets
+
+- Search with `asset.list`:
+  - `kind` (`image` / `video` / `audio`, see `schema.get.assetKinds`),
+    `status` (use `ready`), `filename` (case-insensitive substring),
+    `tags` + `tagMode` (`and` = all, `or` = any), `favorite`.
+  - `archived` defaults to `exclude`. Pass `include` / `only` only when the user
+    asks for archived material.
+  - Results are newest-first and paginated: `limit` defaults to 50 and is capped
+    at 100. Pass the returned `nextCursor` back unchanged; a cursor belongs to
+    the filter set that produced it.
+- Import with `asset.import` using an absolute local path (the agent shares the
+  user's machine and permissions). It returns `{ asset, jobId, deduplicated }`;
+  `jobId: null` means identical bytes already existed.
+- Wait for ingest with `job_wait` / `job.wait` (or poll `job.get`). Then re-read
+  `asset.get` and require `status: "ready"` before referencing it. A pending or
+  failed asset is `ASSET_UNAVAILABLE` at edit time.
+- Tag with `asset.tag` after ingest. Use a stable production tag plus a role tag
+  (for example `production/<slug>`, `background`, `bgm`) so later searches are
+  reproducible. Tags are user-facing metadata; do not repurpose them for IDs.
+- Never inline media bytes into a script. Scripts reference `assetId` only.
+
+## 6. Visuals and audio
+
+- Build cues from `schema.get.templates`, not memory. Pick the template
+  `id`/`version`, a `layer` it allows, and fill `inputFields` within their
+  declared constraints (required/optional, select options, numeric ranges,
+  allowed `assetKinds`, transition/animation policies).
+- Add with `cue.add`; adjust later with `cue.setInput` (partial merge) or
+  `cue.setRange`. Put left/right characters on screen with `standing.set`.
+- Add scene or work BGM with `audio.add`: `role: "bgm"`, a ready audio asset,
+  `range: { kind: "scene", sceneId }` or `{ kind: "work" }`. A work may have at
+  most one work-range BGM.
+- Use a ready asset for every media field. A published CompositionVersion goes
+  in a background cue only; authoring that version is the `kakeai-composition`
+  skill's job.
+- Validate incrementally. `script.validate` accepts either
+  `{ content }` (validate a document you already have) or
+  `{ baseScriptVersionId, operations }` (dry-run the next edit without saving).
+
+## 7. TTS
+
+TTS is available only through the adapter the user already configured
+(`voicevox`, `aivisspeech` or `openai-compatible`). You cannot change endpoints,
+credentials, adapter settings, voice profiles, or trigger any other paid
+generation.
+
+1. Make sure the target script is saved. Both TTS operations take a
+   `scriptVersionId`; unsaved local edits are not visible to them.
+2. `tts.create` synthesizes one Narration Segment:
+   - Required: `scriptVersionId`, `narrationSegmentId`.
+   - Optional: `speechText` (defaults to the saved segment text),
+     `voiceId` (defaults to the speaker's Voice Profile), `speedScale`
+     (default `1.0`, allowed `0.5`–`2.0`).
+   - Prefer omitting `speechText` so the Job speaks exactly the saved line. If
+     you override it, update the line to the same text before attaching.
+   - Returns `{ job }` with `kind: "tts"`.
+3. `tts.createBulk` synthesizes every point-scene line that has no selected
+   take. It returns `{ jobs, excluded }`; `excluded` carries per-line stable
+   codes and safe reasons and does not fail the whole call.
+4. Wait per Job: `job_wait` / `job.wait <jobId>`, or `job.get`. The CLI's
+   `--wait` can attach to `tts.create` (single job) but returns `wait: null` for
+   `tts.createBulk`, so wait on each returned job ID.
+5. On success, `job.ttsResult` holds `narrationSegmentId`, `assetId`,
+   `durationMs` and `source: "tts"`.
+6. Before attaching, `script.get` the latest version and check that:
+   - the `narrationSegmentId` still exists, and
+   - its `speechText` is what you actually synthesized.
+   If either changed, **discard the take and synthesize again**. Never attach
+   audio that speaks different text than the line.
+7. Attach with `script.edit` + `line.assignTake` (`assetId` from `ttsResult`,
+   `source: "tts"`). This creates a new ScriptVersion with a new Audio Take; it
+   does not modify the generated Asset or the previous version.
+8. A failed Job carries a stable code in `job.error`. `TTS_ENGINE_UNAVAILABLE`
+   means the user's TTS engine is not reachable: ask them to start it. Do not
+   switch adapters or invent an endpoint.
+
+## 8. Validate and render
+
+1. `script.validate` the exact version you intend to render. Fix every
+   `VALIDATION_ERROR` issue (JSON Pointer + reason). Read warnings against
+   `schema.get.warningCodes`; fix real problems and leave intentional layout
+   warnings alone.
+2. `render.start` with `scriptVersionId`. It returns `{ job }` of kind `render`.
+3. Poll `job_wait` / `job.wait` (MCP `kakeai_job_wait`) or `job.get`. A timeout
+   (`timedOut: true`) is not a failure; call again with the same job ID.
+   A failed job exposes `job.error`. Render output is an Artifact, not an Asset.
+4. Visual QA — checking previews, frames or render quality — is out of scope for
+   this skill. Do not claim a video looks correct without the user looking at it.
+
+## 9. Idempotency, stale bases and timeouts
+
+| Situation | What to do |
+| --- | --- |
+| Normal edit | Give every `script.edit` a fresh `requestId` that is unique per logical change (for example `<agentId>:<date>-<n>`). |
+| Retrying the same edit | Reuse the same `requestId` only when the base and operations are unchanged. A replay returns `replay: true` and creates no new version. |
+| `SCRIPT_BASE_STALE` | `script.get` the current version, re-apply the **same intent** to the new base. Reuse the `requestId` only if the failed call created no version (it did not); if you change the operations, use a new `requestId`. |
+| `IDEMPOTENCY_CONFLICT` | A version with that `requestId` already exists with different content. Never reuse the ID with different content. Read the current version (`script.get` with `languageEditionId`) and continue from there. |
+| `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `job.list`, `asset.list`, `composition.get`) and only then retry. The exception is `script.edit`, which may be replayed immediately with the same `requestId`. |
+| `replay: true` | The edit was already applied. Do not apply the operations again. |
+| Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. |
+
+Read timeouts are 10 seconds and mutation timeouts 120 seconds; both are
+server-enforced. Job polling has its own bounded budget and is not a mutation
+timeout.
+
+## 10. Stable errors
+
+Do not guess at a cause and do not retry blindly. Surface the code and `issues`
+to the user when the fix is on their side.
+
+| Code | Meaning / action |
+| --- | --- |
+| `AGENT_APP_UNAVAILABLE` | Kakeai is not running or its socket is unreachable. Ask the user to start it. |
+| `AGENT_OPERATION_UNKNOWN` | The operation is not exposed. Re-read `schema.get` / `operations`; the catalog may have changed. |
+| `VALIDATION_ERROR` | Input or saved document violates the contract. Fix the `issues` paths. |
+| `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` | The script or operation is not valid in the current state. Re-read the script and adjust; do not bypass. |
+| `SCRIPT_BASE_STALE` | Base version is no longer current. Re-read and reapply (see above). |
+| `IDEMPOTENCY_CONFLICT` | Same `requestId`, different content. Read the current version and continue; never reuse the ID for other content. |
+| `ASSET_UNAVAILABLE` | Referenced asset is missing or not `ready`. Import/wait or pick another. |
+| `COMPOSITION_UNAVAILABLE` | Referenced CompositionVersion is not published or its bundle is missing. Publish it first. |
+| `TTS_INPUT_INVALID` | Empty text, missing speaker/voice, voice outside the configured adapter, or bad speed. Fix the line or ask the user. |
+| `TTS_ENGINE_UNAVAILABLE` | The configured TTS adapter is unreachable. Ask the user to start the engine. |
+| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | The referenced script version, line, asset or work no longer exists. Re-read and re-plan. |
+| `AGENT_PAYLOAD_TOO_LARGE` | One request exceeded 32 MiB. Split the work; never inline large media in a script. |
+| `AGENT_PROTOCOL_MISMATCH` | Client/server protocol mismatch. Update the MCP/CLI package; do not work around it. |
+
+## 11. Non-goals
+
+- Deleting Works, Assets, Composition Versions, Artifacts or library entries.
+- Publishing anything to an external service (Composition publish inside Kakeai
+  is an immutable version, not an external publish).
+- Creating, updating or deleting character library entries, voice profiles, face
+  sets, TTS adapters, endpoints or credentials.
+- Paid generation other than Jobs on the user's configured TTS adapter.
+- Image/video generation, external project import, or editing app-managed
+  drafts/bundles on disk.
+- Autonomous visual QA or claims about preview/render quality.
+
+## 12. Related skills
+
+- `kakeai-composition` — author and publish the reusable CompositionVersion that
+  a background or device-screen cue references. Call it from this flow when the
+  video needs a new motion composition, then reference the published version in
+  a `script.edit`.
+- `schema.get` — always the authority for templates, fields, warning codes and
+  the operation catalog.

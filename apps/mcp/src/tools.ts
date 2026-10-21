@@ -73,7 +73,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "ContentDocument 全体を検証して新しい台本版として保存する。取り込み向けで、通常の編集は script.edit を使う。",
   "script.edit":
     "操作コアの ScriptOperation 配列を適用し、新しい台本版を作成する。`baseScriptVersionId` が current と一致している必要があり、`requestId` は再送を冪等にする。",
-  "asset.list": "素材の一覧を返す。`kind` で画像・動画・音声に絞り込める。",
+  "asset.list":
+    "素材を検索して `{ assets, nextCursor }` の1ページを返す。`kind`・`status`・`filename`（部分一致）・`tags`（`tagMode` で AND / OR、既定 `and`）・`favorite`・`archived`（既定 `exclude`）を組み合わせ、`createdAt desc, id desc` 固定順で `limit`（最大100）件ずつページングする。続きを取得するときは受け取った `nextCursor` を `cursor` に渡す（`nextCursor` が null なら最終ページ）。",
   "asset.get": "素材 1 件を返す。",
   "asset.import":
     "ローカルパスの素材を取り込み、jobId を返す。完了状態は job_wait または job.get で確認する。",
@@ -92,6 +93,14 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "composition.draft.save": "Composition draft のファイルと manifest を部分更新する。",
   "composition.publish":
     "Composition を publish して不変 version を作る。`dryRun: true` なら検証だけを行い version を作らない。",
+  "tts.create":
+    "保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter（voicevox / aivisspeech / openai-compatible）へ合成 Job を投入し、Job を返す。`speedScale` の既定は 1.0。完了は job_wait または job.get で確認し、`ttsResult` を `script.edit` の `line.assignTake` で Take にする。",
+  "tts.createBulk":
+    "保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する。投入した Job と、生成できなかったセリフ（コードと理由）を返す。完了は各 Job を job_wait または job.get で確認する。",
+  "character.list":
+    "キャラクターライブラリの一覧を返す。台本へ入れるときは script.edit の character.addFromLibrary でコピーする。ライブラリ自体の作成・更新・削除は公開しない。",
+  "character.get":
+    "キャラクターライブラリの 1 件を、locale 別の声と外観（Face Set 参照を含む）付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
 };
 
 function describeOperation(
@@ -144,7 +153,7 @@ export const jobWaitToolEntry: JobWaitToolEntry = {
   toolName: "kakeai_job_wait",
   title: "kakeai_job_wait",
   description:
-    "Job が終端状態（succeeded / failed / cancelled）になるまで job.get を有界にポーリングする。budget 超過時は timedOut: true と最後の Job を返す。asset.import と render.start の後に使う。MCP 束縛の便宜ツールで、Agent 操作ではない。",
+    "Job が終端状態（succeeded / failed / cancelled）になるまで job.get を有界にポーリングする。budget 超過時は timedOut: true と最後の Job を返す。asset.import / render.start / tts.create / tts.createBulk の後に使う。MCP 束縛の便宜ツールで、Agent 操作ではない。",
   inputSchema: toMcpObjectSchema(jobWaitInputSchema, "input") as unknown as ToolInputSchema,
   outputSchema: toMcpObjectSchema(jobWaitResultSchema, "output") as unknown as ToolOutputSchema,
   annotations: {

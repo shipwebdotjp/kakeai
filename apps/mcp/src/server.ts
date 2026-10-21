@@ -121,7 +121,7 @@ export function createKakeaiMcpServer(options: McpServerOptions): Server {
       instructions: [
         "Kakeai Agent Access の MCP 束縛。操作を実行する前に kakeai_schema_get を呼び、",
         "Content Schema、VisualTemplate の入力制約、操作カタログ、警告コードを確認する。",
-        "asset.import と render.start は Job を投入して返るため、kakeai_job_wait または",
+        "asset.import / render.start / tts.create / tts.createBulk は Job を投入して返るため、kakeai_job_wait または",
         "kakeai_job_get で完了を待つ。ツールが失敗した場合は isError: true と",
         "JSON { code, issues? } が返る。コードは再試行可否の判断に使う。",
       ].join(" "),

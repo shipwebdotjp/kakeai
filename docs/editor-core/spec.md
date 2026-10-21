@@ -28,7 +28,8 @@
 | 項目 | 内容 |
 | --- | --- |
 | `assets` | `assetId` から `kind`・`status`・`durationMs`・`hasAudio` を返す読み取り専用の参照。ready でない Asset は解決しない |
-| `ids` | Scene・行・Cue・Audio Take の ID 生成器。テストでは連番に差し替える |
+| `ids` | Scene・行・Cue・Audio Take・Character・Appearance・Speaker の ID 生成器。テストでは連番に差し替える |
+| `libraryCharacters` | 任意。`characterId` から Character ライブラリのキャラクター（名前・locale 別の声・外観）を返す読み取り専用の参照。ライブラリをコピーする操作だけが要求する |
 
 テンプレート定義・入力スキーマ・既定値は `packages/contracts` の静的なレジストリを使う。Face Set・Theme・Composition のグローバル整合は操作コアでは検証せず、保存時の検証に委ねる。操作コアが文書と `ScriptContext` から判定できる参照整合だけをここで守る。
 
@@ -45,6 +46,9 @@ interface ScriptOperationResult {
     cueIds: string[];
     audioCueIds: string[];
     audioTakeIds: string[];
+    characterIds: string[];
+    appearanceIds: string[];
+    speakerIds: string[];
   };
   warnings: Warning[];
 }
@@ -129,6 +133,15 @@ type ScriptOperation =
 - `cue.setRange` の `offset` が Scene 尺を超える場合は、保存・プレビューと同じ警告コード（`offset_range_clamped` / `offset_range_out_of_scene`）を返す。
 - `cue.setTransition` はテンプレートの `transitionPolicy` に適合する範囲だけを許可する。
 
+### Character
+
+| 操作 | 入力 | 不変条件 |
+| --- | --- | --- |
+| `character.addFromLibrary` | `libraryCharacterId` | `ScriptContext.libraryCharacters` からライブラリのキャラクターを引き、新しいローカル ID の Character・Appearance・Speaker として台本へ追加する。名前・`voices`・全外観（`assetId`・`expression`・`pose`・任意の `label`・`faceSetId`）を引き継ぎ、`faceSetId` は参照のままコピーしない。Speaker の名前はキャラクター名、`voiceProfileId` は `document.locale` に一致する `voices` の声、一致がなければ `null` とする。ライブラリ側は変更しない。`key` を持たず、作成 ID は結果の `created` で返す |
+
+- ライブラリの参照能力が `ScriptContext` に無い場合は `EDIT_PRECONDITION_FAILED`、指定した `libraryCharacterId` が存在しない場合は `EDIT_TARGET_NOT_FOUND` とする。ライブラリの作成・更新・削除は操作コアに公開しない。
+- 新規 ID は既存の Character・Appearance・Speaker と衝突してはならない。同じ操作を複数回適用した場合、または同じライブラリ項目を同一呼び出し内で2回コピーした場合も、それぞれ独立した ID を持つ。
+
 ### AudioCue
 
 | 操作 | 入力 | 不変条件 |
@@ -200,7 +213,7 @@ type ScriptOperation =
 
 | code | 発生条件 |
 | --- | --- |
-| `EDIT_TARGET_NOT_FOUND` | 指定した Scene・行・Cue・AudioCue・Audio Take が存在しない |
+| `EDIT_TARGET_NOT_FOUND` | 指定した Scene・行・Cue・AudioCue・Audio Take・ライブラリのキャラクターが存在しない |
 | `EDIT_PRECONDITION_FAILED` | 尺の不足、固定尺の等式違反、Scene 順序、layer 制約など、文書の状態が操作を許さない |
 | `EDIT_INVALID_INPUT` | 入力が操作の Zod スキーマに適合しない、または ID 参照 `key` が解決できない |
 | `EDIT_UNSUPPORTED_TEMPLATE` | 指定した VisualTemplate の版が存在しない、または操作が未対応 |

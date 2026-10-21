@@ -7,3 +7,4 @@ title: Kakeai ユーザーガイド
 # Kakeai ユーザーガイド
 
 - [エージェント連携（MCP / CLI）](./agent-access.md)
+- [Composition Library](./composition-library.md)

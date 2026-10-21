@@ -10,6 +10,10 @@ import {
   agentAssetListOutputSchema,
   agentAssetTagInputSchema,
   agentAssetTagOutputSchema,
+  agentCharacterGetInputSchema,
+  agentCharacterGetOutputSchema,
+  agentCharacterListInputSchema,
+  agentCharacterListOutputSchema,
   agentCompositionAuthoringContextInputSchema,
   agentCompositionAuthoringContextOutputSchema,
   agentCompositionCreateInputSchema,
@@ -42,6 +46,10 @@ import {
   agentScriptSaveOutputSchema,
   agentScriptValidateInputSchema,
   agentScriptValidateOutputSchema,
+  agentTtsCreateBulkInputSchema,
+  agentTtsCreateBulkOutputSchema,
+  agentTtsCreateInputSchema,
+  agentTtsCreateOutputSchema,
   agentWorkCreateInputSchema,
   agentWorkCreateOutputSchema,
   agentWorkGetInputSchema,
@@ -56,13 +64,14 @@ import {
   type AgentOperationInputMap,
   type AgentOperationName,
   type AgentOperationOutputMap,
+  type AgentOperationParsedInputMap,
 } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { logger } from "../logger.ts";
 import type { DataDirectories } from "../storage/paths.ts";
-import { getAsset, listAssets, updateAsset } from "../services/assets.ts";
+import { getAsset, searchAssets, updateAsset } from "../services/assets.ts";
 import {
   editAgentScript,
   getAgentScript,
@@ -71,11 +80,13 @@ import {
 } from "../services/agent-script.ts";
 import { importAgentAsset } from "../services/agent-assets.ts";
 import type { CompositionAuthoringService } from "../services/authoring-context.ts";
+import { getCharacter, listCharacters } from "../services/character-library.ts";
 import type { CompositionService } from "../services/compositions.ts";
 import { publishOrValidateComposition } from "../services/composition-publishing.ts";
 import type { FontCatalogService } from "../services/font-catalog.ts";
 import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
+import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
 import { createWork, getWork, listWorks } from "../services/works.ts";
 import { AgentOperationError } from "./errors.ts";
 
@@ -92,8 +103,8 @@ export interface AgentOperationContext {
   agentId?: string;
 }
 
-interface AgentOperationDefinition<Input, Output> {
-  input: z.ZodType<Input>;
+interface AgentOperationDefinition<RawInput, Input, Output> {
+  input: z.ZodType<Input, RawInput>;
   output: z.ZodType<Output>;
   invalidInputCode?: AgentErrorCode;
   run: (input: Input, context: AgentOperationContext) => Promise<Output>;
@@ -109,6 +120,7 @@ interface UnknownOperationDefinition {
 type AgentOperationDefinitions = {
   [K in AgentOperationName]: AgentOperationDefinition<
     AgentOperationInputMap[K],
+    AgentOperationParsedInputMap[K],
     AgentOperationOutputMap[K]
   >;
 };
@@ -167,9 +179,7 @@ const definitions: AgentOperationDefinitions = {
   "asset.list": {
     input: agentAssetListInputSchema,
     output: agentAssetListOutputSchema,
-    run: async (input, context) => ({
-      assets: await listAssets(context.prisma, input.kind),
-    }),
+    run: async (input, context) => searchAssets(context.prisma, input),
   },
   "asset.get": {
     input: agentAssetGetInputSchema,
@@ -296,6 +306,48 @@ const definitions: AgentOperationDefinitions = {
         { dryRun: dryRun ?? false },
       );
     },
+  },
+  "tts.create": {
+    input: agentTtsCreateInputSchema,
+    output: agentTtsCreateOutputSchema,
+    // Adapter resolution, the Job snapshot and the TTS error codes stay in the
+    // shared TTS service that the HTTP route also calls.
+    run: async (input, context) => ({
+      job: await createTtsJob(
+        context.prisma,
+        context.config,
+        input.scriptVersionId,
+        input.narrationSegmentId,
+        {
+          voiceId: input.voiceId,
+          speechText: input.speechText,
+          speedScale: input.speedScale,
+        },
+      ),
+    }),
+  },
+  "tts.createBulk": {
+    input: agentTtsCreateBulkInputSchema,
+    output: agentTtsCreateBulkOutputSchema,
+    run: async (input, context) =>
+      createBulkTtsJobs(context.prisma, context.config, input.scriptVersionId),
+  },
+  // Character library reads only. Copying into a script goes through
+  // `script.edit` + `character.addFromLibrary`; library mutations are not
+  // exposed on the Agent surface.
+  "character.list": {
+    input: agentCharacterListInputSchema,
+    output: agentCharacterListOutputSchema,
+    run: async (_input, context) => ({
+      characters: await listCharacters(context.prisma),
+    }),
+  },
+  "character.get": {
+    input: agentCharacterGetInputSchema,
+    output: agentCharacterGetOutputSchema,
+    run: async (input, context) => ({
+      character: await getCharacter(context.prisma, input.characterId),
+    }),
   },
 };
 

@@ -13,7 +13,12 @@ import { parseCliArgs, readPackageVersion, DEFAULT_AGENT_ID } from "./config.ts"
 import { CliError } from "./errors.ts";
 import { resolveCliCommand, subcommandNames } from "./commands.ts";
 import { runCli, type CliIo, type CliRequester } from "./run.ts";
-import { fixtureRenderJob, fixtureWork } from "@kakeai/contracts/testing/agent-fixtures";
+import {
+  fixtureAsset,
+  fixtureRenderJob,
+  fixtureTtsJob,
+  fixtureWork,
+} from "@kakeai/contracts/testing/agent-fixtures";
 
 type Handler = (operation: AgentOperationName, input: unknown) => unknown;
 
@@ -92,6 +97,9 @@ describe("CLI argument parsing", () => {
     expect(resolveCliCommand("work.delete")).toBeUndefined();
     expect(resolveCliCommand("asset.delete")).toBeUndefined();
     expect(resolveCliCommand("composition.delete")).toBeUndefined();
+    expect(subcommandNames()).toEqual(
+      expect.arrayContaining(["tts.create", "tts.createBulk", "job.wait"]),
+    );
     for (const name of subcommandNames()) {
       expect(name).not.toMatch(/(delete|remove|destroy|purge|external)/u);
     }
@@ -165,6 +173,10 @@ describe("CLI argument parsing", () => {
     expect(() => parseCliArgs(["work.create", "--wait"], {})).toThrow(CliError);
     expect(() => parseCliArgs(["schema.get", "--timeout-ms", "10"], {})).toThrow(CliError);
     expect(parseCliArgs(["render.start", "--wait"], {})).toMatchObject({ options: { wait: true } });
+    expect(parseCliArgs(["tts.create", "--wait"], {})).toMatchObject({ options: { wait: true } });
+    expect(parseCliArgs(["tts.createBulk", "--wait"], {})).toMatchObject({
+      options: { wait: true },
+    });
     expect(
       parseCliArgs(["asset.import", "--wait", "--timeout-ms", "20", "--interval-ms", "10"], {}),
     ).toMatchObject({ options: { wait: true, waitTimeoutMs: 20, waitIntervalMs: 10 } });
@@ -230,6 +242,130 @@ describe("CLI invocation", () => {
       expect(captured.stderr()).toBe("");
       expect(JSON.parse(captured.stdout())).toEqual({ work: fixtureWork() });
     }
+  });
+
+  it("forwards asset.list filters and prints the page contract", async () => {
+    const filters = {
+      kind: "image",
+      status: "ready",
+      filename: "bgm",
+      tags: ["intro", "bgm"],
+      tagMode: "or",
+      favorite: true,
+      archived: "include",
+      limit: 1,
+    };
+    let received: unknown;
+    const captured = capture((operation, input) => {
+      expect(operation).toBe("asset.list");
+      received = input;
+      return { assets: [fixtureAsset()], nextCursor: "cursor-2" };
+    });
+    expect(
+      await runCli(["asset.list", "--input", JSON.stringify(filters)], captured.io),
+    ).toBe(0);
+    expect(received).toEqual(filters);
+    expect(captured.stderr()).toBe("");
+    expect(JSON.parse(captured.stdout())).toEqual({
+      assets: [fixtureAsset()],
+      nextCursor: "cursor-2",
+    });
+  });
+
+  it("forwards tts.create and tts.createBulk and waits on a single tts Job", async () => {
+    const received: Array<{ operation: AgentOperationName; input: unknown }> = [];
+    const handler = (operation: AgentOperationName, input: unknown): unknown => {
+      received.push({ operation, input });
+      switch (operation) {
+        case "tts.create":
+          return { job: fixtureTtsJob("queued") };
+        case "tts.createBulk":
+          return {
+            jobs: [{ narrationSegmentId: "line-p1-1", job: fixtureTtsJob("queued", "job-bulk-1") }],
+            excluded: [
+              {
+                narrationSegmentId: "line-p1-2",
+                code: "TTS_INPUT_INVALID",
+                message: "声が未設定です。",
+              },
+            ],
+          };
+        case "job.get":
+          return { job: fixtureTtsJob("succeeded") };
+        default:
+          throw new Error(`unexpected operation: ${operation}`);
+      }
+    };
+
+    const created = capture(handler);
+    expect(
+      await runCli(
+        [
+          "tts.create",
+          "--input",
+          '{"scriptVersionId":"scr-1","narrationSegmentId":"line-p1-1","speedScale":1.25}',
+        ],
+        created.io,
+      ),
+    ).toBe(0);
+    expect(received[0]).toEqual({
+      operation: "tts.create",
+      input: { scriptVersionId: "scr-1", narrationSegmentId: "line-p1-1", speedScale: 1.25 },
+    });
+    expect(JSON.parse(created.stdout())).toMatchObject({ job: { kind: "tts", status: "queued" } });
+
+    const bulk = capture(handler);
+    expect(
+      await runCli(["tts.createBulk", "--input", '{"scriptVersionId":"scr-1"}'], bulk.io),
+    ).toBe(0);
+    expect(JSON.parse(bulk.stdout())).toMatchObject({
+      jobs: [{ narrationSegmentId: "line-p1-1" }],
+      excluded: [{ narrationSegmentId: "line-p1-2", code: "TTS_INPUT_INVALID" }],
+    });
+
+    // Bulk enqueues several Jobs, so --wait has no single Job to poll.
+    const bulkWaited = capture(handler, { now: () => 0, sleep: async () => undefined });
+    expect(
+      await runCli(
+        [
+          "tts.createBulk",
+          "--input",
+          '{"scriptVersionId":"scr-1"}',
+          "--wait",
+          "--timeout-ms",
+          "100",
+        ],
+        bulkWaited.io,
+      ),
+    ).toBe(0);
+    const bulkPayload = JSON.parse(bulkWaited.stdout()) as {
+      result: { jobs: unknown[] };
+      wait: unknown;
+    };
+    expect(bulkPayload.result.jobs).toHaveLength(1);
+    expect(bulkPayload.wait).toBeNull();
+
+    const waited = capture(handler, { now: () => 0, sleep: async () => undefined });
+    expect(
+      await runCli(
+        [
+          "tts.create",
+          "--input",
+          '{"scriptVersionId":"scr-1","narrationSegmentId":"line-p1-1"}',
+          "--wait",
+          "--timeout-ms",
+          "100",
+        ],
+        waited.io,
+      ),
+    ).toBe(0);
+    const payload = JSON.parse(waited.stdout()) as {
+      result: { job: { id: string } };
+      wait: { job: { status: string; ttsResult: { assetId: string } | null } };
+    };
+    expect(payload.result.job.id).toBe("job-tts-1");
+    expect(payload.wait.job.status).toBe("succeeded");
+    expect(payload.wait.job.ttsResult?.assetId).toBe("asset-tts-1");
   });
 
   it("rejects invalid inputs before sending anything", async () => {

@@ -5,6 +5,10 @@ export type {
   ScriptAssetStatus,
   ScriptContext,
   ScriptIdGenerator,
+  ScriptLibraryAppearance,
+  ScriptLibraryCharacter,
+  ScriptLibraryCharacterLookup,
+  ScriptLibraryVoice,
 } from "./context.ts";
 export {
   SCRIPT_EDIT_ERROR_CODES,

@@ -16,10 +16,10 @@
 
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
-| 可逆 | 作品作成、台本保存（新しい Script Version の追加と current の前進）、操作コアによる Scene・セリフ・Cue・素材割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、queued Job のキャンセル | 可 |
-| 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、外部サービスへの公開、課金を伴う生成 | 人のみ |
+| 可逆 | 作品作成、台本保存（新しい Script Version の追加と current の前進）、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピーの編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル | 可 |
+| 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成 | 人のみ |
 
-「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。
+「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
 
 ## 操作コアと束縛
 
@@ -61,11 +61,15 @@
 | `composition.create` | mutation | no | `kakeai_composition_create` |
 | `composition.draft.save` | mutation | no | `kakeai_composition_draft_save` |
 | `composition.publish` | mutation | no | `kakeai_composition_publish` |
+| `tts.create` | mutation | yes | `kakeai_tts_create` |
+| `tts.createBulk` | mutation | yes | `kakeai_tts_create_bulk` |
+| `character.list` | read | no | `kakeai_character_list` |
+| `character.get` | read | no | `kakeai_character_get` |
 
-- 長尺操作は Job の投入と ID の返却までで完了する。`asset.import` は内容が既存 Asset と同一なら `jobId: null` を返す。`render.start` は `job` を返す。呼び出し側は `job.get` または `job.list` で状態を確認する。
+- 長尺操作は Job の投入と ID の返却までで完了する。`asset.import` は内容が既存 Asset と同一なら `jobId: null` を返す。`render.start` と `tts.create` は `job` を返す。`tts.createBulk` は投入した Job の組（`jobs`）と生成できなかったセリフ（`excluded`）を返す。呼び出し側は `job.get` または `job.list` で状態を確認する。
 - MCP 束縛は `job.get` の有界ポーリングを `kakeai_job_wait` として提供する。`timeoutMs`（既定 60 秒、最大 600 秒）と `intervalMs`（既定 500 ミリ秒、10〜30000 ミリ秒）を受け、終端状態（`succeeded` / `failed` / `cancelled`）に達したら `{ job, timedOut: false, polls }`、予算超過なら最後の Job と `timedOut: true` を返す。`job_wait` は MCP 束縛の便宜ツールであり、Agent 操作ではない。
 - 失敗はすべて `isError: true` のツール結果として返し、サーバーを落とさない。本文は JSON `{ "code": "...", "issues": [...] }` で、Agent Access と操作コアのコードをそのまま透過する。MCP 自身の失敗は `MCP_TOOL_UNKNOWN`（未知のツール名）、`VALIDATION_ERROR`（入力スキーマ不一致、`issues` 付き）、`MCP_INTERNAL_ERROR`（想定外。詳細は返さない）とする。アプリ未起動は `AGENT_APP_UNAVAILABLE`、未知の操作は `AGENT_OPERATION_UNKNOWN` である。
-- 実体削除、外部サービスへの公開、課金を伴う生成は MCP にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
+- 実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は MCP にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
 
 ## CLI 束縛
 
@@ -73,10 +77,18 @@
 - サブコマンドは正規の `domain.verb` をそのまま使う（`kakeai-agent work.create --input input.json`、`kakeai-agent schema.get`）。`job.wait <jobId>` は MCP の `kakeai_job_wait` と同じ便利コマンド、`operations` は `agentOperationCatalog` を返す。サブコマンド一覧は操作カタログから導出し、束縛側に第二の一覧を持たない。
 - `--input` はインライン JSON・ファイルパス・`-`（標準入力）を受け付ける。省略時は `{}` として扱う。送信前に `packages/contracts` の入力スキーマで検証し、受信後も出力スキーマで検証してから stdout に 1 つの JSON を書く。`--pretty` は出力をインデントする。
 - グローバルオプションは `--agent-id`（既定 `cli`）、`--data-dir`、`--socket`、`--timeout`（1 要求のタイムアウト。読み取り・変更の両方に適用）。解決順は MCP と同じく、引数、環境変数（`KAKEAI_AGENT_ID` / `KAKEAI_DATA_DIR` / `KAKEAI_SOCKET`）、プラットフォーム既定の順である。`--help` は種別ごとの操作一覧、`--version` はバージョンを返す。
-- 長尺操作は `job.wait <jobId>` または `asset.import` / `render.start` の `--wait` で待てる。どちらも MCP と同じ `jobWaitInputSchema` と `waitForJob` を使い、`--timeout-ms`（既定 60000、最大 600000）と `--interval-ms`（既定 500、10〜30000）を受ける。`job.wait` は `{ job, timedOut, polls }` を返し、予算超過は成功（終了コード 0）で `timedOut: true` とする。`--wait` は操作結果を `{ result, wait }` に包み、Job を投入しなかった場合（`asset.import` の重複）は `wait: null` とする。
+- 長尺操作は `job.wait <jobId>` または `asset.import` / `render.start` / `tts.create` / `tts.createBulk` の `--wait` で待てる。どちらも MCP と同じ `jobWaitInputSchema` と `waitForJob` を使い、`--timeout-ms`（既定 60000、最大 600000）と `--interval-ms`（既定 500、10〜30000）を受ける。`job.wait` は `{ job, timedOut, polls }` を返し、予算超過は成功（終了コード 0）で `timedOut: true` とする。`--wait` は操作結果を `{ result, wait }` に包み、Job を投入しなかった場合（`asset.import` の重複）と複数 Job を投入した場合（`tts.createBulk`）は `wait: null` とする。後者は Job ID ごとに `job.wait` するか `job.get` で確認する。
 - 失敗は stderr に `{ code, issues? }` の 1 行 JSON だけを書き、スタックトレースや自由文を出さない。stdout は常にコマンド出力専用である。終了コードは、`0` が成功（help・version・`operations` を含む）、`1` が操作または契約検証の失敗（code は Agent Access と操作コアの安定コード）、`2` が使い方または `--input` の誤り（`CLI_USAGE_ERROR` / `CLI_INPUT_ERROR`）である。CLI 自身の想定外の失敗は `CLI_INTERNAL_ERROR`（終了コード 1）とし、詳細を返さない。
-- MCP と同じく、実体削除、外部サービスへの公開、課金を伴う生成は CLI にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
+- MCP と同じく、実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は CLI にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
 - 束縛間で共有する実装は `@kakeai/agent-client` に置く。`jobWaitInputSchema`・`waitForJob`・`createJobGetter` と、`{ code, issues? }` の整形（`zodIssues`・`bindingErrorPayload`）を MCP と CLI が共有し、ポーリングやエラー整形を複製しない。
+
+## スキル
+
+- リポジトリの `skills/kakeai-production/` と `skills/kakeai-composition/` に、外部エージェント向けの手順書（スキル）を置く。`kakeai-production` は台本・キャラクター・素材・Cue・TTS・検証・レンダーをまたぐ制作フロー、`kakeai-composition` は再利用する Composition の authoring を扱う。
+- スキルは束縛ではない。実行時の入口は MCP または CLI のままとし、スキルはその操作の呼び出し順と判断点だけを定める。HTTP API・ローカルソケット・Prisma を直接使う手順を書かない。
+- テンプレート契約・操作の入出力スキーマをスキルへ複製しない。`schema.get` と、MCP の `inputSchema` / CLI の検証を正とする。
+- 配布はリポジトリの `skills/` を配布元とし、利用するエージェントランタイムのスキルディレクトリへディレクトリごとコピーまたはシンボリックリンクして検出させる。検出先はランタイム依存であり、特定ベンダーのパスを前提にしない。アプリは実行時に `skills/` を読みに行かない。
+- 導入手順は [ユーザーガイドのエージェント連携](../../user-guide/docs/agent-access.md) に記載する。
 
 ## ローカル制御ソケット
 
@@ -93,7 +105,7 @@
 
 ## 操作一覧
 
-操作はタスク指向とし、`domain.verb` 形式で表す。詳細な入出力は [todo.md](./todo.md) の契約フェーズで確定する。
+操作はタスク指向とし、`domain.verb` 形式で表す。詳細な入出力は `packages/contracts` の Zod スキーマを正とする。
 
 参照:
 
@@ -101,8 +113,10 @@
 - `work.list` / `work.get`
 - `script.get` — `scriptVersionId` を指定するとその版、`languageEditionId` を指定するとその Edition の current の `ContentDocument` と帰属を返す。どちらか一方を必須とする。
 - `script.validate` — 保存せずに検証する。`{ content }` または `{ baseScriptVersionId, operations }` を受け、`warnings` と解決済み `timeline` を返す。書込みを行わない。
-- `asset.list` / `asset.get`
+- `asset.list` — 素材を検索し、`{ assets, nextCursor }` の1ページを返す。`kind`・`status`・`filename`（大文字小文字を区別しない部分一致）・`tags`（`tagMode` で AND / OR を明示）・`favorite`・`archived`（既定は除外）を組み合わせ、`createdAt desc, id desc` 固定順で `limit`（既定50、最大100）件ずつ返す。`cursor` は前ページの `nextCursor` をそのまま渡す不透明値で、壊れた cursor は `VALIDATION_ERROR` とする。HTTP、ソケット、MCP、CLIは同じ契約を使う。
+- `asset.get` — Asset 1件を返す。
 - `composition.list` / `composition.get` / `composition.draft.get` / `composition.authoringContext`
+- `character.list` / `character.get` — キャラクターライブラリの読み取り（後述）。
 - `job.get` / `job.list`
 
 可逆な変更:
@@ -114,6 +128,8 @@
 - `asset.tag` — Asset のタグを更新する。
 - `composition.create` / `composition.draft.save` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。publish は `dryRun` を受け付ける。
 - `render.start` — 対象版と ready な素材から render Job を投入する。
+- `tts.create` — 保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter へ合成 Job を投入する（後述）。
+- `tts.createBulk` — 保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する（後述）。
 - `job.cancel` — queued の Job をキャンセルする。
 
 ### `script.edit` の契約
@@ -148,11 +164,35 @@
 - エージェントはアプリと同じマシンのファイルシステムを共有するため、`asset.import` はローカルパスを受け取り、バイト列を読んで取り込む。multipart や base64、URL 取得は用いない。
 - 取り込みは Web UI の multipart アップロードと同じ内部処理に落とし、`storageKey` は内容ハッシュ由来とする。入力パスを正本へ保存しない（[../mvp/spec.md](../mvp/spec.md)）。
 - 読み取りは利用者と同じ権限で行う。実装はサイズ上限とメディア種別の判定を行い、判定できないファイルは取り込まない。取り込み元パスをログや正本へ残さない。
-- 生成物の来歴（モデル、プロンプト、生成パラメータ）は `provenance` として任意に受け取り、`Asset.provenanceJson` に保存する。取り込み元のパスは来歴に含めない。生成自体はアプリ内で行わない（非ゴール参照）。
+- 生成物の来歴（モデル、プロンプト、生成パラメータ）は `provenance` として任意に受け取り、`Asset.provenanceJson` に保存する。取り込み元のパスは来歴に含めない。画像などの生成自体はアプリ内で行わない。TTS は利用者が設定した Adapter への Job 投入に限る（後述）。
+
+## TTS とキャラクター
+
+利用者が事前に設定したループバックの TTS Adapter（`voicevox` / `aivisspeech` / `openai-compatible`）への合成 Job 投入は、生成 Asset と Script Version のいずれも履歴から戻せるため、可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
+
+- 対象は利用者が設定済みの Adapter と既存の Voice Profile に限る。接続先・認証情報・Adapter 設定の変更、Voice Profile の作成・更新・削除は公開しない。
+- TTS の入力・出力は HTTP の TTS 契約（[../tts/spec.md](../tts/spec.md)）と同じスキーマ・Adapter 解決・エラーコードを共有し、束縛ごとに生成ロジックを複製しない。Job は既存の `job.get`（MCP / CLI では Job 待機）で状態を確認する。
+- 完了した Job の `ttsResult` を Take として台本へ入れる操作は公開しない。`script.edit` の `line.assignTake` で新しい Script Version を追加する。
+- 生成物は既存の `origin: generated` と `provenanceJson` で帰属し、TTS 専用の課金管理・プロバイダ管理・新しい帰属列は持たない。
+- Character ライブラリは読み取り（一覧・取得）だけを公開する。台本へ入れるときは操作コアの `character.addFromLibrary` で新しいローカル ID へコピーし、Face Set は参照のまま引き継ぐ（[../editor-core/spec.md](../editor-core/spec.md)）。ライブラリの作成・更新・削除は公開しない。
+
+### TTS の契約
+
+- `tts.create` は `{ scriptVersionId, narrationSegmentId, voiceId?, speechText?, speedScale? }` を受け、1 つの `tts` Job（`{ job }`）を返す。`speedScale` は HTTP と同じく既定 `1.0`、範囲は `0.5`〜`2.0`。`voiceId` を省くと話者の Voice Profile の声、`speechText` を省くと保存済みセグメントの読み上げテキストを使う。
+- `tts.createBulk` は `{ scriptVersionId }` を受け、HTTP と同じ `{ jobs, excluded }` を返す。対象は要点シーンのうち `selectedAudioTakeId` が `null` のセリフで、生成できないセリフは他の生成を止めず `excluded` に `code` と安全な理由を返す。
+- 完了した `tts` Job の `ttsResult`（`narrationSegmentId`・`assetId`・`durationMs`・`source: "tts"`）は `job.get` と MCP の `kakeai_job_wait` / CLI の `job.wait` がそのまま返す。Take への反映前に最新の台本を `script.get` で読み直し、対象 Segment と読み上げテキストを照合してから `script.edit` の `line.assignTake`（`assetId` に `ttsResult.assetId`、`source: "tts"`）を適用する。この照合はワークフローの規約であり、サーバーはテキスト一致を強制しない。
+- 存在しない台本版・セリフは `RESOURCE_NOT_FOUND`、入力不正は `TTS_INPUT_INVALID`、Adapter へ接続できない場合は `TTS_ENGINE_UNAVAILABLE` を返す。Job 実行中の失敗は `job.get` の `status: failed` と `error` で伝える。
+
+### Character の契約
+
+- `character.list` はキャラクターライブラリの全件を `{ characters }` で返す。`character.get` は `{ characterId }` を受け、`{ character }` を返す。いずれも `id`・`name`・locale 別の `voices`・外観（`assetId`・`expression`・`pose`・任意の `label`・`faceSetId`）・`createdAt` / `updatedAt` を持ち、HTTP の Character 契約と同じ `characterLibraryEntrySchema` を使う。存在しない `characterId` は `RESOURCE_NOT_FOUND` とする。ライブラリの作成・更新・削除は公開しない。
+- 台本へ入れるときは `script.edit` の操作コア操作 `character.addFromLibrary`（`{ op, libraryCharacterId }`）を使う。ライブラリのキャラクターを、名前・`voices`・全外観を引き継いだ新しいローカル ID の Character・Appearance・Speaker として文書へコピーする。`faceSetId` は参照のまま引き継ぎ、Face Set の内容はコピーしない。Speaker の `voiceProfileId` は `ContentDocument.locale` に一致する `voices` の声、一致がなければ `null` とする。ライブラリ側は変更しない。
+- コピーで作られた ID は `script.edit` の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` で返る。後続の `line.add`・`line.setSpeaker`・`standing.set` にはこの ID をそのまま使う。`character.addFromLibrary` は `key` を持たないため、同一呼び出し内で作った ID を `{ key }` で参照することはできない。
+- 未知の `libraryCharacterId` は `EDIT_TARGET_NOT_FOUND`、`ScriptContext.libraryCharacters` を用意できない場合は `EDIT_PRECONDITION_FAILED` とする。
 
 ## 長尺操作
 
-- 素材取り込みとレンダーは Job として実行し、操作は Job の投入と ID の返却まで行う。状態は `job.get` のポーリングで確認する。
+- 素材取り込み・TTS・レンダーは Job として実行し、操作は Job の投入と ID の返却まで行う。状態は `job.get` のポーリングで確認する。
 - Job の状態遷移、単一 worker、リースなし、起動時 `WORKER_INTERRUPTED` 掃除は [../mvp/spec.md](../mvp/spec.md) と [ADR 0020](../adr/0020-no-job-lease-startup-reap.md) の規則をそのまま適用する。
 
 ## 帰属
@@ -184,6 +224,9 @@
 | `VALIDATION_ERROR` | 保存検証に適合しない。`issues` に JSON Pointer と理由を含める。MCP の入力スキーマ不一致にも同じコードと `issues` を返す |
 | `ASSET_UNAVAILABLE` | 取り込み・レンダー・編集で参照する Asset が ready でない、または欠損している |
 | `COMPOSITION_UNAVAILABLE` | 参照する Composition Version が publish 済みでない、または bundle が欠損している |
+| `TTS_INPUT_INVALID` | TTS 生成要求の入力が不正（空の読み上げテキスト、話者・声の未設定、Adapter 外の声） |
+| `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した |
+| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`character.get` のキャラクターなど、参照先の資源が存在しない |
 | `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。
@@ -191,9 +234,9 @@
 ## 非ゴール
 
 - アプリ内への LLM 組込、プロバイダ・モデル・API キー・課金・会話履歴の管理。
-- アプリ内の画像・音声生成アダプター。生成はエージェント側に委ね、Agent Access は取り込みだけを公開する。
+- アプリ内の画像生成・音声モデルの組込。画像生成はエージェント側に委ね、Agent Access は取り込みだけを公開する。TTS は利用者が設定したループバック Adapter への合成 Job 投入に限る。
 - 複数プロセスによる SQLite 共有、worker の外部起動。
-- 実体削除、外部サービスへの公開、課金を伴う生成をエージェントへ開放すること。
+- 実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成をエージェントへ開放すること。
 - リモート・クラウドの MCP 接続、HTTP 経由のエージェント接続。
 - 台本編集の意味論を Agent Access 側で持つこと。編集は操作コアだけが行う。
 

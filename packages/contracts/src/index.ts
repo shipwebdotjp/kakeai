@@ -27,6 +27,7 @@ export * from "./character-library";
 export * from "./face-set";
 export * from "./tts";
 export * from "./asset";
+export * from "./asset-list";
 export * from "./dto";
 export * from "./error";
 export * from "./job";

@@ -32,6 +32,10 @@ _Avoid_: plugin, server API
 The `kakeai-agent` command surface through which a user or agent calls Agent Access operations from a shell. It shares the MCP Binding's client, validation and job polling, and holds no Kakeai business logic.
 _Avoid_: admin command, shell API
 
+**Production Skill**:
+A packaged workflow that tells an external agent the order and decision points for producing a Kakeai video through Agent Access, while treating the live schema and operation contracts as authoritative rather than duplicating them.
+_Avoid_: prompt, plugin, template contract
+
 **Script Operation**:
 A named, reversible edit applied to a Content Document, such as adding a scene, splitting a line, or changing a cue range. Operations are applied to a document and never persist themselves.
 _Avoid_: JSON patch, mutation, form update

@@ -1,0 +1,180 @@
+import { describe, expect, it } from "vitest";
+import {
+  agentCharacterGetInputSchema,
+  agentCharacterGetOutputSchema,
+  agentCharacterListInputSchema,
+  agentCharacterListOutputSchema,
+  agentOperationInputSchemas,
+  agentOperationNames,
+  agentOperationOutputSchemas,
+  agentSchemaDigestInputOf,
+  agentTtsCreateBulkInputSchema,
+  agentTtsCreateBulkOutputSchema,
+  agentTtsCreateInputSchema,
+  agentTtsCreateOutputSchema,
+  buildAgentSchemaGetResult,
+  computeAgentSchemaDigest,
+  isAgentLongRunningOperation,
+  isAgentMutationOperation,
+} from "./agent";
+
+const job = {
+  id: "job-1",
+  kind: "tts" as const,
+  status: "queued" as const,
+  workId: "work-1",
+  assetId: null,
+  languageEditionId: "led-1",
+  scriptVersionId: "scr-1",
+  progressPercent: 0,
+  createdAt: "2026-10-21T00:00:00.000Z",
+  startedAt: null,
+  finishedAt: null,
+  error: null,
+  ttsResult: null,
+  artifacts: [],
+};
+
+const libraryEntry = {
+  id: "char-1",
+  name: "四国めたん",
+  voices: [{ locale: "ja-JP", voiceProfileId: "vp-1" }],
+  appearances: [
+    {
+      id: "appearance-1",
+      assetId: "asset-1",
+      expression: "smile",
+      pose: "front",
+      label: "夏服",
+      faceSetId: null,
+    },
+  ],
+  createdAt: "2026-10-21T00:00:00.000Z",
+  updatedAt: "2026-10-21T00:00:00.000Z",
+};
+
+describe("tts.create operation contract", () => {
+  it("defaults speedScale and rejects unknown fields", () => {
+    const input = {
+      scriptVersionId: "scr-1",
+      narrationSegmentId: "line-1",
+    };
+    expect(agentTtsCreateInputSchema.parse(input)).toEqual({
+      ...input,
+      speedScale: 1,
+    });
+    expect(
+      agentTtsCreateInputSchema.safeParse({
+        ...input,
+        voiceId: "voice-1",
+        speechText: "こんにちは",
+        speedScale: 1.5,
+      }).success,
+    ).toBe(true);
+    expect(agentTtsCreateInputSchema.safeParse({ ...input, extra: true }).success).toBe(
+      false,
+    );
+    expect(
+      agentTtsCreateInputSchema.safeParse({ ...input, speedScale: 3 }).success,
+    ).toBe(false);
+    expect(agentTtsCreateInputSchema.safeParse({ scriptVersionId: "scr-1" }).success).toBe(
+      false,
+    );
+    expect(agentTtsCreateOutputSchema.safeParse({ job }).success).toBe(true);
+    expect(agentTtsCreateOutputSchema.safeParse({ job: undefined }).success).toBe(false);
+  });
+
+  it("shares the bulk result contract for tts.createBulk", () => {
+    expect(agentTtsCreateBulkInputSchema.parse({ scriptVersionId: "scr-1" })).toEqual({
+      scriptVersionId: "scr-1",
+    });
+    const output = {
+      jobs: [{ narrationSegmentId: "line-1", job }],
+      excluded: [
+        {
+          narrationSegmentId: "line-2",
+          code: "TTS_INPUT_INVALID",
+          message: "声が未設定です。",
+        },
+      ],
+    };
+    expect(agentTtsCreateBulkOutputSchema.safeParse(output).success).toBe(true);
+    expect(
+      agentTtsCreateBulkOutputSchema.safeParse({ ...output, jobs: "none" }).success,
+    ).toBe(false);
+  });
+
+  it("registers tts.create and tts.createBulk as long-running mutations", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of ["tts.create", "tts.createBulk"] as const) {
+      expect(agentOperationNames).toContain(name);
+      expect(isAgentMutationOperation(name)).toBe(true);
+      expect(isAgentLongRunningOperation(name)).toBe(true);
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "mutation",
+        longRunning: true,
+      });
+    }
+    expect(Object.keys(agentOperationInputSchemas)).toContain("tts.create");
+    expect(Object.keys(agentOperationInputSchemas)).toContain("tts.createBulk");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("tts.create");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("tts.createBulk");
+
+    const digestInput = agentSchemaDigestInputOf(schema);
+    expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);
+    expect(
+      computeAgentSchemaDigest({
+        ...digestInput,
+        agentOperations: digestInput.agentOperations.map((entry) =>
+          entry.name === "tts.create" ? { ...entry, longRunning: false } : entry,
+        ),
+      }),
+    ).not.toBe(schema.schemaDigest);
+  });
+});
+
+describe("character read operation contracts", () => {
+  it("lists and fetches library entries", () => {
+    expect(agentCharacterListInputSchema.safeParse({}).success).toBe(true);
+    expect(agentCharacterListInputSchema.safeParse({ extra: true }).success).toBe(false);
+    expect(agentCharacterListOutputSchema.safeParse({ characters: [] }).success).toBe(true);
+    expect(
+      agentCharacterListOutputSchema.safeParse({ characters: [libraryEntry] }).success,
+    ).toBe(true);
+    expect(agentCharacterGetInputSchema.safeParse({ characterId: "char-1" }).success).toBe(
+      true,
+    );
+    expect(agentCharacterGetInputSchema.safeParse({}).success).toBe(false);
+    expect(
+      agentCharacterGetOutputSchema.safeParse({ character: libraryEntry }).success,
+    ).toBe(true);
+  });
+
+  it("registers both reads in the catalog and the schema digest", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of ["character.list", "character.get"] as const) {
+      expect(agentOperationNames).toContain(name);
+      expect(isAgentMutationOperation(name)).toBe(false);
+      expect(isAgentLongRunningOperation(name)).toBe(false);
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "read",
+        longRunning: false,
+      });
+      expect(Object.keys(agentOperationInputSchemas)).toContain(name);
+      expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
+    }
+
+    const digestInput = agentSchemaDigestInputOf(schema);
+    expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);
+    expect(
+      computeAgentSchemaDigest({
+        ...digestInput,
+        agentOperations: digestInput.agentOperations.filter(
+          (entry) => entry.name !== "character.list",
+        ),
+      }),
+    ).not.toBe(schema.schemaDigest);
+  });
+});

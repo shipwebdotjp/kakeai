@@ -3,6 +3,7 @@ import {
   AGENT_ERROR_CODES,
   computeContentWarnings,
   getVisualTheme,
+  type CharacterLibraryEntry,
   type ContentDocument,
   type PreviewTimeline,
   type ScriptEditRequest,
@@ -14,7 +15,12 @@ import {
   type ScriptValidateResult,
   type Warning,
 } from "@kakeai/contracts";
-import { createIdGenerator, type ScriptAssetInfo, type ScriptContext } from "@kakeai/script-edits";
+import {
+  createIdGenerator,
+  type ScriptAssetInfo,
+  type ScriptContext,
+  type ScriptLibraryCharacter,
+} from "@kakeai/script-edits";
 import { CompositionCompileError, collectOffsetRangeWarnings } from "@kakeai/video";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent } from "../domain/content-json.ts";
@@ -24,6 +30,7 @@ import {
   getCompositionCanvasProfilesByVersionId,
   getCompositionDurationsByVersionId,
 } from "./compositions.ts";
+import { listCharacters } from "./character-library.ts";
 import {
   applyAndValidateScriptOperations,
   mergeWarnings,
@@ -55,6 +62,9 @@ function emptyCreated(): ScriptOperationCreated {
     cueIds: [],
     audioCueIds: [],
     audioTakeIds: [],
+    characterIds: [],
+    appearanceIds: [],
+    speakerIds: [],
   };
 }
 
@@ -94,23 +104,28 @@ function assetInfo(asset: AssetWithRenditions): ScriptAssetInfo {
 }
 
 async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResources> {
-  const [assets, faceSets, compositionIds, themeRevisions] = await Promise.all([
-    prisma.asset.findMany({ include: { renditions: true } }),
-    prisma.faceSet.findMany({
-      include: {
-        layers: { orderBy: { position: "asc" } },
-        expressions: { orderBy: { position: "asc" } },
-      },
-    }),
-    prisma.compositionVersion.findMany({ select: { id: true } }),
-    prisma.themeRevision.findMany({ select: { themeId: true, versionNumber: true } }),
-  ]);
+  const [assets, faceSets, compositionIds, themeRevisions, characterEntries] =
+    await Promise.all([
+      prisma.asset.findMany({ include: { renditions: true } }),
+      prisma.faceSet.findMany({
+        include: {
+          layers: { orderBy: { position: "asc" } },
+          expressions: { orderBy: { position: "asc" } },
+        },
+      }),
+      prisma.compositionVersion.findMany({ select: { id: true } }),
+      prisma.themeRevision.findMany({ select: { themeId: true, versionNumber: true } }),
+      listCharacters(prisma),
+    ]);
 
   const assetById = new Map<string, AssetWithRenditions>(
     assets.map((asset) => [asset.id, asset]),
   );
   const faceSetById = new Map<string, FaceSetDetails>(
     faceSets.map((faceSet) => [faceSet.id, faceSet]),
+  );
+  const libraryCharacterById = new Map<string, ScriptLibraryCharacter>(
+    characterEntries.map((entry) => [entry.id, toScriptLibraryCharacter(entry)]),
   );
   const versionIds = compositionIds.map((row) => row.id);
   const [compositionDurations, compositionProfiles] = await Promise.all([
@@ -130,6 +145,11 @@ async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResource
         },
       },
       ids: createIdGenerator(),
+      // Read-only projection of the library; `character.addFromLibrary` copies
+      // from it into the document without writing the library back.
+      libraryCharacters: {
+        get: (characterId) => libraryCharacterById.get(characterId) ?? null,
+      },
     },
     references: {
       assetById,
@@ -139,6 +159,28 @@ async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResource
       themeExists: (id, version) =>
         getVisualTheme(id, version) !== undefined || revisionKeys.has(`${id}@${version}`),
     },
+  };
+}
+
+/**
+ * Adapts the library DTO to the operation core's read-only projection. The
+ * Appearance `id` stays behind because the core assigns a new local ID.
+ */
+function toScriptLibraryCharacter(entry: CharacterLibraryEntry): ScriptLibraryCharacter {
+  return {
+    id: entry.id,
+    name: entry.name,
+    voices: entry.voices.map((voice) => ({
+      locale: voice.locale,
+      voiceProfileId: voice.voiceProfileId,
+    })),
+    appearances: entry.appearances.map((appearance) => ({
+      assetId: appearance.assetId,
+      expression: appearance.expression,
+      pose: appearance.pose,
+      ...(appearance.label === undefined ? {} : { label: appearance.label }),
+      faceSetId: appearance.faceSetId,
+    })),
   };
 }
 

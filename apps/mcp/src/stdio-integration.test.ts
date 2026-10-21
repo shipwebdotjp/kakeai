@@ -192,6 +192,7 @@ let transport: StdioClientTransport;
 let stderr = "";
 let assetPolls = 0;
 let renderPolls = 0;
+let assetListInput: unknown;
 
 beforeAll(async () => {
   const version = fixtureCompositionVersion();
@@ -211,6 +212,9 @@ beforeAll(async () => {
           cueIds: [],
           audioCueIds: [],
           audioTakeIds: [],
+          characterIds: [],
+          appearanceIds: [],
+          speakerIds: [],
         },
         warnings: [],
         timeline: { totalDurationMs: 4000, fps: 30, scenes: [] },
@@ -222,6 +226,10 @@ beforeAll(async () => {
       jobId: "job-asset-1",
       deduplicated: false,
     }),
+    "asset.list": (input) => {
+      assetListInput = input;
+      return { assets: [fixtureAsset()], nextCursor: "cursor-2" };
+    },
     "composition.create": () => ({ composition: fixtureComposition() }),
     "composition.publish": (input) => {
       const dryRun = (input as { dryRun?: boolean }).dryRun === true;
@@ -372,6 +380,31 @@ describe("MCP stdio server against a real local socket", () => {
     });
     expect((jobs.structuredContent as { jobs: unknown[] }).jobs).toHaveLength(1);
   }, 30000);
+
+  it("forwards asset.list filters and returns the page contract", async () => {
+    const filters = {
+      kind: "image",
+      status: "ready",
+      filename: "bgm",
+      tags: ["intro", "bgm"],
+      tagMode: "or",
+      favorite: true,
+      archived: "include",
+      limit: 1,
+    } as const;
+    const result = await client.callTool({
+      name: mcpToolName("asset.list"),
+      arguments: filters,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(assetListInput).toEqual(filters);
+    const page = result.structuredContent as {
+      assets: Array<{ id: string }>;
+      nextCursor: string | null;
+    };
+    expect(page.assets.map((asset) => asset.id)).toEqual([fixtureAsset().id]);
+    expect(page.nextCursor).toBe("cursor-2");
+  });
 
   it("returns stable operation codes through MCP", async () => {
     const stale = await client.callTool({

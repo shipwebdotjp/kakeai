@@ -6,6 +6,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createKakeaiMcpServer } from "@kakeai/mcp";
 import { createAgentClient } from "@kakeai/agent-client";
+import { agentOperationNames } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
@@ -95,7 +96,7 @@ describe("MCP against the real agent dispatcher", () => {
       schemaDigest: string;
     }>(schema);
     expect(schemaData.contentSchemaVersion).toBe(1);
-    expect(schemaData.agentOperations).toHaveLength(23);
+    expect(schemaData.agentOperations).toHaveLength(agentOperationNames.length);
     expect(schemaData.schemaDigest).toMatch(/^fnv1a64:/u);
 
     const created = await mcpClient.callTool({

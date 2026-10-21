@@ -67,6 +67,9 @@ function emptyResult(document: ContentDocument): ScriptOperationResult {
       cueIds: [],
       audioCueIds: [],
       audioTakeIds: [],
+      characterIds: [],
+      appearanceIds: [],
+      speakerIds: [],
     },
     warnings: [],
   };

@@ -91,6 +91,11 @@ function jobIdOf(
       return (output as AgentOperationOutputMap["asset.import"]).jobId;
     case "render.start":
       return (output as AgentOperationOutputMap["render.start"]).job.id;
+    case "tts.create":
+      return (output as AgentOperationOutputMap["tts.create"]).job.id;
+    case "tts.createBulk":
+      // Bulk enqueues one Job per line, so there is no single Job to wait for.
+      return null;
     default:
       throw internalError();
   }

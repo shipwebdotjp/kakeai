@@ -44,6 +44,7 @@ import {
 } from "./cue.ts";
 import { removeStanding, setStanding } from "./standing.ts";
 import { addAudio, removeAudio, setAudio } from "./audio.ts";
+import { addCharacterFromLibrary } from "./character.ts";
 import { setVisualTheme } from "./theme.ts";
 
 export type { ScriptOperationCreated };
@@ -61,6 +62,9 @@ function emptyCreated(): ScriptOperationCreated {
     cueIds: [],
     audioCueIds: [],
     audioTakeIds: [],
+    characterIds: [],
+    appearanceIds: [],
+    speakerIds: [],
   };
 }
 
@@ -112,6 +116,9 @@ function toResult(
     warnings?: Warning[];
     audioTakeIds?: string[];
     audioCueIds?: string[];
+    characterIds?: string[];
+    appearanceIds?: string[];
+    speakerIds?: string[];
   },
 ): ScriptOperationResult {
   return {
@@ -123,6 +130,9 @@ function toResult(
       cueIds: result.cueIds,
       audioCueIds: result.audioCueIds ?? [],
       audioTakeIds: result.audioTakeIds ?? [],
+      characterIds: result.characterIds ?? [],
+      appearanceIds: result.appearanceIds ?? [],
+      speakerIds: result.speakerIds ?? [],
     },
     warnings: result.warnings ?? [],
   };
@@ -414,6 +424,9 @@ export function applyScriptOperation(
       const audioCueId = resolveId(operation.audioCueId, keys, ["audioCueId"]);
       return toResult(removeAudio(document, audioCueId));
     }
+    case "character.addFromLibrary": {
+      return toResult(addCharacterFromLibrary(document, operation, context));
+    }
     case "document.setVisualTheme": {
       return toResult(
         setVisualTheme(document, operation.id, operation.version),
@@ -444,6 +457,9 @@ export function applyScriptOperations(
       created.cueIds.push(...result.created.cueIds);
       created.audioCueIds.push(...result.created.audioCueIds);
       created.audioTakeIds.push(...result.created.audioTakeIds);
+      created.characterIds.push(...result.created.characterIds);
+      created.appearanceIds.push(...result.created.appearanceIds);
+      created.speakerIds.push(...result.created.speakerIds);
       warnings.push(...result.warnings);
     } catch (error) {
       if (error instanceof ScriptEditError) {

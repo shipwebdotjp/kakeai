@@ -397,31 +397,34 @@ Assetは全Workで再利用できる。アップロードされた原本は不�
 
 ### 一覧とメタデータ
 
-GET /assets は作成日時の降順でAsset配列を返す。任意の kind=image、kind=video、kind=audio クエリで絞り込みできる。存在しないkindは422 VALIDATION_ERRORとする。各Assetは利用者が編集できる `tags`・`favoritedAt`・`archivedAt` を含む。`favoritedAt` はお気に入り、`archivedAt` は一覧・ピッカーから既定で隠すアーカイブを表し、どちらもnullなら未設定。タグ・種類・お気に入り・アーカイブによる絞り込みや並び替えはサーバーでは行わず、取得済み配列をクライアント側で絞り込む。
+GET /assets は素材ライブラリを検索し、`{ assets, nextCursor }` の1ページを返す。並び順は `createdAt` 降順・`id` 降順で固定する。クエリは `kind`（image / video / audio）、`status`（processing / ready / failed）、`filename`（大文字小文字を区別しない部分一致）、`tags`（繰り返し指定またはカンマ区切り。短縮形の `tag` も同じ意味）、`tagMode`（`and` が既定、`or` でいずれか一致）、`favorite`（true / false）、`archived`（`exclude` が既定、`include` はアーカイブ済みも含む、`only` はアーカイブ済みだけ）、`limit`（既定50、最大100）、`cursor`（前ページの `nextCursor` をそのまま渡す不透明値）を組み合わせられる。不正な値や壊れた cursor は422 `VALIDATION_ERROR` とし、`nextCursor` は最終ページでnullになる。返却順・cursor・limit上限はHTTP、ローカルソケット、MCP、CLIで同じ契約を共有する。各Assetは利用者が編集できる `tags`・`favoritedAt`・`archivedAt` を含む。`favoritedAt` はお気に入り、`archivedAt` は一覧・ピッカーから既定で隠すアーカイブを表し、どちらもnullなら未設定。
 
 ~~~json
 {
-  "data": [
-    {
-      "id": "ast_image_001",
-      "kind": "image",
-      "origin": "uploaded",
-      "status": "ready",
-      "originalFilename": "background.png",
-      "mediaType": "image/png",
-      "byteSize": 348921,
-      "sha256": "sha256:4d8b...",
-      "durationMs": null,
-      "widthPx": 1920,
-      "heightPx": 1080,
-      "hasAudio": false,
-      "tags": ["背景", "夏"],
-      "favoritedAt": null,
-      "archivedAt": null,
-      "createdAt": "2026-10-08T03:10:00.000Z",
-      "contentUrl": "/api/v1/assets/ast_image_001/content"
-    }
-  ]
+  "data": {
+    "assets": [
+      {
+        "id": "ast_image_001",
+        "kind": "image",
+        "origin": "uploaded",
+        "status": "ready",
+        "originalFilename": "background.png",
+        "mediaType": "image/png",
+        "byteSize": 348921,
+        "sha256": "sha256:4d8b...",
+        "durationMs": null,
+        "widthPx": 1920,
+        "heightPx": 1080,
+        "hasAudio": false,
+        "tags": ["背景", "夏"],
+        "favoritedAt": null,
+        "archivedAt": null,
+        "createdAt": "2026-10-08T03:10:00.000Z",
+        "contentUrl": "/api/v1/assets/ast_image_001/content"
+      }
+    ],
+    "nextCursor": null
+  }
 }
 ~~~
 

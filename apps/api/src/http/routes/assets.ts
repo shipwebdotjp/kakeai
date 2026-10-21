@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { Readable } from "node:stream";
 import Busboy from "busboy";
 import { Router, type Request, type RequestHandler } from "express";
-import { assetKindSchema, updateAssetRequestSchema, type AssetKindName } from "@kakeai/contracts";
+import { assetListQuerySchema, updateAssetRequestSchema } from "@kakeai/contracts";
 import type { LimitsConfig } from "../../config.ts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
@@ -131,6 +131,64 @@ function receiveUpload(
   });
 }
 
+function firstQueryValue(value: unknown): unknown {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function tagQueryValues(value: unknown): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const entries = Array.isArray(value) ? value : [value];
+  const tags: string[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== "string") {
+      tags.push("");
+      continue;
+    }
+    for (const part of entry.split(",")) {
+      const tag = part.trim();
+      if (tag.length > 0) {
+        tags.push(tag);
+      }
+    }
+  }
+  // An explicitly empty tag filter is a contract violation, not "all assets".
+  return tags.length > 0 ? tags : [""];
+}
+
+function parseAssetListQuery(req: Request) {
+  const raw: Record<string, unknown> = {};
+  for (const key of ["kind", "status", "filename", "tagMode", "archived", "cursor"] as const) {
+    const value = firstQueryValue(req.query[key]);
+    if (value !== undefined) {
+      raw[key] = value;
+    }
+  }
+  // `tags` matches the Agent Access field name; `tag` stays as the shorter
+  // HTTP alias documented in the API contract.
+  const tags = tagQueryValues(req.query.tags ?? req.query.tag);
+  if (tags !== undefined) {
+    raw.tags = tags;
+  }
+  const favorite = firstQueryValue(req.query.favorite);
+  if (favorite !== undefined) {
+    if (favorite === "true") {
+      raw.favorite = true;
+    } else if (favorite === "false") {
+      raw.favorite = false;
+    } else {
+      raw.favorite = favorite;
+    }
+  }
+  const limit = firstQueryValue(req.query.limit);
+  if (limit !== undefined) {
+    raw.limit = typeof limit === "string" && limit.trim().length > 0 ? Number(limit) : limit;
+  }
+
+  return parseBody(assetListQuerySchema, raw);
+}
+
 export function createAssetsRouter(dependencies: AssetsRouterDependencies): Router {
   const { prisma, directories, limits, mediaGuard } = dependencies;
   const router = Router();
@@ -138,18 +196,8 @@ export function createAssetsRouter(dependencies: AssetsRouterDependencies): Rout
   router.get(
     "/assets",
     asyncHandler(async (req, res) => {
-      let kind: AssetKindName | undefined;
-      const raw = req.query.kind;
-      if (raw !== undefined) {
-        const parsed = assetKindSchema.safeParse(Array.isArray(raw) ? raw[0] : raw);
-        if (!parsed.success) {
-          throw validationError([
-            { path: ["kind"], code: "invalid_value", message: "kind は image / video / audio のいずれかです。" },
-          ]);
-        }
-        kind = parsed.data;
-      }
-      sendData(res, 200, await assets.listAssets(prisma, kind));
+      const query = parseAssetListQuery(req);
+      sendData(res, 200, await assets.searchAssets(prisma, query));
     }),
   );
 

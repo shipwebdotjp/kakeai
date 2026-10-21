@@ -10,6 +10,8 @@ Composition Library は、AI（HyperFrames）が作成・公開した全画面�
 - 詳細には draft の entrypoint と、公開バージョンの一覧（版番号・キャンバス・スキン・バージョンID・bundle ハッシュ・entrypoint・公開日時）が表示されます。「キャンバス」はその版の Canvas Profile（横長 1920×1080 ／ 縦長 1080×1920）です。「スキン」は AI がその版を作ったときの世界観（例: `handmade-paper@1`、スキン未指定の `neutral`、情報がない `legacy`）です。
 - Composition の作成・更新・公開（Publish）は AI が行います。Web UI には HTML の直接編集や公開ボタンはありません。編集内容は draft に入り、公開して初めて台本から参照できる不変の CompositionVersion になります。
 
+AI は Agent Access（MCP / CLI）の `composition.draft.get` で draft を読み、`composition.draft.save` で書き、`composition.publish` で公開します。アプリが管理する `drafts/` と `bundles/` を直接編集することはありません（[エージェント連携](./agent-access.md)）。
+
 ## 台本で使う
 
 背景として使う場合:

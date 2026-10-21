@@ -61,18 +61,18 @@
 
 - [x] `npm run typecheck`、`npm test`、最大3回の OCR レビューと妥当な指摘の修正
 
-### [ ] A9 制作フロー操作とスキル
+### [x] A9 制作フロー操作とスキル
 
-- [ ] [ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md) を追加して [ADR 0074](../adr/0074-agent-direct-reversible-operations.md) を amendment する。利用者が事前設定したループバック TTS Adapter への合成 Job は、生成 Asset と ScriptVersion のいずれも履歴から戻せるため、Agent Access に公開する。`openai-compatible` を含める一方、エージェントは接続先・認証情報・Adapter設定を変更できず、TTS以外の課金生成を一般に許可しない。
-- [ ] Agent Access に長尺変更 `tts.create`（1 Narration Segment）と `tts.createBulk`（未選択の要点セリフ）を追加し、既存HTTPのTTS入力・出力契約、Adapter解決、エラーコード、Job snapshot をそのまま共有する。完了 Job の `ttsResult` を `job.get` / `job.wait` で返し、Takeの正本への反映は既存の `script.edit` + `line.assignTake` とする。添付前に最新台本を読み直し、対象 Segment と読み上げテキストを照合してから新しい版へ保存する。
-- [ ] Agent Access に `character.list` / `character.get` を追加し、操作コアに `character.addFromLibrary` を追加する。これはライブラリの Character を新しいローカル Character・Appearance・Speaker IDで台本へコピーし、Face Set参照とEdition localeに対応するVoice Profileを既存のコピー規則どおり引き継ぐ。作成された Character・Appearance・Speaker IDを `script.edit` の `created` 結果で返し、後続のセリフ割り当てと `standing.set` で使えるようにする。キャラクターライブラリ自体の作成・更新・削除は公開しない。
-- [ ] `asset.list` をページング可能な検索操作へ拡張する。`kind` に加え、`ready` を指定できる状態、ファイル名部分一致、タグ（AND / OR を明示）、お気に入り、アーカイブ表示を組み合わせて絞り込めるようにし、既定ではアーカイブ済みを除外する。HTTP API、ローカルソケット、MCP、CLIは同じ契約を使い、返却順・cursor・page sizeの上限を固定する。
-- [ ] 新操作を `schema.get` の Agent操作カタログと schema digest へ反映し、dispatcher・MCP・CLIがカタログから自動公開することを保つ。Agent Access仕様、ユーザーガイド、エラー／Job待機の説明も同じ変更で更新する。
-- [ ] `skills/kakeai-production/SKILL.md` を追加する。台本投入とScene分割、ライブラリCharacterのコピー、素材の検索・取り込み待ち、Cue／立ち絵／全体BGMの一括編集、TTS Job作成・待機・Take添付、validate・renderまでの順序、`SCRIPT_BASE_STALE` 時の再読込とrequestId再送規則を定める。スキルは `schema.get` を正とし、個別のTemplate契約や操作スキーマを複製しない。視覚的なプレビュー／レンダー品質の自律確認は対象外とする。
-- [ ] 既存の [kakeai-composition skill](../../skills/kakeai-composition/SKILL.md) をAgent AccessのComposition操作へ移行し、横断制作スキルからComposition作成時に参照する。両スキルを利用対象のAgent runtimeが検出できる配布場所へ含め、導入方法をAgent Accessガイドに記載する。
-- [ ] 契約・socket・MCP・CLIのテストで、TTS（VOICEVOX / AivisSpeech / OpenAI互換）、Job待機とTake添付、Characterのコピーと立ち絵設定、複合素材フィルタとページングを検証する。代表的な統合テストは「台本編集 → Character取り込み → TTS → Take添付 → タグ付きready素材のCue／BGM配置 → validate → render投入」を通す。スキル文言自体はテストしない。
+- [x] [ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md) を追加して [ADR 0074](../adr/0074-agent-direct-reversible-operations.md) を amendment する。利用者が事前設定したループバック TTS Adapter への合成 Job は、生成 Asset と ScriptVersion のいずれも履歴から戻せるため、Agent Access に公開する。`openai-compatible` を含める一方、エージェントは接続先・認証情報・Adapter設定を変更できず、TTS以外の課金生成を一般に許可しない。
+- [x] Agent Access に長尺変更 `tts.create`（1 Narration Segment）と `tts.createBulk`（未選択の要点セリフ）を追加し、既存HTTPのTTS入力・出力契約、Adapter解決、エラーコード、Job snapshot をそのまま共有する。完了 Job の `ttsResult` を `job.get` / `job.wait` で返し、Takeの正本への反映は既存の `script.edit` + `line.assignTake` とする。添付前に最新台本を読み直し、対象 Segment と読み上げテキストを照合してから新しい版へ保存する。
+- [x] Agent Access に `character.list` / `character.get` を追加し、操作コアに `character.addFromLibrary` を追加する。これはライブラリの Character を新しいローカル Character・Appearance・Speaker IDで台本へコピーし、Face Set参照とEdition localeに対応するVoice Profileを既存のコピー規則どおり引き継ぐ。作成された Character・Appearance・Speaker IDを `script.edit` の `created` 結果で返し、後続のセリフ割り当てと `standing.set` で使えるようにする。キャラクターライブラリ自体の作成・更新・削除は公開しない。
+- [x] `asset.list` をページング可能な検索操作へ拡張する。`kind` に加え、`ready` を指定できる状態、ファイル名部分一致、タグ（AND / OR を明示）、お気に入り、アーカイブ表示を組み合わせて絞り込めるようにし、既定ではアーカイブ済みを除外する。HTTP API、ローカルソケット、MCP、CLIは同じ契約を使い、返却順・cursor・page sizeの上限を固定する。
+- [x] 新操作を `schema.get` の Agent操作カタログと schema digest へ反映し、dispatcher・MCP・CLIがカタログから自動公開することを保つ。Agent Access仕様、ユーザーガイド、エラー／Job待機の説明も同じ変更で更新する。
+- [x] `skills/kakeai-production/SKILL.md` を追加する。台本投入とScene分割、ライブラリCharacterのコピー、素材の検索・取り込み待ち、Cue／立ち絵／全体BGMの一括編集、TTS Job作成・待機・Take添付、validate・renderまでの順序、`SCRIPT_BASE_STALE` 時の再読込とrequestId再送規則を定める。スキルは `schema.get` を正とし、個別のTemplate契約や操作スキーマを複製しない。視覚的なプレビュー／レンダー品質の自律確認は対象外とする。
+- [x] 既存の [kakeai-composition skill](../../skills/kakeai-composition/SKILL.md) をAgent AccessのComposition操作へ移行し、横断制作スキルからComposition作成時に参照する。両スキルを利用対象のAgent runtimeが検出できる配布場所へ含め、導入方法をAgent Accessガイドに記載する。
+- [x] 契約・socket・MCP・CLIのテストで、TTS（VOICEVOX / AivisSpeech / OpenAI互換）、Job待機とTake添付、Characterのコピーと立ち絵設定、複合素材フィルタとページングを検証する。代表的な統合テストは「台本編集 → Character取り込み → TTS → Take添付 → タグ付きready素材のCue／BGM配置 → validate → render投入」を通す。スキル文言自体はテストしない。
 - 完了条件: 外部Agentが既存のCharacterとVoice Profile、タグ付け済み素材だけを使い、台本・Scene・TTS音声・Cue・立ち絵・BGMをScriptVersionとして保存し、MCPまたはCLIから検証・レンダー投入まで完了できる。視覚確認の操作面は後続フェーズとする。
 
-### [ ] A10 レビューとコミット
+### [x] A10 レビューとコミット
 
-- [ ] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。
+- [x] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。

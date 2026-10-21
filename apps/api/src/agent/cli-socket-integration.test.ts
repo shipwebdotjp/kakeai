@@ -8,6 +8,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createKakeaiMcpServer, mcpToolName } from "@kakeai/mcp";
 import { createAgentClient, type AgentClient } from "@kakeai/agent-client";
+import { agentOperationNames } from "@kakeai/contracts";
 import { runCli, type CliIo } from "@kakeai/cli";
 import type { AppConfig } from "../config.ts";
 import { loadConfig } from "../config.ts";
@@ -148,7 +149,7 @@ describe("CLI against the real agent dispatcher", () => {
       schemaDigest: string;
     };
     expect(schemaData.contentSchemaVersion).toBe(1);
-    expect(schemaData.agentOperations).toHaveLength(23);
+    expect(schemaData.agentOperations).toHaveLength(agentOperationNames.length);
     expect(schemaData.schemaDigest).toMatch(/^fnv1a64:/u);
 
     const created = await cli(["work.create", "--input", '{"title":"CLI 実連携作品"}']);

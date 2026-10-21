@@ -10,6 +10,7 @@ import { idSchema, localeSchema, nonNegativeInt, positiveInt } from "./content/p
 import {
   assetKindSchema,
   assetSchema,
+  bulkTtsJobsResultSchema,
   jobSchema,
   previewTimelineSchema,
   scriptVersionSchema,
@@ -17,6 +18,8 @@ import {
   workSummarySchema,
 } from "./dto";
 import { assetTagsSchema } from "./asset";
+import { assetListInputSchema, assetListPageSchema } from "./asset-list";
+import { characterLibraryEntrySchema } from "./character-library";
 import {
   compositionAuthoringContextSchema,
   compositionDraftFilesSchema,
@@ -29,6 +32,7 @@ import { errorCodeSchema, warningSchema } from "./error";
 import {
   compositionAuthoringContextRequestSchema,
   createCompositionRequestSchema,
+  createTtsJobRequestSchema,
   publishCompositionRequestSchema,
   updateCompositionDraftRequestSchema,
 } from "./requests";
@@ -241,6 +245,7 @@ export const scriptOperationCategorySchema = z.enum([
   "line",
   "cue",
   "standing",
+  "character",
   "audio",
   "document",
 ]);
@@ -277,6 +282,10 @@ export const agentOperationNames = [
   "composition.create",
   "composition.draft.save",
   "composition.publish",
+  "tts.create",
+  "tts.createBulk",
+  "character.list",
+  "character.get",
 ] as const;
 export type AgentOperationName = (typeof agentOperationNames)[number];
 
@@ -294,6 +303,8 @@ export const agentReadOperationNames = [
   "composition.get",
   "composition.draft.get",
   "composition.authoringContext",
+  "character.list",
+  "character.get",
 ] as const;
 
 export const agentMutationOperationNames = [
@@ -307,15 +318,19 @@ export const agentMutationOperationNames = [
   "composition.create",
   "composition.draft.save",
   "composition.publish",
+  "tts.create",
+  "tts.createBulk",
 ] as const satisfies readonly AgentOperationName[];
 
 /**
  * Mutations that enqueue a Job and return before the work is done. Callers poll
- * `job.get` (or the MCP binding's `job_wait`) with the returned Job id.
+ * `job.get` (or the MCP binding's `job_wait`) with the returned Job id or ids.
  */
 export const agentLongRunningOperationNames = [
   "asset.import",
   "render.start",
+  "tts.create",
+  "tts.createBulk",
 ] as const satisfies readonly AgentOperationName[];
 
 export function isAgentOperationName(value: string): value is AgentOperationName {
@@ -750,12 +765,8 @@ export const agentScriptSaveOutputSchema = scriptSaveResultSchema;
 export const agentScriptEditInputSchema = scriptEditRequestSchema;
 export const agentScriptEditOutputSchema = scriptEditResultSchema;
 
-export const agentAssetListInputSchema = z.strictObject({
-  kind: assetKindSchema.optional(),
-});
-export const agentAssetListOutputSchema = z.strictObject({
-  assets: z.array(assetSchema),
-});
+export const agentAssetListInputSchema = assetListInputSchema;
+export const agentAssetListOutputSchema = assetListPageSchema;
 
 export const agentAssetGetInputSchema = z.strictObject({ assetId: idSchema });
 export const agentAssetGetOutputSchema = z.strictObject({ asset: assetSchema });
@@ -861,6 +872,43 @@ export const agentCompositionPublishOutputSchema = z.discriminatedUnion("dryRun"
   }),
 ]);
 
+/**
+ * TTS operations (A9). They share the HTTP TTS request/result contracts so the
+ * socket, MCP and CLI never own a second generation contract. `tts.create`
+ * enqueues one Job for a Narration Segment; `tts.createBulk` enqueues Jobs for
+ * the unselected lines of a saved Script Version. A completed Job's
+ * `ttsResult` is read through `job.get`, and the Take enters the script only
+ * through `script.edit` + `line.assignTake`.
+ */
+export const agentTtsCreateInputSchema = createTtsJobRequestSchema.extend({
+  scriptVersionId: idSchema,
+  narrationSegmentId: idSchema,
+});
+export type AgentTtsCreateInput = z.input<typeof agentTtsCreateInputSchema>;
+
+export const agentTtsCreateOutputSchema = z.strictObject({ job: jobSchema });
+export type AgentTtsCreateOutput = z.infer<typeof agentTtsCreateOutputSchema>;
+
+export const agentTtsCreateBulkInputSchema = z.strictObject({
+  scriptVersionId: idSchema,
+});
+export type AgentTtsCreateBulkInput = z.input<typeof agentTtsCreateBulkInputSchema>;
+
+export const agentTtsCreateBulkOutputSchema = bulkTtsJobsResultSchema;
+export type AgentTtsCreateBulkOutput = z.infer<typeof agentTtsCreateBulkOutputSchema>;
+
+export const agentCharacterListInputSchema = agentEmptyInputSchema;
+export const agentCharacterListOutputSchema = z.strictObject({
+  characters: z.array(characterLibraryEntrySchema),
+});
+
+export const agentCharacterGetInputSchema = z.strictObject({
+  characterId: idSchema,
+});
+export const agentCharacterGetOutputSchema = z.strictObject({
+  character: characterLibraryEntrySchema,
+});
+
 export const agentOperationInputSchemas = {
   "schema.get": agentSchemaGetInputSchema,
   "work.list": agentWorkListInputSchema,
@@ -885,6 +933,10 @@ export const agentOperationInputSchemas = {
   "composition.create": agentCompositionCreateInputSchema,
   "composition.draft.save": agentCompositionDraftSaveInputSchema,
   "composition.publish": agentCompositionPublishInputSchema,
+  "tts.create": agentTtsCreateInputSchema,
+  "tts.createBulk": agentTtsCreateBulkInputSchema,
+  "character.list": agentCharacterListInputSchema,
+  "character.get": agentCharacterGetInputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export const agentOperationOutputSchemas = {
@@ -911,10 +963,18 @@ export const agentOperationOutputSchemas = {
   "composition.create": agentCompositionCreateOutputSchema,
   "composition.draft.save": agentCompositionDraftSaveOutputSchema,
   "composition.publish": agentCompositionPublishOutputSchema,
+  "tts.create": agentTtsCreateOutputSchema,
+  "tts.createBulk": agentTtsCreateBulkOutputSchema,
+  "character.list": agentCharacterListOutputSchema,
+  "character.get": agentCharacterGetOutputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export type AgentOperationInputMap = {
-  [K in AgentOperationName]: z.infer<(typeof agentOperationInputSchemas)[K]>;
+  [K in AgentOperationName]: z.input<(typeof agentOperationInputSchemas)[K]>;
+};
+/** Inputs after the binding has applied schema defaults and transforms. */
+export type AgentOperationParsedInputMap = {
+  [K in AgentOperationName]: z.output<(typeof agentOperationInputSchemas)[K]>;
 };
 export type AgentOperationOutputMap = {
   [K in AgentOperationName]: z.infer<(typeof agentOperationOutputSchemas)[K]>;

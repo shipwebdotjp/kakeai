@@ -36,7 +36,12 @@ describe("MCP tool catalog", () => {
     }
     expect(operationToolEntries.filter((entry) => entry.longRunning).map((entry) => entry.operation))
       .toEqual([...agentLongRunningOperationNames]);
-    expect(agentLongRunningOperationNames).toEqual(["asset.import", "render.start"]);
+    expect(agentLongRunningOperationNames).toEqual([
+      "asset.import",
+      "render.start",
+      "tts.create",
+      "tts.createBulk",
+    ]);
     expect(agentReadOperationNames.length + agentMutationOperationNames.length).toBe(
       agentOperationNames.length,
     );
@@ -79,10 +84,39 @@ describe("MCP tool catalog", () => {
     expect(scriptEdit?.inputSchema.required).toEqual(
       expect.arrayContaining(["baseScriptVersionId", "requestId", "operations"]),
     );
+    const assetList = operationToolEntries.find((entry) => entry.operation === "asset.list");
+    expect(assetList?.inputSchema.properties).toHaveProperty("tags");
+    expect(assetList?.inputSchema.properties).toHaveProperty("tagMode");
+    expect(assetList?.inputSchema.properties).toHaveProperty("archived");
+    expect(assetList?.inputSchema.properties).toHaveProperty("cursor");
+    expect(assetList?.outputSchema.properties).toHaveProperty("nextCursor");
     const validate = operationToolEntries.find(
       (entry) => entry.operation === "script.validate",
     );
     expect(validate?.inputSchema.anyOf).toBeDefined();
+    const ttsCreate = operationToolEntries.find((entry) => entry.operation === "tts.create");
+    expect(ttsCreate?.inputSchema.properties).toHaveProperty("narrationSegmentId");
+    expect(ttsCreate?.inputSchema.properties).toHaveProperty("speedScale");
+    expect(ttsCreate?.outputSchema.properties).toHaveProperty("job");
+    expect(ttsCreate?.longRunning).toBe(true);
+    const ttsBulk = operationToolEntries.find((entry) => entry.operation === "tts.createBulk");
+    expect(ttsBulk?.inputSchema.properties).toHaveProperty("scriptVersionId");
+    expect(ttsBulk?.outputSchema.properties).toHaveProperty("jobs");
+    expect(ttsBulk?.outputSchema.properties).toHaveProperty("excluded");
+    expect(ttsBulk?.longRunning).toBe(true);
+    const characterList = operationToolEntries.find(
+      (entry) => entry.operation === "character.list",
+    );
+    expect(characterList?.toolName).toBe("kakeai_character_list");
+    expect(characterList?.readOnly).toBe(true);
+    expect(characterList?.outputSchema.properties).toHaveProperty("characters");
+    const characterGet = operationToolEntries.find(
+      (entry) => entry.operation === "character.get",
+    );
+    expect(characterGet?.toolName).toBe("kakeai_character_get");
+    expect(characterGet?.inputSchema.properties).toHaveProperty("characterId");
+    expect(characterGet?.outputSchema.properties).toHaveProperty("character");
+    expect(characterGet?.readOnly).toBe(true);
   });
 
   it("includes the job_wait convenience tool and no irreversible tools", () => {

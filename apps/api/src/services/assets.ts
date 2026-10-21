@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
+  ASSET_LIST_MAX_LIMIT,
   RENDITION_PURPOSE,
   SNAPSHOT_SCHEMA_VERSION,
   assetIngestJobSnapshotSchema,
@@ -10,13 +11,15 @@ import {
   renderJobSnapshotSchema,
   type Asset,
   type AssetKindName,
+  type AssetListPage,
+  type AssetListQuery,
 } from "@kakeai/contracts";
 import type { LimitsConfig } from "../config.ts";
 import { deserializeContent } from "../domain/content-json.ts";
 import { bigIntToSafeNumber, toAsset } from "../dto/mappers.ts";
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
-import { resourceNotFound } from "../http/validation.ts";
+import { resourceNotFound, validationError } from "../http/validation.ts";
 import { allowedMediaTypes, detectMedia } from "../media/kind.ts";
 import { probeMedia, type MediaProbe } from "../media/probe.ts";
 import {
@@ -269,12 +272,159 @@ export async function ingestUpload(
   }
 }
 
-export async function listAssets(prisma: PrismaClient, kind?: AssetKindName): Promise<Asset[]> {
-  const rows = await prisma.asset.findMany({
-    where: kind === undefined ? undefined : { kind },
-    orderBy: { createdAt: "desc" },
-  });
-  return rows.map(toAsset);
+interface AssetCursorPosition {
+  createdAt: Date;
+  id: string;
+}
+
+function invalidCursor(): ApiError {
+  return validationError([
+    {
+      path: ["cursor"],
+      code: "custom",
+      message: "cursor の形式が不正です。",
+    },
+  ]);
+}
+
+function encodeAssetCursor(position: AssetCursorPosition): string {
+  return Buffer.from(
+    JSON.stringify({
+      v: 1,
+      createdAt: position.createdAt.toISOString(),
+      id: position.id,
+    }),
+    "utf8",
+  ).toString("base64url");
+}
+
+function decodeAssetCursor(cursor: string): AssetCursorPosition {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+  } catch {
+    throw invalidCursor();
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw invalidCursor();
+  }
+  const record = parsed as Record<string, unknown>;
+  if (
+    record.v !== 1 ||
+    typeof record.createdAt !== "string" ||
+    typeof record.id !== "string" ||
+    record.id.length === 0
+  ) {
+    throw invalidCursor();
+  }
+  const createdAt = new Date(record.createdAt);
+  if (Number.isNaN(createdAt.getTime()) || createdAt.toISOString() !== record.createdAt) {
+    throw invalidCursor();
+  }
+  return { createdAt, id: record.id };
+}
+
+function cursorWhere(position: AssetCursorPosition): Prisma.AssetWhereInput {
+  // Keyset pagination over the fixed order `createdAt desc, id desc`.
+  return {
+    OR: [
+      { createdAt: { lt: position.createdAt } },
+      { createdAt: position.createdAt, id: { lt: position.id } },
+    ],
+  };
+}
+
+function archivedWhere(mode: AssetListQuery["archived"]): Prisma.AssetWhereInput {
+  if (mode === "exclude") {
+    return { archivedAt: null };
+  }
+  if (mode === "only") {
+    return { archivedAt: { not: null } };
+  }
+  return {};
+}
+
+function matchesTagFilter(
+  assetTags: readonly string[],
+  query: AssetListQuery,
+): boolean {
+  const wanted = query.tags ?? [];
+  if (wanted.length === 0) {
+    return true;
+  }
+  const stored = new Set(assetTags);
+  return query.tagMode === "and"
+    ? wanted.every((tag) => stored.has(tag))
+    : wanted.some((tag) => stored.has(tag));
+}
+
+/**
+ * Asset library search. Filters are applied server-side, results are ordered by
+ * `createdAt desc, id desc`, and the cursor is a keyset over that exact order so
+ * rows with a shared `createdAt` never repeat or disappear between pages.
+ */
+export async function searchAssets(
+  prisma: PrismaClient,
+  query: AssetListQuery,
+): Promise<AssetListPage> {
+  const limit = Math.min(query.limit, ASSET_LIST_MAX_LIMIT);
+  const start = query.cursor === undefined ? null : decodeAssetCursor(query.cursor);
+  const filters: Prisma.AssetWhereInput = {
+    ...archivedWhere(query.archived),
+    ...(query.kind === undefined ? {} : { kind: query.kind }),
+    ...(query.status === undefined ? {} : { status: query.status }),
+    ...(query.filename === undefined
+      ? {}
+      : { originalFilename: { contains: query.filename } }),
+    ...(query.favorite === undefined
+      ? {}
+      : { favoritedAt: query.favorite ? { not: null } : null }),
+  };
+
+  const hasTagFilter = (query.tags?.length ?? 0) > 0;
+  // Without a tag filter one extra row is enough to know whether another page
+  // exists. With tags we may need to scan rows that do not match in memory.
+  const batchSize = hasTagFilter ? Math.max(limit + 1, 100) : limit + 1;
+  const assets: Asset[] = [];
+  let scanned: AssetCursorPosition | null = start;
+  let hasMore = false;
+
+  for (;;) {
+    const where: Prisma.AssetWhereInput =
+      scanned === null ? filters : { AND: [filters, cursorWhere(scanned)] };
+    const rows = await prisma.asset.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: batchSize,
+    });
+    if (rows.length === 0) {
+      break;
+    }
+    for (const row of rows) {
+      scanned = { createdAt: row.createdAt, id: row.id };
+      const asset = toAsset(row);
+      if (!matchesTagFilter(asset.tags, query)) {
+        continue;
+      }
+      if (assets.length === limit) {
+        hasMore = true;
+        break;
+      }
+      assets.push(asset);
+    }
+    if (hasMore || rows.length < batchSize) {
+      break;
+    }
+  }
+
+  const last = assets.at(-1);
+  return {
+    assets,
+    nextCursor:
+      hasMore && last !== undefined
+        ? encodeAssetCursor({ createdAt: new Date(last.createdAt), id: last.id })
+        : null,
+  };
 }
 
 export async function getAsset(prisma: PrismaClient, assetId: string): Promise<Asset> {

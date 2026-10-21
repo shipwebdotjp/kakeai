@@ -4,6 +4,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { AgentClientError } from "@kakeai/agent-client";
 import {
   AGENT_ERROR_CODES,
+  agentOperationNames,
   buildAgentSchemaGetResult,
   type AgentOperationName,
 } from "@kakeai/contracts";
@@ -11,7 +12,12 @@ import type { AgentRequester, McpServerOptions } from "./server.ts";
 import { createKakeaiMcpServer } from "./server.ts";
 import { mcpToolEntries } from "./tools.ts";
 import { createFakeRequester, type FakeHandler } from "./testing/fake-requester.ts";
-import { fixtureRenderJob, fixtureScriptVersion, fixtureWork } from "@kakeai/contracts/testing/agent-fixtures";
+import {
+  fixtureRenderJob,
+  fixtureScriptVersion,
+  fixtureTtsJob,
+  fixtureWork,
+} from "@kakeai/contracts/testing/agent-fixtures";
 
 interface Harness {
   client: Client;
@@ -97,6 +103,9 @@ describe("MCP server over an in-memory transport", () => {
               cueIds: [],
               audioCueIds: [],
               audioTakeIds: [],
+              characterIds: [],
+              appearanceIds: [],
+              speakerIds: [],
             },
             warnings: [],
             timeline: { totalDurationMs: 4000, fps: 30, scenes: [] },
@@ -117,7 +126,7 @@ describe("MCP server over an in-memory transport", () => {
         agentOperations: Array<{ name: string; kind: string; longRunning: boolean }>;
       };
       expect(schemaPayload.schemaDigest).toMatch(/^fnv1a64:/u);
-      expect(schemaPayload.agentOperations).toHaveLength(23);
+      expect(schemaPayload.agentOperations).toHaveLength(agentOperationNames.length);
 
       const created = await harness.client.callTool({
         name: "kakeai_work_create",
@@ -142,6 +151,55 @@ describe("MCP server over an in-memory transport", () => {
       expect(editedPayload.scriptVersion.id).toBe("scr-2");
       expect(editedPayload.scriptVersion.author).toBe("agent");
       expect(harness.operations).toEqual(["schema.get", "work.create", "script.edit"]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("forwards tts.create and keeps ttsResult through job_wait", async () => {
+    const forwarded: unknown[] = [];
+    let polls = 0;
+    const harness = await connectHarness(
+      (operation, input) => {
+        if (operation === "tts.create") {
+          forwarded.push(input);
+          return { job: fixtureTtsJob("queued") };
+        }
+        if (operation === "job.get") {
+          polls += 1;
+          return { job: fixtureTtsJob(polls >= 2 ? "succeeded" : "running") };
+        }
+        throw new Error(`unexpected operation: ${operation}`);
+      },
+      { now: () => 0, sleep: async () => undefined },
+    );
+    try {
+      const created = await harness.client.callTool({
+        name: "kakeai_tts_create",
+        arguments: { scriptVersionId: "scr-1", narrationSegmentId: "line-p1-1" },
+      });
+      expect(created.isError).toBeUndefined();
+      // The binding applies the contract default before forwarding.
+      expect(forwarded).toEqual([
+        { scriptVersionId: "scr-1", narrationSegmentId: "line-p1-1", speedScale: 1 },
+      ]);
+
+      const waited = await harness.client.callTool({
+        name: "kakeai_job_wait",
+        arguments: { jobId: "job-tts-1", timeoutMs: 1000, intervalMs: 10 },
+      });
+      expect(waited.isError).toBeUndefined();
+      const payload = waited.structuredContent as {
+        job: { status: string; ttsResult: unknown };
+      };
+      expect(payload.job.status).toBe("succeeded");
+      expect(payload.job.ttsResult).toEqual({
+        narrationSegmentId: "line-p1-1",
+        assetId: "asset-tts-1",
+        durationMs: 1200,
+        source: "tts",
+      });
+      expect(harness.operations).toEqual(["tts.create", "job.get", "job.get"]);
     } finally {
       await harness.close();
     }

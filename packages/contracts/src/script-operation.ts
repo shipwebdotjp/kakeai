@@ -30,6 +30,9 @@ export const scriptOperationCreatedSchema = z.strictObject({
   cueIds: z.array(idSchema),
   audioCueIds: z.array(idSchema),
   audioTakeIds: z.array(idSchema),
+  characterIds: z.array(idSchema),
+  appearanceIds: z.array(idSchema),
+  speakerIds: z.array(idSchema),
 });
 export type ScriptOperationCreated = z.infer<typeof scriptOperationCreatedSchema>;
 
@@ -333,6 +336,11 @@ export const audioRemoveOperationSchema = z.strictObject({
   audioCueId: scriptIdRefSchema,
 });
 
+export const characterAddFromLibraryOperationSchema = z.strictObject({
+  op: z.literal("character.addFromLibrary"),
+  libraryCharacterId: idSchema,
+});
+
 export const documentSetVisualThemeOperationSchema = z.strictObject({
   op: z.literal("document.setVisualTheme"),
   id: idSchema,
@@ -371,6 +379,7 @@ const scriptOperationSchemas = [
   audioAddOperationSchema,
   audioSetOperationSchema,
   audioRemoveOperationSchema,
+  characterAddFromLibraryOperationSchema,
   documentSetVisualThemeOperationSchema,
 ] as const;
 
@@ -416,6 +425,9 @@ export type StandingRemoveOperation = z.infer<typeof standingRemoveOperationSche
 export type AudioAddOperation = z.infer<typeof audioAddOperationSchema>;
 export type AudioSetOperation = z.infer<typeof audioSetOperationSchema>;
 export type AudioRemoveOperation = z.infer<typeof audioRemoveOperationSchema>;
+export type CharacterAddFromLibraryOperation = z.infer<
+  typeof characterAddFromLibraryOperationSchema
+>;
 export type DocumentSetVisualThemeOperation = z.infer<
   typeof documentSetVisualThemeOperationSchema
 >;

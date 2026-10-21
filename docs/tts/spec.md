@@ -57,6 +57,8 @@ OpenAI 互換 API を話すローカル TTS サーバー（mlx-audio-server な�
 
 1 Narration Segment につき 1 つの `tts` Job を実行する。
 
+Agent Access（ローカルソケット / MCP / CLI）も、利用者が設定済みの Adapter への合成 Job 投入として同じ `tts` Job を扱う（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)、[Agent Access 仕様](../agent-access/spec.md)）。入力・出力・エラーコードはこの文書の契約を共有し、Job の状態は `job.get`、Take の反映は `script.edit` の `line.assignTake` で行う。
+
 - Job は台本版、Segment ID、凍結した `speechText`、Voice Profile から解決した `voice`（不透明な `voiceId`）、`adapterId`、アダプター固有 settings、話速、エンジン版を入力スナップショットへ保持する。`speechText` は生成要求で直接渡せる（省略時は保存済みセグメントの値）。これにより未保存の編集内容でも生成でき、生成後に明示保存すると1つの版にまとまる。空文字・長すぎるテキストは 422 `TTS_INPUT_INVALID` とする。台本版の ID と Work・LanguageEdition を Job の対象として持つ。
 - 生成成功時は WAV を `origin: "generated"` の `ready` な Audio Asset として確定する。SHA-256 が一致する既存 Asset があればその Asset を再利用し、新しい行・ファイルを作らない。
 - Asset の `originalFilename` は `tts-<adapterId>-<話者名>-<声名>[-<話速>x]-<narrationSegmentId>.wav` とする。話速は 1.0 以外のときだけ付ける。名前に使えない文字は `_` に置換し、空なら `speakerId` / `voiceId` へフォールバックする。再利用時は最初の生成時の名前を保持する。

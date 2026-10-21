@@ -22,6 +22,9 @@ function createContext(
       cue: (sceneId, suffix) => `visual-${sceneId}-${suffix}`,
       audioCue: () => `audio-test`,
       audioTake: (lineId) => `take-${lineId}-1`,
+      character: () => "character-new-1",
+      appearance: () => "appearance-new-1",
+      speaker: () => "speaker-new-1",
     },
   };
 }

@@ -97,6 +97,10 @@ describe("schema.get", () => {
 
     expect(result.operations).toContainEqual({ name: "scene.add", category: "scene" });
     expect(result.operations).toContainEqual({ name: "cue.setInput", category: "cue" });
+    expect(result.operations).toContainEqual({
+      name: "character.addFromLibrary",
+      category: "character",
+    });
     expect(result.warningCodes).toContain("text_overflow");
     expect(result.assetKinds).toEqual(["image", "video", "audio"]);
   });
@@ -121,6 +125,16 @@ describe("schema.get", () => {
     });
     expect(result.agentOperations).toContainEqual({
       name: "render.start",
+      kind: "mutation",
+      longRunning: true,
+    });
+    expect(result.agentOperations).toContainEqual({
+      name: "tts.create",
+      kind: "mutation",
+      longRunning: true,
+    });
+    expect(result.agentOperations).toContainEqual({
+      name: "tts.createBulk",
       kind: "mutation",
       longRunning: true,
     });
@@ -380,6 +394,9 @@ describe("script.edit", () => {
         cueIds: [],
         audioCueIds: [],
         audioTakeIds: [],
+        characterIds: [],
+        appearanceIds: [],
+        speakerIds: [],
       },
       warnings: [
         {

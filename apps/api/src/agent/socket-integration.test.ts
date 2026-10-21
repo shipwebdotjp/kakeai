@@ -282,6 +282,94 @@ describe("agent socket integration", () => {
     expect(listed.assets.some((asset: Asset) => asset.id === first.asset.id)).toBe(true);
   });
 
+  it("searches and pages assets through the socket contract", async () => {
+    const createdAt = new Date("2026-05-01T00:00:00.000Z");
+    const rows = [
+      {
+        id: "socket-search-a",
+        filename: "Socket-Search-Alpha.png",
+        tags: ["socket-x", "socket-y"],
+        favorite: true,
+        archived: false,
+      },
+      {
+        id: "socket-search-b",
+        filename: "socket-search-beta.png",
+        tags: ["socket-x"],
+        favorite: true,
+        archived: false,
+      },
+      {
+        id: "socket-search-c",
+        filename: "socket-search-gamma.png",
+        tags: ["socket-y"],
+        favorite: false,
+        archived: true,
+      },
+    ];
+    for (const row of rows) {
+      await prisma.asset.create({
+        data: {
+          id: row.id,
+          kind: "image",
+          origin: "uploaded",
+          status: "ready",
+          storageKey: `assets/${row.id}`,
+          originalFilename: row.filename,
+          mediaType: "image/png",
+          byteSize: BigInt(10),
+          sha256: `sha-${row.id}`,
+          tagsJson: JSON.stringify(row.tags),
+          favoritedAt: row.favorite ? new Date("2026-05-02T00:00:00.000Z") : null,
+          archivedAt: row.archived ? new Date("2026-05-03T00:00:00.000Z") : null,
+          createdAt,
+        },
+      });
+    }
+
+    const compound = await client.request("asset.list", {
+      kind: "image",
+      status: "ready",
+      filename: "socket-search",
+      tags: ["socket-x"],
+      tagMode: "and",
+      favorite: true,
+      archived: "exclude",
+      limit: 10,
+    });
+    expect(compound.assets.map((asset) => asset.id)).toEqual([
+      "socket-search-b",
+      "socket-search-a",
+    ]);
+    expect(compound.nextCursor).toBeNull();
+
+    const firstPage = await client.request("asset.list", {
+      filename: "socket-search",
+      archived: "include",
+      limit: 2,
+    });
+    expect(firstPage.assets.map((asset) => asset.id)).toEqual([
+      "socket-search-c",
+      "socket-search-b",
+    ]);
+    expect(firstPage.nextCursor).not.toBeNull();
+
+    const secondPage = await client.request("asset.list", {
+      filename: "socket-search",
+      archived: "include",
+      limit: 2,
+      cursor: firstPage.nextCursor ?? "",
+    });
+    expect(secondPage.assets.map((asset) => asset.id)).toEqual(["socket-search-a"]);
+    expect(secondPage.nextCursor).toBeNull();
+
+    const invalid = await expectAgentError(
+      client.request("asset.list", { cursor: "not-a-cursor" }),
+      "VALIDATION_ERROR",
+    );
+    expect(invalid.issues?.[0]?.path).toEqual(["cursor"]);
+  });
+
   it("starts and cancels a render job without starting another worker", async () => {
     const work = await createWork("レンダーテスト作品");
     const edition = firstEdition(work);

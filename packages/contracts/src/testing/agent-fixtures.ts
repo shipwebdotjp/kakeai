@@ -122,6 +122,42 @@ export function fixtureRenderJob(
   };
 }
 
+export function fixtureTtsJob(
+  status: Job["status"] = "succeeded",
+  id = "job-tts-1",
+): Job {
+  return {
+    id,
+    kind: "tts",
+    status,
+    workId: FIXTURE_WORK_ID,
+    assetId: null,
+    languageEditionId: FIXTURE_EDITION_ID,
+    scriptVersionId: FIXTURE_SCRIPT_VERSION_ID,
+    progressPercent: status === "succeeded" ? 100 : 0,
+    createdAt: FIXTURE_TIMESTAMP,
+    startedAt: status === "queued" ? null : FIXTURE_TIMESTAMP,
+    finishedAt:
+      status === "succeeded" || status === "failed" || status === "cancelled"
+        ? FIXTURE_TIMESTAMP
+        : null,
+    error:
+      status === "failed"
+        ? { code: "TTS_SYNTHESIS_FAILED", message: "音声の合成に失敗しました。" }
+        : null,
+    ttsResult:
+      status === "succeeded"
+        ? {
+            narrationSegmentId: "line-p1-1",
+            assetId: "asset-tts-1",
+            durationMs: 1200,
+            source: "tts",
+          }
+        : null,
+    artifacts: [],
+  };
+}
+
 export function fixtureComposition(): Composition {
   return {
     id: "cmp-1",

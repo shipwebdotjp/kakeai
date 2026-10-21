@@ -7,6 +7,9 @@ export function createTestContext(
   let lineCount = 0;
   let cueCount = 0;
   let audioCount = 0;
+  let characterCount = 0;
+  let appearanceCount = 0;
+  let speakerCount = 0;
   return {
     assets: { get: (assetId) => assets[assetId] ?? null },
     ids: {
@@ -39,6 +42,27 @@ export function createTestContext(
         return id;
       },
       audioTake: (lineId) => `take-${lineId}-new`,
+      character: (existing) => {
+        let id = `character-new-${(characterCount += 1)}`;
+        while (existing.has(id)) {
+          id = `character-new-${(characterCount += 1)}`;
+        }
+        return id;
+      },
+      appearance: (existing) => {
+        let id = `appearance-new-${(appearanceCount += 1)}`;
+        while (existing.has(id)) {
+          id = `appearance-new-${(appearanceCount += 1)}`;
+        }
+        return id;
+      },
+      speaker: (existing) => {
+        let id = `speaker-new-${(speakerCount += 1)}`;
+        while (existing.has(id)) {
+          id = `speaker-new-${(speakerCount += 1)}`;
+        }
+        return id;
+      },
     },
   };
 }
