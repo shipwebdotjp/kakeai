@@ -160,6 +160,48 @@ describe("MCP server over an in-memory transport", () => {
     }
   });
 
+  it("returns preview.frame bytes as an image block", async () => {
+    const frame = {
+      artifactId: "art-1",
+      requestedTimeMs: 1500,
+      resolvedTimeMs: 1500,
+      width: 320,
+      height: 240,
+      mimeType: "image/png",
+      pngBase64:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=",
+    };
+    const harness = await connectHarness((operation) => {
+      if (operation === "preview.frame") {
+        return frame;
+      }
+      throw new Error(`unexpected operation: ${operation}`);
+    });
+    try {
+      const result = await harness.client.callTool({
+        name: "kakeai_preview_frame",
+        arguments: { artifactId: "art-1", timeMs: 1500 },
+      });
+      expect(result.isError).toBeUndefined();
+      const { pngBase64: _omitted, ...metadata } = frame;
+      expect(textPayload(result)).toEqual(metadata);
+      expect(result.structuredContent).toEqual(frame);
+      const content = result.content as Array<{
+        type?: string;
+        data?: string;
+        mimeType?: string;
+      }>;
+      expect(content).toHaveLength(2);
+      expect(content[1]).toEqual({
+        type: "image",
+        data: frame.pngBase64,
+        mimeType: "image/png",
+      });
+    } finally {
+      await harness.close();
+    }
+  });
+
   it("forwards tts.create and keeps ttsResult through job_wait", async () => {
     const forwarded: unknown[] = [];
     let polls = 0;

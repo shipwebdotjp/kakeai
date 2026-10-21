@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import type { Asset, ScriptOperation, Work } from "@kakeai/contracts";
 import { createAgentClient, AgentClientError, type AgentClient } from "@kakeai/agent-client";
 import type { AppConfig } from "../config.ts";
@@ -12,6 +15,7 @@ import { runMigrations } from "../db/migrate.ts";
 import { applySqlitePragmas } from "../db/pragmas.ts";
 import { FakeFontCatalogAdapter, FontCatalogService } from "../services/font-catalog.ts";
 import { ensureDataDirectories } from "../storage/paths.ts";
+import { commitFile } from "../storage/asset-store.ts";
 import { createWorker } from "../worker/index.ts";
 import { startAgentSocketServer, type AgentSocketServer } from "./socket-server.ts";
 
@@ -29,6 +33,9 @@ let prisma: ReturnType<typeof createPrismaClient>;
 let worker: ReturnType<typeof createWorker>;
 let agentServer: AgentSocketServer;
 let client: AgentClient;
+let ffmpegReady = false;
+
+const execFileAsync = promisify(execFile);
 
 async function countVersions(languageEditionId: string): Promise<number> {
   return prisma.scriptVersion.count({ where: { languageEditionId } });
@@ -81,6 +88,12 @@ beforeAll(async () => {
     fontCatalogService,
   });
   client = createAgentClient({ dataRoot: config.dataRoot, agentId: "e2e-agent" });
+  try {
+    await execFileAsync("ffmpeg", ["-version"]);
+    ffmpegReady = true;
+  } catch {
+    ffmpegReady = false;
+  }
 }, 60000);
 
 afterAll(async () => {
@@ -136,6 +149,92 @@ describe("agent socket integration", () => {
     );
     await expectAgentError(
       client.request("work.update", { workId: work.id, title: "   " }),
+      "VALIDATION_ERROR",
+    );
+  });
+
+  it("returns a still PNG of a render artifact at the requested time", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const work = await createWork("プレビュー確認作品");
+    const sourcePath = join(fixtureDir, `preview-source-${randomUUID()}.mp4`);
+    await execFileAsync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=size=320x240:rate=30",
+      "-frames:v",
+      "60",
+      "-pix_fmt",
+      "yuv420p",
+      sourcePath,
+    ]);
+    const bytes = await readFile(sourcePath);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const storageKey = `artifacts/test-preview-${randomUUID()}.mp4`;
+    await commitFile(sourcePath, storageKey, config.directories);
+    const job = await prisma.job.create({
+      data: {
+        kind: "render",
+        status: "succeeded",
+        snapshotSchemaVersion: 1,
+        inputSnapshotJson: "{}",
+        workId: work.id,
+      },
+    });
+    const artifact = await prisma.artifact.create({
+      data: {
+        jobId: job.id,
+        role: "render",
+        format: "mp4",
+        storageKey,
+        sha256,
+        byteSize: BigInt(bytes.length),
+        durationMs: 2000,
+        widthPx: 320,
+        heightPx: 240,
+      },
+    });
+
+    const frame = await client.request("preview.frame", {
+      artifactId: artifact.id,
+      timeMs: 1500,
+    });
+    expect(frame.artifactId).toBe(artifact.id);
+    expect(frame.requestedTimeMs).toBe(1500);
+    expect(frame.resolvedTimeMs).toBeLessThanOrEqual(1500);
+    expect(frame.width).toBe(320);
+    expect(frame.height).toBe(240);
+    expect(frame.mimeType).toBe("image/png");
+    const png = Buffer.from(frame.pngBase64, "base64");
+    expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
+    expect(png.readUInt32BE(16)).toBe(320);
+    expect(png.readUInt32BE(20)).toBe(240);
+
+    await expectAgentError(
+      client.request("preview.frame", { artifactId: artifact.id, timeMs: 5000 }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("preview.frame", { artifactId: "missing-artifact", timeMs: 0 }),
+      "RESOURCE_NOT_FOUND",
+    );
+
+    const caption = await prisma.artifact.create({
+      data: {
+        jobId: job.id,
+        role: "caption",
+        format: "vtt",
+        storageKey: `artifacts/test-caption-${randomUUID()}.vtt`,
+        sha256: "0".repeat(64),
+        byteSize: BigInt(10),
+      },
+    });
+    await expectAgentError(
+      client.request("preview.frame", { artifactId: caption.id, timeMs: 0 }),
       "VALIDATION_ERROR",
     );
   });

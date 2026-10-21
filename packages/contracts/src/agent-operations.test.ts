@@ -8,6 +8,8 @@ import {
   agentOperationInputSchemas,
   agentOperationNames,
   agentOperationOutputSchemas,
+  agentPreviewFrameInputSchema,
+  agentPreviewFrameOutputSchema,
   agentSchemaDigestInputOf,
   agentTtsCreateBulkInputSchema,
   agentTtsCreateBulkOutputSchema,
@@ -181,6 +183,53 @@ describe("work.update operation contract", () => {
     });
     expect(Object.keys(agentOperationInputSchemas)).toContain("work.update");
     expect(Object.keys(agentOperationOutputSchemas)).toContain("work.update");
+  });
+});
+
+describe("preview.frame operation contract", () => {
+  const frame = {
+    artifactId: "art-1",
+    requestedTimeMs: 1500,
+    resolvedTimeMs: 1466,
+    width: 1920,
+    height: 1080,
+    mimeType: "image/png" as const,
+    pngBase64: "aVBORw0KGgo=",
+  };
+
+  it("takes an artifact id and a non-negative time", () => {
+    expect(
+      agentPreviewFrameInputSchema.parse({ artifactId: "art-1", timeMs: 0 }),
+    ).toEqual({ artifactId: "art-1", timeMs: 0 });
+    expect(
+      agentPreviewFrameInputSchema.safeParse({ artifactId: "art-1", timeMs: -1 }).success,
+    ).toBe(false);
+    expect(agentPreviewFrameInputSchema.safeParse({ timeMs: 0 }).success).toBe(false);
+    expect(
+      agentPreviewFrameInputSchema.safeParse({ artifactId: "art-1", timeMs: 0, extra: true })
+        .success,
+    ).toBe(false);
+    expect(agentPreviewFrameOutputSchema.safeParse(frame).success).toBe(true);
+    expect(
+      agentPreviewFrameOutputSchema.safeParse({ ...frame, mimeType: "image/jpeg" }).success,
+    ).toBe(false);
+    expect(
+      agentPreviewFrameOutputSchema.safeParse({ ...frame, pngBase64: "" }).success,
+    ).toBe(false);
+  });
+
+  it("registers preview.frame as a sync read", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("preview.frame");
+    expect(isAgentMutationOperation("preview.frame")).toBe(false);
+    expect(isAgentLongRunningOperation("preview.frame")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "preview.frame",
+      kind: "read",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("preview.frame");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("preview.frame");
   });
 });
 

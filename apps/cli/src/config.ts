@@ -28,6 +28,8 @@ export interface CliRunOptions {
   waitIntervalMs?: number;
   /** `job.wait <jobId>` positional. Overrides the `jobId` inside `--input`. */
   jobId?: string;
+  /** `preview.frame` only: write the PNG bytes to this path instead of stdout. */
+  out?: string;
 }
 
 export type ParsedCliArgs =
@@ -52,6 +54,7 @@ const CLI_OPTIONS = {
   timeout: { type: "string" },
   "timeout-ms": { type: "string" },
   "interval-ms": { type: "string" },
+  out: { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "V" },
 } as const;
@@ -118,6 +121,7 @@ export function parseCliArgs(
     "agent-id"?: string;
     "data-dir"?: string;
     socket?: string;
+    out?: string;
     timeout?: string;
     "timeout-ms"?: string;
     "interval-ms"?: string;
@@ -152,6 +156,9 @@ export function parseCliArgs(
   if (commandName === "operations") {
     if (positionals.length > 1) {
       throw usageError("operations は追加の引数を受け取りません。");
+    }
+    if (values.out !== undefined) {
+      throw usageError("--out は preview.frame だけに指定できます。");
     }
     return { kind: "operations", pretty: values.pretty === true };
   }
@@ -203,6 +210,17 @@ export function parseCliArgs(
   if (input !== undefined && input.trim().length === 0) {
     throw usageError("--input には空でない値を指定してください。");
   }
+  const outRaw = values.out;
+  if (outRaw !== undefined && outRaw.trim().length === 0) {
+    throw usageError("--out には空でない値を指定してください。");
+  }
+  const out = nonEmpty(outRaw);
+  if (
+    out !== undefined &&
+    (command.kind !== "operation" || command.operation !== "preview.frame")
+  ) {
+    throw usageError("--out は preview.frame だけに指定できます。");
+  }
 
   const agentId = nonEmpty(values["agent-id"]) ?? nonEmpty(env.KAKEAI_AGENT_ID) ?? DEFAULT_AGENT_ID;
   const dataRoot = nonEmpty(values["data-dir"]) ?? nonEmpty(env.KAKEAI_DATA_DIR);
@@ -223,6 +241,7 @@ export function parseCliArgs(
       ...(waitTimeoutMs === undefined ? {} : { waitTimeoutMs }),
       ...(waitIntervalMs === undefined ? {} : { waitIntervalMs }),
       ...(jobId === undefined ? {} : { jobId }),
+      ...(out === undefined ? {} : { out }),
     },
   };
 }

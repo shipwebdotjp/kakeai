@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入を行えます。実体の削除、外部サービスへの公開、TTS 以外の課金を伴う生成は公開していません。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、TTS 以外の課金を伴う生成は公開していません。
 
 ## 前提
 
@@ -54,6 +54,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` |
 | Composition | `kakeai_composition_list` / `kakeai_composition_get` / `kakeai_composition_draft_get` / `kakeai_composition_authoring_context` / `kakeai_composition_create` / `kakeai_composition_draft_save` / `kakeai_composition_publish` |
 | レンダー | `kakeai_render_start` |
+| プレビュー | `kakeai_preview_frame`（render 成果物の指定時刻の原寸 PNG。絵は image ブロックでも返る） |
 | Job | `kakeai_job_get` / `kakeai_job_list` / `kakeai_job_cancel` / `kakeai_job_wait` |
 
 `kakeai_schema_get` の `agentOperations` が、公開されている全操作（読み取り／変更、Job を返すか）の正です。`kakeai_job_wait` は Job を待つための束縛の便宜ツールで、Agent 操作ではありません。
@@ -146,9 +147,27 @@ kakeai-agent --help
 | `kakeai_tts_create` | `kakeai-agent tts.create --input ...` |
 | `kakeai_tts_create_bulk` | `kakeai-agent tts.createBulk --input ...` |
 | `kakeai_render_start` | `kakeai-agent render.start --input ...` |
+| `kakeai_preview_frame` | `kakeai-agent preview.frame --input ... [--out ...]` |
 | `kakeai_job_wait` | `kakeai-agent job.wait <jobId>` |
 
-MCP ツール名は `kakeai_<domain>_<verb>` の snake_case、CLI のサブコマンドは正規の `domain.verb` です。`createBulk` や `authoringContext` のように語が複数ある操作では機械的な読み替えが一致しないため、`kakeai-agent operations` か `schema.get` の `agentOperations` で正規名を確認してください。同じ操作・同じ入力なら、CLI の stdout JSON は MCP の `structuredContent` と一致します。
+MCP ツール名は `kakeai_<domain>_<verb>` の snake_case、CLI のサブコマンドは正規の `domain.verb` です。`createBulk` や `authoringContext` のように語が複数ある操作では機械的な読み替えが一致しないため、`kakeai-agent operations` か `schema.get` の `agentOperations` で正規名を確認してください。同じ操作・同じ入力なら、CLI の stdout JSON は MCP の `structuredContent` と一致します（`preview.frame` の `--out` 指定時を除く。`--out` 指定時は PNG がファイルに書かれ、stdout JSON は `pngBase64` の代わりに `path` を含みます）。
+
+### 静止画の取得（`preview.frame`）
+
+render が完了した成果物の指定時刻の絵を、原寸 PNG で確認できます。`artifactId` は `job.get` の `artifacts` で取得します。
+
+```sh
+# JSON で受け取る（pngBase64 に原寸 PNG の base64 が入る）
+kakeai-agent preview.frame --input '{"artifactId":"art-123","timeMs":1500}'
+
+# PNG ファイルに書き出す（stdout は pngBase64 なしのメタ情報 + path）
+kakeai-agent preview.frame --input '{"artifactId":"art-123","timeMs":1500}' --out frame.png
+```
+
+- `timeMs` はミリ秒で、`artifact` の確定尺を超えると `VALIDATION_ERROR` になります。
+- 応答の `resolvedTimeMs` が実際に抜いた時刻、`width`・`height` が原寸の寸法です。指定時刻直前のフレームに丸められるため、`resolvedTimeMs` が `timeMs` より少し前になることがあります。
+- 対象は render の MP4 成果物だけです。字幕などの成果物を指定すると `VALIDATION_ERROR` になります。
+- 初回はサーバー側のフレーム走査が入るため、長尺の動画では `AGENT_REQUEST_TIMEOUT` になることがあります。その場合は同じ入力でもう一度呼び直してください（2回目はキャッシュが効きます）。
 
 ### `--input` と共通オプション
 
@@ -181,7 +200,7 @@ kakeai-agent tts.createBulk --input '{"scriptVersionId":"scr-123"}'
 ### 終了コードとエラー
 
 - `0`: 成功（`--help`、`--version`、`operations` を含む）
-- `1`: 操作または検証の失敗。stderr に `{ "code": "...", "issues": [...] }` を 1 行で出力する
+- `1`: 操作または検証の失敗。stderr に `{ "code": "...", "issues": [...] }` を 1 行で出力する。`--out` の書込み失敗もここに含む（`CLI_OUTPUT_ERROR`）
 - `2`: 使い方または `--input` の誤り（`CLI_USAGE_ERROR` / `CLI_INPUT_ERROR`）
 
 stdout は常にコマンド出力専用で、失敗時は空です。スタックトレースは出力しません。

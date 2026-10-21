@@ -330,6 +330,7 @@ export const agentOperationNames = [
   "tts.createBulk",
   "character.list",
   "character.get",
+  "preview.frame",
 ] as const;
 export type AgentOperationName = (typeof agentOperationNames)[number];
 
@@ -349,6 +350,7 @@ export const agentReadOperationNames = [
   "composition.authoringContext",
   "character.list",
   "character.get",
+  "preview.frame",
 ] as const;
 
 export const agentMutationOperationNames = [
@@ -840,6 +842,28 @@ export const agentJobListOutputSchema = z.strictObject({ jobs: z.array(jobSchema
 export const agentJobCancelInputSchema = z.strictObject({ jobId: idSchema });
 export const agentJobCancelOutputSchema = z.strictObject({ job: jobSchema });
 
+/**
+ * `preview.frame` returns a still PNG of a render artifact at the requested
+ * time. The image is full-resolution base64; bindings choose how to surface
+ * the bytes (MCP image block, CLI `--out`). Time resolution reuses the
+ * `resolveStillFramePtsMs` rule (last frame at or before the requested ms).
+ */
+export const agentPreviewFrameInputSchema = z.strictObject({
+  artifactId: idSchema,
+  timeMs: nonNegativeInt,
+});
+export const agentPreviewFrameOutputSchema = z.strictObject({
+  artifactId: idSchema,
+  requestedTimeMs: nonNegativeInt,
+  resolvedTimeMs: nonNegativeInt,
+  width: positiveInt,
+  height: positiveInt,
+  mimeType: z.literal("image/png"),
+  pngBase64: z.string().min(1),
+});
+export type AgentPreviewFrameInput = z.input<typeof agentPreviewFrameInputSchema>;
+export type AgentPreviewFrameOutput = z.infer<typeof agentPreviewFrameOutputSchema>;
+
 export const agentCompositionListInputSchema = agentEmptyInputSchema;
 export const agentCompositionListOutputSchema = z.strictObject({
   compositions: z.array(compositionSchema),
@@ -966,6 +990,7 @@ export const agentOperationInputSchemas = {
   "job.get": agentJobGetInputSchema,
   "job.list": agentJobListInputSchema,
   "job.cancel": agentJobCancelInputSchema,
+  "preview.frame": agentPreviewFrameInputSchema,
   "composition.list": agentCompositionListInputSchema,
   "composition.get": agentCompositionGetInputSchema,
   "composition.draft.get": agentCompositionDraftGetInputSchema,
@@ -997,6 +1022,7 @@ export const agentOperationOutputSchemas = {
   "job.get": agentJobGetOutputSchema,
   "job.list": agentJobListOutputSchema,
   "job.cancel": agentJobCancelOutputSchema,
+  "preview.frame": agentPreviewFrameOutputSchema,
   "composition.list": agentCompositionListOutputSchema,
   "composition.get": agentCompositionGetOutputSchema,
   "composition.draft.get": agentCompositionDraftGetOutputSchema,

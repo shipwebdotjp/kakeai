@@ -1,4 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   AgentClientError,
   bindingErrorPayload,
@@ -112,6 +114,33 @@ function waitInputOf(
   };
 }
 
+/**
+ * `preview.frame --out <path>`: the PNG bytes go to the file so stdout stays
+ * a small metadata JSON. Validation already passed, so this only reshapes
+ * validated output and never prints an undescribed shape by accident.
+ */
+async function writePreviewFrameFile(
+  output: AgentOperationOutputMap["preview.frame"],
+  out: string,
+  io: CliIo,
+): Promise<Record<string, unknown>> {
+  const target = resolve(io.cwd ?? process.cwd(), out);
+  try {
+    await writeFile(target, Buffer.from(output.pngBase64, "base64"));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new CliError(CLI_ERROR_CODES.OUTPUT_ERROR, 1, [
+      {
+        path: ["--out"],
+        code: "write_failed",
+        message: `--out のファイルに書き込めません: ${target} (${reason})`,
+      },
+    ]);
+  }
+  const { pngBase64: _omitted, ...metadata } = output;
+  return { ...metadata, path: target };
+}
+
 async function runJobWait(
   requester: CliRequester,
   rawInput: JobWaitInput,
@@ -158,6 +187,13 @@ async function executeOperation(
   }
 
   if (!command.options.wait) {
+    if (operation === "preview.frame" && command.options.out !== undefined) {
+      return writePreviewFrameFile(
+        validatedOutput.data as AgentOperationOutputMap["preview.frame"],
+        command.options.out,
+        io,
+      );
+    }
     return validatedOutput.data;
   }
   const jobId = jobIdOf(operation, validatedOutput.data);

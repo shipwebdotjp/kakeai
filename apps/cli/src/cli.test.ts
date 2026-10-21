@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentClientError } from "@kakeai/agent-client";
@@ -182,6 +182,19 @@ describe("CLI argument parsing", () => {
     ).toMatchObject({ options: { wait: true, waitTimeoutMs: 20, waitIntervalMs: 10 } });
   });
 
+  it("restricts --out to preview.frame", () => {
+    expect(() => parseCliArgs(["work.get", "--out", "frame.png"], {})).toThrow(CliError);
+    expect(() => parseCliArgs(["schema.get", "--out", "frame.png"], {})).toThrow(CliError);
+    expect(() => parseCliArgs(["job.wait", "job-1", "--out", "frame.png"], {})).toThrow(
+      CliError,
+    );
+    expect(() => parseCliArgs(["preview.frame", "--out", "  "], {})).toThrow(CliError);
+    expect(() => parseCliArgs(["operations", "--out", "frame.png"], {})).toThrow(CliError);
+    expect(parseCliArgs(["preview.frame", "--out", "frame.png"], {})).toMatchObject({
+      options: { out: "frame.png" },
+    });
+  });
+
   it("validates numeric and unknown options", () => {
     expect(() => parseCliArgs(["--timeout", "0", "schema.get"], {})).toThrow(CliError);
     expect(() => parseCliArgs(["--timeout", "abc", "schema.get"], {})).toThrow(CliError);
@@ -242,6 +255,68 @@ describe("CLI invocation", () => {
       expect(captured.stderr()).toBe("");
       expect(JSON.parse(captured.stdout())).toEqual({ work: fixtureWork() });
     }
+  });
+
+  it("writes preview.frame PNG bytes with --out and prints metadata", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kakeai-cli-out-"));
+    dirs.push(dir);
+    const frame = {
+      artifactId: "art-1",
+      requestedTimeMs: 1500,
+      resolvedTimeMs: 1500,
+      width: 320,
+      height: 240,
+      mimeType: "image/png",
+      pngBase64: "aVBORw0KGgo=",
+    };
+    const handler: Handler = (operation, input) => {
+      expect(operation).toBe("preview.frame");
+      expect(input).toEqual({ artifactId: "art-1", timeMs: 1500 });
+      return frame;
+    };
+    const outPath = join(dir, "frame.png");
+    const captured = capture(handler);
+    expect(
+      await runCli(
+        [
+          "preview.frame",
+          "--input",
+          '{"artifactId":"art-1","timeMs":1500}',
+          "--out",
+          outPath,
+        ],
+        captured.io,
+      ),
+    ).toBe(0);
+    expect(captured.stderr()).toBe("");
+    expect(await readFile(outPath)).toEqual(Buffer.from(frame.pngBase64, "base64"));
+    const stdout = JSON.parse(captured.stdout()) as Record<string, unknown>;
+    expect(stdout.pngBase64).toBeUndefined();
+    expect(stdout.path).toBe(outPath);
+    expect(stdout.artifactId).toBe("art-1");
+    expect(stdout.resolvedTimeMs).toBe(1500);
+  });
+
+  it("reports an unwritable --out path without a stack trace", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kakeai-cli-out-"));
+    dirs.push(dir);
+    const frame = {
+      artifactId: "art-1",
+      requestedTimeMs: 0,
+      resolvedTimeMs: 0,
+      width: 320,
+      height: 240,
+      mimeType: "image/png",
+      pngBase64: "aVBORw0KGgo=",
+    };
+    const captured = capture(() => frame);
+    const exitCode = await runCli(
+      ["preview.frame", "--input", '{"artifactId":"art-1","timeMs":0}', "--out", dir],
+      captured.io,
+    );
+    expect(exitCode).toBe(1);
+    expect(captured.stdout()).toBe("");
+    expect(stderrPayload(captured.stderr()).code).toBe("CLI_OUTPUT_ERROR");
   });
 
   it("forwards asset.list filters and prints the page contract", async () => {

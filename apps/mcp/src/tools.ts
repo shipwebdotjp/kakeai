@@ -72,6 +72,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "job.get": "Job 1 件の状態を返す。",
   "job.list": "作品の Job 一覧を返す。",
   "job.cancel": "queued の Job をキャンセルする。",
+  "preview.frame":
+    "render 成果物（MP4）の指定時刻（`timeMs` ミリ秒）の静止画を原寸 PNG で返す。絵は image ブロック、解決時刻と寸法は JSON で返る。JSON にも原寸 PNG の base64（`pngBase64`）が入るため転記せず、絵が必要なときは image ブロックを使う。",
   "composition.list": "Composition の一覧を返す。",
   "composition.get": "Composition 1 件を返す。",
   "composition.draft.get": "Composition の draft ファイルと manifest を返す。",

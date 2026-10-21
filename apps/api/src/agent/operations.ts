@@ -34,6 +34,8 @@ import {
   agentJobGetOutputSchema,
   agentJobListInputSchema,
   agentJobListOutputSchema,
+  agentPreviewFrameInputSchema,
+  agentPreviewFrameOutputSchema,
   agentRenderStartInputSchema,
   agentRenderStartOutputSchema,
   agentSchemaGetInputSchema,
@@ -92,6 +94,7 @@ import {
 } from "../services/composition-publishing.ts";
 import type { FontCatalogService } from "../services/font-catalog.ts";
 import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
+import { getPreviewFrame } from "../services/preview-frames.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
 import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
 import { createWork, getWork, listWorks, updateWork } from "../services/works.ts";
@@ -273,6 +276,12 @@ const definitions: AgentOperationDefinitions = {
     run: async (input, context) => ({
       job: await cancelJob(context.prisma, input.jobId),
     }),
+  },
+  "preview.frame": {
+    input: agentPreviewFrameInputSchema,
+    output: agentPreviewFrameOutputSchema,
+    run: async (input, context) =>
+      getPreviewFrame(context.prisma, context.directories, input),
   },
   "composition.list": {
     input: agentCompositionListInputSchema,

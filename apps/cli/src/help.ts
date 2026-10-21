@@ -48,6 +48,7 @@ export function helpText(): string {
     "options:",
     "  --input <json|path|->  操作の入力を JSON 文字列・ファイル・標準入力で指定する",
     "  --wait                 Job を返す操作の完了まで待ち、{ result, wait } を出力する",
+    "  --out <path>           preview.frame の PNG をファイルに書き、stdout は画像なしの JSON にする",
     "  --pretty               出力 JSON をインデントする",
     "  --agent-id <id>        ハンドシェイクで送るエージェント識別子（既定: cli）",
     "  --data-dir <path>      Kakeai のデータディレクトリ（KAKEAI_DATA_DIR 相当）",
@@ -60,7 +61,7 @@ export function helpText(): string {
     "",
     "環境変数: KAKEAI_DATA_DIR / KAKEAI_SOCKET / KAKEAI_AGENT_ID",
     "成功時は JSON を stdout、失敗時は {\"code\",\"issues?\"} を stderr に出力する。",
-    "終了コード: 0 成功、1 操作・検証の失敗、2 使い方または入力の誤り。",
+    "終了コード: 0 成功、1 操作・検証・出力の失敗、2 使い方または入力の誤り。",
   );
   return lines.join("\n");
 }

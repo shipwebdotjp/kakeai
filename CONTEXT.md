@@ -148,6 +148,10 @@ _Avoid_: Asset, Artifact
 A file produced by a Job as its output. It is not an Asset and becomes reusable only through an explicit promotion.
 _Avoid_: Asset, Render
 
+**Preview Frame**:
+A full-resolution still PNG extracted from a render Artifact at a requested time, used by an Agent to report visual observations. The final quality judgment stays with the user.
+_Avoid_: Thumbnail, preview video
+
 **Visual Template**:
 A trusted reusable visual expression with a defined input contract.
 _Avoid_: Visual cue, scene

@@ -60,6 +60,7 @@ files.
 | 6 | TTS | `tts.create` or `tts.createBulk`, `job.get` / `job.wait`, `script.edit` + `line.assignTake` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
 | 8 | Render | `render.start`, `job.get` / `job.wait` | Target version fixed |
+| 9 | Visual check | `preview.frame`, user review | Frames match intent; user confirms |
 
 Do not interleave a later phase into an earlier one unless the earlier phase is
 saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
@@ -210,8 +211,13 @@ generation.
 3. Poll `job_wait` / `job.wait` (MCP `kakeai_job_wait`) or `job.get`. A timeout
    (`timedOut: true`) is not a failure; call again with the same job ID.
    A failed job exposes `job.error`. Render output is an Artifact, not an Asset.
-4. Visual QA — checking previews, frames or render quality — is out of scope for
-   this skill. Do not claim a video looks correct without the user looking at it.
+4. Visual check — after the render succeeds, fetch stills with `preview.frame`
+   (`artifactId` from `job.get`, `timeMs` at the key moments: scene changes,
+   telop-heavy frames, the ending). Describe what you actually see in each
+   frame and report it to the user; do not claim the video looks correct on
+   your own. The final quality judgment stays with the user. If the first
+   call ends in `AGENT_REQUEST_TIMEOUT` on a long video, call once more with
+   the same input — the second hit uses the warm server-side cache.
 
 ## 9. Idempotency, stale bases and timeouts
 
@@ -290,7 +296,8 @@ to the user when the fix is on their side.
 - Paid generation other than Jobs on the user's configured TTS adapter.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.
-- Autonomous visual QA or claims about preview/render quality.
+- Claiming render quality without checking `preview.frame` stills, or making
+  the final quality judgment instead of the user.
 
 ## 12. Related skills
 

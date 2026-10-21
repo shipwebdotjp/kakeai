@@ -71,6 +71,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 
 - zshでは `===` や `--include=*.ts` のような未クォートの `=`・globを含む引数が展開・エラーになる（`zsh:1: == not found`、`no matches found`）。bashツールでは該当箇所をシングルクォートで囲うか、`rg --glob`・専用ツール（Grep/Glob）を使う。
 - 生成Prismaクライアントが古いと `npm run typecheck` が `src/generated` 由来の存在しないプロパティで失敗する。`npm run db:generate --workspace @kakeai/api` で再生成する。
+- PNG の IHDR チャンクは先頭 8 バイト署名の後に length（オフセット 8、値は 13）、type `"IHDR"`（オフセット 12）、width（オフセット 16）、height（オフセット 20）の順で並ぶ。オフセット 12 を length と誤読するとパースが壊れる。
 - `system_profiler SPFontsDataType` はこの環境で約12秒かかる。`createRenderJob` は `FontCatalogService.diagnoseTheme` を呼ぶため、テストでは必ず `FakeFontCatalogAdapter` を注入する（`render-flow.test.ts`・`composition-library.test.ts`）。実カタログは `getSharedFontCatalogService()` の共有インスタンスを使い、server起動時にバックグラウンドで温める。
 
 ## ユーザーガイド

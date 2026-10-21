@@ -56,15 +56,44 @@ function errorResult(payload: ToolErrorPayload): CallToolResult {
   };
 }
 
-function successResult(data: unknown): CallToolResult {
+function successResult(data: unknown, text?: string): CallToolResult {
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     // The MCP result contract needs an object for `structuredContent`.
     throw new Error("Agent operation returned a non-object result.");
   }
   return {
-    content: [{ type: "text", text: JSON.stringify(data) }],
+    content: [{ type: "text", text: text ?? JSON.stringify(data) }],
     structuredContent: data as Record<string, unknown>,
   };
+}
+
+/**
+ * Metadata-only text for image operations. The full-resolution base64 would
+ * flood the agent's context if echoed as text, so the text block carries the
+ * output without the bytes; `structuredContent` keeps the full output and the
+ * image block keeps the bytes.
+ */
+function previewFrameTextOf(output: unknown): string | undefined {
+  if (typeof output !== "object" || output === null) {
+    return undefined;
+  }
+  const { pngBase64: _omitted, ...metadata } = output as Record<string, unknown>;
+  return JSON.stringify(metadata);
+}
+
+/** Image bytes for `preview.frame`, surfaced as a standard image block. */
+function previewImageOf(
+  operation: AgentOperationName,
+  output: unknown,
+): { type: "image"; data: string; mimeType: string } | undefined {
+  if (operation !== "preview.frame" || typeof output !== "object" || output === null) {
+    return undefined;
+  }
+  const record = output as Record<string, unknown>;
+  if (typeof record.pngBase64 !== "string" || typeof record.mimeType !== "string") {
+    return undefined;
+  }
+  return { type: "image", data: record.pngBase64, mimeType: record.mimeType };
 }
 
 function sleepFor(ms: number): Promise<void> {
@@ -108,7 +137,13 @@ export function createKakeaiMcpServer(options: McpServerOptions): Server {
       );
     }
     const output = await request.request(operation, parsed.data);
-    return successResult(output);
+    const image = previewImageOf(operation, output);
+    const text = image === undefined ? undefined : previewFrameTextOf(output);
+    const result = successResult(output, text);
+    if (image !== undefined) {
+      result.content.push(image);
+    }
+    return result;
   }
 
   const server = new Server(

@@ -77,9 +77,9 @@
 
 - [x] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。
 
-## 拡張フェーズ（B1〜B5）
+## 拡張フェーズ（B1〜B6）
 
-[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 の順に実装する。
+[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 → B6 の順に実装する。
 
 ### [x] B1 操作契約ダイジェストと版折衝の機構（R1-1）
 
@@ -111,3 +111,8 @@
 
 - [x] `work.update`（`workId` と `title`）を追加し、HTTP の `PATCH /works/:workId` と同じ規則で管理上の作品名だけを変更する。出力は `{ work }` を返し、`schema.get` の操作カタログと契約ダイジェストへ反映する。MCP と CLI はカタログから自動公開する。
 - 完了条件: ソケット・MCP・CLI から作品名を変更でき、存在しない Work は `RESOURCE_NOT_FOUND`、空のタイトルは `VALIDATION_ERROR` になる。
+
+### [x] B6 視覚確認（R3-4）
+
+- [x] 実施は [../visual-confirmation/todo.md](../visual-confirmation/todo.md) を正とする。`preview.frame`（render 成果物の指定時刻の原寸 PNG）を操作コア・MCP・CLI へ公開し、仕様・roadmap・ユーザーガイド・スキル・用語を更新する。
+- 完了条件: ソケット・MCP・CLI から指定時刻の静止画が取得でき、異常系が安定コードで返る。
