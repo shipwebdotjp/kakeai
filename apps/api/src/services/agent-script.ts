@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   AGENT_ERROR_CODES,
   computeContentWarnings,
@@ -49,6 +48,7 @@ import {
   type FaceSetDetails,
 } from "./script-versions.ts";
 import { AgentOperationError, agentIssue } from "../agent/errors.ts";
+import { sha256RequestHash } from "./agent-request-hash.ts";
 
 interface ScriptResources {
   context: ScriptContext;
@@ -68,30 +68,18 @@ function emptyCreated(): ScriptOperationCreated {
   };
 }
 
-/** Stable JSON with sorted object keys, used only for the idempotency hash. */
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value) ?? "null";
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((entry) => canonicalJson(entry)).join(",")}]`;
-  }
-  const record = value as Record<string, unknown>;
-  const entries = Object.keys(record)
-    .filter((key) => record[key] !== undefined)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
-  return `{${entries.join(",")}}`;
-}
-
+/**
+ * Hash of one `script.edit` request. It uses the shared canonical JSON and
+ * SHA-256 helper, so the stored `agentRequestHash` keeps the format it always
+ * had and stays comparable with the idempotency ledger hashes.
+ */
 export function computeScriptEditRequestHash(
   request: Pick<ScriptEditRequest, "baseScriptVersionId" | "operations">,
 ): string {
-  const payload = canonicalJson({
+  return sha256RequestHash({
     baseScriptVersionId: request.baseScriptVersionId,
     operations: request.operations,
   });
-  return `sha256:${createHash("sha256").update(payload, "utf8").digest("hex")}`;
 }
 
 function assetInfo(asset: AssetWithRenditions): ScriptAssetInfo {

@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile, cp } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile, cp } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { prepareHyperframeLintBody, runHyperframeLint } from "@hyperframes/producer";
@@ -1039,27 +1039,40 @@ export class CompositionService {
     const versionStorageKey = `compositions/bundles/${contentHash}/${versionId}`;
     const versionDir = join(dataDirectories(this.dataDir).root, versionStorageKey);
 
-    await mkdir(dirname(versionDir), { recursive: true });
-    await cp(draftDir, versionDir, { recursive: true });
+    // The bundle copy, the version row, the composition timestamp and the
+    // response mapping are one unit: if any of them fails, neither a version
+    // nor a bundle is left behind. A half written publish would let a retry
+    // create a second version.
+    try {
+      await mkdir(dirname(versionDir), { recursive: true });
+      await cp(draftDir, versionDir, { recursive: true });
 
-    const createdVersion = await this.db.compositionVersion.create({
-      data: {
-        id: versionId,
-        compositionId,
-        versionNumber: nextVersionNumber,
-        bundleHash: contentHash,
-        storageKey: versionStorageKey,
-        manifestJson: JSON.stringify(manifest),
-        styleProvenanceJson: JSON.stringify(authored ?? { kind: "neutral" }),
-      },
-    });
+      return await this.db.$transaction(async (transaction) => {
+        const createdVersion = await transaction.compositionVersion.create({
+          data: {
+            id: versionId,
+            compositionId,
+            versionNumber: nextVersionNumber,
+            bundleHash: contentHash,
+            storageKey: versionStorageKey,
+            manifestJson: JSON.stringify(manifest),
+            styleProvenanceJson: JSON.stringify(authored ?? { kind: "neutral" }),
+          },
+        });
 
-    await this.db.composition.update({
-      where: { id: compositionId },
-      data: { updatedAt: new Date() },
-    });
+        await transaction.composition.update({
+          where: { id: compositionId },
+          data: { updatedAt: new Date() },
+        });
 
-    return toCompositionVersionDto(createdVersion);
+        return toCompositionVersionDto(createdVersion);
+      });
+    } catch (error) {
+      // The bundle copy has no row without the transaction, so it is removed
+      // again instead of leaving a dead bundle behind.
+      await rm(versionDir, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
   }
 
   async getVersionById(versionId: string): Promise<CompositionVersion> {

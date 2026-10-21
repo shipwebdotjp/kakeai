@@ -351,6 +351,13 @@ changes.
 Re-publishing an unchanged draft creates a new version number with identical
 content. Published versions are never modified or deleted while referenced.
 
+`composition.publish` accepts an optional `requestId`. Give a real publish a
+stable id (for example `publish-<compositionId>-v<draftRevision>`): a retry
+with the same id and the same input returns the version that already exists
+instead of creating a second one, and the same id with a different input is
+rejected with `IDEMPOTENCY_CONFLICT`. A dry run is never recorded, so it does
+not consume the id.
+
 ## 6. Reference the version from a script
 
 Add one visual cue per Scene background with `script.edit` (the same operation

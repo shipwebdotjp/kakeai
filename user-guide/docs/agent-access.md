@@ -62,6 +62,20 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 
 `kakeai_script_edit` は `baseScriptVersionId` が現在の版と一致している必要があります。`requestId` を付けると再送が冪等になります。
 
+### 冪等化（requestId）
+
+`kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_render_start` / `kakeai_composition_publish` は、任意の `requestId` を受け付けます。同じ `requestId` と同じ入力で呼び直すと、Job や CompositionVersion を作らず、既存のものの現在の状態を返します。タイムアウト後の再送でも二重生成は起こりません。
+
+- `requestId` は操作ごとに一意にしてください。同じ ID を別の入力で使うと `IDEMPOTENCY_CONFLICT` になります。
+- 再送は「投入直後の状態」ではなく現在の状態を返します。終了済みの Job は `succeeded` で返ります。
+- 同じ ID の処理が別で実行中の場合は `AGENT_IDEMPOTENCY_IN_PROGRESS` を返します。Job を待って結果を確認してください。
+- 失敗した呼び出しは記録に残らないので、原因を直した同じ `requestId` で再実行できます。
+- `composition.publish` の `dryRun` は副作用がないため記録されません。
+
+台帳の鍵には接続時の `agentId` も含みます。識別子を送らないクライアントは `unknown` の枠を共有するため、衝突を避けるには `KAKEAI_AGENT_ID`（MCP）や `--agent-id`（CLI）で識別子を指定してください。
+
+CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"scriptVersionId":"scr-123","requestId":"render-1"}'`）。
+
 ### 素材の検索
 
 `kakeai_asset_list` は素材を検索し、`{ assets, nextCursor }` の 1 ページを返します。
@@ -196,9 +210,10 @@ ln -s /path/to/kakeai/skills/kakeai-composition .opencode/skills/kakeai-composit
 | `AGENT_APP_UNAVAILABLE` | Kakeai が起動していない、またはソケットに接続できない |
 | `AGENT_PROTOCOL_MISMATCH` | ソケットのプロトコル版が一致しない |
 | `AGENT_OPERATION_UNKNOWN` | 操作名が未登録。`schema.get` / `operations` で正規名を確認する |
-| `AGENT_REQUEST_TIMEOUT` | 操作がタイムアウトした。`script.edit` は同じ `requestId` で再送してよい。それ以外の変更操作は `script.get`・`job.list`・`asset.list` などで結果を確認してから再実行する |
+| `AGENT_REQUEST_TIMEOUT` | 操作がタイムアウトした。`script.edit` は同じ `requestId` で再送してよい。`tts.create` / `tts.createBulk` / `render.start` / `composition.publish` も任意の `requestId` を付けて再送すると既存の Job／Version が返る。それ以外の変更操作は `script.get`・`job.list`・`asset.list` などで結果を確認してから再実行する |
 | `SCRIPT_BASE_STALE` | `baseScriptVersionId` が現在の版と異なる。`kakeai_script_get` で取り直し、同じ意図を適用し直す |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` を異なる内容で使った。既存の版を確認し、同じ ID を別内容で再利用しない |
+| `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった。実行中の Job を `kakeai_job_get` / `kakeai_job_wait` で確認する |
 | `VALIDATION_ERROR` | 入力または保存内容がスキーマに適合しない。`issues` を確認する |
 | `EDIT_TARGET_NOT_FOUND` など `EDIT_*` | 台本操作の対象や前提が成立しない |
 | `ASSET_UNAVAILABLE` | 参照する素材が `ready` でない、または欠損している |

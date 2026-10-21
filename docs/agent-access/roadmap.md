@@ -44,10 +44,12 @@ B1 → B2 → B3 → B4 の順で実装する。
 
 ### B2 高コスト操作の冪等化（R1-2）
 
+- 状態: 完了。冪等台帳 `AgentRequest`（`operation` / `agentId` / `requestId` / 要求ハッシュ / 結果参照）を追加し、`tts.create` / `tts.createBulk` / `render.start` / `composition.publish` に任意の `requestId` を受け付けた。`requestId` は任意のまま（必須化は破壊的変更なので行わない）。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
 - 冪等台帳として `AgentRequest`（`operation` / `agentId` / `requestId` / 要求ハッシュ / 結果参照）を持つ。`script.edit` の既存の版単位冪等（`ScriptVersion.agentRequestId`）はそのまま維持する。
 - 対象は `tts.create` / `tts.createBulk` / `render.start` / `composition.publish`。`requestId` は任意とし、渡されたときだけ冪等化する。必須化は破壊的変更になるため行わない。
 - 保存するのは結果の参照（Job id や CompositionVersion id）だけで、再送時は現在のリソースから結果を再構築する。古いスナップショットを返さない。
 - 同一 `requestId`・同一入力は既存の Job／Version を返し、同一 `requestId`・異なる入力は `IDEMPOTENCY_CONFLICT` とする。同一要求の競合は台帳の一意制約で収束させる。
+- 実行前に台帳を claim する。実行中の重複は支柱時間（最大 2 秒）待って、完了しなければ `AGENT_IDEMPOTENCY_IN_PROGRESS` を返す。失敗時は claim を解放するので再送できる。`dryRun` の publish は副作用がないため記録しない。
 - 完了条件: タイムアウト後の再送でも ScriptVersion・Job・CompositionVersion が増えず、再送と衝突をテストで区別できる。他操作へ台帳を適用しやすい。
 
 ### B3 ソケットの流量制御（R1-3）
@@ -93,7 +95,7 @@ A9 完了時点で認識している制約である。B1〜B4 の完了で大部
 | --- | --- | --- |
 | `schemaDigest` は操作カタログを含むが、各操作の入出力スキーマを含まない | 操作の入力追加・変更をエージェントが検知できない | B1 で解消。`operationDigest` を追加し、`schemaDigest` にも操作契約を含めた |
 | ソケットの `AGENT_PROTOCOL_VERSION` は `1` のまま | 破壊的変更時に旧クライアントとの互換性を判定できない | B1 で解消（機構のみ。版は破壊的変更時に上げる） |
-| `tts.create` などはタイムアウト後の再送で Job が重複し得る | 二重生成・課金・待機の無駄 | B2 |
+| `tts.create` などはタイムアウト後の再送で Job が重複し得る | 二重生成・課金・待機の無駄 | B2 で解消。任意の `requestId` で冪等台帳に記録し、再送しても Job が増えない |
 | ソケットのフレームキューと接続数に上限がない | 大量要求時にメモリが膨らむ | B3 |
 | `asset.list` のタグ検索は SQLite の JSON をメモリで後フィルタする | タグ条件が厳しいとページ取得で走査が増える | B4（DB 側クエリ化。索引化は保留） |
 | `script.edit`/`validate` は毎回ライブラリ全体の Asset・Face Set・Character を読み込む | 大規模ライブラリで編集のたびにコストがかかる | 保留 |

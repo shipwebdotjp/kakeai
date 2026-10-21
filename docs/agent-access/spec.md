@@ -67,6 +67,7 @@
 | `character.get` | read | no | `kakeai_character_get` |
 
 - 長尺操作は Job の投入と ID の返却までで完了する。`asset.import` は内容が既存 Asset と同一なら `jobId: null` を返す。`render.start` と `tts.create` は `job` を返す。`tts.createBulk` は投入した Job の組（`jobs`）と生成できなかったセリフ（`excluded`）を返す。呼び出し側は `job.get` または `job.list` で状態を確認する。
+- `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` は任意の `requestId` を受け付ける（[冪等台帳](#冪等台帳高コスト操作)）。束縛は入力をそのまま転送するだけで、台帳の規則を持つのは操作コア側だけである。
 - MCP 束縛は `job.get` の有界ポーリングを `kakeai_job_wait` として提供する。`timeoutMs`（既定 60 秒、最大 600 秒）と `intervalMs`（既定 500 ミリ秒、10〜30000 ミリ秒）を受け、終端状態（`succeeded` / `failed` / `cancelled`）に達したら `{ job, timedOut: false, polls }`、予算超過なら最後の Job と `timedOut: true` を返す。`job_wait` は MCP 束縛の便宜ツールであり、Agent 操作ではない。
 - 失敗はすべて `isError: true` のツール結果として返し、サーバーを落とさない。本文は JSON `{ "code": "...", "issues": [...] }` で、Agent Access と操作コアのコードをそのまま透過する。MCP 自身の失敗は `MCP_TOOL_UNKNOWN`（未知のツール名）、`VALIDATION_ERROR`（入力スキーマ不一致、`issues` 付き）、`MCP_INTERNAL_ERROR`（想定外。詳細は返さない）とする。アプリ未起動は `AGENT_APP_UNAVAILABLE`、未知の操作は `AGENT_OPERATION_UNKNOWN` である。
 - 実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は MCP にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
@@ -99,7 +100,7 @@
 - 起動時、ソケットファイルが既にある場合はアプリプロセスだけが後始末する。接続できるソケットは稼働中として残し、接続できないソケットだけを削除してから listen する。ソケットでないファイルは削除しない。終了時は自分が作ったソケットを unlink する。
 - 接続時に `{ "protocolVersion": 1, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
 - フレームは 1 行 1 JSON（NDJSON）とし、要求は `{ "requestId": "<呼び出し内で一意>", "operation": "<name>", "input": <object> }`、応答は `{ "requestId": "...", "ok": true, "data": ... }` または `{ "requestId": "...", "ok": false, "error": { "code": "...", "issues": [...] } }` とする。`issues` は `{ path, code, message }` の配列で、スタックトレースや自由文の詳細は返さない。
-- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは 10 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できるが、それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
+- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは 10 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
 - サーバーは応答を返した後も同じ接続で次の要求を受け付けるが、5 分間何も受信しない接続は閉じる。
 - ソケットファイルが残っていて接続できない場合、クライアントは削除せず `AGENT_APP_UNAVAILABLE` を返す。所有者はアプリプロセスだけとする。
 
@@ -202,6 +203,24 @@
 - コピーで作られた ID は `script.edit` の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` で返る。後続の `line.add`・`line.setSpeaker`・`standing.set` にはこの ID をそのまま使う。`character.addFromLibrary` は `key` を持たないため、同一呼び出し内で作った ID を `{ key }` で参照することはできない。
 - 未知の `libraryCharacterId` は `EDIT_TARGET_NOT_FOUND`、`ScriptContext.libraryCharacters` を用意できない場合は `EDIT_PRECONDITION_FAILED` とする。
 
+## 冪等台帳（高コスト操作）
+
+高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）は、任意の `requestId` を受け付ける。`requestId` が渡されたときだけ冪等台帳（`AgentRequest`）に記録し、タイムアウト後の再送でも Job や Version が増えないようにする。
+
+- 台帳の鍵は `(operation, agentId, requestId)` の一意制約で決まる。`agentId` は接続時の識別子で、識別子を送らないクライアントは予約値 `none` を使う。クライアントが送った識別子は `agent:` を前置して保存するので、予約値を偽装できない。識別子を送らないクライアントは `none` の枠を共有するため、衝突を避けるには接続時に `agentId` を送る。同じ `requestId` を別の操作や別のエージェントで使っても別の行になる。
+- `requestId` は任意のままにする。必須化は破壊的変更 ([../mvp/api-contract.md](../mvp/api-contract.md) の互換性方針) になるため行わない。渡さない呼び出しは台帳に記録されず、従来どおり毎回新しい Job を作る。
+- 要求ハッシュは操作名と入力（`requestId` を除く）から決める。キーの並び順に依存せず、同じ論理的な要求は常に同じハッシュになるため、再送と入力の相違を区別できる。意味が変わらない省略（`composition.publish` の `dryRun: false` など）はハッシュから落とすので、等価な呼び出しは同じ要求として扱う。
+- 台帳に保存するのは結果の参照（Job id、CompositionVersion id、一括 TTS の Job id と除外一覧）だけで、応答のスナップショットは保存しない。再送時は現在の Job／Version から応答を再構築するため、投入直後のキュー状態ではなく完了済みの状態を返す。
+- 実行前に台帳の行を先に確保する（claim）。同一要求の競合は一意制約で収束し、二重実行されない。
+- 同じ `requestId`・同じ入力で完了済みの場合は、既存の Job／Version を再構築して返す。
+- 同じ `requestId`・異なる入力は `IDEMPOTENCY_CONFLICT` とする。
+- 同じ `requestId` で実行中のままの場合は、重複側だけを支柱時間（最大 2 秒）待って完了を待つ。完了しなければ `AGENT_IDEMPOTENCY_IN_PROGRESS` を返す。所有者が結果を残さずに消えた請求は、請求の有効期間（10 分）を超えていれば入力が違っても引き継いで実行する（放棄された請求が同じ ID を永久に塞がないようにするため）。ソケットのタイムアウトは実行中の処理を打ち切らないため、10 分を超えても実行が続く異常な処理では Job が二重になる可能性がある。実行中の取消は対象外とする。
+- 操作が失敗した場合は台帳の行を残さない（claim を解放する）。同じ `requestId` で実行し直せる。恒久的な失敗なら毎回同じエラーが返る。publish は版行の追加と応答の組み立てを 1 つのトランザクションで行い、途中で失敗したときはバンドルも削除するため、版もバンドルも残らない。
+- `composition.publish` の `dryRun: true` は副作用がないので台帳に記録しない。同じ `requestId` で実 publish を另行実行できる。
+- 保存した参照が既に存在しない資源を指した場合は、新しい呼び出しと同じ安定コード（`RESOURCE_NOT_FOUND`）を返す。汎用の内部エラーにはしない。
+- 台帳の行は定期（数分に 1 回程度）に掃除する。完了した行は記録の保持期間（30 日）を超えると削除し、結果を残していない請求は請求の有効期間（10 分）を超えたら削除する。台帳は再送に耐える短期の記録として保つ。
+- `script.edit` は従来どおり版単位の冪等（`ScriptVersion.agentRequestId` / `agentRequestHash`）を維持し、台帳には載せない。
+
 ## 長尺操作
 
 - 素材取り込み・TTS・レンダーは Job として実行し、操作は Job の投入と ID の返却まで行う。状態は `job.get` のポーリングで確認する。
@@ -232,6 +251,7 @@
 | `CLI_INTERNAL_ERROR` | CLI 束縛で想定外の失敗。詳細は返さない（CLI 束縛のみ） |
 | `SCRIPT_BASE_STALE` | `baseScriptVersionId` が current と一致しない |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` が異なる入力で使われた |
+| `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった |
 | `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` / `EDIT_ID_GENERATION_FAILED` | 操作コアのエラー（[../editor-core/spec.md](../editor-core/spec.md)） |
 | `VALIDATION_ERROR` | 保存検証に適合しない。`issues` に JSON Pointer と理由を含める。MCP の入力スキーマ不一致にも同じコードと `issues` を返す |
 | `ASSET_UNAVAILABLE` | 取り込み・レンダー・編集で参照する Asset が ready でない、または欠損している |
@@ -255,4 +275,4 @@
 ## 将来
 
 - アプリ内ネイティブの AI 編集機能が必要になった場合は、同じ操作コアの上に任意の束縛として載せる。操作コアを変更しない限り、MCP・CLI を置き換えない。
-- 操作契約のダイジェストとプロトコル版、変更操作の冪等化、素材検索の索引化、TTS の冪等化と Take 添付の一体化、Voice／Face Set の読み取り面、Job 操作の一般化、スキル配布、視覚確認などの拡張候補は [roadmap.md](./roadmap.md) に整理する。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。
+- 操作契約のダイジェストとプロトコル版、素材検索の索引化、TTS の冪等化と Take 添付の一体化、Voice／Face Set の読み取り面、Job 操作の一般化、スキル配布、視覚確認などの拡張候補は [roadmap.md](./roadmap.md) に整理する。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。

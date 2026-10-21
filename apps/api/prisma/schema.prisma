@@ -61,6 +61,25 @@ model ScriptVersion {
   @@unique([languageEditionId, agentRequestId])
 }
 
+/// Idempotency ledger for the high-cost agent operations (`tts.create`,
+/// `tts.createBulk`, `render.start`, `composition.publish`). The row stores a
+/// result reference (resource ids), never a response snapshot, so a replay
+/// rebuilds the answer from the current resource state.
+model AgentRequest {
+  id          String   @id @default(cuid())
+  operation   String
+  agentId     String
+  requestId   String
+  requestHash String
+  /// JSON encoded reference to the created resource(s). `null` while the
+  /// operation is still in flight.
+  resultRef   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([operation, agentId, requestId])
+  @@index([createdAt])
+}
+
 model Asset {
   id              String           @id @default(cuid())
   kind            String

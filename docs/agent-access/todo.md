@@ -87,11 +87,12 @@
 - [x] 対応プロトコル版の範囲（`minProtocolVersion`..`protocolVersion`）を handshake と `schema.get` で扱う。破壊的変更（必須化・削除・意味変更）のときだけ `AGENT_PROTOCOL_VERSION` を上げ、任意フィールド追加や列挙値追加では上げない。
 - [x] 完了条件: 操作スキーマの変更で `operationDigest` と `schemaDigest` が変わり、版の範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` のまま拒否される。契約ドリフトを検出するテストがある。
 
-### [ ] B2 高コスト操作の冪等化（R1-2）
+### [x] B2 高コスト操作の冪等化（R1-2）
 
-- [ ] 冪等台帳 `AgentRequest`（operation / agentId / requestId / 要求ハッシュ / 結果参照）を追加する。`script.edit` の版単位冪等は維持する。
-- [ ] `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` に任意の `requestId` を受け付け、同一ID・同一入力は既存の Job／Version を返し、同一ID・異なる入力は `IDEMPOTENCY_CONFLICT` とする。
-- [ ] 完了条件: タイムアウト後の再送でも ScriptVersion・Job・CompositionVersion が増えず、再送と衝突をテストで区別できる。
+- [x] 冪等台帳 `AgentRequest`（operation / agentId / requestId / 要求ハッシュ / 結果参照）を追加する。`script.edit` の版単位冪等は維持する。
+- [x] `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` に任意の `requestId` を受け付け、同一ID・同一入力は既存の Job／Version を返し、同一ID・異なる入力は `IDEMPOTENCY_CONFLICT` とする。
+- [x] 実行前に台帳を claim して二重実行を防ぎ、実行中の重複は `AGENT_IDEMPOTENCY_IN_PROGRESS`、失敗時は claim を解放して再送できるようにする。`dryRun` の publish は記録しない。
+- [x] 完了条件: タイムアウト後の再送でも ScriptVersion・Job・CompositionVersion が増えず、再送と衝突をテストで区別できる。
 
 ### [ ] B3 ソケットの流量制御（R1-3）
 

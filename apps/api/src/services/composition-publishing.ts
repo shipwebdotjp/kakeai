@@ -20,7 +20,7 @@ export interface PublishCompositionInput {
  * Font diagnostics are advisory: a broken theme or font catalog must not turn
  * the validation outcome into an error, so the failure is reported as a note.
  */
-async function diagnoseFonts(
+export async function diagnoseCompositionFonts(
   compositionService: CompositionService,
   authoringService: CompositionAuthoringService | undefined,
   compositionId: string,
@@ -52,13 +52,13 @@ export async function publishOrValidateComposition(
   if (options.dryRun) {
     const [manifest, fontDiagnostics] = await Promise.all([
       compositionService.validateDraft(compositionId, input),
-      diagnoseFonts(compositionService, authoringService, compositionId),
+      diagnoseCompositionFonts(compositionService, authoringService, compositionId),
     ]);
     return { dryRun: true, manifest, fontDiagnostics };
   }
   const [version, fontDiagnostics] = await Promise.all([
     compositionService.publish(compositionId, input),
-    diagnoseFonts(compositionService, authoringService, compositionId),
+    diagnoseCompositionFonts(compositionService, authoringService, compositionId),
   ]);
   return { dryRun: false, version, fontDiagnostics };
 }

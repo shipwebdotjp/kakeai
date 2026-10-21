@@ -165,13 +165,14 @@ generation.
    - Required: `scriptVersionId`, `narrationSegmentId`.
    - Optional: `speechText` (defaults to the saved segment text),
      `voiceId` (defaults to the speaker's Voice Profile), `speedScale`
-     (default `1.0`, allowed `0.5`–`2.0`).
+     (default `1.0`, allowed `0.5`–`2.0`), `requestId` (see §9.1).
    - Prefer omitting `speechText` so the Job speaks exactly the saved line. If
      you override it, update the line to the same text before attaching.
    - Returns `{ job }` with `kind: "tts"`.
 3. `tts.createBulk` synthesizes every point-scene line that has no selected
    take. It returns `{ jobs, excluded }`; `excluded` carries per-line stable
-   codes and safe reasons and does not fail the whole call.
+   codes and safe reasons and does not fail the whole call. It also accepts an
+   optional `requestId` (§9.1).
 4. Wait per Job: `job_wait` / `job.wait <jobId>`, or `job.get`. The CLI's
    `--wait` can attach to `tts.create` (single job) but returns `wait: null` for
    `tts.createBulk`, so wait on each returned job ID.
@@ -196,6 +197,8 @@ generation.
    `schema.get.warningCodes`; fix real problems and leave intentional layout
    warnings alone.
 2. `render.start` with `scriptVersionId`. It returns `{ job }` of kind `render`.
+   It also accepts an optional `requestId` (§9.1), so a retried render does not
+   queue a second Job.
 3. Poll `job_wait` / `job.wait` (MCP `kakeai_job_wait`) or `job.get`. A timeout
    (`timedOut: true`) is not a failure; call again with the same job ID.
    A failed job exposes `job.error`. Render output is an Artifact, not an Asset.
@@ -214,6 +217,34 @@ generation.
 | `replay: true` | The edit was already applied. Do not apply the operations again. |
 | Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. |
 
+### 9.1 High-cost operations
+
+`script.edit` is idempotent by version. The expensive operations — `tts.create`,
+`tts.createBulk`, `render.start` and `composition.publish` — accept an **optional**
+`requestId` and keep their own idempotency ledger:
+
+- Give each of these calls a stable `requestId` that names the logical request
+  (for example `render-<workId>-v<versionNumber>` or
+  `tts-<scriptVersionId>-<segmentId>`). The same id with the same input returns
+  the **same** Job or CompositionVersion instead of creating a second one, so a
+  retry after a timeout costs nothing.
+- The replay returns the job's **current** state. A job that already succeeded
+  comes back as `succeeded` with its `ttsResult`, not as the queued snapshot
+  you saw the first time.
+- Never reuse one `requestId` for two different inputs. That is reported as
+  `IDEMPOTENCY_CONFLICT`: read the existing job or version and continue
+  instead of forcing it through.
+- `AGENT_IDEMPOTENCY_IN_PROGRESS` means the same request is still running
+  somewhere else. Do not retry blindly and do not start a second job: poll
+  `job.get` (or `job.wait`) for the running job and use the result.
+- A failed call leaves no ledger entry, so the same `requestId` may be used
+  again after you fix the cause.
+- `composition.publish` with `dryRun: true` has no side effect and is never
+  recorded; a dry run and a real publish can share an id.
+- Send an `agentId` in the handshake (the MCP and CLI defaults already do).
+  Clients without one share one ledger bucket, so their request ids can
+  collide with an unrelated client's.
+
 Read timeouts are 10 seconds and mutation timeouts 120 seconds; both are
 server-enforced. Job polling has its own bounded budget and is not a mutation
 timeout.
@@ -231,6 +262,7 @@ to the user when the fix is on their side.
 | `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` | The script or operation is not valid in the current state. Re-read the script and adjust; do not bypass. |
 | `SCRIPT_BASE_STALE` | Base version is no longer current. Re-read and reapply (see above). |
 | `IDEMPOTENCY_CONFLICT` | Same `requestId`, different content. Read the current version and continue; never reuse the ID for other content. |
+| `AGENT_IDEMPOTENCY_IN_PROGRESS` | The same `requestId` is still running. Poll the running job with `job.get` / `job_wait` instead of starting a second one. |
 | `ASSET_UNAVAILABLE` | Referenced asset is missing or not `ready`. Import/wait or pick another. |
 | `COMPOSITION_UNAVAILABLE` | Referenced CompositionVersion is not published or its bundle is missing. Publish it first. |
 | `TTS_INPUT_INVALID` | Empty text, missing speaker/voice, voice outside the configured adapter, or bad speed. Fix the line or ask the user. |

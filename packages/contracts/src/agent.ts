@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentRequestIdSchema, canonicalAgentRequestJson } from "./agent-request";
 import { toAgentJsonSchema, type AgentJsonSchema } from "./agent-json-schema";
 import { CONTENT_SCHEMA_VERSION, contentDocumentSchema } from "./content/document";
 import { animationPresetSchema } from "./content/animation";
@@ -107,6 +108,7 @@ export const AGENT_ERROR_CODES = {
   REQUEST_TIMEOUT: "AGENT_REQUEST_TIMEOUT",
   SCRIPT_BASE_STALE: "SCRIPT_BASE_STALE",
   IDEMPOTENCY_CONFLICT: "IDEMPOTENCY_CONFLICT",
+  IDEMPOTENCY_IN_PROGRESS: "AGENT_IDEMPOTENCY_IN_PROGRESS",
   VALIDATION_ERROR: "VALIDATION_ERROR",
   ASSET_UNAVAILABLE: "ASSET_UNAVAILABLE",
   COMPOSITION_UNAVAILABLE: "COMPOSITION_UNAVAILABLE",
@@ -573,21 +575,11 @@ function scriptOperationCategoryOf(name: ScriptOperationName): ScriptOperationCa
 
 /**
  * Stable JSON with lexicographically sorted object keys. Used only for the
- * schema fingerprint, not for storage normalisation.
+ * schema fingerprint, not for storage normalisation. The request hash uses the
+ * same canonical form, so there is exactly one canonicaliser in this package.
  */
 function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
-  }
-  const record = value as Record<string, unknown>;
-  const entries = Object.keys(record)
-    .filter((key) => record[key] !== undefined)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
-  return `{${entries.join(",")}}`;
+  return canonicalAgentRequestJson(value);
 }
 
 function utf8Bytes(value: string): number[] {
@@ -801,8 +793,14 @@ export const agentAssetTagInputSchema = z.strictObject({
 });
 export const agentAssetTagOutputSchema = z.strictObject({ asset: assetSchema });
 
+/**
+ * `render.start` accepts an optional `requestId`. When it is given, the
+ * operation is recorded in the idempotency ledger and a retry with the same
+ * id returns the same render Job instead of queueing a second one.
+ */
 export const agentRenderStartInputSchema = z.strictObject({
   scriptVersionId: idSchema,
+  requestId: agentRequestIdSchema.optional(),
 });
 export const agentRenderStartOutputSchema = z.strictObject({ job: jobSchema });
 
@@ -852,9 +850,15 @@ export const agentCompositionDraftSaveOutputSchema = z.strictObject({
   draft: compositionDraftSchema,
 });
 
+/**
+ * `composition.publish` accepts an optional `requestId`. A real publish is
+ * recorded in the idempotency ledger; a dry run has no side effect and is
+ * therefore never recorded.
+ */
 export const agentCompositionPublishInputSchema = z.strictObject({
   compositionId: idSchema,
   dryRun: z.boolean().optional(),
+  requestId: agentRequestIdSchema.optional(),
   ...publishCompositionRequestSchema.shape,
 });
 /**
@@ -881,10 +885,15 @@ export const agentCompositionPublishOutputSchema = z.discriminatedUnion("dryRun"
  * the unselected lines of a saved Script Version. A completed Job's
  * `ttsResult` is read through `job.get`, and the Take enters the script only
  * through `script.edit` + `line.assignTake`.
+ *
+ * Both accept an optional `requestId`. When it is given, the operation is
+ * recorded in the idempotency ledger and a retry with the same id returns the
+ * same Jobs instead of enqueueing new ones.
  */
 export const agentTtsCreateInputSchema = createTtsJobRequestSchema.extend({
   scriptVersionId: idSchema,
   narrationSegmentId: idSchema,
+  requestId: agentRequestIdSchema.optional(),
 });
 export type AgentTtsCreateInput = z.input<typeof agentTtsCreateInputSchema>;
 
@@ -893,6 +902,7 @@ export type AgentTtsCreateOutput = z.infer<typeof agentTtsCreateOutputSchema>;
 
 export const agentTtsCreateBulkInputSchema = z.strictObject({
   scriptVersionId: idSchema,
+  requestId: agentRequestIdSchema.optional(),
 });
 export type AgentTtsCreateBulkInput = z.input<typeof agentTtsCreateBulkInputSchema>;
 
