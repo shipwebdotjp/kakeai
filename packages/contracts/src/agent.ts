@@ -87,6 +87,19 @@ export const AGENT_MUTATION_TIMEOUT_MS = 120_000;
 /** A connection that sends nothing for this long is closed by the server. */
 export const AGENT_IDLE_TIMEOUT_MS = 300_000;
 
+/**
+ * Maximum number of request frames one connection may hold unprocessed. A
+ * frame received while the limit is reached is not executed: it is answered
+ * with `AGENT_BACKPRESSURE` and skipped, and the connection stays open.
+ */
+export const AGENT_MAX_PENDING_FRAMES_PER_CONNECTION = 64;
+
+/**
+ * Maximum number of concurrent connections the local control socket accepts.
+ * A connection above the cap is closed before the handshake.
+ */
+export const AGENT_MAX_CONNECTIONS = 16;
+
 export function agentSocketPath(dataRoot: string): string {
   const normalized = dataRoot.replace(/[\\/]+$/u, "");
   // Keep the separator style of the caller's platform path without importing
@@ -106,6 +119,12 @@ export const AGENT_ERROR_CODES = {
   OPERATION_UNKNOWN: "AGENT_OPERATION_UNKNOWN",
   PAYLOAD_TOO_LARGE: "AGENT_PAYLOAD_TOO_LARGE",
   REQUEST_TIMEOUT: "AGENT_REQUEST_TIMEOUT",
+  /**
+   * The connection already holds the maximum number of unprocessed request
+   * frames. The frame is skipped instead of executed, and the connection
+   * stays open so the client can slow down and retry.
+   */
+  BACKPRESSURE: "AGENT_BACKPRESSURE",
   SCRIPT_BASE_STALE: "SCRIPT_BASE_STALE",
   IDEMPOTENCY_CONFLICT: "IDEMPOTENCY_CONFLICT",
   IDEMPOTENCY_IN_PROGRESS: "AGENT_IDEMPOTENCY_IN_PROGRESS",

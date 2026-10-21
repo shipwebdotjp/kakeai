@@ -121,7 +121,13 @@ afterAll(async () => {
 async function withServer(
   dispatch: AgentDispatch,
   run: (socketPath: string, server: AgentSocketServer) => Promise<void>,
-  protocol: { maxRequestBytes?: number; readTimeoutMs?: number; idleTimeoutMs?: number } = {},
+  protocol: {
+    maxRequestBytes?: number;
+    readTimeoutMs?: number;
+    idleTimeoutMs?: number;
+    maxPendingFramesPerConnection?: number;
+    maxPendingBytesPerConnection?: number;
+  } = {},
 ): Promise<void> {
   const socketPath = join(tempDir, `agent-${Math.random().toString(16).slice(2)}.sock`);
   const server = await listenAgentProtocol({
@@ -301,6 +307,150 @@ describe("agent NDJSON protocol", () => {
         connection.close();
       },
       { readTimeoutMs: 40 },
+    );
+  });
+
+  it("answers frames above the pending limit with AGENT_BACKPRESSURE and keeps the connection", async () => {
+    await withServer(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return { ok: true };
+      },
+      async (socketPath) => {
+        const connection = await TestConnection.open(socketPath);
+        connection.sendRaw(
+          [
+            JSON.stringify({ protocolVersion: AGENT_PROTOCOL_VERSION }),
+            JSON.stringify({ requestId: "req-1", operation: "work.list", input: {} }),
+            JSON.stringify({ requestId: "req-2", operation: "work.list", input: {} }),
+            JSON.stringify({ requestId: "req-3", operation: "work.list", input: {} }),
+            "",
+          ].join("\n"),
+        );
+
+        const responses: Array<AgentSuccessResponse | AgentErrorResponse> = [];
+        for (let index = 0; index < 3; index += 1) {
+          responses.push(await connection.nextResponse());
+        }
+        const byRequestId = new Map(
+          responses.map((response) => [response.requestId, response]),
+        );
+        // The frames that were queued keep running.
+        expect(byRequestId.get("req-1")?.ok).toBe(true);
+        expect(byRequestId.get("req-2")?.ok).toBe(true);
+        // The frame above the limit is skipped, not executed.
+        const rejected = byRequestId.get("req-3");
+        expect(rejected?.ok).toBe(false);
+        if (rejected !== undefined && !rejected.ok) {
+          expect(rejected.error.code).toBe(AGENT_ERROR_CODES.BACKPRESSURE);
+        }
+
+        // The connection stays open and later requests are served normally.
+        connection.send({ requestId: "req-4", operation: "work.list", input: {} });
+        const later = await connection.nextResponse();
+        expect(later.ok).toBe(true);
+        expect(later.requestId).toBe("req-4");
+        connection.close();
+      },
+      { maxPendingFramesPerConnection: 2 },
+    );
+  });
+
+  it("processes a normal burst at the default limits without backpressure", async () => {
+    await withServer(echoDispatch, async (socketPath) => {
+      const connection = await TestConnection.open(socketPath);
+      const count = 10;
+      connection.sendRaw(
+        [
+          JSON.stringify({ protocolVersion: AGENT_PROTOCOL_VERSION }),
+          ...Array.from({ length: count }, (_unused, index) =>
+            JSON.stringify({
+              requestId: `req-${index}`,
+              operation: "work.list",
+              input: {},
+            }),
+          ),
+          "",
+        ].join("\n"),
+      );
+      for (let index = 0; index < count; index += 1) {
+        const response = await connection.nextResponse();
+        expect(response.ok).toBe(true);
+        expect(response.requestId).toBe(`req-${index}`);
+      }
+      connection.close();
+    });
+  });
+
+  it("keeps serving a connection whose frames arrive in several chunks", async () => {
+    await withServer(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { ok: true };
+      },
+      async (socketPath) => {
+        const connection = await TestConnection.open(socketPath);
+        connection.send({ protocolVersion: AGENT_PROTOCOL_VERSION });
+        const count = 6;
+        for (let index = 0; index < count; index += 1) {
+          connection.send({
+            requestId: `req-${index}`,
+            operation: "work.list",
+            input: {},
+          });
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+
+        // Every frame is answered exactly once, either executed or skipped.
+        const answered = new Set<string>();
+        for (let index = 0; index < count; index += 1) {
+          const response = await connection.nextResponse();
+          expect(answered.has(response.requestId)).toBe(false);
+          answered.add(response.requestId);
+          if (!response.ok) {
+            expect(response.error.code).toBe(AGENT_ERROR_CODES.BACKPRESSURE);
+          }
+        }
+        expect(answered.size).toBe(count);
+
+        // The connection is still usable after the burst.
+        connection.send({ requestId: "req-last", operation: "work.list", input: {} });
+        const last = await connection.nextResponse();
+        expect(last.ok).toBe(true);
+        expect(last.requestId).toBe("req-last");
+        connection.close();
+      },
+      { maxPendingFramesPerConnection: 2 },
+    );
+  });
+
+  it("skips a frame that would exceed the pending byte budget", async () => {
+    await withServer(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return { ok: true };
+      },
+      async (socketPath) => {
+        const connection = await TestConnection.open(socketPath);
+        connection.send({ protocolVersion: AGENT_PROTOCOL_VERSION });
+        // The frame is larger than the whole byte budget of the connection.
+        connection.send({
+          requestId: "req-big",
+          operation: "work.list",
+          input: { padding: "x".repeat(200) },
+        });
+        const rejected = await connection.nextError();
+        expect(rejected.requestId).toBe("req-big");
+        expect(rejected.error.code).toBe(AGENT_ERROR_CODES.BACKPRESSURE);
+
+        // A frame that fits is served normally.
+        connection.send({ requestId: "req-small", operation: "work.list", input: {} });
+        const served = await connection.nextResponse();
+        expect(served.ok).toBe(true);
+        expect(served.requestId).toBe("req-small");
+        connection.close();
+      },
+      { maxPendingBytesPerConnection: 128 },
     );
   });
 });

@@ -1,6 +1,7 @@
 import { chmod, lstat, stat, unlink } from "node:fs/promises";
 import { createServer, connect, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
+import { AGENT_MAX_CONNECTIONS } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
@@ -33,7 +34,15 @@ export interface ListenAgentProtocolOptions {
     readTimeoutMs?: number;
     mutationTimeoutMs?: number;
     idleTimeoutMs?: number;
+    maxPendingFramesPerConnection?: number;
+    maxPendingBytesPerConnection?: number;
   };
+  /**
+   * Maximum number of concurrent connections. A connection above the cap is
+   * closed before the handshake; the connections within the cap are not
+   * affected.
+   */
+  maxConnections?: number;
 }
 
 export interface StartAgentSocketServerOptions {
@@ -116,8 +125,28 @@ export async function listenAgentProtocol(
   const { socketPath } = options;
   await prepareSocketPath(socketPath);
 
+  const maxConnections = Math.max(1, options.maxConnections ?? AGENT_MAX_CONNECTIONS);
   const sockets = new Set<Socket>();
+  let rejectedConnections = 0;
   const server = createServer((socket) => {
+    if (sockets.size >= maxConnections) {
+      // Over the cap: the connection is closed before the handshake, so the
+      // client never gets a protocol session. The connections that are
+      // already open are not affected.
+      rejectedConnections += 1;
+      // The rejection happens per connection attempt, so the log is sampled
+      // instead of flooding the log of the app.
+      if (rejectedConnections === 1 || rejectedConnections % 100 === 0) {
+        logger.warn("agent_socket_connection_rejected", {
+          socketPath,
+          maxConnections,
+          openConnections: sockets.size,
+          rejectedConnections,
+        });
+      }
+      socket.destroy();
+      return;
+    }
     sockets.add(socket);
     socket.once("close", () => {
       sockets.delete(socket);

@@ -76,6 +76,10 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 
 CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"scriptVersionId":"scr-123","requestId":"render-1"}'`）。
 
+### 大量のリクエスト
+
+短時間に大量の要求を送ると、接続内の未処理要求が上限に達し、要求の一部が `AGENT_BACKPRESSURE` で返ることがあります。接続は閉じられず、その要求だけが実行されませんでした。少し待ってから同じ要求を再送してください。必要なら要求を束ねて減らして送ります。
+
 ### 素材の検索
 
 `kakeai_asset_list` は素材を検索し、`{ assets, nextCursor }` の 1 ページを返します。
@@ -214,6 +218,7 @@ ln -s /path/to/kakeai/skills/kakeai-composition .opencode/skills/kakeai-composit
 | `SCRIPT_BASE_STALE` | `baseScriptVersionId` が現在の版と異なる。`kakeai_script_get` で取り直し、同じ意図を適用し直す |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` を異なる内容で使った。既存の版を確認し、同じ ID を別内容で再利用しない |
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった。実行中の Job を `kakeai_job_get` / `kakeai_job_wait` で確認する |
+| `AGENT_BACKPRESSURE` | 短時間に多すぎる要求を送り、接続内の未処理要求が上限を超えた。接続は閉じられない。しばらく待ってから再送する |
 | `VALIDATION_ERROR` | 入力または保存内容がスキーマに適合しない。`issues` を確認する |
 | `EDIT_TARGET_NOT_FOUND` など `EDIT_*` | 台本操作の対象や前提が成立しない |
 | `ASSET_UNAVAILABLE` | 参照する素材が `ready` でない、または欠損している |

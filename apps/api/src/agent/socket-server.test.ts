@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { connect, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AGENT_PROTOCOL_VERSION } from "@kakeai/contracts";
@@ -22,6 +23,32 @@ async function start(socketPath: string): Promise<AgentSocketServer> {
     socketPath,
     dispatch: async () => ({ ok: true }),
     operationKind: () => "read",
+  });
+}
+
+async function openSocket(socketPath: string): Promise<Socket> {
+  const socket = connect(socketPath);
+  await new Promise<void>((resolve, reject) => {
+    socket.once("connect", () => resolve());
+    socket.once("error", reject);
+  });
+  socket.setEncoding("utf8");
+  return socket;
+}
+
+async function requestOverSocket(
+  socket: Socket,
+  frame: unknown,
+): Promise<Record<string, unknown>> {
+  socket.write(`${JSON.stringify(frame)}\n`);
+  return new Promise((resolve, reject) => {
+    socket.once("data", (chunk: string) => {
+      try {
+        resolve(JSON.parse(chunk) as Record<string, unknown>);
+      } catch (error) {
+        reject(error);
+      }
+    });
   });
 }
 
@@ -85,5 +112,70 @@ describe("agent socket lifecycle", () => {
 
   it("keeps the configured protocol version", () => {
     expect(AGENT_PROTOCOL_VERSION).toBe(1);
+  });
+
+  it("closes connections above the cap and keeps the ones within it", async () => {
+    const socketPath = join(tempDir, "cap", "agent.sock");
+    const server = await listenAgentProtocol({
+      socketPath,
+      dispatch: async () => ({ ok: true }),
+      operationKind: () => "read",
+      maxConnections: 2,
+    });
+    try {
+      const first = await openSocket(socketPath);
+      const second = await openSocket(socketPath);
+
+      // The connection above the cap is closed before the handshake, so it
+      // never gets a protocol session.
+      const third = connect(socketPath);
+      const outcome = await new Promise<"closed" | "errored" | "answered">(
+        (resolve) => {
+          third.on("error", () => resolve("errored"));
+          third.on("close", () => resolve("closed"));
+          third.on("connect", () => {
+            third.write(
+              `${JSON.stringify({ protocolVersion: AGENT_PROTOCOL_VERSION })}\n`,
+            );
+            third.write(
+              `${JSON.stringify({
+                requestId: "req-1",
+                operation: "work.list",
+                input: {},
+              })}\n`,
+            );
+            let received = "";
+            third.on("data", (chunk: Buffer) => {
+              received += chunk.toString("utf8");
+              if (received.includes("\n")) {
+                resolve("answered");
+              }
+            });
+          });
+        },
+      );
+      expect(["closed", "errored"]).toContain(outcome);
+
+      // The connections within the cap are not affected.
+      first.write(`${JSON.stringify({ protocolVersion: AGENT_PROTOCOL_VERSION })}\n`);
+      const response = await requestOverSocket(first, {
+        requestId: "req-2",
+        operation: "work.list",
+        input: {},
+      });
+      expect(response.ok).toBe(true);
+      expect(response.requestId).toBe("req-2");
+
+      second.write(`${JSON.stringify({ protocolVersion: AGENT_PROTOCOL_VERSION })}\n`);
+      const other = await requestOverSocket(second, {
+        requestId: "req-3",
+        operation: "work.list",
+        input: {},
+      });
+      expect(other.ok).toBe(true);
+      expect(other.requestId).toBe("req-3");
+    } finally {
+      await server.close();
+    }
   });
 });
