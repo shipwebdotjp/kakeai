@@ -344,6 +344,7 @@ describe("agent socket integration", () => {
       "socket-search-a",
     ]);
     expect(compound.nextCursor).toBeNull();
+    expect(compound.total).toBe(2);
 
     const firstPage = await client.request("asset.list", {
       filename: "socket-search",
@@ -355,6 +356,7 @@ describe("agent socket integration", () => {
       "socket-search-b",
     ]);
     expect(firstPage.nextCursor).not.toBeNull();
+    expect(firstPage.total).toBe(3);
 
     const secondPage = await client.request("asset.list", {
       filename: "socket-search",
@@ -364,12 +366,121 @@ describe("agent socket integration", () => {
     });
     expect(secondPage.assets.map((asset) => asset.id)).toEqual(["socket-search-a"]);
     expect(secondPage.nextCursor).toBeNull();
+    expect(secondPage.total).toBe(3);
 
     const invalid = await expectAgentError(
       client.request("asset.list", { cursor: "not-a-cursor" }),
       "VALIDATION_ERROR",
     );
     expect(invalid.issues?.[0]?.path).toEqual(["cursor"]);
+  });
+
+  it("applies the sort, metadata filters and total count over the socket", async () => {
+    const createdAt = new Date("2026-05-10T00:00:00.000Z");
+    const rows = [
+      {
+        id: "socket-sort-a",
+        filename: "socket-sort-bravo.mp4",
+        hasAudio: true,
+        durationMs: 4_000,
+      },
+      {
+        id: "socket-sort-b",
+        filename: "socket-sort-alpha.mp4",
+        hasAudio: false,
+        durationMs: 2_000,
+      },
+      {
+        id: "socket-sort-c",
+        filename: "socket-sort-charlie.mp4",
+        hasAudio: true,
+        durationMs: null,
+      },
+    ];
+    for (const row of rows) {
+      await prisma.asset.create({
+        data: {
+          id: row.id,
+          kind: "video",
+          origin: "uploaded",
+          status: "ready",
+          storageKey: `assets/${row.id}`,
+          originalFilename: row.filename,
+          mediaType: "video/mp4",
+          byteSize: BigInt(10),
+          sha256: `sha-${row.id}`,
+          hasAudio: row.hasAudio,
+          durationMs: row.durationMs,
+          createdAt,
+        },
+      });
+    }
+
+    const byName = await client.request("asset.list", {
+      filename: "socket-sort-",
+      sort: "filename_asc",
+    });
+    expect(byName.assets.map((asset) => asset.id)).toEqual([
+      "socket-sort-b",
+      "socket-sort-a",
+      "socket-sort-c",
+    ]);
+    expect(byName.total).toBe(3);
+
+    const byDuration = await client.request("asset.list", {
+      filename: "socket-sort-",
+      sort: "duration_asc",
+    });
+    expect(byDuration.assets.map((asset) => asset.id)).toEqual([
+      "socket-sort-b",
+      "socket-sort-a",
+      "socket-sort-c",
+    ]);
+    expect(byDuration.total).toBe(3);
+
+    const withAudio = await client.request("asset.list", {
+      filename: "socket-sort-",
+      hasAudio: true,
+    });
+    expect(withAudio.assets.map((asset) => asset.id)).toEqual([
+      "socket-sort-c",
+      "socket-sort-a",
+    ]);
+    expect(withAudio.total).toBe(2);
+
+    const ranged = await client.request("asset.list", {
+      filename: "socket-sort-",
+      durationMinMs: 1_000,
+      durationMaxMs: 5_000,
+    });
+    expect(ranged.assets.map((asset) => asset.id)).toEqual([
+      "socket-sort-b",
+      "socket-sort-a",
+    ]);
+    expect(ranged.total).toBe(2);
+
+    const firstPage = await client.request("asset.list", {
+      filename: "socket-sort-",
+      sort: "filename_asc",
+      limit: 2,
+    });
+    expect(firstPage.assets.map((asset) => asset.id)).toEqual([
+      "socket-sort-b",
+      "socket-sort-a",
+    ]);
+    expect(firstPage.nextCursor).not.toBeNull();
+    expect(firstPage.total).toBe(3);
+
+    const mismatched = await expectAgentError(
+      client.request("asset.list", {
+        filename: "socket-sort-",
+        sort: "createdAt_desc",
+        limit: 2,
+        cursor: firstPage.nextCursor ?? "",
+      }),
+      "VALIDATION_ERROR",
+    );
+    expect(mismatched.issues?.[0]?.path).toEqual(["cursor"]);
   });
 
   it("starts and cancels a render job without starting another worker", async () => {

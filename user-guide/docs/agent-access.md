@@ -82,12 +82,13 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 
 ### 素材の検索
 
-`kakeai_asset_list` は素材を検索し、`{ assets, nextCursor }` の 1 ページを返します。
+`kakeai_asset_list` は素材を検索し、`{ assets, nextCursor, total }` の 1 ページを返します。`total` は同じ絞り込み条件に一致する素材の総数です。
 
 - `kind`・`status`（`ready` など）・`filename`（大文字小文字を区別しない部分一致）・`tags`・`favorite` を組み合わせられます。
-- `tags` は `tagMode` で `and`（すべて含む、既定）と `or`（いずれかを含む）を明示します。
+- `tags` は `tagMode` で `and`（すべて含む、既定）と `or`（いずれかを含む）を明示します。タグは要素として照合し、ASCII の英字は大文字小文字を区別しません（`Summer` は `summer` に一致します）。
+- `hasAudio`（音声トラックの有無）と `durationMinMs` / `durationMaxMs`（長さの範囲）で絞り込めます。長さを持たない素材は範囲に一致しません。
 - `archived` は既定で `exclude`（アーカイブ済みを除外）です。`include` / `only` は明示したときだけ使います。
-- 返却順は `createdAt desc, id desc` で固定です。`limit` は既定 50、最大 100 です。`cursor` には前ページの `nextCursor` をそのまま渡します。カーソルは絞り込み条件ごとに意味を持つため、別の条件へ流用しません。
+- 返却順は `sort` で選べます（`createdAt_desc` が既定、`createdAt_asc`、`filename_asc`、`duration_asc`）。`limit` は既定 50、最大 100 です。`cursor` には前ページの `nextCursor` をそのまま渡します。カーソルは絞り込み条件と並び順ごとに意味を持つため、別の条件や別の `sort` へ流用しません（別の `sort` で使うと `VALIDATION_ERROR` になります）。
 
 ### TTS（音声合成）
 

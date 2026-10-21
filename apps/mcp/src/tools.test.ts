@@ -92,7 +92,12 @@ describe("MCP tool catalog", () => {
     expect(assetList?.inputSchema.properties).toHaveProperty("tagMode");
     expect(assetList?.inputSchema.properties).toHaveProperty("archived");
     expect(assetList?.inputSchema.properties).toHaveProperty("cursor");
+    expect(assetList?.inputSchema.properties).toHaveProperty("sort");
+    expect(assetList?.inputSchema.properties).toHaveProperty("hasAudio");
+    expect(assetList?.inputSchema.properties).toHaveProperty("durationMinMs");
+    expect(assetList?.inputSchema.properties).toHaveProperty("durationMaxMs");
     expect(assetList?.outputSchema.properties).toHaveProperty("nextCursor");
+    expect(assetList?.outputSchema.properties).toHaveProperty("total");
     const validate = operationToolEntries.find(
       (entry) => entry.operation === "script.validate",
     );

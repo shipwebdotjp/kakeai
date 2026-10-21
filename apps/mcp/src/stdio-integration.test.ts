@@ -228,7 +228,7 @@ beforeAll(async () => {
     }),
     "asset.list": (input) => {
       assetListInput = input;
-      return { assets: [fixtureAsset()], nextCursor: "cursor-2" };
+      return { assets: [fixtureAsset()], nextCursor: "cursor-2", total: 1 };
     },
     "composition.create": () => ({ composition: fixtureComposition() }),
     "composition.publish": (input) => {
@@ -390,6 +390,10 @@ describe("MCP stdio server against a real local socket", () => {
       tagMode: "or",
       favorite: true,
       archived: "include",
+      hasAudio: true,
+      durationMinMs: 0,
+      durationMaxMs: 60_000,
+      sort: "duration_asc",
       limit: 1,
     } as const;
     const result = await client.callTool({
@@ -401,9 +405,11 @@ describe("MCP stdio server against a real local socket", () => {
     const page = result.structuredContent as {
       assets: Array<{ id: string }>;
       nextCursor: string | null;
+      total: number;
     };
     expect(page.assets.map((asset) => asset.id)).toEqual([fixtureAsset().id]);
     expect(page.nextCursor).toBe("cursor-2");
+    expect(page.total).toBe(1);
   });
 
   it("returns stable operation codes through MCP", async () => {

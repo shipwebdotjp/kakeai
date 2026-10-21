@@ -157,9 +157,51 @@ function tagQueryValues(value: unknown): string[] | undefined {
   return tags.length > 0 ? tags : [""];
 }
 
+/**
+ * Turns a query value into a boolean. Anything that is not `true` / `false`
+ * is passed through unchanged so the contract schema reports it as an
+ * invalid value.
+ */
+function booleanQueryValue(value: unknown): unknown {
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return value;
+}
+
+/**
+ * Turns a query value into an integer. Only a plain decimal integer is
+ * accepted; other forms are passed through unchanged so the contract schema
+ * reports them as invalid values.
+ */
+function integerQueryValue(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const text = value.trim();
+  if (!/^-?\d+$/u.test(text)) {
+    return value;
+  }
+  const parsed = Number(text);
+  // A value that cannot be represented exactly is left to the schema so it is
+  // rejected instead of silently rounded.
+  return Number.isSafeInteger(parsed) ? parsed : value;
+}
+
 function parseAssetListQuery(req: Request) {
   const raw: Record<string, unknown> = {};
-  for (const key of ["kind", "status", "filename", "tagMode", "archived", "cursor"] as const) {
+  for (const key of [
+    "kind",
+    "status",
+    "filename",
+    "tagMode",
+    "archived",
+    "cursor",
+    "sort",
+  ] as const) {
     const value = firstQueryValue(req.query[key]);
     if (value !== undefined) {
       raw[key] = value;
@@ -171,19 +213,17 @@ function parseAssetListQuery(req: Request) {
   if (tags !== undefined) {
     raw.tags = tags;
   }
-  const favorite = firstQueryValue(req.query.favorite);
-  if (favorite !== undefined) {
-    if (favorite === "true") {
-      raw.favorite = true;
-    } else if (favorite === "false") {
-      raw.favorite = false;
-    } else {
-      raw.favorite = favorite;
+  for (const key of ["favorite", "hasAudio"] as const) {
+    const value = firstQueryValue(req.query[key]);
+    if (value !== undefined) {
+      raw[key] = booleanQueryValue(value);
     }
   }
-  const limit = firstQueryValue(req.query.limit);
-  if (limit !== undefined) {
-    raw.limit = typeof limit === "string" && limit.trim().length > 0 ? Number(limit) : limit;
+  for (const key of ["limit", "durationMinMs", "durationMaxMs"] as const) {
+    const value = firstQueryValue(req.query[key]);
+    if (value !== undefined) {
+      raw[key] = integerQueryValue(value);
+    }
   }
 
   return parseBody(assetListQuerySchema, raw);

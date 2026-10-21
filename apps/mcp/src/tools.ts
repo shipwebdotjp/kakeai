@@ -60,7 +60,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "script.edit":
     "操作コアの ScriptOperation 配列を適用し、新しい台本版を作成する。`baseScriptVersionId` が current と一致している必要があり、`requestId` は再送を冪等にする。",
   "asset.list":
-    "素材を検索して `{ assets, nextCursor }` の1ページを返す。`kind`・`status`・`filename`（部分一致）・`tags`（`tagMode` で AND / OR、既定 `and`）・`favorite`・`archived`（既定 `exclude`）を組み合わせ、`createdAt desc, id desc` 固定順で `limit`（最大100）件ずつページングする。続きを取得するときは受け取った `nextCursor` を `cursor` に渡す（`nextCursor` が null なら最終ページ）。",
+    "素材を検索して `{ assets, nextCursor, total }` の1ページを返す。`kind`・`status`・`filename`（部分一致）・`tags`（`tagMode` で AND / OR、既定 `and`）・`favorite`・`archived`（既定 `exclude`）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせ、`sort`（既定 `createdAt_desc`）で `limit`（最大100）件ずつページングする。`total` は絞り込み条件に一致する件数。続きを取得するときは受け取った `nextCursor` を `cursor` に渡す（`nextCursor` が null なら最終ページ）。`sort` を変えると `cursor` は無効になるので、並べ替えたら先頭から取得し直す。",
   "asset.get": "素材 1 件を返す。",
   "asset.import":
     "ローカルパスの素材を取り込み、jobId を返す。完了状態は job_wait または job.get で確認する。",

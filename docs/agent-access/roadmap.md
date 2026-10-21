@@ -62,7 +62,8 @@ B1 → B2 → B3 → B4 の順で実装する。
 
 ### B4 素材検索の拡張（R2-1）
 
-- タグは `Asset.tagsJson` のまま維持し、DB 側のクエリで絞り込む。タグ一致は要素の完全一致とし、SQLite の LIKE の性質から ASCII タグは大文字小文字を区別しないものとして契約に固定する。
+- 状態: 完了。タグの絞り込みは `Asset.tagsJson` に対する DB 側のクエリへ移し、`tagsJson` のまま維持して索引化は行わない。タグ一致は要素の完全一致とし、SQLite の LIKE の性質から ASCII タグは大文字小文字を区別しないものとして契約に固定した（`LIKE` のワイルドカード `_` と `%` を含むタグは、その位置がワイルドカードになる）。検索契約に `sort`（`createdAt_desc` 既定 / `createdAt_asc` / `filename_asc` / `duration_asc`）、`hasAudio`、`durationMinMs` / `durationMaxMs`、一致件数 `total` を追加し、カーソルはソート列と `id` を含む。ソートを変更すると旧カーソルは `VALIDATION_ERROR` とする。HTTP API、ローカルソケット、MCP、CLI は同じ契約を使い続ける。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
+- タグは `Asset.tagsJson` のまま維持し、DB 側のクエリで絞り込む。タグ一致は要素の完全一致とし、SQLite の LIKE の性質から ASCII タグは大文字小文字を区別しないものとして契約に固定する（`LIKE` のワイルドカード `_` と `%` を含むタグは、その位置がワイルドカードになる）。
 - 検索契約に `sort`（`createdAt_desc` 既定 / `createdAt_asc` / `filename_asc` / `duration_asc`）、`hasAudio`、`durationMinMs` / `durationMaxMs` を追加する。ページには一致件数 `total` を返す。
 - カーソルはソート列を含める。ソートを変更すると旧カーソルは `VALIDATION_ERROR` とする。ソートは（キー, id）の二段で固定し、同値時も重複・欠落を起こさない。
 - HTTP API、ローカルソケット、MCP、CLI は同じ契約を使い続ける。
@@ -98,7 +99,7 @@ A9 完了時点で認識している制約である。B1〜B4 の完了で大部
 | ソケットの `AGENT_PROTOCOL_VERSION` は `1` のまま | 破壊的変更時に旧クライアントとの互換性を判定できない | B1 で解消（機構のみ。版は破壊的変更時に上げる） |
 | `tts.create` などはタイムアウト後の再送で Job が重複し得る | 二重生成・課金・待機の無駄 | B2 で解消。任意の `requestId` で冪等台帳に記録し、再送しても Job が増えない |
 | ソケットのフレームキューと接続数に上限がない | 大量要求時にメモリが膨らむ | B3 で解消。接続ごとの未処理フレーム数と同時接続数に上限を設け、超過は `AGENT_BACKPRESSURE` で返す |
-| `asset.list` のタグ検索は SQLite の JSON をメモリで後フィルタする | タグ条件が厳しいとページ取得で走査が増える | B4（DB 側クエリ化。索引化は保留） |
+| `asset.list` のタグ検索は SQLite の JSON をメモリで後フィルタする | タグ条件が厳しいとページ取得で走査が増える | B4 で解消。DB 側のクエリで絞り込む（索引化は保留） |
 | `script.edit`/`validate` は毎回ライブラリ全体の Asset・Face Set・Character を読み込む | 大規模ライブラリで編集のたびにコストがかかる | 保留 |
 | `job.list` はレンダー Job のみ | TTS・取り込み Job の一覧や一括待機ができない | 保留 |
 | `asset.import` は同一ユーザーが読める任意のローカルパスを受け付ける | プロンプト注入時に意図しないファイルを複製し得る | 保留 |

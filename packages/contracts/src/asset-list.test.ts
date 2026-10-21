@@ -11,6 +11,7 @@ describe("assetListQuerySchema", () => {
     expect(assetListQuerySchema.parse({})).toEqual({
       tagMode: "and",
       archived: "exclude",
+      sort: "createdAt_desc",
       limit: ASSET_LIST_DEFAULT_LIMIT,
     });
     expect(ASSET_LIST_DEFAULT_LIMIT).toBe(50);
@@ -27,6 +28,10 @@ describe("assetListQuerySchema", () => {
         tagMode: "or",
         favorite: true,
         archived: "include",
+        hasAudio: true,
+        durationMinMs: 0,
+        durationMaxMs: 120_000,
+        sort: "duration_asc",
         cursor: "cursor-1",
         limit: 10,
       }),
@@ -38,6 +43,10 @@ describe("assetListQuerySchema", () => {
       tagMode: "or",
       favorite: true,
       archived: "include",
+      hasAudio: true,
+      durationMinMs: 0,
+      durationMaxMs: 120_000,
+      sort: "duration_asc",
       cursor: "cursor-1",
       limit: 10,
     });
@@ -56,20 +65,52 @@ describe("assetListQuerySchema", () => {
     expect(assetListQuerySchema.safeParse({ filename: "   " }).success).toBe(false);
     expect(assetListQuerySchema.safeParse({ tags: [""] }).success).toBe(false);
   });
+
+  it("accepts every documented sort and rejects unknown ones", () => {
+    for (const sort of ["createdAt_desc", "createdAt_asc", "filename_asc", "duration_asc"]) {
+      expect(assetListQuerySchema.safeParse({ sort }).success).toBe(true);
+    }
+    expect(assetListQuerySchema.safeParse({ sort: "createdAt" }).success).toBe(false);
+    expect(assetListQuerySchema.safeParse({ sort: "" }).success).toBe(false);
+  });
+
+  it("accepts the metadata filters and rejects invalid durations", () => {
+    expect(assetListQuerySchema.safeParse({ hasAudio: false }).success).toBe(true);
+    expect(assetListQuerySchema.safeParse({ durationMinMs: 0 }).success).toBe(true);
+    expect(assetListQuerySchema.safeParse({ durationMaxMs: 10 }).success).toBe(true);
+    expect(assetListQuerySchema.safeParse({ durationMinMs: -1 }).success).toBe(false);
+    expect(assetListQuerySchema.safeParse({ durationMaxMs: -1 }).success).toBe(false);
+    expect(assetListQuerySchema.safeParse({ durationMinMs: 1.5 }).success).toBe(false);
+  });
+
+  it("rejects an inverted duration range", () => {
+    const inverted = assetListQuerySchema.safeParse({
+      durationMinMs: 9_000,
+      durationMaxMs: 1_000,
+    });
+    expect(inverted.success).toBe(false);
+    expect(assetListQuerySchema.safeParse({ durationMinMs: 1_000, durationMaxMs: 1_000 }).success).toBe(
+      true,
+    );
+  });
 });
 
 describe("assetListPageSchema", () => {
-  it("requires an explicit next cursor", () => {
-    expect(assetListPageSchema.parse({ assets: [], nextCursor: null })).toEqual({
+  it("requires an explicit next cursor and the total count", () => {
+    expect(assetListPageSchema.parse({ assets: [], nextCursor: null, total: 0 })).toEqual({
       assets: [],
       nextCursor: null,
+      total: 0,
     });
     expect(
-      assetListPageSchema.safeParse({ assets: [], nextCursor: "cursor-2" }).success,
+      assetListPageSchema.safeParse({ assets: [], nextCursor: "cursor-2", total: 3 }).success,
     ).toBe(true);
-    expect(assetListPageSchema.safeParse({ assets: [] }).success).toBe(false);
+    expect(assetListPageSchema.safeParse({ assets: [], nextCursor: null }).success).toBe(false);
     expect(
-      assetListPageSchema.safeParse({ assets: [], nextCursor: null, total: 0 }).success,
+      assetListPageSchema.safeParse({ assets: [], nextCursor: null, total: -1 }).success,
+    ).toBe(false);
+    expect(
+      assetListPageSchema.safeParse({ assets: [], nextCursor: null, total: 1.5 }).success,
     ).toBe(false);
   });
 });

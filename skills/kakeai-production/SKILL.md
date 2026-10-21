@@ -117,12 +117,15 @@ changes are the user's job; agents only copy into the script.
 - Search with `asset.list`:
   - `kind` (`image` / `video` / `audio`, see `schema.get.assetKinds`),
     `status` (use `ready`), `filename` (case-insensitive substring),
-    `tags` + `tagMode` (`and` = all, `or` = any), `favorite`.
+    `tags` + `tagMode` (`and` = all, `or` = any), `favorite`, `hasAudio`,
+    `durationMinMs` / `durationMaxMs`.
   - `archived` defaults to `exclude`. Pass `include` / `only` only when the user
     asks for archived material.
   - Results are newest-first and paginated: `limit` defaults to 50 and is capped
     at 100. Pass the returned `nextCursor` back unchanged; a cursor belongs to
-    the filter set that produced it.
+    the filter set and the `sort` that produced it, so start over from the
+    first page after changing the order. `total` is the number of assets that
+    match the filters.
 - Import with `asset.import` using an absolute local path (the agent shares the
   user's machine and permissions). It returns `{ asset, jobId, deduplicated }`;
   `jobId: null` means identical bytes already existed.

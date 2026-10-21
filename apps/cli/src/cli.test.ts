@@ -253,13 +253,17 @@ describe("CLI invocation", () => {
       tagMode: "or",
       favorite: true,
       archived: "include",
+      hasAudio: true,
+      durationMinMs: 0,
+      durationMaxMs: 60_000,
+      sort: "duration_asc",
       limit: 1,
     };
     let received: unknown;
     const captured = capture((operation, input) => {
       expect(operation).toBe("asset.list");
       received = input;
-      return { assets: [fixtureAsset()], nextCursor: "cursor-2" };
+      return { assets: [fixtureAsset()], nextCursor: "cursor-2", total: 12 };
     });
     expect(
       await runCli(["asset.list", "--input", JSON.stringify(filters)], captured.io),
@@ -269,6 +273,7 @@ describe("CLI invocation", () => {
     expect(JSON.parse(captured.stdout())).toEqual({
       assets: [fixtureAsset()],
       nextCursor: "cursor-2",
+      total: 12,
     });
   });
 

@@ -3,6 +3,7 @@ import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   ASSET_LIST_MAX_LIMIT,
+  ASSET_LIST_SORT_VALUES,
   RENDITION_PURPOSE,
   SNAPSHOT_SCHEMA_VERSION,
   assetIngestJobSnapshotSchema,
@@ -13,11 +14,16 @@ import {
   type AssetKindName,
   type AssetListPage,
   type AssetListQuery,
+  type AssetListSort,
 } from "@kakeai/contracts";
 import type { LimitsConfig } from "../config.ts";
 import { deserializeContent } from "../domain/content-json.ts";
 import { bigIntToSafeNumber, toAsset } from "../dto/mappers.ts";
-import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
+import type {
+  Asset as AssetRow,
+  Prisma,
+  PrismaClient,
+} from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError } from "../http/validation.ts";
 import { allowedMediaTypes, detectMedia } from "../media/kind.ts";
@@ -272,10 +278,27 @@ export async function ingestUpload(
   }
 }
 
-interface AssetCursorPosition {
-  createdAt: Date;
-  id: string;
-}
+/**
+ * The position of a page boundary. It carries the sort key of the last row of
+ * the previous page plus the row id, and the sort it was produced for: a
+ * cursor may only be replayed with the same sort.
+ */
+type AssetCursorPosition =
+  | { sort: "createdAt_desc" | "createdAt_asc"; createdAt: Date; id: string }
+  | { sort: "filename_asc"; filename: string; id: string }
+  | { sort: "duration_asc"; durationMs: number | null; id: string };
+
+/**
+ * Every sort is a stable two-part order (sort key, then id) so that rows
+ * sharing the key never repeat or disappear between pages. `duration_asc`
+ * puts rows without a known duration last.
+ */
+const ASSET_LIST_ORDER_BY: Record<AssetListSort, Prisma.AssetOrderByWithRelationInput[]> = {
+  createdAt_desc: [{ createdAt: "desc" }, { id: "desc" }],
+  createdAt_asc: [{ createdAt: "asc" }, { id: "asc" }],
+  filename_asc: [{ originalFilename: "asc" }, { id: "asc" }],
+  duration_asc: [{ durationMs: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+};
 
 function invalidCursor(): ApiError {
   return validationError([
@@ -287,18 +310,47 @@ function invalidCursor(): ApiError {
   ]);
 }
 
-function encodeAssetCursor(position: AssetCursorPosition): string {
-  return Buffer.from(
-    JSON.stringify({
-      v: 1,
-      createdAt: position.createdAt.toISOString(),
-      id: position.id,
-    }),
-    "utf8",
-  ).toString("base64url");
+/**
+ * The cursor was produced for another sort. Replaying it would silently
+ * reinterpret the page, so the caller has to start over with the same sort.
+ */
+function cursorSortMismatch(): ApiError {
+  return validationError([
+    {
+      path: ["cursor"],
+      code: "custom",
+      message: "cursor は別の sort で取得されたものです。sort を揃えるか、先頭から取得し直してください。",
+    },
+  ]);
 }
 
-function decodeAssetCursor(cursor: string): AssetCursorPosition {
+function encodeAssetCursor(position: AssetCursorPosition): string {
+  let payload: Record<string, unknown>;
+  switch (position.sort) {
+    case "filename_asc":
+      payload = { v: 2, sort: position.sort, filename: position.filename, id: position.id };
+      break;
+    case "duration_asc":
+      payload = {
+        v: 2,
+        sort: position.sort,
+        durationMs: position.durationMs,
+        id: position.id,
+      };
+      break;
+    default:
+      payload = {
+        v: 2,
+        sort: position.sort,
+        createdAt: position.createdAt.toISOString(),
+        id: position.id,
+      };
+      break;
+  }
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+function decodeAssetCursor(cursor: string, sort: AssetListSort): AssetCursorPosition {
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
@@ -309,29 +361,94 @@ function decodeAssetCursor(cursor: string): AssetCursorPosition {
     throw invalidCursor();
   }
   const record = parsed as Record<string, unknown>;
+  if (record.v !== 2 || typeof record.id !== "string" || record.id.length === 0) {
+    throw invalidCursor();
+  }
+  const cursorSort = record.sort;
   if (
-    record.v !== 1 ||
-    typeof record.createdAt !== "string" ||
-    typeof record.id !== "string" ||
-    record.id.length === 0
+    typeof cursorSort !== "string" ||
+    !ASSET_LIST_SORT_VALUES.includes(cursorSort as AssetListSort)
   ) {
+    throw invalidCursor();
+  }
+  if (cursorSort !== sort) {
+    throw cursorSortMismatch();
+  }
+  if (sort === "filename_asc") {
+    if (typeof record.filename !== "string") {
+      throw invalidCursor();
+    }
+    return { sort, filename: record.filename, id: record.id };
+  }
+  if (sort === "duration_asc") {
+    const durationMs = record.durationMs;
+    if (
+      durationMs !== null &&
+      (typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < 0)
+    ) {
+      throw invalidCursor();
+    }
+    return { sort, durationMs, id: record.id };
+  }
+  if (typeof record.createdAt !== "string") {
     throw invalidCursor();
   }
   const createdAt = new Date(record.createdAt);
   if (Number.isNaN(createdAt.getTime()) || createdAt.toISOString() !== record.createdAt) {
     throw invalidCursor();
   }
-  return { createdAt, id: record.id };
+  return { sort, createdAt, id: record.id };
 }
 
 function cursorWhere(position: AssetCursorPosition): Prisma.AssetWhereInput {
-  // Keyset pagination over the fixed order `createdAt desc, id desc`.
-  return {
-    OR: [
-      { createdAt: { lt: position.createdAt } },
-      { createdAt: position.createdAt, id: { lt: position.id } },
-    ],
-  };
+  // Keyset pagination over the exact order the sort produced.
+  switch (position.sort) {
+    case "createdAt_desc":
+      return {
+        OR: [
+          { createdAt: { lt: position.createdAt } },
+          { createdAt: position.createdAt, id: { lt: position.id } },
+        ],
+      };
+    case "createdAt_asc":
+      return {
+        OR: [
+          { createdAt: { gt: position.createdAt } },
+          { createdAt: position.createdAt, id: { gt: position.id } },
+        ],
+      };
+    case "filename_asc":
+      return {
+        OR: [
+          { originalFilename: { gt: position.filename } },
+          { originalFilename: position.filename, id: { gt: position.id } },
+        ],
+      };
+    case "duration_asc":
+      // Rows without a known duration come last, so they follow every row with
+      // a duration and are ordered by id among themselves.
+      return position.durationMs === null
+        ? { durationMs: null, id: { gt: position.id } }
+        : {
+            OR: [
+              { durationMs: { gt: position.durationMs } },
+              { durationMs: position.durationMs, id: { gt: position.id } },
+              { durationMs: null },
+            ],
+          };
+  }
+}
+
+function cursorPositionOf(row: AssetRow, sort: AssetListSort): AssetCursorPosition {
+  switch (sort) {
+    case "createdAt_desc":
+    case "createdAt_asc":
+      return { sort, createdAt: row.createdAt, id: row.id };
+    case "filename_asc":
+      return { sort, filename: row.originalFilename, id: row.id };
+    case "duration_asc":
+      return { sort, durationMs: row.durationMs, id: row.id };
+  }
 }
 
 function archivedWhere(mode: AssetListQuery["archived"]): Prisma.AssetWhereInput {
@@ -344,32 +461,39 @@ function archivedWhere(mode: AssetListQuery["archived"]): Prisma.AssetWhereInput
   return {};
 }
 
-function matchesTagFilter(
-  assetTags: readonly string[],
-  query: AssetListQuery,
-): boolean {
-  const wanted = query.tags ?? [];
-  if (wanted.length === 0) {
-    return true;
+function durationWhere(query: AssetListQuery): Prisma.AssetWhereInput {
+  if (query.durationMinMs === undefined && query.durationMaxMs === undefined) {
+    return {};
   }
-  const stored = new Set(assetTags);
-  return query.tagMode === "and"
-    ? wanted.every((tag) => stored.has(tag))
-    : wanted.some((tag) => stored.has(tag));
+  return {
+    durationMs: {
+      ...(query.durationMinMs === undefined ? {} : { gte: query.durationMinMs }),
+      ...(query.durationMaxMs === undefined ? {} : { lte: query.durationMaxMs }),
+    },
+  };
 }
 
 /**
- * Asset library search. Filters are applied server-side, results are ordered by
- * `createdAt desc, id desc`, and the cursor is a keyset over that exact order so
- * rows with a shared `createdAt` never repeat or disappear between pages.
+ * The filter set of one search. It is used for the page and for the total
+ * count, so both always describe the same set of assets.
  */
-export async function searchAssets(
-  prisma: PrismaClient,
-  query: AssetListQuery,
-): Promise<AssetListPage> {
-  const limit = Math.min(query.limit, ASSET_LIST_MAX_LIMIT);
-  const start = query.cursor === undefined ? null : decodeAssetCursor(query.cursor);
-  const filters: Prisma.AssetWhereInput = {
+function assetFilters(query: AssetListQuery): Prisma.AssetWhereInput {
+  const wanted = query.tags ?? [];
+  const andConditions: Prisma.AssetWhereInput[] = [];
+  if (wanted.length > 0) {
+    // A tag matches when it appears as a quoted element of the stored tag
+    // array, so `bgm` never matches `bgm_loop`. The comparison goes through
+    // SQLite's LIKE, which ignores the case of ASCII letters and reads `_`
+    // and `%` inside a tag as wildcards.
+    const tagConditions = wanted.map((tag) => ({
+      tagsJson: { contains: JSON.stringify(tag) },
+    }));
+    andConditions.push(
+      query.tagMode === "or" ? { OR: tagConditions } : { AND: tagConditions },
+    );
+  }
+
+  return {
     ...archivedWhere(query.archived),
     ...(query.kind === undefined ? {} : { kind: query.kind }),
     ...(query.status === undefined ? {} : { status: query.status }),
@@ -379,51 +503,47 @@ export async function searchAssets(
     ...(query.favorite === undefined
       ? {}
       : { favoritedAt: query.favorite ? { not: null } : null }),
+    ...(query.hasAudio === undefined ? {} : { hasAudio: query.hasAudio }),
+    ...durationWhere(query),
+    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
   };
+}
 
-  const hasTagFilter = (query.tags?.length ?? 0) > 0;
-  // Without a tag filter one extra row is enough to know whether another page
-  // exists. With tags we may need to scan rows that do not match in memory.
-  const batchSize = hasTagFilter ? Math.max(limit + 1, 100) : limit + 1;
-  const assets: Asset[] = [];
-  let scanned: AssetCursorPosition | null = start;
-  let hasMore = false;
+/**
+ * Asset library search. Every filter runs in the database query, the result is
+ * ordered by the requested sort, and the cursor is a keyset over that exact
+ * order so rows that share the sort key never repeat or disappear between
+ * pages. `total` counts the rows that match the same filter set.
+ */
+export async function searchAssets(
+  prisma: PrismaClient,
+  query: AssetListQuery,
+): Promise<AssetListPage> {
+  const limit = Math.min(query.limit, ASSET_LIST_MAX_LIMIT);
+  const sort = query.sort;
+  const filters = assetFilters(query);
+  const where: Prisma.AssetWhereInput =
+    query.cursor === undefined
+      ? filters
+      : { AND: [filters, cursorWhere(decodeAssetCursor(query.cursor, sort))] };
 
-  for (;;) {
-    const where: Prisma.AssetWhereInput =
-      scanned === null ? filters : { AND: [filters, cursorWhere(scanned)] };
-    const rows = await prisma.asset.findMany({
+  const [rows, total] = await Promise.all([
+    prisma.asset.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: batchSize,
-    });
-    if (rows.length === 0) {
-      break;
-    }
-    for (const row of rows) {
-      scanned = { createdAt: row.createdAt, id: row.id };
-      const asset = toAsset(row);
-      if (!matchesTagFilter(asset.tags, query)) {
-        continue;
-      }
-      if (assets.length === limit) {
-        hasMore = true;
-        break;
-      }
-      assets.push(asset);
-    }
-    if (hasMore || rows.length < batchSize) {
-      break;
-    }
-  }
+      orderBy: ASSET_LIST_ORDER_BY[sort],
+      take: limit + 1,
+    }),
+    prisma.asset.count({ where: filters }),
+  ]);
 
-  const last = assets.at(-1);
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const last = pageRows.at(-1);
   return {
-    assets,
+    assets: pageRows.map((row) => toAsset(row)),
     nextCursor:
-      hasMore && last !== undefined
-        ? encodeAssetCursor({ createdAt: new Date(last.createdAt), id: last.id })
-        : null,
+      hasMore && last !== undefined ? encodeAssetCursor(cursorPositionOf(last, sort)) : null,
+    total,
   };
 }
 

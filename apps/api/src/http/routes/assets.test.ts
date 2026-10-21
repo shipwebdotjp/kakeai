@@ -31,6 +31,8 @@ async function seed(input: {
   tags?: string[];
   favorite?: boolean;
   archived?: boolean;
+  hasAudio?: boolean;
+  durationMs?: number | null;
   createdAt?: Date;
 }): Promise<void> {
   await prisma.asset.create({
@@ -44,6 +46,8 @@ async function seed(input: {
       mediaType: "image/png",
       byteSize: BigInt(10),
       sha256: `sha-route-${randomUUID()}`,
+      durationMs: input.durationMs ?? null,
+      hasAudio: input.hasAudio ?? false,
       tagsJson:
         input.tags === undefined || input.tags.length === 0
           ? null
@@ -97,6 +101,22 @@ beforeAll(async () => {
     kind: "audio",
     tags: ["背景"],
     createdAt: new Date("2026-01-04T00:00:00.000Z"),
+  });
+  await seed({
+    id: "route-e",
+    filename: "media-short.mp4",
+    kind: "video",
+    hasAudio: true,
+    durationMs: 1_000,
+    createdAt: new Date("2026-01-05T00:00:00.000Z"),
+  });
+  await seed({
+    id: "route-f",
+    filename: "media-long.mp4",
+    kind: "video",
+    hasAudio: true,
+    durationMs: 9_000,
+    createdAt: new Date("2026-01-06T00:00:00.000Z"),
   });
 
   const app = express();
@@ -195,6 +215,13 @@ describe("assets route search", () => {
       "/assets?limit=0",
       "/assets?limit=abc",
       "/assets?favorite=maybe",
+      "/assets?hasAudio=maybe",
+      "/assets?durationMinMs=-1",
+      "/assets?durationMaxMs=abc",
+      "/assets?durationMinMs=1.5",
+      "/assets?durationMinMs=9000&durationMaxMs=1000",
+      "/assets?durationMaxMs=9223372036854775807",
+      "/assets?sort=createdAt",
       "/assets?tag=",
       "/assets?cursor=not-a-cursor",
     ]) {
@@ -203,5 +230,59 @@ describe("assets route search", () => {
       const body = (await res.json()) as { error: { code: string } };
       expect(body.error.code).toBe("VALIDATION_ERROR");
     }
+  });
+
+  it("accepts the sort and metadata filters and returns the total count", async () => {
+    const sorted = (await (await get("/assets?filename=media-&sort=filename_asc")).json()) as {
+      data: AssetListPage;
+    };
+    expect(sorted.data.assets.map((asset) => asset.id)).toEqual(["route-f", "route-e"]);
+    expect(sorted.data.total).toBe(2);
+
+    const byDuration = (await (
+      await get("/assets?filename=media-&sort=duration_asc")
+    ).json()) as { data: AssetListPage };
+    expect(byDuration.data.assets.map((asset) => asset.id)).toEqual(["route-e", "route-f"]);
+
+    const withAudio = (await (
+      await get("/assets?filename=media-&hasAudio=true")
+    ).json()) as { data: AssetListPage };
+    expect(withAudio.data.assets.map((asset) => asset.id)).toEqual(["route-f", "route-e"]);
+    expect(withAudio.data.total).toBe(2);
+
+    const ranged = (await (
+      await get("/assets?filename=media-&durationMinMs=2000&durationMaxMs=10000")
+    ).json()) as { data: AssetListPage };
+    expect(ranged.data.assets.map((asset) => asset.id)).toEqual(["route-f"]);
+    expect(ranged.data.total).toBe(1);
+  });
+
+  it("keeps the total count stable across pages of one filter set", async () => {
+    const first = (await (await get("/assets?filename=route-&limit=2")).json()) as {
+      data: AssetListPage;
+    };
+    expect(first.data.total).toBe(3);
+
+    const second = (await (
+      await get(
+        `/assets?filename=route-&limit=2&cursor=${encodeURIComponent(first.data.nextCursor ?? "")}`,
+      )
+    ).json()) as { data: AssetListPage };
+    expect(second.data.total).toBe(3);
+  });
+
+  it("rejects a cursor that was produced for another sort", async () => {
+    const first = (await (
+      await get("/assets?filename=route-&sort=createdAt_desc&limit=1")
+    ).json()) as { data: AssetListPage };
+    expect(first.data.nextCursor).not.toBeNull();
+
+    const res = await get(
+      `/assets?filename=route-&sort=filename_asc&limit=1&cursor=${encodeURIComponent(first.data.nextCursor ?? "")}`,
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { code: string; details: { issues: unknown[] } } };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details.issues[0]).toMatchObject({ path: ["cursor"] });
   });
 });
