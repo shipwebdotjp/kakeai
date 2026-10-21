@@ -173,6 +173,26 @@ describe("searchAssets", () => {
       "tags-a.png",
     ]);
     expect(either.total).toBe(3);
+
+    // AND needs every tag, so one missing tag empties the result.
+    const andMissing = await searchAssets(
+      prisma,
+      query({ filename: "tags-", tags: ["filter-x", "filter-missing"] }),
+    );
+    expect(andMissing.assets).toHaveLength(0);
+    expect(andMissing.total).toBe(0);
+
+    // OR needs one tag, so a missing tag does not change the result.
+    const orMissing = await searchAssets(
+      prisma,
+      query({
+        filename: "tags-",
+        tags: ["filter-x", "filter-missing"],
+        tagMode: "or",
+      }),
+    );
+    expect(orMissing.assets.map((asset) => asset.id).sort()).toEqual(["tag-a", "tag-b"]);
+    expect(orMissing.total).toBe(2);
   });
 
   it("matches ASCII tags case-insensitively and non-ASCII tags exactly", async () => {
@@ -211,30 +231,68 @@ describe("searchAssets", () => {
     expect(partial.total).toBe(0);
   });
 
-  it("reads LIKE wildcards inside a tag as wildcards", async () => {
-    // The tag comparison goes through SQLite's LIKE, which has no escape
-    // clause in the Prisma query API. `_` matches any single character and
-    // `%` matches any sequence, so a tag that contains them also matches
-    // other tags. This is the documented behaviour of the contract.
-    await seed({ id: "wild-underscore", filename: "wild-underscore.png", tags: ["a_b"] });
-    await seed({ id: "wild-other", filename: "wild-other.png", tags: ["axb"] });
-    await seed({ id: "wild-percent", filename: "wild-percent.png", tags: ["c%d"] });
-    await seed({ id: "wild-percent-other", filename: "wild-percent-other.png", tags: ["cXXd"] });
+  it("matches a tag as a whole element and never as a substring", async () => {
+    await seed({ id: "exact-loop", filename: "exact-loop.png", tags: ["bgm_loop"] });
+    await seed({ id: "exact-noloop", filename: "exact-noloop.png", tags: ["bgmxloop"] });
+    await seed({ id: "exact-plain", filename: "exact-plain.png", tags: ["bgm"] });
+
+    const loop = await searchAssets(
+      prisma,
+      query({ filename: "exact-", tags: ["bgm_loop"] }),
+    );
+    expect(loop.assets.map((asset) => asset.id)).toEqual(["exact-loop"]);
+    expect(loop.total).toBe(1);
+
+    // `bgm` is a prefix of `bgm_loop`, but a prefix is not an element.
+    const plain = await searchAssets(prisma, query({ filename: "exact-", tags: ["bgm"] }));
+    expect(plain.assets.map((asset) => asset.id)).toEqual(["exact-plain"]);
+    expect(plain.total).toBe(1);
+  });
+
+  it("treats % and _ inside a tag as literal characters", async () => {
+    await seed({ id: "literal-underscore", filename: "literal-underscore.png", tags: ["a_b"] });
+    await seed({ id: "literal-other", filename: "literal-other.png", tags: ["axb"] });
+    await seed({ id: "literal-percent", filename: "literal-percent.png", tags: ["c%d"] });
+    await seed({ id: "literal-percent-other", filename: "literal-percent-other.png", tags: ["cXXd"] });
+    await seed({ id: "literal-only-percent", filename: "literal-only-percent.png", tags: ["%"] });
+    await seed({ id: "literal-unrelated", filename: "literal-unrelated.png", tags: ["unrelated"] });
 
     const underscore = await searchAssets(
       prisma,
-      query({ filename: "wild-", tags: ["a_b"] }),
+      query({ filename: "literal-", tags: ["a_b"] }),
     );
-    expect(underscore.assets.map((asset) => asset.id)).toEqual([
-      "wild-underscore",
-      "wild-other",
-    ]);
+    expect(underscore.assets.map((asset) => asset.id)).toEqual(["literal-underscore"]);
+    expect(underscore.total).toBe(1);
 
-    const percent = await searchAssets(prisma, query({ filename: "wild-", tags: ["c%d"] }));
-    expect(percent.assets.map((asset) => asset.id)).toEqual([
-      "wild-percent-other",
-      "wild-percent",
-    ]);
+    const percent = await searchAssets(prisma, query({ filename: "literal-", tags: ["c%d"] }));
+    expect(percent.assets.map((asset) => asset.id)).toEqual(["literal-percent"]);
+    expect(percent.total).toBe(1);
+
+    // `%` is an ordinary character, so it only matches the tag `%` and never
+    // every asset that carries any tag.
+    const onlyPercent = await searchAssets(
+      prisma,
+      query({ filename: "literal-", tags: ["%"] }),
+    );
+    expect(onlyPercent.assets.map((asset) => asset.id)).toEqual(["literal-only-percent"]);
+    expect(onlyPercent.total).toBe(1);
+  });
+
+  it("matches a tag that contains a quote or a backslash exactly", async () => {
+    await seed({ id: "quoted-tag", filename: "quoted-tag.png", tags: ['x"ab'] });
+    await seed({ id: "quoted-other", filename: "quoted-other.png", tags: ["ab"] });
+    await seed({ id: "escaped-tag", filename: "escaped-tag.png", tags: ["a\\b"] });
+
+    const quoted = await searchAssets(prisma, query({ filename: "quoted-", tags: ["ab"] }));
+    expect(quoted.assets.map((asset) => asset.id)).toEqual(["quoted-other"]);
+    expect(quoted.total).toBe(1);
+
+    const escaped = await searchAssets(
+      prisma,
+      query({ filename: "escaped-", tags: ["a\\b"] }),
+    );
+    expect(escaped.assets.map((asset) => asset.id)).toEqual(["escaped-tag"]);
+    expect(escaped.total).toBe(1);
   });
 
   it("matches a case-insensitive filename substring, including Japanese", async () => {
@@ -313,6 +371,136 @@ describe("searchAssets", () => {
     expect(range.total).toBe(1);
   });
 
+  it("keeps the page order of every sort for a tag filter", async () => {
+    // The tag filter reads its ids in the order of the sort, so the order of
+    // a tag filtered page has to be the same as the order without the tag.
+    const createdAt = new Date("2026-06-01T00:00:00.000Z");
+    const later = new Date("2026-06-02T00:00:00.000Z");
+    const rows: AssetSeed[] = [
+      { id: "sorttag-a", filename: "sorttag-b.png", durationMs: 300, createdAt },
+      { id: "sorttag-b", filename: "sorttag-a.png", durationMs: null, createdAt },
+      { id: "sorttag-c", filename: "sorttag-d.png", durationMs: 100, createdAt },
+      { id: "sorttag-d", filename: "sorttag-c.png", durationMs: 200, createdAt },
+      { id: "sorttag-e", filename: "sorttag-f.png", durationMs: null, createdAt: later },
+      { id: "sorttag-f", filename: "sorttag-e.png", durationMs: 50, createdAt: later },
+    ];
+    for (const row of rows) {
+      await seed({ ...row, tags: ["sorttag"] });
+    }
+
+    const collectPages = async (input: Record<string, unknown>): Promise<string[]> => {
+      const collected: string[] = [];
+      let cursor: string | null = null;
+      for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+        const page = await searchAssets(
+          prisma,
+          query({ ...input, limit: 2, ...(cursor === null ? {} : { cursor }) }),
+        );
+        collected.push(...page.assets.map((asset) => asset.id));
+        if (page.nextCursor === null) {
+          break;
+        }
+        cursor = page.nextCursor;
+      }
+      return collected;
+    };
+
+    for (const sort of ["createdAt_desc", "createdAt_asc", "filename_asc", "duration_asc"] as const) {
+      const withTag = await collectPages({ filename: "sorttag-", sort, tags: ["sorttag"] });
+      const withoutTag = await collectPages({ filename: "sorttag-", sort });
+      expect(withTag, sort).toEqual(withoutTag);
+      expect(withTag, sort).toHaveLength(6);
+    }
+  });
+
+  it("applies the other filters to the tag id list as well", async () => {
+    // Every seeded asset carries the tag, so a tag filtered search has to
+    // return the same rows as the same search without the tag.
+    await seed({
+      id: "filter-a",
+      filename: "filter-a.png",
+      kind: "image",
+      status: "ready",
+      tags: ["filters"],
+      favorite: true,
+      hasAudio: true,
+      durationMs: 1_000,
+    });
+    await seed({
+      id: "filter-b",
+      filename: "filter-b.mp4",
+      kind: "video",
+      status: "ready",
+      tags: ["filters"],
+      durationMs: 5_000,
+    });
+    await seed({
+      id: "filter-c",
+      filename: "filter-c.png",
+      kind: "image",
+      status: "failed",
+      tags: ["filters"],
+      archived: true,
+    });
+    await seed({
+      id: "filter-d",
+      filename: "FILTER-d.PNG",
+      kind: "image",
+      status: "ready",
+      tags: ["filters"],
+      hasAudio: true,
+      durationMs: 2_000,
+    });
+
+    const filters: Record<string, unknown>[] = [
+      { filename: "filter-" },
+      { filename: "filter-", kind: "image" },
+      { filename: "filter-", status: "ready" },
+      { filename: "filter-d" },
+      { filename: "filter-", favorite: true },
+      { filename: "filter-", favorite: false },
+      { filename: "filter-", archived: "exclude" },
+      { filename: "filter-", archived: "include" },
+      { filename: "filter-", archived: "only" },
+      { filename: "filter-", hasAudio: true },
+      { filename: "filter-", hasAudio: false },
+      { filename: "filter-", durationMinMs: 1_500 },
+      { filename: "filter-", durationMaxMs: 2_500 },
+      { filename: "filter-", durationMinMs: 1_000, durationMaxMs: 5_000 },
+    ];
+
+    for (const filter of filters) {
+      const label = JSON.stringify(filter);
+      const withTag = await searchAssets(prisma, query({ ...filter, tags: ["filters"] }));
+      const withoutTag = await searchAssets(prisma, query(filter));
+      expect(withTag.assets.map((asset) => asset.id), label).toEqual(
+        withoutTag.assets.map((asset) => asset.id),
+      );
+      expect(withTag.total, label).toBe(withoutTag.total);
+    }
+
+    // Several tags in the `or` mode share the group: the other filters have to
+    // hold for every one of them.
+    await seed({
+      id: "filter-e",
+      filename: "filter-e.png",
+      kind: "image",
+      status: "ready",
+      tags: ["other"],
+      archived: true,
+    });
+    const either = await searchAssets(
+      prisma,
+      query({ filename: "filter-", tags: ["filters", "other"], tagMode: "or" }),
+    );
+    const single = await searchAssets(prisma, query({ filename: "filter-", tags: ["filters"] }));
+    expect(either.assets.map((asset) => asset.id)).toEqual(
+      single.assets.map((asset) => asset.id),
+    );
+    expect(either.assets.map((asset) => asset.id)).not.toContain("filter-e");
+    expect(either.total).toBe(single.total);
+  });
+
   it("counts the rows that match the same compound filter set", async () => {
     await seed({ id: "count-a", filename: "count-a.png", tags: ["count"], favorite: true });
     await seed({ id: "count-b", filename: "count-b.png", tags: ["count"] });
@@ -337,6 +525,123 @@ describe("searchAssets", () => {
     );
     expect(paged.total).toBe(2);
     expect(paged.nextCursor).not.toBeNull();
+  });
+
+  it("counts the rows that match the same compound filter set with several tags", async () => {
+    await seed({ id: "compound-a", filename: "compound-a.png", tags: ["c", "d"], favorite: true });
+    await seed({ id: "compound-b", filename: "compound-b.png", tags: ["c", "d"] });
+    await seed({ id: "compound-c", filename: "compound-c.png", tags: ["c"] });
+    await seed({ id: "compound-d", filename: "compound-d.png", tags: ["c", "d"], archived: true });
+
+    const page = await searchAssets(
+      prisma,
+      query({ filename: "compound-", tags: ["c", "d"], favorite: true, limit: 1 }),
+    );
+    expect(page.assets.map((asset) => asset.id)).toEqual(["compound-a"]);
+    expect(page.total).toBe(1);
+
+    const either = await searchAssets(
+      prisma,
+      query({
+        filename: "compound-",
+        tags: ["c", "d"],
+        tagMode: "or",
+      }),
+    );
+    expect(either.assets.map((asset) => asset.id)).toEqual([
+      "compound-c",
+      "compound-b",
+      "compound-a",
+    ]);
+    expect(either.total).toBe(3);
+  });
+
+  it("pages through the rows of a tag filter without duplicates or gaps", async () => {
+    const createdAt = new Date("2026-03-02T00:00:00.000Z");
+    for (const id of ["tagpage-a", "tagpage-b", "tagpage-c", "tagpage-d", "tagpage-e"]) {
+      await seed({ id, filename: `${id}.png`, tags: ["tagpage"], createdAt });
+    }
+    await seed({ id: "tagpage-other", filename: "tagpage-other.png", tags: ["elsewhere"] });
+
+    const collected: string[] = [];
+    const totals: number[] = [];
+    let cursor: string | null = null;
+    for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+      const page = await searchAssets(
+        prisma,
+        query({
+          filename: "tagpage-",
+          tags: ["tagpage"],
+          limit: 2,
+          ...(cursor === null ? {} : { cursor }),
+        }),
+      );
+      collected.push(...page.assets.map((asset) => asset.id));
+      totals.push(page.total);
+      if (page.nextCursor === null) {
+        break;
+      }
+      cursor = page.nextCursor;
+    }
+
+    expect(collected).toEqual([
+      "tagpage-e",
+      "tagpage-d",
+      "tagpage-c",
+      "tagpage-b",
+      "tagpage-a",
+    ]);
+    expect(totals).toEqual([5, 5, 5]);
+  });
+
+  it("searches a tag that matches more assets than one statement can carry", async () => {
+    // SQLite accepts at most 999 bind parameters per statement, so a tag that
+    // matches more than that many assets is read in chunks.
+    const createdAt = new Date("2026-05-01T00:00:00.000Z");
+    const total = 1200;
+    await prisma.asset.createMany({
+      data: Array.from({ length: total }, (_value, index) => ({
+        id: `bulk-${String(index).padStart(4, "0")}`,
+        kind: "image",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: `assets/bulk-${index}`,
+        originalFilename: `bulk-${String(index).padStart(4, "0")}.png`,
+        mediaType: "image/png",
+        byteSize: BigInt(1),
+        sha256: `sha-bulk-${index}`,
+        tagsJson: JSON.stringify(["bulk"]),
+        createdAt,
+      })),
+    });
+
+    const first = await searchAssets(prisma, query({ tags: ["bulk"], limit: 100 }));
+    expect(first.assets).toHaveLength(100);
+    expect(first.assets[0]?.id).toBe("bulk-1199");
+    expect(first.total).toBe(total);
+    expect(first.nextCursor).not.toBeNull();
+
+    const collected: string[] = [];
+    const totals: number[] = [];
+    let cursor: string | null = null;
+    for (let pageNumber = 0; pageNumber < 20; pageNumber += 1) {
+      const page = await searchAssets(
+        prisma,
+        query({ tags: ["bulk"], limit: 100, ...(cursor === null ? {} : { cursor }) }),
+      );
+      collected.push(...page.assets.map((asset) => asset.id));
+      totals.push(page.total);
+      if (page.nextCursor === null) {
+        break;
+      }
+      cursor = page.nextCursor;
+    }
+
+    expect(collected).toHaveLength(total);
+    expect(new Set(collected).size).toBe(total);
+    expect(collected[0]).toBe("bulk-1199");
+    expect(collected.at(-1)).toBe("bulk-0000");
+    expect(totals.every((value) => value === total)).toBe(true);
   });
 
   it("orders by createdAt desc and id desc", async () => {

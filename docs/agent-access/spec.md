@@ -132,7 +132,7 @@
 - `script.validate` — 保存せずに検証する。`{ content }` または `{ baseScriptVersionId, operations }` を受け、`warnings` と解決済み `timeline` を返す。書込みを行わない。
 - `asset.list` — 素材を検索し、`{ assets, nextCursor, total }` の1ページを返す。`total` は同じ絞り込み条件に一致する素材の総数で、同一条件のどのページでも同じ値になる。
   - 絞り込みは `kind`・`status`・`filename`（大文字小文字を区別しない部分一致）・`tags`（`tagMode` で AND / OR を明示）・`favorite`・`archived`（既定は除外）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせる。`durationMinMs` / `durationMaxMs` は0以上のミリ秒で、長さを持たない素材（`durationMs` がnull）は範囲に一致しない。下限が上限より大きい場合は `VALIDATION_ERROR` とする。
-  - タグの照合は `Asset.tagsJson` の要素として DB 側のクエリで行う。`tagMode: "and"` は指定したタグすべてを持つ素材、`"or"` はいずれか1つを持つ素材が一致する。タグは引用符で囲まれた要素として保存されるため `bgm` は `bgm_loop` に一致しない。照合が SQLite の `LIKE` を通るため ASCII の英字は大文字小文字を区別せず、非ASCII（日本語など）は区別する。`LIKE` のワイルドカード `_`（任意1文字）と `%`（任意文字列）はタグ文字列のままワイルドカードとして解釈されるので、これらの文字を含むタグの検索は他のタグにも一致し得る（タグ `%` はタグを持つ素材すべてに一致する）。
+  - タグの照合は `Asset.tagsJson` の要素として DB 側のクエリで行う。`tagMode: "and"` は指定したタグすべてを持つ素材、`"or"` はいずれか1つを持つ素材が一致する。タグは引用符で囲まれた要素として保存されるため `bgm` は `bgm_loop` に一致しない。照合は要素の完全一致で、ASCII の英字は大文字小文字を区別せず（`Summer` は `summer` に一致する）、非ASCII（日本語など）は区別する。`%` と `_` はタグ文字列のままではワイルドカードとして解釈されず通常の文字として扱われるため、これらの文字を含むタグの検索はそのタグを持つ素材にだけ一致する。
   - 並び順は `sort` で指定する。`createdAt_desc`（既定、`createdAt` 降順・`id` 降順）、`createdAt_asc`（昇順）、`filename_asc`（ファイル名のバイト順）、`duration_asc`（長さの昇順。長さを持たない素材是最後）。いずれも（ソート列, `id`）の2段で固定し、同じ値を持つ行がページをまたいでも重複も欠落も起こさない。
   - `cursor` は前ページの `nextCursor` をそのまま渡す不透明値で、ソート列と `id` を含む。別の `sort` で使うと `VALIDATION_ERROR`（issue path は `["cursor"]`）となり、黙って別の並び順として解釈することはない。壊れた cursor も同じ `VALIDATION_ERROR` とする。`limit` は既定50、最大100。
   - HTTP、ソケット、MCP、CLIは同じ契約を使う。

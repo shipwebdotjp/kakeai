@@ -62,8 +62,8 @@ B1 → B2 → B3 → B4 の順で実装する。
 
 ### B4 素材検索の拡張（R2-1）
 
-- 状態: 完了。タグの絞り込みは `Asset.tagsJson` に対する DB 側のクエリへ移し、`tagsJson` のまま維持して索引化は行わない。タグ一致は要素の完全一致とし、SQLite の LIKE の性質から ASCII タグは大文字小文字を区別しないものとして契約に固定した（`LIKE` のワイルドカード `_` と `%` を含むタグは、その位置がワイルドカードになる）。検索契約に `sort`（`createdAt_desc` 既定 / `createdAt_asc` / `filename_asc` / `duration_asc`）、`hasAudio`、`durationMinMs` / `durationMaxMs`、一致件数 `total` を追加し、カーソルはソート列と `id` を含む。ソートを変更すると旧カーソルは `VALIDATION_ERROR` とする。HTTP API、ローカルソケット、MCP、CLI は同じ契約を使い続ける。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
-- タグは `Asset.tagsJson` のまま維持し、DB 側のクエリで絞り込む。タグ一致は要素の完全一致とし、SQLite の LIKE の性質から ASCII タグは大文字小文字を区別しないものとして契約に固定する（`LIKE` のワイルドカード `_` と `%` を含むタグは、その位置がワイルドカードになる）。
+- 状態: 完了。タグの絞り込みは `Asset.tagsJson` に対する DB 側のクエリへ移し、`tagsJson` のまま維持して索引化は行わない。タグ一致は要素の完全一致とし、照合は SQLite の `lower()` が ASCII しか畳み込まないため ASCII タグは大文字小文字を区別しないものとして契約に固定した（`%` と `_` はワイルドカードではなく通常の文字で、これらの文字を含むタグは自身のタグにだけ一致する）。検索契約に `sort`（`createdAt_desc` 既定 / `createdAt_asc` / `filename_asc` / `duration_asc`）、`hasAudio`、`durationMinMs` / `durationMaxMs`、一致件数 `total` を追加し、カーソルはソート列と `id` を含む。ソートを変更すると旧カーソルは `VALIDATION_ERROR` とする。HTTP API、ローカルソケット、MCP、CLI は同じ契約を使い続ける。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
+- タグは `Asset.tagsJson` のまま維持し、DB 側のクエリで絞り込む。タグ一致は要素の完全一致とし、照合は SQLite の `lower()` が ASCII しか畳み込まないため ASCII タグは大文字小文字を区別しないものとして契約に固定する（`%` と `_` は通常の文字として扱われ、これらの文字を含むタグは自身のタグにだけ一致する）。
 - 検索契約に `sort`（`createdAt_desc` 既定 / `createdAt_asc` / `filename_asc` / `duration_asc`）、`hasAudio`、`durationMinMs` / `durationMaxMs` を追加する。ページには一致件数 `total` を返す。
 - カーソルはソート列を含める。ソートを変更すると旧カーソルは `VALIDATION_ERROR` とする。ソートは（キー, id）の二段で固定し、同値時も重複・欠落を起こさない。
 - HTTP API、ローカルソケット、MCP、CLI は同じ契約を使い続ける。

@@ -19,10 +19,10 @@ import {
 import type { LimitsConfig } from "../config.ts";
 import { deserializeContent } from "../domain/content-json.ts";
 import { bigIntToSafeNumber, toAsset } from "../dto/mappers.ts";
-import type {
-  Asset as AssetRow,
+import {
   Prisma,
-  PrismaClient,
+  type Asset as AssetRow,
+  type PrismaClient,
 } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError } from "../http/validation.ts";
@@ -292,12 +292,32 @@ type AssetCursorPosition =
  * Every sort is a stable two-part order (sort key, then id) so that rows
  * sharing the key never repeat or disappear between pages. `duration_asc`
  * puts rows without a known duration last.
+ *
+ * Every sort has two forms: the Prisma order by of the page query and the
+ * same order in raw SQL, which is the order the id list of a tag filter is
+ * read in. Both forms always describe the same order.
  */
-const ASSET_LIST_ORDER_BY: Record<AssetListSort, Prisma.AssetOrderByWithRelationInput[]> = {
-  createdAt_desc: [{ createdAt: "desc" }, { id: "desc" }],
-  createdAt_asc: [{ createdAt: "asc" }, { id: "asc" }],
-  filename_asc: [{ originalFilename: "asc" }, { id: "asc" }],
-  duration_asc: [{ durationMs: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+const ASSET_LIST_SORTS: Record<
+  AssetListSort,
+  { orderBy: Prisma.AssetOrderByWithRelationInput[]; sql: Prisma.Sql }
+> = {
+  createdAt_desc: {
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    sql: Prisma.sql`a.createdAt DESC, a.id DESC`,
+  },
+  createdAt_asc: {
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    sql: Prisma.sql`a.createdAt ASC, a.id ASC`,
+  },
+  filename_asc: {
+    orderBy: [{ originalFilename: "asc" }, { id: "asc" }],
+    sql: Prisma.sql`a.originalFilename ASC, a.id ASC`,
+  },
+  duration_asc: {
+    orderBy: [{ durationMs: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+    // Rows without a known duration come last, like the page query orders them.
+    sql: Prisma.sql`(a.durationMs IS NULL), a.durationMs ASC, a.id ASC`,
+  },
 };
 
 function invalidCursor(): ApiError {
@@ -451,62 +471,171 @@ function cursorPositionOf(row: AssetRow, sort: AssetListSort): AssetCursorPositi
   }
 }
 
-function archivedWhere(mode: AssetListQuery["archived"]): Prisma.AssetWhereInput {
-  if (mode === "exclude") {
-    return { archivedAt: null };
-  }
-  if (mode === "only") {
-    return { archivedAt: { not: null } };
-  }
-  return {};
-}
-
-function durationWhere(query: AssetListQuery): Prisma.AssetWhereInput {
-  if (query.durationMinMs === undefined && query.durationMaxMs === undefined) {
-    return {};
-  }
-  return {
-    durationMs: {
-      ...(query.durationMinMs === undefined ? {} : { gte: query.durationMinMs }),
-      ...(query.durationMaxMs === undefined ? {} : { lte: query.durationMaxMs }),
-    },
-  };
+/**
+ * One filter of a search. Every filter has two forms: the Prisma filter the
+ * page and the count use, and the same condition in raw SQL. The raw form
+ * narrows the id list of a tag filter, so that list stays close to the rows
+ * that can actually match. Both forms always express the same condition.
+ */
+interface AssetFilter {
+  prisma: Prisma.AssetWhereInput;
+  sql: Prisma.Sql;
 }
 
 /**
- * The filter set of one search. It is used for the page and for the total
+ * The filters of one search. They are used for the page and for the total
  * count, so both always describe the same set of assets.
  */
-function assetFilters(query: AssetListQuery): Prisma.AssetWhereInput {
-  const wanted = query.tags ?? [];
-  const andConditions: Prisma.AssetWhereInput[] = [];
-  if (wanted.length > 0) {
-    // A tag matches when it appears as a quoted element of the stored tag
-    // array, so `bgm` never matches `bgm_loop`. The comparison goes through
-    // SQLite's LIKE, which ignores the case of ASCII letters and reads `_`
-    // and `%` inside a tag as wildcards.
-    const tagConditions = wanted.map((tag) => ({
-      tagsJson: { contains: JSON.stringify(tag) },
-    }));
-    andConditions.push(
-      query.tagMode === "or" ? { OR: tagConditions } : { AND: tagConditions },
+function assetFilters(query: AssetListQuery): AssetFilter[] {
+  const filters: AssetFilter[] = [];
+  if (query.kind !== undefined) {
+    filters.push({
+      prisma: { kind: query.kind },
+      sql: Prisma.sql`a.kind = ${query.kind}`,
+    });
+  }
+  if (query.status !== undefined) {
+    filters.push({
+      prisma: { status: query.status },
+      sql: Prisma.sql`a.status = ${query.status}`,
+    });
+  }
+  if (query.filename !== undefined) {
+    filters.push({
+      prisma: { originalFilename: { contains: query.filename } },
+      // The same substring match Prisma builds: the value is not escaped, so
+      // `%` and `_` inside a filename keep their LIKE meaning.
+      sql: Prisma.sql`a.originalFilename LIKE ('%' || ${query.filename} || '%')`,
+    });
+  }
+  if (query.favorite !== undefined) {
+    filters.push(
+      query.favorite
+        ? {
+            prisma: { favoritedAt: { not: null } },
+            sql: Prisma.sql`a.favoritedAt IS NOT NULL`,
+          }
+        : { prisma: { favoritedAt: null }, sql: Prisma.sql`a.favoritedAt IS NULL` },
     );
   }
+  if (query.archived === "exclude") {
+    filters.push({
+      prisma: { archivedAt: null },
+      sql: Prisma.sql`a.archivedAt IS NULL`,
+    });
+  } else if (query.archived === "only") {
+    filters.push({
+      prisma: { archivedAt: { not: null } },
+      sql: Prisma.sql`a.archivedAt IS NOT NULL`,
+    });
+  }
+  if (query.hasAudio !== undefined) {
+    filters.push({
+      prisma: { hasAudio: query.hasAudio },
+      sql: Prisma.sql`a.hasAudio = ${query.hasAudio}`,
+    });
+  }
+  if (query.durationMinMs !== undefined) {
+    filters.push({
+      prisma: { durationMs: { gte: query.durationMinMs } },
+      sql: Prisma.sql`a.durationMs >= ${query.durationMinMs}`,
+    });
+  }
+  if (query.durationMaxMs !== undefined) {
+    filters.push({
+      prisma: { durationMs: { lte: query.durationMaxMs } },
+      sql: Prisma.sql`a.durationMs <= ${query.durationMaxMs}`,
+    });
+  }
+  return filters;
+}
 
-  return {
-    ...archivedWhere(query.archived),
-    ...(query.kind === undefined ? {} : { kind: query.kind }),
-    ...(query.status === undefined ? {} : { status: query.status }),
-    ...(query.filename === undefined
-      ? {}
-      : { originalFilename: { contains: query.filename } }),
-    ...(query.favorite === undefined
-      ? {}
-      : { favoritedAt: query.favorite ? { not: null } : null }),
-    ...(query.hasAudio === undefined ? {} : { hasAudio: query.hasAudio }),
-    ...durationWhere(query),
-    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
-  };
+/**
+ * The exact element match for one tag.
+ *
+ * `Asset.tagsJson` is a JSON array of strings, so a tag matches when it is one
+ * of its elements: `bgm` never matches `bgm_loop`, and `%` or `_` inside a
+ * tag are ordinary characters instead of wildcards.
+ *
+ * The needle is the JSON encoded tag (`"bgm_loop"`), searched behind an
+ * element boundary: the first element is preceded by `[`, every later element
+ * by `,`. A quote inside a JSON string is always escaped, so `["` and `,"` can
+ * only occur at an element boundary, and the closing quote of the needle is
+ * the closing quote of that element. The match is therefore exact, and it
+ * never depends on where the needle happens to occur first.
+ *
+ * `lower()` in SQLite folds ASCII letters only, so ASCII tags compare
+ * case-insensitively (`Summer` matches `summer`) while non-ASCII tags
+ * (Japanese) compare exactly.
+ *
+ * The fragment reads the `tagsJson` column of the alias `a`, so it belongs to
+ * a statement that selects from `Asset a`.
+ */
+function tagElementCondition(tag: string): Prisma.Sql {
+  const needle = JSON.stringify(tag);
+  return Prisma.sql`(
+    instr(lower(a.tagsJson), lower('[' || ${needle})) > 0
+    OR instr(lower(a.tagsJson), lower(',' || ${needle})) > 0
+  )`;
+}
+
+/**
+ * The ids of the assets that carry the requested tags.
+ *
+ * Prisma has no exact element operator for a SQLite JSON column, so the tag
+ * condition runs as a small raw SQL query and the matching ids are handed to
+ * the regular Prisma filters. `tagMode: "and"` requires every requested tag
+ * (the conditions are joined with `AND`), `"or"` requires at least one (the
+ * conditions are joined with `OR`).
+ *
+ * The other filters join the same statement, so the id list only holds the
+ * assets that can match anyway. The ids come back in the order of the
+ * requested sort. Together with the chunking below that keeps a long id list
+ * usable: the page reads the chunks one after the other and the rows of the
+ * chunks are already in page order.
+ */
+async function assetIdsByTags(
+  prisma: PrismaClient,
+  tags: readonly string[],
+  tagMode: AssetListQuery["tagMode"],
+  sort: AssetListSort,
+  filters: readonly AssetFilter[],
+): Promise<string[]> {
+  const tagConditions = tags.map((tag) => tagElementCondition(tag));
+  const conditions = [
+    // The tag conditions are one group: the other filters have to hold for
+    // every requested tag, also in the `or` mode.
+    Prisma.sql`(${Prisma.join(tagConditions, tagMode === "or" ? " OR " : " AND ")})`,
+    ...filters.map((filter) => filter.sql),
+  ];
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT a.id AS id FROM Asset a
+    WHERE ${Prisma.join(conditions, " AND ")}
+    ORDER BY ${ASSET_LIST_SORTS[sort].sql}
+  `;
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Prisma's SQLite connector rejects a statement with more than 999 bind
+ * parameters, so a tag filter that matches many assets cannot hand all of
+ * their ids to one statement. The id list is split into chunks that stay well
+ * below that limit; every chunk carries the same filters, so the page and the
+ * count still describe exactly the same assets.
+ *
+ * Trade-off: the ids of every asset that carries the tag are read into memory
+ * and the count needs one statement per chunk. A personal library stays far
+ * below that; a library large enough to feel it needs the deferred tag index
+ * (Agent Access roadmap).
+ */
+const ASSET_TAG_ID_CHUNK_SIZE = 800;
+
+function chunkIds(ids: readonly string[]): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += ASSET_TAG_ID_CHUNK_SIZE) {
+    chunks.push(ids.slice(index, index + ASSET_TAG_ID_CHUNK_SIZE));
+  }
+  return chunks;
 }
 
 /**
@@ -521,19 +650,55 @@ export async function searchAssets(
 ): Promise<AssetListPage> {
   const limit = Math.min(query.limit, ASSET_LIST_MAX_LIMIT);
   const sort = query.sort;
+  const wanted = query.tags ?? [];
   const filters = assetFilters(query);
-  const where: Prisma.AssetWhereInput =
-    query.cursor === undefined
-      ? filters
-      : { AND: [filters, cursorWhere(decodeAssetCursor(query.cursor, sort))] };
+  // The tag condition is resolved once and then shared by the page query and
+  // the total count, so the count always describes the same rows.
+  const tagIds =
+    wanted.length > 0
+      ? await assetIdsByTags(prisma, wanted, query.tagMode, sort, filters)
+      : null;
+  const cursorFilter =
+    query.cursor === undefined ? null : cursorWhere(decodeAssetCursor(query.cursor, sort));
+  // Without a tag filter the search runs as one statement; with a tag filter
+  // the ids are read in chunks that stay below the bind parameter limit.
+  const idChunks: (string[] | null)[] = tagIds === null ? [null] : chunkIds(tagIds);
+  const whereOf = (chunk: string[] | null, withCursor: boolean): Prisma.AssetWhereInput => {
+    const parts: Prisma.AssetWhereInput[] = filters.map((filter) => filter.prisma);
+    if (chunk !== null) {
+      parts.push({ id: { in: chunk } });
+    }
+    if (withCursor && cursorFilter !== null) {
+      parts.push(cursorFilter);
+    }
+    return parts.length === 1 ? parts[0] : { AND: parts };
+  };
 
   const [rows, total] = await Promise.all([
-    prisma.asset.findMany({
-      where,
-      orderBy: ASSET_LIST_ORDER_BY[sort],
-      take: limit + 1,
-    }),
-    prisma.asset.count({ where: filters }),
+    (async () => {
+      const collected: AssetRow[] = [];
+      for (const chunk of idChunks) {
+        const chunkRows = await prisma.asset.findMany({
+          where: whereOf(chunk, true),
+          orderBy: ASSET_LIST_SORTS[sort].orderBy,
+          take: limit + 1,
+        });
+        collected.push(...chunkRows);
+        // The chunks are in page order, so the page is complete as soon as
+        // one row more than the page size was read.
+        if (collected.length > limit) {
+          break;
+        }
+      }
+      return collected;
+    })(),
+    (async () => {
+      let count = 0;
+      for (const chunk of idChunks) {
+        count += await prisma.asset.count({ where: whereOf(chunk, false) });
+      }
+      return count;
+    })(),
   ]);
 
   const hasMore = rows.length > limit;

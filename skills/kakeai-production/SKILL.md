@@ -119,6 +119,8 @@ changes are the user's job; agents only copy into the script.
     `status` (use `ready`), `filename` (case-insensitive substring),
     `tags` + `tagMode` (`and` = all, `or` = any), `favorite`, `hasAudio`,
     `durationMinMs` / `durationMaxMs`.
+  - Tags match whole elements: `bgm` does not match `bgm_loop`, and ASCII
+    letters compare case-insensitively (`Summer` matches `summer`).
   - `archived` defaults to `exclude`. Pass `include` / `only` only when the user
     asks for archived material.
   - Results are newest-first and paginated: `limit` defaults to 50 and is capped

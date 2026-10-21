@@ -42,13 +42,12 @@ export const assetListCursorSchema = z.string().min(1);
  *
  * Filters combine as follows:
  * - `tags` matches assets that carry all (`tagMode: "and"`) or any
- *   (`tagMode: "or"`) of the given tags. A tag matches when it appears as a
- *   quoted element of the stored tag array, so `bgm` does not match
- *   `bgm_loop`. The comparison runs through SQLite's `LIKE`, so ASCII letters
- *   are compared case-insensitively while non-ASCII tags (for example
- *   Japanese) are compared exactly. `LIKE` also reads `_` (any single
- *   character) and `%` (any sequence) inside a tag as wildcards, so a tag that
- *   contains them also matches tags that differ at those positions.
+ *   (`tagMode: "or"`) of the given tags. A tag matches when it is one of the
+ *   elements of the stored tag array, so `bgm` does not match `bgm_loop`.
+ *   The comparison is exact: ASCII letters are compared case-insensitively
+ *   (`Summer` matches `summer`) while non-ASCII tags (for example Japanese)
+ *   are compared exactly, and `%` or `_` inside a tag are ordinary
+ *   characters, not wildcards.
  * - `filename` is a case-insensitive substring match on `originalFilename`.
  * - `favorite` filters on `favoritedAt`, `archived` on `archivedAt`
  *   (`exclude` is the default, so archived assets stay hidden).

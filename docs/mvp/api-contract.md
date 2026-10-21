@@ -399,7 +399,7 @@ Assetは全Workで再利用できる。アップロードされた原本は不�
 
 GET /assets は素材ライブラリを検索し、`{ assets, nextCursor, total }` の1ページを返す。`total` は同じ絞り込み条件に一致する素材の総数で、同一条件のどのページでも同じ値になる。クエリは `kind`（image / video / audio）、`status`（processing / ready / failed）、`filename`（大文字小文字を区別しない部分一致）、`tags`（繰り返し指定またはカンマ区切り。短縮形の `tag` も同じ意味）、`tagMode`（`and` が既定、`or` でいずれか一致）、`favorite`（true / false）、`archived`（`exclude` が既定、`include` はアーカイブ済みも含む、`only` はアーカイブ済みだけ）、`hasAudio`（true / false）、`durationMinMs` / `durationMaxMs`（0以上のミリ秒。長さを持たない素材（`durationMs` がnull）は範囲指定に一致しない。下限が上限より大きい場合は422 `VALIDATION_ERROR` とする）、`sort`（`createdAt_desc` が既定、`createdAt_asc`、`filename_asc`、`duration_asc`。長さを持たない素材は `duration_asc` では後ろへ）、`limit`（既定50、最大100）、`cursor`（前ページの `nextCursor` をそのまま渡す不透明値）を組み合わせられる。並び順は `sort` で指定した列と `id` の2段で固定し、同じ値を持つ行がページをまたいでも重複も欠落も起こさない。`cursor` はソートを含んでおり、`sort` を変えると旧 `cursor` は422 `VALIDATION_ERROR` となる。不正な値や壊れた cursor も422 `VALIDATION_ERROR` とし、`nextCursor` は最終ページでnullになる。返却順・cursor・limit上限はHTTP、ローカルソケット、MCP、CLIで同じ契約を共有する。各Assetは利用者が編集できる `tags`・`favoritedAt`・`archivedAt` を含む。`favoritedAt` はお気に入り、`archivedAt` は一覧・ピッカーから既定で隠すアーカイブを表し、どちらもnullなら未設定。
 
-タグの照合は `Asset.tagsJson` のJSON配列の要素として行う。タグは引用符で囲まれた要素として保存されるため、`bgm` は `bgm_loop` に一致しない。照合が SQLite の `LIKE` を通るため ASCII の英字は大文字小文字を区別せず、非ASCII（日本語など）は区別する。`LIKE` のワイルドカード `_`（任意1文字）と `%`（任意文字列）はタグ文字列のままワイルドカードとして解釈されるので、これらの文字を含むタグの検索は他のタグにも一致し得る。
+タグの照合は `Asset.tagsJson` のJSON配列の要素として行う。タグは引用符で囲まれた要素として保存されるため、`bgm` は `bgm_loop` に一致しない。照合は要素の完全一致で、ASCII の英字は大文字小文字を区別せず（`Summer` は `summer` に一致する）、非ASCII（日本語など）は区別する。`%`（任意文字列）と `_`（任意1文字）はタグ文字列のままではワイルドカードとして解釈されず、通常の文字として扱われるため、これらの文字を含むタグの検索はそのタグを持つ素材にだけ一致する。
 
 ~~~json
 {
