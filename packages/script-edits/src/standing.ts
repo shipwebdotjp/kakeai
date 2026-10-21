@@ -47,6 +47,7 @@ export function setStanding(
   characterId: string,
   appearanceId: string,
   scale: number | undefined,
+  transition: VisualCue["transition"] | undefined,
   context: ScriptContext,
 ): StandingEditResult {
   const { scene, sceneIndex, cueIndex } = findStandingIndex(
@@ -80,6 +81,7 @@ export function setStanding(
       ...existing,
       layer: "standing",
       range: { kind: "scene" },
+      transition: transition ?? existing.transition,
       input,
     });
     return {
@@ -115,7 +117,7 @@ export function setStanding(
     range: { kind: "scene" },
     layer: "standing",
     order,
-    transition: {
+    transition: transition ?? {
       enter: { ...characterStandingV1.transitionPolicy.defaultEnter },
       exit: { ...characterStandingV1.transitionPolicy.defaultExit },
     },

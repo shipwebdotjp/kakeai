@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   useFieldArray,
   useWatch,
@@ -22,6 +23,7 @@ interface SceneAudioFieldsProps {
   getValues: UseFormGetValues<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
+  onCommitAudioCue: (cueIndex: number) => void;
 }
 
 export function SceneAudioFields({
@@ -30,12 +32,16 @@ export function SceneAudioFields({
   getValues,
   setValue,
   sceneIndex,
+  onCommitAudioCue,
 }: SceneAudioFieldsProps) {
   const { fields, append, remove } = useFieldArray({
     control,
     name: `scenes.${sceneIndex}.audioCues`,
   });
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.audioCues` }) ?? [];
+  const snapshotRef = useRef(new Map<number, string>());
+  const readSlot = (cueIndex: number) =>
+    (getValues(`scenes.${sceneIndex}.audioCues`) ?? [])[cueIndex];
 
   return (
     <div className="mt-3 border-t border-dashed border-border pt-2">
@@ -51,7 +57,59 @@ export function SceneAudioFields({
           }
           const path = `scenes.${sceneIndex}.audioCues.${cueIndex}` as const;
           return (
-            <li key={field.id} className="my-2 grid gap-1.5 rounded border border-border p-2">
+            <li
+              key={field.id}
+              className="my-2 grid gap-1.5 rounded border border-border p-2"
+              onFocus={(event) => {
+                const related = event.relatedTarget as Node | null;
+                if (
+                  related !== null &&
+                  event.currentTarget.contains(related)
+                ) {
+                  return;
+                }
+                if (
+                  related instanceof Element &&
+                  related.closest('[role="dialog"]') !== null
+                ) {
+                  return;
+                }
+                if (
+                  related === null &&
+                  snapshotRef.current.has(cueIndex)
+                ) {
+                  return;
+                }
+                const slot = readSlot(cueIndex);
+                snapshotRef.current.set(
+                  cueIndex,
+                  slot === undefined ? "" : JSON.stringify(slot),
+                );
+              }}
+              onBlur={(event) => {
+                const related = event.relatedTarget as Node | null;
+                if (
+                  related === null ||
+                  event.currentTarget.contains(related)
+                ) {
+                  return;
+                }
+                if (
+                  related instanceof Element &&
+                  related.closest('[role="dialog"]') !== null
+                ) {
+                  return;
+                }
+                const slot = readSlot(cueIndex);
+                const current =
+                  slot === undefined ? "" : JSON.stringify(slot);
+                if (current === (snapshotRef.current.get(cueIndex) ?? "")) {
+                  return;
+                }
+                snapshotRef.current.set(cueIndex, current);
+                onCommitAudioCue(cueIndex);
+              }}
+            >
               <MediaPicker
                 label={`音声 ${cueIndex + 1}`}
                 kinds={["audio"]}

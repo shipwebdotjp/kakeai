@@ -116,7 +116,7 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率 | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1 |
+| `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1。`transition` は enter/exit をまとめて置き換える |
 | `standing.remove` | `sceneId`、`side` | 対応する `character.standing@1` Cue を削除する |
 
 ### Cue操作の補足
@@ -215,6 +215,7 @@ type ScriptOperation =
 - 入力途中の不正値（空のラベル、未確定の数値、編集中の文字列）はコンポーネントのローカル状態に留める。妥当な値になった時点で型付きの操作へコミットする。不正なローカル値が構造操作を妨げない。
 - 行の `captionText`・`speechText`・`gapBeforeMs` は入力欄のblur時に、話者・表情は選択変更時に、それぞれ操作コアへコミットする。コミット結果は該当行のフィールドだけへ書き戻し、他の入力状態を保つ。
 - Cue は行内のフォーカスが外れたときに、入力・表示区間・レイヤー・順序・トランジションを1つの操作バッチとしてコミットする。未確定Cueはコミットせずフォームに留める。
+- 立ち絵・シーン音声・作品全体BGMは、それぞれの行のフォーカスが外れたときに、現在のフォーム値から `standing.set` / `standing.remove`、`audio.add` / `audio.set` / `audio.remove` を選んでコミットする。
 - 移行中はフォームモデルと文書が一時的に併存する。構造操作は、最後に妥当に構築できた文書へ適用し、結果をフォームへ戻す。
 - 素材未選択などの未確定Cueは、正本文書の構築時に除外してフォームに留める。構造操作の後で同じSceneへ戻し、入力の行参照を剪定する。行範囲が消えた場合はScene範囲へ戻し、`draft_cue_range_reset` 警告を返す。
 - キーストロークごとに文書全体を作り直さない。

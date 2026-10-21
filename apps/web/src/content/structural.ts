@@ -1,7 +1,12 @@
 import type {
   ContentDocument,
   ScriptOperation,
+  VisualCue,
   Warning,
+} from "@kakeai/contracts";
+import {
+  characterStandingV1,
+  characterStandingV1InputSchema,
 } from "@kakeai/contracts";
 import {
   applyScriptOperations,
@@ -16,6 +21,7 @@ import {
   toFormValues,
   type CueFormValue,
   type DocumentFormValues,
+  type StandingFormValue,
 } from "./form";
 
 export interface StructuralAsset {
@@ -193,6 +199,248 @@ export function applyStructuralOperation(
   assets: readonly StructuralAsset[] = [],
 ): StructuralEditResult {
   return applyStructuralOperations(base, values, [operation], assets);
+}
+
+type StandingSide = "left" | "right";
+
+function standingSideOf(cue: VisualCue): StandingSide | null {
+  if (
+    cue.template.id !== characterStandingV1.id ||
+    cue.template.version !== characterStandingV1.version
+  ) {
+    return null;
+  }
+  const parsed = characterStandingV1InputSchema.safeParse(cue.input);
+  return parsed.success ? parsed.data.side : null;
+}
+
+function normalizeTransitionEdge(
+  preset: StandingFormValue["enterPreset"],
+  durationMs: number,
+): { preset: StandingFormValue["enterPreset"]; durationMs: number } {
+  if (preset === "none") {
+    return { preset, durationMs: 0 };
+  }
+  return {
+    preset,
+    durationMs: Number.isFinite(durationMs)
+      ? Math.max(1, Math.floor(durationMs))
+      : 1,
+  };
+}
+
+export function commitStandingStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  sceneId: string,
+  side: StandingSide,
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  const document = buildStructuralDocument(base, values);
+  const scene = document.scenes.find((entry) => entry.id === sceneId);
+  const formScene = values.scenes.find((entry) => entry.id === sceneId);
+  const standing = formScene?.standings.find((entry) => entry.side === side);
+  if (scene === undefined || standing === undefined) {
+    return null;
+  }
+
+  if (standing.characterId === null || standing.appearanceId === null) {
+    if (scene.visualCues.some((cue) => standingSideOf(cue) === side)) {
+      return applyToDocument(
+        document,
+        values,
+        [{ op: "standing.remove", sceneId, side }],
+        assets,
+      );
+    }
+    if (standing.cueId === null) {
+      return null;
+    }
+    return {
+      values: toFormValues(document),
+      document,
+      result: emptyResult(document),
+    };
+  }
+
+  const scale =
+    Number.isFinite(standing.scale) && standing.scale > 0
+      ? standing.scale
+      : 1;
+  return applyToDocument(
+    document,
+    values,
+    [
+      {
+        op: "standing.set",
+        sceneId,
+        side,
+        characterId: standing.characterId,
+        appearanceId: standing.appearanceId,
+        scale,
+        transition: {
+          enter: normalizeTransitionEdge(
+            standing.enterPreset,
+            standing.enterDurationMs,
+          ),
+          exit: normalizeTransitionEdge(
+            standing.exitPreset,
+            standing.exitDurationMs,
+          ),
+        },
+      },
+    ],
+    assets,
+  );
+}
+
+export function commitSceneAudioStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  sceneId: string,
+  cueIndex: number,
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  const document = buildStructuralDocument(base, values);
+  const formScene = values.scenes.find((entry) => entry.id === sceneId);
+  const slot = formScene?.audioCues[cueIndex];
+  if (formScene === undefined || slot === undefined) {
+    return null;
+  }
+  const sceneAudioCues = document.audioCues.filter(
+    (cue) =>
+      cue.range.kind === "scene" && cue.range.sceneId === sceneId,
+  );
+  const existing =
+    slot.cueId !== null
+      ? document.audioCues.find((cue) => cue.id === slot.cueId)
+      : sceneAudioCues.find(
+          (cue) =>
+            cue.assetId === slot.assetId && cue.role === slot.role,
+        ) ?? sceneAudioCues[cueIndex];
+
+  if (slot.assetId === null) {
+    if (existing !== undefined) {
+      return applyToDocument(
+        document,
+        values,
+        [{ op: "audio.remove", audioCueId: existing.id }],
+        assets,
+      );
+    }
+    if (slot.cueId === null) {
+      return null;
+    }
+    return {
+      values: toFormValues(document),
+      document,
+      result: emptyResult(document),
+    };
+  }
+
+  if (existing === undefined) {
+    return applyToDocument(
+      document,
+      values,
+      [
+        {
+          op: "audio.add",
+          role: slot.role,
+          assetId: slot.assetId,
+          range: { kind: "scene", sceneId },
+          gainDb: slot.gainDb,
+          loop: slot.loop,
+        },
+      ],
+      assets,
+    );
+  }
+
+  return applyToDocument(
+    document,
+    values,
+    [
+      {
+        op: "audio.set",
+        audioCueId: existing.id,
+        role: slot.role,
+        assetId: slot.assetId,
+        range: { kind: "scene", sceneId },
+        gainDb: slot.gainDb,
+        loop: slot.loop,
+      },
+    ],
+    assets,
+  );
+}
+
+export function commitBgmStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  const document = buildStructuralDocument(base, values);
+  const existing =
+    (values.bgm.cueId === null
+      ? undefined
+      : document.audioCues.find((cue) => cue.id === values.bgm.cueId)) ??
+    document.audioCues.find(
+      (cue) => cue.role === "bgm" && cue.range.kind === "work",
+    );
+
+  if (values.bgm.assetId === null) {
+    if (existing !== undefined) {
+      return applyToDocument(
+        document,
+        values,
+        [{ op: "audio.remove", audioCueId: existing.id }],
+        assets,
+      );
+    }
+    if (values.bgm.cueId === null) {
+      return null;
+    }
+    return {
+      values: toFormValues(document),
+      document,
+      result: emptyResult(document),
+    };
+  }
+
+  if (existing === undefined) {
+    return applyToDocument(
+      document,
+      values,
+      [
+        {
+          op: "audio.add",
+          role: "bgm",
+          assetId: values.bgm.assetId,
+          range: { kind: "work" },
+          gainDb: values.bgm.gainDb,
+          loop: values.bgm.loop,
+        },
+      ],
+      assets,
+    );
+  }
+
+  return applyToDocument(
+    document,
+    values,
+    [
+      {
+        op: "audio.set",
+        audioCueId: existing.id,
+        role: "bgm",
+        assetId: values.bgm.assetId,
+        range: { kind: "work" },
+        gainDb: values.bgm.gainDb,
+        loop: values.bgm.loop,
+      },
+    ],
+    assets,
+  );
 }
 
 export function commitCueStructural(

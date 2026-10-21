@@ -370,6 +370,7 @@ export function applyScriptOperation(
         operation.characterId,
         operation.appearanceId,
         operation.scale,
+        operation.transition,
         context,
       );
       registerKey(operation.key, keys, result.primaryId);

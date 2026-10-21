@@ -289,6 +289,7 @@ export const standingSetOperationSchema = z.strictObject({
   characterId: idSchema,
   appearanceId: idSchema,
   scale: z.number().finite().positive().optional(),
+  transition: cueTransitionSchema.optional(),
 });
 
 export const standingRemoveOperationSchema = z.strictObject({

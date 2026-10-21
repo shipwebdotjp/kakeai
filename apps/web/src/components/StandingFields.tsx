@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   useWatch,
   type Control,
+  type UseFormGetValues,
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
@@ -25,10 +26,12 @@ import { Collapsible } from "./Collapsible";
 interface StandingFieldsProps {
   control: Control<DocumentFormValues>;
   register: UseFormRegister<DocumentFormValues>;
+  getValues: UseFormGetValues<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
   sceneId: string;
   characters: CharacterFormValue[];
+  onCommitStanding: (side: StandingSide) => void;
 }
 
 const SIDE_LABELS: Record<StandingSide, string> = { left: "左", right: "右" };
@@ -36,12 +39,19 @@ const SIDE_LABELS: Record<StandingSide, string> = { left: "左", right: "右" };
 export function StandingFields({
   control,
   register,
+  getValues,
   setValue,
   sceneIndex,
   sceneId,
   characters,
+  onCommitStanding,
 }: StandingFieldsProps) {
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.standings` });
+  const snapshotRef = useRef(new Map<StandingSide, string>());
+  const readSlot = (side: StandingSide): StandingFormValue | undefined =>
+    (getValues(`scenes.${sceneIndex}.standings`) ?? []).find(
+      (entry) => entry.side === side,
+    );
   const isOrdered =
     watched !== undefined &&
     watched.length === STANDING_SIDES.length &&
@@ -88,7 +98,45 @@ export function StandingFields({
         const character = characters.find((entry) => entry.id === characterId);
         const appearances = character?.appearances ?? [];
         return (
-          <div key={side} className="mt-2 rounded border border-border p-2">
+          <div
+            key={side}
+            className="mt-2 rounded border border-border p-2"
+            onFocus={(event) => {
+              const related = event.relatedTarget as Node | null;
+              if (
+                related !== null &&
+                event.currentTarget.contains(related)
+              ) {
+                return;
+              }
+              const slot = readSlot(side);
+              if (slot !== undefined) {
+                snapshotRef.current.set(side, JSON.stringify(slot));
+              }
+            }}
+            onBlur={(event) => {
+              const related = event.relatedTarget as Node | null;
+              if (
+                related === null ||
+                event.currentTarget.contains(related)
+              ) {
+                return;
+              }
+              if (
+                related instanceof Element &&
+                related.closest('[role="dialog"]') !== null
+              ) {
+                return;
+              }
+              const slot = readSlot(side);
+              const current = slot === undefined ? "" : JSON.stringify(slot);
+              if (current === (snapshotRef.current.get(side) ?? "")) {
+                return;
+              }
+              snapshotRef.current.set(side, current);
+              onCommitStanding(side);
+            }}
+          >
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium">{SIDE_LABELS[side]}</span>
               <label className="inline-flex items-center gap-1.5">

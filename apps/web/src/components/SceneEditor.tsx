@@ -59,7 +59,10 @@ import {
 } from "../content/form";
 import {
   applyStructuralOperation,
+  commitBgmStructural,
   commitCueStructural,
+  commitSceneAudioStructural,
+  commitStandingStructural,
   removeCueStructural,
 } from "../content/structural";
 import { SCENE_LABELS } from "../content/labels";
@@ -651,6 +654,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   }, [base]);
 
   const lastBaseRef = useRef(base);
+  const bgmSnapshotRef = useRef<string | null>(null);
   useEffect(() => {
     if (lastBaseRef.current !== base) {
       lastBaseRef.current = base;
@@ -822,6 +826,82 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         }
         showWarnings(next.result.warnings);
       }
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const onCommitStanding = (
+    sceneIndex: number,
+    side: "left" | "right",
+  ) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    try {
+      const next = commitStandingStructural(
+        base,
+        getValues(),
+        scene.id,
+        side,
+        assetsQuery.data ?? [],
+      );
+      if (next === null) {
+        return;
+      }
+      const nextScene = next.values.scenes.find((entry) => entry.id === scene.id);
+      if (nextScene !== undefined) {
+        setValue(`scenes.${sceneIndex}.standings`, nextScene.standings, {
+          shouldDirty: true,
+        });
+      }
+      showWarnings(next.result.warnings);
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const onCommitBgm = () => {
+    try {
+      const next = commitBgmStructural(
+        base,
+        getValues(),
+        assetsQuery.data ?? [],
+      );
+      if (next === null) {
+        return;
+      }
+      setValue("bgm", next.values.bgm, { shouldDirty: true });
+      showWarnings(next.result.warnings);
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const onCommitAudioCue = (sceneIndex: number, cueIndex: number) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    try {
+      const next = commitSceneAudioStructural(
+        base,
+        getValues(),
+        scene.id,
+        cueIndex,
+        assetsQuery.data ?? [],
+      );
+      if (next === null) {
+        return;
+      }
+      const nextScene = next.values.scenes.find((entry) => entry.id === scene.id);
+      if (nextScene !== undefined) {
+        setValue(`scenes.${sceneIndex}.audioCues`, nextScene.audioCues, {
+          shouldDirty: true,
+        });
+      }
+      showWarnings(next.result.warnings);
     } catch (error) {
       showError(error);
     }
@@ -1275,35 +1355,78 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         className={sectionCardClass}
       >
         <h3 className={sectionTitleClass}>BGM（作品全体）</h3>
-        <MediaPicker
-          label="BGM"
-          kinds={["audio"]}
-          selectedAssetId={watchedBgm?.assetId ?? null}
-          onSelect={(assetId) => setValue("bgm.assetId", assetId, { shouldDirty: true })}
-        />
-        {watchedBgm?.assetId !== null && watchedBgm?.assetId !== undefined && (
-          <div className="mt-2 flex flex-wrap items-center gap-4">
-            <label className="inline-flex items-center gap-1.5">
-              <input type="checkbox" {...register("bgm.loop")} />
-              ループ
-            </label>
-            <label className="inline-flex items-center gap-1.5">
-              音量
-              <input
-                type="number"
-                step="1"
-                className={`w-24 ${textFieldClass}`}
-                {...register("bgm.gainDb", {
-                  setValueAs: (value) =>
-                    value === "" || Number.isNaN(Number(value))
-                      ? DEFAULT_BGM_GAIN_DB
-                      : Number(value),
-                })}
-              />
-              dB
-            </label>
-          </div>
-        )}
+        <div
+          onFocus={(event) => {
+            const related = event.relatedTarget as Node | null;
+            if (
+              related !== null &&
+              event.currentTarget.contains(related)
+            ) {
+              return;
+            }
+            if (
+              related instanceof Element &&
+              related.closest('[role="dialog"]') !== null
+            ) {
+              return;
+            }
+            if (related === null && bgmSnapshotRef.current !== null) {
+              return;
+            }
+            bgmSnapshotRef.current = JSON.stringify(getValues("bgm"));
+          }}
+          onBlur={(event) => {
+            const related = event.relatedTarget as Node | null;
+            if (
+              related === null ||
+              event.currentTarget.contains(related)
+            ) {
+              return;
+            }
+            if (
+              related instanceof Element &&
+              related.closest('[role="dialog"]') !== null
+            ) {
+              return;
+            }
+            const current = JSON.stringify(getValues("bgm"));
+            if (current === bgmSnapshotRef.current) {
+              return;
+            }
+            bgmSnapshotRef.current = current;
+            onCommitBgm();
+          }}
+        >
+          <MediaPicker
+            label="BGM"
+            kinds={["audio"]}
+            selectedAssetId={watchedBgm?.assetId ?? null}
+            onSelect={(assetId) => setValue("bgm.assetId", assetId, { shouldDirty: true })}
+          />
+          {watchedBgm?.assetId !== null && watchedBgm?.assetId !== undefined && (
+            <div className="mt-2 flex flex-wrap items-center gap-4">
+              <label className="inline-flex items-center gap-1.5">
+                <input type="checkbox" {...register("bgm.loop")} />
+                ループ
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                音量
+                <input
+                  type="number"
+                  step="1"
+                  className={`w-24 ${textFieldClass}`}
+                  {...register("bgm.gainDb", {
+                    setValueAs: (value) =>
+                      value === "" || Number.isNaN(Number(value))
+                        ? DEFAULT_BGM_GAIN_DB
+                        : Number(value),
+                  })}
+                />
+                dB
+              </label>
+            </div>
+          )}
+        </div>
       </Collapsible>
 
       <Collapsible
@@ -1522,10 +1645,12 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               <StandingFields
                 control={control}
                 register={register}
+                getValues={getValues}
                 setValue={setValue}
                 sceneIndex={sceneIndex}
                 sceneId={scene.id}
                 characters={watchedCharacters}
+                onCommitStanding={(side) => onCommitStanding(sceneIndex, side)}
               />
             )}
 
@@ -1535,6 +1660,9 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               getValues={getValues}
               setValue={setValue}
               sceneIndex={sceneIndex}
+              onCommitAudioCue={(cueIndex) =>
+                onCommitAudioCue(sceneIndex, cueIndex)
+              }
             />
 
             {scene.kind === "point" && (

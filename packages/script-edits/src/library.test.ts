@@ -58,6 +58,10 @@ describe("standing operations", () => {
         side: "left",
         characterId: "char-1",
         appearanceId: "app-1",
+        transition: {
+          enter: { preset: "fade", durationMs: 200 },
+          exit: { preset: "none", durationMs: 0 },
+        },
       },
       createTestContext(),
     );
@@ -76,6 +80,10 @@ describe("standing operations", () => {
       appearanceId: "app-1",
       side: "left",
       scale: 1,
+    });
+    expect(leftCue?.transition.enter).toEqual({
+      preset: "fade",
+      durationMs: 200,
     });
     expect(left.created.cueIds).toHaveLength(1);
     expect(contentDocumentSchema.safeParse(left.document).success).toBe(true);
@@ -104,6 +112,10 @@ describe("standing operations", () => {
     expect(updatedCues[0]?.input).toMatchObject({
       appearanceId: "app-2",
       scale: 1.5,
+    });
+    expect(updatedCues[0]?.transition.enter).toEqual({
+      preset: "fade",
+      durationMs: 200,
     });
     expect(updated.created.cueIds).toHaveLength(0);
 
