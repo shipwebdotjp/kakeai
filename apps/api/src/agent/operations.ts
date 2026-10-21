@@ -56,6 +56,8 @@ import {
   agentWorkGetOutputSchema,
   agentWorkListInputSchema,
   agentWorkListOutputSchema,
+  agentWorkUpdateInputSchema,
+  agentWorkUpdateOutputSchema,
   buildAgentSchemaGetResult,
   bulkTtsJobExclusionSchema,
   isAgentMutationOperation,
@@ -92,7 +94,7 @@ import type { FontCatalogService } from "../services/font-catalog.ts";
 import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
 import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
-import { createWork, getWork, listWorks } from "../services/works.ts";
+import { createWork, getWork, listWorks, updateWork } from "../services/works.ts";
 import { AgentOperationError } from "./errors.ts";
 import { runWithAgentRequest } from "./idempotency.ts";
 
@@ -177,6 +179,13 @@ const definitions: AgentOperationDefinitions = {
     output: agentWorkCreateOutputSchema,
     run: async (input, context) => ({
       work: await createWork(context.prisma, input.title, input.locale ?? DEFAULT_AGENT_LOCALE),
+    }),
+  },
+  "work.update": {
+    input: agentWorkUpdateInputSchema,
+    output: agentWorkUpdateOutputSchema,
+    run: async (input, context) => ({
+      work: await updateWork(context.prisma, input.workId, input.title),
     }),
   },
   "script.get": {

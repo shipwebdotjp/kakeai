@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入を行えます。実体の削除、外部サービスへの公開、TTS 以外の課金を伴う生成は公開していません。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入を行えます。実体の削除、外部サービスへの公開、TTS 以外の課金を伴う生成は公開していません。
 
 ## 前提
 
@@ -47,7 +47,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 用途 | ツール |
 | --- | --- |
 | スキーマ確認 | `kakeai_schema_get` |
-| 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` |
+| 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` / `kakeai_work_update` |
 | 台本 | `kakeai_script_get` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` |
 | 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` |
 | キャラクター | `kakeai_character_list` / `kakeai_character_get` |
@@ -126,6 +126,7 @@ MCP の代わりに、同じ操作をシェルから実行できます。接続�
 ```sh
 kakeai-agent schema.get
 kakeai-agent work.create --input '{"title":"新しい作品"}'
+kakeai-agent work.update --input '{"workId":"work-123","title":"改訂版の作品名"}'
 kakeai-agent work.create --input input.json
 echo '{"title":"標準入力から"}' | kakeai-agent work.create --input -
 kakeai-agent job.get --input '{"jobId":"job-123"}'
@@ -137,6 +138,7 @@ kakeai-agent --help
 | --- | --- |
 | `kakeai_schema_get` | `kakeai-agent schema.get` |
 | `kakeai_work_create` | `kakeai-agent work.create --input ...` |
+| `kakeai_work_update` | `kakeai-agent work.update --input ...` |
 | `kakeai_script_edit` | `kakeai-agent script.edit --input ...` |
 | `kakeai_asset_list` | `kakeai-agent asset.list --input '{"tags":["bgm"],"status":"ready"}'` |
 | `kakeai_asset_import` | `kakeai-agent asset.import --input ...` |

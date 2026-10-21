@@ -117,6 +117,29 @@ describe("agent socket integration", () => {
     expect(script.scriptVersion.id).toBe(edition.currentScriptVersion.id);
   });
 
+  it("renames a work and reports unknown works", async () => {
+    const work = await createWork("改名前の作品");
+
+    const updated = await client.request("work.update", {
+      workId: work.id,
+      title: "改名後の作品",
+    });
+    expect(updated.work.id).toBe(work.id);
+    expect(updated.work.title).toBe("改名後の作品");
+
+    const fetched = await client.request("work.get", { workId: work.id });
+    expect(fetched.work.title).toBe("改名後の作品");
+
+    await expectAgentError(
+      client.request("work.update", { workId: "missing-work", title: "改名" }),
+      "RESOURCE_NOT_FOUND",
+    );
+    await expectAgentError(
+      client.request("work.update", { workId: work.id, title: "   " }),
+      "VALIDATION_ERROR",
+    );
+  });
+
   it("edits through the operation core with stale, replay and conflict rules", async () => {
     const work = await createWork("編集テスト作品");
     const edition = firstEdition(work);

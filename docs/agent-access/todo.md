@@ -77,9 +77,9 @@
 
 - [x] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。
 
-## 拡張フェーズ（B1〜B4）
+## 拡張フェーズ（B1〜B5）
 
-[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 の順に実装する。
+[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 の順に実装する。
 
 ### [x] B1 操作契約ダイジェストと版折衝の機構（R1-1）
 
@@ -106,3 +106,8 @@
 - [x] 検索契約に `sort`（`createdAt_desc` 既定 / `createdAt_asc` / `filename_asc` / `duration_asc`）、`hasAudio`、`durationMinMs` / `durationMaxMs`、ページの一致件数 `total` を追加する。カーソルはソート列を含める。
 - [x] HTTP API、ローカルソケット、MCP、CLI は同じ契約を使い続ける。`docs/asset-tags/spec.md` をサーバ側絞り込みの現行仕様へ更新する。
 - [x] 完了条件: 複合フィルタ＋ソート＋ページングで重複・欠落がなく、`total` がフィルタと一致し、タグの大小文字挙動が契約で固定されている。
+
+### [x] B5 作品名の更新
+
+- [x] `work.update`（`workId` と `title`）を追加し、HTTP の `PATCH /works/:workId` と同じ規則で管理上の作品名だけを変更する。出力は `{ work }` を返し、`schema.get` の操作カタログと契約ダイジェストへ反映する。MCP と CLI はカタログから自動公開する。
+- 完了条件: ソケット・MCP・CLI から作品名を変更でき、存在しない Work は `RESOURCE_NOT_FOUND`、空のタイトルは `VALIDATION_ERROR` になる。

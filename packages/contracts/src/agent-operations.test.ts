@@ -13,6 +13,8 @@ import {
   agentTtsCreateBulkOutputSchema,
   agentTtsCreateInputSchema,
   agentTtsCreateOutputSchema,
+  agentWorkUpdateInputSchema,
+  agentWorkUpdateOutputSchema,
   buildAgentSchemaGetResult,
   computeAgentSchemaDigest,
   isAgentLongRunningOperation,
@@ -135,6 +137,50 @@ describe("tts.create operation contract", () => {
         ),
       }),
     ).not.toBe(schema.schemaDigest);
+  });
+});
+
+describe("work.update operation contract", () => {
+  const work = {
+    id: "work-1",
+    title: "作品",
+    originalLocale: "ja-JP" as const,
+    updatedAt: "2026-10-21T00:00:00.000Z",
+    createdAt: "2026-10-21T00:00:00.000Z",
+    parentWorkId: null,
+    languageEditions: [],
+  };
+
+  it("takes a work id and a non-empty title", () => {
+    expect(
+      agentWorkUpdateInputSchema.parse({ workId: "work-1", title: "  改名  " }),
+    ).toEqual({ workId: "work-1", title: "改名" });
+    expect(agentWorkUpdateInputSchema.safeParse({ workId: "work-1" }).success).toBe(false);
+    expect(
+      agentWorkUpdateInputSchema.safeParse({ workId: "work-1", title: "   " }).success,
+    ).toBe(false);
+    expect(
+      agentWorkUpdateInputSchema.safeParse({ workId: "work-1", title: "改名", extra: true })
+        .success,
+    ).toBe(false);
+    expect(agentWorkUpdateOutputSchema.safeParse({ work }).success).toBe(true);
+    expect(
+      agentWorkUpdateOutputSchema.safeParse({ work: { ...work, title: undefined } }).success,
+    ).toBe(false);
+  });
+
+  it("registers work.update as a non-long-running mutation", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("work.update");
+    expect(isAgentMutationOperation("work.update")).toBe(true);
+    expect(isAgentLongRunningOperation("work.update")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "work.update",
+      kind: "mutation",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("work.update");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("work.update");
   });
 });
 

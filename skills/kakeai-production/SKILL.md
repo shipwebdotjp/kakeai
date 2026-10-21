@@ -53,7 +53,7 @@ files.
 | # | Phase | Operations | Decision point |
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
-| 2 | Work and script | `work.create`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
+| 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
 | 3 | Characters | `character.list`, `character.get`, `script.edit` + `character.addFromLibrary` | Library entry with a voice for this locale |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
@@ -68,6 +68,9 @@ saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
 
 - `work.create` returns the Work with its `languageEditions`. Use the first
   edition (default locale `ja-JP`) unless the user asked for another locale.
+- `work.update` renames the Work's management title (`workId` + `title`). The
+  title shown inside the video is a Scene slot in the ContentDocument, not this
+  field; change that through `script.edit`.
 - `script.get` with `languageEditionId` returns that edition's current version;
   with `scriptVersionId` it returns one specific version. Keep the returned
   `scriptVersion.id` as the base for the next edit.

@@ -42,6 +42,7 @@
 | `work.list` | read | no | `kakeai_work_list` |
 | `work.get` | read | no | `kakeai_work_get` |
 | `work.create` | mutation | no | `kakeai_work_create` |
+| `work.update` | mutation | no | `kakeai_work_update` |
 | `script.get` | read | no | `kakeai_script_get` |
 | `script.validate` | read | no | `kakeai_script_validate` |
 | `script.save` | mutation | no | `kakeai_script_save` |
@@ -144,6 +145,7 @@
 可逆な変更:
 
 - `work.create` — Work、指定 locale（既定は `ja-JP`）の LanguageEdition、初期 ScriptVersion を [../mvp/spec.md](../mvp/spec.md) の作成規則で作る。
+- `work.update` — Work の管理上の作品名 `title` を変更する。動画内に表示するタイトルは ContentDocument 側の Scene スロットであり、これとは別である（[../mvp/api-contract.md](../mvp/api-contract.md) の `PATCH /works/:workId` と同じ規則）。
 - `script.save` — `languageEditionId` と全 `ContentDocument` を受け、検証して新しい Script Version を追加し current を進める。全体の置換や取り込み向けであり、通常の編集は `script.edit` を使う。
 - `script.edit` — 基準版と `ScriptOperation` の配列を受け、操作コアで一括適用し、保存検証を通して新しい Script Version を追加する。1 呼び出しは 1 版とし、途中失敗時は版を作らない。
 - `asset.import` — 後述の手順で Asset を取り込む。

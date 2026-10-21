@@ -306,6 +306,7 @@ export const agentOperationNames = [
   "work.list",
   "work.get",
   "work.create",
+  "work.update",
   "script.get",
   "script.validate",
   "script.save",
@@ -352,6 +353,7 @@ export const agentReadOperationNames = [
 
 export const agentMutationOperationNames = [
   "work.create",
+  "work.update",
   "script.save",
   "script.edit",
   "asset.import",
@@ -752,6 +754,12 @@ export const agentWorkCreateInputSchema = z.strictObject({
 });
 export const agentWorkCreateOutputSchema = z.strictObject({ work: workSchema });
 
+export const agentWorkUpdateInputSchema = z.strictObject({
+  workId: idSchema,
+  title: z.string().trim().min(1),
+});
+export const agentWorkUpdateOutputSchema = z.strictObject({ work: workSchema });
+
 export const agentScriptGetInputSchema = z
   .strictObject({
     scriptVersionId: idSchema.optional(),
@@ -945,6 +953,7 @@ export const agentOperationInputSchemas = {
   "work.list": agentWorkListInputSchema,
   "work.get": agentWorkGetInputSchema,
   "work.create": agentWorkCreateInputSchema,
+  "work.update": agentWorkUpdateInputSchema,
   "script.get": agentScriptGetInputSchema,
   "script.validate": agentScriptValidateInputSchema,
   "script.save": agentScriptSaveInputSchema,
@@ -975,6 +984,7 @@ export const agentOperationOutputSchemas = {
   "work.list": agentWorkListOutputSchema,
   "work.get": agentWorkGetOutputSchema,
   "work.create": agentWorkCreateOutputSchema,
+  "work.update": agentWorkUpdateOutputSchema,
   "script.get": agentScriptGetOutputSchema,
   "script.validate": agentScriptValidateOutputSchema,
   "script.save": agentScriptSaveOutputSchema,

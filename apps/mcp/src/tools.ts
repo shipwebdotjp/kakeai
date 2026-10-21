@@ -51,6 +51,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "work.list": "作品の一覧を返す。",
   "work.get": "作品 1 件を、言語版と現在の台本版の概要付きで返す。",
   "work.create": "作品、`ja-JP` 既定の言語版、初期台本版を作成する。",
+  "work.update":
+    "作品の管理上の作品名（`title`）を変更する。動画内に表示するタイトルは台本側の Scene スロットで、これとは別。",
   "script.get":
     "台本版を取得する。`scriptVersionId` または `languageEditionId`（その Edition の current）のどちらか一方を指定する。",
   "script.validate":
