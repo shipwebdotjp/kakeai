@@ -76,3 +76,32 @@
 ### [x] A10 レビューとコミット
 
 - [x] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。
+
+## 拡張フェーズ（B1〜B4）
+
+[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 の順に実装する。
+
+### [ ] B1 操作契約ダイジェストと版折衝の機構（R1-1）
+
+- [ ] 各操作の入出力スキーマを正規化して `operationDigest` を出し、`schemaDigest` にも操作契約を含める。JSON Schema 変換は contracts に一本化し、MCP のツールスキーマ生成と同一の正規形を使う。
+- [ ] 対応プロトコル版の範囲（`minProtocolVersion`..`protocolVersion`）を handshake と `schema.get` で扱う。破壊的変更（必須化・削除・意味変更）のときだけ `AGENT_PROTOCOL_VERSION` を上げ、任意フィールド追加や列挙値追加では上げない。
+- [ ] 完了条件: 操作スキーマの変更で `operationDigest` と `schemaDigest` が変わり、版の範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` のまま拒否される。契約ドリフトを検出するテストがある。
+
+### [ ] B2 高コスト操作の冪等化（R1-2）
+
+- [ ] 冪等台帳 `AgentRequest`（operation / agentId / requestId / 要求ハッシュ / 結果参照）を追加する。`script.edit` の版単位冪等は維持する。
+- [ ] `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` に任意の `requestId` を受け付け、同一ID・同一入力は既存の Job／Version を返し、同一ID・異なる入力は `IDEMPOTENCY_CONFLICT` とする。
+- [ ] 完了条件: タイムアウト後の再送でも ScriptVersion・Job・CompositionVersion が増えず、再送と衝突をテストで区別できる。
+
+### [ ] B3 ソケットの流量制御（R1-3）
+
+- [ ] 接続ごとの未処理フレーム数と最大接続数に上限を設け、超過は `AGENT_BACKPRESSURE` などの安定コードで返す（接続は落とさない）。キュー長に応じた backpressure も効かせる。
+- [ ] 同一ユーザー性の担保が `0700` ディレクトリ＋`0600` ソケットのファイル権限であることを Agent Access 仕様と ADR 0075 に明記する。実行中操作の取消とネイティブ UID 検証は対象外とする。
+- [ ] 完了条件: 過負荷時も待ち行列が有界で、接続数超過は切断され、同一ユーザー以外が接続できない根拠が仕様上明確である。
+
+### [ ] B4 素材検索の拡張（R2-1）
+
+- [ ] タグ絞り込みを DB 側クエリへ移し、タグ一致は要素の完全一致（ASCII は大文字小文字を区別しない）として契約に固定する。`tagsJson` のまま維持し、索引化は行わない。
+- [ ] 検索契約に `sort`（`createdAt_desc` 既定 / `createdAt_asc` / `filename_asc` / `duration_asc`）、`hasAudio`、`durationMinMs` / `durationMaxMs`、ページの一致件数 `total` を追加する。カーソルはソート列を含める。
+- [ ] HTTP API、ローカルソケット、MCP、CLI は同じ契約を使い続ける。`docs/asset-tags/spec.md` をサーバ側絞り込みの現行仕様へ更新する。
+- [ ] 完了条件: 複合フィルタ＋ソート＋ページングで重複・欠落がなく、`total` がフィルタと一致し、タグの大小文字挙動が契約で固定されている。
