@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toAgentJsonSchema, type AgentJsonSchema } from "./agent-json-schema";
 import { CONTENT_SCHEMA_VERSION, contentDocumentSchema } from "./content/document";
 import { animationPresetSchema } from "./content/animation";
 import {
@@ -51,6 +52,27 @@ import {
 
 /** Version of the local socket request/response envelope. */
 export const AGENT_PROTOCOL_VERSION = 1 as const;
+
+/**
+ * Oldest protocol version this build still accepts. A handshake is accepted
+ * when its version is inside `[AGENT_PROTOCOL_MIN_VERSION,
+ * AGENT_PROTOCOL_VERSION]`. The range exists so a future breaking change can
+ * raise the maximum while old clients are still told which minimum they need;
+ * a compatible addition never moves either bound.
+ */
+export const AGENT_PROTOCOL_MIN_VERSION = 1 as const;
+
+/**
+ * True when `version` is a protocol version this build can talk. Used by the
+ * local socket handshake and by clients that want to fail early.
+ */
+export function isAgentProtocolVersionSupported(version: number): boolean {
+  return (
+    Number.isInteger(version) &&
+    version >= AGENT_PROTOCOL_MIN_VERSION &&
+    version <= AGENT_PROTOCOL_VERSION
+  );
+}
 
 /** Directory (under the app data root) that holds the local control socket. */
 export const AGENT_SOCKET_DIRECTORY = "agent" as const;
@@ -392,12 +414,24 @@ export const agentSchemaDigestSchema = z
 
 export const agentSchemaGetResultSchema = z.strictObject({
   protocolVersion: z.literal(AGENT_PROTOCOL_VERSION),
+  /**
+   * The oldest protocol version this build accepts. A server that predates
+   * the version range does not report it, so the field is optional on the
+   * wire; the current server always sends it.
+   */
+  minProtocolVersion: z.literal(AGENT_PROTOCOL_MIN_VERSION).optional(),
   contentSchemaVersion: positiveInt,
   templates: z.array(agentVisualTemplateSchema),
   operations: z.array(agentOperationCatalogEntrySchema),
   agentOperations: z.array(agentOperationDescriptorSchema),
   warningCodes: z.array(agentWarningCodeSchema),
   assetKinds: z.array(assetKindSchema),
+  /**
+   * Digest of the operation contracts. A server that predates the digest
+   * does not report it, so the field is optional on the wire; the current
+   * server always sends it.
+   */
+  operationDigest: agentSchemaDigestSchema.optional(),
   schemaDigest: agentSchemaDigestSchema,
 });
 export type AgentSchemaGetResult = z.infer<typeof agentSchemaGetResultSchema>;
@@ -610,32 +644,27 @@ export function computeAgentSchemaDigest(value: unknown): string {
   return `${AGENT_SCHEMA_DIGEST_ALGORITHM}:${fnv1a64Hex(stableStringify(value))}`;
 }
 
-export function buildAgentSchemaGetResult(): AgentSchemaGetResult {
-  const contentSchemaVersion = CONTENT_SCHEMA_VERSION;
-  const templates = visualTemplateDefinitions.map(toAgentTemplate);
-  const operations = scriptOperationNames.map((name) => ({
-    name,
-    category: scriptOperationCategoryOf(name),
-  }));
-  const agentOperations = agentOperationCatalog.map((entry) => ({ ...entry }));
-  const warningCodes = [...agentWarningCodes];
-  const assetKinds = [...assetKindSchema.options];
-  const schema = {
-    contentSchemaVersion,
-    templates,
-    operations,
-    agentOperations,
-    warningCodes,
-    assetKinds,
-  };
-  return {
-    protocolVersion: AGENT_PROTOCOL_VERSION,
-    ...schema,
-    schemaDigest: computeAgentSchemaDigest(agentSchemaDigestInputOf(schema)),
-  };
-}
-
 export type AgentSchemaDigestTemplate = Omit<AgentVisualTemplate, "display" | "editable">;
+
+/**
+ * The payload parts and the operation contracts that belong together. The
+ * digest is computed from this source, so a caller always states which
+ * contracts belong to the payload it digests.
+ */
+export interface AgentSchemaDigestSource {
+  contentSchemaVersion: number;
+  templates: AgentVisualTemplate[];
+  operations: AgentOperationCatalogEntry[];
+  agentOperations: AgentOperationDescriptor[];
+  warningCodes: AgentWarningCode[];
+  assetKinds: Array<z.infer<typeof assetKindSchema>>;
+  /**
+   * The normalised input/output schema of every agent operation. Folding it
+   * into the schema digest is what makes an operation contract change visible
+   * to an agent that cached the previous digest.
+   */
+  operationContracts: readonly AgentOperationContract[];
+}
 
 export interface AgentSchemaDigestInput {
   contentSchemaVersion: number;
@@ -644,34 +673,7 @@ export interface AgentSchemaDigestInput {
   agentOperations: AgentOperationDescriptor[];
   warningCodes: AgentWarningCode[];
   assetKinds: Array<z.infer<typeof assetKindSchema>>;
-}
-
-export function agentSchemaDigestInputOf(
-  result: Pick<
-    AgentSchemaGetResult,
-    | "contentSchemaVersion"
-    | "templates"
-    | "operations"
-    | "agentOperations"
-    | "warningCodes"
-    | "assetKinds"
-  >,
-): AgentSchemaDigestInput {
-  return {
-    contentSchemaVersion: result.contentSchemaVersion,
-    templates: result.templates.map((template) => ({
-      id: template.id,
-      version: template.version,
-      layers: template.layers,
-      inputFields: template.inputFields,
-      transitionPolicy: template.transitionPolicy,
-      animationPolicy: template.animationPolicy,
-    })),
-    operations: result.operations,
-    agentOperations: result.agentOperations,
-    warningCodes: result.warningCodes,
-    assetKinds: result.assetKinds,
-  };
+  operationContracts: readonly AgentOperationContract[];
 }
 
 export const scriptEditRequestSchema = z.strictObject({
@@ -1012,3 +1014,126 @@ export const agentResponseSchema = z.discriminatedUnion("ok", [
   agentErrorResponseSchema,
 ]);
 export type AgentResponse = z.infer<typeof agentResponseSchema>;
+
+/**
+ * The normalised contract of one agent operation: the JSON Schema of its
+ * input and of its output. The JSON Schema conversion is the one shared with
+ * the MCP tool schemas, so an agent sees exactly the schema that was hashed.
+ */
+export interface AgentOperationContract {
+  name: AgentOperationName;
+  input: AgentJsonSchema;
+  output: AgentJsonSchema;
+}
+
+export const agentOperationContractSchema = z.strictObject({
+  name: z.enum(agentOperationNames),
+  input: z.record(z.string(), z.unknown()),
+  output: z.record(z.string(), z.unknown()),
+});
+
+/**
+ * Freezes a plain data structure. The operation contracts are digest inputs,
+ * so they must not change while the build is running.
+ */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  Object.freeze(value);
+  for (const entry of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(entry);
+  }
+  return value;
+}
+
+/**
+ * Builds the contract of every agent operation, in the fixed operation order.
+ * The order is part of the digest input, so it must not change.
+ */
+export function buildAgentOperationContracts(): AgentOperationContract[] {
+  return agentOperationNames.map((name) =>
+    deepFreeze(
+      agentOperationContractSchema.parse({
+        name,
+        input: toAgentJsonSchema(agentOperationInputSchemas[name], "input"),
+        output: toAgentJsonSchema(agentOperationOutputSchemas[name], "output"),
+      }),
+    ),
+  );
+}
+
+const operationContractsCache: { value?: readonly AgentOperationContract[] } = {};
+
+/**
+ * The operation contracts of this build. They are built once and reused, so
+ * every digest of the same build is computed from the same contracts.
+ */
+export function agentOperationContracts(): readonly AgentOperationContract[] {
+  if (operationContractsCache.value === undefined) {
+    operationContractsCache.value = Object.freeze(buildAgentOperationContracts());
+  }
+  return operationContractsCache.value;
+}
+
+/**
+ * Digest of the operation contracts alone. It changes whenever an
+ * operation's input or output schema changes, and it does not depend on the
+ * key order of the JSON Schema objects.
+ */
+export function computeAgentOperationDigest(
+  contracts: readonly AgentOperationContract[],
+): string {
+  return computeAgentSchemaDigest(contracts);
+}
+
+export function agentSchemaDigestInputOf(
+  source: AgentSchemaDigestSource,
+): AgentSchemaDigestInput {
+  return {
+    contentSchemaVersion: source.contentSchemaVersion,
+    templates: source.templates.map((template) => ({
+      id: template.id,
+      version: template.version,
+      layers: template.layers,
+      inputFields: template.inputFields,
+      transitionPolicy: template.transitionPolicy,
+      animationPolicy: template.animationPolicy,
+    })),
+    operations: source.operations,
+    agentOperations: source.agentOperations,
+    warningCodes: source.warningCodes,
+    assetKinds: source.assetKinds,
+    operationContracts: source.operationContracts,
+  };
+}
+
+export function buildAgentSchemaGetResult(): AgentSchemaGetResult {
+  const contentSchemaVersion = CONTENT_SCHEMA_VERSION;
+  const templates = visualTemplateDefinitions.map(toAgentTemplate);
+  const operations = scriptOperationNames.map((name) => ({
+    name,
+    category: scriptOperationCategoryOf(name),
+  }));
+  const agentOperations = agentOperationCatalog.map((entry) => ({ ...entry }));
+  const warningCodes = [...agentWarningCodes];
+  const assetKinds = [...assetKindSchema.options];
+  const operationContracts = agentOperationContracts();
+  const schema = {
+    contentSchemaVersion,
+    templates,
+    operations,
+    agentOperations,
+    warningCodes,
+    assetKinds,
+  };
+  return {
+    protocolVersion: AGENT_PROTOCOL_VERSION,
+    minProtocolVersion: AGENT_PROTOCOL_MIN_VERSION,
+    ...schema,
+    operationDigest: computeAgentOperationDigest(operationContracts),
+    schemaDigest: computeAgentSchemaDigest(
+      agentSchemaDigestInputOf({ ...schema, operationContracts }),
+    ),
+  };
+}

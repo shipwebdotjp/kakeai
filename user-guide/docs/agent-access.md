@@ -58,6 +58,8 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 
 `kakeai_schema_get` の `agentOperations` が、公開されている全操作（読み取り／変更、Job を返すか）の正です。`kakeai_job_wait` は Job を待つための束縛の便宜ツールで、Agent 操作ではありません。
 
+応答には契約の要約 `schemaDigest` と `operationDigest`、対応プロトコル版の `minProtocolVersion` と `protocolVersion` が入ります。`operationDigest` は操作の入力・出力スキーマの要約で、操作の形が変わると変わります。記録した値が変わったときは、キャッシュしたスキーマや ID を使わず `kakeai_schema_get` を取り直してください。任意フィールドの追加や列挙値の追加では版は上がらず、必須化や削除、意味を変えたときだけ `protocolVersion` が変わります。
+
 `kakeai_script_edit` は `baseScriptVersionId` が現在の版と一致している必要があります。`requestId` を付けると再送が冪等になります。
 
 ### 素材の検索

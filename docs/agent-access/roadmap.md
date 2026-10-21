@@ -36,6 +36,7 @@ B1 → B2 → B3 → B4 の順で実装する。
 
 ### B1 操作契約ダイジェストと版折衝の機構（R1-1）
 
+- 状態: 完了。機構だけを導入し、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置いた（`AGENT_PROTOCOL_MIN_VERSION` も `1`）。`schema.get` に `operationDigest` と `minProtocolVersion` を追加し、`schemaDigest` は操作契約を含む。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
 - `schema.get` に各操作の入出力スキーマの正規形ハッシュ `operationDigest` を追加する。JSON Schema への変換は contracts に一本化し、MCP のツールスキーマ生成とダイジェストで同じ正規形を使う。
 - `schemaDigest` は Template・警告・操作カタログ・操作契約をまとめたものにし、操作契約の変更で必ず変わるようにする。
 - 対応プロトコル版の範囲（`minProtocolVersion`..`protocolVersion`）を handshake と `schema.get` で扱う。破壊的変更（必須化・削除・意味変更）のときだけ `AGENT_PROTOCOL_VERSION` を上げる。任意フィールドの追加や列挙値の追加では版を上げない。
@@ -90,8 +91,8 @@ A9 完了時点で認識している制約である。B1〜B4 の完了で大部
 
 | 制約 | 影響 | 対応 |
 | --- | --- | --- |
-| `schemaDigest` は操作カタログを含むが、各操作の入出力スキーマを含まない | 操作の入力追加・変更をエージェントが検知できない | B1 |
-| ソケットの `AGENT_PROTOCOL_VERSION` は `1` のまま | 破壊的変更時に旧クライアントとの互換性を判定できない | B1（機構のみ。版は破壊的変更時に上げる） |
+| `schemaDigest` は操作カタログを含むが、各操作の入出力スキーマを含まない | 操作の入力追加・変更をエージェントが検知できない | B1 で解消。`operationDigest` を追加し、`schemaDigest` にも操作契約を含めた |
+| ソケットの `AGENT_PROTOCOL_VERSION` は `1` のまま | 破壊的変更時に旧クライアントとの互換性を判定できない | B1 で解消（機構のみ。版は破壊的変更時に上げる） |
 | `tts.create` などはタイムアウト後の再送で Job が重複し得る | 二重生成・課金・待機の無駄 | B2 |
 | ソケットのフレームキューと接続数に上限がない | 大量要求時にメモリが膨らむ | B3 |
 | `asset.list` のタグ検索は SQLite の JSON をメモリで後フィルタする | タグ条件が厳しいとページ取得で走査が増える | B4（DB 側クエリ化。索引化は保留） |

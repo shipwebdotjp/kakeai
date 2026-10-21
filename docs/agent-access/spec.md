@@ -97,7 +97,7 @@
 - アプリプロセスが単一の SQLite ライターかつ単一の worker であり続ける。エージェントは Job を投入するだけで、worker を起動しない。
 - v1 はアプリが起動していないとき、接続に失敗する安定したエラーを返す。エージェントによるアプリの自動起動は対象外とする。
 - 起動時、ソケットファイルが既にある場合はアプリプロセスだけが後始末する。接続できるソケットは稼働中として残し、接続できないソケットだけを削除してから listen する。ソケットでないファイルは削除しない。終了時は自分が作ったソケットを unlink する。
-- 接続時に `{ "protocolVersion": 1, "agentId": "<任意>" }` を送る。未知の版は `AGENT_PROTOCOL_MISMATCH` で拒否する。
+- 接続時に `{ "protocolVersion": 1, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
 - フレームは 1 行 1 JSON（NDJSON）とし、要求は `{ "requestId": "<呼び出し内で一意>", "operation": "<name>", "input": <object> }`、応答は `{ "requestId": "...", "ok": true, "data": ... }` または `{ "requestId": "...", "ok": false, "error": { "code": "...", "issues": [...] } }` とする。`issues` は `{ path, code, message }` の配列で、スタックトレースや自由文の詳細は返さない。
 - 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは 10 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できるが、それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
 - サーバーは応答を返した後も同じ接続で次の要求を受け付けるが、5 分間何も受信しない接続は閉じる。
@@ -109,7 +109,7 @@
 
 参照:
 
-- `schema.get` — 現在の `contentSchemaVersion`、各 VisualTemplate の `inputFields`・layer・transition・animation の制約、操作カタログ、Asset 種別と用途の制約、警告コードを返す。`schemaDigest` を含め、アプリ更新による変化を検知できるようにする。エージェントが値を推測しないための必須操作。`schemaDigest` はスキーマ関連データを正規化した非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。`operations` は台本編集の `ScriptOperation` カタログ（名前とカテゴリ）を従来どおり返し、`agentOperations` は束縛が公開してよい全 Agent 操作のカタログ（`name`、`kind` の `read` / `mutation`、Job を返す `longRunning`）を返す。`agentOperations` は読み取り・変更の分類リストから導出し、束縛ごとに第二の操作一覧を持たない。
+- `schema.get` — 現在の `contentSchemaVersion`、各 VisualTemplate の `inputFields`・layer・transition・animation の制約、操作カタログ、Asset 種別と用途の制約、警告コードを返す。`schemaDigest` を含め、アプリ更新による変化を検知できるようにする。エージェントが値を推測しないための必須操作。`schemaDigest` はスキーマ関連データを正規化した非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。`operations` は台本編集の `ScriptOperation` カタログ（名前とカテゴリ）を従来どおり返し、`agentOperations` は束縛が公開してよい全 Agent 操作のカタログ（`name`、`kind` の `read` / `mutation`、Job を返す `longRunning`）を返す。`agentOperations` は読み取り・変更の分類リストから導出し、束縛ごとに第二の操作一覧を持たない。`operationDigest` は全 Agent 操作の入出力スキーマを正規化した契約のダイジェストで、操作の入力・出力が変わると必ず変化する。`minProtocolVersion` は対応するプロトコル版の下限、`protocolVersion` は上限（対応版）である。
 - `work.list` / `work.get`
 - `script.get` — `scriptVersionId` を指定するとその版、`languageEditionId` を指定するとその Edition の current の `ContentDocument` と帰属を返す。どちらか一方を必須とする。
 - `script.validate` — 保存せずに検証する。`{ content }` または `{ baseScriptVersionId, operations }` を受け、`warnings` と解決済み `timeline` を返す。書込みを行わない。
@@ -158,6 +158,18 @@
 - `composition.publish` は任意の `dryRun` を受け付ける。`true` なら version を作らずに publish と同じ検証だけを行い `{ dryRun: true, manifest, fontDiagnostics }` を返し、`false` または省略時は publish して `{ dryRun: false, version, fontDiagnostics }` を返す。検証失敗は `VALIDATION_ERROR` と `issues`、Style Kit の改変は `STYLE_KIT_MODIFIED` とする。
 - 存在しない Composition は、束縛に依存しない HTTP の安定コード `RESOURCE_NOT_FOUND` で返す。
 - Composition の実体削除は操作面に公開しない（HTTP の削除系も従来どおり人専用）。
+
+## プロトコル版と契約ダイジェスト
+
+- 互換性は「追加は自由、破壊は版を上げる」で扱う。操作の入出力への任意フィールドの追加や列挙値の追加では `AGENT_PROTOCOL_VERSION` を上げない。必須化・フィールドの削除・意味変更のときだけ上げる。
+- 対応版は範囲として扱う。`AGENT_PROTOCOL_MIN_VERSION` が下限、`AGENT_PROTOCOL_VERSION` が上限であり、handshake はこの範囲の版だけを受け入れる。範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` で拒否する。現在の版は下限も上限も `1` であり、機構的出现で挙動は変わらない。
+- `schema.get` は `minProtocolVersion`（下限）と `protocolVersion`（上限）を返す。エージェントはどちらの版でも接続できるかを確かめられる。
+- `schema.get` の `operationDigest` は、全 Agent 操作の入出力スキーマを JSON Schema に正規化して摘要した値である。JSON Schema への変換は `packages/contracts` の `toAgentJsonSchema` に一本化し、MCP のツールスキーマ生成と同じ正規形を使う。摘要対象のキーの並び順には依存しない。
+- `schemaDigest` は Template・警告・操作カタログ・操作契約をまとめた摘要である。`operationDigest` を含むため、操作の入力・出力が変われば `schemaDigest` も必ず変化する。エージェントは保存した `schemaDigest` と `operationDigest` を比較して契約ドリフトを検知できる。
+- 摘要は非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。衝突耐性はセキュリティの目的ではなく、変更検知の合図である。
+- `schema.get` の応答には `operationDigest` と `minProtocolVersion` が入る。両方ともこの機構の導入前に作られた応答には存在しないため、応答スキーマでは任意扱いにする（現在のサーバーは必ず返す）。これにより、新しい束縛は古いアプリの応答も検証できる。
+- 古い束縛は厳格な応答検証で未知のキーを弾くため、`schema.get` の応答にフィールドを増やす変更は、束縛とアプリが同じバージョンで同居することを前提とする。ずれが起きたら束縛も同じ版へ更新する。
+- 版の機構は、破壊的変更が実際に起きたときに使う。`AGENT_PROTOCOL_VERSION` を上げると、古い束縛は handshake で `AGENT_PROTOCOL_MISMATCH` になって接続时被弾する（応答検証の失敗ではなく、原因が明確な失敗になる）。
 
 ## 素材の取り込み
 

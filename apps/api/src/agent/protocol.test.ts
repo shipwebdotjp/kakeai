@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AGENT_ERROR_CODES,
+  AGENT_PROTOCOL_MIN_VERSION,
   AGENT_PROTOCOL_VERSION,
   agentErrorResponseSchema,
   agentSuccessResponseSchema,
@@ -165,6 +166,42 @@ describe("agent NDJSON protocol", () => {
       connection.send({ protocolVersion: 99 });
       const response = await connection.nextError();
       expect(response.requestId).toBe("");
+      expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+      await connection.closed;
+      connection.close();
+    });
+  });
+
+  it("accepts a protocol version inside the supported range", async () => {
+    await withServer(echoDispatch, async (socketPath) => {
+      const connection = await TestConnection.open(socketPath);
+      connection.send({
+        protocolVersion: AGENT_PROTOCOL_MIN_VERSION,
+        agentId: "agent-min",
+      });
+      connection.send({ requestId: "req-min", operation: "work.list", input: {} });
+      const response = await connection.nextResponse();
+      expect(response.ok).toBe(true);
+      connection.close();
+    });
+  });
+
+  it("rejects a protocol version below the supported range", async () => {
+    await withServer(echoDispatch, async (socketPath) => {
+      const connection = await TestConnection.open(socketPath);
+      connection.send({ protocolVersion: AGENT_PROTOCOL_MIN_VERSION - 1 });
+      const response = await connection.nextError();
+      expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+      await connection.closed;
+      connection.close();
+    });
+  });
+
+  it("rejects a protocol version above the supported range", async () => {
+    await withServer(echoDispatch, async (socketPath) => {
+      const connection = await TestConnection.open(socketPath);
+      connection.send({ protocolVersion: AGENT_PROTOCOL_VERSION + 1 });
+      const response = await connection.nextError();
       expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
       await connection.closed;
       connection.close();

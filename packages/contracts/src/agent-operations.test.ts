@@ -4,6 +4,7 @@ import {
   agentCharacterGetOutputSchema,
   agentCharacterListInputSchema,
   agentCharacterListOutputSchema,
+  agentOperationContracts,
   agentOperationInputSchemas,
   agentOperationNames,
   agentOperationOutputSchemas,
@@ -121,7 +122,10 @@ describe("tts.create operation contract", () => {
     expect(Object.keys(agentOperationOutputSchemas)).toContain("tts.create");
     expect(Object.keys(agentOperationOutputSchemas)).toContain("tts.createBulk");
 
-    const digestInput = agentSchemaDigestInputOf(schema);
+    const digestInput = agentSchemaDigestInputOf({
+      ...schema,
+      operationContracts: agentOperationContracts(),
+    });
     expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);
     expect(
       computeAgentSchemaDigest({
@@ -166,7 +170,10 @@ describe("character read operation contracts", () => {
       expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
     }
 
-    const digestInput = agentSchemaDigestInputOf(schema);
+    const digestInput = agentSchemaDigestInputOf({
+      ...schema,
+      operationContracts: agentOperationContracts(),
+    });
     expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);
     expect(
       computeAgentSchemaDigest({

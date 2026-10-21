@@ -95,8 +95,10 @@ describe("agent socket integration", () => {
   it("exposes the schema and work reads", async () => {
     const schema = await client.request("schema.get", {});
     expect(schema.protocolVersion).toBe(1);
+    expect(schema.minProtocolVersion).toBe(1);
     expect(schema.operations.length).toBeGreaterThan(0);
     expect(schema.schemaDigest).toMatch(/^fnv1a64:/u);
+    expect(schema.operationDigest).toMatch(/^fnv1a64:/u);
 
     const work = await createWork("統合テスト作品");
     expect(work.originalLocale).toBe("ja-JP");

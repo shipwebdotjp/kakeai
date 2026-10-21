@@ -123,9 +123,13 @@ describe("MCP server over an in-memory transport", () => {
       expect(schema.isError).toBeUndefined();
       const schemaPayload = schema.structuredContent as {
         schemaDigest: string;
+        operationDigest: string;
+        minProtocolVersion: number;
         agentOperations: Array<{ name: string; kind: string; longRunning: boolean }>;
       };
       expect(schemaPayload.schemaDigest).toMatch(/^fnv1a64:/u);
+      expect(schemaPayload.operationDigest).toMatch(/^fnv1a64:/u);
+      expect(schemaPayload.minProtocolVersion).toBe(1);
       expect(schemaPayload.agentOperations).toHaveLength(agentOperationNames.length);
 
       const created = await harness.client.callTool({

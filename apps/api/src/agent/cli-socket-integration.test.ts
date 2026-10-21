@@ -147,10 +147,14 @@ describe("CLI against the real agent dispatcher", () => {
       contentSchemaVersion: number;
       agentOperations: Array<{ name: string }>;
       schemaDigest: string;
+      operationDigest: string;
+      minProtocolVersion: number;
     };
     expect(schemaData.contentSchemaVersion).toBe(1);
     expect(schemaData.agentOperations).toHaveLength(agentOperationNames.length);
     expect(schemaData.schemaDigest).toMatch(/^fnv1a64:/u);
+    expect(schemaData.operationDigest).toMatch(/^fnv1a64:/u);
+    expect(schemaData.minProtocolVersion).toBe(1);
 
     const created = await cli(["work.create", "--input", '{"title":"CLI 実連携作品"}']);
     expect(created.exitCode).toBe(0);

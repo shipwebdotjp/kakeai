@@ -4,11 +4,11 @@ import {
   AGENT_IDLE_TIMEOUT_MS,
   AGENT_MAX_REQUEST_BYTES,
   AGENT_MUTATION_TIMEOUT_MS,
-  AGENT_PROTOCOL_VERSION,
   AGENT_READ_TIMEOUT_MS,
   agentHandshakeSchema,
   agentRequestEnvelopeSchema,
   agentSuccessResponseSchema,
+  isAgentProtocolVersionSupported,
   type AgentErrorCode,
   type AgentResponse,
 } from "@kakeai/contracts";
@@ -179,7 +179,7 @@ export function attachAgentProtocol(socket: Socket, options: AgentProtocolOption
       const handshake = agentHandshakeSchema.safeParse(parsed);
       if (
         !handshake.success ||
-        handshake.data.protocolVersion !== AGENT_PROTOCOL_VERSION
+        !isAgentProtocolVersionSupported(handshake.data.protocolVersion)
       ) {
         protocolFailure(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
         return;

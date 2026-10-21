@@ -81,11 +81,11 @@
 
 [ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 の順に実装する。
 
-### [ ] B1 操作契約ダイジェストと版折衝の機構（R1-1）
+### [x] B1 操作契約ダイジェストと版折衝の機構（R1-1）
 
-- [ ] 各操作の入出力スキーマを正規化して `operationDigest` を出し、`schemaDigest` にも操作契約を含める。JSON Schema 変換は contracts に一本化し、MCP のツールスキーマ生成と同一の正規形を使う。
-- [ ] 対応プロトコル版の範囲（`minProtocolVersion`..`protocolVersion`）を handshake と `schema.get` で扱う。破壊的変更（必須化・削除・意味変更）のときだけ `AGENT_PROTOCOL_VERSION` を上げ、任意フィールド追加や列挙値追加では上げない。
-- [ ] 完了条件: 操作スキーマの変更で `operationDigest` と `schemaDigest` が変わり、版の範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` のまま拒否される。契約ドリフトを検出するテストがある。
+- [x] 各操作の入出力スキーマを正規化して `operationDigest` を出し、`schemaDigest` にも操作契約を含める。JSON Schema 変換は contracts に一本化し、MCP のツールスキーマ生成と同一の正規形を使う。
+- [x] 対応プロトコル版の範囲（`minProtocolVersion`..`protocolVersion`）を handshake と `schema.get` で扱う。破壊的変更（必須化・削除・意味変更）のときだけ `AGENT_PROTOCOL_VERSION` を上げ、任意フィールド追加や列挙値追加では上げない。
+- [x] 完了条件: 操作スキーマの変更で `operationDigest` と `schemaDigest` が変わり、版の範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` のまま拒否される。契約ドリフトを検出するテストがある。
 
 ### [ ] B2 高コスト操作の冪等化（R1-2）
 

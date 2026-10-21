@@ -18,7 +18,7 @@ contracts or operation JSON schemas:
 - Call `schema.get` first. It is the single source of truth for
   `contentSchemaVersion`, Visual Templates (`layers`, `inputFields`, constraints),
   `warningCodes`, `assetKinds`, the operation catalog (`agentOperations` with
-  `kind` and `longRunning`) and `schemaDigest`.
+  `kind` and `longRunning`), `schemaDigest` and `operationDigest`.
 - Read each operation's input fields from the binding's published input schema:
   the MCP tool `inputSchema` (from `tools/list`) or the CLI's validation.
 - Never guess field names, option values, or asset kinds.
@@ -35,9 +35,12 @@ files.
 2. Call `schema.get`:
    - MCP: `kakeai_schema_get` with `{}`
    - CLI: `kakeai-agent schema.get --pretty`
-3. Record `schemaDigest` and `contentSchemaVersion`. If the digest changes later
-   (app restarted or upgraded), re-read `schema.get` and the current script
-   before the next mutation instead of trusting cached templates or IDs.
+3. Record `schemaDigest`, `operationDigest` and `contentSchemaVersion`. If a
+   digest changes later (app restarted or upgraded), re-read `schema.get` and
+   the current script before the next mutation instead of trusting cached
+   templates, operation shapes or IDs. `operationDigest` changes when an
+   operation's input or output schema changed; `schemaDigest` also covers
+   templates, warnings and the operation catalog.
 4. Pick one binding for the session and stay with it. MCP tools are
    `kakeai_<domain>_<verb>` (`kakeai_tts_create_bulk`); CLI subcommands are the
    canonical `domain.verb` (`kakeai-agent tts.createBulk`). Same operations, same
@@ -209,7 +212,7 @@ generation.
 | `IDEMPOTENCY_CONFLICT` | A version with that `requestId` already exists with different content. Never reuse the ID with different content. Read the current version (`script.get` with `languageEditionId`) and continue from there. |
 | `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `job.list`, `asset.list`, `composition.get`) and only then retry. The exception is `script.edit`, which may be replayed immediately with the same `requestId`. |
 | `replay: true` | The edit was already applied. Do not apply the operations again. |
-| Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. |
+| Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. |
 
 Read timeouts are 10 seconds and mutation timeouts 120 seconds; both are
 server-enforced. Job polling has its own bounded budget and is not a mutation
@@ -254,5 +257,5 @@ to the user when the fix is on their side.
   a background or device-screen cue references. Call it from this flow when the
   video needs a new motion composition, then reference the published version in
   a `script.edit`.
-- `schema.get` — always the authority for templates, fields, warning codes and
-  the operation catalog.
+- `schema.get` — always the authority for templates, fields, warning codes, the
+  operation catalog and the contract digests (`schemaDigest`, `operationDigest`).

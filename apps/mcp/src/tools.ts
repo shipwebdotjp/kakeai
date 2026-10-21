@@ -1,9 +1,9 @@
-import { z } from "zod";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import {
   agentOperationCatalog,
   agentOperationInputSchemas,
   agentOperationOutputSchemas,
+  toAgentJsonSchema,
   type AgentOperationName,
 } from "@kakeai/contracts";
 import { jobWaitInputSchema, jobWaitResultSchema } from "@kakeai/agent-client";
@@ -33,20 +33,6 @@ export interface JobWaitToolEntry extends BaseToolEntry {
 }
 
 export type McpToolEntry = OperationToolEntry | JobWaitToolEntry;
-
-/**
- * Converts a contract Zod schema into the JSON Schema shape MCP requires. The
- * generated schema is the only schema exposed to agents; there is no
- * hand-written duplicate. A top-level `type: "object"` is added for unions
- * (e.g. `script.validate`) because MCP tool inputs are objects.
- */
-function toMcpObjectSchema(schema: z.ZodType, io: "input" | "output"): Record<string, unknown> {
-  const { $schema: _schema, ...json } = z.toJSONSchema(schema, { io }) as Record<
-    string,
-    unknown
-  >;
-  return json.type === undefined ? { type: "object", ...json } : json;
-}
 
 /** MCP tool names are lowercase snake case: `kakeai_<domain>_<verb>`. */
 export function mcpToolName(operation: AgentOperationName): string {
@@ -128,6 +114,13 @@ function operationAnnotations(
   };
 }
 
+/**
+ * The tool schemas come from the contract Zod schemas through the one shared
+ * JSON Schema conversion in `@kakeai/contracts`. The generated schema is the
+ * only schema exposed to agents; there is no hand-written duplicate. The same
+ * conversion feeds the operation digest, so an agent sees exactly the schema
+ * that was hashed.
+ */
 export const operationToolEntries: readonly OperationToolEntry[] =
   agentOperationCatalog.map((descriptor) => ({
     kind: "operation",
@@ -135,11 +128,11 @@ export const operationToolEntries: readonly OperationToolEntry[] =
     toolName: mcpToolName(descriptor.name),
     title: descriptor.name,
     description: describeOperation(descriptor.name, descriptor.kind, descriptor.longRunning),
-    inputSchema: toMcpObjectSchema(
+    inputSchema: toAgentJsonSchema(
       agentOperationInputSchemas[descriptor.name],
       "input",
     ) as unknown as ToolInputSchema,
-    outputSchema: toMcpObjectSchema(
+    outputSchema: toAgentJsonSchema(
       agentOperationOutputSchemas[descriptor.name],
       "output",
     ) as unknown as ToolOutputSchema,
@@ -154,8 +147,8 @@ export const jobWaitToolEntry: JobWaitToolEntry = {
   title: "kakeai_job_wait",
   description:
     "Job が終端状態（succeeded / failed / cancelled）になるまで job.get を有界にポーリングする。budget 超過時は timedOut: true と最後の Job を返す。asset.import / render.start / tts.create / tts.createBulk の後に使う。MCP 束縛の便宜ツールで、Agent 操作ではない。",
-  inputSchema: toMcpObjectSchema(jobWaitInputSchema, "input") as unknown as ToolInputSchema,
-  outputSchema: toMcpObjectSchema(jobWaitResultSchema, "output") as unknown as ToolOutputSchema,
+  inputSchema: toAgentJsonSchema(jobWaitInputSchema, "input") as unknown as ToolInputSchema,
+  outputSchema: toAgentJsonSchema(jobWaitResultSchema, "output") as unknown as ToolOutputSchema,
   annotations: {
     readOnlyHint: true,
     destructiveHint: false,

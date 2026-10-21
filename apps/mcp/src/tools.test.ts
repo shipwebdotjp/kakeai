@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   agentLongRunningOperationNames,
   agentMutationOperationNames,
+  agentOperationInputSchemas,
   agentOperationNames,
+  agentOperationOutputSchemas,
   agentReadOperationNames,
   isAgentLongRunningOperation,
   isAgentMutationOperation,
+  toAgentJsonSchema,
 } from "@kakeai/contracts";
 import {
   MCP_TOOL_NAME_PATTERN,
@@ -117,6 +120,45 @@ describe("MCP tool catalog", () => {
     expect(characterGet?.inputSchema.properties).toHaveProperty("characterId");
     expect(characterGet?.outputSchema.properties).toHaveProperty("character");
     expect(characterGet?.readOnly).toBe(true);
+  });
+
+  it("publishes the contract schemas through the shared JSON Schema conversion", () => {
+    for (const entry of operationToolEntries) {
+      expect(entry.inputSchema).toEqual(
+        toAgentJsonSchema(agentOperationInputSchemas[entry.operation], "input"),
+      );
+      expect(entry.outputSchema).toEqual(
+        toAgentJsonSchema(agentOperationOutputSchemas[entry.operation], "output"),
+      );
+      expect(entry.inputSchema.type).toBe("object");
+      expect(entry.outputSchema.type).toBe("object");
+      expect(entry.inputSchema.$schema).toBeUndefined();
+      expect(entry.outputSchema.$schema).toBeUndefined();
+    }
+  });
+
+  it("keeps the generated tool schemas in the published shape", () => {
+    const workGet = operationToolEntries.find((entry) => entry.operation === "work.get");
+    expect(workGet?.inputSchema).toEqual({
+      type: "object",
+      properties: { workId: { type: "string", minLength: 1 } },
+      required: ["workId"],
+      additionalProperties: false,
+    });
+    const jobCancel = operationToolEntries.find(
+      (entry) => entry.operation === "job.cancel",
+    );
+    expect(jobCancel?.inputSchema).toEqual({
+      type: "object",
+      properties: { jobId: { type: "string", minLength: 1 } },
+      required: ["jobId"],
+      additionalProperties: false,
+    });
+    const validate = operationToolEntries.find(
+      (entry) => entry.operation === "script.validate",
+    );
+    expect(validate?.inputSchema.type).toBe("object");
+    expect(validate?.inputSchema.anyOf).toHaveLength(2);
   });
 
   it("includes the job_wait convenience tool and no irreversible tools", () => {

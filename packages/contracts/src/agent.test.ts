@@ -9,6 +9,7 @@ import {
   agentCompositionPublishOutputSchema,
   agentErrorCodeSchema,
   agentMutationOperationNames,
+  agentOperationContracts,
   agentOperationInputSchemas,
   agentOperationNames,
   agentOperationOutputSchemas,
@@ -152,7 +153,10 @@ describe("schema.get", () => {
       "fnv1a64:dfbb1f98a6d14526",
     );
 
-    const descriptor = agentSchemaDigestInputOf(result);
+    const descriptor = agentSchemaDigestInputOf({
+      ...result,
+      operationContracts: agentOperationContracts(),
+    });
     expect(computeAgentSchemaDigest(descriptor)).toBe(result.schemaDigest);
 
     const reordered = {
@@ -160,6 +164,7 @@ describe("schema.get", () => {
       warningCodes: descriptor.warningCodes,
       agentOperations: descriptor.agentOperations,
       operations: descriptor.operations,
+      operationContracts: descriptor.operationContracts,
       templates: descriptor.templates.map((template) =>
         Object.fromEntries(Object.entries(template).reverse()),
       ),
@@ -186,6 +191,14 @@ describe("schema.get", () => {
         ...descriptor,
         agentOperations: descriptor.agentOperations.map((entry) =>
           entry.name === "render.start" ? { ...entry, longRunning: false } : entry,
+        ),
+      }),
+    ).not.toBe(result.schemaDigest);
+    expect(
+      computeAgentSchemaDigest({
+        ...descriptor,
+        operationContracts: descriptor.operationContracts.filter(
+          (contract) => contract.name !== "work.get",
         ),
       }),
     ).not.toBe(result.schemaDigest);

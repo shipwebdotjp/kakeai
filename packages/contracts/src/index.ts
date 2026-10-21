@@ -36,3 +36,4 @@ export * from "./composition.ts";
 export * from "./requests";
 export * from "./script-operation";
 export * from "./agent";
+export * from "./agent-json-schema";
