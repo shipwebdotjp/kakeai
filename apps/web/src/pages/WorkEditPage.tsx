@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useBeforeUnload, useBlocker, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { defaultPointLabel, type ScriptVersion } from "@kakeai/contracts";
+import type { ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
 import { CueMap } from "../components/CueMap";
 import { PreviewSection } from "../components/PreviewSection";
@@ -9,10 +9,11 @@ import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
 import { CollapsibleStateProvider } from "../components/Collapsible";
 import { errorMessage } from "../lib/errorMessage";
+import { findEditorTarget, scrollEditorTargetIntoView } from "../lib/editorScroll";
 import { PreviewControllerProvider, usePreviewActions } from "../lib/PreviewController";
 import { useDraftPreview, type UnsavedDocumentState } from "../lib/useDraftPreview";
 import type { CharacterFormValue, SceneFormValue, SpeakerFormValue } from "../content/form";
-import { SCENE_LABELS } from "../content/labels";
+import { sceneDisplayName } from "../content/labels";
 import {
   EDITOR_LAYOUT_DEFAULT_RATIOS,
   EDITOR_LAYOUT_MAX_LEFT_PX,
@@ -41,21 +42,6 @@ import {
 function renderDownloadName(title: string, versionNumber: number): string {
   const base = title.trim().replace(/[\\/:*?"<>|]/g, "_");
   return `${base.length > 0 ? base : "render"}_v${versionNumber}.mp4`;
-}
-
-function escapeId(id: string): string {
-  return typeof CSS !== "undefined" && typeof CSS.escape === "function"
-    ? CSS.escape(id)
-    : id.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
-}
-
-function findTarget(root: HTMLElement, targetId: string): HTMLElement | null {
-  return root.querySelector<HTMLElement>(`#${escapeId(targetId)}`);
-}
-
-function stickyOffset(root: HTMLElement): number {
-  const actionBar = root.querySelector<HTMLElement>("#editor-actionbar");
-  return (actionBar?.offsetHeight ?? 0) + 8;
 }
 
 function getLayoutStorage(): LayoutStorage | null {
@@ -408,13 +394,7 @@ function WorkEditPanesContent({
     if (root === null) {
       return;
     }
-    const element = findTarget(root, targetId);
-    if (element === null) {
-      return;
-    }
-    const top =
-      element.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
-    root.scrollTo({ top: Math.max(0, top - stickyOffset(root)), behavior: "smooth" });
+    scrollEditorTargetIntoView(root, targetId, "smooth");
   }, []);
 
   useEffect(() => {
@@ -462,16 +442,7 @@ function WorkEditPanesContent({
       if (scene.kind === "point") {
         pointOrdinal += 1;
       }
-      const label = (scene.label ?? "").trim();
-      let display: string;
-      if (label.length > 0) {
-        display = label;
-      } else if (scene.kind === "point") {
-        display = defaultPointLabel(pointOrdinal);
-      } else {
-        display = SCENE_LABELS[scene.kind] ?? scene.kind;
-      }
-      map.set(scene.id, display);
+      map.set(scene.id, sceneDisplayName(scene, pointOrdinal));
     }
     return map;
   }, [formScenes]);
@@ -502,7 +473,7 @@ function WorkEditPanesContent({
       const containerTop = root.getBoundingClientRect().top;
       let active: string | null = null;
       for (const id of targetIds) {
-        const element = findTarget(root, id);
+        const element = findEditorTarget(root, id);
         if (element === null) {
           continue;
         }
@@ -650,6 +621,7 @@ function WorkEditPanesContent({
               onJumpToTarget={jump}
               onDocumentChange={onDocumentChange}
               onDirtyChange={onDirtyChange}
+              scrollContainerRef={centerRef}
             />
           )}
         </div>

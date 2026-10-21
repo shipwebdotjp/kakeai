@@ -15,11 +15,11 @@ import {
 } from "./form";
 
 export const CUE_MAP_ROW_HEIGHT_PX = 32;
-export const CUE_MAP_LANE_WIDTH_PX = 36;
+export const CUE_MAP_LANE_WIDTH_PX = 30;
 export const CUE_MAP_RAIL_WIDTH_PX = 22;
 export const CUE_MAP_NUMBER_WIDTH_PX = 44;
 export const CUE_MAP_GAPS_PX = 22;
-export const CUE_MAP_MIN_TEXT_PX = 96;
+export const CUE_MAP_MAX_LANES = 6;
 export const CUE_MAP_EMPTY_SCENE_ROWS = 3;
 
 export const CUE_LAYERS_IN_DRAW_ORDER: readonly CueLayer[] = [
@@ -85,11 +85,18 @@ export function resolveVisibleLaneCount(paneWidthPx: number): number {
     return 1;
   }
   const reserved =
-    CUE_MAP_RAIL_WIDTH_PX +
-    CUE_MAP_NUMBER_WIDTH_PX +
-    CUE_MAP_MIN_TEXT_PX +
-    CUE_MAP_GAPS_PX;
-  return Math.max(1, Math.floor((paneWidthPx - reserved) / CUE_MAP_LANE_WIDTH_PX));
+    CUE_MAP_RAIL_WIDTH_PX + CUE_MAP_NUMBER_WIDTH_PX + CUE_MAP_GAPS_PX;
+  return Math.min(
+    CUE_MAP_MAX_LANES,
+    Math.max(1, Math.floor((paneWidthPx - reserved) / CUE_MAP_LANE_WIDTH_PX)),
+  );
+}
+
+/**
+ * レーンはペイン右端を基準に並べる。lane 0 が最も前面で、右端（最大lane）が最も奥。
+ */
+export function cueMapLaneOffsetRightPx(lane: number, laneSpan: number): number {
+  return Math.max(0, laneSpan - 1 - lane) * CUE_MAP_LANE_WIDTH_PX;
 }
 
 export interface CueMapInput {

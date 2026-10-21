@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { Asset, PreviewTimeline } from "@kakeai/contracts";
 import {
   buildCueMap,
+  cueMapLaneOffsetRightPx,
   CUE_MAP_EMPTY_SCENE_ROWS,
+  CUE_MAP_LANE_WIDTH_PX,
+  CUE_MAP_MAX_LANES,
   CUE_MAP_NO_ACTIVE,
   locatePlaybackActive,
   resolveVisibleLaneCount,
@@ -529,17 +532,24 @@ describe("buildCueMap standings and representative media", () => {
 });
 
 describe("resolveVisibleLaneCount", () => {
-  it("derives lane counts from the pane width", () => {
-    expect(resolveVisibleLaneCount(192)).toBe(1);
-    expect(resolveVisibleLaneCount(288)).toBe(2);
-    expect(resolveVisibleLaneCount(360)).toBe(4);
-    expect(resolveVisibleLaneCount(2000)).toBeGreaterThan(4);
+  it("derives lane counts from the pane width and caps them", () => {
+    expect(resolveVisibleLaneCount(192)).toBe(3);
+    expect(resolveVisibleLaneCount(256)).toBe(5);
+    expect(resolveVisibleLaneCount(288)).toBe(6);
+    expect(resolveVisibleLaneCount(360)).toBe(6);
+    expect(resolveVisibleLaneCount(2000)).toBe(CUE_MAP_MAX_LANES);
   });
 
   it("keeps at least one lane for narrow or invalid widths", () => {
     expect(resolveVisibleLaneCount(100)).toBe(1);
     expect(resolveVisibleLaneCount(0)).toBe(1);
     expect(resolveVisibleLaneCount(Number.NaN)).toBe(1);
+  });
+
+  it("offsets lanes from the right edge while keeping lane 0 frontmost", () => {
+    expect(cueMapLaneOffsetRightPx(0, 3)).toBe(CUE_MAP_LANE_WIDTH_PX * 2);
+    expect(cueMapLaneOffsetRightPx(1, 3)).toBe(CUE_MAP_LANE_WIDTH_PX);
+    expect(cueMapLaneOffsetRightPx(2, 3)).toBe(0);
   });
 });
 
@@ -577,7 +587,7 @@ describe("buildCueMap overflow and promotion", () => {
 
   it("aggregates overflowing cues into one right-end lane", () => {
     const scenes = threeLaneScenes();
-    const input = { ...baseInput(scenes), paneWidthPx: 288 };
+    const input = { ...baseInput(scenes), paneWidthPx: 150 };
     const model = buildCueMap(input);
     expect(model.requiredLaneCount).toBe(3);
     expect(model.visibleLaneCount).toBe(2);
@@ -593,7 +603,7 @@ describe("buildCueMap overflow and promotion", () => {
     const backgroundCueId = scenes[0]!.cues[0]!.id;
     const input: CueMapInput = {
       ...baseInput(scenes),
-      paneWidthPx: 288,
+      paneWidthPx: 150,
       active: { sceneId: null, lineId: null, cueId: backgroundCueId },
     };
     const model = buildCueMap(input);

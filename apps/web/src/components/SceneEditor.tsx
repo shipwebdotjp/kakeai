@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ChevronDown, ChevronUp, OctagonAlert, TriangleAlert } from "lucide-react";
 import {
   useFieldArray,
@@ -64,9 +64,17 @@ import {
   commitSceneAudioStructural,
   commitStandingStructural,
   removeCueStructural,
+  type StructuralEditResult,
 } from "../content/structural";
-import { SCENE_LABELS } from "../content/labels";
+import { SCENE_LABELS, sceneDisplayName } from "../content/labels";
+import { sceneNavProjection } from "../content/navProjection";
 import { AssetThumbnail, assetLabel } from "../lib/assets";
+import {
+  captureEditorScrollAnchor,
+  restoreEditorScrollAnchor,
+  scrollEditorTargetIntoView,
+  type EditorScrollAnchor,
+} from "../lib/editorScroll";
 import { errorMessage } from "../lib/errorMessage";
 import type { UnsavedDocumentState } from "../lib/useDraftPreview";
 import {
@@ -94,6 +102,25 @@ import { SceneAudioFields } from "./SceneAudioFields";
 
 const DRAFT_PREVIEW_DEBOUNCE_MS = 800;
 
+type PendingEditorScroll =
+  | { kind: "anchor"; anchor: EditorScrollAnchor }
+  | { kind: "reveal"; targetId: string };
+
+function resolveInsertionTargetId(
+  scenes: readonly Pick<SceneFormValue, "id" | "kind">[],
+  selectedId: string | null,
+): string | null {
+  const candidates = scenes.filter((scene) => scene.kind !== "intro");
+  if (candidates.length === 0) {
+    return null;
+  }
+  if (selectedId !== null && candidates.some((scene) => scene.id === selectedId)) {
+    return selectedId;
+  }
+  const outro = candidates.find((scene) => scene.kind === "outro");
+  return outro?.id ?? candidates[candidates.length - 1]?.id ?? null;
+}
+
 interface SceneEditorProps {
   base: ContentDocument;
   editionId: string;
@@ -104,6 +131,7 @@ interface SceneEditorProps {
   onJumpToTarget?: (targetId: string, seek: DiagnosticTarget["seek"]) => void;
   onDocumentChange?: (state: UnsavedDocumentState) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  scrollContainerRef?: RefObject<HTMLDivElement | null>;
 }
 
 function extractServerErrors(error: unknown): Diagnostic[] {
@@ -519,7 +547,7 @@ function InsertSceneFields({
   );
 }
 
-export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onJumpToTarget, onDocumentChange, onDirtyChange }: SceneEditorProps) {
+export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onJumpToTarget, onDocumentChange, onDirtyChange, scrollContainerRef }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
@@ -534,6 +562,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const [openKind, setOpenKind] = useState<"error" | "warning" | null>(null);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [addBeforeSceneId, setAddBeforeSceneId] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkResult, setBulkResult] = useState<{
     succeeded: number;
@@ -588,39 +617,61 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
   const watchedSpeakers = useWatch({ control, name: "speakers" }) ?? [];
 
+  const pendingScrollRef = useRef<PendingEditorScroll | null>(null);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef?.current;
+    if (container === null || container === undefined) {
+      return;
+    }
+    const pending = pendingScrollRef.current;
+    if (pending === null) {
+      return;
+    }
+    const apply = (): boolean => {
+      if (pendingScrollRef.current !== pending) {
+        return true;
+      }
+      if (pending.kind === "reveal") {
+        if (!scrollEditorTargetIntoView(container, pending.targetId)) {
+          return false;
+        }
+      } else {
+        restoreEditorScrollAnchor(container, pending.anchor);
+      }
+      pendingScrollRef.current = null;
+      return true;
+    };
+    if (apply()) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      if (!apply()) {
+        pendingScrollRef.current = null;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [watchedScenes, scrollContainerRef]);
+
+  const keepScrollAnchor = (targetId: string): void => {
+    const container = scrollContainerRef?.current;
+    if (container === null || container === undefined) {
+      return;
+    }
+    const anchor = captureEditorScrollAnchor(container, targetId);
+    pendingScrollRef.current = anchor === null ? null : { kind: "anchor", anchor };
+  };
+
+  const revealTarget = (targetId: string): void => {
+    const container = scrollContainerRef?.current;
+    if (container === null || container === undefined) {
+      return;
+    }
+    pendingScrollRef.current = { kind: "reveal", targetId };
+  };
+
   const navProjection = useMemo(
-    () =>
-      JSON.stringify({
-        scenes: watchedScenes.map((scene) => ({
-          id: scene?.id,
-          kind: scene?.kind,
-          label: scene?.label,
-          cues: (scene?.cues ?? []).map((cue) => ({
-            id: cue?.id,
-            templateId: cue?.templateId,
-            templateVersion: cue?.templateVersion,
-            role: cue?.fields?.role ?? "",
-            text: cue?.fields?.text ?? "",
-          })),
-          lines: (scene?.lines ?? []).map((line) => ({
-            id: line?.id,
-            speakerId: line?.speakerId,
-            captionText: line?.captionText,
-          })),
-        })),
-        speakers: (watchedSpeakers ?? []).map((speaker) => ({
-          id: speaker?.id,
-          name: speaker?.name,
-        })),
-        characters: (watchedCharacters ?? []).map((character) => ({
-          id: character?.id,
-          name: character?.name,
-          appearances: (character?.appearances ?? []).map((appearance) => ({
-            id: appearance?.id,
-            assetId: appearance?.assetId,
-          })),
-        })),
-      }),
+    () => sceneNavProjection(watchedScenes, watchedSpeakers, watchedCharacters),
     [watchedScenes, watchedSpeakers, watchedCharacters],
   );
   const lastEmittedNavProjection = useRef<string | null>(null);
@@ -758,7 +809,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     setOpenKind((prev) => (prev === "warning" ? null : prev));
   };
 
-  const runStructural = (operation: ScriptOperation): void => {
+  const runStructural = (operation: ScriptOperation): StructuralEditResult | null => {
     try {
       const next = applyStructuralOperation(
         base,
@@ -768,8 +819,11 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       );
       replaceScenes(next.values.scenes);
       showWarnings(next.result.warnings);
+      return next;
     } catch (error) {
+      pendingScrollRef.current = null;
       showError(error);
+      return null;
     }
   };
 
@@ -790,9 +844,11 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         showMessage("Cueを削除できませんでした。Sceneの状態を確認してください。");
         return;
       }
+      keepScrollAnchor(`scene-${scene.id}`);
       replaceScenes(next.values.scenes);
       showWarnings(next.result.warnings);
     } catch (error) {
+      pendingScrollRef.current = null;
       showError(error);
     }
   };
@@ -907,11 +963,26 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     }
   };
 
-  const onAddPoint = () => {
+  const resolveInsertIndex = (): number => {
     const scenes = getValues("scenes");
-    const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
-    const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
-    runStructural({ op: "scene.add", kind: "point", index: insertIndex });
+    const targetId = resolveInsertionTargetId(scenes, addBeforeSceneId);
+    if (targetId === null) {
+      return scenes.length;
+    }
+    const index = scenes.findIndex((scene) => scene.id === targetId);
+    return index === -1 ? scenes.length : index;
+  };
+
+  const onAddPoint = () => {
+    const next = runStructural({
+      op: "scene.add",
+      kind: "point",
+      index: resolveInsertIndex(),
+    });
+    const newSceneId = next?.result.created.sceneIds[0];
+    if (newSceneId !== undefined) {
+      revealTarget(`scene-${newSceneId}`);
+    }
   };
 
   const onClonePrevious = (index: number) => {
@@ -944,17 +1015,18 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       showMessage("尺が確定した動画だけを挿入できます。素材の取り込み完了後に選び直してください。");
       return;
     }
-    const scenes = getValues("scenes");
-    const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
-    const insertIndex = outroIndex === -1 ? scenes.length : outroIndex;
-    runStructural({
+    const next = runStructural({
       op: "scene.add",
       kind: "insert",
-      index: insertIndex,
+      index: resolveInsertIndex(),
       assetId: asset.id,
       durationMs: asset.durationMs,
       embeddedAudio: asset.hasAudio,
     });
+    const newSceneId = next?.result.created.sceneIds[0];
+    if (newSceneId !== undefined) {
+      revealTarget(`scene-${newSceneId}`);
+    }
   };
 
   const onMove = (index: number, direction: -1 | 1) => {
@@ -968,6 +1040,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     ) {
       return;
     }
+    keepScrollAnchor(`scene-${scene.id}`);
     runStructural({ op: "scene.move", sceneId: scene.id, index: target });
   };
 
@@ -1140,6 +1213,19 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   }, [watchedScenes]);
 
   const pointCount = pointOrdinals.filter((ordinal) => ordinal > 0).length;
+
+  const insertionOptions = watchedScenes.flatMap((scene, index) => {
+    if (scene.kind === "intro") {
+      return [];
+    }
+    if (scene.kind === "outro") {
+      return [{ id: scene.id, text: "結びの前" }];
+    }
+    const name = sceneDisplayName(scene, pointOrdinals[index] ?? 0);
+    return [{ id: scene.id, text: `「${name}」の前` }];
+  });
+  const insertionSelectValue =
+    resolveInsertionTargetId(watchedScenes, addBeforeSceneId) ?? "";
 
   const timing = useMemo(() => {
     if (allValues === undefined || allValues.scenes === undefined) {
@@ -1695,6 +1781,22 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       </ScriptSkinProvider>
 
       <div className="flex flex-wrap items-center gap-3">
+        {insertionOptions.length > 0 && (
+          <label className="inline-flex items-center gap-1.5">
+            追加位置
+            <select
+              className={textFieldClass}
+              value={insertionSelectValue}
+              onChange={(event) => setAddBeforeSceneId(event.target.value)}
+            >
+              {insertionOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.text}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
           要点を追加
         </button>

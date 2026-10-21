@@ -16,6 +16,7 @@ import { SCENE_LABELS } from "../content/labels";
 import type { CharacterFormValue, SceneFormValue } from "../content/form";
 import {
   buildCueMap,
+  cueMapLaneOffsetRightPx,
   CUE_MAP_LANE_WIDTH_PX,
   CUE_MAP_NUMBER_WIDTH_PX,
   CUE_MAP_RAIL_WIDTH_PX,
@@ -245,6 +246,7 @@ interface ActiveRow extends CueMapRow {
 
 function CueBandView({
   band,
+  laneSpan,
   assetById,
   open,
   onOpen,
@@ -252,6 +254,7 @@ function CueBandView({
   onJump,
 }: {
   band: BandWithSceneStart;
+  laneSpan: number;
   assetById: ReadonlyMap<string, Asset>;
   open: boolean;
   onOpen: () => void;
@@ -264,7 +267,7 @@ function CueBandView({
     <div
       className="absolute"
       style={{
-        left: band.lane * CUE_MAP_LANE_WIDTH_PX,
+        right: cueMapLaneOffsetRightPx(band.lane, laneSpan),
         width: CUE_MAP_LANE_WIDTH_PX,
         top,
         height,
@@ -313,6 +316,7 @@ function CueBandView({
 
 function AggregateLaneView({
   lane,
+  laneSpan,
   entries,
   assetById,
   open,
@@ -321,6 +325,7 @@ function AggregateLaneView({
   onJump,
 }: {
   lane: number;
+  laneSpan: number;
   entries: CueMapAggregateEntry[];
   assetById: ReadonlyMap<string, Asset>;
   open: boolean;
@@ -332,7 +337,7 @@ function AggregateLaneView({
     <div
       className="absolute top-0 bottom-0"
       style={{
-        left: lane * CUE_MAP_LANE_WIDTH_PX,
+        right: cueMapLaneOffsetRightPx(lane, laneSpan),
         width: CUE_MAP_LANE_WIDTH_PX,
         pointerEvents: "none",
       }}
@@ -448,7 +453,7 @@ function SceneSection({
   aggregateEntries,
   aggregateLane,
   markers,
-  laneCount,
+  laneSpan,
   assetById,
   openId,
   onOpen,
@@ -461,7 +466,7 @@ function SceneSection({
   aggregateEntries: CueMapAggregateEntry[];
   aggregateLane: number | null;
   markers: MarkerWithSceneStart[];
-  laneCount: number;
+  laneSpan: number;
   assetById: ReadonlyMap<string, Asset>;
   openId: string | null;
   onOpen: (id: string) => void;
@@ -525,11 +530,6 @@ function SceneSection({
                   {row.displayNumber}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs">{row.captionHead}</span>
-                <span
-                  aria-hidden="true"
-                  className="shrink-0"
-                  style={{ width: laneCount * CUE_MAP_LANE_WIDTH_PX }}
-                />
               </button>
             ) : (
               <div
@@ -541,11 +541,6 @@ function SceneSection({
                 <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                   {row.index === rail.startRow ? "（セリフなし）" : ""}
                 </span>
-                <span
-                  aria-hidden="true"
-                  className="shrink-0"
-                  style={{ width: laneCount * CUE_MAP_LANE_WIDTH_PX }}
-                />
               </div>
             ),
           )}
@@ -553,6 +548,7 @@ function SceneSection({
             <CueBandView
               key={band.cueId}
               band={band}
+              laneSpan={laneSpan}
               assetById={assetById}
               open={openId === `band-${band.cueId}`}
               onOpen={() => onOpen(`band-${band.cueId}`)}
@@ -563,6 +559,7 @@ function SceneSection({
           {aggregateLane !== null && aggregateEntries.length > 0 && (
             <AggregateLaneView
               lane={aggregateLane}
+              laneSpan={laneSpan}
               entries={aggregateEntries}
               assetById={assetById}
               open={openId === `aggregate-${rail.sceneId}`}
@@ -673,6 +670,14 @@ export function CueMap({
     return map;
   }, [model]);
 
+  const laneSpan = useMemo(
+    () =>
+      model.aggregate !== null
+        ? model.visibleLaneCount
+        : Math.max(1, model.requiredLaneCount),
+    [model],
+  );
+
   return (
     <nav aria-label="構成">
       {model.rails.map((rail) => (
@@ -684,7 +689,7 @@ export function CueMap({
           aggregateEntries={aggregateByRail.get(rail.sceneId) ?? []}
           aggregateLane={model.aggregate?.lane ?? null}
           markers={markersByRail.get(rail.sceneId) ?? []}
-          laneCount={model.visibleLaneCount}
+          laneSpan={laneSpan}
           assetById={assetById}
           openId={openId}
           onOpen={setOpenId}

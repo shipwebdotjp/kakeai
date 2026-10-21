@@ -28,7 +28,7 @@ export const TEXT_CONSTRAINTS: Record<TextRole, TextConstraint> = {
   label: { maxLines: 1, charsPerLine: 24 },
 };
 
-export const CAPTION_CONSTRAINT: TextConstraint = { maxLines: 2, charsPerLine: 20 };
+export const CAPTION_CONSTRAINT: TextConstraint = { maxLines: 2, charsPerLine: 38 };
 
 export const CHAT_MESSAGE_CONSTRAINT: TextConstraint = { maxLines: 4, charsPerLine: 16 };
 

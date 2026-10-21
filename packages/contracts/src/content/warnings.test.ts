@@ -82,6 +82,28 @@ describe("computeContentWarnings", () => {
     ]);
   });
 
+  it("allows a caption up to two lines and warns from three lines", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    if (scene.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    scene.lines[0]!.captionText = "い".repeat(
+      CAPTION_CONSTRAINT.charsPerLine * CAPTION_CONSTRAINT.maxLines,
+    );
+    expect(computeContentWarnings(document)).toEqual([]);
+
+    scene.lines[0]!.captionText = "一行目\n二行目\n三行目";
+    const warnings = computeContentWarnings(document);
+    expect(warnings.map((warning) => warning.path)).toContainEqual([
+      "scenes",
+      1,
+      "lines",
+      0,
+      "captionText",
+    ]);
+  });
+
   it("warns when a table cell exceeds the character guideline", () => {
     const document = validContentDocument();
     document.scenes[1]!.visualCues.push(
