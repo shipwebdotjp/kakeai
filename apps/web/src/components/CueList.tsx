@@ -1,4 +1,11 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   useFieldArray,
   useWatch,
@@ -159,6 +166,7 @@ interface CueListProps {
   speakers: SpeakerFormValue[];
   sceneDurationMs: number | null;
   onRemoveCue: (cueId: string) => void;
+  onCommitCue: (cueId: string) => void;
 }
 
 interface CueRowProps {
@@ -172,6 +180,7 @@ interface CueRowProps {
   speakers: SpeakerFormValue[];
   sceneDurationMs: number | null;
   onRemove: () => void;
+  onCommitCue: () => void;
 }
 
 function CueRow({
@@ -185,8 +194,10 @@ function CueRow({
   speakers,
   sceneDurationMs,
   onRemove,
+  onCommitCue,
 }: CueRowProps) {
   const base = `scenes.${sceneIndex}.cues.${cueIndex}` as const;
+  const snapshotRef = useRef(JSON.stringify(cue));
   const definition = getVisualTemplate(cue.templateId, cue.templateVersion);
   const layerOptions = definition?.layers ?? ["background"];
   const fields = definition?.inputFields;
@@ -240,7 +251,44 @@ function CueRow({
   );
 
   return (
-    <div id={`cue-${cue.id}`} className="mt-2 rounded border border-border p-2">
+    <div
+      id={`cue-${cue.id}`}
+      className="mt-2 rounded border border-border p-2"
+      onFocus={(event) => {
+        const related = event.relatedTarget as Node | null;
+        if (related === null) {
+          return;
+        }
+        if (event.currentTarget.contains(related)) {
+          return;
+        }
+        if (
+          related instanceof Element &&
+          related.closest('[role="dialog"]') !== null
+        ) {
+          return;
+        }
+        snapshotRef.current = JSON.stringify(getValues(base));
+      }}
+      onBlur={(event) => {
+        const related = event.relatedTarget as Node | null;
+        if (related === null || event.currentTarget.contains(related)) {
+          return;
+        }
+        if (
+          related instanceof Element &&
+          related.closest('[role="dialog"]') !== null
+        ) {
+          return;
+        }
+        const current = JSON.stringify(getValues(base));
+        if (current === snapshotRef.current) {
+          return;
+        }
+        snapshotRef.current = current;
+        onCommitCue();
+      }}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className={badgeNeutralClass}>
           {definition?.display.label ?? cue.templateId}@{cue.templateVersion}
@@ -1091,6 +1139,7 @@ export function CueList({
   speakers,
   sceneDurationMs,
   onRemoveCue,
+  onCommitCue,
 }: CueListProps) {
   const { fields, append } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.cues` }) ?? [];
@@ -1140,6 +1189,7 @@ export function CueList({
             speakers={speakers}
             sceneDurationMs={sceneDurationMs}
             onRemove={() => onRemoveCue(cue.id)}
+            onCommitCue={() => onCommitCue(cue.id)}
           />
         );
       })}

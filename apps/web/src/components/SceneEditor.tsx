@@ -57,7 +57,11 @@ import {
   type SceneFormValue,
   type SpeakerFormValue,
 } from "../content/form";
-import { applyStructuralOperation, removeCueStructural } from "../content/structural";
+import {
+  applyStructuralOperation,
+  commitCueStructural,
+  removeCueStructural,
+} from "../content/structural";
 import { SCENE_LABELS } from "../content/labels";
 import { AssetThumbnail, assetLabel } from "../lib/assets";
 import { errorMessage } from "../lib/errorMessage";
@@ -789,6 +793,40 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     }
   };
 
+  const onCommitCue = (sceneIndex: number, cueId: string) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    try {
+      const next = commitCueStructural(
+        base,
+        getValues(),
+        scene.id,
+        cueId,
+        assetsQuery.data ?? [],
+      );
+      if (next !== null) {
+        const nextCue = next.values.scenes
+          .find((entry) => entry.id === scene.id)
+          ?.cues.find((entry) => entry.id === cueId);
+        const cueIndex = getValues(`scenes.${sceneIndex}.cues`).findIndex(
+          (entry) => entry.id === cueId,
+        );
+        if (nextCue !== undefined && cueIndex !== -1) {
+          setValue(`scenes.${sceneIndex}.cues.${cueIndex}`, nextCue, {
+            shouldDirty: true,
+          });
+        } else {
+          replaceScenes(next.values.scenes);
+        }
+        showWarnings(next.result.warnings);
+      }
+    } catch (error) {
+      showError(error);
+    }
+  };
+
   const onAddPoint = () => {
     const scenes = getValues("scenes");
     const outroIndex = scenes.findIndex((scene) => scene.kind === "outro");
@@ -1476,6 +1514,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                 speakers={watchedSpeakers}
                 sceneDurationMs={placementBySceneId.get(scene.id)?.durationMs ?? null}
                 onRemoveCue={(cueId) => onRemoveCue(sceneIndex, cueId)}
+                onCommitCue={(cueId) => onCommitCue(sceneIndex, cueId)}
               />
             )}
 

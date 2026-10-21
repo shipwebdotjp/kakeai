@@ -23,6 +23,7 @@ import {
 import {
   applyStructuralOperation,
   applyStructuralOperations,
+  commitCueStructural,
   removeCueStructural,
 } from "./structural";
 
@@ -253,6 +254,55 @@ describe("structural operation adapter", () => {
     expect(
       result.document.scenes[1]?.visualCues.some((cue) => cue.id === draft.id),
     ).toBe(false);
+  });
+
+  it("Cueの入力・配置変更を操作コア経由で確定できる", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const cue = values.scenes[1]!.cues[0]!;
+    cue.fields = { ...cue.fields, text: "更新後", role: "heading" };
+    cue.order = 15;
+
+    const result = commitCueStructural(
+      base,
+      values,
+      DEFAULT_SCENE_IDS.point1,
+      cue.id,
+      [],
+    );
+    expect(result).not.toBeNull();
+    const committed = result?.document.scenes[1]?.visualCues.find(
+      (entry) => entry.id === cue.id,
+    );
+    expect(committed?.input).toMatchObject({ text: "更新後", role: "heading" });
+    expect(committed?.order).toBe(15);
+    expect(
+      result?.values.scenes[1]?.cues.find((entry) => entry.id === cue.id)?.fields
+        .text,
+    ).toBe("更新後");
+  });
+
+  it("未確定Cueのコミットは行わない", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const draft = createCueFormValue({
+      sceneId: DEFAULT_SCENE_IDS.point1,
+      templateId: "media.full-bleed",
+      templateVersion: 1,
+      layer: "background",
+      order: 10,
+    });
+    values.scenes[1]!.cues.push(draft);
+
+    expect(
+      commitCueStructural(
+        base,
+        values,
+        DEFAULT_SCENE_IDS.point1,
+        draft.id,
+        [],
+      ),
+    ).toBeNull();
   });
 
   it("行フィールドの変更をまとめて適用できる", () => {

@@ -195,6 +195,50 @@ export function applyStructuralOperation(
   return applyStructuralOperations(base, values, [operation], assets);
 }
 
+export function commitCueStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  sceneId: string,
+  cueId: string,
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  const document = buildStructuralDocument(base, values);
+  const scene = document.scenes.find((entry) => entry.id === sceneId);
+  const cue = scene?.visualCues.find((entry) => entry.id === cueId);
+  if (cue === undefined) {
+    return null;
+  }
+  return applyToDocument(
+    document,
+    values,
+    [
+      { op: "cue.setRange", sceneId, cueId, range: cue.range },
+      {
+        op: "cue.setInput",
+        sceneId,
+        cueId,
+        input: cue.input,
+        replace: true,
+      },
+      {
+        op: "cue.setPlacement",
+        sceneId,
+        cueId,
+        layer: cue.layer,
+        order: cue.order,
+      },
+      {
+        op: "cue.setTransition",
+        sceneId,
+        cueId,
+        enter: cue.transition.enter,
+        exit: cue.transition.exit,
+      },
+    ],
+    assets,
+  );
+}
+
 export function removeCueStructural(
   base: ContentDocument,
   values: DocumentFormValues,
