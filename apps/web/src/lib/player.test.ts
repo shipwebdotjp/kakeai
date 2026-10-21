@@ -3,6 +3,7 @@ import {
   applyMove,
   clampPreviewTime,
   frameStepSeconds,
+  safePlay,
   semanticSeekTarget,
   type SeekablePlayer,
 } from "./player";
@@ -76,5 +77,26 @@ describe("applyMove", () => {
     applyMove(null, 1);
     applyMove({ play } as unknown as SeekablePlayer, 1);
     expect(play).not.toHaveBeenCalled();
+  });
+});
+
+describe("safePlay", () => {
+  it("starts playback once", async () => {
+    const { player, calls } = stubPlayer(true);
+    safePlay(player);
+    await Promise.resolve();
+    expect(calls.played).toBe(1);
+  });
+
+  it("swallows a rejected playback", async () => {
+    const play = vi.fn(() => Promise.reject(new Error("blocked")));
+    safePlay({ play } as unknown as SeekablePlayer);
+    await Promise.resolve();
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing without a play implementation", () => {
+    expect(() => safePlay(null)).not.toThrow();
+    expect(() => safePlay({} as unknown as SeekablePlayer)).not.toThrow();
   });
 });

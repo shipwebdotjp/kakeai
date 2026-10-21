@@ -5,6 +5,7 @@ export interface SeekablePlayer extends HTMLElement {
   readonly currentTime?: number;
   readonly duration?: number;
   readonly paused?: boolean;
+  readonly ready?: boolean;
 }
 
 export function asSeekablePlayer(element: HTMLElement | null): SeekablePlayer | null {
@@ -50,6 +51,17 @@ export function semanticSeekTarget(
 
 export function isPlaying(player: SeekablePlayer | null): boolean {
   return player?.paused === false;
+}
+
+/**
+ * Starts playback, discarding a rejection. Playback can be rejected before the
+ * user has interacted with the page; the player's own controls still start it.
+ */
+export function safePlay(player: SeekablePlayer | null): void {
+  if (player?.play === undefined) {
+    return;
+  }
+  Promise.resolve(player.play()).catch(() => undefined);
 }
 
 export function applyMove(player: SeekablePlayer | null, timeInSeconds: number): void {

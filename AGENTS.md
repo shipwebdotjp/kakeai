@@ -73,6 +73,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 - 生成Prismaクライアントが古いと `npm run typecheck` が `src/generated` 由来の存在しないプロパティで失敗する。`npm run db:generate --workspace @kakeai/api` で再生成する。
 - PNG の IHDR チャンクは先頭 8 バイト署名の後に length（オフセット 8、値は 13）、type `"IHDR"`（オフセット 12）、width（オフセット 16）、height（オフセット 20）の順で並ぶ。オフセット 12 を length と誤読するとパースが壊れる。
 - `system_profiler SPFontsDataType` はこの環境で約12秒かかる。`createRenderJob` は `FontCatalogService.diagnoseTheme` を呼ぶため、テストでは必ず `FakeFontCatalogAdapter` を注入する（`render-flow.test.ts`・`composition-library.test.ts`）。実カタログは `getSharedFontCatalogService()` の共有インスタンスを使い、server起動時にバックグラウンドで温める。
+- `useMutation` の `data` は新しい `mutate` のpending中に `undefined` へ戻る。テーマ編集プレビューのように `data` だけを描画条件にすると待機中に `<hyperframes-player>` がアンマウントされ、再生位置が0に戻る。直前のHTMLをrefに保持して表示し、プレイヤーを作り直さない。
 
 ## ユーザーガイド
 

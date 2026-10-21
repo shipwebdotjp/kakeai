@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -42,6 +42,8 @@ import {
 import { ColorField } from "../components/ColorField";
 import { errorMessage } from "../lib/errorMessage";
 import { includeFontFace, selectableFontFaces } from "../lib/fontFaceOptions";
+import { asSeekablePlayer, safePlay } from "../lib/player";
+import { capturePlayback, isPlayerReady, playbackRestoreSeconds, type PlaybackSnapshot } from "../lib/previewPlayback";
 import { THEMES_ROUTE_PATH, themeDetailRoute } from "../lib/routes";
 import {
   buttonNeutralClass,
@@ -84,6 +86,10 @@ export function ThemeDetailPage() {
   const [activeTab, setActiveTab] = useState<"colors" | "typography" | "surfaces" | "skin">("colors");
   const [fontSearch, setFontSearch] = useState("");
 
+  const [playerElement, setPlayerElement] = useState<HTMLElement | null>(null);
+  const playbackRef = useRef<PlaybackSnapshot | null>(null);
+  const startedRef = useRef(false);
+
   const theme = themeQuery.data;
   const isBuiltIn = theme?.isBuiltIn ?? false;
 
@@ -105,6 +111,74 @@ export function ThemeDetailPage() {
     }, 400);
     return () => clearTimeout(timer);
   }, [formDef]);
+
+  const latestPreviewHtml = previewDraft.data?.compositionHtml;
+  const lastPreviewHtmlRef = useRef<string | undefined>(undefined);
+  if (latestPreviewHtml !== undefined && latestPreviewHtml.length > 0) {
+    lastPreviewHtmlRef.current = latestPreviewHtml;
+  }
+  // Keep the last preview on screen while the next one compiles, so the player is
+  // not torn down (and does not restart) between updates.
+  const previewHtml = latestPreviewHtml ?? lastPreviewHtmlRef.current;
+  const hasPreview = previewHtml !== undefined && previewHtml.length > 0;
+
+  // Another theme's preview is a fresh start: play it from the beginning.
+  useEffect(() => {
+    startedRef.current = false;
+    playbackRef.current = null;
+  }, [themeId]);
+
+  // A rebuilt preview replaces the composition document, which restarts playback.
+  // Track the playhead while it plays so the new document can be put back where
+  // the user left it, including a seek or pause made while a request is in flight.
+  useEffect(() => {
+    if (!hasPreview || playerElement === null) return;
+
+    const syncPlayback = () => {
+      const captured = capturePlayback(asSeekablePlayer(playerElement), performance.now());
+      if (captured !== null) {
+        playbackRef.current = captured;
+      }
+    };
+
+    const applyReady = () => {
+      const player = asSeekablePlayer(playerElement);
+      if (player === null) return;
+      if (!startedRef.current) {
+        startedRef.current = true;
+        safePlay(player);
+        return;
+      }
+      const snapshot = playbackRef.current;
+      if (snapshot === null) return;
+      const now = performance.now();
+      const target = playbackRestoreSeconds(snapshot, now, player.duration);
+      if (player.seek === undefined) return;
+      player.seek(target);
+      if (snapshot.paused) {
+        player.pause?.();
+      } else {
+        safePlay(player);
+      }
+      // Overlapping preview requests each reload a document. Carry the restored
+      // position forward instead of replaying the whole gap on the next `ready`.
+      playbackRef.current = { ...snapshot, timeSeconds: target, capturedAtMs: now };
+    };
+
+    playerElement.addEventListener("ready", applyReady);
+    playerElement.addEventListener("timeupdate", syncPlayback);
+    playerElement.addEventListener("play", syncPlayback);
+    playerElement.addEventListener("pause", syncPlayback);
+    if (isPlayerReady(asSeekablePlayer(playerElement))) {
+      applyReady();
+    }
+    return () => {
+      playerElement.removeEventListener("ready", applyReady);
+      playerElement.removeEventListener("timeupdate", syncPlayback);
+      playerElement.removeEventListener("play", syncPlayback);
+      playerElement.removeEventListener("pause", syncPlayback);
+    };
+  }, [hasPreview, playerElement]);
 
   const fontFaces = fontCatalogQuery.data?.faces ?? [];
   const fontCatalogSupported = fontCatalogQuery.data?.supported ?? true;
@@ -787,11 +861,11 @@ export function ThemeDetailPage() {
           </div>
 
           <div className="relative aspect-video w-full overflow-hidden rounded border border-border bg-black shadow">
-            {previewDraft.data?.compositionHtml ? (
+            {previewHtml ? (
               <hyperframes-player
-                srcdoc={previewDraft.data.compositionHtml}
+                ref={setPlayerElement}
+                srcdoc={previewHtml}
                 controls
-                autoplay
                 loop
                 className="h-full w-full"
               />

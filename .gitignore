@@ -19,3 +19,6 @@ apps/api/prisma/*.db-wal
 apps/api/prisma/*.db-shm
 
 .agents/
+
+# Playwright CLI scratch output
+.playwright-cli/
