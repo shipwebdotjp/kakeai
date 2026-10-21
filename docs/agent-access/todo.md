@@ -1,6 +1,6 @@
 # Agent Access 実装TODO
 
-[Agent Access 仕様](./spec.md) を正とする。台本の編集操作は [台本編集操作コア](../editor-core/todo.md) の E1〜E5 を前提とし、このフォルダでは束縛と帰属を実装する。
+[Agent Access 仕様](./spec.md) を正とする。台本の編集操作は [台本編集操作コア](../editor-core/todo.md) の E1〜E5 を前提とし、このフォルダでは束縛と帰属を実装する。A9 完了後の拡張候補は [roadmap.md](./roadmap.md) に整理する。
 
 ## フェーズ
 
