@@ -62,3 +62,9 @@
 - [x] `npm run typecheck` と `npm test` を通す
 - [x] `ocr review --audience agent -b "指定Font Faceが描画に反映されない不具合の修正"`を実行し、正当な指摘を最大3回まで修正する
 - [x] 変更をコミットする
+
+## 既知の制約（V1では対応しない）
+
+- [x] Safari（WebKit）はmacOSのSubsetsフォント（游明朝体・クレー・筑紫A丸ゴシック・凸版文久明朝など）と`~/Library/Fonts`の利用者導入フォントをweb contentへ公開しないため、代表サンプルプレビューがカテゴリ既定のgeneric stackへフォールバックし、Font Faceの切り替えが反映されない。プレビューはサーバーでコンパイルしたHTMLを閲覧ブラウザが描画するため、ブラウザ差をアプリ側で吸収しない。MP4とサムネイルはChromiumで描画するため選択したfaceが反映される
+- [x] テーマ編集はChromium系ブラウザの利用を推奨する運用とし、[spec.md](./spec.md)と`user-guide/docs/theme-customization.md`へ明記する
+- [x] サーバー側でChromium描画した静止画プレビューは将来の選択肢として保留し、V1には含めない

@@ -81,6 +81,8 @@ family名はCSSのfont familyとして解決できる名前でなければなら
 
 コンパイラはText Roleごとに、選択faceのplatform identifier、family名、カテゴリのgeneric stackの順でfont-familyを出力する。platform identifierを先頭に置くことで、family内に複数のfaceがあるフォント（例: 游明朝体のMediumとDemibold）でも選択したfaceがそのまま描画される。
 
+この解決はChromium（MP4レンダーとサムネイル）を前提とする。macOS 26では游明朝体、クレー、筑紫A丸ゴシック、凸版文久明朝などの多くが`FontServices.framework`配下のSubsetsとして保持されており、Safari（WebKit）のweb contentからは解決できない。`~/Library/Fonts`へ利用者が導入したフォントも同様に解決できない。この場合font-familyは次のfamily名、最終的にはカテゴリのgeneric stackへフォールバックするため、Font Faceを切り替えても描画は変わらない。V1はこのブラウザ差を吸収せず、テーマ編集にはChromium系ブラウザを使う運用とする。サーバー側でChromium描画した静止画をプレビューへ出す案は将来の選択肢とし、V1には含めない。
+
 V1のmacOS Font CatalogはmacOSのフォント基盤から列挙し、起動時キャッシュと手動更新を持つ。将来のWindows DirectWrite、Linux Fontconfig実装も同一DTOを返す。レンダーに使うChromiumでfaceが解決できるかはカタログ列挙と別に確認する。
 
 指定faceが選択・プレビュー・Render Job作成時に見つからない場合、保存や公開は拒否しない。Theme編集画面、Work編集画面、プレビュー、レンダー投入前に欠落Font Faceと使用するfallbackを警告し、コンパイルはfallbackで継続する。Theme Revision自体は同じFont Face参照を保持し、環境依存の解決結果を正本へ書き戻さない。
@@ -94,6 +96,8 @@ Render Jobを作るときは、ContentDocumentのTheme Refだけでなく、解�
 テーマ編集画面のプレビューは固定の代表ContentDocumentを使う。代表サンプルにはbackground、surface、accent、title、subtitle、heading、body、closing、label、captionを含める。編集フォームの未保存値を`themeDefinition` overrideとしてプレビューAPIへ送り、通常のコンパイラでHTMLと診断を返す。この呼び出しはDB、Script Version、Theme Revision、Job、Artifactを作成しない。実WorkをDraftでプレビューするAPIはV1に含めない。
 
 返したHTMLは完成したCompositionそのものなので、Web UIはHyperFramesプレイヤー（`<hyperframes-player>`）で再生する。プレイヤーは枠に合わせてCompositionをスケールし、Sceneの`data-start`/`data-duration`に従って再生・シークする。通常の`<iframe>`へ直接描画してはならない（スケールされず、全Sceneが重なって表示される）。
+
+代表サンプルプレビューはサーバーでHTML/CSSへコンパイルするだけで、ラスタライズはしない。描画は閲覧ブラウザが行うため、見た目はブラウザのフォント解決に依存する。MP4とサムネイルは管理下のChromiumで描画する。したがってFont Faceの描画はMP4を正とし、テーマ編集にはChromium系ブラウザを使う運用とする（Safariでの制約は「Font Catalog と Font Face」を参照）。
 
 ## APIとUI
 
