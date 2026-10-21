@@ -30,6 +30,7 @@ import type {
 } from "../content/form";
 import {
   countLineCueReferences,
+  DEFAULT_NEW_LINE_GAP_BEFORE_MS,
   generatedTakePolicy,
   lineSummary,
   mergeTake,
@@ -1023,7 +1024,13 @@ export function LinesEditor({
       <button
         type="button"
         className={buttonNeutralClass}
-        onClick={() => runStructural({ op: "line.add", sceneId })}
+        onClick={() =>
+          runStructural({
+            op: "line.add",
+            sceneId,
+            gapBeforeMs: DEFAULT_NEW_LINE_GAP_BEFORE_MS,
+          })
+        }
       >
         セリフを追加
       </button>

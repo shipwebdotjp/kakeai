@@ -115,7 +115,7 @@ function tapeHtml(spec: TapeSpec, shadow: string): string {
   ]
     .filter((part) => part.length > 0)
     .join(";");
-  return `<span class="kakeai-paper-tape" style="position:absolute;${position};width:${spec.width}px;height:${spec.height}px;background:var(--kakeai-accent-soft);opacity:.9;transform:rotate(${spec.rotate}deg);clip-path:polygon(0 14%,4% 0,97% 5%,100% 86%,95% 100%,2% 93%);box-shadow:0 1px 3px ${shadow};"></span>`;
+  return `<span class="kakeai-paper-tape" style="position:absolute;z-index:1;${position};width:${spec.width}px;height:${spec.height}px;background:var(--kakeai-accent-soft);opacity:.9;transform:rotate(${spec.rotate}deg);clip-path:polygon(0 14%,4% 0,97% 5%,100% 86%,95% 100%,2% 93%);box-shadow:0 1px 3px ${shadow};"></span>`;
 }
 
 function slipHtml(options: {
@@ -320,7 +320,7 @@ function renderHandmadeMediaCard(input: unknown, context: RenderContext): Render
     tapeHtml({ top: "-12px", right: "11%", rotate: 5, width: 104, height: 28 }, palette.shadow);
 
   return {
-    html: `<figure class="kakeai-card kakeai-paper-photocard"><div id="${frameId}" class="kakeai-paper-photo" style="position:relative;filter:drop-shadow(0 18px 40px ${palette.shadow});transform:rotate(-0.7deg);">${tapes}<div class="kakeai-paper-photo-frame" style="position:relative;background:${palette.paper};padding:18px 18px 0;border-radius:4px;box-shadow:inset 0 0 0 1px ${palette.paperEdge};">${media.html}${noteHtml}</div></div></figure>`,
+    html: `<figure class="kakeai-card kakeai-paper-photocard"><div id="${frameId}" class="kakeai-paper-photo" style="position:relative;filter:drop-shadow(0 18px 40px ${palette.shadow});transform:rotate(-0.7deg);"><div class="kakeai-paper-photo-frame" style="position:relative;background:${palette.paper};padding:18px 18px 0;border-radius:4px;box-shadow:inset 0 0 0 1px ${palette.paperEdge};">${media.html}${noteHtml}</div>${tapes}</div></figure>`,
     assetIds: media.assetIds,
     animation: [settleAnimation(frameId, "scale-in")],
   };
@@ -455,10 +455,10 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
       : `inset 0 0 0 1px ${palette.paperEdge}`;
 
   return {
-    html: `<figure class="kakeai-quotewrap kakeai-paper-quotewrap"><div id="${cardId}" class="kakeai-paper-quotecard" style="position:relative;max-width:1400px;filter:drop-shadow(0 14px 30px ${palette.shadow});transform:rotate(-0.5deg);">${tapeHtml(
+    html: `<figure class="kakeai-quotewrap kakeai-paper-quotewrap"><div id="${cardId}" class="kakeai-paper-quotecard" style="position:relative;max-width:1400px;filter:drop-shadow(0 14px 30px ${palette.shadow});transform:rotate(-0.5deg);"><div class="kakeai-paper-quotebody" style="position:relative;background:${palette.paper};box-shadow:${edgeShadow};border-radius:6px;padding:52px 72px 44px;clip-path:${tornBottomClipPath()};">${quoteMarkHtml}${quoteHtml}${attribution}</div>${tapeHtml(
       { top: "-14px", left: "42%", rotate: 4, width: 112, height: 28 },
       palette.shadow,
-    )}<div class="kakeai-paper-quotebody" style="position:relative;background:${palette.paper};box-shadow:${edgeShadow};border-radius:6px;padding:52px 72px 44px;clip-path:${tornBottomClipPath()};">${quoteMarkHtml}${quoteHtml}${attribution}</div></div></figure>`,
+    )}</div></figure>`,
     assetIds: [],
     animation: animation.length === 0 && stateIntervals.length === 0
       ? [settleAnimation(cardId, "slide-up", 0, 340)]

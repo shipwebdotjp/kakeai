@@ -1643,6 +1643,8 @@ export function newLineId(sceneId: string, existing: ReadonlySet<string>): strin
   return uniqueShortId((token) => `line-${sceneToken}-${token}`, existing);
 }
 
+export const DEFAULT_NEW_LINE_GAP_BEFORE_MS = 500;
+
 export function createEmptyLine(sceneId: string, existing: ReadonlySet<string>): LineFormValue {
   return {
     id: newLineId(sceneId, existing),
@@ -1651,7 +1653,7 @@ export function createEmptyLine(sceneId: string, existing: ReadonlySet<string>):
     speechText: "",
     selectedAudioTakeId: null,
     expressionId: null,
-    gapBeforeMs: 0,
+    gapBeforeMs: DEFAULT_NEW_LINE_GAP_BEFORE_MS,
     takes: [],
   };
 }
