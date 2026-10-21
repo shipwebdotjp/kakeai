@@ -21,7 +21,7 @@ import {
   createInsertSceneFormValue,
   createPointSceneFormValue,
   newSceneId,
-  removeLineInScene,
+  pruneDraftCueForLines,
   toFormValues,
   NESTED_COMPOSITION_FIT_SUFFIX,
   NESTED_COMPOSITION_POS_X_SUFFIX,
@@ -2389,8 +2389,11 @@ describe("video playback form fields", () => {
       ],
     });
 
-    const pruned = removeLineInScene(scene, 1);
-    const playback = pruned.cues[0]!.fields["assetId__videoPlayback"] ?? "";
+    const pruned = pruneDraftCueForLines(
+      scene.cues[0]!,
+      new Set([line.id]),
+    );
+    const playback = pruned.fields["assetId__videoPlayback"] ?? "";
     expect(playback).toContain(line.id);
     expect(playback).not.toContain(second.id);
   });

@@ -50,7 +50,7 @@
 - [x] `form.ts` の `readCueFields`・`buildCueInput`・`defaultCueFields` を `effects`・`calloutItems` に対応させる
 - [x] `EffectsField`・`CalloutItemsField` 部品（対象・契機・効果、行ピッカー）を追加する
 - [x] 行の削除で、削除行を参照する効果トリガーを落とし、`countLineCueReferences` にも算入する
-- [x] シーン分割（`splitPointScene`）で効果トリガーの参照を前後シーンへ振り分ける
+- [x] シーン分割（操作コアの `scene.splitAtLine`）で効果トリガーの参照を前後シーンへ振り分ける
 - 完了条件: 表・グラフ・ポイントの効果をエディタで設定でき、行削除・シーン分割後も参照が破綻しない。
 
 ### 5b 二重表現の解消
@@ -83,7 +83,7 @@
 - [x] `collectLineReferences(document)` 文書ウォーカーを `packages/contracts` に追加する（`asset-refs` と同型）
 - [x] `validateContentDocument` で効果トリガーの lineId が同一Sceneに実在するかを検証する
 - [x] `collectLineRefs` の各実装を trigger 部分スキーマの `safeParse` に変え、部分入力を許容する
-- [x] web の remap（`removeLineInScene`・`splitPointScene`・`countLineCueReferences`）を `collectLineRefs` に一本化する（未知テンプレートは非破壊保持）
+- [x] 行削除・分割時の remap（操作コアの `line.remove`・`scene.splitAtLine`、表示用の `countLineCueReferences`）を `collectLineRefs` に一本化する（未知テンプレートは非破壊保持）
 - [x] 契約・web のテストを追加・更新する
 - 完了条件: 別Scene・不存在の効果トリガーを保存時に拒否し、行削除・分割後も参照が破綻しない。
 

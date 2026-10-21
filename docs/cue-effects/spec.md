@@ -86,7 +86,7 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 ## エディタ
 
-- 行の並べ替え・削除・分割で、Cueの `range` だけでなく各テンプレート入力のTrigger参照も同じ規則でremapする（`apps/web/src/content/form.ts` の `moveLineInScene`・`removeLineInScene`・`splitPointScene` と同様）。remapは `collectLineRefs` を使って歩査する。
+- 行の並べ替え・削除・分割で、Cueの `range` だけでなく各テンプレート入力のTrigger参照も同じ規則でremapする。remapは操作コアの `line.move`・`line.remove`・`scene.splitAtLine` が `collectLineRefs` を使って行う（[editor-core](../editor-core/spec.md)）。
 - 行区間の選択UIは、Cueの表示区間編集と同じ行ピッカーを使い回す。
 - Trigger値は `inputFields` から生成する。データ駆動テンプレートの `effects` 配列は、targetの選択と効果の編集を汎用のリピータ部品で扱う。
 - 編集UIが未対応のTrigger・Effectは読み取り専用で非破壊に保持する。

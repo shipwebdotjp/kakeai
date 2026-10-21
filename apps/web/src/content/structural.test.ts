@@ -5,19 +5,10 @@ import {
   DEFAULT_TRANSITION_POLICY,
   type ContentDocument,
   type PointScene,
-  type Scene,
   type VisualCue,
 } from "@kakeai/contracts";
-import { resolveTimeline } from "@kakeai/video/timeline";
 import {
-  buildContentDocument,
-  collectSceneIds,
-  createPointSceneFormValue,
   createCueFormValue,
-  moveLineInScene,
-  nextPointLabel,
-  removeLineInScene,
-  splitPointScene,
   toFormValues,
 } from "./form";
 import {
@@ -64,36 +55,11 @@ function lines(document: ContentDocument, ids: string[]): void {
   }));
 }
 
-function cueShape(scene: Scene): unknown[] {
-  return scene.visualCues
-    .map((cue) => ({
-      template: cue.template,
-      range: cue.range,
-      layer: cue.layer,
-      input: cue.input,
-    }))
-    .sort((left, right) =>
-      JSON.stringify(left).localeCompare(JSON.stringify(right)),
-    );
-}
-
 describe("structural operation adapter", () => {
-  it("要点Sceneの追加が既存フォーム経路と同じ形になる", () => {
+  it("要点Sceneを既定の形で追加する", () => {
     const base = createInitialContentDocument();
     const values = toFormValues(base);
     const outroIndex = values.scenes.findIndex((scene) => scene.kind === "outro");
-    const oldValues = {
-      ...values,
-      scenes: [
-        ...values.scenes.slice(0, outroIndex),
-        createPointSceneFormValue(
-          nextPointLabel(values.scenes, outroIndex),
-          collectSceneIds(values.scenes),
-        ),
-        ...values.scenes.slice(outroIndex),
-      ],
-    };
-    const oldDocument = buildContentDocument(base, oldValues);
     const { document } = applyStructuralOperation(
       base,
       values,
@@ -101,18 +67,18 @@ describe("structural operation adapter", () => {
       [],
     );
 
-    expect(document.scenes.map((scene) => scene.kind)).toEqual(
-      oldDocument.scenes.map((scene) => scene.kind),
-    );
-    expect(document.scenes[outroIndex]?.label).toBe(
-      oldDocument.scenes[outroIndex]?.label,
-    );
-    expect(cueShape(document.scenes[outroIndex]!)).toEqual(
-      cueShape(oldDocument.scenes[outroIndex]!),
-    );
+    expect(document.scenes.map((scene) => scene.kind)).toEqual([
+      "intro",
+      "point",
+      "point",
+      "outro",
+    ]);
+    const added = document.scenes[outroIndex]!;
+    expect(added.label).toBe("要点 2");
+    expect(added.visualCues).toHaveLength(2);
   });
 
-  it("行の移動・削除が既存フォーム経路と同じCue範囲になる", () => {
+  it("行の移動・削除でCue範囲を更新する", () => {
     const base = createInitialContentDocument();
     lines(base, ["line-a", "line-b", "line-c"]);
     pointScene(base).visualCues.push(
@@ -122,50 +88,57 @@ describe("structural operation adapter", () => {
       ),
     );
     const values = toFormValues(base);
-    const sceneValue = values.scenes[1]!;
 
-    const movedForm = moveLineInScene(sceneValue, 2, 0);
-    const movedDocument = buildContentDocument(base, {
-      ...values,
-      scenes: values.scenes.map((scene, index) =>
-        index === 1 ? movedForm : scene,
-      ),
-    });
     const moved = applyStructuralOperation(
       base,
       values,
-      { op: "line.move", sceneId: DEFAULT_SCENE_IDS.point1, lineId: "line-c", index: 0 },
+      {
+        op: "line.move",
+        sceneId: DEFAULT_SCENE_IDS.point1,
+        lineId: "line-c",
+        index: 0,
+      },
       [],
     );
-    expect(moved.document.scenes[1]?.lines.map((line) => line.id)).toEqual(
-      movedDocument.scenes[1]?.lines.map((line) => line.id),
-    );
-    expect(cueShape(moved.document.scenes[1]!)).toEqual(
-      cueShape(movedDocument.scenes[1]!),
-    );
-
-    const removedForm = removeLineInScene(sceneValue, 0);
-    const removedDocument = buildContentDocument(base, {
-      ...values,
-      scenes: values.scenes.map((scene, index) =>
-        index === 1 ? removedForm : scene,
-      ),
+    const movedScene = moved.document.scenes[1]!;
+    expect(movedScene.lines.map((line) => line.id)).toEqual([
+      "line-c",
+      "line-a",
+      "line-b",
+    ]);
+    expect(
+      movedScene.visualCues.find((cue) => cue.id === "cue-text")?.range,
+    ).toEqual({
+      kind: "lines",
+      startLineId: "line-c",
+      endLineId: "line-a",
     });
+
     const removed = applyStructuralOperation(
       base,
       values,
-      { op: "line.remove", sceneId: DEFAULT_SCENE_IDS.point1, lineId: "line-a" },
+      {
+        op: "line.remove",
+        sceneId: DEFAULT_SCENE_IDS.point1,
+        lineId: "line-a",
+      },
       [],
     );
-    expect(removed.document.scenes[1]?.lines.map((line) => line.id)).toEqual(
-      removedDocument.scenes[1]?.lines.map((line) => line.id),
-    );
-    expect(cueShape(removed.document.scenes[1]!)).toEqual(
-      cueShape(removedDocument.scenes[1]!),
-    );
+    const removedScene = removed.document.scenes[1]!;
+    expect(removedScene.lines.map((line) => line.id)).toEqual([
+      "line-b",
+      "line-c",
+    ]);
+    expect(
+      removedScene.visualCues.find((cue) => cue.id === "cue-text")?.range,
+    ).toEqual({
+      kind: "lines",
+      startLineId: "line-b",
+      endLineId: "line-c",
+    });
   });
 
-  it("Scene分割がプレビュー応答なしで既存経路と同じ形になる", () => {
+  it("Scene分割がプレビュー応答なしでCueを振り分ける", () => {
     const base = createInitialContentDocument();
     lines(base, ["line-a", "line-b", "line-c"]);
     pointScene(base).visualCues.push(
@@ -180,28 +153,6 @@ describe("structural operation adapter", () => {
       },
     );
     const values = toFormValues(base);
-    const timeline = resolveTimeline(base);
-    const placement = timeline.scenes.find(
-      (entry) => entry.sceneId === DEFAULT_SCENE_IDS.point1,
-    )!;
-    const splitLine = placement.lines.find((line) => line.lineId === "line-c")!;
-    const splitOffsetMs = splitLine.startMs - placement.startMs;
-    const oldSplit = splitPointScene(
-      values.scenes[1]!,
-      2,
-      nextPointLabel(values.scenes, 2),
-      collectSceneIds(values.scenes),
-      splitOffsetMs,
-    );
-    const oldDocument = buildContentDocument(base, {
-      ...values,
-      scenes: [
-        ...values.scenes.slice(0, 1),
-        oldSplit.first,
-        oldSplit.second,
-        ...values.scenes.slice(2),
-      ],
-    });
 
     const { document } = applyStructuralOperation(
       base,
@@ -214,22 +165,38 @@ describe("structural operation adapter", () => {
       [],
     );
 
-    expect(document.scenes.map((scene) => scene.kind)).toEqual(
-      oldDocument.scenes.map((scene) => scene.kind),
-    );
-    const oldFirst = oldDocument.scenes[1]!;
-    const oldSecond = oldDocument.scenes[2]!;
-    const newFirst = document.scenes[1]!;
-    const newSecond = document.scenes[2]!;
-    expect(newFirst.lines.map((line) => line.id)).toEqual(
-      oldFirst.lines.map((line) => line.id),
-    );
-    expect(newSecond.lines.map((line) => line.id)).toEqual(
-      oldSecond.lines.map((line) => line.id),
-    );
-    expect(newSecond.label).toBe(oldSecond.label);
-    expect(cueShape(newFirst)).toEqual(cueShape(oldFirst));
-    expect(cueShape(newSecond)).toEqual(cueShape(oldSecond));
+    expect(document.scenes.map((scene) => scene.kind)).toEqual([
+      "intro",
+      "point",
+      "point",
+      "outro",
+    ]);
+    const first = document.scenes[1]!;
+    const second = document.scenes[2]!;
+    expect(first.lines.map((line) => line.id)).toEqual(["line-a", "line-b"]);
+    expect(second.lines.map((line) => line.id)).toEqual(["line-c"]);
+    expect(second.label).toBe("要点 2");
+
+    expect(first.visualCues.find((cue) => cue.id === "cue-text")?.range).toEqual({
+      kind: "lines",
+      startLineId: "line-a",
+      endLineId: "line-b",
+    });
+    expect(
+      second.visualCues.find(
+        (cue) => cue.range.kind === "lines" && cue.id !== "cue-text",
+      )?.range,
+    ).toEqual({
+      kind: "lines",
+      startLineId: "line-c",
+      endLineId: "line-c",
+    });
+    expect(
+      first.visualCues.find((cue) => cue.id === "cue-offset")?.range,
+    ).toEqual({ kind: "offset", startMs: 4000, endMs: 5500 });
+    expect(
+      second.visualCues.find((cue) => cue.range.kind === "offset")?.range,
+    ).toEqual({ kind: "offset", startMs: 0, endMs: 1500 });
   });
 
   it("未確定Cueがあっても構造操作でき、Cueはフォームに残る", () => {

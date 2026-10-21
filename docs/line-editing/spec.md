@@ -79,7 +79,7 @@
 
 ## 実装構成
 
-- `apps/web/src/content/form.ts` に、分割・並べ替え後のCue範囲を正規化する副作用のない変換関数を置く（`moveLineInScene`・`normalizeLineRangeCues`・`splitPointScene`・`duplicateLineFormValue`・表示ラベル・候補制約の各関数）。
+- 行の移動・削除・分割・複製の意味論は `packages/script-edits` の操作コアに置く（[editor-core](../editor-core/spec.md)）。`apps/web/src/content/form.ts` はフォームとContentDocumentの変換、表示ラベル・候補制約などの分析だけを持つ。
 - `LinesEditor` にメニューと連番表示を追加し、Scene配列の挿入が必要な分割操作は親の `SceneEditor` へコールバックする。
 - `CueList` にセリフ表示ラベルと、開始・終了の候補制約を追加する。
 

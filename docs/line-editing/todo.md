@@ -2,13 +2,9 @@
 
 - [x] `docs/line-editing/spec.md` と `todo.md` を追加する。
 - [x] `docs/editor/spec.md` にセリフ順序・分割・Cue範囲の編集規則を追記する。
-- [x] `apps/web/src/content/form.ts` に副作用のない変換関数を追加する。
-  - [x] `moveLineInScene`（並べ替え＋Cue範囲の正規化）
-  - [x] `normalizeLineRangeCues`（逆転したLine範囲の入れ替え）
-  - [x] `splitPointScene`（分割点でSceneを2つへ）
-  - [x] `duplicateLineFormValue`（Audio Takeを含めない複製）
-  - [x] 表示ラベル（`lineSummary`・`lineOptionLabel`）と候補制約（`lineRangeEndCandidates`・`nextEndLineId`）
-  - [x] `removeLineInScene`（削除時の端点繰り上げ、単一Line範囲のCue削除）と `countLineCueReferences`
+- [x] 行の移動・削除・分割・複製を実装する。
+  - [x] 編集意味論は [editor-core](../editor-core/spec.md) の操作コアへ移設し、UIは操作コアを呼ぶ。
+  - [x] 表示ラベル（`lineSummary`・`lineOptionLabel`）と候補制約（`lineRangeEndCandidates`・`nextEndLineId`）、`countLineCueReferences` は表示用の分析として残す。
 - [x] セリフ削除時に、参照中のLine範囲Cueを確認のうえ端点を寄せ、潰れるCueを削除する。
 - [x] `LinesEditor` に連番表示と `…` 操作メニューを追加する。
 - [x] 分割操作を `SceneEditor` のコールバックへ委譲する。
