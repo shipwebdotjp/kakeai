@@ -9,6 +9,7 @@ import {
   transitionPresetSchema,
 } from "./content/layers";
 import { idSchema, localeSchema, nonNegativeInt, positiveInt } from "./content/primitives";
+import { richTextMarkSchema } from "./content/rich-text";
 import {
   assetKindSchema,
   assetSchema,
@@ -198,6 +199,12 @@ export const agentTemplateFieldSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ kind: z.literal("text"), ...fieldKeyShape }),
   z.strictObject({ kind: z.literal("optionalText"), ...fieldKeyShape }),
+  z.strictObject({
+    kind: z.literal("richText"),
+    ...fieldKeyShape,
+    marks: z.array(richTextMarkSchema).min(1),
+    optional: z.boolean().optional(),
+  }),
   z.strictObject({
     kind: z.literal("select"),
     ...fieldKeyShape,
@@ -494,6 +501,14 @@ function toTemplateField(field: TemplateFieldSpec): AgentTemplateField {
     case "calloutItems":
     case "animation":
       return { kind: field.kind, key: field.key, label: field.label };
+    case "richText":
+      return {
+        kind: field.kind,
+        key: field.key,
+        label: field.label,
+        marks: [...field.marks],
+        ...optional("optional", field.optional),
+      };
     case "select":
       return {
         kind: field.kind,

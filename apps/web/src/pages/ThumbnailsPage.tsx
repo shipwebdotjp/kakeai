@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import {
   getThumbnailTemplate,
   listThumbnailTemplateCatalog,
+  parseRichText,
+  type RichTextMark,
   type TemplateFieldSpec,
   type Thumbnail,
 } from "@kakeai/contracts";
@@ -18,12 +20,14 @@ import {
   useWork,
 } from "../api/hooks";
 import { MediaPicker } from "../components/MediaPicker";
+import { RICH_TEXT_DELIMITER, wrapSelection } from "../lib/richTextEditing";
 import {
   badgeInfoClass,
   buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
+  iconButtonClass,
   metaTextClass,
   sectionCardClass,
   sectionTitleClass,
@@ -31,6 +35,13 @@ import {
 } from "../ui";
 
 const TEMPLATE_CATALOG = listThumbnailTemplateCatalog();
+
+const RICH_TEXT_MARK_LABELS: Record<RichTextMark, string> = {
+  bold: "太字",
+  italic: "斜体",
+  accent: "アクセント",
+  outline: "縁取り",
+};
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "操作に失敗しました。";
@@ -45,11 +56,98 @@ function defaultInput(templateId: string, version: number): Record<string, unkno
       if (first !== undefined) {
         input[field.key] = first.value;
       }
-    } else if (field.kind === "text") {
+    } else if (field.kind === "text" || (field.kind === "richText" && field.optional !== true)) {
       input[field.key] = "";
     }
   }
   return input;
+}
+
+interface RichTextFieldProps {
+  field: Extract<TemplateFieldSpec, { kind: "richText" }>;
+  value: unknown;
+  onChange: (value: string) => void;
+}
+
+function RichTextField({ field, value, onChange }: RichTextFieldProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const pendingSelection = useRef<{ start: number; end: number } | null>(null);
+  const lastSelection = useRef<{ start: number; end: number } | null>(null);
+  const text = typeof value === "string" ? value : "";
+  const firstError = parseRichText(text, { allowedMarks: field.marks }).errors[0];
+
+  const rememberSelection = () => {
+    const element = textareaRef.current;
+    if (element !== null) {
+      lastSelection.current = { start: element.selectionStart, end: element.selectionEnd };
+    }
+  };
+
+  useEffect(() => {
+    const pending = pendingSelection.current;
+    if (pending === null) {
+      return;
+    }
+    pendingSelection.current = null;
+    const element = textareaRef.current;
+    if (element === null) {
+      return;
+    }
+    element.focus();
+    element.setSelectionRange(pending.start, pending.end);
+  }, [text]);
+
+  const applyMark = (mark: RichTextMark) => {
+    const element = textareaRef.current;
+    const focused = element !== null && document.activeElement === element;
+    const selection =
+      focused && element !== null
+        ? { start: element.selectionStart, end: element.selectionEnd }
+        : (lastSelection.current ?? { start: text.length, end: text.length });
+    const next = wrapSelection(text, selection.start, selection.end, mark);
+    pendingSelection.current = { start: next.selectionStart, end: next.selectionEnd };
+    onChange(next.value);
+  };
+
+  const inputId = `thumbnail-rich-${field.key}`;
+
+  return (
+    <div className="my-2">
+      <label htmlFor={inputId} className="text-sm font-medium">
+        {field.label}
+      </label>
+      <textarea
+        id={inputId}
+        ref={textareaRef}
+        rows={2}
+        className={`${textFieldClass} mt-1 block w-full`}
+        value={text}
+        onChange={(event) => onChange(event.target.value)}
+        onSelect={rememberSelection}
+        onBlur={rememberSelection}
+      />
+      <div className="mt-1 flex flex-wrap items-center gap-1">
+        {field.marks.map((mark) => (
+          <button
+            key={mark}
+            type="button"
+            className={iconButtonClass}
+            title={`${RICH_TEXT_MARK_LABELS[mark]}（${RICH_TEXT_DELIMITER[mark]}）`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => applyMark(mark)}
+          >
+            {RICH_TEXT_MARK_LABELS[mark]}
+          </button>
+        ))}
+        <span className={`${metaTextClass} ml-1`}>
+          「**太字**」のように記号を直接入力しても装飾できます。
+        </span>
+      </div>
+      {firstError !== undefined && (
+        <p className={`${errorTextClass} mt-1`}>{firstError.message}</p>
+      )}
+    </div>
+  );
 }
 
 interface FieldProps {
@@ -61,6 +159,15 @@ interface FieldProps {
 
 function ThumbnailField({ field, input, setValue, clearValue }: FieldProps) {
   const value = input[field.key];
+  if (field.kind === "richText") {
+    return (
+      <RichTextField
+        field={field}
+        value={value}
+        onChange={(next) => setValue(field.key, next)}
+      />
+    );
+  }
   if (field.kind === "text" || field.kind === "optionalText") {
     return (
       <label className="my-2 block">

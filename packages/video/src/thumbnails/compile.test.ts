@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { getVisualTheme } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import type { AssetResolver } from "../resolver";
+import { contrastRatio } from "../theme";
 import { compileThumbnail } from "./compile";
+import { resolveReadableAccent } from "./render";
 import { THUMBNAIL_OUTPUT_HEIGHT, THUMBNAIL_OUTPUT_WIDTH } from "../meta";
 
 const theme = getVisualTheme("soft-editorial", 1);
@@ -140,6 +142,100 @@ describe("compileThumbnail", () => {
         assetResolver,
       }).html;
     expect(build()).toBe(build());
+  });
+
+  it("renders inline marks as spans inside the text paragraph", () => {
+    const compiled = compileThumbnail({
+      document: {
+        schemaVersion: 1,
+        template: { id: "thumbnail.text", version: 1 },
+        input: {
+          headline: "**太字**と*斜体*と==色==と%%縁%%",
+          subline: "**補足**\n二行目",
+        },
+      },
+      theme,
+      assetResolver,
+    });
+    expect(compiled.html).toContain("font-weight:700");
+    expect(compiled.html).toContain("font-style:italic");
+    expect(compiled.html).toContain("text-shadow:");
+    expect(compiled.html).toContain("white-space:pre-line");
+    expect(compiled.html).toContain("太字");
+    expect(compiled.html).toContain("補足");
+    expect(compiled.html).toContain("二行目");
+    expect(compiled.html).not.toContain("**");
+    expect(compiled.html).not.toContain("==");
+    expect(compiled.html).not.toContain("%%");
+  });
+
+  it("escapes html characters inside marked spans", () => {
+    const compiled = compileThumbnail({
+      document: {
+        schemaVersion: 1,
+        template: { id: "thumbnail.text", version: 1 },
+        input: { headline: "**<b>強調</b>**&" },
+      },
+      theme,
+      assetResolver,
+    });
+    expect(compiled.html).toContain("&lt;b&gt;");
+    expect(compiled.html).not.toContain("<b>");
+    expect(compiled.html).toContain("&amp;");
+  });
+
+  it("renders marked thumbnails deterministically", () => {
+    const build = (): string =>
+      compileThumbnail({
+        document: {
+          schemaVersion: 1,
+          template: { id: "thumbnail.headline-photo", version: 1 },
+          input: {
+            headline: "==**見出し**==\n二行目",
+            subline: "_補足_",
+            badge: "%%バッジ%%",
+            assetId: "ast_photo",
+          },
+        },
+        theme,
+        assetResolver,
+      }).html;
+    expect(build()).toBe(build());
+  });
+
+  it("uses the neutral that contrasts with the glyph for outlines", () => {
+    const darkGlyph = compileThumbnail({
+      document: {
+        schemaVersion: 1,
+        template: { id: "thumbnail.text", version: 1 },
+        input: { headline: "%%縁取り%%", tone: "canvas" },
+      },
+      theme,
+      assetResolver,
+    });
+    expect(darkGlyph.html).toContain("rgba(255,255,255,.9)");
+
+    const lightGlyph = compileThumbnail({
+      document: {
+        schemaVersion: 1,
+        template: { id: "thumbnail.text", version: 1 },
+        input: { headline: "%%縁取り%%", tone: "accent" },
+      },
+      theme,
+      assetResolver,
+    });
+    expect(lightGlyph.html).toContain("rgba(27,39,64,.9)");
+  });
+
+  it("keeps the accent mark readable on every template surface", () => {
+    const surfaces = [theme.canvas.base, theme.accents.primary, theme.scrim.color];
+    for (const surface of surfaces) {
+      for (const token of ["primary", "secondary", "tertiary"] as const) {
+        expect(contrastRatio(resolveReadableAccent(theme, token, surface), surface)).toBeGreaterThanOrEqual(
+          3,
+        );
+      }
+    }
   });
 
   it("fails on an unknown template", () => {

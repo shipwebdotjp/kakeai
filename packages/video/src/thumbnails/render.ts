@@ -1,4 +1,6 @@
 import {
+  parseRichText,
+  type RichTextSpan,
   type ThumbnailHeadlinePhotoInput,
   type ThumbnailLayeredInput,
   type ThumbnailPhotoCoverInput,
@@ -10,7 +12,7 @@ import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute, escapeHtmlText } from "../escape";
 import { THUMBNAIL_OUTPUT_HEIGHT } from "../meta";
 import type { AssetResolver } from "../resolver";
-import { mixHex, overlayToRgba, resolveFontFamilyCss } from "../theme";
+import { contrastRatio, hexToRgb, mixHex, overlayToRgba, resolveFontFamilyCss } from "../theme";
 import { mediaCropStyle, resolveCueMedia } from "../templates/shared";
 
 export interface ThumbnailRenderContext {
@@ -67,23 +69,178 @@ function textStyle(css: TextCss, extra = ""): string {
   ].join(";");
 }
 
-function badgeHtml(theme: VisualThemeDefinition, badge: string | undefined): string {
-  if (badge === undefined || badge.trim().length === 0) {
+const MIN_ACCENT_CONTRAST = 3;
+
+/**
+ * Accent marks must stay readable on whatever surface the template puts the
+ * text on. Start from the Theme accent, then lighten or darken toward the
+ * Theme neutrals until the contrast is acceptable. The result is deterministic
+ * because the candidate list is fixed.
+ */
+export function resolveReadableAccent(
+  theme: VisualThemeDefinition,
+  token: "primary" | "secondary" | "tertiary",
+  background: string,
+): string {
+  const base = theme.accents[token];
+  const candidates = [
+    base,
+    mixHex(base, theme.onMedia, 0.55),
+    mixHex(base, theme.scrim.color, 0.55),
+  ];
+  for (const candidate of candidates) {
+    if (contrastRatio(candidate, background) >= MIN_ACCENT_CONTRAST) {
+      return candidate;
+    }
+  }
+  return contrastRatio(theme.onMedia, background) >= contrastRatio(theme.canvas.ink, background)
+    ? theme.onMedia
+    : theme.canvas.ink;
+}
+
+/**
+ * An outline is drawn with layered text shadows. It must contrast with the
+ * glyph to be visible; the surface only breaks ties between the two Theme
+ * neutrals.
+ */
+function outlineColorFor(
+  theme: VisualThemeDefinition,
+  textColor: string,
+  background: string,
+): string {
+  const dark = theme.scrim.color;
+  const light = theme.onMedia;
+  const darkAgainstGlyph = contrastRatio(dark, textColor);
+  const lightAgainstGlyph = contrastRatio(light, textColor);
+  if (darkAgainstGlyph !== lightAgainstGlyph) {
+    return darkAgainstGlyph > lightAgainstGlyph ? dark : light;
+  }
+  return contrastRatio(dark, background) >= contrastRatio(light, background) ? dark : light;
+}
+
+function outlineShadow(color: string): string {
+  const { r, g, b } = hexToRgb(color);
+  return [
+    `0 0 2px rgba(${r},${g},${b},.9)`,
+    `2px 2px 0 rgba(${r},${g},${b},.7)`,
+    `-2px -2px 0 rgba(${r},${g},${b},.7)`,
+  ].join(",");
+}
+
+interface RichTextColors {
+  accent: string;
+  background: string;
+}
+
+function richTextColors(theme: VisualThemeDefinition, surface: string): RichTextColors {
+  return { accent: resolveReadableAccent(theme, "primary", surface), background: surface };
+}
+
+function richTextHtml(
+  text: string,
+  css: TextCss,
+  colors: RichTextColors,
+  theme: VisualThemeDefinition,
+  path: (string | number)[],
+): string {
+  const parsed = parseRichText(text);
+  if (parsed.errors.length > 0) {
+    throw new CompositionCompileError(
+      parsed.errors.map((error) => ({
+        path,
+        code: error.code,
+        message: error.message,
+      })),
+    );
+  }
+  return parsed.spans.map((span) => richSpanHtml(span, css, colors, theme)).join("");
+}
+
+function richSpanHtml(
+  span: RichTextSpan,
+  css: TextCss,
+  colors: RichTextColors,
+  theme: VisualThemeDefinition,
+): string {
+  if (span.marks.length === 0) {
+    return escapeHtmlText(span.text);
+  }
+  const styles: string[] = [];
+  if (span.marks.includes("bold")) {
+    styles.push("font-weight:700");
+  }
+  if (span.marks.includes("italic")) {
+    styles.push("font-style:italic");
+  }
+  if (span.marks.includes("accent")) {
+    styles.push(`color:${colors.accent}`);
+  }
+  if (span.marks.includes("outline")) {
+    const glyphColor = span.marks.includes("accent") ? colors.accent : css.color;
+    styles.push(`text-shadow:${outlineShadow(outlineColorFor(theme, glyphColor, colors.background))}`);
+  }
+  return `<span style="${styles.join(";")}">${escapeHtmlText(span.text)}</span>`;
+}
+
+function hasVisibleText(text: string): boolean {
+  return parseRichText(text).spans.some((span) => span.text.trim().length > 0);
+}
+
+function richParagraph(
+  text: string,
+  css: TextCss,
+  colors: RichTextColors,
+  theme: VisualThemeDefinition,
+  path: (string | number)[],
+  extra = "",
+): string {
+  return `<p style="${textStyle(css, `white-space:pre-line;${extra}`)}">${richTextHtml(
+    text,
+    css,
+    colors,
+    theme,
+    path,
+  )}</p>`;
+}
+
+function badgeHtml(
+  theme: VisualThemeDefinition,
+  badge: string | undefined,
+  path: (string | number)[],
+): string {
+  if (badge === undefined || !hasVisibleText(badge)) {
     return "";
   }
   const token = theme.textRoles.label;
+  const background = theme.accents.secondary;
+  const css: TextCss = {
+    fontFamily: roleFontFamily(token),
+    fontSize: `${scaledSize(token.fontSize, 1.6)}px`,
+    color: theme.onMedia,
+    fontWeight: "700",
+    fontStyle: "normal",
+    lineHeight: String(token.lineHeight),
+  };
   const style = [
     "display:inline-block",
-    `background:${theme.accents.secondary}`,
-    `color:${theme.onMedia}`,
+    `background:${background}`,
+    `color:${css.color}`,
     `border-radius:${theme.radius.md}px`,
     `padding:8px 22px`,
-    `font-family:${roleFontFamily(token)}`,
-    `font-size:${scaledSize(token.fontSize, 1.6)}px`,
-    "font-weight:700",
+    `font-family:${css.fontFamily}`,
+    `font-size:${css.fontSize}`,
+    `font-weight:${css.fontWeight}`,
     "letter-spacing:0.02em",
+    "white-space:pre-line",
   ].join(";");
-  return `<span class="kakeai-thumb-badge" style="${style}">${escapeHtmlText(badge)}</span>`;
+  const colors = richTextColors(theme, background);
+  return `<span class="kakeai-thumb-badge" style="${style}">${richTextHtml(
+    badge,
+    css,
+    colors,
+    theme,
+    path,
+  )}</span>`;
 }
 
 function toneBackground(theme: VisualThemeDefinition, tone: "accent" | "canvas"): string {
@@ -131,6 +288,7 @@ export function renderHeadlinePhoto(
     1.1,
     mixHex(headlineColor, background, 0.2),
   );
+  const colors = richTextColors(context.theme, background);
 
   const photoOnLeft = data.layout === "photo-left";
   const photoStyle = [
@@ -160,10 +318,10 @@ export function renderHeadlinePhoto(
     `<div class="kakeai-thumb" style="position:absolute;inset:0;background:${background}">`,
     `<img class="kakeai-thumb-photo" src="${photo}" alt="" style="${photoStyle}">`,
     `<div class="kakeai-thumb-text" style="${textWrapper}">`,
-    badgeHtml(context.theme, data.badge),
-    `<p style="${textStyle(headline)}">${escapeHtmlText(data.headline)}</p>`,
-    data.subline !== undefined && data.subline.trim().length > 0
-      ? `<p style="${textStyle(subline)}">${escapeHtmlText(data.subline)}</p>`
+    badgeHtml(context.theme, data.badge, [...context.path, "badge"]),
+    richParagraph(data.headline, headline, colors, context.theme, [...context.path, "headline"]),
+    data.subline !== undefined && hasVisibleText(data.subline)
+      ? richParagraph(data.subline, subline, colors, context.theme, [...context.path, "subline"])
       : "",
     "</div>",
     "</div>",
@@ -181,6 +339,7 @@ export function renderPhotoCover(
   const { theme } = context;
   const headline = textCss(theme.textRoles.title, 1.7, theme.onMedia);
   const subline = textCss(theme.textRoles.heading, 1.1, theme.onMedia);
+  const colors = richTextColors(theme, theme.scrim.color);
 
   const photoStyle = [
     "position:absolute",
@@ -212,9 +371,9 @@ export function renderPhotoCover(
     `<img class="kakeai-thumb-photo" src="${photo}" alt="" style="${photoStyle}">`,
     `<div class="kakeai-thumb-scrim" style="${scrimStyle}"></div>`,
     `<div class="kakeai-thumb-text" style="${textWrapper}">`,
-    `<p style="${textStyle(headline)}">${escapeHtmlText(data.headline)}</p>`,
-    data.subline !== undefined && data.subline.trim().length > 0
-      ? `<p style="${textStyle(subline)}">${escapeHtmlText(data.subline)}</p>`
+    richParagraph(data.headline, headline, colors, theme, [...context.path, "headline"]),
+    data.subline !== undefined && hasVisibleText(data.subline)
+      ? richParagraph(data.subline, subline, colors, theme, [...context.path, "subline"])
       : "",
     "</div>",
     "</div>",
@@ -351,6 +510,8 @@ function layeredTextHtml(
   const colors = layeredTextColors(context.theme, hasBackground);
   const headline = textCss(context.theme.textRoles.title, 1.5, colors.headline);
   const subline = textCss(context.theme.textRoles.heading, 1.1, colors.subline);
+  const backdrop = hasBackground ? context.theme.scrim.color : context.theme.canvas.base;
+  const richColors = richTextColors(context.theme, backdrop);
   const headlineStyle =
     "position:absolute;top:0;left:0;right:0;padding:44px 64px;text-align:center";
   const sublineStyle =
@@ -358,9 +519,9 @@ function layeredTextHtml(
   return [
     `<div class="kakeai-thumb-text-layer" style="position:absolute;inset:0;z-index:${zIndex};pointer-events:none">`,
     hasBackground ? `<div class="kakeai-thumb-scrim" style="${layeredScrim(context.theme)}"></div>` : "",
-    `<p style="${textStyle(headline, headlineStyle)}">${escapeHtmlText(data.headline)}</p>`,
-    data.subline !== undefined && data.subline.trim().length > 0
-      ? `<p style="${textStyle(subline, sublineStyle)}">${escapeHtmlText(data.subline)}</p>`
+    richParagraph(data.headline, headline, richColors, context.theme, [...context.path, "headline"], headlineStyle),
+    data.subline !== undefined && hasVisibleText(data.subline)
+      ? richParagraph(data.subline, subline, richColors, context.theme, [...context.path, "subline"], sublineStyle)
       : "",
     "</div>",
   ].join("");
@@ -408,14 +569,15 @@ export function renderTextOnly(
     "padding:72px 96px",
     "box-sizing:border-box",
   ].join(";");
+  const colors = richTextColors(context.theme, background);
 
   const html = [
     `<div class="kakeai-thumb" style="position:absolute;inset:0;background:${background}">`,
     `<div class="kakeai-thumb-text" style="${wrapper}">`,
-    badgeHtml(context.theme, data.badge),
-    `<p style="${textStyle(headline)}">${escapeHtmlText(data.headline)}</p>`,
-    data.subline !== undefined && data.subline.trim().length > 0
-      ? `<p style="${textStyle(subline)}">${escapeHtmlText(data.subline)}</p>`
+    badgeHtml(context.theme, data.badge, [...context.path, "badge"]),
+    richParagraph(data.headline, headline, colors, context.theme, [...context.path, "headline"]),
+    data.subline !== undefined && hasVisibleText(data.subline)
+      ? richParagraph(data.subline, subline, colors, context.theme, [...context.path, "subline"])
       : "",
     "</div>",
     "</div>",

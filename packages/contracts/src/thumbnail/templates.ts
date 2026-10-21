@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { richTextStringSchema } from "../content/rich-text";
 import { idSchema } from "../content/primitives";
 import { focalPointSchema, mediaZoomSchema } from "../content/nested";
 import type { AssetKindName, AssetReference } from "../content/asset-reference";
@@ -16,6 +17,13 @@ export interface ThumbnailTemplateDefinition {
 
 const THUMBNAIL_MEDIA_KINDS: readonly AssetKindName[] = ["image"];
 
+const HEADLINE_MARKS = ["bold", "italic", "accent", "outline"] as const;
+const BADGE_MARKS = ["bold", "italic", "outline"] as const;
+
+function headlineTextSchema() {
+  return richTextStringSchema(HEADLINE_MARKS);
+}
+
 const LAYOUT_OPTIONS = [
   { value: "photo-left", label: "写真を左" },
   { value: "photo-right", label: "写真を右" },
@@ -27,14 +35,14 @@ const TONE_OPTIONS = [
 ] as const;
 
 export const thumbnailHeadlinePhotoInputSchema = z.strictObject({
-  headline: z.string(),
-  subline: z.string().optional(),
+  headline: headlineTextSchema(),
+  subline: headlineTextSchema().optional(),
   assetId: idSchema,
   focalPoint: focalPointSchema.optional(),
   zoom: mediaZoomSchema.optional(),
   layout: z.enum(["photo-left", "photo-right"]).default("photo-left"),
   tone: z.enum(["accent", "canvas"]).default("accent"),
-  badge: z.string().optional(),
+  badge: richTextStringSchema(BADGE_MARKS).optional(),
 });
 export type ThumbnailHeadlinePhotoInput = z.infer<typeof thumbnailHeadlinePhotoInputSchema>;
 
@@ -48,13 +56,13 @@ const headlinePhotoV1: ThumbnailTemplateDefinition = {
     category: "thumbnail",
   },
   inputFields: [
-    { kind: "text", key: "headline", label: "見出し" },
-    { kind: "optionalText", key: "subline", label: "補足文" },
+    { kind: "richText", key: "headline", label: "見出し", marks: HEADLINE_MARKS },
+    { kind: "richText", key: "subline", label: "補足文", marks: HEADLINE_MARKS, optional: true },
     { kind: "media", key: "assetId", label: "写真", assetKinds: THUMBNAIL_MEDIA_KINDS },
     { kind: "mediaCrop", key: "focalPoint", label: "切り出し位置", zoomKey: "zoom" },
     { kind: "select", key: "layout", label: "写真の位置", options: LAYOUT_OPTIONS },
     { kind: "select", key: "tone", label: "背景", options: TONE_OPTIONS },
-    { kind: "optionalText", key: "badge", label: "バッジ" },
+    { kind: "richText", key: "badge", label: "バッジ", marks: BADGE_MARKS, optional: true },
   ],
   collectAssetRefs: (input, path) => {
     const parsed = thumbnailHeadlinePhotoInputSchema.safeParse(input);
@@ -68,8 +76,8 @@ const headlinePhotoV1: ThumbnailTemplateDefinition = {
 };
 
 export const thumbnailPhotoCoverInputSchema = z.strictObject({
-  headline: z.string(),
-  subline: z.string().optional(),
+  headline: headlineTextSchema(),
+  subline: headlineTextSchema().optional(),
   assetId: idSchema,
   focalPoint: focalPointSchema.optional(),
   zoom: mediaZoomSchema.optional(),
@@ -86,8 +94,8 @@ const photoCoverV1: ThumbnailTemplateDefinition = {
     category: "thumbnail",
   },
   inputFields: [
-    { kind: "text", key: "headline", label: "見出し" },
-    { kind: "optionalText", key: "subline", label: "補足文" },
+    { kind: "richText", key: "headline", label: "見出し", marks: HEADLINE_MARKS },
+    { kind: "richText", key: "subline", label: "補足文", marks: HEADLINE_MARKS, optional: true },
     { kind: "media", key: "assetId", label: "写真", assetKinds: THUMBNAIL_MEDIA_KINDS },
     { kind: "mediaCrop", key: "focalPoint", label: "切り出し位置", zoomKey: "zoom" },
   ],
@@ -114,8 +122,8 @@ export const thumbnailLayeredStackSchema = z.enum(THUMBNAIL_LAYERED_STACK_VALUES
 export const thumbnailLayeredPositionSchema = z.enum(["left", "center", "right"]);
 
 export const thumbnailLayeredInputSchema = z.strictObject({
-  headline: z.string(),
-  subline: z.string().optional(),
+  headline: headlineTextSchema(),
+  subline: headlineTextSchema().optional(),
   backgroundAssetId: idSchema.optional(),
   backgroundFocalPoint: focalPointSchema.optional(),
   backgroundZoom: mediaZoomSchema.optional(),
@@ -152,8 +160,8 @@ const layeredV1: ThumbnailTemplateDefinition = {
     category: "thumbnail",
   },
   inputFields: [
-    { kind: "text", key: "headline", label: "見出し" },
-    { kind: "optionalText", key: "subline", label: "補足文" },
+    { kind: "richText", key: "headline", label: "見出し", marks: HEADLINE_MARKS },
+    { kind: "richText", key: "subline", label: "補足文", marks: HEADLINE_MARKS, optional: true },
     { kind: "media", key: "backgroundAssetId", label: "背景画像", assetKinds: THUMBNAIL_MEDIA_KINDS },
     {
       kind: "mediaCrop",
@@ -200,10 +208,10 @@ const layeredV1: ThumbnailTemplateDefinition = {
 };
 
 export const thumbnailTextInputSchema = z.strictObject({
-  headline: z.string(),
-  subline: z.string().optional(),
+  headline: headlineTextSchema(),
+  subline: headlineTextSchema().optional(),
   tone: z.enum(["accent", "canvas"]).default("accent"),
-  badge: z.string().optional(),
+  badge: richTextStringSchema(BADGE_MARKS).optional(),
 });
 export type ThumbnailTextInput = z.infer<typeof thumbnailTextInputSchema>;
 
@@ -217,10 +225,10 @@ const textV1: ThumbnailTemplateDefinition = {
     category: "thumbnail",
   },
   inputFields: [
-    { kind: "text", key: "headline", label: "見出し" },
-    { kind: "optionalText", key: "subline", label: "補足文" },
+    { kind: "richText", key: "headline", label: "見出し", marks: HEADLINE_MARKS },
+    { kind: "richText", key: "subline", label: "補足文", marks: HEADLINE_MARKS, optional: true },
     { kind: "select", key: "tone", label: "背景", options: TONE_OPTIONS },
-    { kind: "optionalText", key: "badge", label: "バッジ" },
+    { kind: "richText", key: "badge", label: "バッジ", marks: BADGE_MARKS, optional: true },
   ],
   collectAssetRefs: () => [],
 };

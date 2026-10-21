@@ -11,6 +11,7 @@ import {
   type AnimationPolicy,
 } from "../content/animation";
 import { fontFaceSpecSchema, textSurfaceSchema, themeAccentTokenSchema } from "../content/theme";
+import type { RichTextMark } from "../content/rich-text";
 import { tableToneSchema } from "../content/tone";
 import {
   appearEffectSchema,
@@ -48,6 +49,13 @@ export type TemplateFieldSpec =
   | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[]; optional?: boolean; allowComposition?: boolean; videoPlayback?: boolean }
   | { kind: "text"; key: string; label: string }
   | { kind: "optionalText"; key: string; label: string }
+  | {
+      kind: "richText";
+      key: string;
+      label: string;
+      marks: readonly [RichTextMark, ...RichTextMark[]];
+      optional?: boolean;
+    }
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
   | { kind: "color"; key: string; label: string; optional?: boolean }
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }

@@ -291,3 +291,7 @@ _Avoid_: cover image, render, Artifact, Script Version
 **Thumbnail Template**:
 A trusted reusable thumbnail layout with a defined input contract, separate from a Visual Template.
 _Avoid_: Visual Template, scene, Visual Cue
+
+**Rich Text Value**:
+A thumbnail text input that carries inline emphasis in a small plain-text syntax, mapped by the owning Thumbnail Template to Theme tokens rather than user-chosen colors or fonts. It stays an ordinary string in the saved document.
+_Avoid_: HTML, Markdown document, rich text editor state

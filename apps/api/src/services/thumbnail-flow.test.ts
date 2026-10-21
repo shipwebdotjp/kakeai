@@ -114,6 +114,24 @@ describe("thumbnail flow", () => {
     ).rejects.toMatchObject({ code: "ASSET_NOT_FOUND" });
   });
 
+  it("accepts inline text marks and rejects marks a field does not allow", async () => {
+    const editionId = await createEdition();
+    const created = await thumbnails.createThumbnail(prisma, editionId, {
+      label: "装飾",
+      template: { id: "thumbnail.text", version: 1 },
+      input: { headline: "**重要**と==色==" },
+    });
+    expect(created.id).toBeTruthy();
+
+    await expect(
+      thumbnails.createThumbnail(prisma, editionId, {
+        label: "不正",
+        template: { id: "thumbnail.text", version: 1 },
+        input: { headline: "見出し", badge: "==バッジ==" },
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
   it("saves, switches primary, and deletes with fallback", async () => {
     const editionId = await createEdition();
     const first = await thumbnails.createThumbnail(prisma, editionId, {

@@ -107,4 +107,35 @@ describe("thumbnail templates", () => {
     expect(getThumbnailTemplate("thumbnail.text", 2)).toBeUndefined();
     expect(thumbnailTextInputSchema.parse({ headline: "x" }).tone).toBe("accent");
   });
+
+  it("declares rich text fields with the marks they accept", () => {
+    const definition = getThumbnailTemplate("thumbnail.text", 1);
+    const headline = definition?.inputFields?.find((field) => field.key === "headline");
+    expect(headline?.kind).toBe("richText");
+    if (headline?.kind === "richText") {
+      expect(headline.marks).toEqual(["bold", "italic", "accent", "outline"]);
+      expect(headline.optional).toBeUndefined();
+    }
+    const subline = definition?.inputFields?.find((field) => field.key === "subline");
+    expect(subline?.kind === "richText" && subline.optional).toBe(true);
+    const badge = definition?.inputFields?.find((field) => field.key === "badge");
+    if (badge?.kind === "richText") {
+      expect(badge.marks).not.toContain("accent");
+      expect(badge.optional).toBe(true);
+    }
+  });
+
+  it("accepts inline marks in text fields and rejects marks a field does not allow", () => {
+    expect(thumbnailTextInputSchema.safeParse({ headline: "**見出し**と==色==" }).success).toBe(
+      true,
+    );
+    expect(thumbnailTextInputSchema.safeParse({ headline: "**閉じない" }).success).toBe(true);
+    expect(
+      thumbnailHeadlinePhotoInputSchema.safeParse({
+        headline: "見出し",
+        assetId: "ast_1",
+        badge: "==バッジ==",
+      }).success,
+    ).toBe(false);
+  });
 });

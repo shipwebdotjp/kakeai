@@ -39,3 +39,12 @@
 - [x] [../mvp/api-contract.md](../mvp/api-contract.md) にエンドポイントとDTO（Thumbnail）を追記する
 - [x] ユーザーガイドにサムネイル作成・候補管理・ダウンロードを追記する
 - 完了条件: 文書と実装が一致し、`npm run typecheck` と `npm test` が通る。
+
+### [x] T6 文字の部分装飾
+
+- [x] `packages/contracts` に限定記法のパーサと `richText` フィールド種別を追加し、同梱テンプレートの文字入力を `@1` のまま拡張する（[ADR 0080](../adr/0080-thumbnail-inline-text-marks.md)）
+- [x] `packages/video` で装飾区間を `<span>` に描画し、アクセント色と縁取り色を Theme から解決する
+- [x] 保存時検証とプレビューで不正な記法を `VALIDATION_ERROR` として返す
+- [x] Web UI に textarea とツールバー（選択範囲の装飾）を追加する
+- [x] [spec.md](./spec.md) とユーザーガイドに記法・制約を追記する
+- 完了条件: 単語単位の太字・斜体・アクセント・縁取りがプレビューと PNG に反映され、許可されない記法が保存時に拒否される。
