@@ -36,9 +36,9 @@ export function statusBarHtml(containerClass: string, time?: string): string {
  * keyboard, trackpad, speaker grilles and the front thumb notch. The outer
  * stage reserves the projected footprint so the layout stays predictable.
  *
- * Keep the stage depth (`29%` of the body width) in sync with the deck geometry
- * in the compiler styles: the deck is 110% wide, 10/7 deep and rotated 70deg
- * under a 365cqw camera, which projects to roughly the same height. The
+ * Keep the stage aspect ratio (`100/27`) in sync with the deck geometry in the
+ * compiler styles: the deck is as wide as the lid, 10/7 deep and rotated 70deg
+ * under a 365cqw camera, which projects to roughly the stage height. The
  * speaker grille pitch is 7.7% of the grille width by 1.1% of its height, so
  * the dots stay square and scale with the deck.
  */
