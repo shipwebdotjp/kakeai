@@ -660,24 +660,6 @@ export function CueMap({
     return map;
   }, [model]);
 
-  const aggregateByRail = useMemo(() => {
-    const map = new Map<string, CueMapAggregateEntry[]>();
-    for (const entry of model.aggregate?.entries ?? []) {
-      const list = map.get(entry.sceneId) ?? [];
-      list.push(entry);
-      map.set(entry.sceneId, list);
-    }
-    return map;
-  }, [model]);
-
-  const laneSpan = useMemo(
-    () =>
-      model.aggregate !== null
-        ? model.visibleLaneCount
-        : Math.max(1, model.requiredLaneCount),
-    [model],
-  );
-
   return (
     <nav aria-label="構成">
       {model.rails.map((rail) => (
@@ -686,10 +668,10 @@ export function CueMap({
           rail={rail}
           rows={rowsByRail.get(rail.sceneId) ?? []}
           bands={bandsByRail.get(rail.sceneId) ?? []}
-          aggregateEntries={aggregateByRail.get(rail.sceneId) ?? []}
-          aggregateLane={model.aggregate?.lane ?? null}
+          aggregateEntries={rail.aggregate?.entries ?? []}
+          aggregateLane={rail.aggregate?.lane ?? null}
           markers={markersByRail.get(rail.sceneId) ?? []}
-          laneSpan={laneSpan}
+          laneSpan={rail.laneSpan}
           assetById={assetById}
           openId={openId}
           onOpen={setOpenId}

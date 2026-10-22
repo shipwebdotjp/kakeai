@@ -97,7 +97,7 @@ import {
   editAreaClass,
   errorTextClass,
   formLabelClass,
-  iconButtonClass,
+  iconButtonLargeClass,
   metaTextClass,
   sectionCardClass,
   sectionSummaryClass,
@@ -1635,7 +1635,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   )}
                   <button
                     type="button"
-                    className={iconButtonClass}
+                    className={iconButtonLargeClass}
                     aria-label="上へ移動"
                     title="上へ移動"
                     disabled={
@@ -1647,7 +1647,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                   </button>
                   <button
                     type="button"
-                    className={iconButtonClass}
+                    className={iconButtonLargeClass}
                     aria-label="下へ移動"
                     title="下へ移動"
                     disabled={

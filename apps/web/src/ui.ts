@@ -8,7 +8,12 @@ export const colorFieldClass = `h-8 w-12 cursor-pointer rounded border border-bo
 const neutralSurfaceClass =
   "border border-muted-foreground/40 bg-surface hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-950/40";
 
-const buttonBase = `inline-flex items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${focusRingClass}`;
+const buttonPaddingYClass = "py-1.5";
+
+// text-sm の行高20px + 上下パディング12px + 枠2px。アイコンだけのボタンも同じ高さにする。
+const controlMinHeightClass = "min-h-[34px]";
+
+const buttonBase = `inline-flex items-center justify-center gap-1 rounded-md px-3 ${buttonPaddingYClass} ${controlMinHeightClass} text-sm font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${focusRingClass}`;
 
 export const buttonPrimaryClass = `${buttonBase} bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-500 dark:text-brand-950 dark:hover:bg-brand-400`;
 
@@ -59,7 +64,12 @@ export const badgeDangerClass = `${badgeBaseClass} bg-red-100 text-red-800 dark:
 
 export const detailsSummaryClass = `inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-muted-foreground select-none hover:text-foreground ${focusRingClass}`;
 
-export const iconButtonClass = `inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md ${neutralSurfaceClass} px-1 text-sm text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${focusRingClass}`;
+const iconButtonBase = `inline-flex shrink-0 items-center justify-center rounded-md ${neutralSurfaceClass} text-sm text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${focusRingClass}`;
+
+export const iconButtonClass = `${iconButtonBase} h-7 min-w-7 px-1`;
+
+// テキスト付きボタンと同じ高さにして、同じ行に並べるアイコン操作向け。
+export const iconButtonLargeClass = `${iconButtonBase} min-w-8 px-2 ${buttonPaddingYClass} ${controlMinHeightClass}`;
 
 export const PRESET_LABELS: Record<string, string> = {
   none: "なし",

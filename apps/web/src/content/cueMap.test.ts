@@ -296,7 +296,7 @@ describe("buildCueMap draw order and lanes", () => {
     expect(laneByLayer.get("overlay")).toBe(0);
     expect(laneByLayer.get("card")).toBe(1);
     expect(laneByLayer.get("background")).toBe(2);
-    expect(model.requiredLaneCount).toBe(3);
+    expect(model.rails[0]!.laneSpan).toBe(3);
   });
 
   it("reuses one lane for cues that never overlap", () => {
@@ -326,8 +326,114 @@ describe("buildCueMap draw order and lanes", () => {
     ];
     const model = buildCueMap(baseInput(scenes));
     expect(model.bands.map((band) => band.lane)).toEqual([0, 0]);
-    expect(model.requiredLaneCount).toBe(1);
-    expect(model.aggregate).toBeNull();
+    expect(model.rails[0]!.laneSpan).toBe(1);
+    expect(model.rails[0]!.aggregate).toBeNull();
+  });
+
+  it("resets lanes per scene and right-aligns each scene's lanes", () => {
+    const threeLaneCues = [
+      makeCue({
+        sceneId: "p1",
+        templateId: "media.full-bleed",
+        templateVersion: 1,
+        layer: "background",
+        order: 0,
+        rangeKind: "scene",
+      }),
+      makeCue({
+        sceneId: "p1",
+        templateId: "media.card",
+        templateVersion: 1,
+        layer: "card",
+        order: 0,
+        rangeKind: "scene",
+      }),
+      makeCue({
+        sceneId: "p1",
+        templateId: "text.block",
+        templateVersion: 1,
+        layer: "overlay",
+        order: 0,
+        rangeKind: "scene",
+      }),
+    ];
+    const singleCue = makeCue({
+      sceneId: "p2",
+      templateId: "media.full-bleed",
+      templateVersion: 1,
+      layer: "background",
+      order: 0,
+      rangeKind: "scene",
+    });
+    const scenes = [
+      makeScene("p1", "point", [makeLine("l1", "a"), makeLine("l2", "b")], threeLaneCues),
+      makeScene("p2", "point", [makeLine("l3", "c")], [singleCue]),
+    ];
+    const model = buildCueMap(baseInput(scenes));
+
+    expect(model.rails.map((rail) => [rail.sceneId, rail.laneSpan])).toEqual([
+      ["p1", 3],
+      ["p2", 1],
+    ]);
+
+    const p1Background = model.bands.find(
+      (band) => band.sceneId === "p1" && band.layer === "background",
+    )!;
+    const p2Background = model.bands.find((band) => band.sceneId === "p2")!;
+    expect(p1Background.lane).toBe(2);
+    expect(p2Background.lane).toBe(0);
+    expect(cueMapLaneOffsetRightPx(p1Background.lane, 3)).toBe(0);
+    expect(cueMapLaneOffsetRightPx(p2Background.lane, 1)).toBe(0);
+  });
+
+  it("aggregates overflow within a scene without widening other scenes", () => {
+    const scenes = [
+      makeScene("p1", "point", [makeLine("l1", "a"), makeLine("l2", "b")], [
+        makeCue({
+          sceneId: "p1",
+          templateId: "media.full-bleed",
+          templateVersion: 1,
+          layer: "background",
+          order: 0,
+          rangeKind: "scene",
+        }),
+        makeCue({
+          sceneId: "p1",
+          templateId: "media.card",
+          templateVersion: 1,
+          layer: "card",
+          order: 0,
+          rangeKind: "scene",
+        }),
+        makeCue({
+          sceneId: "p1",
+          templateId: "text.block",
+          templateVersion: 1,
+          layer: "overlay",
+          order: 0,
+          rangeKind: "scene",
+        }),
+      ]),
+      makeScene("p2", "point", [makeLine("l3", "c")], [
+        makeCue({
+          sceneId: "p2",
+          templateId: "media.full-bleed",
+          templateVersion: 1,
+          layer: "background",
+          order: 0,
+          rangeKind: "scene",
+        }),
+      ]),
+    ];
+    const input = { ...baseInput(scenes), paneWidthPx: 150 };
+    const model = buildCueMap(input);
+
+    expect(model.rails[0]!.laneSpan).toBe(2);
+    expect(model.rails[0]!.aggregate).not.toBeNull();
+    expect(model.rails[0]!.aggregate!.entries).toHaveLength(2);
+    expect(model.rails[1]!.laneSpan).toBe(1);
+    expect(model.rails[1]!.aggregate).toBeNull();
+    expect(model.bands.find((band) => band.sceneId === "p2")!.lane).toBe(0);
   });
 
   it("stabilizes order ties by scene and input order", () => {
@@ -589,11 +695,10 @@ describe("buildCueMap overflow and promotion", () => {
     const scenes = threeLaneScenes();
     const input = { ...baseInput(scenes), paneWidthPx: 150 };
     const model = buildCueMap(input);
-    expect(model.requiredLaneCount).toBe(3);
-    expect(model.visibleLaneCount).toBe(2);
-    expect(model.aggregate).not.toBeNull();
-    expect(model.aggregate!.lane).toBe(1);
-    expect(model.aggregate!.entries).toHaveLength(2);
+    expect(model.rails[0]!.laneSpan).toBe(2);
+    expect(model.rails[0]!.aggregate).not.toBeNull();
+    expect(model.rails[0]!.aggregate!.lane).toBe(1);
+    expect(model.rails[0]!.aggregate!.entries).toHaveLength(2);
     expect(model.bands).toHaveLength(1);
     expect(model.bands[0]!.layer).toBe("overlay");
   });
@@ -609,7 +714,7 @@ describe("buildCueMap overflow and promotion", () => {
     const model = buildCueMap(input);
     const visibleIds = model.bands.map((band) => band.cueId);
     expect(visibleIds).toContain(backgroundCueId);
-    expect(model.aggregate!.entries.map((entry) => entry.cueId)).not.toContain(
+    expect(model.rails[0]!.aggregate!.entries.map((entry) => entry.cueId)).not.toContain(
       backgroundCueId,
     );
     expect(model.bands.find((band) => band.cueId === backgroundCueId)!.active).toBe(true);

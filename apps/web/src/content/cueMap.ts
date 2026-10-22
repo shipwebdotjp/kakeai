@@ -127,6 +127,10 @@ export interface CueMapSceneRail {
   label: string;
   startRow: number;
   endRow: number;
+  /** この Scene のレーン幅。Scene ごとに右詰めするための値。 */
+  laneSpan: number;
+  /** 表示可能レーンを超えた Cue の集約。超えていなければ null。 */
+  aggregate: CueMapAggregate | null;
 }
 
 export type CueMapRangeDetail =
@@ -181,10 +185,7 @@ export interface CueMapModel {
   rows: CueMapRow[];
   rails: CueMapSceneRail[];
   bands: CueMapBandPlacement[];
-  aggregate: CueMapAggregate | null;
   markers: CueMapMarker[];
-  requiredLaneCount: number;
-  visibleLaneCount: number;
 }
 
 interface CueSpanInput {
@@ -507,6 +508,74 @@ function promoteActive(
   }
 }
 
+interface SceneLaneLayout {
+  placements: CueMapBandPlacement[];
+  laneSpan: number;
+  aggregate: CueMapAggregate | null;
+}
+
+/**
+ * 1つの Scene の Cue をレーンへ配置する。
+ *
+ * - Cue は Scene をまたげないため、レーンも Scene ごとにリセットする。
+ * - lane 0 が最も前面（左）で、lane が大きいほど奥（右）。呼び出し側は
+ *   `cueMapLaneOffsetRightPx(lane, laneSpan)` で右端基準の位置へ変換する。
+ * - 必要レーン数が表示可能数を超えた Scene だけ、右端の1本を集約レーンにし、
+ *   残りを `entries` へ退避する。他の Scene のレーン幅には影響しない。
+ */
+function layoutSceneLanes(
+  sceneSpans: readonly CueSpan[],
+  visibleLaneCount: number,
+  isActive: (band: CueSpan) => boolean,
+): SceneLaneLayout {
+  if (sceneSpans.length === 0) {
+    return { placements: [], laneSpan: 1, aggregate: null };
+  }
+  const ordered = [...sceneSpans].sort(compareDrawOrder);
+  const frontFirst = [...ordered].reverse();
+  const assigned = assignLanes(frontFirst);
+  const laneByCueId = new Map(
+    frontFirst.map((band, index) => [band.cueId, assigned[index]!]),
+  );
+  const laneOf = (band: CueSpan): number => laneByCueId.get(band.cueId) ?? 0;
+  const required = Math.max(...laneByCueId.values()) + 1;
+
+  if (required <= visibleLaneCount) {
+    return {
+      placements: ordered.map((band) => toPlacement(band, laneOf(band), isActive(band))),
+      laneSpan: Math.max(1, required),
+      aggregate: null,
+    };
+  }
+
+  const aggregateLane = Math.max(0, visibleLaneCount - 1);
+  const visible: CueMapBandPlacement[] = [];
+  const aggregated: CueSpan[] = [];
+  ordered.forEach((band) => {
+    if (laneOf(band) < aggregateLane) {
+      visible.push(toPlacement(band, laneOf(band), isActive(band)));
+    } else {
+      aggregated.push(band);
+    }
+  });
+
+  if (visibleLaneCount > 1) {
+    promoteActive(ordered, visible, aggregated, aggregateLane, isActive);
+  }
+
+  aggregated.sort(compareDrawOrder);
+  visible.sort((a, b) => a.lane - b.lane || a.startRow - b.startRow);
+
+  return {
+    placements: visible,
+    laneSpan: visibleLaneCount,
+    aggregate: {
+      lane: aggregateLane,
+      entries: aggregated.map((band) => toAggregateEntry(band, isActive(band))),
+    },
+  };
+}
+
 export function buildCueMap(input: CueMapInput): CueMapModel {
   const assetById = new Map(input.assets.map((asset) => [asset.id, asset]));
   const rows: CueMapRow[] = [];
@@ -553,6 +622,8 @@ export function buildCueMap(input: CueMapInput): CueMapModel {
       label: input.sceneLabels.get(scene.id) ?? scene.id,
       startRow,
       endRow: rows.length - 1,
+      laneSpan: 1,
+      aggregate: null,
     });
   });
   const railBySceneId = new Map(rails.map((rail) => [rail.sceneId, rail]));
@@ -626,17 +697,27 @@ export function buildCueMap(input: CueMapInput): CueMapModel {
     });
   }
 
-  const ordered = [...bands].sort(compareDrawOrder);
-  const frontFirst = [...ordered].sort((a, b) => compareDrawOrder(b, a));
-  const assigned = assignLanes(frontFirst);
-  const laneByCueId = new Map(
-    frontFirst.map((band, index) => [band.cueId, assigned[index]!]),
-  );
-  const laneOf = (band: CueSpan): number => laneByCueId.get(band.cueId) ?? 0;
-  const requiredLaneCount =
-    ordered.length === 0 ? 0 : Math.max(...laneByCueId.values()) + 1;
   const visibleLaneCount = resolveVisibleLaneCount(input.paneWidthPx);
   const isActive = (band: CueSpan): boolean => isActiveBand(band, input.active, lineRowById);
+  const spansBySceneId = new Map<string, CueSpan[]>();
+  for (const band of bands) {
+    const list = spansBySceneId.get(band.sceneId) ?? [];
+    list.push(band);
+    spansBySceneId.set(band.sceneId, list);
+  }
+  const placements: CueMapBandPlacement[] = [];
+  input.scenes.forEach((scene, sceneIndex) => {
+    const layout = layoutSceneLanes(
+      spansBySceneId.get(scene.id) ?? [],
+      visibleLaneCount,
+      isActive,
+    );
+    placements.push(...layout.placements);
+    // rails は input.scenes と同じ順・同じ件数で構築している。
+    const rail = rails[sceneIndex]!;
+    rail.laneSpan = layout.laneSpan;
+    rail.aggregate = layout.aggregate;
+  });
   const markerIndexByScene = new Map<string, number>();
   const toMarker = (entry: CueSpanInput): CueMapMarker => {
     const rail = railBySceneId.get(entry.sceneId);
@@ -657,46 +738,10 @@ export function buildCueMap(input: CueMapInput): CueMapModel {
     };
   };
 
-  if (requiredLaneCount <= visibleLaneCount) {
-    return {
-      rows,
-      rails,
-      bands: ordered.map((band) => toPlacement(band, laneOf(band), isActive(band))),
-      aggregate: null,
-      markers: markers.map(toMarker),
-      requiredLaneCount,
-      visibleLaneCount,
-    };
-  }
-
-  const aggregateLane = Math.max(0, visibleLaneCount - 1);
-  const visible: CueMapBandPlacement[] = [];
-  const aggregated: CueSpan[] = [];
-  ordered.forEach((band) => {
-    if (laneOf(band) < aggregateLane) {
-      visible.push(toPlacement(band, laneOf(band), isActive(band)));
-    } else {
-      aggregated.push(band);
-    }
-  });
-
-  if (visibleLaneCount > 1) {
-    promoteActive(ordered, visible, aggregated, aggregateLane, isActive);
-  }
-
-  aggregated.sort(compareDrawOrder);
-  visible.sort((a, b) => a.lane - b.lane || a.startRow - b.startRow);
-
   return {
     rows,
     rails,
-    bands: visible,
-    aggregate: {
-      lane: aggregateLane,
-      entries: aggregated.map((band) => toAggregateEntry(band, isActive(band))),
-    },
+    bands: placements,
     markers: markers.map(toMarker),
-    requiredLaneCount,
-    visibleLaneCount,
   };
 }
