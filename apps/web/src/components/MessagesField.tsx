@@ -1,5 +1,11 @@
 import { MediaPicker } from "./MediaPicker";
-import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  buttonNeutralClass,
+  errorTextClass,
+  formLabelTextClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 
 type Json = Record<string, unknown>;
 
@@ -56,7 +62,7 @@ export function MessagesField({
   if (messages === null) {
     return (
       <div className="my-2">
-        <span>{label}</span>
+        <span className={formLabelTextClass}>{label}</span>
         <p className={errorTextClass}>メッセージを読み取れませんでした。JSONで修正してください。</p>
         <textarea
           className={`mt-1 block w-full ${textFieldClass}`}
@@ -75,7 +81,7 @@ export function MessagesField({
 
   return (
     <div className="my-2">
-      <span>{label}</span>
+      <span className={formLabelTextClass}>{label}</span>
       <p className={metaTextClass}>
         会話を上から順に表示します。左右で吹き出しの向きが変わります。
       </p>

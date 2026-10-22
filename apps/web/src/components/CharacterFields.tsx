@@ -6,6 +6,7 @@ import {
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
+import { Trash2 } from "lucide-react";
 import type { FaceSet, VoiceProfile } from "@kakeai/contracts";
 import {
   createEmptyAppearance,
@@ -13,7 +14,7 @@ import {
   type CharacterFormValue,
   type DocumentFormValues,
 } from "../content/form";
-import { buttonDangerClass, textFieldClass } from "../ui";
+import { buttonDangerClass, formLabelClass, textFieldClass } from "../ui";
 import { AppearanceFields } from "./AppearanceFields";
 
 interface CharacterFieldsProps {
@@ -100,11 +101,12 @@ export function CharacterFields({
             }
           }}
         >
+          <Trash2 aria-hidden="true" className="h-4 w-4" />
           削除
         </button>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           声プロファイル
           <select
             className={textFieldClass}

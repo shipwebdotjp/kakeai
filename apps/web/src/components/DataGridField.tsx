@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { tableDataSchema, type TableColumn, type TableData } from "@kakeai/contracts";
 import { defaultGridDataJson } from "../content/form";
-import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  buttonNeutralClass,
+  errorTextClass,
+  formLabelTextClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 
 const COLUMN_TYPE_OPTIONS: readonly { value: string; label: string }[] = [
   { value: "text", label: "文字列" },
@@ -191,7 +197,7 @@ export function DataGridField({
   if (data === null) {
     return (
       <div className="my-2">
-        <span>{label}</span>
+        <span className={formLabelTextClass}>{label}</span>
         <p className={errorTextClass}>表データを読み取れませんでした。初期化してください。</p>
         <button
           type="button"
@@ -345,7 +351,7 @@ export function DataGridField({
 
   return (
     <div className="my-2">
-      <span>{label}</span>
+      <span className={formLabelTextClass}>{label}</span>
       <p className={metaTextClass}>
         {data.columns.length}/{maxColumns}列・{data.rows.length}/{maxRows}行
       </p>
@@ -473,7 +479,7 @@ export function DataGridField({
         </button>
       </div>
       <div className="mt-2">
-        <span>CSV貼り付け</span>
+        <span className={formLabelTextClass}>CSV貼り付け</span>
         <textarea
           className={`mt-1 block w-full ${textFieldClass}`}
           rows={3}

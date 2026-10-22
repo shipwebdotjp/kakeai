@@ -211,7 +211,7 @@ Kakeai は、エージェントが制作手順をたどるためのスキル（�
 
 | スキル | 内容 |
 | --- | --- |
-| [`skills/kakeai-production/`](https://github.com/shipwebdotjp/kakeai/tree/main/skills/kakeai-production) | 1 本の動画を作る横断手順。`schema.get` → 作品と台本 → キャラクター → 素材 → Cue・立ち絵・BGM → TTS → 検証 → レンダー、および再送・古い基準版の扱い |
+| [`skills/kakeai-production/`](https://github.com/shipwebdotjp/kakeai/tree/main/skills/kakeai-production) | 1 本の動画を作る横断手順。`schema.get` → 作品と台本 → キャラクター → 素材 → 映像演出・立ち絵・BGM → TTS → 検証 → レンダー、および再送・古い基準版の扱い |
 | [`skills/kakeai-composition/`](https://github.com/shipwebdotjp/kakeai/tree/main/skills/kakeai-composition) | 再利用する Composition の draft 作成・QA・publish と、台本からの参照 |
 
 使い方は、各スキルのディレクトリを、利用するエージェントランタイムのスキルディレクトリへコピーするかシンボリックリンクします。

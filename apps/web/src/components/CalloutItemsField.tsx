@@ -5,7 +5,14 @@ import {
   TABLE_TONES,
 } from "@kakeai/contracts";
 import { lineOptionLabel, type LineFormValue, type SpeakerFormValue } from "../content/form";
-import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  buttonNeutralClass,
+  errorTextClass,
+  formLabelClass,
+  formLabelTextClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
@@ -20,7 +27,7 @@ interface CalloutItemsFieldProps {
 }
 
 const TRIGGER_OPTIONS = [
-  { value: "cue", label: "Cue全体" },
+  { value: "cue", label: "映像演出全体" },
   { value: "lines", label: "セリフ区間" },
 ] as const;
 
@@ -79,7 +86,7 @@ export function CalloutItemsField({
   if (items === null) {
     return (
       <div className="my-2">
-        <span>{label}</span>
+        <span className={formLabelTextClass}>{label}</span>
         <p className={errorTextClass}>ポイントを読み取れませんでした。JSONで修正してください。</p>
         <textarea
           className={`mt-1 block w-full ${textFieldClass}`}
@@ -104,7 +111,7 @@ export function CalloutItemsField({
 
   return (
     <div className="my-2">
-      <span>{label}</span>
+      <span className={formLabelTextClass}>{label}</span>
       <p className={metaTextClass}>
         ポイントごとに、特定のセリフ区間で強調（または登場）できます。
       </p>
@@ -132,7 +139,7 @@ export function CalloutItemsField({
                 削除
               </button>
             </div>
-            <label className="mt-1 inline-flex items-center gap-1.5 text-xs">
+            <label className={`mt-1 ${formLabelClass}`}>
               <input
                 type="checkbox"
                 checked={hasEffect}
@@ -153,7 +160,7 @@ export function CalloutItemsField({
             {hasEffect && (
               <>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     契機
                     <select
                       className={textFieldClass}
@@ -188,7 +195,7 @@ export function CalloutItemsField({
                   </label>
                   {trigger.kind === "lines" && (
                     <>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={formLabelClass}>
                         開始
                         <select
                           className={textFieldClass}
@@ -205,7 +212,7 @@ export function CalloutItemsField({
                           ))}
                         </select>
                       </label>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={formLabelClass}>
                         終了
                         <select
                           className={textFieldClass}
@@ -226,7 +233,7 @@ export function CalloutItemsField({
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     効果
                     <select
                       className={textFieldClass}
@@ -249,7 +256,7 @@ export function CalloutItemsField({
                   </label>
                   {effect.kind === "emphasize" ? (
                     <>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={formLabelClass}>
                         見た目
                         <select
                           className={textFieldClass}
@@ -265,7 +272,7 @@ export function CalloutItemsField({
                           ))}
                         </select>
                       </label>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={formLabelClass}>
                         色
                         <select
                           className={textFieldClass}
@@ -287,7 +294,7 @@ export function CalloutItemsField({
                       />
                     </>
                   ) : (
-                    <label className="inline-flex items-center gap-1.5">
+                    <label className={formLabelClass}>
                       動き
                       <select
                         className={textFieldClass}

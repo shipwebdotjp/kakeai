@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Ellipsis, Play } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  Ellipsis,
+  MessageSquarePlus,
+  Play,
+  Scissors,
+  Trash2,
+} from "lucide-react";
 import {
   useFieldArray,
   useWatch,
@@ -47,8 +56,11 @@ import {
   buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
+  editAreaClass,
   errorTextClass,
+  formLabelClass,
   iconButtonClass,
+  itemCardClass,
   metaTextClass,
   textFieldClass,
 } from "../ui";
@@ -117,10 +129,10 @@ interface LineActionsMenuProps {
 }
 
 const MENU_ITEM_CLASS =
-  "block w-full whitespace-nowrap rounded px-2 py-1 text-left text-sm hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40";
+  "flex w-full items-center gap-2 whitespace-nowrap rounded px-2 py-1 text-left text-sm hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40";
 
 const MENU_DANGER_ITEM_CLASS =
-  "block w-full whitespace-nowrap rounded px-2 py-1 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-300 dark:hover:bg-red-950";
+  "flex w-full items-center gap-2 whitespace-nowrap rounded px-2 py-1 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-300 dark:hover:bg-red-950";
 
 function LineActionsMenu({
   canMoveUp,
@@ -169,6 +181,7 @@ function LineActionsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="セリフ操作"
+        title="セリフ操作"
         className={iconButtonClass}
         onClick={() => setOpen((previous) => !previous)}
       >
@@ -186,6 +199,7 @@ function LineActionsMenu({
             disabled={!canMoveUp}
             onClick={() => run(onMoveUp)}
           >
+            <ArrowUp aria-hidden="true" className="h-4 w-4 shrink-0" />
             上へ
           </button>
           <button
@@ -195,6 +209,7 @@ function LineActionsMenu({
             disabled={!canMoveDown}
             onClick={() => run(onMoveDown)}
           >
+            <ArrowDown aria-hidden="true" className="h-4 w-4 shrink-0" />
             下へ
           </button>
           {canSplit && (
@@ -204,6 +219,7 @@ function LineActionsMenu({
               className={MENU_ITEM_CLASS}
               onClick={() => run(onSplit)}
             >
+              <Scissors aria-hidden="true" className="h-4 w-4 shrink-0" />
               このセリフの前でシーンを分割
             </button>
           )}
@@ -213,6 +229,7 @@ function LineActionsMenu({
             className={MENU_ITEM_CLASS}
             onClick={() => run(onDuplicate)}
           >
+            <Copy aria-hidden="true" className="h-4 w-4 shrink-0" />
             複製
           </button>
           <button
@@ -221,6 +238,7 @@ function LineActionsMenu({
             className={MENU_DANGER_ITEM_CLASS}
             onClick={() => run(onDelete)}
           >
+            <Trash2 aria-hidden="true" className="h-4 w-4 shrink-0" />
             削除
           </button>
         </div>
@@ -518,7 +536,7 @@ function LineEditor({
   }, [audioNeedsAttention, setAudioOpen]);
 
   return (
-    <div id={`line-${line.id}`} className="my-2 grid gap-1.5 rounded border border-border p-2">
+    <div id={`line-${line.id}`} className={`${itemCardClass} grid gap-1.5`}>
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium break-words">
           {lineIndex + 1}. {lineSummary(line, speakers)}
@@ -592,60 +610,62 @@ function LineEditor({
           ]);
         }}
       />
-      <label className="inline-flex items-center gap-1.5 text-sm">
-        このセリフの前の間（ms）
-        <input
-          type="number"
-          min={0}
-          className={`w-24 ${textFieldClass}`}
-          {...gapRegistration}
-          onFocus={(event) => {
-            gapFocusRef.current = event.target.valueAsNumber;
-          }}
-          onBlur={(event) => {
-            gapRegistration.onBlur?.(event);
-            const parsed = event.target.valueAsNumber;
-            if (!Number.isFinite(parsed)) {
-              setValue(
-                gapPath,
-                Number.isFinite(gapFocusRef.current) ? gapFocusRef.current : 0,
-                { shouldDirty: true },
-              );
-              return;
-            }
-            const gapBeforeMs = Math.max(0, Math.floor(parsed));
-            if (gapBeforeMs !== parsed) {
-              setValue(gapPath, gapBeforeMs, { shouldDirty: true });
-            }
-            if (gapBeforeMs === gapFocusRef.current) {
-              return;
-            }
-            onCommitLineFields(line.id, [
-              {
-                op: "line.setGap",
-                sceneId,
-                lineId: line.id,
-                gapBeforeMs,
-              },
-            ]);
-          }}
-        />
-      </label>
-      <label className="inline-flex items-center gap-1.5 text-sm">
-        キャラクター
-        <select
-          className={textFieldClass}
-          value={characterId ?? ""}
-          onChange={(event) => onChangeCharacter(event.target.value)}
-        >
-          <option value="">なし</option>
-          {characters.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name || entry.id}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <label className={formLabelClass}>
+          前の間（ms）
+          <input
+            type="number"
+            min={0}
+            className={`w-24 ${textFieldClass}`}
+            {...gapRegistration}
+            onFocus={(event) => {
+              gapFocusRef.current = event.target.valueAsNumber;
+            }}
+            onBlur={(event) => {
+              gapRegistration.onBlur?.(event);
+              const parsed = event.target.valueAsNumber;
+              if (!Number.isFinite(parsed)) {
+                setValue(
+                  gapPath,
+                  Number.isFinite(gapFocusRef.current) ? gapFocusRef.current : 0,
+                  { shouldDirty: true },
+                );
+                return;
+              }
+              const gapBeforeMs = Math.max(0, Math.floor(parsed));
+              if (gapBeforeMs !== parsed) {
+                setValue(gapPath, gapBeforeMs, { shouldDirty: true });
+              }
+              if (gapBeforeMs === gapFocusRef.current) {
+                return;
+              }
+              onCommitLineFields(line.id, [
+                {
+                  op: "line.setGap",
+                  sceneId,
+                  lineId: line.id,
+                  gapBeforeMs,
+                },
+              ]);
+            }}
+          />
+        </label>
+        <label className={formLabelClass}>
+          キャラクター
+          <select
+            className={textFieldClass}
+            value={characterId ?? ""}
+            onChange={(event) => onChangeCharacter(event.target.value)}
+          >
+            <option value="">なし</option>
+            {characters.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name || entry.id}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <Collapsible
         title="音声詳細"
         summary={audioNeedsAttention ? `要確認・${audioSummary}` : audioSummary}
@@ -664,7 +684,7 @@ function LineEditor({
           </button>
         </p>
       ) : presets.length > 0 ? (
-        <label className="inline-flex items-center gap-1.5 text-sm">
+        <label className={formLabelClass}>
           表情
           <select
             className={textFieldClass}
@@ -770,7 +790,7 @@ function LineEditor({
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               声
               {manualVoice ? (
                 <>
@@ -807,7 +827,7 @@ function LineEditor({
                 </select>
               )}
             </label>
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               話速
               <input
                 type="number"
@@ -974,7 +994,7 @@ export function LinesEditor({
     if (
       usage > 0 &&
       !window.confirm(
-        `このセリフは ${usage} 件のCueの表示区間に使われています。削除すると該当するCueの区間を調整します。`,
+        `このセリフは ${usage} 件の映像演出の表示区間に使われています。削除すると該当する映像演出の区間を調整します。`,
       )
     ) {
       return;
@@ -983,8 +1003,8 @@ export function LinesEditor({
   };
 
   return (
-    <div className="mt-3 border-t border-dashed border-border pt-2">
-      <h4 className="mb-2 font-semibold">セリフ</h4>
+    <div className={editAreaClass}>
+      <h4 className="mb-2 text-sm font-semibold text-foreground">セリフ</h4>
       {fields.map((field, lineIndex) => {
         const line = watchedLines[lineIndex];
         if (line === undefined) {
@@ -1023,7 +1043,7 @@ export function LinesEditor({
       })}
       <button
         type="button"
-        className={buttonNeutralClass}
+        className={`mt-2 ${buttonNeutralClass}`}
         onClick={() =>
           runStructural({
             op: "line.add",
@@ -1032,6 +1052,7 @@ export function LinesEditor({
           })
         }
       >
+        <MessageSquarePlus aria-hidden="true" className="h-4 w-4" />
         セリフを追加
       </button>
     </div>

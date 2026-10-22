@@ -14,7 +14,14 @@ import {
   defaultAudioGainDb,
   type DocumentFormValues,
 } from "../content/form";
-import { buttonDangerClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  buttonDangerClass,
+  editAreaClass,
+  formLabelClass,
+  itemCardClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 import { MediaPicker } from "./MediaPicker";
 
 interface SceneAudioFieldsProps {
@@ -44,8 +51,8 @@ export function SceneAudioFields({
     (getValues(`scenes.${sceneIndex}.audioCues`) ?? [])[cueIndex];
 
   return (
-    <div className="mt-3 border-t border-dashed border-border pt-2">
-      <h4 className="text-sm font-semibold">シーン音声</h4>
+    <div className={editAreaClass}>
+      <h4 className="text-sm font-semibold text-foreground">シーン音声</h4>
       <p className={metaTextClass}>
         このシーンの先頭から終端まで再生する音声です。開始オフセット・フェード・ダッキングはありません。
       </p>
@@ -59,7 +66,7 @@ export function SceneAudioFields({
           return (
             <li
               key={field.id}
-              className="my-2 grid gap-1.5 rounded border border-border p-2"
+              className={`${itemCardClass} grid gap-1.5`}
               onFocus={(event) => {
                 const related = event.relatedTarget as Node | null;
                 if (
@@ -119,7 +126,7 @@ export function SceneAudioFields({
                 }
               />
               <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex items-center gap-1.5 text-sm">
+                <label className={formLabelClass}>
                   役割
                   <select className={textFieldClass} {...register(`${path}.role`)}>
                     {AUDIO_CUE_ROLES.map((role: AudioCueRole) => (
@@ -129,11 +136,11 @@ export function SceneAudioFields({
                     ))}
                   </select>
                 </label>
-                <label className="inline-flex items-center gap-1.5 text-sm">
+                <label className={formLabelClass}>
                   <input type="checkbox" {...register(`${path}.loop`)} />
                   ループ
                 </label>
-                <label className="inline-flex items-center gap-1.5 text-sm">
+                <label className={formLabelClass}>
                   音量
                   <input
                     type="number"

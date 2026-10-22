@@ -8,7 +8,16 @@ import {
   type LineFormValue,
   type SpeakerFormValue,
 } from "../content/form";
-import { buttonDangerClass, buttonNeutralClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  buttonDangerClass,
+  buttonNeutralClass,
+  editAreaClass,
+  formLabelClass,
+  formLabelTightClass,
+  itemCardClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 
 function numberValue(raw: string, fallback: number): number {
   const value = Number(raw);
@@ -104,14 +113,14 @@ export function VideoPlaybackField({
   const firstUnusedLine = lines.find((line) => !usedLines.has(line.id));
 
   return (
-    <div className="my-2 rounded border border-border p-2">
+    <div className={editAreaClass}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-semibold">セリフゲート再生</span>
+        <span className="text-sm font-semibold text-foreground">セリフゲート再生</span>
         <button type="button" className={buttonDangerClass} onClick={() => onChange("")}>
           解除
         </button>
       </div>
-      <label className="my-1 inline-flex items-center gap-1.5 text-sm">
+      <label className={formLabelTightClass}>
         再生終端(ms)
         <input
           type="number"
@@ -131,7 +140,7 @@ export function VideoPlaybackField({
       {playback.gates.map((gate, index) => {
         const audio = audioOf(gate);
         return (
-          <div key={gate.narrationSegmentId} className="my-2 rounded border border-border/60 p-2">
+          <div key={gate.narrationSegmentId} className={itemCardClass}>
             <div className="flex flex-wrap items-center gap-2">
               <span className={metaTextClass}>{index + 1}</span>
               <select
@@ -151,7 +160,7 @@ export function VideoPlaybackField({
                   </option>
                 ))}
               </select>
-              <label className="inline-flex items-center gap-1 text-sm">
+              <label className={formLabelClass}>
                 source(ms)
                 <input
                   type="number"
@@ -180,7 +189,7 @@ export function VideoPlaybackField({
                 削除
               </button>
             </div>
-            <label className="my-1 inline-flex items-center gap-1.5 text-sm">
+            <label className={formLabelTightClass}>
               <input
                 type="checkbox"
                 checked={audio !== null}
@@ -197,7 +206,7 @@ export function VideoPlaybackField({
             </label>
             {audio !== null && (
               <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-1 text-sm">
+                <label className={formLabelClass}>
                   音量(dB)
                   <input
                     type="number"
@@ -211,7 +220,7 @@ export function VideoPlaybackField({
                     }
                   />
                 </label>
-                <label className="inline-flex items-center gap-1 text-sm">
+                <label className={formLabelClass}>
                   フェードイン(ms)
                   <input
                     type="number"
@@ -226,7 +235,7 @@ export function VideoPlaybackField({
                     }
                   />
                 </label>
-                <label className="inline-flex items-center gap-1 text-sm">
+                <label className={formLabelClass}>
                   フェードアウト(ms)
                   <input
                     type="number"

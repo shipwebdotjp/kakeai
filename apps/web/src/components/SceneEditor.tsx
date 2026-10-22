@@ -1,5 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { ChevronDown, ChevronUp, OctagonAlert, TriangleAlert } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  OctagonAlert,
+  Plus,
+  Save,
+  Trash2,
+  TriangleAlert,
+  Video,
+} from "lucide-react";
 import {
   useFieldArray,
   useForm,
@@ -83,7 +93,10 @@ import {
   buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
+  colorFieldClass,
+  editAreaClass,
   errorTextClass,
+  formLabelClass,
   iconButtonClass,
   metaTextClass,
   sectionCardClass,
@@ -183,7 +196,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind, inse
   const fixedOnly = sceneKind !== "point";
   return (
     <div className="my-2 flex flex-wrap items-center gap-3">
-      <label className="inline-flex items-center gap-1.5">
+      <label className={formLabelClass}>
         アクセント
         <select
           className={textFieldClass}
@@ -203,16 +216,16 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind, inse
         </select>
       </label>
       {accentKind === "custom" ? (
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           自由色
           <input
             type="color"
-            className="h-8 w-12 cursor-pointer rounded border border-border"
+            className={colorFieldClass}
             {...register(`scenes.${sceneIndex}.accentColor`)}
           />
         </label>
       ) : (
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           テーマ色
           <select className={textFieldClass} {...register(`scenes.${sceneIndex}.accentToken`)}>
             {ACCENT_TOKEN_OPTIONS.map((option) => (
@@ -223,7 +236,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind, inse
           </select>
         </label>
       )}
-      <label className="inline-flex items-center gap-1.5">
+      <label className={formLabelClass}>
         尺
         <select className={textFieldClass} {...register(`scenes.${sceneIndex}.timingMode`)}>
           {!fixedOnly && <option value="auto">自動</option>}
@@ -231,7 +244,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind, inse
         </select>
       </label>
       {mode === "fixed" && (sceneKind !== "insert" || insertLoop) && (
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           固定尺(ms)
           <input
             type="number"
@@ -243,7 +256,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind, inse
       )}
       {sceneIndex > 0 && (
         <>
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             シーン切替
             <select
               className={textFieldClass}
@@ -255,7 +268,7 @@ function TimingFields({ control, register, setValue, sceneIndex, sceneKind, inse
             </select>
           </label>
           {transitionPreset !== "cut" && (
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               切替尺(ms)
               <input
                 type="number"
@@ -404,7 +417,7 @@ function InsertSceneFields({
   };
 
   return (
-    <div className="my-3 flex flex-col gap-2 rounded border border-border p-3">
+    <div className={`${editAreaClass} flex flex-col gap-2`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">インサート動画</span>
         {asset === undefined ? (
@@ -439,7 +452,7 @@ function InsertSceneFields({
               return;
             }
             if (mainCue === undefined) {
-              onError("主動画Cueを特定できません。動画を追加し直してください。");
+              onError("主動画の映像演出を特定できません。動画を追加し直してください。");
               return;
             }
             setValue(`scenes.${sceneIndex}.cues.${mainCueIndex}.fields.assetId`, next.id, {
@@ -465,8 +478,8 @@ function InsertSceneFields({
           <> ／ 使用区間: {(trimStartMs / 1000).toFixed(2)}〜{((trimStartMs + clipMs) / 1000).toFixed(2)}秒（{(clipMs / 1000).toFixed(2)}秒）</>
         )}
       </p>
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <label className="inline-flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className={formLabelClass}>
           トリム開始(ms)
           <input
             type="number"
@@ -478,7 +491,7 @@ function InsertSceneFields({
             onChange={(event) => setField("trimStartMs", event.target.value)}
           />
         </label>
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           トリム終了(ms)
           <input
             type="number"
@@ -490,7 +503,7 @@ function InsertSceneFields({
             onChange={(event) => setField("trimEndMs", event.target.value)}
           />
         </label>
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           <input
             type="checkbox"
             checked={loop}
@@ -500,18 +513,18 @@ function InsertSceneFields({
         </label>
       </div>
       {trimError !== null && <p className={errorTextClass}>{trimError}</p>}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
         <span className={asset?.hasAudio === true ? badgeInfoClass : badgeNeutralClass}>
           {assetAudioLabel(asset)}
         </span>
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           <input
             type="checkbox"
             {...register(`scenes.${sceneIndex}.embeddedAudio`)}
           />
           埋め込み音声を再生
         </label>
-        <label className="inline-flex items-center gap-1.5">
+        <label className={formLabelClass}>
           音量
           <input
             type="number"
@@ -535,7 +548,7 @@ function InsertSceneFields({
         )}
       </div>
       {mainCueIndex === -1 && (
-        <p className={errorTextClass}>主動画Cueが見つかりません。動画を選び直してください。</p>
+        <p className={errorTextClass}>主動画の映像演出が見つかりません。動画を選び直してください。</p>
       )}
       {asset !== undefined && asset.kind !== "video" && (
         <p className={errorTextClass}>動画以外の素材は主動画に指定できません。</p>
@@ -841,7 +854,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         assetsQuery.data ?? [],
       );
       if (next === null) {
-        showMessage("Cueを削除できませんでした。Sceneの状態を確認してください。");
+        showMessage("映像演出を削除できませんでした。Sceneの状態を確認してください。");
         return;
       }
       keepScrollAnchor(`scene-${scene.id}`);
@@ -1259,6 +1272,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           className={buttonPrimaryClass}
           disabled={save.isPending || bulkGenerate.isPending}
         >
+          <Save aria-hidden="true" className="h-4 w-4" />
           保存
         </button>
         {diagnostics.errors.length > 0 && (
@@ -1401,7 +1415,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           作品全体の文字デザイン・配色テーマを指定します。選択変更後に「保存」すると新しい台本版が作成されます。
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <label className="inline-flex items-center gap-1.5 text-sm">
+          <label className={formLabelClass}>
             選択中テーマ:
             <select
               className={textFieldClass}
@@ -1491,11 +1505,11 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           />
           {watchedBgm?.assetId !== null && watchedBgm?.assetId !== undefined && (
             <div className="mt-2 flex flex-wrap items-center gap-4">
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 <input type="checkbox" {...register("bgm.loop")} />
                 ループ
               </label>
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 音量
                 <input
                   type="number"
@@ -1549,7 +1563,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           />
         ))}
         <div className="flex flex-wrap items-center gap-3">
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             ライブラリから追加
             <select
               className={textFieldClass}
@@ -1615,6 +1629,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                       disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
                       onClick={() => onClonePrevious(sceneIndex)}
                     >
+                      <Copy aria-hidden="true" className="h-4 w-4" />
                       前のシーンを複製
                     </button>
                   )}
@@ -1622,6 +1637,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                     type="button"
                     className={iconButtonClass}
                     aria-label="上へ移動"
+                    title="上へ移動"
                     disabled={
                       !isMiddleScene(watchedScenes[sceneIndex - 1]?.kind)
                     }
@@ -1633,6 +1649,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                     type="button"
                     className={iconButtonClass}
                     aria-label="下へ移動"
+                    title="下へ移動"
                     disabled={
                       !isMiddleScene(watchedScenes[sceneIndex + 1]?.kind)
                     }
@@ -1645,6 +1662,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
                     className={buttonDangerClass}
                     onClick={() => onRemoveScene(sceneIndex)}
                   >
+                    <Trash2 aria-hidden="true" className="h-4 w-4" />
                     削除
                   </button>
                 </span>
@@ -1782,7 +1800,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
 
       <div className="flex flex-wrap items-center gap-3">
         {insertionOptions.length > 0 && (
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             追加位置
             <select
               className={textFieldClass}
@@ -1798,6 +1816,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           </label>
         )}
         <button type="button" className={buttonNeutralClass} onClick={onAddPoint}>
+          <Plus aria-hidden="true" className="h-4 w-4" />
           要点を追加
         </button>
         <MediaPicker
@@ -1807,6 +1826,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
           onSelect={onInsertVideo}
           variant="add"
           inline
+          icon={Video}
         />
         <button
           type="button"

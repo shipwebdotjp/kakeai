@@ -33,7 +33,7 @@ import {
   type CueMapSeek,
 } from "../content/cueMap";
 import { usePreviewTime } from "../lib/PreviewController";
-import { metaTextClass } from "../ui";
+import { focusRingClass, metaTextClass } from "../ui";
 
 const LAYER_LABELS: Record<CueLayer, string> = {
   background: "背景",
@@ -290,7 +290,7 @@ function CueBandView({
           }}
           onFocus={onOpen}
           style={{ pointerEvents: "auto" }}
-          className={`absolute inset-0 rounded focus-visible:outline-2 focus-visible:outline-brand-500 ${
+          className={`absolute inset-0 rounded ${focusRingClass} ${
             band.active ? "outline-2 outline-brand-500" : ""
           }`}
         >
@@ -350,12 +350,12 @@ function AggregateLaneView({
       >
         <button
           type="button"
-          aria-label={`表示しきれないCue ${entries.length}件`}
+          aria-label={`表示しきれない映像演出 ${entries.length}件`}
           aria-expanded={open}
           onClick={() => (open ? onClose() : onOpen())}
           onFocus={onOpen}
           style={{ pointerEvents: "auto" }}
-          className="absolute top-0 left-1/2 flex -translate-x-1/2 items-start justify-center rounded focus-visible:outline-2 focus-visible:outline-brand-500"
+          className={`absolute top-0 left-1/2 flex -translate-x-1/2 items-start justify-center rounded ${focusRingClass}`}
         >
           <span className="rounded-full border border-border bg-surface-muted px-1.5 py-0.5 text-[11px] leading-tight font-semibold whitespace-nowrap">
             +{entries.length}
@@ -374,7 +374,7 @@ function AggregateLaneView({
                           onClose();
                           onJump(entry.jumpTargetId, entry.jumpSeek);
                         }}
-                        className="flex w-full items-center gap-1.5 rounded p-1 text-left hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-brand-500"
+                        className={`flex w-full items-center gap-1.5 rounded p-1 text-left hover:bg-surface-muted ${focusRingClass}`}
                       >
                         <span
                           aria-hidden="true"
@@ -432,7 +432,7 @@ function RailMarkerView({
             onJump(marker.jumpTargetId, marker.jumpSeek);
           }}
           onFocus={onOpen}
-          className="flex h-6 w-[22px] items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand-500"
+          className={`flex h-6 w-[22px] items-center justify-center rounded text-muted-foreground hover:text-foreground ${focusRingClass}`}
         >
           <Clock aria-hidden="true" className="h-3.5 w-3.5" />
         </button>
@@ -485,7 +485,7 @@ function SceneSection({
             aria-current={railActive ? "true" : undefined}
             onClick={() => onJump(`scene-${rail.sceneId}`, { kind: "scene", id: rail.sceneId })}
             style={{ writingMode: "vertical-rl" }}
-            className={`flex h-full w-full items-center justify-center gap-1 rounded py-1 text-xs font-medium hover:bg-border/50 focus-visible:outline-2 focus-visible:outline-brand-500 ${
+            className={`flex h-full w-full items-center justify-center gap-1 rounded py-1 text-xs font-medium hover:bg-border/50 ${focusRingClass} ${
               railActive ? "bg-border/60 font-semibold" : "text-muted-foreground"
             }`}
           >
@@ -519,7 +519,7 @@ function SceneSection({
                   onJump(`line-${row.lineId}`, { kind: "line", id: row.lineId })
                 }
                 style={{ height: CUE_MAP_ROW_HEIGHT_PX }}
-                className={`flex w-full items-center gap-1 rounded text-left focus-visible:outline-2 focus-visible:outline-brand-500 ${
+                className={`flex w-full items-center gap-1 rounded text-left ${focusRingClass} ${
                   row.active ? "bg-border/60" : "hover:bg-border/30"
                 }`}
               >

@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Clapperboard, Trash2 } from "lucide-react";
 import {
   useFieldArray,
   useWatch,
@@ -60,7 +61,22 @@ import {
   type LineFormValue,
   type SpeakerFormValue,
 } from "../content/form";
-import { PRESET_LABELS, badgeNeutralClass, buttonDangerClass, buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  PRESET_LABELS,
+  badgeNeutralClass,
+  buttonDangerClass,
+  buttonNeutralClass,
+  colorFieldClass,
+  editAreaClass,
+  errorTextClass,
+  formLabelBlockClass,
+  formLabelClass,
+  formLabelSpacedClass,
+  formLabelTextClass,
+  itemCardClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 import { useCompositions, useTheme } from "../api/hooks";
 import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
@@ -253,7 +269,7 @@ function CueRow({
   return (
     <div
       id={`cue-${cue.id}`}
-      className="mt-2 rounded border border-border p-2"
+      className={itemCardClass}
       onFocus={(event) => {
         const related = event.relatedTarget as Node | null;
         if (related === null) {
@@ -294,6 +310,7 @@ function CueRow({
           {definition?.display.label ?? cue.templateId}@{cue.templateVersion}
         </span>
         <button type="button" className={`ml-auto ${buttonDangerClass}`} onClick={onRemove}>
+          <Trash2 aria-hidden="true" className="h-4 w-4" />
           削除
         </button>
       </div>
@@ -317,7 +334,7 @@ function CueRow({
 
       <Collapsible title="表示の詳細" summary={displaySummary} storageKey={`cue-display-${cue.id}`}>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             レイヤー
             <select className={textFieldClass} {...register(`${base}.layer`)}>
               {layerOptions.map((layer) => (
@@ -327,7 +344,7 @@ function CueRow({
               ))}
             </select>
           </label>
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             順序
             <input
               type="number"
@@ -339,7 +356,7 @@ function CueRow({
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             表示区間
             <select className={textFieldClass} {...register(`${base}.rangeKind`)}>
               <option value="scene">Scene全体</option>
@@ -349,7 +366,7 @@ function CueRow({
           </label>
           {cue.rangeKind === "lines" && (
             <>
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 開始
                 <select
                   className={textFieldClass}
@@ -370,7 +387,7 @@ function CueRow({
                   ))}
                 </select>
               </label>
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 終了
                 <select
                   className={textFieldClass}
@@ -391,7 +408,7 @@ function CueRow({
           )}
           {cue.rangeKind === "offset" && (
             <>
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 開始(ms)
                 <input
                   type="number"
@@ -401,7 +418,7 @@ function CueRow({
                   {...register(`${base}.startMs`, { valueAsNumber: true })}
                 />
               </label>
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 終了(ms)
                 <input
                   type="number"
@@ -431,7 +448,7 @@ function CueRow({
         )}
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             入場
             <select className={textFieldClass} {...register(`${base}.enterPreset`)}>
               {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
@@ -442,7 +459,7 @@ function CueRow({
             </select>
           </label>
           {cue.enterPreset !== "none" && (
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               尺(ms)
               <input
                 type="number"
@@ -452,7 +469,7 @@ function CueRow({
               />
             </label>
           )}
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             退場
             <select className={textFieldClass} {...register(`${base}.exitPreset`)}>
               {(definition?.transitionPolicy.presets ?? ["none"]).map((preset) => (
@@ -463,7 +480,7 @@ function CueRow({
             </select>
           </label>
           {cue.exitPreset !== "none" && (
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               尺(ms)
               <input
                 type="number"
@@ -525,7 +542,7 @@ function CompositionVersionField({ label, value, setField, fieldKey, profiles }:
       : undefined;
   return (
     <div className="my-2">
-      <label className="inline-flex items-center gap-1.5">
+      <label className={formLabelClass}>
         {label}
         <select
           className={textFieldClass}
@@ -591,7 +608,7 @@ function PositionZoomControls({
   return (
     <div className="my-2">
       <div className="flex flex-wrap items-center gap-2">
-        {label !== undefined && <span>{label}</span>}
+        {label !== undefined && <span className={formLabelTextClass}>{label}</span>}
         <span className={metaTextClass}>
           横 {xDisplay}% / 縦 {yDisplay}%
         </span>
@@ -678,7 +695,7 @@ function NestedScreenField({
   return (
     <div>
       <div className="my-2 flex flex-wrap items-center gap-2">
-        <span>{field.label}</span>
+        <span className={formLabelTextClass}>{field.label}</span>
         <div className="inline-flex overflow-hidden rounded border border-border">
           <button
             type="button"
@@ -706,7 +723,7 @@ function NestedScreenField({
             setField={setField}
             fieldKey={`${field.key}${NESTED_COMPOSITION_VERSION_SUFFIX}`}
           />
-          <label className="my-2 inline-flex items-center gap-1.5">
+          <label className={formLabelSpacedClass}>
             表示方法
             <select
               className={textFieldClass}
@@ -735,7 +752,7 @@ function NestedScreenField({
             selectedAssetId={(values[field.key] ?? "").length > 0 ? (values[field.key] ?? "") : null}
             onSelect={videoAssetSelectHandler(field.key, values[field.key] ?? "", setField, setFields)}
           />
-          <label className="my-2 inline-flex items-center gap-1.5">
+          <label className={formLabelSpacedClass}>
             表示方法
             <select
               className={textFieldClass}
@@ -888,7 +905,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             selectedAssetId={value.length > 0 ? value : null}
             onSelect={videoAssetSelectHandler(field.key, value, setField, setFields)}
           />
-          <label className="my-2 inline-flex items-center gap-1.5">
+          <label className={formLabelSpacedClass}>
             表示方法
             <select
               className={textFieldClass}
@@ -925,7 +942,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
     case "text":
     case "optionalText":
       return (
-        <label className="my-2 block">
+        <label className={formLabelBlockClass}>
           {field.label}
           {multiline ? (
             <textarea
@@ -945,7 +962,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
       );
     case "select":
       return (
-        <label className="my-2 inline-flex items-center gap-1.5">
+        <label className={formLabelSpacedClass}>
           {field.label}
           <select
             className={textFieldClass}
@@ -966,11 +983,11 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
       const isHexColor = /^#[0-9A-Fa-f]{6}$/.test(value);
       const fallback = isHexColor ? value : "#FFFFFF";
       return (
-        <label className="my-2 inline-flex items-center gap-1.5">
+        <label className={formLabelSpacedClass}>
           {field.label}
           <input
             type="color"
-            className="h-8 w-12 cursor-pointer rounded border border-border"
+            className={colorFieldClass}
             value={fallback}
             onChange={(event) => setField(field.key, event.target.value)}
           />
@@ -995,7 +1012,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
     }
     case "number":
       return (
-        <label className="my-2 inline-flex items-center gap-1.5">
+        <label className={formLabelSpacedClass}>
           {field.label}
           <input
             type="number"
@@ -1072,7 +1089,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
       ];
       return (
         <div className="my-2 flex items-center gap-1.5">
-          <span>{field.label}</span>
+          <span className={formLabelTextClass}>{field.label}</span>
           <div className="inline-flex overflow-hidden rounded border border-border">
             {options.map((option) => (
               <button
@@ -1095,7 +1112,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
     case "animation":
       return (
         <div className="my-2 flex flex-wrap items-center gap-3">
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             {field.label}
             <select
               className={textFieldClass}
@@ -1110,7 +1127,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             </select>
           </label>
           {(value.length > 0 ? value : "none") !== "none" && (
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               尺(ms)
               <input
                 type="number"
@@ -1169,8 +1186,8 @@ export function CueList({
   };
 
   return (
-    <div className="mt-3 border-t border-dashed border-border pt-2">
-      <h4 className="text-sm font-semibold">Cue</h4>
+    <div className={editAreaClass}>
+      <h4 className="text-sm font-semibold text-foreground">映像演出</h4>
       {fields.map((field, cueIndex) => {
         const cue = watched[cueIndex];
         if (cue === undefined) {
@@ -1194,19 +1211,23 @@ export function CueList({
         );
       })}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <select
-          className={textFieldClass}
-          value={addTemplate}
-          onChange={(event) => setAddTemplate(event.target.value)}
-        >
-          {templates.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
+        <label className={formLabelClass}>
+          新しい映像演出
+          <select
+            className={textFieldClass}
+            value={addTemplate}
+            onChange={(event) => setAddTemplate(event.target.value)}
+          >
+            {templates.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="button" className={buttonNeutralClass} onClick={handleAdd}>
-          Cueを追加
+          <Clapperboard aria-hidden="true" className="h-4 w-4" />
+          映像演出を追加
         </button>
       </div>
     </div>

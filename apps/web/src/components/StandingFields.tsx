@@ -20,7 +20,14 @@ import {
   type StandingFormValue,
   type StandingSide,
 } from "../content/form";
-import { PRESET_LABELS, metaTextClass, textFieldClass } from "../ui";
+import {
+  PRESET_LABELS,
+  editAreaClass,
+  formLabelClass,
+  itemCardClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 import { Collapsible } from "./Collapsible";
 
 interface StandingFieldsProps {
@@ -82,8 +89,8 @@ export function StandingFields({
       });
 
   return (
-    <div className="mt-3 border-t border-dashed border-border pt-2">
-      <h4 className="text-sm font-semibold">立ち絵</h4>
+    <div className={editAreaClass}>
+      <h4 className="text-sm font-semibold text-foreground">立ち絵</h4>
       {characters.length === 0 && (
         <p className={metaTextClass}>
           この作品にキャラクターがありません。上の「キャラクター」から追加してください。
@@ -100,7 +107,7 @@ export function StandingFields({
         return (
           <div
             key={side}
-            className="mt-2 rounded border border-border p-2"
+            className={itemCardClass}
             onFocus={(event) => {
               const related = event.relatedTarget as Node | null;
               if (
@@ -139,7 +146,7 @@ export function StandingFields({
           >
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium">{SIDE_LABELS[side]}</span>
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 キャラクター
                 <select
                   className={textFieldClass}
@@ -164,7 +171,7 @@ export function StandingFields({
                 </select>
               </label>
               {character !== undefined && (
-                <label className="inline-flex items-center gap-1.5">
+                <label className={formLabelClass}>
                   外観
                   <select
                     className={textFieldClass}
@@ -190,7 +197,7 @@ export function StandingFields({
                 storageKey={`standing-${sceneId}-${side}`}
               >
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     倍率
                     <input
                       type="number"
@@ -208,7 +215,7 @@ export function StandingFields({
                   </label>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     入場
                     <select
                       className={textFieldClass}
@@ -222,7 +229,7 @@ export function StandingFields({
                     </select>
                   </label>
                   {enterPreset !== "none" && (
-                    <label className="inline-flex items-center gap-1.5">
+                    <label className={formLabelClass}>
                       尺
                       <input
                         type="number"
@@ -238,7 +245,7 @@ export function StandingFields({
                       ms
                     </label>
                   )}
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     退場
                     <select
                       className={textFieldClass}
@@ -252,7 +259,7 @@ export function StandingFields({
                     </select>
                   </label>
                   {exitPreset !== "none" && (
-                    <label className="inline-flex items-center gap-1.5">
+                    <label className={formLabelClass}>
                       尺
                       <input
                         type="number"

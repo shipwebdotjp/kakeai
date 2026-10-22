@@ -172,9 +172,9 @@ _Avoid_: Step, box
 A directed connection between two Nodes of a Flow Diagram, referencing them by index. It may carry a label.
 _Avoid_: Arrow, link
 
-**Visual Cue**:
-An instruction to display one Visual Template with specific inputs over a segment of a Scene, on a named layer and with an enter/exit transition.
-_Avoid_: Asset, template
+**Visual Cue** (映像演出):
+An instruction to display one Visual Template with specific inputs over a segment of a Scene, on a named layer and with an enter/exit transition. The editor shows it to users as 映像演出. It is distinct from an Audio Cue, which places sound over a Work or Scene range, and from a Video Gate, which holds a source-video playhead for Narration Segments.
+_Avoid_: Asset, template, Audio Cue, Video Gate
 
 **Cue Map**:
 A non-persistent editor navigation view that lays Scenes and Narration Segments in order and shows the ranges and visual stacking of Visual Cues as lanes. It is not a rendering timeline and never changes editorial data.

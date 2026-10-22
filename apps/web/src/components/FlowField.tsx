@@ -1,4 +1,11 @@
-import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  buttonNeutralClass,
+  errorTextClass,
+  formLabelClass,
+  formLabelTextClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 
 interface FlowFieldProps {
   label: string;
@@ -89,7 +96,7 @@ export function FlowField({
   if (diagram === null) {
     return (
       <div className="my-2">
-        <span>{label}</span>
+        <span className={formLabelTextClass}>{label}</span>
         <p className={errorTextClass}>ノードと辺を読み取れませんでした。JSONで修正してください。</p>
         <textarea
           className={`mt-1 block w-full ${textFieldClass}`}
@@ -154,7 +161,7 @@ export function FlowField({
 
   return (
     <div className="my-2">
-      <span>{label}</span>
+      <span className={formLabelTextClass}>{label}</span>
       <p className={metaTextClass}>
         ノードを並べ、辺でつなぎます。矢印は from から to へ向きます。
       </p>
@@ -223,7 +230,7 @@ export function FlowField({
         </div>
         {edges.map((edge, index) => (
           <div key={index} className="mt-1 flex flex-wrap items-center gap-2">
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               から
               <select
                 className={textFieldClass}
@@ -237,7 +244,7 @@ export function FlowField({
                 ))}
               </select>
             </label>
-            <label className="inline-flex items-center gap-1.5">
+            <label className={formLabelClass}>
               へ
               <select
                 className={textFieldClass}

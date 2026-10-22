@@ -1,8 +1,9 @@
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import type { AssetKindName } from "@kakeai/contracts";
 import { useAssets } from "../api/hooks";
 import { AssetThumbnail, assetLabel } from "../lib/assets";
-import { buttonNeutralClass, metaTextClass } from "../ui";
+import { buttonNeutralClass, formLabelClass, metaTextClass } from "../ui";
 import { MediaLibraryModal } from "./MediaLibraryModal";
 
 interface MediaPickerProps {
@@ -12,6 +13,7 @@ interface MediaPickerProps {
   onSelect: (assetId: string | null) => void;
   variant?: "select" | "add";
   inline?: boolean;
+  icon?: LucideIcon;
 }
 
 export function MediaPicker({
@@ -21,6 +23,7 @@ export function MediaPicker({
   onSelect,
   variant = "select",
   inline = false,
+  icon: Icon,
 }: MediaPickerProps) {
   const assets = useAssets();
   const [open, setOpen] = useState(false);
@@ -33,11 +36,15 @@ export function MediaPicker({
     <div className={inline ? "" : "my-2"}>
       {variant === "add" ? (
         <button type="button" className={buttonNeutralClass} onClick={() => setOpen(true)}>
+          {Icon !== undefined && <Icon aria-hidden="true" className="h-4 w-4" />}
           {label}
         </button>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{label}</span>
+          <span className={`${formLabelClass} font-medium`}>
+            {Icon !== undefined && <Icon aria-hidden="true" className="h-4 w-4" />}
+            {label}
+          </span>
           <button type="button" className={buttonNeutralClass} onClick={() => setOpen(true)}>
             {hasSelection ? "変更" : "選択"}
           </button>

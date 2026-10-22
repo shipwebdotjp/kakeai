@@ -1,5 +1,5 @@
 import { ONSET_PRESETS } from "@kakeai/contracts";
-import { buttonNeutralClass, textFieldClass } from "../ui";
+import { buttonNeutralClass, formLabelClass, textFieldClass } from "../ui";
 
 type Json = Record<string, unknown>;
 
@@ -24,7 +24,7 @@ export function OnsetField({ effect, onChange }: OnsetFieldProps) {
 
   return (
     <div className="mt-1 flex flex-wrap items-center gap-2">
-      <label className="inline-flex items-center gap-1.5 text-xs">
+      <label className={formLabelClass}>
         <input
           type="checkbox"
           checked={onset !== null}
@@ -42,7 +42,7 @@ export function OnsetField({ effect, onChange }: OnsetFieldProps) {
       </label>
       {onset !== null && (
         <>
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             動き
             <select
               className={textFieldClass}
@@ -58,7 +58,7 @@ export function OnsetField({ effect, onChange }: OnsetFieldProps) {
               ))}
             </select>
           </label>
-          <label className="inline-flex items-center gap-1.5">
+          <label className={formLabelClass}>
             尺(ms)
             <input
               type="number"

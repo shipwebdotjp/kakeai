@@ -5,7 +5,14 @@ import {
   TABLE_TONES,
 } from "@kakeai/contracts";
 import { lineOptionLabel, type LineFormValue, type SpeakerFormValue } from "../content/form";
-import { buttonNeutralClass, errorTextClass, metaTextClass, textFieldClass } from "../ui";
+import {
+  buttonNeutralClass,
+  errorTextClass,
+  formLabelClass,
+  formLabelTextClass,
+  metaTextClass,
+  textFieldClass,
+} from "../ui";
 import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
@@ -48,7 +55,7 @@ const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
 };
 
 const TRIGGER_OPTIONS = [
-  { value: "cue", label: "Cue全体" },
+  { value: "cue", label: "映像演出全体" },
   { value: "lines", label: "セリフ区間" },
 ] as const;
 
@@ -184,7 +191,7 @@ export function EffectsField({
   if (entries === null) {
     return (
       <div className="my-2">
-        <span>{label}</span>
+        <span className={formLabelTextClass}>{label}</span>
         <p className={errorTextClass}>セリフ同期の効果を読み取れませんでした。JSONで修正してください。</p>
         <textarea
           className={`mt-1 block w-full ${textFieldClass}`}
@@ -217,7 +224,7 @@ export function EffectsField({
 
   return (
     <div className="my-2">
-      <span>{label}</span>
+      <span className={formLabelTextClass}>{label}</span>
       <p className={metaTextClass}>
         セリフ区間を契機に、対象を登場・強調・数値カウントします。
       </p>
@@ -238,7 +245,7 @@ export function EffectsField({
             <div className="flex flex-wrap items-center gap-2">
               {!targetless && (
                 <>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     対象
                     <select
                       className={textFieldClass}
@@ -256,7 +263,7 @@ export function EffectsField({
                     </select>
                   </label>
                   {hasIndex && (
-                    <label className="inline-flex items-center gap-1.5">
+                    <label className={formLabelClass}>
                       {targetKind === "message" ? "メッセージ" : "番号"}
                       {targetKind === "message" &&
                       messageLabels !== undefined &&
@@ -304,7 +311,7 @@ export function EffectsField({
                   )}
                   {isCell && (
                     <>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={formLabelClass}>
                         行
                         <input
                           type="number"
@@ -321,7 +328,7 @@ export function EffectsField({
                           }
                         />
                       </label>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={formLabelClass}>
                         列キー
                         <input
                           className={`w-24 ${textFieldClass}`}
@@ -344,7 +351,7 @@ export function EffectsField({
               </button>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 契機
                 <select
                   className={textFieldClass}
@@ -379,7 +386,7 @@ export function EffectsField({
               </label>
               {trigger.kind === "lines" && (
                 <>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     開始
                     <select
                       className={textFieldClass}
@@ -398,7 +405,7 @@ export function EffectsField({
                       ))}
                     </select>
                   </label>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     終了
                     <select
                       className={textFieldClass}
@@ -421,7 +428,7 @@ export function EffectsField({
               )}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <label className="inline-flex items-center gap-1.5">
+              <label className={formLabelClass}>
                 効果
                 <select
                   className={textFieldClass}
@@ -437,7 +444,7 @@ export function EffectsField({
               </label>
               {effect.kind === "emphasize" ? (
                 <>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     見た目
                     <select
                       className={textFieldClass}
@@ -453,7 +460,7 @@ export function EffectsField({
                       ))}
                     </select>
                   </label>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     色
                     <select
                       className={textFieldClass}
@@ -476,7 +483,7 @@ export function EffectsField({
                 </>
               ) : effect.kind === "value" ? (
                 <>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     開始値
                     <input
                       type="number"
@@ -493,7 +500,7 @@ export function EffectsField({
                       }}
                     />
                   </label>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     尺(ms)
                     <input
                       type="number"
@@ -514,7 +521,7 @@ export function EffectsField({
                 </>
               ) : (
                 <>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     動き
                     <select
                       className={textFieldClass}
@@ -530,7 +537,7 @@ export function EffectsField({
                       ))}
                     </select>
                   </label>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     尺(ms)
                     <input
                       type="number"
@@ -544,7 +551,7 @@ export function EffectsField({
                       }
                     />
                   </label>
-                  <label className="inline-flex items-center gap-1.5">
+                  <label className={formLabelClass}>
                     ずれ(ms)
                     <input
                       type="number"
