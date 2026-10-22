@@ -30,7 +30,18 @@ export function statusBarHtml(containerClass: string, time?: string): string {
   return `<div class="${escapeHtmlAttribute(containerClass)} kakeai-statusbar">${timeHtml}<span class="kakeai-statusbar-island" aria-hidden="true"></span><span class="kakeai-statusbar-icons" aria-hidden="true"><span class="kakeai-statusbar-wifi">${WIFI_SVG}</span><span class="kakeai-statusbar-battery">${BATTERY_SVG}</span></span></div>`;
 }
 
-/** Laptop keyboard deck with a trackpad notch, sized by its container. */
+/**
+ * Open-laptop base: the deck is projected in 3D so that its far edge meets the
+ * screen and its near edge flares toward the viewer. The deck carries the
+ * keyboard, trackpad, speaker grilles and the front thumb notch. The outer
+ * stage reserves the projected footprint so the layout stays predictable.
+ *
+ * Keep the stage depth (`29%` of the body width) in sync with the deck geometry
+ * in the compiler styles: the deck is 110% wide, 10/7 deep and rotated 70deg
+ * under a 365cqw camera, which projects to roughly the same height. The
+ * speaker grille pitch is 7.7% of the grille width by 1.1% of its height, so
+ * the dots stay square and scale with the deck.
+ */
 export function laptopBaseHtml(): string {
-  return '<div class="kakeai-laptopbase" aria-hidden="true"></div>';
+  return '<div class="kakeai-laptopbase" aria-hidden="true"><div class="kakeai-laptopdeck"><span class="kakeai-laptopspeaker kakeai-laptopspeaker-left"></span><span class="kakeai-laptopspeaker kakeai-laptopspeaker-right"></span><span class="kakeai-laptopkeys"><span class="kakeai-laptopspace"></span></span><span class="kakeai-laptoptrackpad"></span><span class="kakeai-laptopnotch"></span></div></div>';
 }

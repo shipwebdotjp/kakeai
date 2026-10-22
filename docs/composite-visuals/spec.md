@@ -76,7 +76,7 @@ NestedVisual =
 | `character.standing@1` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体）。Face Set を持つ外観の表情合成（台詞区間ごと）は [../face-expression/spec.md](../face-expression/spec.md) |
 | `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor?, animation?, statusBar?, keyboard? | 対応（複合ビジュアル、画面の登場アニメーション。screen は素材または `kind: "composition"`） |
 
-`scene.device-frame@1` は端末クロームを重ねられる。`frame: "phone"` では既定で画面の上に静的なステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）を重ねる（`statusBar: false` で消せる）。`frame: "laptop"` では既定で画面の下にキーボードベースを描く（`keyboard: false` で消せる。画面＋ベースがキャンバスに収まるよう画面幅を縮める）。どちらも**既定オンの任意入力**（`.default(true)`）であり、正式リリース前は見た目の変更を版の追加なしで行える（[ADR-0071](../adr/0071-pre-release-appearance-changes-without-version-bump.md)）。クロームは `chat.thread@1` と共通の描画（`device-chrome`）を使い、寸法は画面の大きさに追従するコンテナ相対で表す。
+`scene.device-frame@1` は端末クロームを重ねられる。`frame: "phone"` では既定で画面の上に静的なステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）を重ねる（`statusBar: false` で消せる）。`frame: "laptop"` では既定で画面の下に、開いたノートPCのベース（キーボード・トラックパッド・左右のスピーカーグリル・前面の指掛け）をパース投影で描く（`keyboard: false` で消せる。画面＋ベースがキャンバスに収まるよう画面幅を縮める）。どちらも**既定オンの任意入力**（`.default(true)`）であり、正式リリース前は見た目の変更を版の追加なしで行える（[ADR-0071](../adr/0071-pre-release-appearance-changes-without-version-bump.md)）。クロームは `chat.thread@1` と共通の描画（`device-chrome`）を使い、寸法は画面の大きさに追従するコンテナ相対で表す。
 
 ## テンプレート入力メタデータと汎用エディタ
 
