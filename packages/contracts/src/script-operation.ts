@@ -4,7 +4,7 @@ import { audioTakeSourceSchema } from "./content/narration";
 import { audioCueRangeSchema, audioCueRoleSchema } from "./content/audio";
 import { cueLayerSchema, cueTransitionSchema, transitionEdgeSchema } from "./content/layers";
 import { templateRefSchema } from "./content/nested";
-import { standingSideSchema } from "./templates";
+import { standingEdgeSchema, standingSideSchema, standingVerticalSchema } from "./templates";
 import { sceneAccentSchema, sceneTransitionEdgeSchema } from "./content/scene";
 import { sceneTimingSchema } from "./content/timing";
 
@@ -292,6 +292,8 @@ export const standingSetOperationSchema = z.strictObject({
   characterId: idSchema,
   appearanceId: idSchema,
   scale: z.number().finite().positive().optional(),
+  edge: standingEdgeSchema.optional(),
+  vertical: standingVerticalSchema.optional(),
   transition: cueTransitionSchema.optional(),
 });
 

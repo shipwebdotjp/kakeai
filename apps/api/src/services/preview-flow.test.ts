@@ -287,8 +287,8 @@ describe("script version preview", () => {
     );
 
     expect(preview.compositionHtml).toContain('class="kakeai-standingv2"');
-    expect(preview.compositionHtml).toContain("left:84.5%;top:86%;");
-    expect(preview.compositionHtml).toContain("width:480px;");
+    expect(preview.compositionHtml).toContain("left:83%;top:86%;");
+    expect(preview.compositionHtml).toContain("width:576px;");
     expect(preview.compositionHtml).toContain(
       `/api/v1/assets/${encodeURIComponent(image.id)}/render-content`,
     );

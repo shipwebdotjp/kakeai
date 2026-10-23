@@ -300,12 +300,24 @@ const mediaCardV1: VisualTemplateDefinition = {
 };
 
 export const standingSideSchema = z.enum(["left", "right"]);
+export type StandingSide = z.infer<typeof standingSideSchema>;
+
+export const standingEdgeSchema = z.enum(["tight", "margin", "center"]);
+export type StandingEdge = z.infer<typeof standingEdgeSchema>;
+
+export const standingVerticalSchema = z.enum(["up", "standard", "down"]);
+export type StandingVertical = z.infer<typeof standingVerticalSchema>;
+
+export const DEFAULT_STANDING_EDGE: StandingEdge = "margin";
+export const DEFAULT_STANDING_VERTICAL: StandingVertical = "standard";
 
 export const characterStandingV1InputSchema = z.strictObject({
   characterId: idSchema,
   appearanceId: idSchema,
   side: standingSideSchema,
   scale: z.number().positive(),
+  edge: standingEdgeSchema.default(DEFAULT_STANDING_EDGE),
+  vertical: standingVerticalSchema.default(DEFAULT_STANDING_VERTICAL),
 });
 
 const characterStandingV1: VisualTemplateDefinition = {

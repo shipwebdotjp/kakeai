@@ -120,7 +120,7 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1。`transition` は enter/exit をまとめて置き換える |
+| `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `edge`（端からの位置3段階）・`vertical`（高さ3段階）、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1。`edge` 省略時は既存値、なければ `margin`。`vertical` 省略時は既存値、なければ `standard`。`transition` は enter/exit をまとめて置き換える |
 | `standing.remove` | `sceneId`、`side` | 対応する `character.standing@1` Cue を削除する |
 
 ### Cue操作の補足

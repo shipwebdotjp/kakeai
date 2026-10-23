@@ -19,9 +19,17 @@ import {
   buildContentDocument,
   pruneDraftCueForLines,
   toFormValues,
+  DEFAULT_STANDING_EDGE,
+  DEFAULT_STANDING_VERTICAL,
+  STANDING_EDGE_VALUES,
+  STANDING_VERTICAL_VALUES,
+  normalizeStandingEnum,
   type CueFormValue,
   type DocumentFormValues,
+  type StandingEdge,
   type StandingFormValue,
+  type StandingSide,
+  type StandingVertical,
 } from "./form";
 
 export interface StructuralAsset {
@@ -204,8 +212,6 @@ export function applyStructuralOperation(
   return applyStructuralOperations(base, values, [operation], assets);
 }
 
-type StandingSide = "left" | "right";
-
 function standingSideOf(cue: VisualCue): StandingSide | null {
   if (
     cue.template.id !== characterStandingV1.id ||
@@ -270,6 +276,12 @@ export function commitStandingStructural(
     Number.isFinite(standing.scale) && standing.scale > 0
       ? standing.scale
       : 1;
+  const edge = normalizeStandingEnum(standing.edge, STANDING_EDGE_VALUES, DEFAULT_STANDING_EDGE);
+  const vertical = normalizeStandingEnum(
+    standing.vertical,
+    STANDING_VERTICAL_VALUES,
+    DEFAULT_STANDING_VERTICAL,
+  );
   return applyToDocument(
     document,
     values,
@@ -281,6 +293,8 @@ export function commitStandingStructural(
         characterId: standing.characterId,
         appearanceId: standing.appearanceId,
         scale,
+        edge,
+        vertical,
         transition: {
           enter: normalizeTransitionEdge(
             standing.enterPreset,

@@ -1,7 +1,12 @@
 import {
   characterStandingV1,
   characterStandingV1InputSchema,
+  DEFAULT_STANDING_EDGE,
+  DEFAULT_STANDING_VERTICAL,
   type ContentDocument,
+  type StandingEdge,
+  type StandingSide,
+  type StandingVertical,
   type VisualCue,
   type Warning,
 } from "@kakeai/contracts";
@@ -10,8 +15,6 @@ import { targetNotFound } from "./errors.ts";
 import { withScene } from "./line-utils.ts";
 import { findEditableScene, parseCue } from "./cue.ts";
 import type { SceneEditResult } from "./scene.ts";
-
-export type StandingSide = "left" | "right";
 
 export interface StandingEditResult extends SceneEditResult {
   warnings?: Warning[];
@@ -49,6 +52,8 @@ export function setStanding(
   scale: number | undefined,
   transition: VisualCue["transition"] | undefined,
   context: ScriptContext,
+  edge?: StandingEdge,
+  vertical?: StandingVertical,
 ): StandingEditResult {
   const { scene, sceneIndex, cueIndex } = findStandingIndex(
     document,
@@ -74,7 +79,20 @@ export function setStanding(
   const resolvedScale =
     scale ??
     (existingInput?.success ? existingInput.data.scale : 1);
-  const input = { characterId, appearanceId, side, scale: resolvedScale };
+  const resolvedEdge =
+    edge ??
+    (existingInput?.success ? existingInput.data.edge : DEFAULT_STANDING_EDGE);
+  const resolvedVertical =
+    vertical ??
+    (existingInput?.success ? existingInput.data.vertical : DEFAULT_STANDING_VERTICAL);
+  const input = {
+    characterId,
+    appearanceId,
+    side,
+    scale: resolvedScale,
+    edge: resolvedEdge,
+    vertical: resolvedVertical,
+  };
 
   if (existing !== undefined) {
     const cue = parseCue({

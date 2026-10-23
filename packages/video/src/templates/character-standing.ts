@@ -1,7 +1,12 @@
 import {
   characterStandingV1InputSchema,
+  DEFAULT_STANDING_EDGE,
+  DEFAULT_STANDING_VERTICAL,
   type ContentDocument,
   type SnapshotFaceSet,
+  type StandingEdge,
+  type StandingSide,
+  type StandingVertical,
 } from "@kakeai/contracts";
 import type { AssetResolver } from "../resolver";
 import { CompositionCompileError } from "../compile-error";
@@ -10,20 +15,31 @@ import { OUTPUT_WIDTH } from "../meta";
 import type { ExpressionTarget, RenderedCue, RenderContext } from "../render-context";
 import { resolveCueMedia } from "./shared";
 
-const STANDING_BASE_WIDTH_PX = 480;
-const STANDING_EDGE_MARGIN = 0.03;
-const STANDING_Y = 0.86;
+const STANDING_BASE_WIDTH_PX = 576;
+const STANDING_EDGE_MARGIN: Record<StandingEdge, number> = {
+  tight: 0,
+  margin: 0.02,
+  center: 0.08,
+};
+const STANDING_Y: Record<StandingVertical, number> = {
+  up: 0.78,
+  standard: 0.86,
+  down: 0.92,
+};
 
 export function standingPosition(
-  side: "left" | "right",
+  side: StandingSide,
   scale: number,
+  edge: StandingEdge = DEFAULT_STANDING_EDGE,
+  vertical: StandingVertical = DEFAULT_STANDING_VERTICAL,
 ): { x: number; y: number } {
   const halfWidth = (STANDING_BASE_WIDTH_PX * scale) / 2 / OUTPUT_WIDTH;
+  const margin = STANDING_EDGE_MARGIN[edge];
   const x =
     side === "left"
-      ? STANDING_EDGE_MARGIN + halfWidth
-      : 1 - STANDING_EDGE_MARGIN - halfWidth;
-  return { x, y: STANDING_Y };
+      ? margin + halfWidth
+      : 1 - margin - halfWidth;
+  return { x, y: STANDING_Y[vertical] };
 }
 
 function resolveStandingAppearance(
@@ -85,7 +101,7 @@ export function renderCharacterStanding(input: unknown, context: RenderContext):
       { path: context.path, code: "invalid_input", message: "character.standing の入力が不正です。" },
     ]);
   }
-  const { characterId, appearanceId, side, scale } = parsed.data;
+  const { characterId, appearanceId, side, scale, edge, vertical } = parsed.data;
   const { src, assetId } = resolveStandingAppearance(
     characterId,
     appearanceId,
@@ -93,7 +109,7 @@ export function renderCharacterStanding(input: unknown, context: RenderContext):
     context.path,
     context.assetResolver,
   );
-  const layout = standingPosition(side, scale);
+  const layout = standingPosition(side, scale, edge, vertical);
   const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale);
   const leftPercent = Math.round(layout.x * 10000) / 100;
   const topPercent = Math.round(layout.y * 10000) / 100;

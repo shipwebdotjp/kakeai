@@ -32,6 +32,8 @@ import {
   tableDataSchema,
   tableEffectsSchema,
   videoPlaybackSchema,
+  DEFAULT_STANDING_EDGE,
+  DEFAULT_STANDING_VERTICAL,
   type AnimationPreset,
   type AudioCueRole,
   type Character,
@@ -42,6 +44,9 @@ import {
   type SceneAccent,
   type SceneTransitionPreset,
   type Speaker,
+  type StandingSide,
+  type StandingEdge,
+  type StandingVertical,
   type TemplateFieldSpec,
   type ThemeAccentToken,
   type TransitionPolicy,
@@ -127,7 +132,11 @@ export interface SpeakerFormValue {
   voiceProfileId: string | null;
 }
 
-export type StandingSide = "left" | "right";
+export type { StandingSide, StandingEdge, StandingVertical } from "@kakeai/contracts";
+export {
+  DEFAULT_STANDING_EDGE,
+  DEFAULT_STANDING_VERTICAL,
+} from "@kakeai/contracts";
 export type CueRangeKind = "scene" | "lines" | "offset";
 
 export interface StandingFormValue {
@@ -136,6 +145,8 @@ export interface StandingFormValue {
   appearanceId: string | null;
   side: StandingSide;
   scale: number;
+  edge: StandingEdge;
+  vertical: StandingVertical;
   enterPreset: TransitionPreset;
   enterDurationMs: number;
   exitPreset: TransitionPreset;
@@ -207,6 +218,22 @@ export function defaultAudioGainDb(role: AudioCueRole): number {
   return role === "bgm" ? DEFAULT_BGM_GAIN_DB : 0;
 }
 export const DEFAULT_STANDING_SCALE = 1;
+export const STANDING_EDGE_OPTIONS: readonly { value: StandingEdge; label: string }[] = [
+  { value: "tight", label: "ギリギリ" },
+  { value: "margin", label: "少し余白あり" },
+  { value: "center", label: "中央より" },
+];
+export const STANDING_VERTICAL_OPTIONS: readonly { value: StandingVertical; label: string }[] = [
+  { value: "up", label: "上" },
+  { value: "standard", label: "標準" },
+  { value: "down", label: "下" },
+];
+export const STANDING_EDGE_VALUES: readonly StandingEdge[] = STANDING_EDGE_OPTIONS.map(
+  (option) => option.value,
+);
+export const STANDING_VERTICAL_VALUES: readonly StandingVertical[] = STANDING_VERTICAL_OPTIONS.map(
+  (option) => option.value,
+);
 export const MIN_STANDING_SCALE = 0.1;
 export const MAX_STANDING_SCALE = 3;
 export const STANDING_SCALE_STEP = 0.05;
@@ -316,6 +343,8 @@ export interface StandingCueInput {
   appearanceId: string;
   side: StandingSide;
   scale: number;
+  edge: StandingEdge;
+  vertical: StandingVertical;
 }
 
 function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
@@ -336,6 +365,8 @@ function readStanding(cue: VisualCue | undefined): StandingCueInput | null {
     appearanceId: data.appearanceId,
     side: data.side,
     scale: data.scale,
+    edge: data.edge,
+    vertical: data.vertical,
   };
 }
 
@@ -369,6 +400,8 @@ export function emptyStandingSlots(): StandingFormValue[] {
     appearanceId: null,
     side,
     scale: DEFAULT_STANDING_SCALE,
+    edge: DEFAULT_STANDING_EDGE,
+    vertical: DEFAULT_STANDING_VERTICAL,
     enterPreset: STANDING_TRANSITION_POLICY.defaultEnter.preset,
     enterDurationMs: STANDING_TRANSITION_POLICY.defaultEnter.durationMs,
     exitPreset: STANDING_TRANSITION_POLICY.defaultExit.preset,
@@ -385,6 +418,8 @@ function readStandings(scene: Scene): StandingFormValue[] {
       appearanceId: standing.appearanceId,
       side: standing.side,
       scale: standing.scale,
+      edge: standing.edge,
+      vertical: standing.vertical,
       enterPreset: cue.transition.enter.preset,
       enterDurationMs: cue.transition.enter.durationMs,
       exitPreset: cue.transition.exit.preset,
@@ -892,6 +927,12 @@ function buildCharacters(values: CharacterFormValue[], locale: CharacterVoice["l
       };
     }),
   }));
+}
+
+export function normalizeStandingEnum<T extends string>(value: unknown, options: readonly T[], fallback: T): T {
+  return typeof value === "string" && (options as readonly string[]).includes(value)
+    ? (value as T)
+    : fallback;
 }
 
 function normalizeScale(value: number, fallback: number): number {
@@ -1452,6 +1493,8 @@ function buildStandingCues(
         appearanceId: standing.appearanceId,
         side: standing.side,
         scale: normalizeScale(standing.scale, DEFAULT_STANDING_SCALE),
+        edge: normalizeStandingEnum(standing.edge, STANDING_EDGE_VALUES, DEFAULT_STANDING_EDGE),
+        vertical: normalizeStandingEnum(standing.vertical, STANDING_VERTICAL_VALUES, DEFAULT_STANDING_VERTICAL),
       },
     });
     order += 1;

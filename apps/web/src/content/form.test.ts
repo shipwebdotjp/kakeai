@@ -77,12 +77,16 @@ function standingInput(cue: { input: unknown }): {
   appearanceId: string;
   side: "left" | "right";
   scale: number;
+  edge: string;
+  vertical: string;
 } {
   return cue.input as {
     characterId: string;
     appearanceId: string;
     side: "left" | "right";
     scale: number;
+    edge: string;
+    vertical: string;
   };
 }
 
@@ -96,6 +100,8 @@ function standingCue(id: string, side: "left" | "right", scale = 1): VisualCue {
       appearanceId: "appearance-smile",
       side,
       scale,
+      edge: "margin",
+      vertical: "standard",
     },
   });
 }
@@ -890,6 +896,8 @@ describe("buildContentDocument", () => {
         appearanceId: null,
         side: "left",
         scale: 1,
+        edge: "margin",
+        vertical: "standard",
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",
@@ -901,6 +909,8 @@ describe("buildContentDocument", () => {
         appearanceId: "appearance-smile",
         side: "right",
         scale: 1,
+        edge: "margin",
+        vertical: "standard",
         enterPreset: "fade",
         enterDurationMs: 350,
         exitPreset: "none",
@@ -917,6 +927,8 @@ describe("buildContentDocument", () => {
       appearanceId: "appearance-smile",
       side: "right",
       scale: 1,
+      edge: "margin",
+      vertical: "standard",
     });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
@@ -958,6 +970,8 @@ describe("buildContentDocument", () => {
         appearanceId: "appearance-smile",
         side: "left",
         scale: 1,
+        edge: "margin",
+        vertical: "standard",
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",
@@ -975,6 +989,8 @@ describe("buildContentDocument", () => {
       appearanceId: "appearance-smile",
       side: "left",
       scale: 1,
+      edge: "margin",
+      vertical: "standard",
     });
     expect(cue.transition).toEqual({
       enter: { preset: "none", durationMs: 0 },
@@ -1004,6 +1020,8 @@ describe("buildContentDocument", () => {
         appearanceId: "appearance-smile",
         side: "left",
         scale: 1,
+        edge: "margin",
+        vertical: "standard",
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",
@@ -1015,6 +1033,8 @@ describe("buildContentDocument", () => {
         appearanceId: "appearance-smile",
         side: "right",
         scale: 0.8,
+        edge: "margin",
+        vertical: "standard",
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",
@@ -1177,6 +1197,8 @@ describe("buildContentDocument", () => {
       appearanceId: "appearance-smile",
       side: "right",
       scale: 1.5,
+      edge: "margin",
+      vertical: "standard",
     });
     const extraCue = byId.get("vc-standing-extra")!;
     expect(extraCue.template).toEqual({ id: "character.standing", version: 1 });
@@ -1185,6 +1207,8 @@ describe("buildContentDocument", () => {
       appearanceId: "appearance-smile",
       side: "left",
       scale: 0.75,
+      edge: "margin",
+      vertical: "standard",
     });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });

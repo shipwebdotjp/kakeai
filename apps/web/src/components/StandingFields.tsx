@@ -7,12 +7,16 @@ import {
   type UseFormSetValue,
 } from "react-hook-form";
 import {
+  DEFAULT_STANDING_EDGE,
   DEFAULT_STANDING_SCALE,
+  DEFAULT_STANDING_VERTICAL,
   MAX_STANDING_SCALE,
   MIN_STANDING_SCALE,
+  STANDING_EDGE_OPTIONS,
   STANDING_SCALE_STEP,
   STANDING_SIDES,
   STANDING_TRANSITION_POLICY,
+  STANDING_VERTICAL_OPTIONS,
   appearanceDisplayName,
   emptyStandingSlots,
   type CharacterFormValue,
@@ -100,6 +104,10 @@ export function StandingFields({
         const standing = slots[index];
         const characterId = standing?.characterId ?? null;
         const scale = standing?.scale ?? DEFAULT_STANDING_SCALE;
+        const edge = standing?.edge ?? DEFAULT_STANDING_EDGE;
+        const vertical = standing?.vertical ?? DEFAULT_STANDING_VERTICAL;
+        const edgeLabel = STANDING_EDGE_OPTIONS.find((entry) => entry.value === edge)?.label ?? edge;
+        const verticalLabel = STANDING_VERTICAL_OPTIONS.find((entry) => entry.value === vertical)?.label ?? vertical;
         const enterPreset = standing?.enterPreset ?? "none";
         const exitPreset = standing?.exitPreset ?? "none";
         const character = characters.find((entry) => entry.id === characterId);
@@ -193,7 +201,7 @@ export function StandingFields({
             {character !== undefined && (
               <Collapsible
                 title="表示の調整"
-                summary={`倍率 ${scale} / 入場 ${PRESET_LABELS[enterPreset] ?? enterPreset} / 退場 ${PRESET_LABELS[exitPreset] ?? exitPreset}`}
+                summary={`倍率 ${scale} / 端 ${edgeLabel} / 高さ ${verticalLabel} / 入場 ${PRESET_LABELS[enterPreset] ?? enterPreset} / 退場 ${PRESET_LABELS[exitPreset] ?? exitPreset}`}
                 storageKey={`standing-${sceneId}-${side}`}
               >
                 <div className="flex flex-wrap items-center gap-3">
@@ -212,6 +220,32 @@ export function StandingFields({
                             : Number(value),
                       })}
                     />
+                  </label>
+                  <label className={formLabelClass}>
+                    端からの位置
+                    <select
+                      className={textFieldClass}
+                      {...register(`scenes.${sceneIndex}.standings.${index}.edge`)}
+                    >
+                      {STANDING_EDGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={formLabelClass}>
+                    高さ
+                    <select
+                      className={textFieldClass}
+                      {...register(`scenes.${sceneIndex}.standings.${index}.vertical`)}
+                    >
+                      {STANDING_VERTICAL_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">

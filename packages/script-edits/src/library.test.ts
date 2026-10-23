@@ -80,6 +80,8 @@ describe("standing operations", () => {
       appearanceId: "app-1",
       side: "left",
       scale: 1,
+      edge: "margin",
+      vertical: "standard",
     });
     expect(leftCue?.transition.enter).toEqual({
       preset: "fade",
@@ -112,6 +114,8 @@ describe("standing operations", () => {
     expect(updatedCues[0]?.input).toMatchObject({
       appearanceId: "app-2",
       scale: 1.5,
+      edge: "margin",
+      vertical: "standard",
     });
     expect(updatedCues[0]?.transition.enter).toEqual({
       preset: "fade",
@@ -148,6 +152,52 @@ describe("standing operations", () => {
       ),
     ).toBe(false);
     expect(contentDocumentSchema.safeParse(removed.document).success).toBe(true);
+  });
+
+  it("立ち絵の端寄せと高さを設定し、省略時は既存値を保つ", () => {
+    const { document, point } = documentWithCharacter();
+    const created = applyScriptOperation(
+      document,
+      {
+        op: "standing.set",
+        sceneId: point.id,
+        side: "left",
+        characterId: "char-1",
+        appearanceId: "app-1",
+        edge: "tight",
+        vertical: "up",
+      },
+      createTestContext(),
+    );
+    const scene = created.document.scenes[1]!;
+    if (scene.kind !== "point") {
+      throw new Error("要点Sceneではありません。");
+    }
+    const cue = scene.visualCues.find(
+      (entry) => entry.template.id === "character.standing",
+    );
+    expect(cue?.input).toMatchObject({ edge: "tight", vertical: "up", scale: 1 });
+
+    const kept = applyScriptOperation(
+      created.document,
+      {
+        op: "standing.set",
+        sceneId: point.id,
+        side: "left",
+        characterId: "char-1",
+        appearanceId: "app-2",
+      },
+      createTestContext(),
+    );
+    const keptScene = kept.document.scenes[1]!;
+    if (keptScene.kind !== "point") {
+      throw new Error("要点Sceneではありません。");
+    }
+    const keptCue = keptScene.visualCues.find(
+      (entry) => entry.template.id === "character.standing",
+    );
+    expect(keptCue?.input).toMatchObject({ edge: "tight", vertical: "up" });
+    expect(contentDocumentSchema.safeParse(kept.document).success).toBe(true);
   });
 
   it("存在しない立ち絵を拒否する", () => {

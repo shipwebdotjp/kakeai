@@ -955,8 +955,8 @@ describe("compileDocument", () => {
     expect(compiled.assetIds).toContain("asset-rin");
     expect(compiled.html).toContain('class="kakeai-standingv2"');
     expect(compiled.html).toContain('class="kakeai-standingimg"');
-    expect(compiled.html).toContain("left:78.25%;top:86%;");
-    expect(compiled.html).toContain("width:720px;");
+    expect(compiled.html).toContain("left:75.5%;top:86%;");
+    expect(compiled.html).toContain("width:864px;");
   });
 
   it("anchors the standing's outer edge to the frame at any scale", () => {
@@ -996,8 +996,53 @@ describe("compileDocument", () => {
       }),
     );
     const compiled = compileDocument({ document, assetResolver: resolver });
-    expect(compiled.html).toContain("left:15.5%;top:86%;");
-    expect(compiled.html).toContain("left:72%;top:86%;");
+    expect(compiled.html).toContain("left:17%;top:86%;");
+    expect(compiled.html).toContain("left:68%;top:86%;");
+  });
+
+  it("maps standing edge and vertical presets to positions", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      voices: [],
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+      ],
+    });
+    document.scenes[1]!.visualCues.push(
+      cue({
+        id: "vc-standing-tight-up",
+        template: { id: "character.standing", version: 1 },
+        layer: "standing",
+        order: 0,
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          side: "left",
+          scale: 1,
+          edge: "tight",
+          vertical: "up",
+        },
+      }),
+      cue({
+        id: "vc-standing-center-down",
+        template: { id: "character.standing", version: 1 },
+        layer: "standing",
+        order: 1,
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          side: "right",
+          scale: 1,
+          edge: "center",
+          vertical: "down",
+        },
+      }),
+    );
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain("left:15%;top:78%;");
+    expect(compiled.html).toContain("left:77%;top:92%;");
   });
 
   it("bounces only the standing of the speaking character", () => {

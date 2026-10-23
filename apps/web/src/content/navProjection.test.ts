@@ -28,6 +28,8 @@ function makeScene(id: string): SceneFormValue {
         appearanceId: null,
         side: "left",
         scale: 1,
+        edge: "margin",
+        vertical: "standard",
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",

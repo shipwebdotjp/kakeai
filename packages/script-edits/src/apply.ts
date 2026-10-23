@@ -382,6 +382,8 @@ export function applyScriptOperation(
         operation.scale,
         operation.transition,
         context,
+        operation.edge,
+        operation.vertical,
       );
       registerKey(operation.key, keys, result.primaryId);
       return toResult(result);

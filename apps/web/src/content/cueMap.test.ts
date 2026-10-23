@@ -560,6 +560,8 @@ describe("buildCueMap standings and representative media", () => {
         appearanceId: "app-1",
         side: "left",
         scale: 1,
+        edge: "margin",
+        vertical: "standard",
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",

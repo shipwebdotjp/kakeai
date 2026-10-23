@@ -319,6 +319,8 @@ describe("structural operation adapter", () => {
       appearanceId: "app-1",
       side: "left",
       scale: 1.5,
+      edge: "margin",
+      vertical: "standard",
     });
     expect(cue?.transition.enter).toEqual({
       preset: "fade",
