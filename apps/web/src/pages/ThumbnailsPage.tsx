@@ -253,12 +253,15 @@ function ThumbnailField({ field, input, setValue, clearValue }: FieldProps) {
       </div>
     );
   }
-  if (field.kind === "number") {
+  if (field.kind === "number" || field.kind === "decimal") {
     return (
       <label className="my-2 block">
         <span className="text-sm font-medium">{field.label}</span>
         <input
           type="number"
+          step={field.kind === "number" ? (field.step ?? 1) : "any"}
+          min={field.min}
+          max={field.max}
           className={`${textFieldClass} mt-1 w-full`}
           value={typeof value === "number" ? value : ""}
           onChange={(event) => {
