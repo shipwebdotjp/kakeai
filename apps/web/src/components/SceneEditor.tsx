@@ -1327,48 +1327,50 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         {bulkGenerate.isError && (
           <span className={errorTextClass}>{errorMessage(bulkGenerate.error)}</span>
         )}
+        {openKind !== null && (
+          <div
+            role="region"
+            aria-label={openKind === "error" ? "エラー一覧" : "警告一覧"}
+            className={`absolute left-0 right-0 top-full max-h-60 overflow-auto rounded border p-3 text-sm shadow-lg ${
+              openKind === "error"
+                ? "border-red-400 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200"
+                : "border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+            }`}
+          >
+            <div className="mb-1 font-semibold">
+              {openKind === "error" ? "エラー一覧" : "警告一覧"}
+            </div>
+            <ul className="m-0 list-disc space-y-1 pl-5">
+              {(openKind === "error" ? diagnostics.errors : diagnostics.warnings).map((diag, index) => {
+                const target = diagnosticTarget(diag.path, watchedScenes);
+                const pathStr = diag.path ? diag.path.join(".") : null;
+                return (
+                  <li key={index}>
+                    {pathStr !== null && (
+                      <>
+                        {target !== null ? (
+                          <button
+                            type="button"
+                            className="mr-1.5 cursor-pointer font-mono underline hover:no-underline"
+                            onClick={() => onJumpToTarget?.(target.targetId, target.seek)}
+                          >
+                            {pathStr}
+                          </button>
+                        ) : (
+                          <span className="mr-1.5 font-mono text-muted-foreground">{pathStr}</span>
+                        )}
+                        :{" "}
+                      </>
+                    )}
+                    <span>{diag.message}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
 
-      {openKind !== null && (
-        <div
-          className={`mt-2 max-h-60 overflow-auto rounded border p-3 text-sm ${
-            openKind === "error"
-              ? "border-red-400 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200"
-              : "border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
-          }`}
-        >
-          <div className="mb-1 font-semibold">
-            {openKind === "error" ? "エラー一覧" : "警告一覧"}
-          </div>
-          <ul className="m-0 list-disc space-y-1 pl-5">
-            {(openKind === "error" ? diagnostics.errors : diagnostics.warnings).map((diag, index) => {
-              const target = diagnosticTarget(diag.path, watchedScenes);
-              const pathStr = diag.path ? diag.path.join(".") : null;
-              return (
-                <li key={index}>
-                  {pathStr !== null && (
-                    <>
-                      {target !== null ? (
-                        <button
-                          type="button"
-                          className="mr-1.5 cursor-pointer font-mono underline hover:no-underline"
-                          onClick={() => onJumpToTarget?.(target.targetId, target.seek)}
-                        >
-                          {pathStr}
-                        </button>
-                      ) : (
-                        <span className="mr-1.5 font-mono text-muted-foreground">{pathStr}</span>
-                      )}
-                      :{" "}
-                    </>
-                  )}
-                  <span>{diag.message}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
 
       {bulkResult !== null && (
         <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm dark:bg-yellow-950/40">
