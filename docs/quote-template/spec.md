@@ -45,7 +45,7 @@
 | 項目 | 値 |
 | --- | --- |
 | `id@version` | `quote@1` |
-| `layers` | `overlay` |
+| `layers` | `card`, `overlay` |
 | `transitionPolicy` | 既定（入退場はCue側） |
 | `animationPolicy` | 既定 |
 | `collectAssetRefs` | 素材を使わないため空 |

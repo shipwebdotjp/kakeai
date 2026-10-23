@@ -146,9 +146,9 @@ describe("visual template metadata", () => {
     }
   });
 
-  it("registers table.simple@1 as an editable overlay template with a table field", () => {
+  it("registers table.simple@1 as an editable card/overlay template with a table field", () => {
     const definition = getVisualTemplate("table.simple", 1);
-    expect(definition?.layers).toEqual(["overlay"]);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
     expect(isEditableTemplate("table.simple", 1)).toBe(true);
     const fields = getTemplateInputFields("table.simple", 1);
     expect(fields?.some((field) => field.kind === "grid" && field.key === "data")).toBe(true);
@@ -170,9 +170,9 @@ describe("visual template metadata", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("registers chart.bar@1 as an editable overlay template with a grid field", () => {
+  it("registers chart.bar@1 as an editable card/overlay template with a grid field", () => {
     const definition = getVisualTemplate("chart.bar", 1);
-    expect(definition?.layers).toEqual(["overlay"]);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
     expect(isEditableTemplate("chart.bar", 1)).toBe(true);
     const fields = getTemplateInputFields("chart.bar", 1);
     const grid = fields?.find((field) => field.kind === "grid");
@@ -410,9 +410,9 @@ describe("visual template metadata", () => {
     ).toBe(true);
   });
 
-  it("registers list.callout@1 as an editable overlay template", () => {
+  it("registers list.callout@1 as an editable card/overlay template", () => {
     const definition = getVisualTemplate("list.callout", 1);
-    expect(definition?.layers).toEqual(["overlay"]);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
     expect(isEditableTemplate("list.callout", 1)).toBe(true);
     const fields = getTemplateInputFields("list.callout", 1);
     expect(fields?.some((field) => field.kind === "calloutItems")).toBe(true);
@@ -449,9 +449,9 @@ describe("flow.diagram@1", () => {
     },
   };
 
-  it("registers flow.diagram@1 as an editable overlay template with a flow field", () => {
+  it("registers flow.diagram@1 as an editable card/overlay template with a flow field", () => {
     const definition = getVisualTemplate("flow.diagram", 1);
-    expect(definition?.layers).toEqual(["overlay"]);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
     expect(isEditableTemplate("flow.diagram", 1)).toBe(true);
     const fields = getTemplateInputFields("flow.diagram", 1);
     expect(fields?.some((field) => field.kind === "flow")).toBe(true);
@@ -602,9 +602,9 @@ describe("count-up value effects", () => {
 });
 
 describe("stat@1", () => {
-  it("registers stat@1 as an editable overlay template with a decimal field", () => {
+  it("registers stat@1 as an editable card/overlay template with a decimal field", () => {
     const definition = getVisualTemplate("stat", 1);
-    expect(definition?.layers).toEqual(["overlay"]);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
     expect(isEditableTemplate("stat", 1)).toBe(true);
     const fields = getTemplateInputFields("stat", 1);
     expect(fields?.some((field) => field.kind === "decimal")).toBe(true);
@@ -629,9 +629,9 @@ describe("stat@1", () => {
 });
 
 describe("quote@1", () => {
-  it("registers quote@1 as an editable overlay template with an effects field", () => {
+  it("registers quote@1 as an editable card/overlay template with an effects field", () => {
     const definition = getVisualTemplate("quote", 1);
-    expect(definition?.layers).toEqual(["overlay"]);
+    expect(definition?.layers).toEqual(["card", "overlay"]);
     expect(isEditableTemplate("quote", 1)).toBe(true);
     const fields = getTemplateInputFields("quote", 1);
     expect(fields?.some((field) => field.key === "quote")).toBe(true);

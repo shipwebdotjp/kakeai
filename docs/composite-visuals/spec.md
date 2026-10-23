@@ -70,7 +70,7 @@ NestedVisual =
 
 | VisualTemplate | layer | 入力 | 状態 |
 | --- | --- | --- | --- |
-| `text.block@1` | overlay | text, role, 配置, font, decoration ほか | 対応（inputFieldsで編集） |
+| `text.block@1` | card, overlay | text, role, 配置, font, decoration ほか | 対応（inputFieldsで編集） |
 | `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
 | `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
 | `character.standing@1` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体）。Face Set を持つ外観の表情合成（台詞区間ごと）は [../face-expression/spec.md](../face-expression/spec.md) |

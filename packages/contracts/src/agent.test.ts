@@ -90,7 +90,7 @@ describe("schema.get", () => {
 
     const textBlock = result.templates.find((template) => template.id === "text.block");
     expect(textBlock?.inputFields.map((field) => field.key)).toContain("text");
-    expect(textBlock?.layers).toEqual(["overlay"]);
+    expect(textBlock?.layers).toEqual(["card", "overlay"]);
 
     const standing = result.templates.find((template) => template.id === "character.standing");
     expect(standing?.inputFields).toEqual([]);

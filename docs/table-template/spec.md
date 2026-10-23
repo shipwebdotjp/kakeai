@@ -59,7 +59,7 @@
 | 項目 | 値 |
 | --- | --- |
 | `id@version` | `table.simple@1` |
-| `layers` | `overlay` |
+| `layers` | `card`, `overlay` |
 | `transitionPolicy` | 既定（入退場はCue側） |
 | `animationPolicy` | 既定（内部アニメは `effects` が `AnimationPlan`／`stateIntervals` を返す） |
 | `collectAssetRefs` | 素材を使わないため空 |
