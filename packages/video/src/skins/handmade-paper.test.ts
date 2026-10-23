@@ -72,7 +72,7 @@ function compile(cues: VisualCue[]) {
 }
 
 describe("handmade-paper@1", () => {
-  it("renders a title as a paper slip with tape and a settle motion", () => {
+  it("renders a title as a paper slip with tape and no automatic motion", () => {
     const compiled = compile([textCue("vc-title", "title", "紙のタイトル")]);
     expect(compiled.html).toContain('class="kakeai-textblock"');
     expect(compiled.html).toContain("kakeai-paper-slip");
@@ -80,8 +80,9 @@ describe("handmade-paper@1", () => {
     expect(compiled.html).toContain("紙のタイトル");
 
     const slipId = cueScope("vc-title").id("slip");
-    expect(compiled.html).toContain(`document.getElementById("${slipId}")`);
-    expect(compiled.html).toContain("opacity:0,y:60");
+    expect(compiled.html).toContain(`id="${slipId}"`);
+    expect(compiled.html).not.toContain(`document.getElementById("${slipId}")`);
+    expect(compiled.html).not.toContain("opacity:0,y:60");
   });
 
   it("keeps a cue-explicit surface instead of the paper piece", () => {
@@ -137,8 +138,9 @@ describe("handmade-paper@1", () => {
     expect(compiled.assetIds).toContain("asset-photo");
 
     const frameId = cueScope("vc-photo").id("photo");
-    expect(compiled.html).toContain(`document.getElementById("${frameId}")`);
-    expect(compiled.html).toContain("scale:0.9");
+    expect(compiled.html).toContain(`id="${frameId}"`);
+    expect(compiled.html).not.toContain(`document.getElementById("${frameId}")`);
+    expect(compiled.html).not.toContain("scale:0.9");
   });
 
   it("renders callout items as paper slips and keeps cue effects", () => {
@@ -174,7 +176,7 @@ describe("handmade-paper@1", () => {
     expect(compiled.html).not.toContain("y:60");
   });
 
-  it("adds staggered settle motions only when the cue has no effects", () => {
+  it("adds no automatic motion when the cue has no effects", () => {
     const compiled = compile([
       {
         id: "vc-points",
@@ -188,9 +190,11 @@ describe("handmade-paper@1", () => {
     ]);
     const firstSlip = cueScope("vc-points").id("slip-0");
     const secondSlip = cueScope("vc-points").id("slip-1");
-    expect(compiled.html).toContain(`document.getElementById("${firstSlip}")`);
-    expect(compiled.html).toContain(`document.getElementById("${secondSlip}")`);
-    expect(compiled.html).toContain("opacity:0,y:60");
+    expect(compiled.html).toContain(`id="${firstSlip}"`);
+    expect(compiled.html).toContain(`id="${secondSlip}"`);
+    expect(compiled.html).not.toContain(`document.getElementById("${firstSlip}")`);
+    expect(compiled.html).not.toContain(`document.getElementById("${secondSlip}")`);
+    expect(compiled.html).not.toContain("opacity:0,y:60");
   });
 
   it("renders a quote as a taped paper card with attribution", () => {

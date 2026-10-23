@@ -14,7 +14,6 @@ import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 import type {
   AnimationItem,
-  RenderAnimationAction,
   RenderedCue,
   RenderContext,
   StateInterval,
@@ -34,8 +33,6 @@ import {
 } from "../templates/text-block";
 import { toneHex } from "../templates/tone";
 import type { ResolvedVisualSkin, VisualSkinTemplateRenderer } from "./types";
-
-const SETTLE_DURATION_MS = 320;
 
 interface PaperPalette {
   paper: string;
@@ -142,15 +139,6 @@ function slipHtml(options: {
   return `<div id="${options.id}" class="kakeai-paper-slip" style="position:relative;filter:drop-shadow(0 12px 26px ${options.palette.shadow});transform:rotate(${options.rotate}deg);max-width:1600px;"><div class="kakeai-paper-slip-body" style="${bodyStyle}">${options.innerHtml}</div>${options.tapes ?? ""}</div>`;
 }
 
-function settleAnimation(
-  targetId: string,
-  action: RenderAnimationAction = "slide-up",
-  startMs = 0,
-  durationMs = SETTLE_DURATION_MS,
-): AnimationItem {
-  return { targetId, action, startMs, durationMs, ease: "normal" };
-}
-
 function themeTextCss(
   theme: VisualThemeDefinition,
   role: VisualThemeTextRole,
@@ -240,7 +228,7 @@ function renderHandmadeTextBlock(input: unknown, context: RenderContext): Render
       tapes,
       torn: true,
     })}</div>`;
-    return { html, assetIds: [], animation: [settleAnimation(slipId)] };
+    return { html, assetIds: [], animation: [] };
   }
 
   if (spec.role === "label") {
@@ -257,7 +245,7 @@ function renderHandmadeTextBlock(input: unknown, context: RenderContext): Render
     return {
       html: `<div class="kakeai-textblock" style="${wrapperStyle}"><span id="${tagId}" class="kakeai-paper-tag" style="${style}">${escapeHtmlText(spec.text)}</span></div>`,
       assetIds: [],
-      animation: [settleAnimation(tagId, "fade", 0, 260)],
+      animation: [],
     };
   }
 
@@ -276,7 +264,7 @@ function renderHandmadeTextBlock(input: unknown, context: RenderContext): Render
     return {
       html: `<div class="kakeai-textblock" style="${wrapperStyle}"><span id="${stripId}" class="kakeai-paper-caption" style="${style}">${escapeHtmlText(spec.text)}</span></div>`,
       assetIds: [],
-      animation: [settleAnimation(stripId, "fade", 0, 260)],
+      animation: [],
     };
   }
 
@@ -322,7 +310,7 @@ function renderHandmadeMediaCard(input: unknown, context: RenderContext): Render
   return {
     html: `<figure class="kakeai-card kakeai-paper-photocard"><div id="${frameId}" class="kakeai-paper-photo" style="position:relative;filter:drop-shadow(0 18px 40px ${palette.shadow});transform:rotate(-0.7deg);"><div class="kakeai-paper-photo-frame" style="position:relative;background:${palette.paper};padding:18px 18px 0;border-radius:4px;box-shadow:inset 0 0 0 1px ${palette.paperEdge};">${media.html}${noteHtml}</div>${tapes}</div></figure>`,
     assetIds: media.assetIds,
-    animation: [settleAnimation(frameId, "scale-in")],
+    animation: [],
   };
 }
 
@@ -362,17 +350,10 @@ function renderHandmadeListCallout(input: unknown, context: RenderContext): Rend
     })
     .join("");
 
-  const motion: AnimationItem[] =
-    animation.length === 0 && stateIntervals.length === 0
-      ? slipIds.map((slipId, index) =>
-          settleAnimation(slipId, "slide-up", index * 70, SETTLE_DURATION_MS),
-        )
-      : [];
-
   return {
     html: `<figure class="kakeai-calloutwrap kakeai-paper-calloutwrap">${titleHtml}<ul class="kakeai-calloutlist kakeai-paper-calloutlist">${itemsHtml}</ul></figure>`,
     assetIds: [],
-    animation: [...animation, ...motion],
+    animation,
     stateIntervals,
   };
 }
@@ -460,9 +441,7 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
       palette.shadow,
     )}</div></figure>`,
     assetIds: [],
-    animation: animation.length === 0 && stateIntervals.length === 0
-      ? [settleAnimation(cardId, "slide-up", 0, 340)]
-      : animation,
+    animation,
     stateIntervals,
   };
 }
