@@ -20,6 +20,7 @@ import {
   createEmptyLine,
   createInsertSceneFormValue,
   createPointSceneFormValue,
+  defaultVideoGate,
   duplicateCueFormValue,
   newSceneId,
   pruneDraftCueForLines,
@@ -31,6 +32,7 @@ import {
   NESTED_COMPOSITION_ZOOM_SUFFIX,
   NESTED_MODE_COMPOSITION,
   NESTED_MODE_SUFFIX,
+  type LineFormValue,
   type SceneFormValue,
 } from "./form";
 
@@ -2439,6 +2441,60 @@ describe("video playback form fields", () => {
     const playback = pruned.fields["assetId__videoPlayback"] ?? "";
     expect(playback).toContain(line.id);
     expect(playback).not.toContain(second.id);
+  });
+});
+
+describe("defaultVideoGate", () => {
+  function lines(count: number): LineFormValue[] {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `line-${index + 1}`,
+    }) as LineFormValue);
+  }
+
+  it("appends after the last gate without touching existing sourceMs", () => {
+    const next = defaultVideoGate(
+      [
+        { narrationSegmentId: "line-2", sourceMs: 0 },
+        { narrationSegmentId: "line-4", sourceMs: 17000 },
+      ],
+      lines(6),
+    );
+    // 最終ゲート（4つ目）より後ろの未使用セリフの先頭
+    expect(next).toEqual({ narrationSegmentId: "line-5", sourceMs: 18000 });
+  });
+
+  it("falls back to the first unused line when nothing is free after the last gate", () => {
+    const next = defaultVideoGate(
+      [
+        { narrationSegmentId: "line-4", sourceMs: 0 },
+        { narrationSegmentId: "line-12", sourceMs: 17000 },
+      ],
+      lines(12),
+    );
+    // 先頭への挿入では次ゲートの直前に収める（ここでは0）
+    expect(next).toEqual({ narrationSegmentId: "line-1", sourceMs: 0 });
+  });
+
+  it("fits between neighboring gates", () => {
+    const next = defaultVideoGate(
+      [
+        { narrationSegmentId: "line-1", sourceMs: 0 },
+        { narrationSegmentId: "line-8", sourceMs: 17000 },
+      ],
+      lines(8),
+    );
+    expect(next).toEqual({ narrationSegmentId: "line-2", sourceMs: 8500 });
+  });
+
+  it("returns null when every line is used", () => {
+    const next = defaultVideoGate(
+      [
+        { narrationSegmentId: "line-1", sourceMs: 0 },
+        { narrationSegmentId: "line-2", sourceMs: 1000 },
+      ],
+      lines(2),
+    );
+    expect(next).toBeNull();
   });
 });
 

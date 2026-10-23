@@ -50,6 +50,7 @@ import {
   type VisualTemplateDefinition,
   type CanvasProfile,
   type Composition,
+  type VideoGate,
   type VideoPlayback,
 } from "@kakeai/contracts";
 
@@ -2237,6 +2238,48 @@ export function nextEndLineId(
     return startLineId;
   }
   return currentEndLineId;
+}
+
+export interface VideoGateDefault {
+  narrationSegmentId: string;
+  sourceMs: number;
+}
+
+/**
+ * 「ゲートを追加」の既定値を求める。台詞順で最後のゲートより後ろの未使用セリフを
+ * 優先し、末尾へ追加することで既存ゲートの sourceMs を書き換えない。
+ * 後ろに空きがない場合は先頭の未使用セリフにし、前後のゲートの間に収まる
+ * sourceMs を選ぶ。収まる値がない場合は後続の持ち上げに任せる。
+ */
+export function defaultVideoGate(
+  gates: readonly VideoGate[],
+  lines: readonly LineFormValue[],
+): VideoGateDefault | null {
+  const used = new Set(gates.map((gate) => gate.narrationSegmentId));
+  const firstUnused = lines.find((line) => !used.has(line.id));
+  if (firstUnused === undefined) {
+    return null;
+  }
+  const byLine = [...gates]
+    .map((gate) => ({ gate, position: lineIndex(lines, gate.narrationSegmentId) }))
+    .filter((entry) => entry.position !== -1)
+    .sort((a, b) => a.position - b.position);
+  const lastPosition = byLine[byLine.length - 1]?.position ?? -1;
+  const candidate =
+    lines.find((line, index) => index > lastPosition && !used.has(line.id)) ?? firstUnused;
+  const position = lineIndex(lines, candidate.id);
+  const previous = [...byLine].reverse().find((entry) => entry.position < position);
+  const next = byLine.find((entry) => entry.position > position);
+  const maxSourceMs = gates.reduce((max, gate) => Math.max(max, gate.sourceMs), 0);
+  if (next === undefined) {
+    return { narrationSegmentId: candidate.id, sourceMs: maxSourceMs + 1000 };
+  }
+  const low = (previous?.gate.sourceMs ?? -1) + 1;
+  const high = next.gate.sourceMs - 1;
+  if (low <= high) {
+    return { narrationSegmentId: candidate.id, sourceMs: Math.floor((low + high) / 2) };
+  }
+  return { narrationSegmentId: candidate.id, sourceMs: next.gate.sourceMs };
 }
 
 

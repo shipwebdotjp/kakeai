@@ -5,6 +5,7 @@ import {
   lineOptionLabel,
   parseVideoPlayback,
   serializeVideoPlayback,
+  defaultVideoGate,
   type LineFormValue,
   type SpeakerFormValue,
 } from "../content/form";
@@ -263,19 +264,13 @@ export function VideoPlaybackField({
         className={buttonNeutralClass}
         disabled={firstUnusedLine === undefined}
         onClick={() => {
-          if (firstUnusedLine === undefined) {
+          const next = defaultVideoGate(playback.gates, lines);
+          if (next === null) {
             return;
           }
-          const last = playback.gates[playback.gates.length - 1];
           update({
             ...playback,
-            gates: sortGates([
-              ...playback.gates,
-              {
-                narrationSegmentId: firstUnusedLine.id,
-                sourceMs: (last?.sourceMs ?? 0) + 1000,
-              },
-            ]),
+            gates: sortGates([...playback.gates, next]),
           });
         }}
       >
