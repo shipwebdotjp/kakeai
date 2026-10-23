@@ -22,6 +22,7 @@ import {
   createPointSceneFormValue,
   defaultVideoGate,
   duplicateCueFormValue,
+  initialVideoGateLineId,
   newSceneId,
   pruneDraftCueForLines,
   toFormValues,
@@ -2495,6 +2496,28 @@ describe("defaultVideoGate", () => {
       lines(2),
     );
     expect(next).toBeNull();
+  });
+});
+
+describe("initialVideoGateLineId", () => {
+  function gateLines(count: number): LineFormValue[] {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `line-${index + 1}`,
+    }) as LineFormValue);
+  }
+
+  it("prefers the display range start line", () => {
+    expect(initialVideoGateLineId(gateLines(6), "line-4")).toBe("line-4");
+  });
+
+  it("falls back to the first line when the range start is unknown", () => {
+    expect(initialVideoGateLineId(gateLines(6), "line-99")).toBe("line-1");
+    expect(initialVideoGateLineId(gateLines(6), null)).toBe("line-1");
+  });
+
+  it("returns null when there are no lines", () => {
+    expect(initialVideoGateLineId([], "line-1")).toBeNull();
+    expect(initialVideoGateLineId([], null)).toBeNull();
   });
 });
 

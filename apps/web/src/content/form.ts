@@ -2282,6 +2282,23 @@ export function defaultVideoGate(
   return { narrationSegmentId: candidate.id, sourceMs: next.gate.sourceMs };
 }
 
+/**
+ * セリフゲート有効化時の最初のゲートに選ぶセリフIDを求める。
+ * 表示区間がセリフ区間で開始セリフがあればそれを優先し、なければ先頭セリフ。
+ */
+export function initialVideoGateLineId(
+  lines: readonly LineFormValue[],
+  rangeStartLineId: string | null,
+): string | null {
+  if (rangeStartLineId !== null) {
+    const ranged = lines.find((line) => line.id === rangeStartLineId);
+    if (ranged !== undefined) {
+      return ranged.id;
+    }
+  }
+  return lines[0]?.id ?? null;
+}
+
 
 function pruneVideoPlaybackFields(
   templateId: string,

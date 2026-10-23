@@ -255,6 +255,7 @@ function CueRow({
   const displaySummary = `${LAYER_LABELS[cue.layer] ?? cue.layer} / 順序 ${cue.order} / ${
     RANGE_LABELS[cue.rangeKind] ?? cue.rangeKind
   }`;
+  const rangeStartLineId = cue.rangeKind === "lines" ? cue.startLineId : null;
   const renderCueField = (field: TemplateFieldSpec) => (
     <CueField
       key={field.key}
@@ -267,6 +268,7 @@ function CueRow({
       animationPresets={definition?.animationPolicy.presets ?? ANIMATION_PRESETS}
       lines={lines}
       speakers={speakers}
+      rangeStartLineId={rangeStartLineId}
     />
   );
 
@@ -518,6 +520,7 @@ interface CueFieldProps {
   animationPresets: readonly AnimationPreset[];
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
+  rangeStartLineId: string | null;
 }
 
 interface CompositionVersionFieldProps {
@@ -693,6 +696,7 @@ function NestedScreenField({
   getFields,
   lines,
   speakers,
+  rangeStartLineId,
 }: {
   field: Extract<TemplateFieldSpec, { kind: "nestedMedia" }>;
   values: Record<string, string>;
@@ -701,6 +705,7 @@ function NestedScreenField({
   getFields: () => Record<string, string>;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
+  rangeStartLineId: string | null;
 }) {
   const mode = values[`${field.key}${NESTED_MODE_SUFFIX}`] ?? NESTED_MODE_MEDIA;
   const isComposition = mode === NESTED_MODE_COMPOSITION;
@@ -781,6 +786,7 @@ function NestedScreenField({
             setField={setField}
             lines={lines}
             speakers={speakers}
+            rangeStartLineId={rangeStartLineId}
           />
         </div>
       )}
@@ -838,12 +844,14 @@ function CueVideoPlaybackField({
   setField,
   lines,
   speakers,
+  rangeStartLineId,
 }: {
   field: TemplateFieldSpec;
   values: Record<string, string>;
   setField: (key: string, value: string) => void;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
+  rangeStartLineId: string | null;
 }) {
   if (
     (field.kind !== "media" && field.kind !== "nestedMedia") ||
@@ -859,11 +867,12 @@ function CueVideoPlaybackField({
       onChange={(next) => setField(`${field.key}${VIDEO_PLAYBACK_SUFFIX}`, next)}
       lines={lines}
       speakers={speakers}
+      rangeStartLineId={rangeStartLineId}
     />
   );
 }
 
-function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers }: CueFieldProps) {
+function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers, rangeStartLineId }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
     return (
@@ -892,6 +901,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             setField={setField}
             lines={lines}
             speakers={speakers}
+            rangeStartLineId={rangeStartLineId}
           />
         </div>
       );
@@ -906,6 +916,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             getFields={getFields}
             lines={lines}
             speakers={speakers}
+            rangeStartLineId={rangeStartLineId}
           />
         );
       }
@@ -934,6 +945,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             setField={setField}
             lines={lines}
             speakers={speakers}
+            rangeStartLineId={rangeStartLineId}
           />
         </div>
       );

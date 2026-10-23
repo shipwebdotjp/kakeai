@@ -1,6 +1,7 @@
 import type { VideoGate, VideoGateAudio, VideoPlayback } from "@kakeai/contracts";
 import { useAssets } from "../api/hooks";
 import {
+  initialVideoGateLineId,
   lineIndex,
   lineOptionLabel,
   parseVideoPlayback,
@@ -39,12 +40,14 @@ export function VideoPlaybackField({
   onChange,
   lines,
   speakers,
+  rangeStartLineId = null,
 }: {
   assetId: string;
   value: string;
   onChange: (value: string) => void;
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
+  rangeStartLineId?: string | null;
 }) {
   const assets = useAssets();
   const asset = (assets.data ?? []).find((entry) => entry.id === assetId);
@@ -60,14 +63,14 @@ export function VideoPlaybackField({
           className={buttonNeutralClass}
           disabled={lines.length === 0}
           onClick={() => {
-            const first = lines[0];
-            if (first === undefined) {
+            const firstId = initialVideoGateLineId(lines, rangeStartLineId);
+            if (firstId === null) {
               return;
             }
             onChange(
               serializeVideoPlayback({
                 mode: "gated",
-                gates: [{ narrationSegmentId: first.id, sourceMs: 0 }],
+                gates: [{ narrationSegmentId: firstId, sourceMs: 0 }],
               }),
             );
           }}
