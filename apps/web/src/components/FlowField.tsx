@@ -1,35 +1,32 @@
+import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   buttonNeutralClass,
   errorTextClass,
+  iconButtonLargeClass,
   formLabelClass,
   formLabelTextClass,
   metaTextClass,
   textFieldClass,
 } from "../ui";
+import {
+  moveDiagramNode,
+  remapFlowEffectTargets,
+  swapNodeIndex,
+  type FlowDiagramJson,
+  type FlowEdgeJson,
+  type FlowNodeJson,
+} from "../content/flow";
 
 interface FlowFieldProps {
   label: string;
   fieldKey: string;
   value: string;
+  effectsKey: string;
+  effectsValue: string;
   setField: (key: string, value: string) => void;
+  setFields: (patch: Record<string, string>) => void;
   maxNodes: number;
   maxEdges: number;
-}
-
-interface FlowNodeJson {
-  label: string;
-  caption?: string;
-}
-
-interface FlowEdgeJson {
-  from: number;
-  to: number;
-  label?: string;
-}
-
-interface FlowDiagramJson {
-  nodes: FlowNodeJson[];
-  edges: FlowEdgeJson[];
 }
 
 function defaultDiagram(): FlowDiagramJson {
@@ -87,7 +84,10 @@ export function FlowField({
   label,
   fieldKey,
   value,
+  effectsKey,
+  effectsValue,
   setField,
+  setFields,
   maxNodes,
   maxEdges,
 }: FlowFieldProps) {
@@ -109,6 +109,13 @@ export function FlowField({
   }
 
   const commit = (next: FlowDiagramJson) => setField(fieldKey, JSON.stringify(next));
+  const commitWithEffects = (next: FlowDiagramJson, effectsJson: string | null) => {
+    if (effectsJson === null) {
+      commit(next);
+      return;
+    }
+    setFields({ [fieldKey]: JSON.stringify(next), [effectsKey]: effectsJson });
+  };
   const nodes = diagram.nodes;
   const edges = diagram.edges;
 
@@ -133,7 +140,10 @@ export function FlowField({
         from: edge.from > index ? edge.from - 1 : edge.from,
         to: edge.to > index ? edge.to - 1 : edge.to,
       }));
-    commit({ nodes: nextNodes, edges: nextEdges });
+    const effectsJson = remapFlowEffectTargets(effectsValue, (nodeIndex) =>
+      nodeIndex === index ? null : nodeIndex > index ? nodeIndex - 1 : nodeIndex,
+    );
+    commitWithEffects({ nodes: nextNodes, edges: nextEdges }, effectsJson);
   };
 
   const addNode = () => {
@@ -141,6 +151,18 @@ export function FlowField({
       return;
     }
     commit({ ...diagram, nodes: [...nodes, { label: "ノード" }] });
+  };
+
+  const moveNode = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    const next = moveDiagramNode(diagram, index, direction);
+    if (next === diagram) {
+      return;
+    }
+    const effectsJson = remapFlowEffectTargets(effectsValue, (nodeIndex) =>
+      swapNodeIndex(nodeIndex, index, target),
+    );
+    commitWithEffects(next, effectsJson);
   };
 
   const setEdge = (index: number, patch: Partial<FlowEdgeJson>) => {
@@ -181,6 +203,26 @@ export function FlowField({
         {nodes.map((node, index) => (
           <div key={index} className="mt-1 flex flex-wrap items-center gap-2">
             <span className="w-5 text-right text-xs">{index + 1}</span>
+            <button
+              type="button"
+              className={iconButtonLargeClass}
+              aria-label="上へ移動"
+              title="上へ移動"
+              disabled={index === 0}
+              onClick={() => moveNode(index, -1)}
+            >
+              <ChevronUp aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className={iconButtonLargeClass}
+              aria-label="下へ移動"
+              title="下へ移動"
+              disabled={index === nodes.length - 1}
+              onClick={() => moveNode(index, 1)}
+            >
+              <ChevronDown aria-hidden="true" className="h-4 w-4" />
+            </button>
             <input
               className={`flex-1 ${textFieldClass}`}
               value={node.label}

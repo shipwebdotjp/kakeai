@@ -59,7 +59,7 @@ export type TemplateFieldSpec =
   | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
   | { kind: "color"; key: string; label: string; optional?: boolean }
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
-  | { kind: "decimal"; key: string; label: string; min?: number; max?: number; optional?: boolean }
+  | { kind: "decimal"; key: string; label: string; min?: number; max?: number; optional?: boolean; defaultValue?: number }
   | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }
@@ -1191,7 +1191,7 @@ const statV1: VisualTemplateDefinition = {
   animationPolicy: DEFAULT_ANIMATION_POLICY,
   display: { label: "数値", description: "大きな数値とラベルの1点強調", category: "data" },
   inputFields: [
-    { kind: "decimal", key: "value", label: "数値" },
+    { kind: "decimal", key: "value", label: "数値（カウント後の値）", defaultValue: 100 },
     { kind: "optionalText", key: "label", label: "ラベル" },
     { kind: "optionalText", key: "caption", label: "補足" },
     { kind: "select", key: "format", label: "書式", options: STAT_FORMAT_OPTIONS },

@@ -63,7 +63,7 @@
 | key | kind | 内容 |
 | --- | --- | --- |
 | `title` | optionalText | 図の見出し |
-| `diagram` | flow | ノードと辺の一括編集（`maxNodes` / `maxEdges`） |
+| `diagram` | flow | ノードと辺の一括編集（`maxNodes` / `maxEdges`）。ノードは↑↓で並び替えでき、辺の `from` / `to` と `effects` のノード番号は入れ替えに追従する |
 | `style.orientation` | select | horizontal / vertical |
 | `style.preset` | select | clean / boxed |
 | `effects` | effects | 行トリガー付きの登場・強調（`variant: "flow"`） |
@@ -72,8 +72,9 @@
 
 ## レンダリング
 
-- ノードを主軸に等間隔配置する（`horizontal` は左→右、`vertical` は上→下）。直交軸は中央寄せ。プロットは固定px内で、ノード数に応じてノード寸法を上限・下限内で調整する。
-- 辺はスコープ付きSVGで描く。矢印は `marker-end`、非隣接の辺は垂直オフセットのベジェで中間ノードを避ける。辺ラベルは中点に置く。
+- ノードを主軸に等間隔配置する（`horizontal` は左→右、`vertical` は上→下）。直交軸は中央寄せ。プロットは固定px内で、ノード数に応じてノード寸法を上限・下限内で調整する。ノード間は最大72pxの間隔を確保する。
+- 辺はスコープ付きSVGで描く。矢印は `marker-end`。隣接ノードの辺は直線、非隣接の辺はノードの外側（前向きは右／下、後ろ向きは左／上）を通るベジェで中間ノードを避ける。辺ラベルは辺の中点付近、かつ線のプロット中央側に置き、背景色の縁取りで線と重なっても読めるようにする。
+- 文字はテーマの `heading`（見出し）と `body`（ノード・辺ラベル）のフォントを使う。
 - 要素ID（ノード・マーカー）はCue scope 配下に閉じ、複数配置・入れ子で衝突しない。
 - `appear` は対象ノードを `AnimationPlan` として登場させ、`nodes` グループでは `startMs = index × staggerMs` でずらす。
 - `emphasize` は対象ノードにリングまたは背景を当て、`spotlight` では他ノードを `filter` で減光する。`onset` は対象ノード内の一時オーバーレイに当てる（発火と持続は別要素・別プロパティ）。

@@ -19,12 +19,14 @@ import {
   SPOTLIGHT_DIM_ON,
   type AppearTarget,
 } from "../cue-effects";
-import { accentForegroundHex } from "../theme";
+import { accentForegroundHex, themeRoleFontStyle } from "../theme";
 import { toneHex } from "./tone";
 
 const FLOW_PLOT_W = 1320;
 const FLOW_PLOT_H = 760;
-const FLOW_GAP = 36;
+const FLOW_GAP = 72;
+const FLOW_ROUTE_OFFSET = 56;
+const FLOW_ROUTE_MARGIN = 24;
 const FLOW_H_NODE_H = 132;
 const FLOW_V_NODE_W = 600;
 const FLOW_NODE_MIN_W = 120;
@@ -98,44 +100,69 @@ function edgePath(
   edge: FlowEdge,
   layout: FlowLayout,
   orientation: FlowOrientation,
-): { d: string; labelX: number; labelY: number } {
+): { d: string; labelX: number; labelY: number; anchor: "start" | "middle" | "end" } {
   const distance = Math.abs(edge.to - edge.from);
-  const arc = Math.min(200, FLOW_GAP + FLOW_GAP * Math.max(0, distance - 1));
   if (orientation === "vertical") {
     const forward = edge.to > edge.from;
-    const sx = layout.centers[edge.from]!.x;
-    const sy = forward
-      ? layout.ys[edge.from]! + layout.nodeH
-      : layout.ys[edge.from]!;
-    const tx = layout.centers[edge.to]!.x;
-    const ty = forward
-      ? layout.ys[edge.to]!
-      : layout.ys[edge.to]! + layout.nodeH;
-    const direction = forward ? -1 : 1;
-    const cp1x = sx + direction * arc;
-    const cp1y = sy + (ty - sy) * 0.35;
-    const cp2x = tx + direction * arc;
-    const cp2y = ty - (ty - sy) * 0.35;
+    if (distance === 1) {
+      const sx = layout.centers[edge.from]!.x;
+      const sy = forward
+        ? layout.ys[edge.from]! + layout.nodeH
+        : layout.ys[edge.from]!;
+      const tx = layout.centers[edge.to]!.x;
+      const ty = forward
+        ? layout.ys[edge.to]!
+        : layout.ys[edge.to]! + layout.nodeH;
+      return {
+        d: `M ${round(sx)} ${round(sy)} L ${round(tx)} ${round(ty)}`,
+        labelX: sx + 16,
+        labelY: (sy + ty) / 2,
+        anchor: "start",
+      };
+    }
+    const side = forward ? 1 : -1;
+    const sx = layout.xs[edge.from]! + (forward ? layout.nodeW : 0);
+    const sy = layout.centers[edge.from]!.y;
+    const tx = layout.xs[edge.to]! + (forward ? layout.nodeW : 0);
+    const ty = layout.centers[edge.to]!.y;
+    const routeOffset = FLOW_ROUTE_OFFSET * Math.max(1, distance - 1);
+    const routeX = forward
+      ? Math.min(FLOW_PLOT_W - FLOW_ROUTE_MARGIN, Math.max(sx, tx) + routeOffset)
+      : Math.max(FLOW_ROUTE_MARGIN, Math.min(sx, tx) - routeOffset);
     return {
-      d: `M ${round(sx)} ${round(sy)} C ${round(cp1x)} ${round(cp1y)} ${round(cp2x)} ${round(cp2y)} ${round(tx)} ${round(ty)}`,
-      labelX: (sx + tx) / 2 + direction * arc * 0.6,
+      d: `M ${round(sx)} ${round(sy)} C ${round(routeX)} ${round(sy)} ${round(routeX)} ${round(ty)} ${round(tx)} ${round(ty)}`,
+      labelX: routeX - side * 20,
       labelY: (sy + ty) / 2,
+      anchor: side === 1 ? "end" : "start",
     };
   }
   const forward = edge.to > edge.from;
-  const sx = forward ? layout.xs[edge.from]! + layout.nodeW : layout.xs[edge.from]!;
-  const sy = layout.centers[edge.from]!.y;
-  const tx = forward ? layout.xs[edge.to]! : layout.xs[edge.to]! + layout.nodeW;
-  const ty = layout.centers[edge.to]!.y;
-  const direction = forward ? -1 : 1;
-  const cp1x = sx + (tx - sx) * 0.35;
-  const cp1y = sy + direction * arc;
-  const cp2x = tx - (tx - sx) * 0.35;
-  const cp2y = ty + direction * arc;
+  if (distance === 1) {
+    const sx = forward ? layout.xs[edge.from]! + layout.nodeW : layout.xs[edge.from]!;
+    const sy = layout.centers[edge.from]!.y;
+    const tx = forward ? layout.xs[edge.to]! : layout.xs[edge.to]! + layout.nodeW;
+    const ty = layout.centers[edge.to]!.y;
+    return {
+      d: `M ${round(sx)} ${round(sy)} L ${round(tx)} ${round(ty)}`,
+      labelX: (sx + tx) / 2,
+      labelY: sy - 20,
+      anchor: "middle",
+    };
+  }
+  const side = forward ? 1 : -1;
+  const sx = layout.centers[edge.from]!.x;
+  const sy = layout.ys[edge.from]! + (forward ? layout.nodeH : 0);
+  const tx = layout.centers[edge.to]!.x;
+  const ty = layout.ys[edge.to]! + (forward ? layout.nodeH : 0);
+  const routeOffset = FLOW_ROUTE_OFFSET * Math.max(1, distance - 1);
+  const routeY = forward
+    ? Math.min(FLOW_PLOT_H - FLOW_ROUTE_MARGIN, Math.max(sy, ty) + routeOffset)
+    : Math.max(FLOW_ROUTE_MARGIN, Math.min(sy, ty) - routeOffset);
   return {
-    d: `M ${round(sx)} ${round(sy)} C ${round(cp1x)} ${round(cp1y)} ${round(cp2x)} ${round(cp2y)} ${round(tx)} ${round(ty)}`,
+    d: `M ${round(sx)} ${round(sy)} C ${round(sx)} ${round(routeY)} ${round(tx)} ${round(routeY)} ${round(tx)} ${round(ty)}`,
     labelX: (sx + tx) / 2,
-    labelY: (sy + ty) / 2 + direction * arc * 0.6,
+    labelY: routeY - side * 20,
+    anchor: "middle",
   };
 }
 
@@ -211,11 +238,11 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
 
   const edgesHtml = diagram.edges
     .map((edge) => {
-      const { d, labelX, labelY } = edgePath(edge, layout, orientation);
+      const { d, labelX, labelY, anchor } = edgePath(edge, layout, orientation);
       const label =
         edge.label === undefined || edge.label.trim().length === 0
           ? ""
-          : `<text class="kakeai-flowedgelabel" x="${round(labelX)}" y="${round(labelY)}">${escapeHtmlText(edge.label)}</text>`;
+          : `<text class="kakeai-flowedgelabel" x="${round(labelX)}" y="${round(labelY)}" style="text-anchor:${anchor}">${escapeHtmlText(edge.label)}</text>`;
       return `<path class="kakeai-flowered" d="${d}" marker-end="url(#${markerId})"></path>${label}`;
     })
     .join("");
@@ -238,12 +265,12 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
-      : `<figcaption class="kakeai-flowtitle">${escapeHtmlText(title)}</figcaption>`;
+      : `<figcaption class="kakeai-flowtitle" style="${themeRoleFontStyle(theme, "heading")}">${escapeHtmlText(title)}</figcaption>`;
   const presetClass = preset === "boxed" ? " kakeai-flow-boxed" : "";
   const plot = `<div class="kakeai-flowplot kakeai-flow-${orientation}${presetClass}" style="width:${FLOW_PLOT_W}px;height:${FLOW_PLOT_H}px"><svg class="kakeai-flowsvg" width="${FLOW_PLOT_W}" height="${FLOW_PLOT_H}" viewBox="0 0 ${FLOW_PLOT_W} ${FLOW_PLOT_H}"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--kakeai-muted)"></path></marker></defs>${edgesHtml}</svg>${nodesHtml}</div>`;
 
   return {
-    html: `<figure class="kakeai-flowwrap">${titleHtml}${plot}</figure>`,
+    html: `<figure class="kakeai-flowwrap" style="${themeRoleFontStyle(theme, "body")}">${titleHtml}${plot}</figure>`,
     assetIds: [],
     animation,
     stateIntervals,

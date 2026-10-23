@@ -30,7 +30,7 @@
 
 - `effects` の各要素は `{ trigger, effect }`。target は持たない（数値は1つ）。
 - `effect` は `numericEffectSchema`（`appear` / `emphasize` / `value`）。
-  - `value`: 数値を `from`（既定0）から `value` へ、Trigger区間（または `durationMs`）で数える。
+  - `value`: 数値を `from`（既定0）から `value` へ、Trigger区間（または `durationMs`）で数える。`from` が `value` より大きければカウントダウン、小さければカウントアップになる。
   - `emphasize`: 数値に枠・背景・スポットライトを当てる（区間中）。
   - `appear`: カード全体を登場させる。
 - `format` は静的表示とカウント中の表示の両方に使う（`ja-JP` ロケール、`percent` は比率、`currency` はJPY・小数なし）。
@@ -50,7 +50,7 @@
 
 | key | kind | 内容 |
 | --- | --- | --- |
-| `value` | decimal | 数値（小数可） |
+| `value` | decimal | 数値（小数可）。カウント後の値 |
 | `label` | optionalText | ラベル |
 | `caption` | optionalText | 補足 |
 | `format` | select | integer / decimal / percent / currency |
@@ -58,7 +58,7 @@
 | `style.preset` | select | plain / card |
 | `effects` | effects | セリフ同期の効果（`variant: "stat"`、targetなし） |
 
-新規Cueには、値 `0` と、Cue窓で数える既定効果（`value`, `durationMs: 1000`）を入れる。
+新規Cueには、値 `100` と、Cue窓で数える既定効果（`value`, `durationMs: 1000`）を入れる。既定効果は `from` 0 から `value` 100 へカウントアップする。
 
 ## レンダリング
 

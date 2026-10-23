@@ -87,6 +87,41 @@ describe("renderFlowDiagram", () => {
     expect(Math.min(...tops)).toBeGreaterThanOrEqual(0);
   });
 
+  it("straightens adjacent edges and routes skipped edges outside the nodes", () => {
+    const rendered = renderFlowDiagram(
+      {
+        ...baseInput,
+        diagram: {
+          ...baseInput.diagram,
+          edges: [
+            { from: 0, to: 1, label: "書類" },
+            { from: 0, to: 2, label: "特例" },
+          ],
+        },
+        style: { orientation: "vertical", preset: "clean" },
+      },
+      context(),
+    );
+    const paths = [...rendered.html.matchAll(/class="kakeai-flowered" d="([^"]+)"/g)].map(
+      (match) => match[1]!,
+    );
+    expect(paths).toHaveLength(2);
+    expect(paths[0]).toContain(" L ");
+    expect(paths[1]).toContain(" C ");
+    expect(rendered.html).toContain('style="text-anchor:start">書類</text>');
+    expect(rendered.html).toContain('style="text-anchor:end">特例</text>');
+    for (const path of paths) {
+      const numbers = (path.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+      expect(numbers.length).toBeGreaterThan(0);
+      for (let index = 0; index + 1 < numbers.length; index += 2) {
+        expect(numbers[index]).toBeGreaterThanOrEqual(0);
+        expect(numbers[index]).toBeLessThanOrEqual(1320);
+        expect(numbers[index + 1]).toBeGreaterThanOrEqual(0);
+        expect(numbers[index + 1]).toBeLessThanOrEqual(760);
+      }
+    }
+  });
+
   it("rejects invalid input", () => {
     expect(() =>
       renderFlowDiagram({ diagram: { nodes: [], edges: [] } }, context()),

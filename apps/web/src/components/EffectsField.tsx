@@ -19,6 +19,15 @@ type Json = Record<string, unknown>;
 
 type EffectVariant = "table" | "chart" | "flow" | "stat" | "quote" | "chat";
 
+const EFFECT_HINTS: Record<EffectVariant, string> = {
+  stat: "セリフ区間を契機に、開始値から「数値（カウント後の値）」までカウントします。",
+  table: "セリフ区間を契機に、対象の行・セルを登場・強調・数値カウントします。",
+  chart: "セリフ区間を契機に、対象の棒を登場・強調・数値カウントします。",
+  flow: "セリフ区間を契機に、対象のノードを登場・強調します。",
+  quote: "セリフ区間を契機に、引用を登場・強調します。",
+  chat: "セリフ区間を契機に、対象のメッセージを登場・強調します。",
+};
+
 interface EffectsFieldProps {
   label: string;
   fieldKey: string;
@@ -225,9 +234,7 @@ export function EffectsField({
   return (
     <div className="my-2">
       <span className={formLabelTextClass}>{label}</span>
-      <p className={metaTextClass}>
-        セリフ区間を契機に、対象を登場・強調・数値カウントします。
-      </p>
+      <p className={metaTextClass}>{EFFECT_HINTS[variant]}</p>
       {entries.map((entry, index) => {
         const target = targetOf(entry);
         const trigger = triggerOf(entry);
@@ -484,7 +491,7 @@ export function EffectsField({
               ) : effect.kind === "value" ? (
                 <>
                   <label className={formLabelClass}>
-                    開始値
+                    {variant === "stat" ? "開始値（数値まで）" : "開始値"}
                     <input
                       type="number"
                       className={`w-24 ${textFieldClass}`}

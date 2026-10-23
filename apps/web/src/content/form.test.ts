@@ -2155,7 +2155,7 @@ describe("stat form", () => {
       layer: "overlay",
       order: 0,
     });
-    expect(cue.fields.value).toBe("0");
+    expect(cue.fields.value).toBe("100");
     const effects = JSON.parse(cue.fields.effects ?? "") as { effect: { kind: string } }[];
     expect(effects[0]!.effect.kind).toBe("value");
   });

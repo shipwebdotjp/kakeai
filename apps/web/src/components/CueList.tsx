@@ -61,6 +61,7 @@ import {
   type LineFormValue,
   type SpeakerFormValue,
 } from "../content/form";
+import { FLOW_EFFECTS_FIELD_KEY } from "../content/flow";
 import {
   PRESET_LABELS,
   badgeNeutralClass,
@@ -1076,7 +1077,10 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           label={field.label}
           fieldKey={field.key}
           value={value}
+          effectsKey={FLOW_EFFECTS_FIELD_KEY}
+          effectsValue={values[FLOW_EFFECTS_FIELD_KEY] ?? ""}
           setField={setField}
+          setFields={setFields}
           maxNodes={field.maxNodes}
           maxEdges={field.maxEdges}
         />

@@ -76,6 +76,7 @@ Sceneは `accent`（旧 `accentColor`）を必須で持つ。
 
 - Text Cue・字幕：上記の解決順序とトークンを使う。
 - カード・端末枠・立ち絵・Nested Visual：汎用のsurface・文字・scrim・影・角丸をテーマから取る。`scene.device-frame@1` の `backgroundColor` 未指定時の既定は `surfaceMuted` とする。
+- 表・棒グラフ・フロー図：テーマの `textRoles` に従い、見出しは `heading`、本体・目盛り・ラベルは `body` のフォントを使う。surface・border・アクセント色は従来どおりテーマから取る。
 - サイトモックアップ：実在サービス固有のアクセントバーは維持する。テーマは外側の汎用surface・文字・影だけへ適用し、入力の `theme`（`light`/`dark`）の意味は変えない。
 
 ## 移行

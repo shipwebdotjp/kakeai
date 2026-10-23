@@ -29,6 +29,7 @@ import {
   SPOTLIGHT_DIM_ON,
   tableNumberFormatToValueFormat,
 } from "../cue-effects";
+import { themeRoleFontStyle } from "../theme";
 import { formatNumber } from "./table-format";
 import { toneHex } from "./tone";
 
@@ -36,6 +37,11 @@ const PLOT_HEIGHT_PX = 560;
 const CATEGORY_BAND_PX = 48;
 const PLOT_WIDTH_PX = 1280;
 const ROW_LABEL_WIDTH_PX = 220;
+/** Left edge of the horizontal bar area: the row label plus the row gap (CSS). */
+const HORIZONTAL_BAR_LEFT_PX = ROW_LABEL_WIDTH_PX + 16;
+/** Minimum right gutter kept free so value labels stay inside the plot. */
+const HORIZONTAL_VALUE_GUTTER_PX = 96;
+const HORIZONTAL_VALUE_GUTTER_MAX_PX = 240;
 const TARGET_TICKS = 5;
 const BAR_GAP_PX = 10;
 const CATEGORY_GAP_PX = 28;
@@ -108,6 +114,47 @@ function roundPx(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+const WIDE_CHAR_PATTERN = /[\u3000-\u9fff\uff00-\uffef]/;
+const WIDE_CHAR_WIDTH_PX = 24;
+const NARROW_CHAR_WIDTH_PX = 13.2;
+
+/**
+ * Rough advance width of a value label at the template's 24px font. CJK and
+ * fullwidth glyphs are about one em wide; digits, commas, and dots are not.
+ */
+function estimateLabelWidthPx(text: string): number {
+  let width = 0;
+  for (const char of text) {
+    width += WIDE_CHAR_PATTERN.test(char) ? WIDE_CHAR_WIDTH_PX : NARROW_CHAR_WIDTH_PX;
+  }
+  return width;
+}
+
+function horizontalValueGutter(
+  values: number[][],
+  columns: TableColumn[],
+  valueLabels: boolean,
+): number {
+  if (!valueLabels) {
+    return 0;
+  }
+  let widest = 0;
+  values.forEach((row) => {
+    row.forEach((value, index) => {
+      const column = columns[index];
+      if (column === undefined) {
+        return;
+      }
+      widest = Math.max(widest, estimateLabelWidthPx(formatNumber(value, column.format)));
+    });
+  });
+  return clamp(
+    Math.ceil(widest) + 24,
+    HORIZONTAL_VALUE_GUTTER_PX,
+    HORIZONTAL_VALUE_GUTTER_MAX_PX,
+  );
+}
+
 interface RenderArgs {
   context: RenderContext;
   rows: TableRow[];
@@ -148,8 +195,9 @@ function renderVertical(args: RenderArgs): string {
   const width = barThickness(bandWidth - CATEGORY_GAP_PX, seriesColumns.length, MAX_BAR_THICKNESS_PX);
   const lines = stats.ticks
     .map((tick) => {
-      const bottom = CATEGORY_BAND_PX + (stats.max === 0 ? 0 : (tick / stats.max) * available);
-      return `<div class="kakeai-chartline" style="bottom:${roundPx(bottom)}px"><span class="kakeai-charttick">${axisTickLabel(tick, axisFormat, axisUnit)}</span></div>`;
+      const bottom = stats.max === 0 ? 0 : (tick / stats.max) * available;
+      const offset = `bottom:${roundPx(bottom)}px`;
+      return `<div class="kakeai-chartline" style="${offset}"></div><span class="kakeai-charttick" style="${offset}">${axisTickLabel(tick, axisFormat, axisUnit)}</span>`;
     })
     .join("");
   const cols = rows
@@ -169,12 +217,15 @@ function renderVertical(args: RenderArgs): string {
       return `<div class="kakeai-chartcol"><div class="kakeai-chartbars">${bars}</div><div class="kakeai-chartcat">${escapeHtmlText(categoryLabel(row, categoryColumn))}</div></div>`;
     })
     .join("");
-  return `<div class="kakeai-chartplot" style="height:${PLOT_HEIGHT_PX}px"><div class="kakeai-chartlines" style="bottom:${CATEGORY_BAND_PX}px">${lines}</div><div class="kakeai-chartcols" style="left:${ROW_LABEL_WIDTH_PX}px">${cols}</div></div>`;
+  return `<div class="kakeai-chartplot" style="height:${PLOT_HEIGHT_PX}px;--kakeai-chart-label-w:${ROW_LABEL_WIDTH_PX}px"><div class="kakeai-chartlines" style="bottom:${CATEGORY_BAND_PX}px">${lines}</div><div class="kakeai-chartcols" style="left:${ROW_LABEL_WIDTH_PX}px">${cols}</div></div>`;
 }
 
 function renderHorizontal(args: RenderArgs): string {
   const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, labelId, valueLabels, axisUnit, axisFormat } = args;
-  const available = PLOT_WIDTH_PX - ROW_LABEL_WIDTH_PX;
+  const available =
+    PLOT_WIDTH_PX -
+    HORIZONTAL_BAR_LEFT_PX -
+    horizontalValueGutter(values, seriesColumns, valueLabels);
   const availableHeight = PLOT_HEIGHT_PX;
   const rowHeight =
     rows.length === 0
@@ -183,7 +234,7 @@ function renderHorizontal(args: RenderArgs): string {
   const height = barThickness(rowHeight, seriesColumns.length, MAX_BAR_THICKNESS_PX);
   const lines = stats.ticks
     .map((tick) => {
-      const left = ROW_LABEL_WIDTH_PX + (stats.max === 0 ? 0 : (tick / stats.max) * available);
+      const left = stats.max === 0 ? 0 : (tick / stats.max) * available;
       return `<div class="kakeai-charthline" style="left:${roundPx(left)}px"><span class="kakeai-charthtick">${axisTickLabel(tick, axisFormat, axisUnit)}</span></div>`;
     })
     .join("");
@@ -204,7 +255,8 @@ function renderHorizontal(args: RenderArgs): string {
       return `<div class="kakeai-chartrow"><div class="kakeai-charthcat">${escapeHtmlText(categoryLabel(row, categoryColumn))}</div><div class="kakeai-chartbars-h">${bars}</div></div>`;
     })
     .join("");
-  return `<div class="kakeai-chartplot kakeai-chartplot-h" style="width:${PLOT_WIDTH_PX}px"><div class="kakeai-chartlines-h" style="left:${ROW_LABEL_WIDTH_PX}px">${lines}</div><div class="kakeai-chartrows">${rowsHtml}</div></div>`;
+  const linesOffset = HORIZONTAL_BAR_LEFT_PX - ROW_LABEL_WIDTH_PX;
+  return `<div class="kakeai-chartplot kakeai-chartplot-h" style="width:${PLOT_WIDTH_PX}px;--kakeai-chart-label-w:${ROW_LABEL_WIDTH_PX}px"><div class="kakeai-chartlines-h" style="left:calc(var(--kakeai-chart-label-w) + ${linesOffset}px)">${lines}</div><div class="kakeai-chartrows">${rowsHtml}</div></div>`;
 }
 
 function buildLegend(
@@ -314,7 +366,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
-      : `<figcaption class="kakeai-charttitle">${escapeHtmlText(title)}</figcaption>`;
+      : `<figcaption class="kakeai-charttitle" style="${themeRoleFontStyle(context.theme, "heading")}">${escapeHtmlText(title)}</figcaption>`;
   const legendHtml = buildLegend(
     seriesCount,
     colorBy,
@@ -327,7 +379,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   const orientationClass = orientation === "horizontal" ? " kakeai-chart-horizontal" : "";
 
   return {
-    html: `<figure class="kakeai-chartwrap"><div class="kakeai-chartframe${gridClass}${orientationClass}">${titleHtml}${legendHtml}${body}</div></figure>`,
+    html: `<figure class="kakeai-chartwrap" style="${themeRoleFontStyle(context.theme, "body")}"><div class="kakeai-chartframe${gridClass}${orientationClass}">${titleHtml}${legendHtml}${body}</div></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

@@ -1837,7 +1837,7 @@ function defaultCueFields(templateId: string, templateVersion: number): Record<s
         fields[field.key] = defaultGridDataJson();
         break;
       case "decimal":
-        fields[field.key] = "0";
+        fields[field.key] = String(field.defaultValue ?? 0);
         break;
       case "flow":
         fields[field.key] = JSON.stringify({

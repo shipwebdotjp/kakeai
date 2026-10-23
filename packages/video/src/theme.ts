@@ -7,7 +7,7 @@ import {
   type VisualThemeOverlay,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
-import { escapeCssFontFamily } from "./escape";
+import { escapeCssFontFamily, escapeHtmlAttribute } from "./escape";
 
 export const THEME_FONT_STACKS: Record<ThemeFontCategory, string> = {
   sans: "'Noto Sans JP','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif",
@@ -24,6 +24,23 @@ export const THEME_FONT_STACKS: Record<ThemeFontCategory, string> = {
 export interface FontFaceNames {
   platformId?: string;
   family?: string;
+}
+
+/** Resolves the font family of one theme text role for inline template styles. */
+function themeRoleFont(
+  theme: VisualThemeDefinition,
+  role: keyof VisualThemeDefinition["textRoles"],
+): string {
+  const token = theme.textRoles[role];
+  return resolveFontFamilyCss(token.fontFace, token.font);
+}
+
+/** Ready-made `font-family` declaration for a template's `style` attribute. */
+export function themeRoleFontStyle(
+  theme: VisualThemeDefinition,
+  role: keyof VisualThemeDefinition["textRoles"],
+): string {
+  return `font-family:${escapeHtmlAttribute(themeRoleFont(theme, role))}`;
 }
 
 /**

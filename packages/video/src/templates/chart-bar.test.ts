@@ -51,6 +51,25 @@ describe("renderChartBar", () => {
     expect(rendered.html).toContain("kakeai-chartbar");
   });
 
+  it("anchors the zero tick to the bar baseline", () => {
+    const rendered = renderChartBar(singleSeries, context());
+    expect(rendered.html).toContain(
+      '<div class="kakeai-chartline" style="bottom:0px"></div><span class="kakeai-charttick" style="bottom:0px">',
+    );
+  });
+
+  it("aligns horizontal ticks with the bar area and leaves room for value labels", () => {
+    const rendered = renderChartBar(
+      { ...singleSeries, style: { orientation: "horizontal" } },
+      context(),
+    );
+    expect(rendered.html).toContain(
+      '<div class="kakeai-chartlines-h" style="left:calc(var(--kakeai-chart-label-w) + 16px)">',
+    );
+    expect(rendered.html).toContain('<div class="kakeai-charthline" style="left:0px">');
+    expect(rendered.html).toContain('<div class="kakeai-charthline" style="left:948px">');
+  });
+
   it("grows bars along the vertical axis through a cue-triggered effect", () => {
     const rendered = renderChartBar(
       {
