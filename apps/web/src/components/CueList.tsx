@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Clapperboard, Trash2 } from "lucide-react";
+import { Clapperboard, Copy, Trash2 } from "lucide-react";
 import {
   useFieldArray,
   useWatch,
@@ -51,6 +51,7 @@ import {
   VIDEO_PLAYBACK_SUFFIX,
   compositionVersionOptions,
   createCueFormValue,
+  duplicateCueFormValue,
   lineIndex,
   lineOptionLabel,
   lineRangeEndCandidates,
@@ -197,6 +198,7 @@ interface CueRowProps {
   speakers: SpeakerFormValue[];
   sceneDurationMs: number | null;
   onRemove: () => void;
+  onDuplicate: (() => void) | null;
   onCommitCue: () => void;
 }
 
@@ -211,6 +213,7 @@ function CueRow({
   speakers,
   sceneDurationMs,
   onRemove,
+  onDuplicate,
   onCommitCue,
 }: CueRowProps) {
   const base = `scenes.${sceneIndex}.cues.${cueIndex}` as const;
@@ -310,10 +313,18 @@ function CueRow({
         <span className={badgeNeutralClass}>
           {definition?.display.label ?? cue.templateId}@{cue.templateVersion}
         </span>
-        <button type="button" className={`ml-auto ${buttonDangerClass}`} onClick={onRemove}>
-          <Trash2 aria-hidden="true" className="h-4 w-4" />
-          削除
-        </button>
+        <span className="ml-auto flex items-center gap-2">
+          {onDuplicate !== null && (
+            <button type="button" className={buttonNeutralClass} onClick={onDuplicate}>
+              <Copy aria-hidden="true" className="h-4 w-4" />
+              複製
+            </button>
+          )}
+          <button type="button" className={buttonDangerClass} onClick={onRemove}>
+            <Trash2 aria-hidden="true" className="h-4 w-4" />
+            削除
+          </button>
+        </span>
       </div>
 
       {fields === undefined || fields.length === 0 ? (
@@ -1190,6 +1201,19 @@ export function CueList({
     );
   };
 
+  const handleDuplicate = (cueId: string) => {
+    const cues = getValues(`scenes.${sceneIndex}.cues`) ?? [];
+    const source = cues.find((cue) => cue?.id === cueId);
+    if (source === undefined) {
+      return;
+    }
+    const copy = duplicateCueFormValue(source, sceneId, cues);
+    if (copy === null) {
+      return;
+    }
+    append(copy);
+  };
+
   return (
     <div className={editAreaClass}>
       <h4 className="text-sm font-semibold text-foreground">映像演出</h4>
@@ -1211,6 +1235,7 @@ export function CueList({
             speakers={speakers}
             sceneDurationMs={sceneDurationMs}
             onRemove={() => onRemoveCue(cue.id)}
+            onDuplicate={cue.baseCue === null ? null : () => handleDuplicate(cue.id)}
             onCommitCue={() => onCommitCue(cue.id)}
           />
         );

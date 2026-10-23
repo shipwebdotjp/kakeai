@@ -1905,6 +1905,31 @@ export function createCueFormValue(options: {
   };
 }
 
+export function duplicateCueFormValue(
+  source: CueFormValue,
+  sceneId: string,
+  cues: readonly CueFormValue[],
+): CueFormValue | null {
+  if (source.baseCue === null) {
+    return null;
+  }
+  if (source.templateId === STANDING_TEMPLATE_ID) {
+    return null;
+  }
+  const nextOrder =
+    cues
+      .filter((cue) => cue?.layer === source.layer && Number.isFinite(cue?.order))
+      .reduce((max, cue) => Math.max(max, cue?.order ?? 0), -1) + 1;
+  const id = newVisualCueId(sceneId, source.templateId.replace(/\W/g, "-"));
+  return {
+    ...source,
+    id,
+    baseCue: { ...structuredClone(source.baseCue), id },
+    fields: { ...source.fields },
+    order: nextOrder,
+  };
+}
+
 export function nextPointLabel(
   scenes: readonly SceneFormValue[],
   insertIndex: number,

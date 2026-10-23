@@ -20,6 +20,7 @@ import {
   createEmptyLine,
   createInsertSceneFormValue,
   createPointSceneFormValue,
+  duplicateCueFormValue,
   newSceneId,
   pruneDraftCueForLines,
   toFormValues,
@@ -1738,6 +1739,48 @@ describe("buildContentDocument", () => {
     const cueIds = rebuilt.scenes.flatMap((scene) => scene.visualCues.map((cue) => cue.id));
     expect(new Set(cueIds).size).toBe(cueIds.length);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("duplicates a saved cue at the end of the same layer", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const scene = values.scenes[1]!;
+    const source = scene.cues[0]!;
+    expect(source.baseCue).not.toBeNull();
+
+    const copy = duplicateCueFormValue(source, scene.id, scene.cues);
+    expect(copy).not.toBeNull();
+    expect(copy!.id).not.toBe(source.id);
+    expect(copy!.templateId).toBe(source.templateId);
+    expect(copy!.layer).toBe(source.layer);
+    expect(copy!.rangeKind).toBe(source.rangeKind);
+    expect(copy!.fields).toEqual(source.fields);
+    expect(copy!.fields).not.toBe(source.fields);
+    const maxOrder = Math.max(...scene.cues.filter((cue) => cue.layer === source.layer).map((cue) => cue.order));
+    expect(copy!.order).toBe(maxOrder + 1);
+
+    copy!.fields.text = "複製側の変更";
+    expect(source.fields.text).not.toBe("複製側の変更");
+
+    scene.cues = [...scene.cues, copy!];
+    const rebuilt = buildContentDocument(base, values);
+    const ids = rebuilt.scenes.flatMap((entry) => entry.visualCues.map((cue) => cue.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("refuses to duplicate an unsaved draft cue", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const scene = values.scenes[1]!;
+    const draft = createCueFormValue({
+      sceneId: scene.id,
+      templateId: "text.block",
+      templateVersion: 1,
+      layer: "background",
+      order: 99,
+    });
+    expect(duplicateCueFormValue(draft, scene.id, [...scene.cues, draft])).toBeNull();
   });
 });
 
