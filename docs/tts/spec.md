@@ -79,6 +79,16 @@ Agent Access（ローカルソケット / MCP / CLI）も、利用者が設定�
 - Job 実行中の失敗は個別生成と同じく `GET /jobs/:jobId` の `status: failed` で伝える。
 - 成功した Job ごとに Take を編集フォームへ追加する。追加後の選択は、そのセリフに利用者が既に選択した Take を上書きしない。一括生成の Take は自動再生しない。
 - 一括生成の結果は通常の明示保存まで `ScriptVersion` に入らない。未保存変更または生成中は一括生成を開始できず、保存を促す。生成中は保存と個別生成を無効化し、フォームのリセットで結果が失われないようにする。
+- 結果の表示は成功・対象外・失敗の件数に、未音声が残った場合だけ「成功分を保存後、未音声を一括生成して再試行できる」案内を加える。失敗専用の再試行ボタンや結果の永続的な履歴は持たない。
+
+### 一括生成のエージェント確定
+
+Web は Take を編集フォームへ追加して明示保存するのに対し、Agent Access は `tts.attachBulk` で成功 Job だけを一つの版へ原子的に添付する。詳細は [Agent Access 仕様](../agent-access/spec.md) を正とする。
+
+- `tts.createBulk` は `requestId` 付きで開始したものだけ確定対象になる。`requestId` なしの実行や別エージェントの実行は確定できない。
+- `tts.attachBulk`（`scriptVersionId`・元の `bulkRequestId`・添付自身の必須 `requestId`）は、Job が1件でも未完了なら版を作らず `pending` を返し、全 Job が終端状態になったら成功 Job のみを添付して `finalized` を返す。
+- 確定前に台本を書き換えてはならない。元の版が current でなくなると `SCRIPT_BASE_STALE` で停止する。
+- 失敗・対象外行を再生成するときは、返された新しい版（添付0件なら元版）に対して新しい `bulkRequestId` で `tts.createBulk` を実行する。
 
 ## エラー
 

@@ -57,7 +57,7 @@ files.
 | 3 | Characters | `character.list`, `character.get`, `script.edit` + `character.addFromLibrary` | Library entry with a voice for this locale |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
-| 6 | TTS | `tts.create` or `tts.createBulk`, `job.get` / `job.wait`, `script.edit` + `line.assignTake` | Which lines actually need a voice |
+| 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
 | 8 | Render | `render.start`, `job.get` / `job.wait` | Target version fixed |
 | 9 | Visual check | `preview.frame`, user review | Frames match intent; user confirms |
@@ -192,22 +192,38 @@ generation.
      you override it, update the line to the same text before attaching.
    - Returns `{ job }` with `kind: "tts"`.
 3. `tts.createBulk` synthesizes every point-scene line that has no selected
-   take. It returns `{ jobs, excluded }`; `excluded` carries per-line stable
-   codes and safe reasons and does not fail the whole call. It also accepts an
-   optional `requestId` (§9.1).
-4. Wait per Job: `job_wait` / `job.wait <jobId>`, or `job.get`. The CLI's
-   `--wait` can attach to `tts.create` (single job) but returns `wait: null` for
-   `tts.createBulk`, so wait on each returned job ID.
-5. On success, `job.ttsResult` holds `narrationSegmentId`, `assetId`,
-   `durationMs` and `source: "tts"`.
-6. Before attaching, `script.get` the latest version and check that:
+   take. Give it a stable `requestId` (§9.1) — only a bulk started with a
+   `requestId` can later be finalized. It returns `{ jobs, excluded }`;
+   `excluded` carries per-line stable codes and safe reasons and does not
+   fail the whole call.
+4. Finalize with `tts.attachBulk` (`scriptVersionId`, the bulk's
+   `bulkRequestId`, and a fresh `requestId` for the attach itself):
+   - While any Job is still running it returns `pending` with the per-status
+     counts. Poll it again instead of attaching takes yourself.
+   - Once every Job is terminal it returns `finalized` and attaches only the
+     succeeded Jobs in one new ScriptVersion. Read that version's id from
+     `scriptVersion` (`null` means nothing was attachable).
+   - Never attach bulk results with `script.edit` + `line.assignTake` by
+     hand: the server restores the Job set from its ledger and verifies
+     lines, speech text and ready assets for you. Single-line TTS (§7 first
+     half) still uses `line.assignTake`.
+   - Do not rewrite the script between `tts.createBulk` and `tts.attachBulk`.
+     A newer version makes the base stale (`SCRIPT_BASE_STALE`) and the
+     attach stops without attaching anything.
+5. On `finalized`, `failures` names the failed/cancelled or unverifiable
+   lines with reasons. To retry them, run a new `tts.createBulk` with a new
+   `bulkRequestId` against the returned version (or the original version when
+   `scriptVersion` is `null`), then `tts.attachBulk` again.
+6. Before attaching a **single** TTS take, `script.get` the latest version and
+   check that:
    - the `narrationSegmentId` still exists, and
    - its `speechText` is what you actually synthesized.
    If either changed, **discard the take and synthesize again**. Never attach
    audio that speaks different text than the line.
-7. Attach with `script.edit` + `line.assignTake` (`assetId` from `ttsResult`,
-   `source: "tts"`). This creates a new ScriptVersion with a new Audio Take; it
-   does not modify the generated Asset or the previous version.
+7. Attach the single take with `script.edit` + `line.assignTake` (`assetId`
+   from `ttsResult`, `source: "tts"`). This creates a new ScriptVersion with
+   a new Audio Take; it does not modify the generated Asset or the previous
+   version.
 8. A failed Job carries a stable code in `job.error`. `TTS_ENGINE_UNAVAILABLE`
    means the user's TTS engine is not reachable: ask them to start it. Do not
    switch adapters or invent an endpoint.
@@ -248,7 +264,11 @@ generation.
 
 `script.edit` is idempotent by version. The expensive operations — `tts.create`,
 `tts.createBulk`, `render.start` and `composition.publish` — accept an **optional**
-`requestId` and keep their own idempotency ledger:
+`requestId` and keep their own idempotency ledger. `tts.attachBulk` is not in
+that ledger: its `requestId` is required and works like `script.edit` (same id
+returns the existing ScriptVersion; a different input is `IDEMPOTENCY_CONFLICT`).
+A bulk run started without a `requestId` is never recorded and can never be
+finalized — always pass one when the bulk's takes should land in the script.
 
 - Give each of these calls a stable `requestId` that names the logical request
   (for example `render-<workId>-v<versionNumber>` or

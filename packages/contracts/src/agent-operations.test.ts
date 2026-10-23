@@ -11,6 +11,8 @@ import {
   agentPreviewFrameInputSchema,
   agentPreviewFrameOutputSchema,
   agentSchemaDigestInputOf,
+  agentTtsAttachBulkInputSchema,
+  agentTtsAttachBulkOutputSchema,
   agentTtsCreateBulkInputSchema,
   agentTtsCreateBulkOutputSchema,
   agentTtsCreateInputSchema,
@@ -139,6 +141,61 @@ describe("tts.create operation contract", () => {
         ),
       }),
     ).not.toBe(schema.schemaDigest);
+  });
+
+  it("registers tts.attachBulk as a short mutation without job waiting", () => {
+    expect(
+      agentTtsAttachBulkInputSchema.parse({
+        scriptVersionId: "scr-1",
+        bulkRequestId: "bulk-1",
+        requestId: "attach-1",
+      }),
+    ).toEqual({
+      scriptVersionId: "scr-1",
+      bulkRequestId: "bulk-1",
+      requestId: "attach-1",
+    });
+    expect(agentTtsAttachBulkInputSchema.safeParse({ scriptVersionId: "scr-1" }).success).toBe(
+      false,
+    );
+    expect(
+      agentTtsAttachBulkInputSchema.safeParse({
+        scriptVersionId: "scr-1",
+        bulkRequestId: "bulk-1",
+        requestId: "attach-1",
+        extra: true,
+      }).success,
+    ).toBe(false);
+    const output = {
+      status: "finalized" as const,
+      counts: { queued: 0, running: 0, succeeded: 1, failed: 1, cancelled: 0 },
+      excluded: [],
+      failures: [
+        {
+          narrationSegmentId: "line-2",
+          jobId: "job-2",
+          status: "failed" as const,
+          code: "TTS_SYNTHESIS_FAILED",
+          message: "音声生成に失敗しました。",
+        },
+      ],
+      scriptVersion: null,
+    };
+    expect(agentTtsAttachBulkOutputSchema.safeParse(output).success).toBe(true);
+    expect(agentTtsAttachBulkOutputSchema.safeParse({ ...output, status: "done" }).success).toBe(
+      false,
+    );
+
+    expect(agentOperationNames).toContain("tts.attachBulk");
+    expect(isAgentMutationOperation("tts.attachBulk")).toBe(true);
+    expect(isAgentLongRunningOperation("tts.attachBulk")).toBe(false);
+    expect(buildAgentSchemaGetResult().agentOperations).toContainEqual({
+      name: "tts.attachBulk",
+      kind: "mutation",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("tts.attachBulk");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("tts.attachBulk");
   });
 });
 

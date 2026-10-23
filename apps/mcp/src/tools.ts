@@ -89,6 +89,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter（voicevox / aivisspeech / openai-compatible）へ合成 Job を投入し、Job を返す。`speedScale` の既定は 1.0。完了は job_wait または job.get で確認し、`ttsResult` を `script.edit` の `line.assignTake` で Take にする。",
   "tts.createBulk":
     "保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する。投入した Job と、生成できなかったセリフ（コードと理由）を返す。完了は各 Job を job_wait または job.get で確認する。",
+  "tts.attachBulk":
+    "requestId付きで開始した tts.createBulk の結果を確定し、成功 Job だけを1つの台本版へ添付する。入力は元の台本版（`scriptVersionId`）、元の一括要求の `bulkRequestId`、添付自身の `requestId`（必須）。Jobが1件でも未完了なら台本を変更せず `pending` を返し、全Jobが終端状態になったら成功分だけを添付して `finalized` を返す。件数・対象外・失敗理由と、添付後の台本版（添付0件なら null）を返す。同じ `requestId` の再送は既存の版を返す。確定前に台本を書き換えると `SCRIPT_BASE_STALE` になる。",
   "character.list":
     "キャラクターライブラリの一覧を返す。台本へ入れるときは script.edit の character.addFromLibrary でコピーする。ライブラリ自体の作成・更新・削除は公開しない。",
   "character.get":

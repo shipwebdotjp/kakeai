@@ -1393,6 +1393,11 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
               ))}
             </ul>
           )}
+          {(bulkResult.failed.length > 0 || bulkResult.excluded.length > 0) && (
+            <p>
+              未音声が残っています。成功分を保存した後、もう一度「未音声を一括生成」で再試行できます。
+            </p>
+          )}
         </div>
       )}
 

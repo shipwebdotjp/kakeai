@@ -65,11 +65,12 @@
 | `composition.publish` | mutation | no | `kakeai_composition_publish` |
 | `tts.create` | mutation | yes | `kakeai_tts_create` |
 | `tts.createBulk` | mutation | yes | `kakeai_tts_create_bulk` |
+| `tts.attachBulk` | mutation | no | `kakeai_tts_attach_bulk` |
 | `character.list` | read | no | `kakeai_character_list` |
 | `character.get` | read | no | `kakeai_character_get` |
 
-- 長尺操作は Job の投入と ID の返却までで完了する。`asset.import` は内容が既存 Asset と同一なら `jobId: null` を返す。`render.start` と `tts.create` は `job` を返す。`tts.createBulk` は投入した Job の組（`jobs`）と生成できなかったセリフ（`excluded`）を返す。呼び出し側は `job.get` または `job.list` で状態を確認する。
-- `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` は任意の `requestId` を受け付ける（[冪等台帳](#冪等台帳高コスト操作)）。束縛は入力をそのまま転送するだけで、台帳の規則を持つのは操作コア側だけである。
+- 長尺操作は Job の投入と ID の返却までで完了する。`asset.import` は内容が既存 Asset と同一なら `jobId: null` を返す。`render.start` と `tts.create` は `job` を返す。`tts.createBulk` は投入した Job の組（`jobs`）と生成できなかったセリフ（`excluded`）を返す。`tts.attachBulk` は短時間の確定操作で Job を待機しない（`pending` / `finalized` と件数を返す）。呼び出し側は `job.get` または `job.list` で状態を確認する。
+- `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` は任意の `requestId` を受け付ける（[冪等台帳](#冪等台帳高コスト操作)）。`tts.attachBulk` は版を作る操作のため `requestId` が必須で、版単位の冪等（`script.edit` と同じ規則）になる。束縛は入力をそのまま転送するだけで、台帳の規則を持つのは操作コア側だけである。
 - MCP 束縛は `job.get` の有界ポーリングを `kakeai_job_wait` として提供する。`timeoutMs`（既定 60 秒、最大 600 秒）と `intervalMs`（既定 500 ミリ秒、10〜30000 ミリ秒）を受け、終端状態（`succeeded` / `failed` / `cancelled`）に達したら `{ job, timedOut: false, polls }`、予算超過なら最後の Job と `timedOut: true` を返す。`job_wait` は MCP 束縛の便宜ツールであり、Agent 操作ではない。
 - 失敗はすべて `isError: true` のツール結果として返し、サーバーを落とさない。本文は JSON `{ "code": "...", "issues": [...] }` で、Agent Access と操作コアのコードをそのまま透過する。MCP 自身の失敗は `MCP_TOOL_UNKNOWN`（未知のツール名）、`VALIDATION_ERROR`（入力スキーマ不一致、`issues` 付き）、`MCP_INTERNAL_ERROR`（想定外。詳細は返さない）とする。アプリ未起動は `AGENT_APP_UNAVAILABLE`、未知の操作は `AGENT_OPERATION_UNKNOWN` である。
 - 実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は MCP にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
@@ -157,6 +158,7 @@
 - `render.start` — 対象版と ready な素材から render Job を投入する。
 - `tts.create` — 保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter へ合成 Job を投入する（後述）。
 - `tts.createBulk` — 保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する（後述）。
+- `tts.attachBulk` — `requestId` 付きで開始した一括生成の結果を確定し、成功 Job だけを一つの Script Version へ添付する（後述）。短時間の操作で Job 待機の対象にしない。
 - `job.cancel` — queued の Job をキャンセルする。
 
 ### `script.edit` の契約
@@ -218,8 +220,13 @@
 ### TTS の契約
 
 - `tts.create` は `{ scriptVersionId, narrationSegmentId, voiceId?, speechText?, speedScale? }` を受け、1 つの `tts` Job（`{ job }`）を返す。`speedScale` は HTTP と同じく既定 `1.0`、範囲は `0.5`〜`2.0`。`voiceId` を省くと話者の Voice Profile の声、`speechText` を省くと保存済みセグメントの読み上げテキストを使う。
-- `tts.createBulk` は `{ scriptVersionId }` を受け、HTTP と同じ `{ jobs, excluded }` を返す。対象は要点シーンのうち `selectedAudioTakeId` が `null` のセリフで、生成できないセリフは他の生成を止めず `excluded` に `code` と安全な理由を返す。
-- 完了した `tts` Job の `ttsResult`（`narrationSegmentId`・`assetId`・`durationMs`・`source: "tts"`）は `job.get` と MCP の `kakeai_job_wait` / CLI の `job.wait` がそのまま返す。Take への反映前に最新の台本を `script.get` で読み直し、対象 Segment と読み上げテキストを照合してから `script.edit` の `line.assignTake`（`assetId` に `ttsResult.assetId`、`source: "tts"`）を適用する。この照合はワークフローの規約であり、サーバーはテキスト一致を強制しない。
+- `tts.createBulk` は `{ scriptVersionId }` を受け、HTTP と同じ `{ jobs, excluded }` を返す。対象は要点シーンのうち `selectedAudioTakeId` が `null` のセリフで、生成できないセリフは他の生成を止めず `excluded` に `code` と安全な理由を返す。確定の対象にするには `requestId` を付けて開始する（付けない実行は確定できない）。
+- `tts.attachBulk` は `{ scriptVersionId, bulkRequestId, requestId }` を受ける。`bulkRequestId` は確定したい `tts.createBulk` の `requestId`、`requestId` は添付自身の必須キーである。出力は `status`（`pending` / `finalized`）、Job 件数（`queued` / `running` / `succeeded` / `failed` / `cancelled`。検証で添付できなかった成功 Job は `failed` へ移す）、対象外行（`excluded`）、失敗／取消行の理由（`failures`）、添付後の `scriptVersion`（添付0件なら `null`）を返す。
+  - サーバーは同じ Agent ID・`bulkRequestId` の冪等台帳から元の一括要求の Job 集合と行 ID を復元する。呼び出し側が Job や行の対応付けを指定することはなく、LLM に Asset や行を選ばせない。
+  - Job が1件でも未完了なら台本を変更せず `pending` を返す。全 Job が終端状態になったら、成功 Job のみを、元の版が依然 current であること・対象行と読み上げテキスト・ready な Audio Asset が一致することの確認のうえ、一つの原子的な Script Version として添付する（`line.assignTake` 群はサーバー内部で作る）。基準版が古い場合は `SCRIPT_BASE_STALE`、要求元が見つからない／`requestId` なしで開始された場合は `RESOURCE_NOT_FOUND` で、誤添付せず停止する。
+  - 添付の同一 `requestId` 再送は既存の Script Version を返す（版単位の冪等で `script.edit` と同じ規則。再送と内容相違の区別は `IDEMPOTENCY_CONFLICT`）。確定は一度だけ行い、途中成功を逐次保存しない。
+  - 確定後の失敗・対象外行の再生成は、返された新しい版（添付0件なら元版）の `scriptVersionId` に対して新しい `bulkRequestId` で `tts.createBulk` を実行する。確定前に台本を書き換えると基準版が古くなり確定できなくなるため、一括生成から確定までは台本を書き換えない。
+- 完了した `tts` Job の `ttsResult`（`narrationSegmentId`・`assetId`・`durationMs`・`source: "tts"`）は `job.get` と MCP の `kakeai_job_wait` / CLI の `job.wait` がそのまま返す。単体 TTS の Take 反映は `script.edit` の `line.assignTake`（`assetId` に `ttsResult.assetId`、`source: "tts"`）で行い、反映前に最新の台本を `script.get` で読み直して対象 Segment と読み上げテキストを照合する。この照合はワークフローの規約であり、サーバーはテキスト一致を強制しない（`tts.attachBulk` の確定ではサーバー側で強制する）。
 - 存在しない台本版・セリフは `RESOURCE_NOT_FOUND`、入力不正は `TTS_INPUT_INVALID`、Adapter へ接続できない場合は `TTS_ENGINE_UNAVAILABLE` を返す。Job 実行中の失敗は `job.get` の `status: failed` と `error` で伝える。
 
 ### Character の契約
@@ -231,7 +238,7 @@
 
 ## 冪等台帳（高コスト操作）
 
-高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）は、任意の `requestId` を受け付ける。`requestId` が渡されたときだけ冪等台帳（`AgentRequest`）に記録し、タイムアウト後の再送でも Job や Version が増えないようにする。
+高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）は、任意の `requestId` を受け付ける。`requestId` が渡されたときだけ冪等台帳（`AgentRequest`）に記録し、タイムアウト後の再送でも Job や Version が増えないようにする。`tts.attachBulk` は台帳に載せず、必須の `requestId` を `script.edit` と同じ版単位の冪等（`ScriptVersion.agentRequestId`）で扱う。
 
 - 台帳の鍵は `(operation, agentId, requestId)` の一意制約で決まる。`agentId` は接続時の識別子で、識別子を送らないクライアントは予約値 `none` を使う。クライアントが送った識別子は `agent:` を前置して保存するので、予約値を偽装できない。識別子を送らないクライアントは `none` の枠を共有するため、衝突を避けるには接続時に `agentId` を送る。同じ `requestId` を別の操作や別のエージェントで使っても別の行になる。
 - `requestId` は任意のままにする。必須化は破壊的変更 ([../mvp/api-contract.md](../mvp/api-contract.md) の互換性方針) になるため行わない。渡さない呼び出しは台帳に記録されず、従来どおり毎回新しい Job を作る。
@@ -285,7 +292,7 @@
 | `COMPOSITION_UNAVAILABLE` | 参照する Composition Version が publish 済みでない、または bundle が欠損している |
 | `TTS_INPUT_INVALID` | TTS 生成要求の入力が不正（空の読み上げテキスト、話者・声の未設定、Adapter 外の声） |
 | `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した |
-| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`character.get` のキャラクターなど、参照先の資源が存在しない |
+| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` のキャラクターなど、参照先の資源が存在しない |
 | `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。
@@ -302,4 +309,4 @@
 ## 将来
 
 - アプリ内ネイティブの AI 編集機能が必要になった場合は、同じ操作コアの上に任意の束縛として載せる。操作コアを変更しない限り、MCP・CLI を置き換えない。
-- 操作契約のダイジェストとプロトコル版、素材検索の索引化、TTS の冪等化と Take 添付の一体化、Voice／Face Set の読み取り面、Job 操作の一般化、スキル配布などの拡張候補は [roadmap.md](./roadmap.md) に整理する。視覚確認（R3-4）は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) へ切り出して実装した。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。
+- 操作契約のダイジェストとプロトコル版、素材検索の索引化、Voice／Face Set の読み取り面、Job 操作の一般化、スキル配布などの拡張候補は [roadmap.md](./roadmap.md) に整理する。TTS の冪等化と Take 添付の一体化（`tts.attachBulk`）は実装済みで、視覚確認（R3-4）は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) へ切り出して実装した。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。

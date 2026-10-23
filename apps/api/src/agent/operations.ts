@@ -50,6 +50,8 @@ import {
   agentScriptSaveOutputSchema,
   agentScriptValidateInputSchema,
   agentScriptValidateOutputSchema,
+  agentTtsAttachBulkInputSchema,
+  agentTtsAttachBulkOutputSchema,
   agentTtsCreateBulkInputSchema,
   agentTtsCreateBulkOutputSchema,
   agentTtsCreateInputSchema,
@@ -63,7 +65,6 @@ import {
   agentWorkUpdateInputSchema,
   agentWorkUpdateOutputSchema,
   buildAgentSchemaGetResult,
-  bulkTtsJobExclusionSchema,
   isAgentMutationOperation,
   isAgentOperationName,
   type AgentErrorCode,
@@ -99,6 +100,11 @@ import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
 import { getPreviewFrame } from "../services/preview-frames.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
 import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
+import { attachBulkTts, bulkTtsResultRefOf } from "../services/tts-attach-bulk.ts";
+import {
+  invalidResultReference,
+  parseResultReference,
+} from "../services/agent-result-references.ts";
 import { createWork, createLanguageEdition, getWork, listWorks, updateWork } from "../services/works.ts";
 import { AgentOperationError } from "./errors.ts";
 import { runWithAgentRequest } from "./idempotency.ts";
@@ -448,6 +454,15 @@ const definitions: AgentOperationDefinitions = {
     run: async (input, context) =>
       createBulkTtsJobs(context.prisma, context.config, input.scriptVersionId),
   },
+  "tts.attachBulk": {
+    input: agentTtsAttachBulkInputSchema,
+    output: agentTtsAttachBulkOutputSchema,
+    // Not routed through the Job idempotency ledger: the attach creates a
+    // Script Version, so its `requestId` is idempotent on the version itself
+    // (like `script.edit`). Resending the same attach returns the existing
+    // version instead of creating a second one.
+    run: async (input, context) => attachBulkTts(context.prisma, input, context.agentId),
+  },
   // Character library reads only. Copying into a script goes through
   // `script.edit` + `character.addFromLibrary`; library mutations are not
   // exposed on the Agent surface.
@@ -474,36 +489,10 @@ function unknownOperation(): AgentOperationError {
 /** The stored reference of a Job returning operation. */
 const jobResultReferenceSchema = z.strictObject({ jobId: z.string().min(1) });
 
-/** The stored reference of the bulk TTS operation. */
-const bulkTtsResultReferenceSchema = z.strictObject({
-  entries: z.array(
-    z.strictObject({
-      narrationSegmentId: z.string().min(1),
-      jobId: z.string().min(1),
-    }),
-  ),
-  excluded: z.array(bulkTtsJobExclusionSchema),
-});
-
 /** The stored reference of a composition publish. */
 const compositionVersionResultReferenceSchema = z.strictObject({
   compositionVersionId: z.string().min(1),
 });
-
-function invalidResultReference(operation: string): AgentOperationError {
-  // A stored reference that no longer parses means the reference format and
-  // the rows in the ledger drifted apart. It has to be visible in the log.
-  logger.error("agent_result_reference_invalid", { operation });
-  return new AgentOperationError("INTERNAL_ERROR");
-}
-
-function parseResultReference(operation: string, resultRef: string): unknown {
-  try {
-    return JSON.parse(resultRef) as unknown;
-  } catch {
-    throw invalidResultReference(operation);
-  }
-}
 
 function jobIdOf(operation: string, resultRef: string): string {
   const parsed = jobResultReferenceSchema.safeParse(
@@ -523,19 +512,6 @@ function compositionVersionIdOf(operation: string, resultRef: string): string {
     throw invalidResultReference(operation);
   }
   return parsed.data.compositionVersionId;
-}
-
-function bulkTtsResultRefOf(
-  operation: string,
-  resultRef: string,
-): z.infer<typeof bulkTtsResultReferenceSchema> {
-  const parsed = bulkTtsResultReferenceSchema.safeParse(
-    parseResultReference(operation, resultRef),
-  );
-  if (!parsed.success) {
-    throw invalidResultReference(operation);
-  }
-  return parsed.data;
 }
 
 /**

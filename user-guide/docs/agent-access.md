@@ -51,7 +51,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 台本 | `kakeai_script_get` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` |
 | 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` |
 | キャラクター | `kakeai_character_list` / `kakeai_character_get` |
-| 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` |
+| 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_tts_attach_bulk` |
 | Composition | `kakeai_composition_list` / `kakeai_composition_get` / `kakeai_composition_draft_get` / `kakeai_composition_authoring_context` / `kakeai_composition_create` / `kakeai_composition_draft_save` / `kakeai_composition_publish` |
 | レンダー | `kakeai_render_start` |
 | プレビュー | `kakeai_preview_frame`（render 成果物の指定時刻の原寸 PNG。絵は image ブロックでも返る） |
@@ -75,6 +75,8 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 
 台帳の鍵には接続時の `agentId` も含みます。識別子を送らないクライアントは `unknown` の枠を共有するため、衝突を避けるには `KAKEAI_AGENT_ID`（MCP）や `--agent-id`（CLI）で識別子を指定してください。
 
+`kakeai_tts_attach_bulk` は台帳に載りません。`requestId` が必須で、`kakeai_script_edit` と同じ版単位の冪等になります。同じ `requestId` の再送は既存の版を返し、異なる内容での再利用は `IDEMPOTENCY_CONFLICT` になります。
+
 CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"scriptVersionId":"scr-123","requestId":"render-1"}'`）。
 
 ### 大量のリクエスト
@@ -95,12 +97,12 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 
 TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。接続先・認証情報・アダプター設定・Voice Profile はエージェントから変更できません。TTS 以外の課金を伴う生成も公開していません。
 
-1. 対象の台本を保存し、`scriptVersionId` を用意します。
+1. 対象の台本を保存し、`scriptVersionId` を用意します。**一括生成から確定までは台本を書き換えないでください。**確定前に保存し直すと元の版が最新でなくなり、確定は `SCRIPT_BASE_STALE` で停止します。
 2. 1 セリフなら `kakeai_tts_create`（`scriptVersionId` と `narrationSegmentId`、任意で `speechText` / `voiceId` / `speedScale`）を使います。`speedScale` の既定は 1.0、範囲は 0.5〜2.0 です。通常は `speechText` を省略し、保存済みの読み上げテキストを使います。上書きする場合は、添付前にセリフ側も同じテキストへ更新します。
-3. 要点シーンで音声が未選択のセリフをまとめて生成するなら `kakeai_tts_create_bulk`（`scriptVersionId`）を使います。応答の `jobs` にセリフごとの Job、`excluded` に生成できなかったセリフと理由が入ります。除外があっても他の生成は続きます。
-4. `kakeai_job_wait` / `kakeai_job_get` で完了を待ちます。成功した Job の `ttsResult` に `narrationSegmentId`・`assetId`・`durationMs`・`source: "tts"` が入ります。
-5. 添付前に `kakeai_script_get` で最新の台本を読み直し、対象セグメントが残っていて、読み上げテキストが合成した内容と一致することを確認します。変わっていたら、その Take は使わずに生成し直します。
-6. `kakeai_script_edit` の `line.assignTake`（`assetId` に `ttsResult.assetId`、`source: "tts"`）で添付します。これは新しい ScriptVersion を作る操作で、生成済み Asset を書き換えるものではありません。
+3. 要点シーンで音声が未選択のセリフをまとめて生成するなら `kakeai_tts_create_bulk`（`scriptVersionId`）を使います。確定の対象にするには `requestId` を付けて開始します（付けない実行は確定できません）。応答の `jobs` にセリフごとの Job、`excluded` に生成できなかったセリフと理由が入ります。除外があっても他の生成は続きます。
+4. 一括生成の確定は `kakeai_tts_attach_bulk`（`scriptVersionId`、元の `bulkRequestId`、添付自身の `requestId`）で行います。Job が1件でも未完了なら台本を変更せず `pending`（件数付き）を返すので、繰り返し呼んで待ちます。全 Job が終端状態になると成功分だけを一つの台本版へ添付して `finalized` を返します。100件以上の対応表を手で作る必要はありません。同じ `requestId` の再送は既存の版を返します。
+5. `finalized` の `failures` に残った行は、新しい `bulkRequestId` で `kakeai_tts_create_bulk` を実行し直してから、もう一度確定します。対象の版は、返された新しい版（添付0件なら元の版）です。
+6. 単体生成の添付は `kakeai_script_edit` の `line.assignTake`（`assetId` に `ttsResult.assetId`、`source: "tts"`）で行います。添付前に `kakeai_script_get` で最新の台本を読み直し、対象セグメントが残っていて、読み上げテキストが合成した内容と一致することを確認します。変わっていたら、その Take は使わずに生成し直します。
 
 ### キャラクター
 
@@ -114,7 +116,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 1. `kakeai_asset_import` は `jobId` を返します（同じ内容の素材が既にあれば `null`）。
 2. `kakeai_render_start` は `job` を返します。
-3. `kakeai_tts_create` は `job` を、`kakeai_tts_create_bulk` は `jobs`（セリフごとの Job）と `excluded` を返します。
+3. `kakeai_tts_create` は `job` を、`kakeai_tts_create_bulk` は `jobs`（セリフごとの Job）と `excluded` を返します。`kakeai_tts_attach_bulk` は短時間の確定操作で、Job を待機しない代わりに `pending` / `finalized` と件数を返します。
 4. `kakeai_job_wait` に Job ID を渡すと、終端状態までポーリングします。`timeoutMs` を超えた場合は `timedOut: true` と最後の Job を返すので、そのまま再度呼び出せます。一括生成のように複数の Job がある場合は、Job ID ごとに待つか `kakeai_job_get` で個別に確認します。
 5. 個別に確認する場合は `kakeai_job_get`、作品内の一覧は `kakeai_job_list` を使います。
 
@@ -146,6 +148,7 @@ kakeai-agent --help
 | `kakeai_character_list` | `kakeai-agent character.list` |
 | `kakeai_tts_create` | `kakeai-agent tts.create --input ...` |
 | `kakeai_tts_create_bulk` | `kakeai-agent tts.createBulk --input ...` |
+| `kakeai_tts_attach_bulk` | `kakeai-agent tts.attachBulk --input ...` |
 | `kakeai_render_start` | `kakeai-agent render.start --input ...` |
 | `kakeai_preview_frame` | `kakeai-agent preview.frame --input ... [--out ...]` |
 | `kakeai_job_wait` | `kakeai-agent job.wait <jobId>` |
@@ -236,7 +239,7 @@ ln -s /path/to/kakeai/skills/kakeai-composition .opencode/skills/kakeai-composit
 | `AGENT_APP_UNAVAILABLE` | Kakeai が起動していない、またはソケットに接続できない |
 | `AGENT_PROTOCOL_MISMATCH` | ソケットのプロトコル版が一致しない |
 | `AGENT_OPERATION_UNKNOWN` | 操作名が未登録。`schema.get` / `operations` で正規名を確認する |
-| `AGENT_REQUEST_TIMEOUT` | 操作がタイムアウトした。`script.edit` は同じ `requestId` で再送してよい。`tts.create` / `tts.createBulk` / `render.start` / `composition.publish` も任意の `requestId` を付けて再送すると既存の Job／Version が返る。それ以外の変更操作は `script.get`・`job.list`・`asset.list` などで結果を確認してから再実行する |
+| `AGENT_REQUEST_TIMEOUT` | 操作がタイムアウトした。`script.edit` と `kakeai_tts_attach_bulk` は同じ `requestId` で再送してよい（既存の版が返る）。`tts.create` / `tts.createBulk` / `render.start` / `composition.publish` も任意の `requestId` を付けて再送すると既存の Job／Version が返る。それ以外の変更操作は `script.get`・`job.list`・`asset.list` などで結果を確認してから再実行する |
 | `SCRIPT_BASE_STALE` | `baseScriptVersionId` が現在の版と異なる。`kakeai_script_get` で取り直し、同じ意図を適用し直す |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` を異なる内容で使った。既存の版を確認し、同じ ID を別内容で再利用しない |
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった。実行中の Job を `kakeai_job_get` / `kakeai_job_wait` で確認する |

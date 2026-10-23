@@ -13,6 +13,7 @@ import { richTextMarkSchema } from "./content/rich-text";
 import {
   assetKindSchema,
   assetSchema,
+  bulkTtsJobExclusionSchema,
   bulkTtsJobsResultSchema,
   jobSchema,
   previewTimelineSchema,
@@ -336,6 +337,7 @@ export const agentOperationNames = [
   "composition.publish",
   "tts.create",
   "tts.createBulk",
+  "tts.attachBulk",
   "character.list",
   "character.get",
   "preview.frame",
@@ -376,6 +378,7 @@ export const agentMutationOperationNames = [
   "composition.publish",
   "tts.create",
   "tts.createBulk",
+  "tts.attachBulk",
 ] as const satisfies readonly AgentOperationName[];
 
 /**
@@ -984,6 +987,68 @@ export type AgentTtsCreateBulkInput = z.input<typeof agentTtsCreateBulkInputSche
 export const agentTtsCreateBulkOutputSchema = bulkTtsJobsResultSchema;
 export type AgentTtsCreateBulkOutput = z.infer<typeof agentTtsCreateBulkOutputSchema>;
 
+/**
+ * `tts.attachBulk` attaches the succeeded Jobs of one `tts.createBulk` run in
+ * a single Script Version. It is a short mutation: it never enqueues a Job,
+ * so it is not a long-running operation and has no `job.wait` support.
+ *
+ * - `scriptVersionId` is the bulk run's source version. It must still be the
+ *   current version, otherwise the call fails with `SCRIPT_BASE_STALE` and
+ *   attaches nothing.
+ * - `bulkRequestId` is the `requestId` the original `tts.createBulk` call
+ *   carried. Only a bulk run that was recorded in the idempotency ledger (one
+ *   sent with a `requestId`, by the same agent) can be finalized. Anything
+ *   else is `RESOURCE_NOT_FOUND`.
+ * - `requestId` is this attach's own required key. The created Script Version
+ *   stores it like `script.edit` does, so resending the same attach returns
+ *   the existing version instead of creating a second one.
+ */
+export const agentTtsAttachBulkInputSchema = z.strictObject({
+  scriptVersionId: idSchema,
+  bulkRequestId: agentRequestIdSchema,
+  requestId: agentRequestIdSchema,
+});
+export type AgentTtsAttachBulkInput = z.input<typeof agentTtsAttachBulkInputSchema>;
+
+export const agentTtsAttachBulkCountsSchema = z.strictObject({
+  queued: nonNegativeInt,
+  running: nonNegativeInt,
+  succeeded: nonNegativeInt,
+  failed: nonNegativeInt,
+  cancelled: nonNegativeInt,
+});
+export type AgentTtsAttachBulkCounts = z.infer<typeof agentTtsAttachBulkCountsSchema>;
+
+export const agentTtsAttachBulkFailureSchema = z.strictObject({
+  narrationSegmentId: idSchema,
+  jobId: idSchema,
+  status: z.enum(["failed", "cancelled"]),
+  code: z.string().min(1),
+  message: z.string().min(1),
+});
+export type AgentTtsAttachBulkFailure = z.infer<typeof agentTtsAttachBulkFailureSchema>;
+
+/**
+ * `status` is `pending` while any Job of the bulk run is still queued or
+ * running; the script is left untouched and the agent resends the same attach
+ * later. `scriptVersion` is null while pending, and also when the run
+ * finalized with nothing to attach: no succeeded Job at all, or none passed
+ * verification (missing line, changed speech text, unavailable asset) while
+ * no prior attach exists for `requestId`.
+ *
+ * `counts.succeeded` counts only Jobs that actually became Takes —
+ * verification can demote a succeeded Job into `failures`. `queued` and
+ * `running` are non-zero only while pending.
+ */
+export const agentTtsAttachBulkOutputSchema = z.strictObject({
+  status: z.enum(["pending", "finalized"]),
+  counts: agentTtsAttachBulkCountsSchema,
+  excluded: z.array(bulkTtsJobExclusionSchema),
+  failures: z.array(agentTtsAttachBulkFailureSchema),
+  scriptVersion: scriptVersionSchema.nullable(),
+});
+export type AgentTtsAttachBulkOutput = z.infer<typeof agentTtsAttachBulkOutputSchema>;
+
 export const agentCharacterListInputSchema = agentEmptyInputSchema;
 export const agentCharacterListOutputSchema = z.strictObject({
   characters: z.array(characterLibraryEntrySchema),
@@ -1025,6 +1090,7 @@ export const agentOperationInputSchemas = {
   "composition.publish": agentCompositionPublishInputSchema,
   "tts.create": agentTtsCreateInputSchema,
   "tts.createBulk": agentTtsCreateBulkInputSchema,
+  "tts.attachBulk": agentTtsAttachBulkInputSchema,
   "character.list": agentCharacterListInputSchema,
   "character.get": agentCharacterGetInputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
@@ -1058,6 +1124,7 @@ export const agentOperationOutputSchemas = {
   "composition.publish": agentCompositionPublishOutputSchema,
   "tts.create": agentTtsCreateOutputSchema,
   "tts.createBulk": agentTtsCreateBulkOutputSchema,
+  "tts.attachBulk": agentTtsAttachBulkOutputSchema,
   "character.list": agentCharacterListOutputSchema,
   "character.get": agentCharacterGetOutputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;

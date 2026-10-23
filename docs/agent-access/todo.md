@@ -116,3 +116,12 @@
 
 - [x] 実施は [../visual-confirmation/todo.md](../visual-confirmation/todo.md) を正とする。`preview.frame`（render 成果物の指定時刻の原寸 PNG）を操作コア・MCP・CLI へ公開し、仕様・roadmap・ユーザーガイド・スキル・用語を更新する。
 - 完了条件: ソケット・MCP・CLI から指定時刻の静止画が取得でき、異常系が安定コードで返る。
+
+### [ ] B7 エージェント一括TTS確定（R2-2）
+
+- [ ] 契約・操作カタログ・schema digest へ `tts.attachBulk` を追加する。短時間の mutation とし、Job 待機オプションの対象にしない。MCP と CLI は既存カタログ連携で同じ操作を公開する
+- [ ] Agent サービスに、元の一括要求の結果参照を冪等台帳から復元し、Job 状態を集計して、サーバー内部で `line.assignTake` 群を作る共通処理を追加する。HTTP の Web 一括 TTS 契約・DB スキーマ・Job 種別は変更しない
+- [ ] 一括 Job が未完了なら版を作らず `pending`、全完了後は成功 Job だけを一つの版へ添付して `finalized` を返す。基準版の競合は `SCRIPT_BASE_STALE`、要求元なしは `RESOURCE_NOT_FOUND`、添付の同一 `requestId` 再送は既存版を返す
+- [ ] `skills/kakeai-production` の一括 TTS 手順を、`tts.createBulk`（`requestId` 付き）→ `tts.attachBulk` の状態確認／確定→未音声だけ新バッチ、へ変更する。単体 TTS は従来どおり個別の `line.assignTake` を使う
+- [ ] TTS 仕様、Agent Access 仕様・roadmap、ユーザーガイドを更新し、Web と Agent の差分、失敗後の再実行、確定前に台本を書き換えない規則を明記する
+- 完了条件: 契約・MCP・CLI 公開のテスト、一括未完了／全完了後の一部添付、失敗・取消・対象外を含む部分成功、冪等再送、requestId なし／別 Agent の一括要求、基準版の競合が検証できる。Web の一括生成フローで部分失敗時の件数と保存後の再実行案内が表示され、成功分の保存・次回の未音声一括生成を妨げない。
