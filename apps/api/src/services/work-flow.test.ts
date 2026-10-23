@@ -563,6 +563,96 @@ describe("work and script version flow", () => {
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
+  it("creates a second language edition by seeding from the source edition", async () => {
+    const work = await works.createWork(prisma, "多言語テスト", "ja-JP");
+    const sourceEdition = work.languageEditions[0]!;
+
+    const created = await works.createLanguageEdition(
+      prisma,
+      work.id,
+      "en-US",
+      sourceEdition.id,
+    );
+    expect(created.languageEditions).toHaveLength(2);
+    const target = created.languageEditions.find((edition) => edition.locale === "en-US")!;
+    expect(target).toBeDefined();
+
+    const current = await scriptVersions.getCurrentScriptVersion(prisma, target.id);
+    expect(current.versionNumber).toBe(1);
+    expect(current.content.locale).toBe("en-US");
+    expect(current.content.audioTakes).toEqual([]);
+    expect(
+      current.content.scenes.flatMap((scene) => scene.lines.map((line) => line.selectedAudioTakeId)),
+    ).toEqual([]);
+    expect(current.content.speakers.map((speaker) => speaker.voiceProfileId)).toEqual([]);
+    expect(current.author).toBe("human");
+
+    const sourceCurrent = await scriptVersions.getCurrentScriptVersion(prisma, sourceEdition.id);
+    expect(current.content.scenes.map((scene) => scene.id)).toEqual(
+      sourceCurrent.content.scenes.map((scene) => scene.id),
+    );
+  });
+
+  it("rejects a duplicate locale for the same work", async () => {
+    const work = await works.createWork(prisma, "多言語重複", "ja-JP");
+    const sourceEdition = work.languageEditions[0]!;
+    await works.createLanguageEdition(prisma, work.id, "en-US", sourceEdition.id);
+    const updated = await works.getWork(prisma, work.id);
+    const enEdition = updated.languageEditions.find((edition) => edition.locale === "en-US")!;
+    await expect(
+      works.createLanguageEdition(prisma, work.id, "en-US", sourceEdition.id),
+    ).rejects.toMatchObject({ code: "LANGUAGE_EDITION_EXISTS" });
+    await expect(
+      works.createLanguageEdition(prisma, work.id, "ja-JP", enEdition.id),
+    ).rejects.toMatchObject({ code: "LANGUAGE_EDITION_EXISTS" });
+  });
+
+  it("rejects a source edition from another work", async () => {
+    const first = await works.createWork(prisma, "多言語A", "ja-JP");
+    const second = await works.createWork(prisma, "多言語B", "ja-JP");
+    const foreignEdition = second.languageEditions[0]!;
+    await expect(
+      works.createLanguageEdition(prisma, first.id, "en-US", foreignEdition.id),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("strips voices and audio takes when seeding", () => {
+    const source = createInitialContentDocument();
+    source.speakers = [
+      { id: "speaker-1", name: "ナレーター", characterId: null, voiceProfileId: "voice-ja" },
+    ];
+    source.audioTakes = [
+      {
+        id: "take-1",
+        narrationSegmentId: "line-x",
+        assetId: "asset-1",
+        durationMs: 1000,
+        source: "manual",
+      },
+    ];
+    (source.scenes[1] as { lines: unknown[] }).lines = [
+      {
+        id: "line-x",
+        speakerId: "speaker-1",
+        captionText: "こんにちは",
+        speechText: "こんにちは",
+        selectedAudioTakeId: "take-1",
+        expressionId: null,
+      },
+    ];
+
+    const seeded = works.buildLanguageEditionSeedDocument(source, "en-US");
+    expect(seeded.locale).toBe("en-US");
+    expect(seeded.speakers).toEqual([
+      { id: "speaker-1", name: "ナレーター", characterId: null, voiceProfileId: null },
+    ]);
+    expect(seeded.audioTakes).toEqual([]);
+    expect(seeded.scenes[1]?.lines[0]?.selectedAudioTakeId).toBeNull();
+    // Source document is not mutated.
+    expect(source.locale).toBe("ja-JP");
+    expect(source.speakers[0]?.voiceProfileId).toBe("voice-ja");
+  });
+
   it("deletes a work and removes its artifact files", async () => {
     const work = await works.createWork(prisma, "削除テスト", "ja-JP");
     const edition = work.languageEditions[0]!;

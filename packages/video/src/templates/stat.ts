@@ -109,7 +109,7 @@ export function renderStat(input: unknown, context: RenderContext): RenderedCue 
   const cardClass = preset === "card" ? " kakeai-stat-card" : "";
 
   return {
-    html: `<figure class="kakeai-statwrap"><div id="${cardId}" class="kakeai-statcard${cardClass}"><span id="${valueId}" class="kakeai-statvalue" style="color:${toneColor}"><span id="${valueTextId}">${escapeHtmlText(formatNumber(value, format))}</span>${overlay}</span>${labelHtml}${captionHtml}</div></figure>`,
+    html: `<figure class="kakeai-statwrap"><div id="${cardId}" class="kakeai-statcard${cardClass}"><span id="${valueId}" class="kakeai-statvalue" style="color:${toneColor}"><span id="${valueTextId}">${escapeHtmlText(formatNumber(value, format, context.document.locale))}</span>${overlay}</span>${labelHtml}${captionHtml}</div></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

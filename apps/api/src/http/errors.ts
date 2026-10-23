@@ -9,6 +9,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   ASSET_PROCESSING: "素材を取り込み中です。完了後に再試行してください。",
   ASSET_IN_USE: "この素材は使用中のため削除できません。",
   WORK_HAS_CHILDREN: "子作品があるため削除できません。",
+  LANGUAGE_EDITION_EXISTS: "この言語版は既に存在します。",
   JOB_NOT_CANCELLABLE: "このジョブはキャンセルできません。",
   FILE_TOO_LARGE: "ファイルサイズが上限を超えています。",
   UNSUPPORTED_MEDIA_TYPE: "対応していないファイル形式です。",

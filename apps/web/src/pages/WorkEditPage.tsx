@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link, useBeforeUnload, useBlocker, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { ScriptVersion } from "@kakeai/contracts";
-import { useCurrentScriptVersion, useUpdateWork, useWork } from "../api/hooks";
+import { useCurrentScriptVersion, useCreateLanguageEdition, useUpdateWork, useWork } from "../api/hooks";
 import { CueMap } from "../components/CueMap";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
@@ -123,9 +123,15 @@ type PreviewSeekTarget =
 export function WorkEditPage() {
   const { workId } = useParams<{ workId: string }>();
   const work = useWork(workId);
-  const editionId = work.data?.languageEditions[0]?.id;
+  const editions = work.data?.languageEditions ?? [];
+  const [selectedEditionId, setSelectedEditionId] = useState<string | null>(null);
+  const editionId =
+    selectedEditionId !== null && editions.some((edition) => edition.id === selectedEditionId)
+      ? selectedEditionId
+      : (editions[0]?.id ?? undefined);
   const current = useCurrentScriptVersion(editionId);
   const updateWork = useUpdateWork(workId);
+  const createEdition = useCreateLanguageEdition(workId);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [sceneEditorDirty, setSceneEditorDirty] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
@@ -139,6 +145,12 @@ export function WorkEditPage() {
     setPreviewVersionId(null);
     setUnsaved({ dirty: false, document: null });
   }, [workId, editionId]);
+
+  useEffect(() => {
+    if (selectedEditionId === null && editions[0] !== undefined) {
+      setSelectedEditionId(editions[0].id);
+    }
+  }, [editions, selectedEditionId]);
 
   const savedTitle = (work.data?.title ?? "").trim();
   const titleDraftTrimmed = titleDraft !== null ? titleDraft.trim() : null;
@@ -238,6 +250,19 @@ export function WorkEditPage() {
         <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(updateWork.error)}</p>
       )}
 
+      {work.data && editions.length > 0 && (
+        <EditionSelector
+          editions={editions}
+          editionId={editionId}
+          onSelect={setSelectedEditionId}
+          onCreated={setSelectedEditionId}
+          createEdition={createEdition}
+        />
+      )}
+      {createEdition.isError && (
+        <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(createEdition.error)}</p>
+      )}
+
       <PreviewControllerProvider playerRef={playerRef} scriptVersionId={scriptVersionId} draft={draft}>
         <WorkEditPanes
           workId={workId}
@@ -251,6 +276,89 @@ export function WorkEditPage() {
         />
       </PreviewControllerProvider>
     </section>
+  );
+}
+
+function EditionSelector({
+  editions,
+  editionId,
+  onSelect,
+  onCreated,
+  createEdition,
+}: {
+  editions: { id: string; locale: string }[];
+  editionId: string | undefined;
+  onSelect: (id: string) => void;
+  onCreated: (id: string) => void;
+  createEdition: ReturnType<typeof useCreateLanguageEdition>;
+}) {
+  const [localeDraft, setLocaleDraft] = useState("en-US");
+  const existingLocales = new Set(editions.map((edition) => edition.locale));
+  const creatableLocales = ["ja-JP", "en-US"].filter((locale) => !existingLocales.has(locale));
+  useEffect(() => {
+    if (!creatableLocales.includes(localeDraft) && creatableLocales[0] !== undefined) {
+      setLocaleDraft(creatableLocales[0]);
+    }
+  }, [creatableLocales, localeDraft]);
+
+  return (
+    <div className="my-2 flex shrink-0 flex-wrap items-center gap-2 text-sm">
+      <label className="flex items-center gap-2">
+        言語版
+        <select
+          value={editionId ?? ""}
+          onChange={(event) => onSelect(event.target.value)}
+          className={textFieldClass}
+        >
+          {editions.map((edition) => (
+            <option key={edition.id} value={edition.id}>
+              {edition.locale}
+            </option>
+          ))}
+        </select>
+      </label>
+      {creatableLocales.length > 0 && editionId !== undefined && (
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createEdition.mutate(
+              { locale: localeDraft, sourceEditionId: editionId },
+              {
+                onSuccess: (work) => {
+                  const created = work.languageEditions.find(
+                    (edition) => edition.locale === localeDraft,
+                  );
+                  if (created !== undefined) {
+                    onCreated(created.id);
+                  }
+                },
+              },
+            );
+          }}
+        >
+          <select
+            value={localeDraft}
+            onChange={(event) => setLocaleDraft(event.target.value)}
+            className={textFieldClass}
+            aria-label="追加する言語"
+          >
+            {creatableLocales.map((locale) => (
+              <option key={locale} value={locale}>
+                {locale}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className={buttonNeutralClass}
+            disabled={createEdition.isPending}
+          >
+            言語版を追加
+          </button>
+        </form>
+      )}
+    </div>
   );
 }
 

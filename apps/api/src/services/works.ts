@@ -1,11 +1,12 @@
 import {
   CONTENT_SCHEMA_VERSION,
   createInitialContentDocument,
+  type ContentDocument,
   type Work,
   type WorkSummary,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
-import { serializeContent } from "../domain/content-json.ts";
+import { deserializeContent, serializeContent } from "../domain/content-json.ts";
 import { logger } from "../logger.ts";
 import { removeStorageFile } from "../storage/asset-store.ts";
 import type { DataDirectories } from "../storage/paths.ts";
@@ -161,6 +162,91 @@ export async function cloneWork(
   });
 
   return getWork(prisma, newWorkId);
+}
+
+export function buildLanguageEditionSeedDocument(
+  source: ContentDocument,
+  targetLocale: ContentDocument["locale"],
+): ContentDocument {
+  return {
+    ...source,
+    locale: targetLocale,
+    speakers: source.speakers.map((speaker) => ({ ...speaker, voiceProfileId: null })),
+    audioTakes: [],
+    scenes: source.scenes.map((scene) => ({
+      ...scene,
+      lines: scene.lines.map((line) => ({ ...line, selectedAudioTakeId: null })),
+    })),
+  };
+}
+
+export async function createLanguageEdition(
+  prisma: PrismaClient,
+  workId: string,
+  locale: ContentDocument["locale"],
+  sourceEditionId: string,
+): Promise<Work> {
+  const work = await prisma.work.findUnique({
+    where: { id: workId },
+    include: { languageEditions: { select: { id: true, locale: true } } },
+  });
+  if (work === null) {
+    throw resourceNotFound("work", workId);
+  }
+  const sourceEdition = await prisma.languageEdition.findUnique({
+    where: { id: sourceEditionId },
+    include: { currentScriptVersion: true },
+  });
+  if (sourceEdition === null || sourceEdition.workId !== workId) {
+    throw resourceNotFound("language_edition", sourceEditionId);
+  }
+  if (sourceEdition.currentScriptVersion === null) {
+    throw new ApiError(500, "INTERNAL_ERROR", "現在の台本版が設定されていません。");
+  }
+  if (work.languageEditions.some((edition) => edition.locale === locale)) {
+    throw new ApiError(409, "LANGUAGE_EDITION_EXISTS", undefined, { workId, locale });
+  }
+
+  const sourceContent = deserializeContent(sourceEdition.currentScriptVersion.contentJson);
+  const seeded = buildLanguageEditionSeedDocument(sourceContent, locale);
+  const contentJson = serializeContent(seeded);
+  const sourceScriptVersionId = sourceEdition.currentScriptVersion.id;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const edition = await tx.languageEdition.create({
+        data: { workId, locale },
+      });
+      const script = await tx.scriptVersion.create({
+        data: {
+          languageEditionId: edition.id,
+          versionNumber: 1,
+          contentSchemaVersion: seeded.schemaVersion,
+          contentJson,
+          sourceScriptVersionId,
+          author: "human",
+        },
+      });
+      await tx.languageEdition.update({
+        where: { id: edition.id },
+        data: { currentScriptVersionId: script.id },
+      });
+    });
+  } catch (error) {
+    if (isPrismaCode(error, "P2002")) {
+      throw new ApiError(409, "LANGUAGE_EDITION_EXISTS", undefined, { workId, locale });
+    }
+    throw error;
+  }
+  return getWork(prisma, workId);
+}
+
+function isPrismaCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === code
+  );
 }
 
 export async function updateWork(

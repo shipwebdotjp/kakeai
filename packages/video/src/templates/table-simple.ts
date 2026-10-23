@@ -35,9 +35,9 @@ interface TableOnset {
   color: string;
 }
 
-function cellText(value: string | number, column: TableColumn): string {
+function cellText(value: string | number, column: TableColumn, locale: string): string {
   if (typeof value === "number" && column.type === "number") {
-    return formatNumber(value, column.format);
+    return formatNumber(value, column.format, locale);
   }
   return String(value);
 }
@@ -119,7 +119,7 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
             onset === undefined
               ? ""
               : `<span id="${onsetOverlayId(cellId)}" class="kakeai-onsetoverlay kakeai-onset-${onset.preset}" style="--kakeai-onset-color:${onset.color}"></span>`;
-          return `<td id="${cellId}" class="kakeai-tablecell" style="text-align:${columnAlign(column)};"><span id="${cellId}-text">${escapeHtmlText(cellText(row[column.key] ?? "", column))}</span>${overlay}</td>`;
+          return `<td id="${cellId}" class="kakeai-tablecell" style="text-align:${columnAlign(column)};"><span id="${cellId}-text">${escapeHtmlText(cellText(row[column.key] ?? "", column, context.document.locale))}</span>${overlay}</td>`;
         })
         .join("");
       return `<tr id="${rowIdOf(rowIndex)}" class="kakeai-tablerow">${cellsHtml}</tr>`;

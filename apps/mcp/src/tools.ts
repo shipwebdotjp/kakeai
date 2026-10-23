@@ -53,6 +53,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "work.create": "作品、`ja-JP` 既定の言語版、初期台本版を作成する。",
   "work.update":
     "作品の管理上の作品名（`title`）を変更する。動画内に表示するタイトルは台本側の Scene スロットで、これとは別。",
+  "edition.create":
+    "既存作品に言語版を追加する。シード元の現行台本をコピーし、声と音声を取り除いた初期版を作る。翻訳は script.save で別途保存する。",
   "script.get":
     "台本版を取得する。`scriptVersionId` または `languageEditionId`（その Edition の current）のどちらか一方を指定する。",
   "script.validate":

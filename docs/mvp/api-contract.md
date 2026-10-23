@@ -279,6 +279,8 @@ Content-Type: application/json
 
 DELETE /works/:workId は確認済みの破壊的操作である。子Workがあるときは409 `WORK_HAS_CHILDREN` を返す。子がなければ、当該WorkのEdition、ScriptVersion、Job、ArtifactのDB行と実体を削除する。共有Assetは削除しない。削除済みWorkの出力・履歴は復元できない。
 
+POST /works/:workId/language-editions は、既存 Work に言語版を追加する。リクエストは `{ locale, sourceEditionId }`（[../multilingual-editions/spec.md](../multilingual-editions/spec.md)）とし、同一トランザクションで Edition と初期 ScriptVersion v1 を作って `currentScriptVersionId` を設定する。初期版はシード元 Edition の current の深いコピーに置き換え規則（`document.locale` 変換、話者 `voiceProfileId` の null 化、`audioTakes` の空化と `selectedAudioTakeId` の null 化）を適用したものとし、`sourceScriptVersionId` にシード元を記録する。当該 Work に既にある locale は 409 `LANGUAGE_EDITION_EXISTS`、他 Work の Edition や存在しない Work/Edition は 404 `RESOURCE_NOT_FOUND` とする。
+
 ### 台本の取得と版履歴
 
 編集画面は最初に GET /language-editions/:editionId/current-script-version を呼び、完全なScriptVersion DTOを取得する。currentはEditionの `currentScriptVersionId` が指すScriptVersionであり、最大のversionNumberから推測しない。特定の版やレンダー履歴から台本を開く場合は GET /script-versions/:scriptVersionId を使う。
@@ -758,6 +760,7 @@ GET /api/v1/script-versions/scr_003/subtitles
 | 409 | ASSET_IN_USE | Asset削除時に残存する版またはJobが参照している | assetId, references |
 | 409 | FACE_SET_IN_USE | Face Set削除時に外観（ライブラリまたは保存済み版）が参照している | faceSetId, references |
 | 409 | WORK_HAS_CHILDREN | 子Workを持つWorkの削除 | workId, childWorkIds |
+| 409 | LANGUAGE_EDITION_EXISTS | 同一 Work に既にある locale の言語版を追加しようとした | workId, locale |
 | 409 | JOB_NOT_CANCELLABLE | queued以外のJobをキャンセルしようとした | jobId, status |
 | 413 | FILE_TOO_LARGE | アップロードが設定済み上限を超過 | maxBytes |
 | 415 | UNSUPPORTED_MEDIA_TYPE | 許可されない画像、動画、音声形式 | receivedMediaType, allowedMediaTypes |

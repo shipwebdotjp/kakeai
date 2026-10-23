@@ -93,8 +93,8 @@ function categoryLabel(row: TableRow, column: TableColumn): string {
   return value === undefined ? "" : String(value);
 }
 
-function valueLabel(value: number, column: TableColumn): string {
-  return escapeHtmlText(formatNumber(value, column.format));
+function valueLabel(value: number, column: TableColumn, locale: string): string {
+  return escapeHtmlText(formatNumber(value, column.format, locale));
 }
 
 function chartAction(
@@ -134,6 +134,7 @@ function horizontalValueGutter(
   values: number[][],
   columns: TableColumn[],
   valueLabels: boolean,
+  locale: string,
 ): number {
   if (!valueLabels) {
     return 0;
@@ -145,7 +146,7 @@ function horizontalValueGutter(
       if (column === undefined) {
         return;
       }
-      widest = Math.max(widest, estimateLabelWidthPx(formatNumber(value, column.format)));
+      widest = Math.max(widest, estimateLabelWidthPx(formatNumber(value, column.format, locale)));
     });
   });
   return clamp(
@@ -182,13 +183,19 @@ function barOverlayHtml(onset: ChartOnset | undefined, overlayId: string): strin
   return `<span id="${overlayId}" class="kakeai-onsetoverlay kakeai-onset-${onset.preset}" style="--kakeai-onset-color:${onset.color}"></span>`;
 }
 
-function axisTickLabel(tick: number, column: TableColumn | undefined, unit: string): string {
-  const formatted = column === undefined ? String(tick) : formatNumber(tick, column.format);
+function axisTickLabel(
+  tick: number,
+  column: TableColumn | undefined,
+  unit: string,
+  locale: string,
+): string {
+  const formatted = column === undefined ? String(tick) : formatNumber(tick, column.format, locale);
   return escapeHtmlText(`${formatted}${unit}`);
 }
 
 function renderVertical(args: RenderArgs): string {
   const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, labelId, valueLabels, axisUnit, axisFormat } = args;
+  const locale = context.document.locale;
   const available = PLOT_HEIGHT_PX - CATEGORY_BAND_PX;
   const availableWidth = PLOT_WIDTH_PX - ROW_LABEL_WIDTH_PX;
   const bandWidth = rows.length === 0 ? availableWidth : availableWidth / rows.length;
@@ -197,7 +204,7 @@ function renderVertical(args: RenderArgs): string {
     .map((tick) => {
       const bottom = stats.max === 0 ? 0 : (tick / stats.max) * available;
       const offset = `bottom:${roundPx(bottom)}px`;
-      return `<div class="kakeai-chartline" style="${offset}"></div><span class="kakeai-charttick" style="${offset}">${axisTickLabel(tick, axisFormat, axisUnit)}</span>`;
+      return `<div class="kakeai-chartline" style="${offset}"></div><span class="kakeai-charttick" style="${offset}">${axisTickLabel(tick, axisFormat, axisUnit, locale)}</span>`;
     })
     .join("");
   const cols = rows
@@ -208,7 +215,7 @@ function renderVertical(args: RenderArgs): string {
           const height = stats.max === 0 ? 0 : (value / stats.max) * available;
           const id = context.scope.id(`bar-${categoryIndex}-${seriesIndex}`);
           const label = valueLabels
-            ? `<span id="${labelId(categoryIndex, seriesIndex)}" class="kakeai-chartvalue">${valueLabel(value, column)}</span>`
+            ? `<span id="${labelId(categoryIndex, seriesIndex)}" class="kakeai-chartvalue">${valueLabel(value, column, locale)}</span>`
             : "";
           const overlay = barOverlayHtml(onsetFor(categoryIndex, seriesIndex), onsetOverlayId(id));
           return `<div id="${id}" class="kakeai-chartbar" style="width:${width}px;height:${roundPx(height)}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}${overlay}</div>`;
@@ -222,10 +229,11 @@ function renderVertical(args: RenderArgs): string {
 
 function renderHorizontal(args: RenderArgs): string {
   const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, labelId, valueLabels, axisUnit, axisFormat } = args;
+  const locale = context.document.locale;
   const available =
     PLOT_WIDTH_PX -
     HORIZONTAL_BAR_LEFT_PX -
-    horizontalValueGutter(values, seriesColumns, valueLabels);
+    horizontalValueGutter(values, seriesColumns, valueLabels, locale);
   const availableHeight = PLOT_HEIGHT_PX;
   const rowHeight =
     rows.length === 0
@@ -235,7 +243,7 @@ function renderHorizontal(args: RenderArgs): string {
   const lines = stats.ticks
     .map((tick) => {
       const left = stats.max === 0 ? 0 : (tick / stats.max) * available;
-      return `<div class="kakeai-charthline" style="left:${roundPx(left)}px"><span class="kakeai-charthtick">${axisTickLabel(tick, axisFormat, axisUnit)}</span></div>`;
+      return `<div class="kakeai-charthline" style="left:${roundPx(left)}px"><span class="kakeai-charthtick">${axisTickLabel(tick, axisFormat, axisUnit, locale)}</span></div>`;
     })
     .join("");
   const rowsHtml = rows
@@ -246,7 +254,7 @@ function renderHorizontal(args: RenderArgs): string {
           const width = stats.max === 0 ? 0 : (value / stats.max) * available;
           const id = context.scope.id(`bar-${categoryIndex}-${seriesIndex}`);
           const label = valueLabels
-            ? `<span id="${labelId(categoryIndex, seriesIndex)}" class="kakeai-charthvalue">${valueLabel(value, column)}</span>`
+            ? `<span id="${labelId(categoryIndex, seriesIndex)}" class="kakeai-charthvalue">${valueLabel(value, column, locale)}</span>`
             : "";
           const overlay = barOverlayHtml(onsetFor(categoryIndex, seriesIndex), onsetOverlayId(id));
           return `<div id="${id}" class="kakeai-chartbar kakeai-chartbar-h" style="width:${roundPx(width)}px;height:${height}px;background:${colorFor(categoryIndex, seriesIndex)}">${label}${overlay}</div>`;

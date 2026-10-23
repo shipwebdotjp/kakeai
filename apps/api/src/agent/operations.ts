@@ -28,6 +28,8 @@ import {
   agentCompositionListOutputSchema,
   agentCompositionPublishInputSchema,
   agentCompositionPublishOutputSchema,
+  agentEditionCreateInputSchema,
+  agentEditionCreateOutputSchema,
   agentJobCancelInputSchema,
   agentJobCancelOutputSchema,
   agentJobGetInputSchema,
@@ -97,7 +99,7 @@ import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
 import { getPreviewFrame } from "../services/preview-frames.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
 import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
-import { createWork, getWork, listWorks, updateWork } from "../services/works.ts";
+import { createWork, createLanguageEdition, getWork, listWorks, updateWork } from "../services/works.ts";
 import { AgentOperationError } from "./errors.ts";
 import { runWithAgentRequest } from "./idempotency.ts";
 
@@ -189,6 +191,15 @@ const definitions: AgentOperationDefinitions = {
     output: agentWorkUpdateOutputSchema,
     run: async (input, context) => ({
       work: await updateWork(context.prisma, input.workId, input.title),
+    }),
+  },
+  "edition.create": {
+    input: agentEditionCreateInputSchema,
+    output: agentEditionCreateOutputSchema,
+    run: async (input, context) => ({
+      work: await asWorkResource(
+        createLanguageEdition(context.prisma, input.workId, input.locale, input.sourceEditionId),
+      ),
     }),
   },
   "script.get": {

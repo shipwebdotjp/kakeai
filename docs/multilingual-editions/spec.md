@@ -13,7 +13,7 @@
 
 `POST /works/:workId/language-editions` を追加する。
 
-- リクエストは `locale` と、シード元を指す `sourceEditionId` を持つ。`locale` は `localeSchema`（`ja-JP` / `en-US`）で検証し、当該 Work に既に存在する locale は 409 で拒否する。
+- リクエストは `locale` と、シード元を指す `sourceEditionId` を持つ。`locale` は `localeSchema`（`ja-JP` / `en-US`）で検証し、当該 Work に既に存在する locale は 409 `LANGUAGE_EDITION_EXISTS` で拒否する。シード元が他 Work の Edition の場合は 404 `RESOURCE_NOT_FOUND` とする。
 - 同一トランザクションで Edition を作り、初期 `ScriptVersion` v1 を作成して `currentScriptVersionId` を設定する（[../mvp/spec.md](../mvp/spec.md) の作成規則に従う）。
 - 初期版の contentJson は、シード元 current 版を深いコピーして初期化する。ただし次を置き換える：
   - `document.locale` を作成先の locale に変える。
@@ -32,7 +32,7 @@
 ## 翻訳の接続（外部エージェント）
 
 - Agent Access に `edition.create` 操作を追加する（`work.create` と同じ系統の mutation）。引数は HTTP と同じ（`workId`、`locale`、`sourceEditionId`）。エージェントはこれで翻訳先 Edition を作れる。
-- 既存の `script.save` に検証を追加する：`ContentDocument.locale` と対象 Edition の `locale` の一致を必須にする。不一致は `EDITION_LOCALE_MISMATCH`（既存の操作エラーの形状に従う）で返す。
+- 既存の `script.save` に検証は追加しない：`saveScriptVersion` が既に `ContentDocument.locale` と対象 Edition の `locale` の一致を必須とし、不一致は 422 `VALIDATION_ERROR`（`details.issues` の path `["content","locale"]`）で返す。エージェント束縛では同じ内容が `VALIDATION_ERROR` として返る。専用の `EDITION_LOCALE_MISMATCH` コードは設けない（既存の locale 不一致の扱いと統一する）。
 - 翻訳の下流（元 Edition の読み取り・翻訳の生成・対象 Edition への `script.save`）はエージェント側の責務とし、アプリは読み取りと検証だけを提供する。`skills/kakeai-production/` に翻訳版制作の手順（「元 Edition を `script.get` で読み、`edition.create` で訳edition を作り、翻訳 contentJson を `script.save` する」）を追加する。
 - 翻訳版は人が確認して current として承認する。承認を追加UIにする必要はなく、Web UI での版の選択（current 進行）をそのまま使う。
 

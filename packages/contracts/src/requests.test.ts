@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cloneWorkRequestSchema,
+  createLanguageEditionRequestSchema,
   createWorkRequestSchema,
   draftPreviewRequestSchema,
   saveScriptVersionRequestSchema,
@@ -48,6 +49,36 @@ describe("createWorkRequestSchema", () => {
   it("rejects an unsupported locale", () => {
     expect(
       createWorkRequestSchema.safeParse({ title: "作品", originalLocale: "fr-FR" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("createLanguageEditionRequestSchema", () => {
+  it("accepts a locale and source edition", () => {
+    expect(
+      createLanguageEditionRequestSchema.safeParse({
+        locale: "en-US",
+        sourceEditionId: "edition-1",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unsupported locale", () => {
+    expect(
+      createLanguageEditionRequestSchema.safeParse({
+        locale: "fr-FR",
+        sourceEditionId: "edition-1",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects unknown fields", () => {
+    expect(
+      createLanguageEditionRequestSchema.safeParse({
+        locale: "en-US",
+        sourceEditionId: "edition-1",
+        extra: 1,
+      }).success,
     ).toBe(false);
   });
 });

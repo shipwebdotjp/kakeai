@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   cloneWorkRequestSchema,
+  createLanguageEditionRequestSchema,
   createWorkRequestSchema,
   updateWorkRequestSchema,
 } from "@kakeai/contracts";
@@ -55,6 +56,23 @@ export function createWorksRouter(dependencies: WorksRouterDependencies): Router
     asyncHandler(async (req, res) => {
       const input = parseBody(cloneWorkRequestSchema, req.body);
       sendData(res, 201, await works.cloneWork(prisma, pathParam(req, "workId"), input.title));
+    }),
+  );
+
+  router.post(
+    "/works/:workId/language-editions",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(createLanguageEditionRequestSchema, req.body);
+      sendData(
+        res,
+        201,
+        await works.createLanguageEdition(
+          prisma,
+          pathParam(req, "workId"),
+          input.locale,
+          input.sourceEditionId,
+        ),
+      );
     }),
   );
 

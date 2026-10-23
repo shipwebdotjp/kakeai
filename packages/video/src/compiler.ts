@@ -835,26 +835,34 @@ function actionEase(ease: FigureEase | undefined): string {
   return ease === "overshoot" ? "back.out(1.6)" : "power1.out";
 }
 
-function valueFormatterExpr(format: ValueAnimation["format"]): string {
+function currencyForLocale(locale: string): string {
+  return locale.startsWith("ja") ? "JPY" : "USD";
+}
+
+function valueFormatterExpr(format: ValueAnimation["format"], locale = "ja-JP"): string {
   switch (format) {
     case "integer":
-      return `(function(){var f=new Intl.NumberFormat("ja-JP",{maximumFractionDigits:0});return function(v){return f.format(v);};})()`;
+      return `(function(){var f=new Intl.NumberFormat(${JSON.stringify(locale)},{maximumFractionDigits:0});return function(v){return f.format(v);};})()`;
     case "decimal":
-      return `(function(){var f=new Intl.NumberFormat("ja-JP",{minimumFractionDigits:1,maximumFractionDigits:2});return function(v){return f.format(v);};})()`;
+      return `(function(){var f=new Intl.NumberFormat(${JSON.stringify(locale)},{minimumFractionDigits:1,maximumFractionDigits:2});return function(v){return f.format(v);};})()`;
     case "percent":
-      return `(function(){var f=new Intl.NumberFormat("ja-JP",{style:"percent",maximumFractionDigits:1});return function(v){return f.format(v);};})()`;
+      return `(function(){var f=new Intl.NumberFormat(${JSON.stringify(locale)},{style:"percent",maximumFractionDigits:1});return function(v){return f.format(v);};})()`;
     case "currency":
-      return `(function(){var f=new Intl.NumberFormat("ja-JP",{style:"currency",currency:"JPY",maximumFractionDigits:0});return function(v){return f.format(v);};})()`;
+      return `(function(){var f=new Intl.NumberFormat(${JSON.stringify(locale)},{style:"currency",currency:${JSON.stringify(currencyForLocale(locale))},maximumFractionDigits:0});return function(v){return f.format(v);};})()`;
     case "raw":
       return `function(v){return String(v);}`;
   }
 }
 
-function valueTweenLine(item: ValueAnimation, absStartMs: number): string | null {
+function valueTweenLine(
+  item: ValueAnimation,
+  absStartMs: number,
+  locale: string,
+): string | null {
   if (item.durationMs <= 0 || !Number.isFinite(item.from) || !Number.isFinite(item.to)) {
     return null;
   }
-  const formatter = valueFormatterExpr(item.format);
+  const formatter = valueFormatterExpr(item.format, locale);
   const startMs = absStartMs + item.startMs;
   const targetId = JSON.stringify(item.targetId);
   return `(function(){var _fmt=${formatter};var _o={v:${item.from}};tl.fromTo(_o,{v:${item.from}},{v:${item.to},duration:${secondsText(item.durationMs / 1000)},ease:"power1.out",immediateRender:true,onUpdate:function(){var el=document.getElementById(${targetId});if(el){el.textContent=_fmt(this.targets()[0].v);}}},${toSecondsText(startMs)});})();`;
@@ -1407,7 +1415,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
       }
 
       for (const item of rendered.valueAnimations ?? []) {
-        const valueLine = valueTweenLine(item, absStartMs);
+        const valueLine = valueTweenLine(item, absStartMs, document.locale);
         if (valueLine !== null) {
           tweenLines.push(valueLine);
         }

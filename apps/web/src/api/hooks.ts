@@ -207,6 +207,23 @@ export function useUploadAssets() {
   });
 }
 
+export function useCreateLanguageEdition(workId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { locale: string; sourceEditionId: string }): Promise<Work> =>
+      (
+        await apiRequest<Work>(`/works/${encodeURIComponent(workId ?? "")}/language-editions`, {
+          method: "POST",
+          body: input,
+        })
+      ).data,
+    onSuccess: (work) => {
+      queryClient.invalidateQueries({ queryKey: ["works"] });
+      queryClient.setQueryData(["work", work.id], work);
+    },
+  });
+}
+
 export function useDeleteAsset() {
   const queryClient = useQueryClient();
   return useMutation({

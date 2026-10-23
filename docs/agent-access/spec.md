@@ -148,6 +148,7 @@
 
 - `work.create` — Work、指定 locale（既定は `ja-JP`）の LanguageEdition、初期 ScriptVersion を [../mvp/spec.md](../mvp/spec.md) の作成規則で作る。
 - `work.update` — Work の管理上の作品名 `title` を変更する。動画内に表示するタイトルは ContentDocument 側の Scene スロットであり、これとは別である（[../mvp/api-contract.md](../mvp/api-contract.md) の `PATCH /works/:workId` と同じ規則）。
+- `edition.create` — 既存 Work に言語版を追加する。引数は HTTP の `POST /works/:workId/language-editions` と同じ（`workId`、`locale`、`sourceEditionId`）。初期版はシード元 current のコピーに置き換え規則を適用したもの（[../multilingual-editions/spec.md](../multilingual-editions/spec.md)）。重複 locale は `LANGUAGE_EDITION_EXISTS`、他 Work の Edition は `WORK_NOT_FOUND` とする。
 - `script.save` — `languageEditionId` と全 `ContentDocument` を受け、検証して新しい Script Version を追加し current を進める。全体の置換や取り込み向けであり、通常の編集は `script.edit` を使う。
 - `script.edit` — 基準版と `ScriptOperation` の配列を受け、操作コアで一括適用し、保存検証を通して新しい Script Version を追加する。1 呼び出しは 1 版とし、途中失敗時は版を作らない。
 - `asset.import` — 後述の手順で Asset を取り込む。

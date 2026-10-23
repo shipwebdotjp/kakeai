@@ -69,6 +69,19 @@ saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
 
 - `work.create` returns the Work with its `languageEditions`. Use the first
   edition (default locale `ja-JP`) unless the user asked for another locale.
+- To make another language of the same Work, use `edition.create` with
+  `workId`, the target `locale` (`en-US`) and `sourceEditionId` (the current
+  edition you translated from). It copies the source current script
+  (scenes, cues, characters) and strips voices and audio takes, so the new
+  edition starts as subtitles-only with TTS unset. A locale that already
+  exists is `LANGUAGE_EDITION_EXISTS`; a source from another Work is
+  `WORK_NOT_FOUND`.
+- To translate, `script.get` the source edition's current version, translate
+  the text fields, then `script.save` the translated `ContentDocument` to the
+  target `languageEditionId`. The document `locale` must equal the target
+  edition's locale or the save is `VALIDATION_ERROR`. Then continue the
+  normal flow on the new edition: pick voices for its locale, run TTS,
+  validate, render.
 - `work.update` renames the Work's management title (`workId` + `title`). The
   title shown inside the video is a Scene slot in the ContentDocument, not this
   field; change that through `script.edit`.

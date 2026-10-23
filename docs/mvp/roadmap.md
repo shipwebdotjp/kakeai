@@ -64,9 +64,8 @@
 ## Phase 4: 多言語制作
 
 - `LanguageEdition` を使って英語などの言語別制作版を追加する。第2言語版の作成と翻訳接続の具体化は [../multilingual-editions/spec.md](../multilingual-editions/spec.md) と [../multilingual-editions/roadmap.md](../multilingual-editions/roadmap.md) を正とする。Edition 間の同期状態の表示は [ADR-0082](../adr/0082-no-edition-sync-tracking.md) により実装対象から外れた。
-- 翻訳候補、言語別の台本、TTS音声、素材差し替え、字幕をそれぞれ版管理する。
-- 原本の変更と各言語版の同期状態を表示し、再翻訳・再レンダーの対象を明確にする。
-- 言語別の読速、文字量、フォント、音声モデル、公開先に合わせた品質検証を追加する。
+- R1/R2 は実装済み：既存 Work への Edition 追加（`POST /works/:workId/language-editions`、`edition.create`）、編集画面の切替・追加 UI、数値・通貨の locale フォーマット、翻訳のエージェント接続（`script.save` の locale 一致は既存 `VALIDATION_ERROR`、`skills/kakeai-production/` の手順）。残りは R3 候補（言語別品質・素材言語タグ）。
+- 言語別の読速、文字量、フォント、音声モデル、公開先に合わせた品質検証を追加する（R3 候補として [../multilingual-editions/roadmap.md](../multilingual-editions/roadmap.md) に残る）。
 
 完了条件：日本語原本から複数言語の制作版を人が承認し、言語ごとに再現可能なMP4を出力できる。
 
