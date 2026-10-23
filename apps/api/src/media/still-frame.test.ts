@@ -26,7 +26,7 @@ describe("still frame extraction", () => {
       "-f",
       "lavfi",
       "-i",
-      "testsrc=size=160x120:rate=10",
+      "testsrc=size=160x120:rate=30",
       "-t",
       "2",
       "-pix_fmt",
@@ -42,7 +42,7 @@ describe("still frame extraction", () => {
   const source = () => ({ filePath: videoPath, sha256: "still-test-sha" });
 
   it("resolves the last frame PTS at or before the requested time", async () => {
-    expect(await resolveStillFramePtsMs(source(), 1450)).toBe(1400);
+    expect(await resolveStillFramePtsMs(source(), 1450)).toBe(1433);
     expect(await resolveStillFramePtsMs(source(), 1000)).toBe(1000);
   });
 
@@ -76,5 +76,15 @@ describe("still frame extraction", () => {
 
     const second = await ensureStillFramePngAtPts(source(), 1400, cacheDir);
     expect(second).toBe(first);
+  });
+
+  it("extracts the clamped last frame when the request exceeds the duration", async () => {
+    const cacheDir = stillFrameCacheDir(dir);
+    const lastPts = await resolveStillFramePtsMs(source(), 9000);
+    expect(lastPts).toBe(1967);
+    const output = await ensureStillFramePngAtPts(source(), lastPts, cacheDir);
+    const info = await stat(output);
+    expect(info.isFile()).toBe(true);
+    expect(info.size).toBeGreaterThan(0);
   });
 });

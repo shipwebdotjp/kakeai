@@ -18,6 +18,11 @@ export interface StillFrameSource {
 const MAX_PTS_CACHE = 16;
 const ptsCache = new Map<string, number[]>();
 
+/** 目的 PTS の手前から入力シークする幅（ms）。GOP 長より十分大きく取る。 */
+const SEEK_BACKOFF_MS = 2000;
+/** select フィルタ閾値の余裕（ms）。フレーム間隔より十分小さく取る。 */
+const SELECT_EPSILON_MS = 5;
+
 async function framePtsList(source: StillFrameSource): Promise<number[]> {
   const cached = ptsCache.get(source.sha256);
   if (cached !== undefined) {
@@ -100,13 +105,20 @@ export async function extractStillFramePng(
   await mkdir(dirname(outputPath), { recursive: true });
   const temporaryPath = `${outputPath}.tmp-${process.pid}-${randomUUID()}`;
   try {
-    // 入力シーク（-ss を -i の前）はキーフレームへシーク後にデコードして目的時刻まで捨てるため、
-    // 再エンコードする静止画抽出では解決済み PTS に一致するフレームが得られる。
+    // 入力シーク（-ss を -i の前）を解決済み PTS ちょうどに置くと、その時刻より前の
+    // フレームがすべて捨てられるため、末尾フレーム等では出力が0件になる。
+    // その場合 ffmpeg は終了コード0でファイルを生成せず、後続の rename が
+    // ENOENT で失敗する。少し手前からシークし、select フィルタで目的の
+    // フレームを選び直す（入力シーク後はタイムスタンプがシーク起点になる）。
+    const seekMs = Math.max(0, ptsMs - SEEK_BACKOFF_MS);
+    const thresholdSec = (ptsMs - seekMs - SELECT_EPSILON_MS) / 1000;
     await runFfmpeg([
       "-ss",
-      String(ptsMs / 1000),
+      String(seekMs / 1000),
       "-i",
       source.filePath,
+      "-vf",
+      `select='gte(t,${thresholdSec})'`,
       "-frames:v",
       "1",
       "-f",
@@ -116,6 +128,10 @@ export async function extractStillFramePng(
       "-y",
       temporaryPath,
     ]);
+    const produced = await stat(temporaryPath).catch(() => null);
+    if (produced === null || !produced.isFile()) {
+      throw new Error(`静止フレームを抽出できませんでした（ptsMs=${ptsMs}）。`);
+    }
     await rename(temporaryPath, outputPath);
   } catch (error) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
