@@ -116,6 +116,8 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 ```jsonc
 {
   "title": "テンプレート化の要点",                 // 任意
+  "width": "medium",                             // 任意: long | medium | short（省略時は long）
+  "align": "center",                             // 任意: left | center | right（省略時は left）
   "items": [
     { "text": "再利用できる", "trigger": { "kind": "lines", "startLineId": "line-1", "endLineId": "line-1" }, "effect": { "kind": "emphasize", "style": "frame", "tone": "primary" } },
     { "text": "表記ゆれを防ぐ", "trigger": { "kind": "lines", "startLineId": "line-2", "endLineId": "line-3" }, "effect": { "kind": "emphasize", "style": "background", "tone": "secondary" } }
@@ -126,6 +128,8 @@ TriggerはCue相対の時刻へ解決する。テンプレートは `RenderConte
 
 - `items[].trigger`・`items[].effect` は任意。省略したアイテムは常時表示で効果なし。
 - `appear` は列全体の登場を表す任意フィールド。グループtarget＋`staggerMs` と同じ意味。
+- `width` は見出しとポイント列の両方に効く最大幅。`long`（1400px）・`medium`（1120px）・`short`（840px）の3段階。省略時は `long` と同じ見た目。
+- `align` は見出しと各ポイントの文言の文字揃え。`left`・`center`・`right` の3択。省略時は `left` と同じ見た目。リストの束は画面中央に置いたまま。
 
 ## 版と移行
 

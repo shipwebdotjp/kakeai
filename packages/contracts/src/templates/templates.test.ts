@@ -421,6 +421,8 @@ describe("visual template metadata", () => {
   it("accepts a list.callout input and rejects mismatched trigger/effect", () => {
     expect(
       listCalloutInputSchema.safeParse({
+        width: "medium",
+        align: "center",
         items: [
           {
             text: "a",
@@ -435,6 +437,36 @@ describe("visual template metadata", () => {
       listCalloutInputSchema.safeParse({ items: [{ text: "a", trigger: { kind: "cue" } }] }).success,
     ).toBe(false);
     expect(listCalloutInputSchema.safeParse({ items: [] }).success).toBe(false);
+    expect(
+      listCalloutInputSchema.safeParse({ width: "huge", items: [{ text: "a" }] }).success,
+    ).toBe(false);
+    expect(
+      listCalloutInputSchema.safeParse({ align: "justify", items: [{ text: "a" }] }).success,
+    ).toBe(false);
+  });
+
+  it("exposes list.callout width and align as select fields", () => {
+    const fields = getTemplateInputFields("list.callout", 1);
+    const width = fields?.find((field) => field.key === "width");
+    const align = fields?.find((field) => field.key === "align");
+    expect(width).toMatchObject({
+      kind: "select",
+      label: "幅",
+      options: [
+        { value: "long", label: "長い" },
+        { value: "medium", label: "中くらい" },
+        { value: "short", label: "短い" },
+      ],
+    });
+    expect(align).toMatchObject({
+      kind: "select",
+      label: "揃え",
+      options: [
+        { value: "left", label: "左揃え" },
+        { value: "center", label: "中央揃え" },
+        { value: "right", label: "右揃え" },
+      ],
+    });
   });
 });
 

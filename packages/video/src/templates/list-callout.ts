@@ -1,8 +1,10 @@
 import {
   listCalloutInputSchema,
   type EmphasizeEffect,
+  type ListCalloutAlign,
   type ListCalloutAppear,
   type ListCalloutItem,
+  type ListCalloutWidth,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
@@ -128,6 +130,32 @@ export function planListCalloutEffects(
   return { itemIds, animation, stateIntervals };
 }
 
+// "long" は `.kakeai-calloutlist` の既定 max-width（compiler.ts の 1400px）と同期させること。
+// align 単独指定のフォールバックがこの値を使うため、ずらすと align のみ指定時のリスト幅が変わる。
+export const LIST_CALLOUT_WIDTH_PX: Record<ListCalloutWidth, number> = {
+  long: 1400,
+  medium: 1120,
+  short: 840,
+};
+
+export function listCalloutLayoutStyle(
+  width: ListCalloutWidth | undefined,
+  align: ListCalloutAlign | undefined,
+): string {
+  const parts: string[] = [];
+  if (width !== undefined) {
+    parts.push("width:100%");
+    parts.push(`max-width:${LIST_CALLOUT_WIDTH_PX[width]}px`);
+  } else if (align !== undefined) {
+    parts.push("width:100%");
+    parts.push(`max-width:${LIST_CALLOUT_WIDTH_PX.long}px`);
+  }
+  if (align !== undefined) {
+    parts.push(`text-align:${align}`);
+  }
+  return parts.join(";");
+}
+
 export function renderListCallout(input: unknown, context: RenderContext): RenderedCue {
   const parsed = listCalloutInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -135,14 +163,16 @@ export function renderListCallout(input: unknown, context: RenderContext): Rende
       { path: context.path, code: "invalid_input", message: "list.callout の入力が不正です。" },
     ]);
   }
-  const { title, items, appear } = parsed.data;
+  const { title, width, align, items, appear } = parsed.data;
   const theme = context.theme;
   const { itemIds, animation, stateIntervals } = planListCalloutEffects(items, appear, context);
+  const layoutStyle = listCalloutLayoutStyle(width, align);
+  const styleAttr = layoutStyle.length > 0 ? ` style="${layoutStyle}"` : "";
 
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
-      : `<figcaption class="kakeai-callouttitle">${escapeHtmlText(title)}</figcaption>`;
+      : `<figcaption class="kakeai-callouttitle"${styleAttr}>${escapeHtmlText(title)}</figcaption>`;
   const itemsHtml = items
     .map((item, index) => {
       const effect = item.effect?.kind === "emphasize" ? item.effect : undefined;
@@ -150,7 +180,7 @@ export function renderListCallout(input: unknown, context: RenderContext): Rende
     })
     .join("");
   return {
-    html: `<figure class="kakeai-calloutwrap">${titleHtml}<ul class="kakeai-calloutlist">${itemsHtml}</ul></figure>`,
+    html: `<figure class="kakeai-calloutwrap">${titleHtml}<ul class="kakeai-calloutlist"${styleAttr}>${itemsHtml}</ul></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

@@ -20,7 +20,7 @@ import type {
 } from "../render-context";
 import { mixHex, overlayToRgba, resolveFontFamilyCss } from "../theme";
 import { onsetOverlayId } from "../cue-effects";
-import { calloutItemOverlayHtml, planListCalloutEffects } from "../templates/list-callout";
+import { calloutItemOverlayHtml, listCalloutLayoutStyle, planListCalloutEffects } from "../templates/list-callout";
 import { renderMediaCardMedia } from "../templates/media-card";
 import { applyQuoteEffects } from "../templates/quote";
 import {
@@ -321,16 +321,20 @@ function renderHandmadeListCallout(input: unknown, context: RenderContext): Rend
       { path: context.path, code: "invalid_input", message: "list.callout の入力が不正です。" },
     ]);
   }
-  const { title, items, appear } = parsed.data;
+  const { title, width, align, items, appear } = parsed.data;
   const theme = context.theme;
   const palette = paperPalette(theme);
   const { itemIds, animation, stateIntervals } = planListCalloutEffects(items, appear, context);
   const slipIds = items.map((_item, index) => context.scope.id(`slip-${index}`));
+  const layoutStyle = listCalloutLayoutStyle(width, align);
+  const listStyleAttr = layoutStyle.length > 0 ? ` style="${layoutStyle}"` : "";
+  const titleBase = themeTextCss(theme, "heading", { fontSize: Math.min(theme.textRoles.heading.fontSize, 46) });
+  const titleStyle = [titleBase, layoutStyle].filter((part) => part.length > 0).join(";");
 
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
-      : `<figcaption class="kakeai-paper-callouttitle" style="${themeTextCss(theme, "heading", { fontSize: Math.min(theme.textRoles.heading.fontSize, 46) })}">${escapeHtmlText(title)}</figcaption>`;
+      : `<figcaption class="kakeai-paper-callouttitle" style="${titleStyle}">${escapeHtmlText(title)}</figcaption>`;
 
   const itemsHtml = items
     .map((item, index) => {
@@ -344,14 +348,14 @@ function renderHandmadeListCallout(input: unknown, context: RenderContext): Rend
           rotate,
           padding: "22px 38px 28px",
           palette,
-          textAlign: "left",
+          textAlign: align ?? "left",
         },
       )}${calloutItemOverlayHtml(itemIds[index]!, effect, theme)}</li>`;
     })
     .join("");
 
   return {
-    html: `<figure class="kakeai-calloutwrap kakeai-paper-calloutwrap">${titleHtml}<ul class="kakeai-calloutlist kakeai-paper-calloutlist">${itemsHtml}</ul></figure>`,
+    html: `<figure class="kakeai-calloutwrap kakeai-paper-calloutwrap">${titleHtml}<ul class="kakeai-calloutlist kakeai-paper-calloutlist"${listStyleAttr}>${itemsHtml}</ul></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

@@ -171,4 +171,40 @@ describe("renderListCallout", () => {
     const b = renderListCallout(baseInput, context("callout-b"));
     expect(a.html).not.toBe(b.html);
   });
+
+  it("keeps the default layout untouched when width and align are omitted", () => {
+    const rendered = renderListCallout(baseInput, context());
+    expect(rendered.html).not.toContain("max-width");
+    expect(rendered.html).not.toContain("text-align");
+  });
+
+  it("applies the width to the title and the list", () => {
+    const rendered = renderListCallout({ ...baseInput, width: "short" }, context());
+    expect(rendered.html).toContain(
+      '<figcaption class="kakeai-callouttitle" style="width:100%;max-width:840px">',
+    );
+    expect(rendered.html).toContain(
+      '<ul class="kakeai-calloutlist" style="width:100%;max-width:840px">',
+    );
+  });
+
+  it("applies the alignment to the title, the list, and each item", () => {
+    const rendered = renderListCallout({ ...baseInput, align: "center" }, context());
+    expect(rendered.html).toContain(
+      '<figcaption class="kakeai-callouttitle" style="width:100%;max-width:1400px;text-align:center">',
+    );
+    expect(rendered.html).toContain(
+      '<ul class="kakeai-calloutlist" style="width:100%;max-width:1400px;text-align:center">',
+    );
+    expect(rendered.html).toContain("再利用できる");
+  });
+
+  it("combines width and alignment in one style", () => {
+    const rendered = renderListCallout(
+      { ...baseInput, width: "medium", align: "right" },
+      context(),
+    );
+    expect(rendered.html).toContain("max-width:1120px");
+    expect(rendered.html).toContain("text-align:right");
+  });
 });

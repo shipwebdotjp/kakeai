@@ -176,6 +176,27 @@ describe("handmade-paper@1", () => {
     expect(compiled.html).not.toContain("y:60");
   });
 
+  it("applies callout width and alignment in the paper skin", () => {
+    const compiled = compile([
+      {
+        id: "vc-points-width",
+        template: { id: "list.callout", version: 1 },
+        range: { kind: "scene" },
+        layer: "overlay",
+        order: 0,
+        transition,
+        input: {
+          title: "3つの要点",
+          width: "short",
+          align: "right",
+          items: [{ text: "ひとつめ" }, { text: "ふたつめ" }],
+        },
+      },
+    ]);
+    expect(compiled.html).toContain("max-width:840px");
+    expect(compiled.html).toContain("text-align:right");
+  });
+
   it("adds no automatic motion when the cue has no effects", () => {
     const compiled = compile([
       {

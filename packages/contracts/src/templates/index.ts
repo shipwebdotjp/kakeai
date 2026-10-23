@@ -928,8 +928,16 @@ export const listCalloutAppearSchema = z.strictObject({
 });
 export type ListCalloutAppear = z.infer<typeof listCalloutAppearSchema>;
 
+export const listCalloutWidthSchema = z.enum(["long", "medium", "short"]);
+export type ListCalloutWidth = z.infer<typeof listCalloutWidthSchema>;
+
+export const listCalloutAlignSchema = z.enum(["left", "center", "right"]);
+export type ListCalloutAlign = z.infer<typeof listCalloutAlignSchema>;
+
 export const listCalloutInputSchema = z.strictObject({
   title: z.string().optional(),
+  width: listCalloutWidthSchema.optional(),
+  align: listCalloutAlignSchema.optional(),
   items: listCalloutItemsSchema,
   appear: listCalloutAppearSchema.optional(),
 });
@@ -970,6 +978,26 @@ const listCalloutV1: VisualTemplateDefinition = {
   },
   inputFields: [
     { kind: "optionalText", key: "title", label: "見出し" },
+    {
+      kind: "select",
+      key: "width",
+      label: "幅",
+      options: [
+        { value: "long", label: "長い" },
+        { value: "medium", label: "中くらい" },
+        { value: "short", label: "短い" },
+      ],
+    },
+    {
+      kind: "select",
+      key: "align",
+      label: "揃え",
+      options: [
+        { value: "left", label: "左揃え" },
+        { value: "center", label: "中央揃え" },
+        { value: "right", label: "右揃え" },
+      ],
+    },
     { kind: "calloutItems", key: "items", label: "ポイント" },
   ],
   collectAssetRefs: () => [],
