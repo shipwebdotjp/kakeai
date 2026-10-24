@@ -115,6 +115,8 @@ type ScriptOperation =
 | `cue.setInput` | `sceneId`、`cueId`、`input` の部分更新 | テンプレート入力スキーマに適合する。メディア参照は ready な Asset |
 | `cue.setPlacement` | `sceneId`、`cueId`、`layer`、`order` | テンプレートが許可する layer。描画順は layer と order で決まる |
 | `cue.setTransition` | `sceneId`、`cueId`、`enter` / `exit` | テンプレートの `transitionPolicy` に適合する。尺は実効表示窓内 |
+| `cue.move` | `sceneId`、`cueId`、`toSceneId` | Sceneをまたぐ行参照は初期化する（下記）。Cue ID は維持し、`order` は移動先の同一 layer の末尾へ振り直す |
+| `cue.copy` | `sceneId`、`cueId`、`toSceneIds`（1件以上）、任意の `key` | `cue.move` と同じ初期化を各複製先へ適用する。宛先ごとに新しい Cue ID を採番し、結果の `created.cueIds` は `toSceneIds` と同じ順序で返す。途中で1件でも失敗したら全体を適用しない |
 
 `character.standing@1` は 1 Scene に左右 1 体ずつ最大 2 件である。操作コアは立ち絵を通常の Cue として扱わず、次の操作で編集し、内部で Cue を生成する。UI の「左」「右」固定行と一致させる。同じ `side` への `standing.set` は既存 Cue の ID と order を維持して入力を置き換える。
 
@@ -122,6 +124,8 @@ type ScriptOperation =
 | --- | --- | --- |
 | `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `edge`（端からの位置3段階）・`vertical`（高さ3段階）、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1。`edge` 省略時は既存値、なければ `margin`。`vertical` 省略時は既存値、なければ `standard`。`transition` は enter/exit をまとめて置き換える |
 | `standing.remove` | `sceneId`、`side` | 対応する `character.standing@1` Cue を削除する |
+
+立ち絵の Scene 間転送は操作コアに新しい操作を足さず、`standing.set` と `standing.remove` の組み合わせで表す。単位は左右まとめて（1体ずつの転送はしない）。移動は転送先を転送元の設定で置き換えたうえで転送元を削除する。複製は転送先の置換だけを行い、複数の転送先へ一括適用できる。入れ替えは両方向の置換を行う。転送元に立ち絵がない場合の移動・複製は行わない。
 
 ### Cue操作の補足
 
@@ -132,6 +136,8 @@ type ScriptOperation =
 - `cue.setInput` は入力の部分更新である。plain object は深くマージし、配列・プリミティブ・`null` は置換する。`replace: true` のときは入力全体を置換する。マージ後の入力をテンプレートの入力スキーマで検証する。
 - `cue.setRange` の `offset` が Scene 尺を超える場合は、保存・プレビューと同じ警告コード（`offset_range_clamped` / `offset_range_out_of_scene`）を返す。
 - `cue.setTransition` はテンプレートの `transitionPolicy` に適合する範囲だけを許可する。
+- `cue.move` と `cue.copy` は、Sceneをまたぐ行参照を次の規則で初期化する。`range: lines` は `range: scene` へ戻す。効果トリガーの `{ kind: "lines", ... }` は `{ kind: "cue" }` へ置換する。`videoPlayback.gates` は削除する。`range: offset` はミリ秒をそのまま維持する（移動先が短い場合は `cue.setRange` と同じ警告を返す）。参照を初期化した宛先ごとに `cue_line_refs_reset` 警告を返す。
+- `cue.move` と `cue.copy` の宛先に insert Scene は指定できない。移動元と同一 Scene の指定、`character.standing@1` の指定は拒否する。立ち絵の Scene 間移動・複製・入れ替えは `standing.set` / `standing.remove` の組み合わせで表す（下記）。
 
 ### Character
 

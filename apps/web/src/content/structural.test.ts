@@ -18,7 +18,11 @@ import {
   commitCueStructural,
   commitSceneAudioStructural,
   commitStandingStructural,
+  copyCueStructural,
+  copyStandingsStructural,
+  moveCueStructural,
   removeCueStructural,
+  transferStandingsStructural,
 } from "./structural";
 
 function pointScene(document: ContentDocument): PointScene {
@@ -571,5 +575,290 @@ describe("structural operation adapter", () => {
     expect(
       result?.values.scenes[1]?.cues.some((cue) => cue.id === draft.id),
     ).toBe(false);
+  });
+
+  it("Cueを別Sceneへ移動すると行参照が初期化される", () => {
+    const base = createInitialContentDocument();
+    lines(base, ["line-a", "line-b"]);
+    pointScene(base).visualCues.push({
+      id: "cue-table",
+      template: { id: "table.simple", version: 1 },
+      range: { kind: "lines", startLineId: "line-a", endLineId: "line-b" },
+      layer: "card",
+      order: 10,
+      transition: {
+        enter: { ...DEFAULT_TRANSITION_POLICY.defaultEnter },
+        exit: { ...DEFAULT_TRANSITION_POLICY.defaultExit },
+      },
+      input: {
+        data: {
+          columns: [{ key: "name", label: "項目", type: "text" }],
+          rows: [{ name: "a" }],
+        },
+        effects: [
+          {
+            target: { kind: "row", index: 0 },
+            trigger: { kind: "lines", startLineId: "line-a", endLineId: "line-b" },
+            effect: { kind: "emphasize", style: "frame", tone: "primary" },
+          },
+        ],
+      },
+    });
+    const values = toFormValues(base);
+
+    const result = moveCueStructural(
+      base,
+      values,
+      DEFAULT_SCENE_IDS.point1,
+      "cue-table",
+      DEFAULT_SCENE_IDS.outro,
+      [],
+    );
+    expect(result).not.toBeNull();
+    const sourceCues =
+      result?.document.scenes.find((scene) => scene.id === DEFAULT_SCENE_IDS.point1)
+        ?.visualCues ?? [];
+    expect(sourceCues.some((cue) => cue.id === "cue-table")).toBe(false);
+    const moved = result?.document.scenes
+      .find((scene) => scene.id === DEFAULT_SCENE_IDS.outro)
+      ?.visualCues.find((cue) => cue.id === "cue-table");
+    expect(moved?.range).toEqual({ kind: "scene" });
+    expect(moved?.input).toMatchObject({
+      effects: [{ trigger: { kind: "cue" } }],
+    });
+    expect(
+      result?.result.warnings.some(
+        (warning) => warning.code === "cue_line_refs_reset",
+      ),
+    ).toBe(true);
+    expect(
+      result?.values.scenes
+        .find((scene) => scene.id === DEFAULT_SCENE_IDS.outro)
+        ?.cues.some((cue) => cue.id === "cue-table"),
+    ).toBe(true);
+  });
+
+  it("Cueを複数Sceneへ複製するとIDが採番し直される", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    const cueId = values.scenes[1]!.cues[0]!.id;
+
+    const result = copyCueStructural(
+      base,
+      values,
+      DEFAULT_SCENE_IDS.point1,
+      cueId,
+      [DEFAULT_SCENE_IDS.intro, DEFAULT_SCENE_IDS.outro],
+      [],
+    );
+    expect(result).not.toBeNull();
+    expect(result?.result.created.cueIds).toHaveLength(2);
+    expect(new Set(result?.result.created.cueIds).size).toBe(2);
+    const sourceCues =
+      result?.document.scenes.find((scene) => scene.id === DEFAULT_SCENE_IDS.point1)
+        ?.visualCues ?? [];
+    expect(sourceCues.some((cue) => cue.id === cueId)).toBe(true);
+  });
+
+  it("立ち絵を別Sceneへ移動・複製・入れ替えできる", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "char-1",
+        name: "一人目",
+        voices: [],
+        appearances: [
+          {
+            id: "app-1",
+            assetId: "asset-image",
+            expression: "normal",
+            pose: "default",
+            faceSetId: null,
+          },
+        ],
+      },
+      {
+        id: "char-2",
+        name: "二人目",
+        voices: [],
+        appearances: [
+          {
+            id: "app-2",
+            assetId: "asset-image",
+            expression: "normal",
+            pose: "default",
+            faceSetId: null,
+          },
+        ],
+      },
+    ];
+    const withStanding = commitStandingStructural(
+      base,
+      (() => {
+        const form = toFormValues(base);
+        const slot = form.scenes[1]!.standings.find(
+          (entry) => entry.side === "left",
+        )!;
+        slot.characterId = "char-1";
+        slot.appearanceId = "app-1";
+        return form;
+      })(),
+      DEFAULT_SCENE_IDS.point1,
+      "left",
+      [],
+    )!;
+    const outroForm = withStanding.values;
+    const outroSlot = outroForm.scenes[2]!.standings.find(
+      (entry) => entry.side === "left",
+    )!;
+    outroSlot.characterId = "char-2";
+    outroSlot.appearanceId = "app-2";
+    const bothSet = commitStandingStructural(
+      withStanding.document,
+      outroForm,
+      DEFAULT_SCENE_IDS.outro,
+      "left",
+      [],
+    )!;
+
+    const swapped = transferStandingsStructural(
+      bothSet.document,
+      bothSet.values,
+      DEFAULT_SCENE_IDS.point1,
+      DEFAULT_SCENE_IDS.outro,
+      "swap",
+      [],
+    );
+    expect(swapped).not.toBeNull();
+    const pointCue = swapped?.document.scenes
+      .find((scene) => scene.id === DEFAULT_SCENE_IDS.point1)
+      ?.visualCues.find((cue) => cue.template.id === "character.standing");
+    const outroCue = swapped?.document.scenes
+      .find((scene) => scene.id === DEFAULT_SCENE_IDS.outro)
+      ?.visualCues.find((cue) => cue.template.id === "character.standing");
+    expect(pointCue?.input).toMatchObject({ characterId: "char-2" });
+    expect(outroCue?.input).toMatchObject({ characterId: "char-1" });
+
+    const moved = transferStandingsStructural(
+      bothSet.document,
+      bothSet.values,
+      DEFAULT_SCENE_IDS.point1,
+      DEFAULT_SCENE_IDS.outro,
+      "move",
+      [],
+    );
+    expect(moved).not.toBeNull();
+    expect(
+      moved?.document.scenes
+        .find((scene) => scene.id === DEFAULT_SCENE_IDS.point1)
+        ?.visualCues.some((cue) => cue.template.id === "character.standing"),
+    ).toBe(false);
+    expect(
+      moved?.document.scenes
+        .find((scene) => scene.id === DEFAULT_SCENE_IDS.outro)
+        ?.visualCues.find((cue) => cue.template.id === "character.standing")
+        ?.input,
+    ).toMatchObject({ characterId: "char-1" });
+
+    const copied = transferStandingsStructural(
+      bothSet.document,
+      bothSet.values,
+      DEFAULT_SCENE_IDS.point1,
+      DEFAULT_SCENE_IDS.outro,
+      "copy",
+      [],
+    );
+    expect(copied).not.toBeNull();
+    expect(
+      copied?.document.scenes
+        .find((scene) => scene.id === DEFAULT_SCENE_IDS.point1)
+        ?.visualCues.some((cue) => cue.template.id === "character.standing"),
+    ).toBe(true);
+    expect(
+      copied?.document.scenes
+        .find((scene) => scene.id === DEFAULT_SCENE_IDS.outro)
+        ?.visualCues.find((cue) => cue.template.id === "character.standing")
+        ?.input,
+    ).toMatchObject({ characterId: "char-1" });
+  });
+
+  it("立ち絵を複数のSceneへまとめて複製できる", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "char-1",
+        name: "一人目",
+        voices: [],
+        appearances: [
+          {
+            id: "app-1",
+            assetId: "asset-image",
+            expression: "normal",
+            pose: "default",
+            faceSetId: null,
+          },
+        ],
+      },
+    ];
+    const form = toFormValues(base);
+    const slot = form.scenes[1]!.standings.find(
+      (entry) => entry.side === "left",
+    )!;
+    slot.characterId = "char-1";
+    slot.appearanceId = "app-1";
+    const committed = commitStandingStructural(
+      base,
+      form,
+      DEFAULT_SCENE_IDS.point1,
+      "left",
+      [],
+    )!;
+
+    const copied = copyStandingsStructural(
+      committed.document,
+      committed.values,
+      DEFAULT_SCENE_IDS.point1,
+      [DEFAULT_SCENE_IDS.intro, DEFAULT_SCENE_IDS.outro],
+      [],
+    );
+    expect(copied).not.toBeNull();
+    for (const sceneId of [DEFAULT_SCENE_IDS.intro, DEFAULT_SCENE_IDS.outro]) {
+      expect(
+        copied?.document.scenes
+          .find((scene) => scene.id === sceneId)
+          ?.visualCues.find((cue) => cue.template.id === "character.standing")
+          ?.input,
+      ).toMatchObject({ characterId: "char-1" });
+    }
+    expect(
+      copied?.document.scenes
+        .find((scene) => scene.id === DEFAULT_SCENE_IDS.point1)
+        ?.visualCues.some((cue) => cue.template.id === "character.standing"),
+    ).toBe(true);
+  });
+
+  it("立ち絵のないSceneからの移動・複製は行わない", () => {
+    const base = createInitialContentDocument();
+    const values = toFormValues(base);
+    expect(
+      transferStandingsStructural(
+        base,
+        values,
+        DEFAULT_SCENE_IDS.point1,
+        DEFAULT_SCENE_IDS.outro,
+        "move",
+        [],
+      ),
+    ).toBeNull();
+    expect(
+      transferStandingsStructural(
+        base,
+        values,
+        DEFAULT_SCENE_IDS.point1,
+        DEFAULT_SCENE_IDS.outro,
+        "copy",
+        [],
+      ),
+    ).toBeNull();
   });
 });

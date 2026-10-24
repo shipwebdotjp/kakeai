@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Clapperboard, Copy, Trash2 } from "lucide-react";
+import { ArrowRightLeft, Clapperboard, Copy, CopyPlus, Trash2 } from "lucide-react";
 import {
   useFieldArray,
   useWatch,
@@ -66,7 +66,6 @@ import { FLOW_EFFECTS_FIELD_KEY } from "../content/flow";
 import {
   PRESET_LABELS,
   badgeNeutralClass,
-  buttonDangerClass,
   buttonNeutralClass,
   colorFieldClass,
   editAreaClass,
@@ -80,6 +79,7 @@ import {
   textFieldClass,
 } from "../ui";
 import { useCompositions, useTheme } from "../api/hooks";
+import { IconMenu, iconMenuDangerItemClass, iconMenuItemClass } from "./IconMenu";
 import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { VideoPlaybackField } from "./VideoPlaybackField";
@@ -185,6 +185,8 @@ interface CueListProps {
   sceneDurationMs: number | null;
   onRemoveCue: (cueId: string) => void;
   onCommitCue: (cueId: string) => void;
+  onMoveCue: ((cueId: string) => void) | null;
+  onCopyCue: ((cueId: string) => void) | null;
   /** SceneEditor側の折りたたみ内に置くときは外枠と見出しを出さない */
   bare?: boolean;
 }
@@ -201,6 +203,8 @@ interface CueRowProps {
   sceneDurationMs: number | null;
   onRemove: () => void;
   onDuplicate: (() => void) | null;
+  onMoveCue: (() => void) | null;
+  onCopyCue: (() => void) | null;
   onCommitCue: () => void;
 }
 
@@ -216,6 +220,8 @@ function CueRow({
   sceneDurationMs,
   onRemove,
   onDuplicate,
+  onMoveCue,
+  onCopyCue,
   onCommitCue,
 }: CueRowProps) {
   const base = `scenes.${sceneIndex}.cues.${cueIndex}` as const;
@@ -318,16 +324,66 @@ function CueRow({
           {definition?.display.label ?? cue.templateId}@{cue.templateVersion}
         </span>
         <span className="ml-auto flex items-center gap-2">
-          {onDuplicate !== null && (
-            <button type="button" className={buttonNeutralClass} onClick={onDuplicate}>
-              <Copy aria-hidden="true" className="h-4 w-4" />
-              複製
-            </button>
-          )}
-          <button type="button" className={buttonDangerClass} onClick={onRemove}>
-            <Trash2 aria-hidden="true" className="h-4 w-4" />
-            削除
-          </button>
+          <IconMenu label="映像演出の操作">
+            {(close) => (
+              <>
+                {onDuplicate !== null && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={iconMenuItemClass}
+                    onClick={() => {
+                      close();
+                      onDuplicate();
+                    }}
+                  >
+                    <Copy aria-hidden="true" className="h-4 w-4 shrink-0" />
+                    複製
+                  </button>
+                )}
+                {onMoveCue !== null && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={iconMenuItemClass}
+                    onClick={() => {
+                      close();
+                      onMoveCue();
+                    }}
+                  >
+                    <ArrowRightLeft aria-hidden="true" className="h-4 w-4 shrink-0" />
+                    別のシーンへ移動
+                  </button>
+                )}
+                {onCopyCue !== null && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={iconMenuItemClass}
+                    onClick={() => {
+                      close();
+                      onCopyCue();
+                    }}
+                  >
+                    <CopyPlus aria-hidden="true" className="h-4 w-4 shrink-0" />
+                    別のシーンへ複製
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={iconMenuDangerItemClass}
+                  onClick={() => {
+                    close();
+                    onRemove();
+                  }}
+                >
+                  <Trash2 aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  削除
+                </button>
+              </>
+            )}
+          </IconMenu>
         </span>
       </div>
 
@@ -1187,6 +1243,8 @@ export function CueList({
   sceneDurationMs,
   onRemoveCue,
   onCommitCue,
+  onMoveCue,
+  onCopyCue,
   bare = false,
 }: CueListProps) {
   const { fields, append } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
@@ -1251,6 +1309,8 @@ export function CueList({
             sceneDurationMs={sceneDurationMs}
             onRemove={() => onRemoveCue(cue.id)}
             onDuplicate={cue.baseCue === null ? null : () => handleDuplicate(cue.id)}
+            onMoveCue={onMoveCue === null || cue.baseCue === null ? null : () => onMoveCue(cue.id)}
+            onCopyCue={onCopyCue === null || cue.baseCue === null ? null : () => onCopyCue(cue.id)}
             onCommitCue={() => onCommitCue(cue.id)}
           />
         );

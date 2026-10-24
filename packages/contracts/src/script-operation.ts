@@ -284,6 +284,21 @@ export const cueSetTransitionOperationSchema = z
     path: ["enter"],
   });
 
+export const cueMoveOperationSchema = z.strictObject({
+  op: z.literal("cue.move"),
+  sceneId: scriptIdRefSchema,
+  cueId: scriptIdRefSchema,
+  toSceneId: scriptIdRefSchema,
+});
+
+export const cueCopyOperationSchema = z.strictObject({
+  op: z.literal("cue.copy"),
+  key: scriptKeySchema.optional(),
+  sceneId: scriptIdRefSchema,
+  cueId: scriptIdRefSchema,
+  toSceneIds: z.array(scriptIdRefSchema).min(1),
+});
+
 export const standingSetOperationSchema = z.strictObject({
   op: z.literal("standing.set"),
   key: scriptKeySchema.optional(),
@@ -376,6 +391,8 @@ const scriptOperationSchemas = [
   cueSetInputOperationSchema,
   cueSetPlacementOperationSchema,
   cueSetTransitionOperationSchema,
+  cueMoveOperationSchema,
+  cueCopyOperationSchema,
   standingSetOperationSchema,
   standingRemoveOperationSchema,
   audioAddOperationSchema,
@@ -422,6 +439,8 @@ export type CueSetRangeOperation = z.infer<typeof cueSetRangeOperationSchema>;
 export type CueSetInputOperation = z.infer<typeof cueSetInputOperationSchema>;
 export type CueSetPlacementOperation = z.infer<typeof cueSetPlacementOperationSchema>;
 export type CueSetTransitionOperation = z.infer<typeof cueSetTransitionOperationSchema>;
+export type CueMoveOperation = z.infer<typeof cueMoveOperationSchema>;
+export type CueCopyOperation = z.infer<typeof cueCopyOperationSchema>;
 export type StandingSetOperation = z.infer<typeof standingSetOperationSchema>;
 export type StandingRemoveOperation = z.infer<typeof standingRemoveOperationSchema>;
 export type AudioAddOperation = z.infer<typeof audioAddOperationSchema>;

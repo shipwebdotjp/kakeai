@@ -77,7 +77,12 @@ import {
   commitCueStructural,
   commitSceneAudioStructural,
   commitStandingStructural,
+  copyCueStructural,
+  copyStandingsStructural,
+  moveCueStructural,
   removeCueStructural,
+  transferStandingsStructural,
+  type StandingTransferMode,
   type StructuralEditResult,
 } from "../content/structural";
 import { SCENE_LABELS, sceneDisplayName } from "../content/labels";
@@ -121,6 +126,7 @@ import {
 import { CueList, ScriptSkinProvider } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
+import { ScenePickerModal, type ScenePickerTarget } from "./ScenePickerModal";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { StandingFields } from "./StandingFields";
 import { SceneAudioFields } from "./SceneAudioFields";
@@ -302,8 +308,88 @@ const SCENE_TRANSITION_LABELS: Record<string, string> = {
   crossfade: "クロスフェード",
 };
 
+type ScenePickerRequest =
+  | { kind: "move-cue" | "copy-cue"; sceneId: string; cueId: string }
+  | { kind: "move-standing" | "copy-standing" | "swap-standing"; sceneId: string };
+
+const SCENE_PICKER_COPY: Record<
+  ScenePickerRequest["kind"],
+  { title: string; description: string; mode: "single" | "multiple"; confirmLabel: string }
+> = {
+  "move-cue": {
+    title: "別のシーンへ移動",
+    description:
+      "移動すると表示区間はシーン全体に戻り、セリフ同期のトリガーはシーン全体に変わります。移動先で選び直してください。",
+    mode: "single",
+    confirmLabel: "移動する",
+  },
+  "copy-cue": {
+    title: "別のシーンへ複製",
+    description:
+      "複製すると表示区間はシーン全体に戻り、セリフ同期のトリガーはシーン全体に変わります。複製先で選び直してください。",
+    mode: "multiple",
+    confirmLabel: "別のシーンへ複製",
+  },
+  "move-standing": {
+    title: "立ち絵を別のシーンへ移動",
+    description: "移動先の立ち絵（左・右）はこのシーンの設定で置き換わり、このシーンの立ち絵は削除されます。",
+    mode: "single",
+    confirmLabel: "移動する",
+  },
+  "copy-standing": {
+    title: "立ち絵を別のシーンへ複製",
+    description: "複製先の立ち絵（左・右）はこのシーンの設定で置き換わります。このシーンの立ち絵はそのまま残ります。",
+    mode: "multiple",
+    confirmLabel: "別のシーンへ複製",
+  },
+  "swap-standing": {
+    title: "立ち絵を別のシーンと入れ替え",
+    description: "2つのシーンの立ち絵（左・右）を丸ごと入れ替えます。",
+    mode: "single",
+    confirmLabel: "入れ替え",
+  },
+};
+
+function standingTransferModeOf(
+  kind: Extract<ScenePickerRequest["kind"], `${string}-standing`>,
+): StandingTransferMode {
+  const modeMap = {
+    "move-standing": "move",
+    "copy-standing": "copy",
+    "swap-standing": "swap",
+  } as const;
+  return modeMap[kind];
+}
+
+function hasConfiguredStanding(standing: {
+  characterId: string | null;
+  appearanceId: string | null;
+}): boolean {
+  return standing.characterId !== null && standing.appearanceId !== null;
+}
+
+function pickerTargets(
+  scenes: readonly SceneFormValue[],
+  excludeSceneId: string,
+): ScenePickerTarget[] {
+  return scenes
+    .filter((scene) => scene.id !== excludeSceneId && scene.kind !== "insert")
+    .map((scene) => ({
+      id: scene.id,
+      label: scene.label,
+      kind: scene.kind,
+      lineCount: scene.lines.length,
+      cueCount: scene.cues.length,
+      standingCount: scene.standings.filter(hasConfiguredStanding).length,
+    }));
+}
+
 function isMiddleScene(kind: SceneFormValue["kind"] | undefined): boolean {
   return kind === "point" || kind === "insert";
+}
+
+function sceneHasStandings(scene: SceneFormValue): boolean {
+  return scene.standings.some(hasConfiguredStanding);
 }
 
 function resolveMainCueIndex(
@@ -614,7 +700,10 @@ interface SceneBlockProps {
   onClonePrevious: (sceneIndex: number) => void;
   onRemoveCue: (sceneIndex: number, cueId: string) => void;
   onCommitCue: (sceneIndex: number, cueId: string) => void;
+  onMoveCueRequest: (sceneIndex: number, cueId: string) => void;
+  onCopyCueRequest: (sceneIndex: number, cueId: string) => void;
   onCommitStanding: (sceneIndex: number, side: "left" | "right") => void;
+  onTransferStandingsRequest: (sceneIndex: number, mode: StandingTransferMode) => void;
   onCommitAudioCue: (sceneIndex: number, cueIndex: number) => void;
   onSplitScene: (sceneIndex: number, lineIndex: number) => void;
   onJumpToLine?: (lineId: string) => void;
@@ -808,6 +897,8 @@ function SceneBlock(props: SceneBlockProps) {
               sceneDurationMs={props.durationMs}
               onRemoveCue={(cueId) => props.onRemoveCue(sceneIndex, cueId)}
               onCommitCue={(cueId) => props.onCommitCue(sceneIndex, cueId)}
+              onMoveCue={(cueId) => props.onMoveCueRequest(sceneIndex, cueId)}
+              onCopyCue={(cueId) => props.onCopyCueRequest(sceneIndex, cueId)}
               bare
             />
           )}
@@ -823,6 +914,17 @@ function SceneBlock(props: SceneBlockProps) {
             sceneId={scene.id}
             characters={props.characters}
             onCommitStanding={(side) => props.onCommitStanding(sceneIndex, side)}
+            onMoveStandings={
+              sceneHasStandings(scene)
+                ? () => props.onTransferStandingsRequest(sceneIndex, "move")
+                : null
+            }
+            onCopyStandings={
+              sceneHasStandings(scene)
+                ? () => props.onTransferStandingsRequest(sceneIndex, "copy")
+                : null
+            }
+            onSwapStandings={() => props.onTransferStandingsRequest(sceneIndex, "swap")}
           />
         )}
 
@@ -898,6 +1000,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const [openKind, setOpenKind] = useState<"error" | "warning" | null>(null);
   const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [pickerRequest, setPickerRequest] = useState<ScenePickerRequest | null>(null);
   const [addBeforeSceneId, setAddBeforeSceneId] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkResult, setBulkResult] = useState<{
@@ -1229,6 +1332,175 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     } catch (error) {
       showError(error);
     }
+  };
+
+  const onMoveCueRequest = (sceneIndex: number, cueId: string) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    setPickerRequest({ kind: "move-cue", sceneId: scene.id, cueId });
+  };
+
+  const onCopyCueRequest = (sceneIndex: number, cueId: string) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    setPickerRequest({ kind: "copy-cue", sceneId: scene.id, cueId });
+  };
+
+  const onTransferStandingsRequest = (sceneIndex: number, mode: StandingTransferMode) => {
+    const scene = getValues(`scenes.${sceneIndex}`);
+    if (scene === undefined) {
+      return;
+    }
+    const requestKind = {
+      move: "move-standing",
+      copy: "copy-standing",
+      swap: "swap-standing",
+    } as const;
+    setPickerRequest({ kind: requestKind[mode], sceneId: scene.id });
+  };
+
+  const runTransferStructural = (
+    apply: () => StructuralEditResult | null,
+    openSceneIds: readonly string[],
+    reveal: string | null | ((next: StructuralEditResult) => string | null),
+    failureMessage: string,
+  ): void => {
+    try {
+      const next = apply();
+      if (next === null) {
+        showMessage(failureMessage);
+        return;
+      }
+      replaceScenes(next.values.scenes);
+      for (const sceneId of openSceneIds) {
+        openScene(sceneId);
+      }
+      const anchor = typeof reveal === "function" ? reveal(next) : reveal;
+      if (anchor !== null) {
+        revealTarget(anchor);
+      }
+      showWarnings(next.result.warnings);
+    } catch (error) {
+      pendingScrollRef.current = null;
+      showError(error);
+    }
+  };
+
+  const onMoveCue = (sceneId: string, cueId: string, toSceneId: string) => {
+    runTransferStructural(
+      () =>
+        moveCueStructural(
+          base,
+          getValues(),
+          sceneId,
+          cueId,
+          toSceneId,
+          assetsQuery.data ?? [],
+        ),
+      [toSceneId],
+      `cue-${cueId}`,
+      "映像演出を移動できませんでした。Sceneの状態を確認してください。",
+    );
+  };
+
+  const onCopyCue = (sceneId: string, cueId: string, toSceneIds: string[]) => {
+    runTransferStructural(
+      () =>
+        copyCueStructural(
+          base,
+          getValues(),
+          sceneId,
+          cueId,
+          toSceneIds,
+          assetsQuery.data ?? [],
+        ),
+      toSceneIds,
+      (next) => {
+        const [firstCreated] = next.result.created.cueIds;
+        return firstCreated === undefined ? null : `cue-${firstCreated}`;
+      },
+      "映像演出を複製できませんでした。Sceneの状態を確認してください。",
+    );
+  };
+
+  const onTransferStandings = (
+    fromSceneId: string,
+    toSceneId: string,
+    mode: StandingTransferMode,
+  ) => {
+    runTransferStructural(
+      () =>
+        transferStandingsStructural(
+          base,
+          getValues(),
+          fromSceneId,
+          toSceneId,
+          mode,
+          assetsQuery.data ?? [],
+        ),
+      [toSceneId],
+      `scene-${toSceneId}`,
+      "立ち絵を変更できませんでした。Sceneの状態を確認してください。",
+    );
+  };
+
+  const onCopyStandings = (fromSceneId: string, toSceneIds: string[]) => {
+    runTransferStructural(
+      () =>
+        copyStandingsStructural(
+          base,
+          getValues(),
+          fromSceneId,
+          toSceneIds,
+          assetsQuery.data ?? [],
+        ),
+      toSceneIds,
+      toSceneIds.length > 0 ? `scene-${toSceneIds[0]}` : null,
+      "立ち絵を複製できませんでした。Sceneの状態を確認してください。",
+    );
+  };
+
+  const onPickerSelect = (toSceneIds: string[]) => {
+    const request = pickerRequest;
+    setPickerRequest(null);
+    if (request === null) {
+      return;
+    }
+    if (request.kind === "move-cue") {
+      const [toSceneId] = toSceneIds;
+      if (toSceneId === undefined) {
+        return;
+      }
+      onMoveCue(request.sceneId, request.cueId, toSceneId);
+      return;
+    }
+    if (request.kind === "copy-cue") {
+      if (toSceneIds.length === 0) {
+        return;
+      }
+      onCopyCue(request.sceneId, request.cueId, toSceneIds);
+      return;
+    }
+    if (request.kind === "copy-standing") {
+      if (toSceneIds.length === 0) {
+        return;
+      }
+      onCopyStandings(request.sceneId, toSceneIds);
+      return;
+    }
+    const [toSceneId] = toSceneIds;
+    if (toSceneId === undefined) {
+      return;
+    }
+    onTransferStandings(
+      request.sceneId,
+      toSceneId,
+      standingTransferModeOf(request.kind),
+    );
   };
 
   const onCommitStanding = (
@@ -1629,6 +1901,8 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   }, [diagnostics, watchedScenes]);
 
   const watchedBgm = allValues?.bgm;
+
+  const pickerCopy = pickerRequest === null ? null : SCENE_PICKER_COPY[pickerRequest.kind];
 
   return (
     <>
@@ -2044,7 +2318,10 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             onClonePrevious={onClonePrevious}
             onRemoveCue={onRemoveCue}
             onCommitCue={onCommitCue}
+            onMoveCueRequest={onMoveCueRequest}
+            onCopyCueRequest={onCopyCueRequest}
             onCommitStanding={onCommitStanding}
+            onTransferStandingsRequest={onTransferStandingsRequest}
             onCommitAudioCue={onCommitAudioCue}
             onSplitScene={onSplitScene}
             onJumpToLine={onJumpToLine}
@@ -2098,6 +2375,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       )}
       </fieldset>
     </form>
+    <ScenePickerModal
+      open={pickerCopy !== null}
+      title={pickerCopy?.title ?? ""}
+      description={pickerCopy?.description ?? ""}
+      mode={pickerCopy?.mode ?? "single"}
+      confirmLabel={pickerCopy?.confirmLabel ?? ""}
+      scenes={pickerRequest === null ? [] : pickerTargets(watchedScenes, pickerRequest.sceneId)}
+      onClose={() => setPickerRequest(null)}
+      onSelect={onPickerSelect}
+    />
     <ScriptImportModal
       open={importOpen}
       onClose={() => setImportOpen(false)}

@@ -1,4 +1,5 @@
 import {
+  characterStandingV1,
   collectLineReferences,
   getVisualTemplate,
   visualCueSchema,
@@ -397,5 +398,202 @@ export function setCueTransition(
     lineIds: [],
     cueIds: [],
     primaryId: cueId,
+  };
+}
+
+const STANDING_TEMPLATE_ID = characterStandingV1.id;
+
+function cloneJson<T>(value: T): T {
+  return structuredClone(value);
+}
+
+/**
+ * Sceneをまたぐ行参照を初期化する。`range: lines` は `range: scene` へ戻し、
+ * 入力ツリー内の `{ kind: "lines" }` トリガーは `{ kind: "cue" }` へ置換する。
+ * `videoPlayback` は `gates` が必須（min(1)）のため、ゲート設定ごと削除する
+ * しかない。何かを変更したら true を返す。
+ */
+function resetCrossSceneRefs(cue: VisualCue): { cue: VisualCue; reset: boolean } {
+  let reset = false;
+  let range = cue.range;
+  if (range.kind === "lines") {
+    range = { kind: "scene" };
+    reset = true;
+  }
+  const input = cloneJson(cue.input);
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        walk(entry);
+      }
+      return;
+    }
+    if (typeof value !== "object" || value === null) {
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const trigger = record.trigger;
+    if (
+      typeof trigger === "object" &&
+      trigger !== null &&
+      !Array.isArray(trigger) &&
+      (trigger as Record<string, unknown>).kind === "lines"
+    ) {
+      record.trigger = { kind: "cue" };
+      reset = true;
+    }
+    const playback = record.videoPlayback;
+    if (
+      typeof playback === "object" &&
+      playback !== null &&
+      !Array.isArray(playback) &&
+      Array.isArray((playback as Record<string, unknown>).gates)
+    ) {
+      delete record.videoPlayback;
+      reset = true;
+    }
+    for (const child of Object.values(record)) {
+      walk(child);
+    }
+  };
+  walk(input);
+  if (!reset) {
+    return { cue, reset: false };
+  }
+  return { cue: parseCue({ ...cue, range, input }), reset: true };
+}
+
+function resetWarning(sceneIndex: number, cueIndex: number): Warning {
+  return {
+    path: ["scenes", sceneIndex, "visualCues", cueIndex],
+    code: "cue_line_refs_reset",
+    message:
+      "Sceneをまたぐ移動・複製のため、表示区間をScene全体へ戻し、セリフ同期のトリガーをScene全体へ変更しました。動画のセリフゲート再生の設定も外しました。移動先・複製先で選び直してください。",
+  };
+}
+
+/**
+ * Cueを宛先Sceneの同一レイヤー末尾へ移設する共通パイプライン。
+ * 追加前の `visualCues.length` が新しいCueの配列indexになる。
+ */
+function relocateCue(
+  document: ContentDocument,
+  toSceneId: string,
+  cue: VisualCue,
+): { document: ContentDocument; warnings: Warning[] } {
+  const targetIndex = document.scenes.findIndex(
+    (entry) => entry.id === toSceneId,
+  );
+  const targetScene = document.scenes[targetIndex]!;
+  const order = nextOrder(targetScene, cue.layer);
+  const relocated = resetCrossSceneRefs({ ...cue, order });
+  const cueIndex = targetScene.visualCues.length;
+  const next = withScene(document, targetIndex, {
+    ...targetScene,
+    visualCues: [...targetScene.visualCues, relocated.cue],
+  });
+  assertCueLineReferences(next, toSceneId);
+  return {
+    document: next,
+    warnings: [
+      ...offsetWarnings(next, targetIndex),
+      ...(relocated.reset ? [resetWarning(targetIndex, cueIndex)] : []),
+    ],
+  };
+}
+
+function assertMovableCue(scene: Scene, cueId: string): VisualCue {
+  const cue = findCue(scene, cueId);
+  if (cue.template.id === STANDING_TEMPLATE_ID) {
+    throw invalidOperation(
+      ["cueId"],
+      "立ち絵Cueは立ち絵の操作で移動・複製してください。",
+    );
+  }
+  return cue;
+}
+
+export function moveCue(
+  document: ContentDocument,
+  sceneId: string,
+  cueId: string,
+  toSceneId: string,
+): CueEditResult {
+  if (sceneId === toSceneId) {
+    throw invalidOperation(
+      ["toSceneId"],
+      "移動先には異なるSceneを指定してください。",
+    );
+  }
+  const { scene, sceneIndex } = findEditableScene(document, sceneId);
+  const cue = assertMovableCue(scene, cueId);
+  findEditableScene(document, toSceneId);
+  const withoutSource = withScene(document, sceneIndex, {
+    ...scene,
+    visualCues: scene.visualCues.filter((entry) => entry.id !== cueId),
+  });
+  const relocated = relocateCue(withoutSource, toSceneId, cue);
+  return {
+    document: relocated.document,
+    sceneIds: [],
+    lineIds: [],
+    cueIds: [],
+    primaryId: cueId,
+    warnings: relocated.warnings,
+  };
+}
+
+export function copyCue(
+  document: ContentDocument,
+  sceneId: string,
+  cueId: string,
+  toSceneIds: readonly string[],
+  context: ScriptContext,
+): CueEditResult {
+  if (toSceneIds.length === 0) {
+    throw invalidOperation(["toSceneIds"], "複製先を1件以上指定してください。");
+  }
+  if (new Set(toSceneIds).size !== toSceneIds.length) {
+    throw invalidOperation(["toSceneIds"], "複製先Sceneが重複しています。");
+  }
+  const { scene } = findEditableScene(document, sceneId);
+  const cue = assertMovableCue(scene, cueId);
+  for (const toSceneId of toSceneIds) {
+    if (toSceneId === sceneId) {
+      throw invalidOperation(
+        ["toSceneIds"],
+        "複製先には異なるSceneを指定してください。",
+      );
+    }
+    findEditableScene(document, toSceneId);
+  }
+  const existingIds = new Set(
+    document.scenes.flatMap((entry) => entry.visualCues.map((item) => item.id)),
+  );
+  let next = document;
+  const createdIds: string[] = [];
+  const warnings: Warning[] = [];
+  for (const toSceneId of toSceneIds) {
+    const cueIdForTarget = context.ids.cue(
+      toSceneId,
+      cue.template.id.replace(/\W/g, "-"),
+      existingIds,
+    );
+    existingIds.add(cueIdForTarget);
+    const relocated = relocateCue(next, toSceneId, {
+      ...cue,
+      id: cueIdForTarget,
+    });
+    next = relocated.document;
+    createdIds.push(cueIdForTarget);
+    warnings.push(...relocated.warnings);
+  }
+  return {
+    document: next,
+    sceneIds: [],
+    lineIds: [],
+    cueIds: createdIds,
+    primaryId: createdIds[0]!,
+    warnings,
   };
 }

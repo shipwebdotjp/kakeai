@@ -546,3 +546,268 @@ export function removeCueStructural(
     assets,
   );
 }
+
+function buildStructuralOrNull(
+  base: ContentDocument,
+  values: DocumentFormValues,
+): ContentDocument | null {
+  try {
+    return buildStructuralDocument(base, values);
+  } catch (error) {
+    console.error("buildStructuralDocument failed", error);
+    return null;
+  }
+}
+
+function hasValidTransferTargets(
+  document: ContentDocument,
+  fromSceneId: string,
+  toSceneIds: readonly string[],
+): boolean {
+  return !(
+    toSceneIds.length === 0 ||
+    new Set(toSceneIds).size !== toSceneIds.length ||
+    toSceneIds.some(
+      (toSceneId) =>
+        toSceneId === fromSceneId ||
+        !document.scenes.some((entry) => entry.id === toSceneId),
+    )
+  );
+}
+
+export function moveCueStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  sceneId: string,
+  cueId: string,
+  toSceneId: string,
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  if (sceneId === toSceneId) {
+    return null;
+  }
+  const document = buildStructuralOrNull(base, values);
+  if (document === null) {
+    return null;
+  }
+  const source = document.scenes.find((entry) => entry.id === sceneId);
+  if (
+    source === undefined ||
+    !document.scenes.some((entry) => entry.id === toSceneId) ||
+    !source.visualCues.some((cue) => cue.id === cueId)
+  ) {
+    return null;
+  }
+  return applyToDocument(
+    document,
+    values,
+    [{ op: "cue.move", sceneId, cueId, toSceneId }],
+    assets,
+  );
+}
+
+export function copyCueStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  sceneId: string,
+  cueId: string,
+  toSceneIds: readonly string[],
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  const document = buildStructuralOrNull(base, values);
+  if (document === null) {
+    return null;
+  }
+  const scene = document.scenes.find((entry) => entry.id === sceneId);
+  if (scene === undefined) {
+    return null;
+  }
+  if (!scene.visualCues.some((cue) => cue.id === cueId)) {
+    return null;
+  }
+  if (!hasValidTransferTargets(document, sceneId, toSceneIds)) {
+    return null;
+  }
+  return applyToDocument(
+    document,
+    values,
+    [{ op: "cue.copy", sceneId, cueId, toSceneIds: [...toSceneIds] }],
+    assets,
+  );
+}
+
+export type StandingTransferMode = "move" | "copy" | "swap";
+
+function standingSlotOperation(
+  targetSceneId: string,
+  slot: StandingFormValue | undefined,
+  targetHasSide: (side: StandingSide) => boolean,
+): ScriptOperation | null {
+  if (slot === undefined) {
+    return null;
+  }
+  if (slot.characterId !== null && slot.appearanceId !== null) {
+    const scale =
+      Number.isFinite(slot.scale) && slot.scale > 0 ? slot.scale : 1;
+    const edge = normalizeStandingEnum(slot.edge, STANDING_EDGE_VALUES, DEFAULT_STANDING_EDGE);
+    const vertical = normalizeStandingEnum(
+      slot.vertical,
+      STANDING_VERTICAL_VALUES,
+      DEFAULT_STANDING_VERTICAL,
+    );
+    return {
+      op: "standing.set",
+      sceneId: targetSceneId,
+      side: slot.side,
+      characterId: slot.characterId,
+      appearanceId: slot.appearanceId,
+      scale,
+      edge,
+      vertical,
+      transition: {
+        enter: normalizeTransitionEdge(slot.enterPreset, slot.enterDurationMs),
+        exit: normalizeTransitionEdge(slot.exitPreset, slot.exitDurationMs),
+      },
+    };
+  }
+  if (targetHasSide(slot.side)) {
+    return { op: "standing.remove", sceneId: targetSceneId, side: slot.side };
+  }
+  return null;
+}
+
+function standingCopyOperations(
+  document: ContentDocument,
+  formFrom: DocumentFormValues["scenes"][number],
+  toSceneId: string,
+): ScriptOperation[] {
+  const operations: ScriptOperation[] = [];
+  const target = document.scenes.find((entry) => entry.id === toSceneId);
+  for (const side of ["left", "right"] as const) {
+    const sourceSlot = formFrom.standings.find((entry) => entry.side === side);
+    const operation = standingSlotOperation(
+      toSceneId,
+      sourceSlot,
+      (candidate) =>
+        target?.visualCues.some((cue) => standingSideOf(cue) === candidate) ??
+        false,
+    );
+    if (operation !== null) {
+      operations.push(operation);
+    }
+  }
+  return operations;
+}
+
+function formSceneHasStandings(
+  document: ContentDocument,
+  formScene: DocumentFormValues["scenes"][number],
+  sceneId: string,
+): boolean {
+  return (["left", "right"] as const).some((side) => {
+    const slot = formScene.standings.find((entry) => entry.side === side);
+    if (
+      slot !== undefined &&
+      slot.characterId !== null &&
+      slot.appearanceId !== null
+    ) {
+      return true;
+    }
+    return (
+      document.scenes
+        .find((entry) => entry.id === sceneId)
+        ?.visualCues.some((cue) => standingSideOf(cue) === side) ?? false
+    );
+  });
+}
+
+export function transferStandingsStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  fromSceneId: string,
+  toSceneId: string,
+  mode: StandingTransferMode,
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  if (fromSceneId === toSceneId) {
+    return null;
+  }
+  const document = buildStructuralOrNull(base, values);
+  if (document === null) {
+    return null;
+  }
+  const formFrom = values.scenes.find((entry) => entry.id === fromSceneId);
+  const formTo = values.scenes.find((entry) => entry.id === toSceneId);
+  if (formFrom === undefined || formTo === undefined) {
+    return null;
+  }
+  const hasSide = (sceneId: string, side: StandingSide): boolean =>
+    document.scenes
+      .find((entry) => entry.id === sceneId)
+      ?.visualCues.some((cue) => standingSideOf(cue) === side) ?? false;
+
+  const sourceHasStanding = formSceneHasStandings(document, formFrom, fromSceneId);
+  if ((mode === "move" || mode === "copy") && !sourceHasStanding) {
+    return null;
+  }
+
+  const operations: ScriptOperation[] = [
+    ...standingCopyOperations(document, formFrom, toSceneId),
+  ];
+  if (mode === "swap") {
+    // 逆方向の操作は操作前のformToスロットから構築するため、
+    // 正方向のstanding.set/removeの結果に依存しない。
+    // standing.setは指定sideを上書きするため、正方向と逆方向の適用で完全な入れ替えになる。
+    for (const side of ["left", "right"] as const) {
+      const targetSlot = formTo.standings.find((entry) => entry.side === side);
+      const operation = standingSlotOperation(
+        fromSceneId,
+        targetSlot,
+        (candidate) => hasSide(fromSceneId, candidate),
+      );
+      if (operation !== null) {
+        operations.push(operation);
+      }
+    }
+  } else if (mode === "move") {
+    for (const side of ["left", "right"] as const) {
+      if (hasSide(fromSceneId, side)) {
+        operations.push({ op: "standing.remove", sceneId: fromSceneId, side });
+      }
+    }
+  }
+  if (operations.length === 0) {
+    return null;
+  }
+  return applyToDocument(document, values, operations, assets);
+}
+
+export function copyStandingsStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  fromSceneId: string,
+  toSceneIds: readonly string[],
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  const document = buildStructuralOrNull(base, values);
+  if (document === null) {
+    return null;
+  }
+  const formFrom = values.scenes.find((entry) => entry.id === fromSceneId);
+  if (formFrom === undefined) {
+    return null;
+  }
+  if (!hasValidTransferTargets(document, fromSceneId, toSceneIds)) {
+    return null;
+  }
+  if (!formSceneHasStandings(document, formFrom, fromSceneId)) {
+    return null;
+  }
+  const operations = toSceneIds.flatMap((toSceneId) =>
+    standingCopyOperations(document, formFrom, toSceneId),
+  );
+  if (operations.length === 0) {
+    return null;
+  }
+  return applyToDocument(document, values, operations, assets);
+}

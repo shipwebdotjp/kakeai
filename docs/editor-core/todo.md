@@ -27,7 +27,7 @@
 
 ### [x] E4 Cue・音声・文書操作
 
-- [x] `cue.add`、`cue.remove`、`cue.setRange`、`cue.setInput`、`cue.setPlacement`、`cue.setTransition`
+- [x] `cue.add`、`cue.remove`、`cue.setRange`、`cue.setInput`、`cue.setPlacement`、`cue.setTransition`、`cue.move`、`cue.copy`
 - [x] `standing.set` / `standing.remove`（左右 1 体ずつの内部 Cue 生成）
 - [x] `audio.add`、`audio.set`、`audio.remove`
 - [x] `document.setVisualTheme`

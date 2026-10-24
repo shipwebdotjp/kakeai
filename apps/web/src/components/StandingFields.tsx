@@ -1,3 +1,4 @@
+import { ArrowRightLeft, CopyPlus, Repeat } from "lucide-react";
 import { useEffect, useRef } from "react";
 import {
   useWatch,
@@ -32,6 +33,7 @@ import {
   metaTextClass,
   textFieldClass,
 } from "../ui";
+import { IconMenu, iconMenuItemClass } from "./IconMenu";
 import { Collapsible } from "./Collapsible";
 
 interface StandingFieldsProps {
@@ -43,6 +45,9 @@ interface StandingFieldsProps {
   sceneId: string;
   characters: CharacterFormValue[];
   onCommitStanding: (side: StandingSide) => void;
+  onMoveStandings: (() => void) | null;
+  onCopyStandings: (() => void) | null;
+  onSwapStandings: (() => void) | null;
 }
 
 const SIDE_LABELS: Record<StandingSide, string> = { left: "左", right: "右" };
@@ -56,6 +61,9 @@ export function StandingFields({
   sceneId,
   characters,
   onCommitStanding,
+  onMoveStandings,
+  onCopyStandings,
+  onSwapStandings,
 }: StandingFieldsProps) {
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.standings` });
   const snapshotRef = useRef(new Map<StandingSide, string>());
@@ -94,7 +102,61 @@ export function StandingFields({
 
   return (
     <div className={editAreaClass}>
-      <h4 className="text-sm font-semibold text-foreground">立ち絵</h4>
+      <div className="flex items-center gap-2">
+        <h4 className="text-sm font-semibold text-foreground">立ち絵</h4>
+        {(onMoveStandings !== null || onCopyStandings !== null || onSwapStandings !== null) && (
+          <span className="ml-auto">
+            <IconMenu label="立ち絵の操作">
+              {(close) => (
+                <>
+                  {onMoveStandings !== null && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={iconMenuItemClass}
+                      onClick={() => {
+                        close();
+                        onMoveStandings();
+                      }}
+                    >
+                      <ArrowRightLeft aria-hidden="true" className="h-4 w-4 shrink-0" />
+                      別のシーンへ移動
+                    </button>
+                  )}
+                  {onCopyStandings !== null && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={iconMenuItemClass}
+                      onClick={() => {
+                        close();
+                        onCopyStandings();
+                      }}
+                    >
+                      <CopyPlus aria-hidden="true" className="h-4 w-4 shrink-0" />
+                      別のシーンへ複製
+                    </button>
+                  )}
+                  {onSwapStandings !== null && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={iconMenuItemClass}
+                      onClick={() => {
+                        close();
+                        onSwapStandings();
+                      }}
+                    >
+                      <Repeat aria-hidden="true" className="h-4 w-4 shrink-0" />
+                      別のシーンと入れ替え
+                    </button>
+                  )}
+                </>
+              )}
+            </IconMenu>
+          </span>
+        )}
+      </div>
       {characters.length === 0 && (
         <p className={metaTextClass}>
           この作品にキャラクターがありません。上の「キャラクター」から追加してください。

@@ -3,9 +3,8 @@ import {
   ArrowDown,
   ArrowUp,
   Copy,
-  Ellipsis,
-  MessageSquarePlus,
   Play,
+  MessageSquarePlus,
   Scissors,
   Trash2,
 } from "lucide-react";
@@ -64,6 +63,7 @@ import {
   metaTextClass,
   textFieldClass,
 } from "../ui";
+import { IconMenu, iconMenuDangerItemClass, iconMenuItemClass } from "./IconMenu";
 import { Collapsible, useStoredCollapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
 import { TakeAudioPlayer } from "./TakeAudioPlayer";
@@ -130,12 +130,6 @@ interface LineActionsMenuProps {
   onDelete: () => void;
 }
 
-const MENU_ITEM_CLASS =
-  "flex w-full items-center gap-2 whitespace-nowrap rounded px-2 py-1 text-left text-sm hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40";
-
-const MENU_DANGER_ITEM_CLASS =
-  "flex w-full items-center gap-2 whitespace-nowrap rounded px-2 py-1 text-left text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-300 dark:hover:bg-red-950";
-
 function LineActionsMenu({
   canMoveUp,
   canMoveDown,
@@ -146,60 +140,19 @@ function LineActionsMenu({
   onDuplicate,
   onDelete,
 }: LineActionsMenuProps) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onPointerDown = (event: MouseEvent) => {
-      if (containerRef.current !== null && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
-  const run = (action: () => void) => {
-    setOpen(false);
-    action();
-  };
-
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="セリフ操作"
-        title="セリフ操作"
-        className={iconButtonClass}
-        onClick={() => setOpen((previous) => !previous)}
-      >
-        <Ellipsis aria-hidden="true" className="h-4 w-4" />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-48 rounded border border-border bg-surface p-1 shadow-lg"
-        >
+    <IconMenu label="セリフ操作">
+      {(close) => (
+        <>
           <button
             type="button"
             role="menuitem"
-            className={MENU_ITEM_CLASS}
+            className={iconMenuItemClass}
             disabled={!canMoveUp}
-            onClick={() => run(onMoveUp)}
+            onClick={() => {
+              close();
+              onMoveUp();
+            }}
           >
             <ArrowUp aria-hidden="true" className="h-4 w-4 shrink-0" />
             上へ
@@ -207,9 +160,12 @@ function LineActionsMenu({
           <button
             type="button"
             role="menuitem"
-            className={MENU_ITEM_CLASS}
+            className={iconMenuItemClass}
             disabled={!canMoveDown}
-            onClick={() => run(onMoveDown)}
+            onClick={() => {
+              close();
+              onMoveDown();
+            }}
           >
             <ArrowDown aria-hidden="true" className="h-4 w-4 shrink-0" />
             下へ
@@ -218,8 +174,11 @@ function LineActionsMenu({
             <button
               type="button"
               role="menuitem"
-              className={MENU_ITEM_CLASS}
-              onClick={() => run(onSplit)}
+              className={iconMenuItemClass}
+              onClick={() => {
+                close();
+                onSplit();
+              }}
             >
               <Scissors aria-hidden="true" className="h-4 w-4 shrink-0" />
               このセリフの前でシーンを分割
@@ -228,8 +187,11 @@ function LineActionsMenu({
           <button
             type="button"
             role="menuitem"
-            className={MENU_ITEM_CLASS}
-            onClick={() => run(onDuplicate)}
+            className={iconMenuItemClass}
+            onClick={() => {
+              close();
+              onDuplicate();
+            }}
           >
             <Copy aria-hidden="true" className="h-4 w-4 shrink-0" />
             複製
@@ -237,15 +199,18 @@ function LineActionsMenu({
           <button
             type="button"
             role="menuitem"
-            className={MENU_DANGER_ITEM_CLASS}
-            onClick={() => run(onDelete)}
+            className={iconMenuDangerItemClass}
+            onClick={() => {
+              close();
+              onDelete();
+            }}
           >
             <Trash2 aria-hidden="true" className="h-4 w-4 shrink-0" />
             削除
           </button>
-        </div>
+        </>
       )}
-    </div>
+    </IconMenu>
   );
 }
 

@@ -36,6 +36,8 @@ import {
 import { splitPointSceneAtLine } from "./split.ts";
 import {
   addCue,
+  copyCue,
+  moveCue,
   removeCue,
   setCueInput,
   setCuePlacement,
@@ -370,6 +372,22 @@ export function applyScriptOperation(
           operation.exit,
         ),
       );
+    }
+    case "cue.move": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      const toSceneId = resolveId(operation.toSceneId, keys, ["toSceneId"]);
+      return toResult(moveCue(document, sceneId, cueId, toSceneId));
+    }
+    case "cue.copy": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      const toSceneIds = operation.toSceneIds.map((entry, index) =>
+        resolveId(entry, keys, ["toSceneIds", index]),
+      );
+      const result = copyCue(document, sceneId, cueId, toSceneIds, context);
+      registerKey(operation.key, keys, result.primaryId);
+      return toResult(result);
     }
     case "standing.set": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
