@@ -548,6 +548,78 @@ describe("buildCueMap offset ranges", () => {
     expect(model.bands).toHaveLength(0);
     expect(model.markers).toHaveLength(1);
   });
+
+  it("falls back to a marker for an empty offset window", () => {
+    const empty = [
+      makeScene("p1", "point", [makeLine("l1", "a"), makeLine("l2", "b")], [
+        makeCue({
+          sceneId: "p1",
+          templateId: "media.card",
+          templateVersion: 1,
+          layer: "card",
+          order: 0,
+          rangeKind: "offset",
+          startMs: 500,
+          endMs: 500,
+        }),
+      ]),
+    ];
+    const input = {
+      ...baseInput(empty),
+      timeline: makeTimeline([
+        {
+          sceneId: "p1",
+          startMs: 1000,
+          durationMs: 2000,
+          lines: [
+            { lineId: "l1", startMs: 1000, durationMs: 1000 },
+            { lineId: "l2", startMs: 2000, durationMs: 1000 },
+          ],
+        },
+      ]),
+      timelineReady: true,
+    };
+    const model = buildCueMap(input);
+    expect(model.bands).toHaveLength(0);
+    expect(model.markers).toHaveLength(1);
+    expect(model.markers[0]).toMatchObject({ sceneId: "p1", rangeKind: "offset" });
+  });
+
+  it("falls back to a marker when the resolved window hits no rows", () => {
+    const gapped = [
+      makeScene("p1", "point", [makeLine("l1", "a"), makeLine("l2", "b")], [
+        makeCue({
+          sceneId: "p1",
+          templateId: "media.card",
+          templateVersion: 1,
+          layer: "card",
+          order: 0,
+          rangeKind: "offset",
+          startMs: 0,
+          endMs: 100,
+        }),
+      ]),
+    ];
+    const input = {
+      ...baseInput(gapped),
+      timeline: makeTimeline([
+        {
+          sceneId: "p1",
+          startMs: 1000,
+          durationMs: 2000,
+          lines: [
+            { lineId: "l1", startMs: 1500, durationMs: 400 },
+            { lineId: "l2", startMs: 2000, durationMs: 400 },
+          ],
+        },
+      ]),
+      timelineReady: true,
+    };
+    const model = buildCueMap(input);
+    expect(model.bands).toHaveLength(0);
+    expect(model.markers).toHaveLength(1);
+    expect(model.markers[0]).toMatchObject({ sceneId: "p1", railRow: 0, rangeKind: "offset" });
+  });
 });
 
 describe("buildCueMap standings and representative media", () => {

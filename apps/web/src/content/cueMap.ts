@@ -18,6 +18,7 @@ export const CUE_MAP_ROW_HEIGHT_PX = 32;
 export const CUE_MAP_LANE_WIDTH_PX = 30;
 export const CUE_MAP_RAIL_WIDTH_PX = 22;
 export const CUE_MAP_NUMBER_WIDTH_PX = 44;
+export const CUE_MAP_MARKER_WIDTH_PX = 24;
 export const CUE_MAP_GAPS_PX = 22;
 export const CUE_MAP_MAX_LANES = 6;
 export const CUE_MAP_EMPTY_SCENE_ROWS = 3;
@@ -673,8 +674,13 @@ export function buildCueMap(input: CueMapInput): CueMapModel {
       markers.push(entry);
       continue;
     }
-    const windowStart = placement.startMs + entry.startMs;
-    const windowEnd = placement.startMs + entry.endMs;
+    // resolveCueWindow と同じ正規化。空区間は表示されないため帯にしない。
+    const windowStart = placement.startMs + Math.max(0, entry.startMs);
+    const windowEnd = placement.startMs + Math.min(placement.durationMs, entry.endMs);
+    if (windowStart >= windowEnd) {
+      markers.push(entry);
+      continue;
+    }
     const hitRows: number[] = [];
     for (const line of placement.lines) {
       const lineStart = line.startMs;

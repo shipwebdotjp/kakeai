@@ -953,7 +953,7 @@ function buildSceneAccent(sceneValue: SceneFormValue): SceneAccent {
   return { ...DEFAULT_SCENE_ACCENT };
 }
 
-function intOrZero(value: number): number {
+export function intOrZero(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
@@ -1916,6 +1916,15 @@ export function defaultGridDataJson(): string {
     ],
     rows: [{ col1: "", col2: "" }],
   });
+}
+
+export const DEFAULT_OFFSET_RANGE_MS = 3000;
+
+export function defaultOffsetEndMs(sceneDurationMs: number | null): number {
+  if (sceneDurationMs === null || !Number.isFinite(sceneDurationMs)) {
+    return DEFAULT_OFFSET_RANGE_MS;
+  }
+  return Math.max(1, Math.min(DEFAULT_OFFSET_RANGE_MS, Math.floor(sceneDurationMs)));
 }
 
 export function createCueFormValue(options: {

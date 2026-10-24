@@ -18,6 +18,7 @@ import {
   buildCueMap,
   cueMapLaneOffsetRightPx,
   CUE_MAP_LANE_WIDTH_PX,
+  CUE_MAP_MARKER_WIDTH_PX,
   CUE_MAP_NUMBER_WIDTH_PX,
   CUE_MAP_RAIL_WIDTH_PX,
   CUE_MAP_ROW_HEIGHT_PX,
@@ -417,7 +418,7 @@ function RailMarkerView({
 }) {
   const top = (marker.railRow - marker.sceneStartRow) * CUE_MAP_ROW_HEIGHT_PX;
   return (
-    <div className="absolute left-0" style={{ top }}>
+    <div className="absolute left-0 z-10" style={{ top, width: CUE_MAP_MARKER_WIDTH_PX }}>
       <div
         className="relative"
         onMouseEnter={onOpen}
@@ -432,7 +433,7 @@ function RailMarkerView({
             onJump(marker.jumpTargetId, marker.jumpSeek);
           }}
           onFocus={onOpen}
-          className={`flex h-6 w-[22px] items-center justify-center rounded text-muted-foreground hover:text-foreground ${focusRingClass}`}
+          className={`flex h-6 w-full items-center justify-center rounded text-muted-foreground hover:text-foreground ${focusRingClass}`}
         >
           <Clock aria-hidden="true" className="h-3.5 w-3.5" />
         </button>
@@ -475,6 +476,7 @@ function SceneSection({
 }) {
   const height = (rail.endRow - rail.startRow + 1) * CUE_MAP_ROW_HEIGHT_PX;
   const railActive = bands.some((band) => band.active) || markers.some((marker) => marker.active);
+  const gutterWidthPx = markers.length > 0 ? CUE_MAP_MARKER_WIDTH_PX : 0;
   return (
     <div className="border-b border-border py-0.5 last:border-b-0">
       <div className="flex gap-1.5">
@@ -494,6 +496,11 @@ function SceneSection({
             </span>
             <span className="truncate">{rail.label}</span>
           </button>
+        </div>
+        <div
+          className="relative min-w-0 flex-1"
+          style={{ paddingLeft: gutterWidthPx }}
+        >
           {markers.map((marker) => (
             <RailMarkerView
               key={marker.cueId}
@@ -505,8 +512,6 @@ function SceneSection({
               onJump={onJump}
             />
           ))}
-        </div>
-        <div className="relative min-w-0 flex-1">
           {rows.map((row) =>
             row.kind === "line" && row.lineId !== null ? (
               <button

@@ -23,6 +23,8 @@ export const buttonDangerClass = `${buttonBase} border border-red-300 bg-red-50 
 
 export const errorTextClass = "text-sm text-red-600 dark:text-red-400";
 
+export const warningTextClass = "text-sm text-amber-700 dark:text-amber-300";
+
 export const metaTextClass = "text-sm text-muted-foreground";
 
 // 通常のフォームラベル。単位・補助説明・メタデータはこのサイズに揃えない。

@@ -20,6 +20,7 @@ import {
   createEmptyLine,
   createInsertSceneFormValue,
   createPointSceneFormValue,
+  defaultOffsetEndMs,
   defaultVideoGate,
   duplicateCueFormValue,
   initialVideoGateLineId,
@@ -2545,3 +2546,21 @@ describe("initialVideoGateLineId", () => {
   });
 });
 
+
+describe("defaultOffsetEndMs", () => {
+  it("returns 3000ms when the scene duration is unknown", () => {
+    expect(defaultOffsetEndMs(null)).toBe(3000);
+  });
+
+  it("returns 3000ms for long scenes", () => {
+    expect(defaultOffsetEndMs(221556)).toBe(3000);
+  });
+
+  it("clamps to the scene duration for short scenes", () => {
+    expect(defaultOffsetEndMs(1200)).toBe(1200);
+  });
+
+  it("returns at least 1ms", () => {
+    expect(defaultOffsetEndMs(0)).toBe(1);
+  });
+});

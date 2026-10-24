@@ -51,7 +51,9 @@ import {
   VIDEO_PLAYBACK_SUFFIX,
   compositionVersionOptions,
   createCueFormValue,
+  defaultOffsetEndMs,
   duplicateCueFormValue,
+  intOrZero,
   lineIndex,
   lineOptionLabel,
   lineRangeEndCandidates,
@@ -77,6 +79,7 @@ import {
   itemCardClass,
   metaTextClass,
   textFieldClass,
+  warningTextClass,
 } from "../ui";
 import { useCompositions, useTheme } from "../api/hooks";
 import { IconMenu, iconMenuDangerItemClass, iconMenuItemClass } from "./IconMenu";
@@ -104,6 +107,62 @@ const RANGE_LABELS: Record<string, string> = {
   lines: "セリフ区間",
   offset: "オフセット",
 };
+
+const OFFSET_TONE_CLASS: Record<"error" | "warning", string> = {
+  error: errorTextClass,
+  warning: warningTextClass,
+};
+
+interface OffsetRangeStatus {
+  tone: "error" | "warning";
+  text: string;
+}
+
+function offsetRangeStatus(
+  rangeKind: CueFormValue["rangeKind"],
+  startMs: number,
+  endMs: number,
+  sceneDurationMs: number | null,
+): OffsetRangeStatus | null {
+  if (rangeKind !== "offset") {
+    return null;
+  }
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    return null;
+  }
+  // 保存時（buildRange）と同じ正規化で判定する。負値は0に切り上げられるため、
+  // 正規化後に有効な区間になる入力には何も出さない。
+  const start = intOrZero(startMs);
+  const end = intOrZero(endMs);
+  if (start > end) {
+    return {
+      tone: "error",
+      text: "開始は終了以下にしてください。このままでは保存できません。",
+    };
+  }
+  if (start === end) {
+    return {
+      tone: "warning",
+      text: "開始と終了が同じため、このCueは表示されません。",
+    };
+  }
+  if (sceneDurationMs === null) {
+    return null;
+  }
+  if (start >= sceneDurationMs) {
+    return {
+      tone: "warning",
+      text: `開始がシーン尺 ${sceneDurationMs}ms 以上です。このCueは表示されません。`,
+    };
+  }
+  if (end > sceneDurationMs) {
+    return {
+      tone: "warning",
+      text: `終了がシーン尺 ${sceneDurationMs}ms を超えています。シーン末尾で切り詰められます。`,
+    };
+  }
+  return null;
+}
 
 const TEXT_BLOCK_PRIMARY_KEYS: ReadonlySet<string> = new Set(["text", "role"]);
 
@@ -241,16 +300,12 @@ function CueRow({
   const endCandidates = lineRangeEndCandidates(lines, cue.startLineId);
   const offsetStartMs = Number(cue.startMs);
   const offsetEndMs = Number(cue.endMs);
-  const offsetOutOfScene =
-    cue.rangeKind === "offset" &&
-    sceneDurationMs !== null &&
-    Number.isFinite(offsetStartMs) &&
-    Number.isFinite(offsetEndMs) &&
-    (offsetStartMs < 0 ||
-      offsetEndMs < 0 ||
-      offsetStartMs >= offsetEndMs ||
-      offsetStartMs >= sceneDurationMs ||
-      offsetEndMs > sceneDurationMs);
+  const offsetMessage = offsetRangeStatus(
+    cue.rangeKind,
+    offsetStartMs,
+    offsetEndMs,
+    sceneDurationMs,
+  );
 
   const isTextBlock = cue.templateId === textBlockV1.id && cue.templateVersion === textBlockV1.version;
   const contentFields = fields ?? [];
@@ -430,7 +485,33 @@ function CueRow({
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label className={formLabelClass}>
             表示区間
-            <select className={textFieldClass} {...register(`${base}.rangeKind`)}>
+            <select
+              className={textFieldClass}
+              {...register(`${base}.rangeKind`, {
+                onChange: (event) => {
+                  if (event.target.value !== "offset") {
+                    return;
+                  }
+                  // 未設定のまま切り替えたときだけ初期区間を入れる。
+                  // ユーザーが入力済みの値（逆転・負値を含む）は残し、
+                  // 下のメッセージで理由を示す。0/0 は長さ0で表示されず
+                  // 保存時に警告になるため未設定とみなす。
+                  const currentStart = Number(getValues(`${base}.startMs`));
+                  const currentEnd = Number(getValues(`${base}.endMs`));
+                  const unset =
+                    !Number.isFinite(currentStart) ||
+                    !Number.isFinite(currentEnd) ||
+                    (currentStart === 0 && currentEnd === 0);
+                  if (!unset) {
+                    return;
+                  }
+                  setValue(`${base}.startMs`, 0, { shouldDirty: true });
+                  setValue(`${base}.endMs`, defaultOffsetEndMs(sceneDurationMs), {
+                    shouldDirty: true,
+                  });
+                },
+              })}
+            >
               <option value="scene">Scene全体</option>
               <option value="lines">セリフ区間</option>
               <option value="offset">オフセット</option>
@@ -504,12 +585,16 @@ function CueRow({
           )}
         </div>
 
-        {cue.rangeKind === "offset" && sceneDurationMs !== null && (
-          <p className={`mt-1 ${offsetOutOfScene ? errorTextClass : metaTextClass}`}>
-            シーン尺 {sceneDurationMs}ms
-            {offsetOutOfScene && " — 区間がシーンに収まらないため、保存時に警告されます"}
-          </p>
-        )}
+        {cue.rangeKind === "offset" &&
+          (sceneDurationMs !== null || offsetMessage !== null) && (
+            <p
+              className={`mt-1 ${offsetMessage === null ? metaTextClass : OFFSET_TONE_CLASS[offsetMessage.tone]}`}
+            >
+              {sceneDurationMs !== null ? `シーン尺 ${sceneDurationMs}ms` : null}
+              {sceneDurationMs !== null && offsetMessage !== null ? " — " : null}
+              {offsetMessage?.text}
+            </p>
+          )}
 
         {cue.rangeKind === "lines" && (cue.startLineId !== "" || cue.endLineId !== "") && (
           <p className={`mt-1 ${metaTextClass}`}>
