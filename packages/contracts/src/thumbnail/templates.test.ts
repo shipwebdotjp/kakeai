@@ -3,113 +3,97 @@ import {
   collectThumbnailAssetRefs,
   getThumbnailTemplate,
   listThumbnailTemplateCatalog,
-  thumbnailHeadlinePhotoInputSchema,
-  thumbnailLayeredInputSchema,
-  thumbnailTextInputSchema,
+  thumbnailCutoutHeroInputSchema,
 } from "./templates";
 import { thumbnailDocumentSchema } from "./document";
 
+const VALID_INPUT = {
+  headline: "見出し",
+  backgroundAssetId: "ast_bg",
+  foregroundAssetId: "ast_fg",
+};
+
 describe("thumbnail templates", () => {
-  it("registers bundled templates with editable fields", () => {
+  it("registers only the cutout-hero template with editable fields", () => {
     const catalog = listThumbnailTemplateCatalog();
-    expect(catalog.length).toBeGreaterThanOrEqual(2);
-    for (const entry of catalog) {
-      const definition = getThumbnailTemplate(entry.id, entry.version);
-      expect(definition?.inputFields?.length ?? 0).toBeGreaterThan(0);
-    }
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0]).toMatchObject({ id: "thumbnail.cutout-hero", version: 1 });
+    const definition = getThumbnailTemplate(catalog[0]!.id, catalog[0]!.version);
+    expect(definition?.inputFields?.length ?? 0).toBeGreaterThan(0);
   });
 
-  it("exposes a layout variant on the headline-photo template", () => {
-    const definition = getThumbnailTemplate("thumbnail.headline-photo", 1);
-    const layout = definition?.inputFields?.find((field) => field.key === "layout");
-    expect(layout?.kind).toBe("select");
-    if (layout?.kind === "select") {
-      expect(layout.options.map((option) => option.value)).toEqual(["photo-left", "photo-right"]);
+  it("exposes the subject side select with right as the first option", () => {
+    const definition = getThumbnailTemplate("thumbnail.cutout-hero", 1);
+    const side = definition?.inputFields?.find((field) => field.key === "subjectSide");
+    expect(side?.kind).toBe("select");
+    if (side?.kind === "select") {
+      expect(side.options.map((option) => option.value)).toEqual(["right", "left"]);
     }
   });
 
   it("returns undefined for an unknown template", () => {
     expect(getThumbnailTemplate("thumbnail.missing", 1)).toBeUndefined();
+    expect(getThumbnailTemplate("thumbnail.cutout-hero", 2)).toBeUndefined();
   });
 
-  it("applies defaults when parsing input", () => {
-    const parsed = thumbnailHeadlinePhotoInputSchema.parse({
-      headline: "タイトル",
-      assetId: "ast_1",
-    });
-    expect(parsed.layout).toBe("photo-left");
-    expect(parsed.tone).toBe("accent");
+  it("applies the cutout defaults when parsing input", () => {
+    const parsed = thumbnailCutoutHeroInputSchema.parse(VALID_INPUT);
+    expect(parsed.subjectSide).toBe("right");
+    expect(parsed.flipForeground).toBe(false);
+    expect(parsed.subjectScale).toBe(1);
   });
 
-  it("collects image asset references", () => {
+  it("requires both background and foreground images", () => {
+    expect(
+      thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, foregroundAssetId: undefined })
+        .success,
+    ).toBe(false);
+    expect(
+      thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, backgroundAssetId: undefined })
+        .success,
+    ).toBe(false);
+  });
+
+  it("collects both image asset references", () => {
     const refs = collectThumbnailAssetRefs({
-      schemaVersion: 1,
-      template: { id: "thumbnail.headline-photo", version: 1 },
-      input: { headline: "タイトル", assetId: "ast_1" },
+      schemaVersion: 2,
+      template: { id: "thumbnail.cutout-hero", version: 1 },
+      input: VALID_INPUT,
     });
     expect(refs).toEqual([
-      { assetId: "ast_1", allowedKinds: ["image"], path: ["input", "assetId"] },
+      { assetId: "ast_bg", allowedKinds: ["image"], path: ["input", "backgroundAssetId"] },
+      { assetId: "ast_fg", allowedKinds: ["image"], path: ["input", "foregroundAssetId"] },
     ]);
   });
 
-  it("collects no references for the text-only template", () => {
-    const refs = collectThumbnailAssetRefs({
-      schemaVersion: 1,
-      template: { id: "thumbnail.text", version: 1 },
-      input: { headline: "タイトル" },
-    });
-    expect(refs).toEqual([]);
-  });
-
-  it("exposes the layered template with the stack and character position selects", () => {
-    const definition = getThumbnailTemplate("thumbnail.layered", 1);
-    expect(definition).toBeDefined();
-    const stack = definition?.inputFields?.find((field) => field.key === "stack");
-    expect(stack?.kind).toBe("select");
-    if (stack?.kind === "select") {
-      expect(stack.options.map((option) => option.value)).toEqual([
-        "text-character-main",
-        "character-text-main",
-        "character-main-text",
-        "main-character-text",
-      ]);
-    }
-    const position = definition?.inputFields?.find((field) => field.key === "characterPosition");
-    expect(position?.kind).toBe("select");
-  });
-
-  it("applies the layered defaults", () => {
-    const parsed = thumbnailLayeredInputSchema.parse({ headline: "タイトル" });
-    expect(parsed.stack).toBe("text-character-main");
-    expect(parsed.characterPosition).toBe("right");
-  });
-
-  it("collects layered image references from provided slots only", () => {
-    const refs = collectThumbnailAssetRefs({
-      schemaVersion: 1,
-      template: { id: "thumbnail.layered", version: 1 },
-      input: { headline: "タイトル", mainAssetId: "ast_main", characterAssetId: "ast_char" },
-    });
-    expect(refs).toEqual([
-      { assetId: "ast_main", allowedKinds: ["image"], path: ["input", "mainAssetId"] },
-      { assetId: "ast_char", allowedKinds: ["image"], path: ["input", "characterAssetId"] },
-    ]);
-  });
-
-  it("validates the thumbnail document shape and rejects unknown versions", () => {
+  it("parses v1 and v2 documents and rejects unknown versions", () => {
+    const template = { id: "thumbnail.cutout-hero", version: 1 };
+    expect(
+      thumbnailDocumentSchema.safeParse({ schemaVersion: 1, template, input: VALID_INPUT }).success,
+    ).toBe(true);
     expect(
       thumbnailDocumentSchema.safeParse({
-        schemaVersion: 1,
-        template: { id: "thumbnail.text", version: 1 },
-        input: { headline: "タイトル" },
+        schemaVersion: 2,
+        template,
+        input: VALID_INPUT,
+        appearanceOverride: { headline: { color: "#FFFFFF" } },
       }).success,
     ).toBe(true);
-    expect(getThumbnailTemplate("thumbnail.text", 2)).toBeUndefined();
-    expect(thumbnailTextInputSchema.parse({ headline: "x" }).tone).toBe("accent");
+    expect(
+      thumbnailDocumentSchema.safeParse({ schemaVersion: 3, template, input: VALID_INPUT }).success,
+    ).toBe(false);
+    expect(
+      thumbnailDocumentSchema.safeParse({
+        schemaVersion: 2,
+        template,
+        input: VALID_INPUT,
+        unknown: true,
+      }).success,
+    ).toBe(false);
   });
 
-  it("declares rich text fields with the marks they accept", () => {
-    const definition = getThumbnailTemplate("thumbnail.text", 1);
+  it("declares rich text fields with all supported marks", () => {
+    const definition = getThumbnailTemplate("thumbnail.cutout-hero", 1);
     const headline = definition?.inputFields?.find((field) => field.key === "headline");
     expect(headline?.kind).toBe("richText");
     if (headline?.kind === "richText") {
@@ -118,24 +102,5 @@ describe("thumbnail templates", () => {
     }
     const subline = definition?.inputFields?.find((field) => field.key === "subline");
     expect(subline?.kind === "richText" && subline.optional).toBe(true);
-    const badge = definition?.inputFields?.find((field) => field.key === "badge");
-    if (badge?.kind === "richText") {
-      expect(badge.marks).not.toContain("accent");
-      expect(badge.optional).toBe(true);
-    }
-  });
-
-  it("accepts inline marks in text fields and rejects marks a field does not allow", () => {
-    expect(thumbnailTextInputSchema.safeParse({ headline: "**見出し**と==色==" }).success).toBe(
-      true,
-    );
-    expect(thumbnailTextInputSchema.safeParse({ headline: "**閉じない" }).success).toBe(true);
-    expect(
-      thumbnailHeadlinePhotoInputSchema.safeParse({
-        headline: "見出し",
-        assetId: "ast_1",
-        badge: "==バッジ==",
-      }).success,
-    ).toBe(false);
   });
 });

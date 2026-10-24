@@ -1,250 +1,200 @@
 import { describe, expect, it } from "vitest";
-import { getVisualTheme } from "@kakeai/contracts";
+import {
+  getVisualTheme,
+  type ThumbnailAppearance,
+  type ThumbnailDocument,
+} from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import type { AssetResolver } from "../resolver";
 import { contrastRatio } from "../theme";
 import { compileThumbnail } from "./compile";
-import { resolveReadableAccent } from "./render";
+import {
+  headlineFitFactor,
+  outlineShadow,
+  resolveReadableAccent,
+} from "./render";
 import { THUMBNAIL_OUTPUT_HEIGHT, THUMBNAIL_OUTPUT_WIDTH } from "../meta";
 
-const theme = getVisualTheme("soft-editorial", 1);
-if (theme === undefined) {
+const resolvedTheme = getVisualTheme("soft-editorial", 1);
+if (resolvedTheme === undefined) {
   throw new Error("soft-editorial@1 is required for tests");
 }
+const theme = resolvedTheme;
 
 const assetResolver: AssetResolver = (assetId) => ({ url: `/preview/${assetId}`, kind: "image" });
 
+const BASE_INPUT = {
+  headline: "テスト見出し",
+  backgroundAssetId: "ast_bg",
+  foregroundAssetId: "ast_fg",
+};
+
+function document(
+  input: Record<string, unknown> = BASE_INPUT,
+  appearanceOverride?: ThumbnailAppearance,
+): ThumbnailDocument {
+  return {
+    schemaVersion: 2,
+    template: { id: "thumbnail.cutout-hero", version: 1 },
+    input,
+    ...(appearanceOverride === undefined ? {} : { appearanceOverride }),
+  };
+}
+
+function compile(
+  input: Record<string, unknown> = BASE_INPUT,
+  options: {
+    appearanceOverride?: ThumbnailAppearance;
+    appearance?: Parameters<typeof compileThumbnail>[0]["appearance"];
+  } = {},
+) {
+  return compileThumbnail({
+    document: document(input, options.appearanceOverride),
+    theme,
+    assetResolver,
+    appearance: options.appearance,
+  });
+}
+
 describe("compileThumbnail", () => {
-  it("renders a headline-photo thumbnail at 1280x720", () => {
-    const compiled = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.headline-photo", version: 1 },
-        input: { headline: "テスト見出し", assetId: "ast_photo", layout: "photo-left" },
-      },
-      theme,
-      assetResolver,
-    });
-    expect(compiled.width).toBe(THUMBNAIL_OUTPUT_WIDTH);
-    expect(compiled.height).toBe(THUMBNAIL_OUTPUT_HEIGHT);
-    expect(compiled.html).toContain("/preview/ast_photo");
-    expect(compiled.html).toContain("テスト見出し");
-    expect(compiled.assetIds).toEqual(["ast_photo"]);
-  });
-
-  it("changes the photo side with the layout variant", () => {
-    const base = {
-      schemaVersion: 1 as const,
-      template: { id: "thumbnail.headline-photo", version: 1 },
-      input: { headline: "x", assetId: "ast_photo" },
-    };
-    const left = compileThumbnail({
-      document: { ...base, input: { ...base.input, layout: "photo-left" } },
-      theme,
-      assetResolver,
-    });
-    const right = compileThumbnail({
-      document: { ...base, input: { ...base.input, layout: "photo-right" } },
-      theme,
-      assetResolver,
-    });
-    expect(left.html).not.toBe(right.html);
-  });
-
-  it("renders a text-only thumbnail with no asset references", () => {
-    const compiled = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.text", version: 1 },
-        input: { headline: "文字だけ" },
-      },
-      theme,
-      assetResolver,
-    });
-    expect(compiled.assetIds).toEqual([]);
-    expect(compiled.html).toContain("文字だけ");
-  });
-
-  it("renders a layered thumbnail with background, main, and character", () => {
-    const compiled = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.layered", version: 1 },
-        input: {
-          headline: "重ね見出し",
-          subline: "補足",
-          backgroundAssetId: "ast_bg",
-          mainAssetId: "ast_main",
-          characterAssetId: "ast_char",
-        },
-      },
-      theme,
-      assetResolver,
-    });
+  it("renders a cutout thumbnail at 1280x720 with both images", () => {
+    const compiled = compile();
     expect(compiled.width).toBe(THUMBNAIL_OUTPUT_WIDTH);
     expect(compiled.height).toBe(THUMBNAIL_OUTPUT_HEIGHT);
     expect(compiled.html).toContain("/preview/ast_bg");
-    expect(compiled.html).toContain("/preview/ast_main");
-    expect(compiled.html).toContain("/preview/ast_char");
-    expect(compiled.html).toContain("重ね見出し");
-    expect(compiled.assetIds).toEqual(["ast_bg", "ast_main", "ast_char"]);
+    expect(compiled.html).toContain("/preview/ast_fg");
+    expect(compiled.html).toContain("テスト見出し");
+    expect(compiled.assetIds).toEqual(["ast_bg", "ast_fg"]);
   });
 
-  it("renders a layered thumbnail without any image", () => {
+  it("changes the subject side", () => {
+    const right = compile();
+    const left = compile({ ...BASE_INPUT, subjectSide: "left" });
+    expect(right.html).toContain("bottom:0;right:0;width:50%");
+    expect(left.html).toContain("bottom:0;left:0;width:50%");
+    expect(right.html).not.toBe(left.html);
+  });
+
+  it("flips the foreground and changes its scale", () => {
+    const flipped = compile({ ...BASE_INPUT, flipForeground: true });
+    expect(flipped.html).toContain("transform:scaleX(-1)");
+    const scaled = compile({ ...BASE_INPUT, subjectScale: 1.5 });
+    expect(scaled.html).toContain("height:117%");
+  });
+
+  it("applies common appearance and lets the candidate override it", () => {
+    const longHeadline =
+      "%%強調%%この見出しはとても長いので自動で小さくなることを確認するための文章です";
+    const compiled = compile(
+      { ...BASE_INPUT, headline: longHeadline },
+      {
+        appearance: {
+          headline: { fontSize: 120, color: "#00FFFF" },
+          accent: "#FF00FF",
+        },
+        appearanceOverride: {
+          headline: {
+            color: "#123456",
+            lineHeight: 2,
+            outline: { color: "#00FF00", width: 6 },
+          },
+          scrim: { opacity: 0.2 },
+        },
+      },
+    );
+    expect(compiled.html).toContain("font-size:80px");
+    expect(compiled.html).toContain("line-height:2");
+    expect(compiled.html).toContain("color:#123456");
+    expect(compiled.html).not.toContain("color:#00FFFF");
+    expect(compiled.html).toContain("rgba(0,255,0,.85)");
+    expect(compiled.html).toContain("rgba(27,39,64,0.2)");
+  });
+
+  it("renders a v1 document and still applies the language-edition appearance", () => {
     const compiled = compileThumbnail({
       document: {
         schemaVersion: 1,
-        template: { id: "thumbnail.layered", version: 1 },
-        input: { headline: "文字だけ" },
+        template: { id: "thumbnail.cutout-hero", version: 1 },
+        input: BASE_INPUT,
       },
       theme,
       assetResolver,
+      appearance: { headline: { color: "#00FFFF" } },
     });
-    expect(compiled.assetIds).toEqual([]);
-    expect(compiled.html).toContain("文字だけ");
+    expect(compiled.html).toContain("color:#00FFFF");
+    expect(compiled.assetIds).toEqual(["ast_bg", "ast_fg"]);
   });
 
-  it("changes the stacking order with the stack variant", () => {
-    const base = {
-      schemaVersion: 1 as const,
-      template: { id: "thumbnail.layered", version: 1 },
-      input: { headline: "x", mainAssetId: "ast_main", characterAssetId: "ast_char" },
-    };
-    const front = compileThumbnail({
-      document: { ...base, input: { ...base.input, stack: "text-character-main" } },
-      theme,
-      assetResolver,
-    });
-    const back = compileThumbnail({
-      document: { ...base, input: { ...base.input, stack: "character-main-text" } },
-      theme,
-      assetResolver,
-    });
-    expect(front.html).not.toBe(back.html);
+  it("uses an explicit accent without automatic contrast adjustment", () => {
+    const compiled = compile(
+      { ...BASE_INPUT, headline: "==強調==" },
+      { appearance: { accent: "#FF00FF" } },
+    );
+    expect(compiled.html).toContain("color:#FF00FF");
   });
 
-  it("renders the layered thumbnail deterministically", () => {
-    const build = (): string =>
-      compileThumbnail({
-        document: {
-          schemaVersion: 1,
-          template: { id: "thumbnail.layered", version: 1 },
-          input: {
-            headline: "見出し",
-            subline: "補足",
-            backgroundAssetId: "ast_bg",
-            mainAssetId: "ast_main",
-            characterAssetId: "ast_char",
-            characterPosition: "left",
+  it("keeps Theme accents readable", () => {
+    const compiled = compile({ ...BASE_INPUT, headline: "==強調==" });
+    const readable = resolveReadableAccent(theme, "primary", theme.scrim.color);
+    expect(contrastRatio(readable, theme.scrim.color)).toBeGreaterThanOrEqual(3);
+    expect(compiled.html).toContain(`color:${readable}`);
+  });
+
+  it("applies whole-role outline and inline outline with the same style", () => {
+    const compiled = compile(
+      { ...BASE_INPUT, headline: "見出しと%%強調%%" },
+      {
+        appearance: {
+          headline: {
+            decoration: { outline: true },
+            outline: { color: "#00FF00", width: 6 },
           },
         },
-        theme,
-        assetResolver,
-      }).html;
-    expect(build()).toBe(build());
-  });
-
-  it("renders inline marks as spans inside the text paragraph", () => {
-    const compiled = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.text", version: 1 },
-        input: {
-          headline: "**太字**と*斜体*と==色==と%%縁%%",
-          subline: "**補足**\n二行目",
-        },
       },
-      theme,
-      assetResolver,
-    });
-    expect(compiled.html).toContain("font-weight:700");
-    expect(compiled.html).toContain("font-style:italic");
+    );
     expect(compiled.html).toContain("text-shadow:");
+    expect(compiled.html).toContain("rgba(0,255,0,.85)");
+    expect(compiled.html.match(/rgba\(0,255,0,\.85\)/g)?.length ?? 0).toBeGreaterThan(8);
+  });
+
+  it("supports bold, italic, accent, outline, escaping, and newlines", () => {
+    const compiled = compile({
+      ...BASE_INPUT,
+      headline: "**太字**と*斜体*と==色==と%%縁取り%%\n2行目 <tag>",
+    });
+    expect(compiled.html).toContain('<span style="font-weight:700">太字</span>');
+    expect(compiled.html).toContain('<span style="font-style:italic">斜体</span>');
+    expect(compiled.html).toContain("color:");
+    expect(compiled.html).toContain("text-shadow:");
+    expect(compiled.html).toContain("&lt;tag&gt;");
     expect(compiled.html).toContain("white-space:pre-line");
-    expect(compiled.html).toContain("太字");
-    expect(compiled.html).toContain("補足");
-    expect(compiled.html).toContain("二行目");
-    expect(compiled.html).not.toContain("**");
-    expect(compiled.html).not.toContain("==");
-    expect(compiled.html).not.toContain("%%");
+    expect(compiled.html).toContain("\n2行目");
   });
 
-  it("escapes html characters inside marked spans", () => {
-    const compiled = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.text", version: 1 },
-        input: { headline: "**<b>強調</b>**&" },
-      },
-      theme,
-      assetResolver,
+  it("sizes headlines down as the visible text grows", () => {
+    expect(headlineFitFactor("短い見出し")).toBeGreaterThan(
+      headlineFitFactor("この見出しはとても長いので自動で小さくなることを確認するための文章です"),
+    );
+    const short = compile({ ...BASE_INPUT, headline: "短い見出し" });
+    const long = compile({
+      ...BASE_INPUT,
+      headline: "この見出しはとても長いので自動で小さくなることを確認するための文章です",
     });
-    expect(compiled.html).toContain("&lt;b&gt;");
-    expect(compiled.html).not.toContain("<b>");
-    expect(compiled.html).toContain("&amp;");
+    expect(short.html).not.toBe(long.html);
   });
 
-  it("renders marked thumbnails deterministically", () => {
-    const build = (): string =>
-      compileThumbnail({
-        document: {
-          schemaVersion: 1,
-          template: { id: "thumbnail.headline-photo", version: 1 },
-          input: {
-            headline: "==**見出し**==\n二行目",
-            subline: "_補足_",
-            badge: "%%バッジ%%",
-            assetId: "ast_photo",
-          },
-        },
-        theme,
-        assetResolver,
-      }).html;
-    expect(build()).toBe(build());
-  });
-
-  it("uses the neutral that contrasts with the glyph for outlines", () => {
-    const darkGlyph = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.text", version: 1 },
-        input: { headline: "%%縁取り%%", tone: "canvas" },
-      },
-      theme,
-      assetResolver,
-    });
-    expect(darkGlyph.html).toContain("rgba(255,255,255,.9)");
-
-    const lightGlyph = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.text", version: 1 },
-        input: { headline: "%%縁取り%%", tone: "accent" },
-      },
-      theme,
-      assetResolver,
-    });
-    expect(lightGlyph.html).toContain("rgba(27,39,64,.9)");
-  });
-
-  it("keeps the accent mark readable on every template surface", () => {
-    const surfaces = [theme.canvas.base, theme.accents.primary, theme.scrim.color];
-    for (const surface of surfaces) {
-      for (const token of ["primary", "secondary", "tertiary"] as const) {
-        expect(contrastRatio(resolveReadableAccent(theme, token, surface), surface)).toBeGreaterThanOrEqual(
-          3,
-        );
-      }
-    }
+  it("renders deterministically", () => {
+    const input = { ...BASE_INPUT, headline: "==強調==と**太字**", subjectSide: "left" };
+    expect(compile(input).html).toBe(compile(input).html);
   });
 
   it("fails on an unknown template", () => {
     expect(() =>
       compileThumbnail({
         document: {
-          schemaVersion: 1 as const,
+          schemaVersion: 2,
           template: { id: "thumbnail.missing", version: 1 },
-          input: {},
+          input: BASE_INPUT,
         },
         theme,
         assetResolver,
@@ -253,16 +203,16 @@ describe("compileThumbnail", () => {
   });
 
   it("fails on invalid input", () => {
-    expect(() =>
-      compileThumbnail({
-        document: {
-          schemaVersion: 1 as const,
-          template: { id: "thumbnail.headline-photo", version: 1 },
-          input: { headline: "x" },
-        },
-        theme,
-        assetResolver,
-      }),
-    ).toThrow(CompositionCompileError);
+    expect(() => compile({ ...BASE_INPUT, foregroundAssetId: undefined })).toThrow(
+      CompositionCompileError,
+    );
+  });
+});
+
+describe("outlineShadow", () => {
+  it("builds a wider ring for a larger width", () => {
+    expect(outlineShadow("#FFFFFF", 0)).toBe("");
+    expect(outlineShadow("#FFFFFF", 3)).toContain("2px 2px 0");
+    expect(outlineShadow("#FFFFFF", 12)).toContain("8px 8px 0");
   });
 });

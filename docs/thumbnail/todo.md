@@ -48,3 +48,14 @@
 - [x] Web UI に textarea とツールバー（選択範囲の装飾）を追加する
 - [x] [spec.md](./spec.md) とユーザーガイドに記法・制約を追記する
 - 完了条件: 単語単位の太字・斜体・アクセント・縁取りがプレビューと PNG に反映され、許可されない記法が保存時に拒否される。
+
+### [x] T7 Thumbnail Appearance と前景切り抜きテンプレート
+
+- [x] `packages/contracts` に `ThumbnailAppearance`（疎な上書き）、解決・マージ・正規化、文書v2、`thumbnail.cutout-hero@1` を追加する
+- [x] 旧4テンプレートの定義・描画・入力型を削除し、カタログを `cutout-hero` のみにする
+- [x] `packages/video` に背景全面・前景切り抜き・下部見出しの描画、左右・反転・倍率、自動文字サイズ、Appearance の縁取り色・太さを実装する
+- [x] Prisma に `LanguageEdition.thumbnailAppearanceJson` を追加し、共通Appearanceの取得・保存APIを実装する
+- [x] 候補CRUD・プレビュー・PNG生成へ `appearanceOverride` と未保存の共通Appearanceを配線する
+- [x] Web に共通Appearance編集、候補上書き、Font Catalog連携、未保存Appearanceのプレビューを追加する
+- [x] [spec.md](./spec.md)、API契約、ユーザーガイド、CONTEXT、ADR-0084、ADR-0059/0080のamendedを更新する
+- 完了条件: 共通→候補のプロパティ単位継承、未保存Appearanceのプレビュー、背景・前景両AssetのPNG出力、v1文書の読み取りがテストで確認でき、`npm run typecheck` と `npx vitest run --testTimeout=20000` が通る。

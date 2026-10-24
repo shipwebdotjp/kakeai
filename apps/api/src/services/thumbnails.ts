@@ -1,12 +1,18 @@
 import { readFile } from "node:fs/promises";
 import {
   THUMBNAIL_SCHEMA_VERSION,
+  applyThumbnailAppearance,
   collectThumbnailAssetRefs,
   getThumbnailTemplate,
+  normalizeThumbnailAppearance,
+  resolveThumbnailAppearanceDefaults,
+  thumbnailAppearanceSchema,
   thumbnailDocumentSchema,
   type CreateThumbnailRequest,
   type SaveThumbnailRequest,
   type Thumbnail as ThumbnailDto,
+  type ThumbnailAppearance,
+  type ThumbnailAppearanceView,
   type ThumbnailDocument,
   type ThumbnailPreview,
   type ThumbnailPreviewRequest,
@@ -39,11 +45,43 @@ function zodIssues(error: z.ZodError): ValidationIssue[] {
   }));
 }
 
+function buildDocument(input: {
+  template: ThumbnailDocument["template"];
+  input: unknown;
+  appearanceOverride?: ThumbnailAppearance | null;
+}): ThumbnailDocument {
+  const appearanceOverride = normalizeThumbnailAppearance(input.appearanceOverride);
+  if (appearanceOverride === null) {
+    return {
+      schemaVersion: THUMBNAIL_SCHEMA_VERSION,
+      template: input.template,
+      input: input.input,
+    };
+  }
+  return {
+    schemaVersion: THUMBNAIL_SCHEMA_VERSION,
+    template: input.template,
+    input: input.input,
+    appearanceOverride,
+  };
+}
+
 export function serializeThumbnailDocument(document: ThumbnailDocument): string {
+  // New writes are always v2. The v1 branch is defensive for callers that
+  // serialize a parsed legacy document without rewriting it.
+  if (document.schemaVersion === 1) {
+    return JSON.stringify({
+      schemaVersion: 1,
+      template: document.template,
+      input: document.input,
+    });
+  }
+  const appearanceOverride = normalizeThumbnailAppearance(document.appearanceOverride);
   return JSON.stringify({
-    schemaVersion: document.schemaVersion,
+    schemaVersion: THUMBNAIL_SCHEMA_VERSION,
     template: document.template,
     input: document.input,
+    ...(appearanceOverride === null ? {} : { appearanceOverride }),
   });
 }
 
@@ -59,6 +97,25 @@ export function parseThumbnailDocument(inputJson: string): ThumbnailDocument {
     throw new ApiError(500, "INTERNAL_ERROR", "サムネイルの入力が不正です。");
   }
   return parsed.data;
+}
+
+/**
+ * The stored appearance is a supplementary, unversioned patch. A stale or
+ * corrupt row must not make thumbnails unrenderable, so reads degrade to the
+ * Theme defaults. Writes still go through the strict request schema.
+ */
+export function parseThumbnailAppearanceJson(
+  appearanceJson: string | null,
+): ThumbnailAppearance | null {
+  if (appearanceJson === null) {
+    return null;
+  }
+  try {
+    const parsed = thumbnailAppearanceSchema.safeParse(JSON.parse(appearanceJson));
+    return parsed.success ? normalizeThumbnailAppearance(parsed.data) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function validateDocument(
@@ -124,13 +181,26 @@ async function requireEditionWithTheme(prisma: PrismaClient, editionId: string) 
   return { edition, theme };
 }
 
+function appearanceView(
+  theme: Parameters<typeof resolveThumbnailAppearanceDefaults>[0],
+  appearance: ThumbnailAppearance | null,
+): ThumbnailAppearanceView {
+  const defaults = resolveThumbnailAppearanceDefaults(theme);
+  return {
+    appearance,
+    defaults,
+    resolved: applyThumbnailAppearance(defaults, appearance),
+  };
+}
+
 function compile(
   document: ThumbnailDocument,
   theme: Parameters<typeof compileThumbnail>[0]["theme"],
   assetResolver: AssetResolver,
+  appearance: ThumbnailAppearance | null,
 ): CompiledThumbnail {
   try {
-    return compileThumbnail({ document, theme, assetResolver });
+    return compileThumbnail({ document, theme, assetResolver, appearance });
   } catch (error) {
     if (error instanceof CompositionCompileError) {
       throw new ApiError(422, "THUMBNAIL_INPUT_INVALID", undefined, { issues: error.issues });
@@ -177,11 +247,7 @@ export async function createThumbnail(
   input: CreateThumbnailRequest,
 ): Promise<ThumbnailDto> {
   await requireEditionWithTheme(prisma, editionId);
-  const document: ThumbnailDocument = {
-    schemaVersion: THUMBNAIL_SCHEMA_VERSION,
-    template: input.template,
-    input: input.input,
-  };
+  const document = buildDocument(input);
   await validateDocument(prisma, document);
   const created = await prisma.$transaction(async (tx) => {
     const row = await tx.thumbnail.create({
@@ -215,11 +281,7 @@ export async function saveThumbnail(
   if (existing === null) {
     throw resourceNotFound("thumbnail", thumbnailId);
   }
-  const document: ThumbnailDocument = {
-    schemaVersion: THUMBNAIL_SCHEMA_VERSION,
-    template: input.template,
-    input: input.input,
-  };
+  const document = buildDocument(input);
   await validateDocument(prisma, document);
   const row = await prisma.thumbnail.update({
     where: { id: thumbnailId },
@@ -290,22 +352,46 @@ export async function setPrimaryThumbnail(
   return getThumbnail(prisma, thumbnailId);
 }
 
+export async function getThumbnailAppearance(
+  prisma: PrismaClient,
+  editionId: string,
+): Promise<ThumbnailAppearanceView> {
+  const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
+  return appearanceView(theme, parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson));
+}
+
+export async function saveThumbnailAppearance(
+  prisma: PrismaClient,
+  editionId: string,
+  appearance: ThumbnailAppearance | null,
+): Promise<ThumbnailAppearanceView> {
+  const { theme } = await requireEditionWithTheme(prisma, editionId);
+  const normalized = normalizeThumbnailAppearance(appearance);
+  await prisma.languageEdition.update({
+    where: { id: editionId },
+    data: {
+      thumbnailAppearanceJson: normalized === null ? null : JSON.stringify(normalized),
+    },
+  });
+  return appearanceView(theme, normalized);
+}
+
 export async function createThumbnailPreview(
   prisma: PrismaClient,
   editionId: string,
   input: ThumbnailPreviewRequest,
 ): Promise<ThumbnailPreview> {
-  const document: ThumbnailDocument = {
-    schemaVersion: THUMBNAIL_SCHEMA_VERSION,
-    template: input.template,
-    input: input.input,
-  };
+  const document = buildDocument(input);
   await validateDocument(prisma, document);
-  const { theme } = await requireEditionWithTheme(prisma, editionId);
+  const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
+  const commonAppearance =
+    input.appearance === undefined
+      ? parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson)
+      : normalizeThumbnailAppearance(input.appearance);
   const compiled = compile(document, theme, (assetId) => ({
     url: renderContentUrl(assetId),
     kind: "image",
-  }));
+  }), commonAppearance);
   return { html: compiled.html, width: compiled.width, height: compiled.height };
 }
 
@@ -345,6 +431,9 @@ export async function generateThumbnailImage(
   const document = parseThumbnailDocument(row.inputJson);
   await validateDocument(prisma, document);
   const { theme } = await requireEditionWithTheme(prisma, row.languageEditionId);
+  const commonAppearance = parseThumbnailAppearanceJson(
+    row.languageEdition.thumbnailAppearanceJson,
+  );
 
   const assetIds = [
     ...new Set(collectThumbnailAssetRefs(document).map((reference) => reference.assetId)),
@@ -377,7 +466,7 @@ export async function generateThumbnailImage(
       ]);
     }
     return { url, kind: "image" };
-  });
+  }, commonAppearance);
   const png = await rasterizer.renderPng(compiled.html, compiled.width, compiled.height);
   return { filename: pngFilename(row.languageEdition.work.title), png };
 }

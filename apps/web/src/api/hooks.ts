@@ -41,6 +41,8 @@ import type {
   VisualThemeDefinition,
   DraftPreview,
   Thumbnail,
+  ThumbnailAppearance,
+  ThumbnailAppearanceView,
   ThumbnailPreview,
   CreateThumbnailRequest,
   SaveThumbnailRequest,
@@ -1097,6 +1099,40 @@ export function useThumbnailPreview(editionId: string | undefined) {
           { method: "POST", body: input },
         )
       ).data;
+    },
+  });
+}
+
+export function useThumbnailAppearance(editionId: string | undefined) {
+  return useQuery({
+    queryKey: ["thumbnail-appearance", editionId],
+    enabled: editionId !== undefined && editionId.length > 0,
+    queryFn: async () =>
+      (
+        await apiRequest<ThumbnailAppearanceView>(
+          `/language-editions/${encodeURIComponent(editionId ?? "")}/thumbnail-appearance`,
+        )
+      ).data,
+  });
+}
+
+export function useSaveThumbnailAppearance(editionId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (appearance: ThumbnailAppearance | null) => {
+      if (editionId === undefined || editionId.length === 0) {
+        throw new Error("editionId がありません");
+      }
+      return (
+        await apiRequest<ThumbnailAppearanceView>(
+          `/language-editions/${encodeURIComponent(editionId)}/thumbnail-appearance`,
+          { method: "PUT", body: { appearance } },
+        )
+      ).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance", editionId] });
+      queryClient.invalidateQueries({ queryKey: ["thumbnails", editionId] });
     },
   });
 }

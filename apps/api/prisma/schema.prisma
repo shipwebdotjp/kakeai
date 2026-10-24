@@ -32,6 +32,7 @@ model LanguageEdition {
   thumbnails             Thumbnail[]     @relation("EditionThumbnails")
   primaryThumbnailId     String?         @unique
   primaryThumbnail       Thumbnail?      @relation("EditionPrimaryThumbnail", fields: [primaryThumbnailId], references: [id], onDelete: SetNull)
+  thumbnailAppearanceJson String?
   jobs                   Job[]
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt

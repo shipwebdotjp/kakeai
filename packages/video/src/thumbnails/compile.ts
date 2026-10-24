@@ -1,28 +1,25 @@
 import {
+  applyThumbnailAppearance,
   getThumbnailTemplate,
+  mergeThumbnailAppearance,
+  resolveThumbnailAppearanceDefaults,
+  thumbnailAppearanceOverrideOf,
+  type ThumbnailAppearance,
+  type ThumbnailCutoutHeroInput,
   type ThumbnailDocument,
-  type ThumbnailHeadlinePhotoInput,
-  type ThumbnailLayeredInput,
-  type ThumbnailPhotoCoverInput,
-  type ThumbnailTextInput,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { THUMBNAIL_OUTPUT_HEIGHT, THUMBNAIL_OUTPUT_WIDTH } from "../meta";
 import type { AssetResolver } from "../resolver";
-import {
-  renderHeadlinePhoto,
-  renderLayered,
-  renderPhotoCover,
-  renderTextOnly,
-  type RenderedThumbnail,
-  type ThumbnailRenderContext,
-} from "./render";
+import { renderCutoutHero, type RenderedThumbnail, type ThumbnailRenderContext } from "./render";
 
 export interface CompileThumbnailOptions {
   document: ThumbnailDocument;
   theme: VisualThemeDefinition;
   assetResolver: AssetResolver;
+  /** Saved language-edition appearance. Candidate overrides live in the document. */
+  appearance?: ThumbnailAppearance | null;
 }
 
 export interface CompiledThumbnail {
@@ -44,14 +41,8 @@ function dispatch(
   context: ThumbnailRenderContext,
 ): RenderedThumbnail {
   switch (key) {
-    case "thumbnail.headline-photo@1":
-      return renderHeadlinePhoto(input as ThumbnailHeadlinePhotoInput, context);
-    case "thumbnail.photo-cover@1":
-      return renderPhotoCover(input as ThumbnailPhotoCoverInput, context);
-    case "thumbnail.text@1":
-      return renderTextOnly(input as ThumbnailTextInput, context);
-    case "thumbnail.layered@1":
-      return renderLayered(input as ThumbnailLayeredInput, context);
+    case "thumbnail.cutout-hero@1":
+      return renderCutoutHero(input as ThumbnailCutoutHeroInput, context);
     default:
       throw new CompositionCompileError([
         {
@@ -108,10 +99,20 @@ export function compileThumbnail(options: CompileThumbnailOptions): CompiledThum
       })),
     );
   }
+  const merged = mergeThumbnailAppearance(
+    options.appearance ?? null,
+    thumbnailAppearanceOverrideOf(document),
+  );
+  const appearance = applyThumbnailAppearance(
+    resolveThumbnailAppearanceDefaults(theme),
+    merged,
+  );
   const rendered = dispatch(`${id}@${version}`, parsed.data, {
     theme,
     assetResolver,
     path: ["input"],
+    appearance,
+    accentOverridden: merged?.accent !== undefined,
   });
   return {
     html: assemble(rendered.html),

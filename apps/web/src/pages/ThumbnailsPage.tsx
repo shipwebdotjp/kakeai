@@ -1,31 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  applyThumbnailAppearance,
   getThumbnailTemplate,
   listThumbnailTemplateCatalog,
   parseRichText,
+  type FontFace,
+  type ResolvedThumbnailAppearance,
   type RichTextMark,
   type TemplateFieldSpec,
   type Thumbnail,
+  type ThumbnailAppearance,
 } from "@kakeai/contracts";
 import { ApiError } from "../api/client";
 import { thumbnailImageUrl } from "../api/client";
 import {
   useCreateThumbnail,
   useDeleteThumbnail,
+  useFontCatalog,
   useSaveThumbnail,
+  useSaveThumbnailAppearance,
   useSetPrimaryThumbnail,
+  useThumbnailAppearance,
   useThumbnails,
   useThumbnailPreview,
   useWork,
 } from "../api/hooks";
 import { MediaPicker } from "../components/MediaPicker";
+import { ThumbnailAppearanceEditor } from "../components/ThumbnailAppearanceEditor";
 import { RICH_TEXT_DELIMITER, wrapSelection } from "../lib/richTextEditing";
+import { defaultThumbnailInput } from "../lib/thumbnailTemplate";
 import {
   badgeInfoClass,
   buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
+  detailsSummaryClass,
   errorTextClass,
   iconButtonClass,
   metaTextClass,
@@ -45,22 +55,6 @@ const RICH_TEXT_MARK_LABELS: Record<RichTextMark, string> = {
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "操作に失敗しました。";
-}
-
-function defaultInput(templateId: string, version: number): Record<string, unknown> {
-  const input: Record<string, unknown> = {};
-  const definition = getThumbnailTemplate(templateId, version);
-  for (const field of definition?.inputFields ?? []) {
-    if (field.kind === "select" && field.optional !== true) {
-      const first = field.options[0];
-      if (first !== undefined) {
-        input[field.key] = first.value;
-      }
-    } else if (field.kind === "text" || (field.kind === "richText" && field.optional !== true)) {
-      input[field.key] = "";
-    }
-  }
-  return input;
 }
 
 interface RichTextFieldProps {
@@ -298,7 +292,7 @@ function ThumbnailField({ field, input, setValue, clearValue }: FieldProps) {
         <input
           type="color"
           value={typeof value === "string" ? value : "#000000"}
-          onChange={(event) => setValue(field.key, event.target.value)}
+          onChange={(event) => setValue(field.key, event.target.value.toUpperCase())}
         />
       </label>
     );
@@ -331,11 +325,21 @@ function ThumbnailForm({
   editionId,
   candidate,
   defaultTemplate,
+  appearanceDefaults,
+  commonAppearance,
+  appearanceLoading,
+  fontFaces,
+  fontCatalogSupported,
   onSaved,
 }: {
   editionId: string;
   candidate: Thumbnail | null;
   defaultTemplate: { id: string; version: number };
+  appearanceDefaults: ResolvedThumbnailAppearance | null;
+  commonAppearance: ThumbnailAppearance | null | undefined;
+  appearanceLoading: boolean;
+  fontFaces: readonly FontFace[];
+  fontCatalogSupported: boolean;
   onSaved: (thumbnail: Thumbnail) => void;
 }) {
   const initialTemplate = candidate?.template ?? defaultTemplate;
@@ -344,7 +348,10 @@ function ThumbnailForm({
   const [templateVersion, setTemplateVersion] = useState(initialTemplate.version);
   const [input, setInput] = useState<Record<string, unknown>>(
     (candidate?.input as Record<string, unknown> | undefined) ??
-      defaultInput(initialTemplate.id, initialTemplate.version),
+      defaultThumbnailInput(initialTemplate.id, initialTemplate.version),
+  );
+  const [appearanceOverride, setAppearanceOverride] = useState<ThumbnailAppearance | null>(
+    candidate?.appearanceOverride ?? null,
   );
   const [preview, setPreview] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -361,17 +368,29 @@ function ThumbnailForm({
 
   const definition = getThumbnailTemplate(templateId, templateVersion);
   const fields = definition?.inputFields ?? [];
+  const inheritedAppearance = useMemo(
+    () =>
+      appearanceDefaults === null
+        ? null
+        : applyThumbnailAppearance(appearanceDefaults, commonAppearance ?? null),
+    [appearanceDefaults, commonAppearance],
+  );
 
-  const requestBody = useMemo(
-    () => ({ label: label.trim().length === 0 ? "無題" : label.trim(), template: { id: templateId, version: templateVersion }, input }),
-    [label, templateId, templateVersion, input],
+  const previewBody = useMemo(
+    () => ({
+      template: { id: templateId, version: templateVersion },
+      input,
+      appearanceOverride: appearanceOverride ?? undefined,
+      ...(commonAppearance === undefined ? {} : { appearance: commonAppearance }),
+    }),
+    [templateId, templateVersion, input, appearanceOverride, commonAppearance],
   );
 
   useEffect(() => {
     const seq = ++seqRef.current;
     const handle = setTimeout(() => {
       previewRef
-        .current({ template: requestBody.template, input: requestBody.input })
+        .current(previewBody)
         .then((result) => {
           if (seq === seqRef.current) {
             setPreview(result.html);
@@ -388,7 +407,7 @@ function ThumbnailForm({
     return () => {
       clearTimeout(handle);
     };
-  }, [requestBody]);
+  }, [previewBody]);
 
   const setValue = (key: string, value: unknown) => {
     setInput((previous) => ({ ...previous, [key]: value }));
@@ -405,12 +424,18 @@ function ThumbnailForm({
   const changeTemplate = (id: string, version: number) => {
     setTemplateId(id);
     setTemplateVersion(version);
-    setInput(defaultInput(id, version));
+    setInput(defaultThumbnailInput(id, version));
   };
 
   const submit = () => {
     setError(null);
-    const body = { label: requestBody.label, template: requestBody.template, input: requestBody.input };
+    const labelValue = label.trim().length === 0 ? "無題" : label.trim();
+    const body = {
+      label: labelValue,
+      template: { id: templateId, version: templateVersion },
+      input,
+      appearanceOverride: appearanceOverride ?? undefined,
+    };
     const run = candidate === null ? create.mutateAsync(body) : save.mutateAsync({ id: candidate.id, input: body });
     run.then((result) => onSaved(result)).catch((err) => setError(errorMessage(err)));
   };
@@ -432,7 +457,7 @@ function ThumbnailForm({
           <span className="text-sm font-medium">テンプレート</span>
           <select
             className={`${textFieldClass} mt-1 block w-full`}
-            value={`${templateId}@${templateVersion}`}
+            value={definition === undefined ? "" : `${templateId}@${templateVersion}`}
             onChange={(event) => {
               const entry = TEMPLATE_CATALOG.find(
                 (item) => `${item.id}@${item.version}` === event.target.value,
@@ -442,6 +467,11 @@ function ThumbnailForm({
               }
             }}
           >
+            {definition === undefined && (
+              <option value="" disabled>
+                （利用できないテンプレート: {templateId}@{templateVersion}）
+              </option>
+            )}
             {TEMPLATE_CATALOG.map((entry) => (
               <option key={`${entry.id}@${entry.version}`} value={`${entry.id}@${entry.version}`}>
                 {entry.label}
@@ -449,6 +479,20 @@ function ThumbnailForm({
             ))}
           </select>
         </label>
+        {definition === undefined && (
+          <div className="my-2 flex flex-wrap items-center gap-2">
+            <p className={errorTextClass}>
+              この候補のテンプレートは現在利用できません。テンプレートを選び直して保存してください。
+            </p>
+            <button
+              type="button"
+              className={buttonNeutralClass}
+              onClick={() => changeTemplate(defaultTemplate.id, defaultTemplate.version)}
+            >
+              既定のテンプレートに切り替える
+            </button>
+          </div>
+        )}
         {fields.map((field) => (
           <ThumbnailField
             key={field.key}
@@ -458,6 +502,28 @@ function ThumbnailForm({
             clearValue={clearValue}
           />
         ))}
+        {inheritedAppearance === null ? (
+          <p className={metaTextClass}>
+            {appearanceLoading
+              ? "共通の見た目を読み込み中…"
+              : "共通の見た目を読み込めないため、候補の上書きは編集できません。"}
+          </p>
+        ) : (
+          <details className="my-3 rounded border border-border p-2">
+            <summary className={detailsSummaryClass}>この候補だけ見た目を上書き</summary>
+            <div className="mt-2">
+              <ThumbnailAppearanceEditor
+                base={inheritedAppearance}
+                value={appearanceOverride}
+                onChange={setAppearanceOverride}
+                fontFaces={fontFaces}
+                fontCatalogSupported={fontCatalogSupported}
+                idPrefix={`candidate-${candidate?.id ?? "new"}`}
+                resetLabel="候補の上書きをすべて解除"
+              />
+            </div>
+          </details>
+        )}
         <div className="my-3 flex items-center gap-2">
           <button type="button" className={buttonPrimaryClass} disabled={busy} onClick={submit}>
             {candidate === null ? "候補を追加" : "保存"}
@@ -479,12 +545,40 @@ export function ThumbnailsPage() {
   const thumbnails = useThumbnails(editionId);
   const setPrimary = useSetPrimaryThumbnail(editionId);
   const remove = useDeleteThumbnail(editionId);
+  const appearanceQuery = useThumbnailAppearance(editionId);
+  const saveAppearance = useSaveThumbnailAppearance(editionId);
+  const fontCatalog = useFontCatalog();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  const [appearanceDraft, setAppearanceDraft] = useState<ThumbnailAppearance | null>(null);
+  const [appearanceDirty, setAppearanceDirty] = useState(false);
+  const [appearanceError, setAppearanceError] = useState<string | null>(null);
+  const appearanceDirtyRef = useRef(false);
+  const appearanceRevisionRef = useRef(0);
 
   const candidates = thumbnails.data ?? [];
   const selected = candidates.find((candidate) => candidate.id === selectedId) ?? null;
   const defaultTemplate = TEMPLATE_CATALOG[0] ?? null;
+  const appearanceDefaults = appearanceQuery.data?.defaults ?? null;
+  const fontFaces = fontCatalog.data?.faces ?? [];
+  const fontCatalogSupported = fontCatalog.data?.supported ?? true;
+
+  useEffect(() => {
+    appearanceDirtyRef.current = false;
+    appearanceRevisionRef.current += 1;
+    setAppearanceDraft(null);
+    setAppearanceDirty(false);
+    setAppearanceError(null);
+  }, [editionId]);
+
+  useEffect(() => {
+    if (appearanceQuery.data === undefined || appearanceDirtyRef.current) {
+      return;
+    }
+    setAppearanceDraft(appearanceQuery.data.appearance);
+    setAppearanceDirty(false);
+    setAppearanceError(null);
+  }, [appearanceQuery.data]);
 
   useEffect(() => {
     if (thumbnails.isFetching || !thumbnails.isSuccess) {
@@ -494,6 +588,26 @@ export function ThumbnailsPage() {
       setSelectedId(null);
     }
   }, [candidates, selectedId, thumbnails.isFetching, thumbnails.isSuccess]);
+
+  const saveAppearanceDraft = () => {
+    setAppearanceError(null);
+    const submitted = appearanceDraft;
+    const revision = appearanceRevisionRef.current;
+    saveAppearance
+      .mutateAsync(submitted)
+      .then((view) => {
+        if (appearanceRevisionRef.current === revision) {
+          setAppearanceDraft(view.appearance);
+          appearanceDirtyRef.current = false;
+          setAppearanceDirty(false);
+        }
+      })
+      .catch((error) => {
+        if (appearanceRevisionRef.current === revision) {
+          setAppearanceError(errorMessage(error));
+        }
+      });
+  };
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -508,6 +622,49 @@ export function ThumbnailsPage() {
       <p className={metaTextClass}>
         YouTube投稿用のサムネイル候補を作成します。言語版ごとに管理し、選んだ1枚を書き出せます。
       </p>
+
+      <section className={sectionCardClass}>
+        <h2 className={sectionTitleClass}>共通の見た目（この言語版）</h2>
+        <p className={metaTextClass}>
+          この言語版のすべての候補に適用されます。候補ごとに必要な項目だけ上書きできます。
+        </p>
+        {appearanceQuery.isLoading && <p className={metaTextClass}>読み込み中…</p>}
+        {appearanceQuery.isError && (
+          <p className={errorTextClass}>{errorMessage(appearanceQuery.error)}</p>
+        )}
+        {appearanceQuery.data !== undefined && appearanceDefaults !== null && (
+          <>
+            <div className="mt-3">
+              <ThumbnailAppearanceEditor
+                base={appearanceDefaults}
+                value={appearanceDraft}
+                onChange={(next) => {
+                  setAppearanceDraft(next);
+                  appearanceDirtyRef.current = true;
+                  appearanceRevisionRef.current += 1;
+                  setAppearanceDirty(true);
+                  setAppearanceError(null);
+                }}
+                fontFaces={fontFaces}
+                fontCatalogSupported={fontCatalogSupported}
+                idPrefix="common"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={buttonPrimaryClass}
+                disabled={!appearanceDirty || saveAppearance.isPending}
+                onClick={saveAppearanceDraft}
+              >
+                {saveAppearance.isPending ? "保存中…" : "共通の見た目を保存"}
+              </button>
+              {appearanceDirty && <span className={metaTextClass}>未保存の変更があります</span>}
+              {appearanceError !== null && <span className={errorTextClass}>{appearanceError}</span>}
+            </div>
+          </>
+        )}
+      </section>
 
       <section className={sectionCardClass}>
         <h2 className={sectionTitleClass}>候補</h2>
@@ -600,6 +757,11 @@ export function ThumbnailsPage() {
             editionId={editionId}
             candidate={selected}
             defaultTemplate={defaultTemplate}
+            appearanceDefaults={appearanceDefaults}
+            commonAppearance={appearanceQuery.data === undefined ? undefined : appearanceDraft}
+            appearanceLoading={appearanceQuery.isLoading}
+            fontFaces={fontFaces}
+            fontCatalogSupported={fontCatalogSupported}
             onSaved={(thumbnail) => setSelectedId(thumbnail.id)}
           />
         </section>

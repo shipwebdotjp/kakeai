@@ -6,6 +6,7 @@ import { canvasProfileSchema } from "./composition";
 import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 import { voiceIdSchema } from "./voice-profile";
 import { assetTagsSchema } from "./asset";
+import { thumbnailAppearanceSchema } from "./thumbnail/appearance";
 
 export const createWorkRequestSchema = z.strictObject({
   title: z.string().trim().min(1),
@@ -164,6 +165,7 @@ export const createThumbnailRequestSchema = z.strictObject({
   label: thumbnailLabelSchema,
   template: templateRefSchema,
   input: z.unknown(),
+  appearanceOverride: thumbnailAppearanceSchema.optional(),
 });
 export type CreateThumbnailRequest = z.infer<typeof createThumbnailRequestSchema>;
 
@@ -171,6 +173,7 @@ export const saveThumbnailRequestSchema = z.strictObject({
   label: thumbnailLabelSchema,
   template: templateRefSchema,
   input: z.unknown(),
+  appearanceOverride: thumbnailAppearanceSchema.optional(),
 });
 export type SaveThumbnailRequest = z.infer<typeof saveThumbnailRequestSchema>;
 
@@ -182,5 +185,18 @@ export type SetPrimaryThumbnailRequest = z.infer<typeof setPrimaryThumbnailReque
 export const thumbnailPreviewRequestSchema = z.strictObject({
   template: templateRefSchema,
   input: z.unknown(),
+  appearanceOverride: thumbnailAppearanceSchema.optional(),
+  /**
+   * Unsaved language-edition appearance. Omitted means "use the saved
+   * appearance"; null means "preview with no common appearance".
+   */
+  appearance: thumbnailAppearanceSchema.nullable().optional(),
 });
 export type ThumbnailPreviewRequest = z.infer<typeof thumbnailPreviewRequestSchema>;
+
+export const updateThumbnailAppearanceRequestSchema = z.strictObject({
+  appearance: thumbnailAppearanceSchema.nullable(),
+});
+export type UpdateThumbnailAppearanceRequest = z.infer<
+  typeof updateThumbnailAppearanceRequestSchema
+>;

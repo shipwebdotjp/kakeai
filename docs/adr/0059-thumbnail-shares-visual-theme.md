@@ -1,5 +1,7 @@
 # サムネイルのブランドは Visual Theme を共有する
 
+Status: amended by [ADR-0084](./0084-thumbnail-appearance-overrides.md)
+
 サムネイルは独自のブランド設定を持たず、その `LanguageEdition` の現行 `ScriptVersion` の `visualTheme`（選択中 Theme Revision）をそのまま参照する。色・書体・アクセント・scrim・角丸・サーフェスを共有し、文字サイズだけをフレームに合わせてスケールする。ロゴ／チャンネル名帯は今回は Theme に持たせず、サムネイルテンプレートの入力に置く。
 
 理由は、動画とサムネイルの見た目の統一が、ブランドを二重管理しないことで最も確実に得られるため。Theme は既に版付き・信頼済みレジストリとして存在し（[ADR-0040](./0040-visual-theme-contract.md)、[ADR-0049](./0049-custom-visual-theme-revisions.md)）、サムネイル専用のブランド層を新設すると色・書体の不整合の温床になる。

@@ -4,6 +4,7 @@ import {
   saveThumbnailRequestSchema,
   setPrimaryThumbnailRequestSchema,
   thumbnailPreviewRequestSchema,
+  updateThumbnailAppearanceRequestSchema,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
@@ -48,6 +49,33 @@ export function createThumbnailsRouter(dependencies: ThumbnailsRouterDependencie
         res,
         200,
         await thumbnails.setPrimaryThumbnail(prisma, pathParam(req, "editionId"), input.thumbnailId),
+      );
+    }),
+  );
+
+  router.get(
+    "/language-editions/:editionId/thumbnail-appearance",
+    asyncHandler(async (req, res) => {
+      sendData(
+        res,
+        200,
+        await thumbnails.getThumbnailAppearance(prisma, pathParam(req, "editionId")),
+      );
+    }),
+  );
+
+  router.put(
+    "/language-editions/:editionId/thumbnail-appearance",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(updateThumbnailAppearanceRequestSchema, req.body);
+      sendData(
+        res,
+        200,
+        await thumbnails.saveThumbnailAppearance(
+          prisma,
+          pathParam(req, "editionId"),
+          input.appearance,
+        ),
       );
     }),
   );

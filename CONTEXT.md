@@ -292,6 +292,14 @@ _Avoid_: cover image, render, Artifact, Script Version
 A trusted reusable thumbnail layout with a defined input contract, separate from a Visual Template.
 _Avoid_: Visual Template, scene, Visual Cue
 
+**Thumbnail Appearance**:
+A sparse visual override for thumbnails that is layered over the current Visual Theme. One appearance belongs to a Language Edition and each Thumbnail may carry a further sparse override; unset properties keep following the Theme.
+_Avoid_: Theme, Theme Draft, template preset
+
+**Foreground Cutout**:
+A transparent-background image Asset placed as the subject of a thumbnail template, anchored to the bottom edge. Its transparency is not inspected by the app.
+_Avoid_: background removal result, character image, main visual
+
 **Rich Text Value**:
-A thumbnail text input that carries inline emphasis in a small plain-text syntax, mapped by the owning Thumbnail Template to Theme tokens rather than user-chosen colors or fonts. It stays an ordinary string in the saved document.
+A thumbnail text input that carries inline emphasis in a small plain-text syntax, mapped to the resolved Thumbnail Appearance and the owning Thumbnail Template rather than raw user CSS. It stays an ordinary string in the saved document.
 _Avoid_: HTML, Markdown document, rich text editor state

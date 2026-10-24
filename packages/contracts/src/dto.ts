@@ -5,6 +5,10 @@ import { templateRefSchema } from "./content/nested";
 import { visualThemeDefinitionSchema } from "./content/theme";
 import { assetTagsSchema } from "./asset";
 import { errorCodeSchema } from "./error";
+import {
+  resolvedThumbnailAppearanceSchema,
+  thumbnailAppearanceSchema,
+} from "./thumbnail/appearance";
 
 export const jobKindSchema = z.enum(["asset_ingest", "render", "tts"]);
 export const jobStatusSchema = z.enum([
@@ -394,11 +398,19 @@ export const thumbnailSchema = z.object({
   schemaVersion: positiveInt,
   template: templateRefSchema,
   input: z.unknown(),
+  appearanceOverride: thumbnailAppearanceSchema.nullable(),
   isPrimary: z.boolean(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 export type Thumbnail = z.infer<typeof thumbnailSchema>;
+
+export const thumbnailAppearanceViewSchema = z.object({
+  appearance: thumbnailAppearanceSchema.nullable(),
+  defaults: resolvedThumbnailAppearanceSchema,
+  resolved: resolvedThumbnailAppearanceSchema,
+});
+export type ThumbnailAppearanceView = z.infer<typeof thumbnailAppearanceViewSchema>;
 
 export const thumbnailPreviewSchema = z.object({
   html: z.string().min(1),
