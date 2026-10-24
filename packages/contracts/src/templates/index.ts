@@ -78,11 +78,29 @@ export interface VisualTemplateDefinition {
   animationPolicy: AnimationPolicy;
   display: TemplateDisplay;
   inputFields?: readonly TemplateFieldSpec[];
+  /**
+   * A complete input that passes `inputSchema`. It is published by the Agent
+   * surface (`template.get`) so an agent can start from a valid shape instead
+   * of guessing nested JSON. The schema stays the only validation source; a
+   * test ensures this example keeps parsing against `inputSchema`.
+   */
+  exampleInput: unknown;
   collectAssetRefs: (input: unknown, path: (string | number)[], depth?: number) => AssetReference[];
   collectLineRefs?: (input: unknown, path: (string | number)[]) => LineReference[];
 }
 
 const MEDIA_KINDS = ["image", "video"] as const;
+
+/**
+ * Shared line-trigger placeholder for template examples. The ids are
+ * placeholders like the other example ids (`<assetId>`); an agent replaces
+ * them with real ids before saving.
+ */
+const EXAMPLE_LINE_TRIGGER = {
+  kind: "lines",
+  startLineId: "<startLineId>",
+  endLineId: "<endLineId>",
+} as const;
 
 const FIT_OPTIONS = [
   { value: "cover", label: "全体を覆う（切り抜き）" },
@@ -176,6 +194,14 @@ const textBlockV1: VisualTemplateDefinition = {
     { kind: "boolean", key: "decoration.outline", label: "縁取り" },
     { kind: "boolean", key: "decoration.shadow", label: "影" },
   ],
+  exampleInput: {
+    text: "売上は前年比120%",
+    role: "title",
+    anchor: "center",
+    fontSize: 96,
+    color: "#1F2937",
+    decoration: { bold: true, shadow: true },
+  } satisfies z.input<typeof textBlockInputSchema>,
   collectAssetRefs: () => [],
 };
 
@@ -231,6 +257,12 @@ const mediaFullBleedV1: VisualTemplateDefinition = {
     { kind: "number", key: "trimEndMs", label: "トリム終了(ms)", min: 0, step: 1, optional: true },
     { kind: "boolean", key: "loop", label: "動画をループ再生" },
   ],
+  exampleInput: {
+    assetId: "<assetId>",
+    fit: "cover",
+    focalPoint: { x: 0.5, y: 0.4 },
+    zoom: 1.2,
+  } satisfies z.input<typeof mediaFullBleedInputSchema>,
   collectAssetRefs: (input, path) => {
     const parsed = mediaFullBleedInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -290,6 +322,13 @@ const mediaCardV1: VisualTemplateDefinition = {
     { kind: "mediaCrop", key: "focalPoint", label: "焦点位置", zoomKey: "zoom" },
     { kind: "boolean", key: "loop", label: "動画をループ再生" },
   ],
+  exampleInput: {
+    assetId: "<assetId>",
+    aspectRatio: "16:9",
+    heading: "管理画面のダッシュボード",
+    caption: "毎日の確認はここから",
+    zoom: 1.1,
+  } satisfies z.input<typeof mediaCardInputSchema>,
   collectAssetRefs: (input, path) => {
     const parsed = mediaCardInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -328,6 +367,14 @@ const characterStandingV1: VisualTemplateDefinition = {
   transitionPolicy: DEFAULT_TRANSITION_POLICY,
   animationPolicy: DEFAULT_ANIMATION_POLICY,
   display: { label: "立ち絵", description: "左右1体ずつ立ち絵を表示し表情を切り替える", category: "character" },
+  exampleInput: {
+    characterId: "<characterId>",
+    appearanceId: "<appearanceId>",
+    side: "left",
+    scale: 1,
+    edge: "tight",
+    vertical: "standard",
+  } satisfies z.input<typeof characterStandingV1InputSchema>,
   collectAssetRefs: () => [],
 };
 
@@ -382,6 +429,11 @@ const sceneDeviceFrameV1: VisualTemplateDefinition = {
     category: "composition",
   },
   inputFields: DEVICE_FRAME_FIELDS,
+  exampleInput: {
+    screen: { kind: "media", assetId: "<assetId>", fit: "cover" },
+    frame: "laptop",
+    animation: { preset: "scale-in", durationMs: 600 },
+  } satisfies z.input<typeof deviceFrameInputSchema>,
   collectAssetRefs: (input, path, depth = 0) =>
     collectDeviceFrameRefs(deviceFrameInputSchema, input, path, depth),
 };
@@ -461,6 +513,15 @@ const sceneSiteMockupV1: VisualTemplateDefinition = {
     { kind: "nestedMedia", key: "logo", label: "ロゴ（任意）", assetKinds: MEDIA_KINDS, optional: true, videoPlayback: true },
     { kind: "animation", key: "animation", label: "画面の登場アニメーション" },
   ],
+  exampleInput: {
+    variant: "x",
+    screen: { kind: "media", assetId: "<assetId>", fit: "cover" },
+    theme: "light",
+    name: "Kakeai",
+    handle: "@kakeai",
+    caption: "台本からMP4まで、ひとつのアプリで",
+    animation: { preset: "fade", durationMs: 400 },
+  } satisfies z.input<typeof siteMockupInputSchema>,
   collectAssetRefs: (input, path, depth = 0) => {
     const parsed = siteMockupInputSchema.safeParse(input);
     if (!parsed.success) {
@@ -493,6 +554,9 @@ export const compositionFullBleedV1: VisualTemplateDefinition = {
   inputFields: [
     { kind: "text", key: "compositionVersionId", label: "Composition バージョン" },
   ],
+  exampleInput: { compositionVersionId: "<compositionVersionId>" } satisfies z.input<
+    typeof compositionFullBleedInputSchema
+  >,
   collectAssetRefs: () => [],
 };
 
@@ -697,6 +761,27 @@ const tableSimpleV1: VisualTemplateDefinition = {
     { kind: "boolean", key: "style.zebra", label: "ゼブラ" },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "table" },
   ],
+  exampleInput: {
+    caption: "料金プラン",
+    data: {
+      columns: [
+        { key: "plan", label: "プラン", type: "text" },
+        { key: "price", label: "月額", type: "number", format: "currency" },
+      ],
+      rows: [
+        { plan: "Free", price: 0 },
+        { plan: "Pro", price: 1500 },
+      ],
+    },
+    style: { preset: "striped", headerAccent: "primary", zebra: true },
+    effects: [
+      {
+        target: { kind: "row", index: 1 },
+        trigger: EXAMPLE_LINE_TRIGGER,
+        effect: { kind: "emphasize", style: "background", tone: "primary" },
+      },
+    ],
+  } satisfies z.input<typeof tableSimpleInputSchema>,
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
     const parsed = tableEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
@@ -898,6 +983,28 @@ const chartBarV1: VisualTemplateDefinition = {
     { kind: "boolean", key: "style.valueLabels", label: "値ラベル" },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "chart" },
   ],
+  exampleInput: {
+    title: "四半期の売上",
+    data: {
+      columns: [
+        { key: "quarter", label: "四半期", type: "text" },
+        { key: "thisYear", label: "今年", type: "number", format: "integer" },
+        { key: "lastYear", label: "昨年", type: "number", format: "integer" },
+      ],
+      rows: [
+        { quarter: "Q1", thisYear: 120, lastYear: 98 },
+        { quarter: "Q2", thisYear: 150, lastYear: 120 },
+      ],
+    },
+    style: { preset: "grid", orientation: "vertical", valueLabels: true, axisUnit: "件" },
+    effects: [
+      {
+        target: { kind: "bars" },
+        trigger: EXAMPLE_LINE_TRIGGER,
+        effect: { kind: "appear", preset: "grow", durationMs: 600, staggerMs: 80 },
+      },
+    ],
+  } satisfies z.input<typeof chartBarInputSchema>,
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
     const parsed = chartEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
@@ -1012,6 +1119,23 @@ const listCalloutV1: VisualTemplateDefinition = {
     },
     { kind: "calloutItems", key: "items", label: "ポイント" },
   ],
+  exampleInput: {
+    title: "この動画のポイント",
+    width: "medium",
+    align: "left",
+    items: [
+      {
+        text: "台本は正本JSONで保持される",
+        trigger: EXAMPLE_LINE_TRIGGER,
+        effect: { kind: "appear", preset: "fade", durationMs: 300 },
+      },
+      { text: "レンダーは何度でもやり直せる" },
+    ],
+    appear: {
+      trigger: { kind: "cue" },
+      effect: { kind: "appear", preset: "slide-up", durationMs: 400 },
+    },
+  } satisfies z.input<typeof listCalloutInputSchema>,
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
     const items = listCalloutItemsSchema.safeParse(readTriggerField(input, "items") ?? []);
@@ -1157,6 +1281,28 @@ const flowDiagramV1: VisualTemplateDefinition = {
     { kind: "select", key: "style.preset", label: "スタイル", options: FLOW_STYLE_PRESET_OPTIONS },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "flow" },
   ],
+  exampleInput: {
+    title: "制作の流れ",
+    diagram: {
+      nodes: [
+        { label: "台本", caption: "正本JSON" },
+        { label: "TTS" },
+        { label: "レンダー" },
+      ],
+      edges: [
+        { from: 0, to: 1, label: "音声生成" },
+        { from: 1, to: 2 },
+      ],
+    },
+    style: { orientation: "horizontal", preset: "boxed" },
+    effects: [
+      {
+        target: { kind: "node", index: 0 },
+        trigger: EXAMPLE_LINE_TRIGGER,
+        effect: { kind: "appear", preset: "fade", durationMs: 300 },
+      },
+    ],
+  } satisfies z.input<typeof flowDiagramInputSchema>,
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
     const parsed = flowEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
@@ -1239,6 +1385,19 @@ const statV1: VisualTemplateDefinition = {
     { kind: "select", key: "style.preset", label: "スタイル", options: STAT_STYLE_PRESET_OPTIONS },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "stat" },
   ],
+  exampleInput: {
+    value: 120,
+    label: "前年比",
+    caption: "2026年 第1四半期",
+    format: "percent",
+    style: { tone: "success", preset: "card" },
+    effects: [
+      {
+        trigger: EXAMPLE_LINE_TRIGGER,
+        effect: { kind: "value", from: 0, durationMs: 800 },
+      },
+    ],
+  } satisfies z.input<typeof statInputSchema>,
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
     const parsed = statEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
@@ -1299,6 +1458,18 @@ const quoteV1: VisualTemplateDefinition = {
     { kind: "select", key: "style.preset", label: "スタイル", options: QUOTE_STYLE_PRESET_OPTIONS },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "quote" },
   ],
+  exampleInput: {
+    quote: "測れるものしか改善できない",
+    author: "Peter Drucker",
+    source: "Management",
+    style: { tone: "primary", preset: "card" },
+    effects: [
+      {
+        trigger: { kind: "cue" },
+        effect: { kind: "appear", preset: "fade", durationMs: 400 },
+      },
+    ],
+  } satisfies z.input<typeof quoteInputSchema>,
   collectAssetRefs: () => [],
   collectLineRefs: (input, path) => {
     const parsed = quoteEffectsSchema.safeParse(readTriggerField(input, "effects") ?? []);
@@ -1399,6 +1570,22 @@ const chatThreadV1: VisualTemplateDefinition = {
     { kind: "messages", key: "messages", label: "メッセージ", maxMessages: CHAT_MAX_MESSAGES },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "chat" },
   ],
+  exampleInput: {
+    title: "チームの相談",
+    frame: "phone",
+    statusTime: "9:41",
+    messages: [
+      { name: "佐藤", side: "left", body: "今日の打ち合わせは10時です", time: "9:40" },
+      { name: "鈴木", side: "right", body: "了解しました", time: "9:41" },
+    ],
+    effects: [
+      {
+        target: { kind: "message", index: 1 },
+        trigger: EXAMPLE_LINE_TRIGGER,
+        effect: { kind: "appear", preset: "slide-up", durationMs: 300 },
+      },
+    ],
+  } satisfies z.input<typeof chatThreadInputSchema>,
   collectAssetRefs: (input, path, depth = 0) => {
     const parsed = chatThreadInputSchema.safeParse(input);
     if (!parsed.success) {

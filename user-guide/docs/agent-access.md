@@ -49,6 +49,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 用途 | ツール |
 | --- | --- |
 | スキーマ確認 | `kakeai_schema_get` |
+| テンプレート入力の形 | `kakeai_template_get`（1件の JSON Schema と入力例） |
 | 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` / `kakeai_work_update` |
 | 台本 | `kakeai_script_get` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` |
 | 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` |
@@ -62,6 +63,8 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 `kakeai_schema_get` の `agentOperations` が、公開されている全操作（読み取り／変更、Job を返すか）の正です。`kakeai_job_wait` は Job を待つための束縛の便宜ツールで、Agent 操作ではありません。
 
 応答には契約の要約 `schemaDigest` と `operationDigest`、対応プロトコル版の `minProtocolVersion` と `protocolVersion` が入ります。`operationDigest` は操作の入力・出力スキーマの要約で、操作の形が変わると変わります。記録した値が変わったときは、キャッシュしたスキーマや ID を使わず `kakeai_schema_get` を取り直してください。任意フィールドの追加や列挙値の追加では版は上がらず、必須化や削除、意味を変えたときだけ `protocolVersion` が変わります。
+
+表・グラフ・フロー・セリフ同期の効果・入れ子など、`kakeai_schema_get` の `inputFields` だけでは JSON の形が分からない入力は、`kakeai_template_get` に `{ "id": "...", "version": 1 }` を渡してください。`inputSchema`（保存時検証と同じスキーマから作った JSON Schema）と、そのまま使える `example` が返ります。`example` の `<assetId>` のような `<...>` は実在する ID に置き換えます。`schemaDigest` はテンプレート入力の変更でも変わるため、記録した値と違うときは取り直してください。
 
 `kakeai_script_edit` は `baseScriptVersionId` が現在の版と一致している必要があります。`requestId` を付けると再送が冪等になります。
 
@@ -164,6 +167,7 @@ kakeai-agent --help
 | MCP ツール | CLI |
 | --- | --- |
 | `kakeai_schema_get` | `kakeai-agent schema.get` |
+| `kakeai_template_get` | `kakeai-agent template.get --input '{"id":"table.simple","version":1}'` |
 | `kakeai_work_create` | `kakeai-agent work.create --input ...` |
 | `kakeai_work_update` | `kakeai-agent work.update --input ...` |
 | `kakeai_script_edit` | `kakeai-agent script.edit --input ...` |

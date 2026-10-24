@@ -39,6 +39,7 @@
 | 操作 | 種別 | 長尺（Job） | MCP ツール名 |
 | --- | --- | --- | --- |
 | `schema.get` | read | no | `kakeai_schema_get` |
+| `template.get` | read | no | `kakeai_template_get` |
 | `work.list` | read | no | `kakeai_work_list` |
 | `work.get` | read | no | `kakeai_work_get` |
 | `work.create` | mutation | no | `kakeai_work_create` |
@@ -90,7 +91,7 @@
 
 - リポジトリの `skills/kakeai-production/` と `skills/kakeai-composition/` に、外部エージェント向けの手順書（スキル）を置く。`kakeai-production` は台本・キャラクター・素材・Cue・TTS・検証・レンダーをまたぐ制作フロー、`kakeai-composition` は再利用する Composition の authoring を扱う。
 - スキルは束縛ではない。実行時の入口は MCP または CLI のままとし、スキルはその操作の呼び出し順と判断点だけを定める。HTTP API・ローカルソケット・Prisma を直接使う手順を書かない。
-- テンプレート契約・操作の入出力スキーマをスキルへ複製しない。`schema.get` と、MCP の `inputSchema` / CLI の検証を正とする。
+- テンプレート契約・操作の入出力スキーマをスキルへ複製しない。`schema.get`、`template.get`、MCP の `inputSchema` / CLI の検証を正とする。
 - 配布はリポジトリの `skills/` を配布元とし、利用するエージェントランタイムのスキルディレクトリへディレクトリごとコピーまたはシンボリックリンクして検出させる。検出先はランタイム依存であり、特定ベンダーのパスを前提にしない。アプリは実行時に `skills/` を読みに行かない。
 - 導入手順は [ユーザーガイドのエージェント連携](../../user-guide/docs/agent-access.md) に記載する。
 
@@ -129,7 +130,8 @@
 
 参照:
 
-- `schema.get` — 現在の `contentSchemaVersion`、各 VisualTemplate の `inputFields`・layer・transition・animation の制約、操作カタログ、Asset 種別と用途の制約、警告コードを返す。`schemaDigest` を含め、アプリ更新による変化を検知できるようにする。エージェントが値を推測しないための必須操作。`schemaDigest` はスキーマ関連データを正規化した非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。`operations` は台本編集の `ScriptOperation` カタログ（名前とカテゴリ）を従来どおり返し、`agentOperations` は束縛が公開してよい全 Agent 操作のカタログ（`name`、`kind` の `read` / `mutation`、Job を返す `longRunning`）を返す。`agentOperations` は読み取り・変更の分類リストから導出し、束縛ごとに第二の操作一覧を持たない。`operationDigest` は全 Agent 操作の入出力スキーマを正規化した契約のダイジェストで、操作の入力・出力が変わると必ず変化する。`minProtocolVersion` は対応するプロトコル版の下限、`protocolVersion` は上限（対応版）である。
+- `schema.get` — 現在の `contentSchemaVersion`、各 VisualTemplate の `inputFields`・layer・transition・animation の制約、操作カタログ、Asset 種別と用途の制約、警告コードを返す。`schemaDigest` を含め、アプリ更新による変化を検知できるようにする。エージェントが値を推測しないための必須操作。`schemaDigest` はスキーマ関連データを正規化した非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。`operations` は台本編集の `ScriptOperation` カタログ（名前とカテゴリ）を従来どおり返し、`agentOperations` は束縛が公開してよい全 Agent 操作のカタログ（`name`、`kind` の `read` / `mutation`、Job を返す `longRunning`）を返す。`agentOperations` は読み取り・変更の分類リストから導出し、束縛ごとに第二の操作一覧を持たない。`operationDigest` は全 Agent 操作の入出力スキーマを正規化した契約のダイジェストで、操作の入力・出力が変わると必ず変化する。`minProtocolVersion` は対応するプロトコル版の下限、`protocolVersion` は上限（対応版）である。テンプレートごとの入力 JSON Schema と入力例は応答に含めず、`template.get` で必要な1件だけを取得する。`schemaDigest` はそれらも含むため、テンプレート入力の変更でも変化する。
+- `template.get` — VisualTemplate 1件の入力契約を `{ id, version }` で取得する。`inputSchema` はそのテンプレート定義の `inputSchema`（保存時検証と同じ Zod スキーマ）を `toAgentJsonSchema` で変換した JSON Schema（draft 2020-12。`$schema` は付けない）で、`example` は同じスキーマを通ることがテストで固定された入力例である。入力の正はテンプレート定義の `inputSchema` ひとつで、Agent 向けの第二のスキーマは持たない。`id` / `version` は `schema.get` の `templates` から取り、存在しなければ `RESOURCE_NOT_FOUND` とする。`inputFields` を持たないテンプレートでも取得できる。`example` の ID は `<assetId>` のようなプレースホルダなので、実在する ID に置き換えて使う。
 - `work.list` / `work.get`
 - `script.get` — `scriptVersionId` を指定するとその版、`languageEditionId` を指定するとその Edition の current の `ContentDocument` と帰属を返す。どちらか一方を必須とする。
 - `script.validate` — 保存せずに検証する。`{ content }` または `{ baseScriptVersionId, operations }` を受け、`warnings` と解決済み `timeline` を返す。書込みを行わない。

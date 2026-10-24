@@ -50,6 +50,8 @@ import {
   agentScriptSaveOutputSchema,
   agentScriptValidateInputSchema,
   agentScriptValidateOutputSchema,
+  agentTemplateGetInputSchema,
+  agentTemplateGetOutputSchema,
   agentTtsAttachBulkInputSchema,
   agentTtsAttachBulkOutputSchema,
   agentTtsCreateBulkInputSchema,
@@ -65,6 +67,7 @@ import {
   agentWorkUpdateInputSchema,
   agentWorkUpdateOutputSchema,
   buildAgentSchemaGetResult,
+  buildAgentTemplateInputContract,
   isAgentMutationOperation,
   isAgentOperationName,
   type AgentErrorCode,
@@ -106,7 +109,7 @@ import {
   parseResultReference,
 } from "../services/agent-result-references.ts";
 import { createWork, createLanguageEdition, getWork, listWorks, updateWork } from "../services/works.ts";
-import { AgentOperationError } from "./errors.ts";
+import { AgentOperationError, agentIssue } from "./errors.ts";
 import { runWithAgentRequest } from "./idempotency.ts";
 
 export type AgentOperationKind = "read" | "mutation";
@@ -172,6 +175,25 @@ const definitions: AgentOperationDefinitions = {
     input: agentSchemaGetInputSchema,
     output: agentSchemaGetOutputSchema,
     run: async () => buildAgentSchemaGetResult(),
+  },
+  // Template input contracts are read from the immutable registry, so this is
+  // a pure lookup. The Zod `inputSchema` stays the only validation source.
+  "template.get": {
+    input: agentTemplateGetInputSchema,
+    output: agentTemplateGetOutputSchema,
+    run: async (input) => {
+      const template = buildAgentTemplateInputContract(input.id, input.version);
+      if (template === undefined) {
+        throw new AgentOperationError("RESOURCE_NOT_FOUND", [
+          agentIssue(
+            ["id", "version"],
+            "not_found",
+            `未対応のVisualTemplateです: ${input.id}@${input.version}。schema.getのtemplatesからidとversionを選び直してください。`,
+          ),
+        ]);
+      }
+      return { template };
+    },
   },
   "work.list": {
     input: agentWorkListInputSchema,

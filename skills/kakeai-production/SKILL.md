@@ -21,6 +21,11 @@ contracts or operation JSON schemas:
   `kind` and `longRunning`), `schemaDigest` and `operationDigest`.
 - Read each operation's input fields from the binding's published input schema:
   the MCP tool `inputSchema` (from `tools/list`) or the CLI's validation.
+- For a Visual Template's input JSON, call `template.get` with the template
+  `id`/`version` from `schema.get.templates`. It returns the template's
+  `inputSchema` (the same schema that validates saves) and a valid `example`.
+  Use it whenever the nested shape is not visible in `inputFields`; do not
+  invent the JSON.
 - Never guess field names, option values, or asset kinds.
 
 Work only through Agent Access. Do not call Kakeai's HTTP API, do not open the
@@ -203,6 +208,16 @@ changes are the user's job; agents only copy into the script.
   `id`/`version`, a `layer` it allows, and fill `inputFields` within their
   declared constraints (required/optional, select options, numeric ranges,
   allowed `assetKinds`, transition/animation policies).
+- `inputFields` describes the editor fields, not the nested JSON shape. When a
+  template uses a grid, flow, line-triggered effects, a nested visual or video
+  playback gates, call `template.get` first and start from its `example`:
+  - `inputSchema` is the save-time schema, so validating against it is enough.
+  - Replace every `<...>` placeholder (`<assetId>`, `<startLineId>`,
+    `<compositionVersionId>`, ...) with a real id from `asset.get`,
+    `script.get` or `composition.get`.
+  - If an example contains a nested `{ "kind": "template", "template": ... }`,
+    call `template.get` again for that nested template. Do not stop at one
+    level.
 - Add with `cue.add`; adjust later with `cue.setInput` (partial merge) or
   `cue.setRange`. Put left/right characters on screen with `standing.set`.
 - Add scene or work BGM with `audio.add`: `role: "bgm"`, a ready audio asset,
@@ -309,7 +324,7 @@ generation.
 | `work.create` / `script.save` timeout | These operations have no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `work.list` / `script.get` to check whether the change landed, then retry only if it did not. |
 | `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `work.list`, `job.list` — pass `{ kind: "tts" }` for TTS Jobs — `asset.list`, `composition.get`) and only then retry. The exception is `script.edit`, which may be replayed immediately with the same `requestId`. |
 | `replay: true` | The edit was already applied. Do not apply the operations again. |
-| Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. |
+| Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. `schemaDigest` also covers each template's input contract, so re-fetch any `template.get` result you cached. |
 
 ### 9.1 High-cost operations
 
@@ -369,7 +384,7 @@ to the user when the fix is on their side.
 | `COMPOSITION_UNAVAILABLE` | Referenced CompositionVersion is not published or its bundle is missing. Publish it first. |
 | `TTS_INPUT_INVALID` | Empty text, missing speaker/voice, voice outside the configured adapter, or bad speed. Fix the line or ask the user. |
 | `TTS_ENGINE_UNAVAILABLE` | The configured TTS adapter is unreachable. Ask the user to start the engine. |
-| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | The referenced script version, line, asset or work no longer exists. Includes a `tts.attachBulk` whose bulk was started by another `agentId` or without a `requestId`. Re-read and re-plan. |
+| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | The referenced script version, line, asset or work no longer exists, or a `template.get` id/version is not in `schema.get.templates`. Includes a `tts.attachBulk` whose bulk was started by another `agentId` or without a `requestId`. Re-read and re-plan. |
 | `AGENT_PAYLOAD_TOO_LARGE` | One request exceeded 32 MiB. Split the work; never inline large media in a script. |
 | `JOB_NOT_CANCELLABLE` | Only queued Jobs can be cancelled. A running or terminal Job must be waited for, not cancelled. |
 | `RENDER_FAILED` / `RENDER_INPUT_INVALID` | The render Job failed. Report `job.error`; check assets, duration and template inputs. Do not retry identical input indefinitely. |
@@ -398,3 +413,5 @@ to the user when the fix is on their side.
   a `script.edit`.
 - `schema.get` — always the authority for templates, fields, warning codes, the
   operation catalog and the contract digests (`schemaDigest`, `operationDigest`).
+- `template.get` — the authority for one template's input JSON (`inputSchema`)
+  and a valid `example`. Use it instead of guessing nested input shapes.

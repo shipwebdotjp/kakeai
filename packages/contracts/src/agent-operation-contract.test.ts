@@ -10,6 +10,7 @@ import {
   agentOperationOutputSchemas,
   agentSchemaDigestInputOf,
   agentSchemaGetResultSchema,
+  agentTemplateInputContracts,
   buildAgentOperationContracts,
   buildAgentSchemaGetResult,
   computeAgentOperationDigest,
@@ -122,6 +123,7 @@ describe("schema.get digests", () => {
     const result = buildAgentSchemaGetResult();
     const descriptor = agentSchemaDigestInputOf({
       ...result,
+      templateInputContracts: agentTemplateInputContracts(),
       operationContracts: agentOperationContracts(),
     });
     expect(descriptor.operationContracts).toHaveLength(agentOperationNames.length);
@@ -154,7 +156,11 @@ describe("schema.get digests", () => {
       );
       expect(
         computeAgentSchemaDigest(
-          agentSchemaDigestInputOf({ ...result, operationContracts: changedInput }),
+          agentSchemaDigestInputOf({
+            ...result,
+            templateInputContracts: agentTemplateInputContracts(),
+            operationContracts: changedInput,
+          }),
         ),
       ).not.toBe(result.schemaDigest);
 
@@ -164,7 +170,11 @@ describe("schema.get digests", () => {
       );
       expect(
         computeAgentSchemaDigest(
-          agentSchemaDigestInputOf({ ...result, operationContracts: changedOutput }),
+          agentSchemaDigestInputOf({
+            ...result,
+            templateInputContracts: agentTemplateInputContracts(),
+            operationContracts: changedOutput,
+          }),
         ),
       ).not.toBe(result.schemaDigest);
     }
@@ -197,7 +207,11 @@ describe("schema.get digests", () => {
     expect(computeAgentOperationDigest(changed)).not.toBe(result.operationDigest);
     expect(
       computeAgentSchemaDigest(
-        agentSchemaDigestInputOf({ ...result, operationContracts: changed }),
+        agentSchemaDigestInputOf({
+          ...result,
+          templateInputContracts: agentTemplateInputContracts(),
+          operationContracts: changed,
+        }),
       ),
     ).not.toBe(result.schemaDigest);
   });

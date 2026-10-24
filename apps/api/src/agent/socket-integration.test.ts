@@ -130,6 +130,31 @@ describe("agent socket integration", () => {
     expect(script.scriptVersion.id).toBe(edition.currentScriptVersion.id);
   });
 
+  it("returns a template input contract and reports unknown templates", async () => {
+    const schema = await client.request("schema.get", {});
+    const table = schema.templates.find((template) => template.id === "table.simple");
+    expect(table).toBeDefined();
+
+    const fetched = await client.request("template.get", {
+      id: table!.id,
+      version: table!.version,
+    });
+    expect(fetched.template.id).toBe("table.simple");
+    expect(fetched.template.version).toBe(1);
+    expect(fetched.template.inputSchema).toMatchObject({
+      type: "object",
+      required: ["data"],
+    });
+    expect(fetched.template.example).toMatchObject({
+      data: { columns: expect.any(Array), rows: expect.any(Array) },
+    });
+
+    await expectAgentError(
+      client.request("template.get", { id: table!.id, version: 99 }),
+      "RESOURCE_NOT_FOUND",
+    );
+  });
+
   it("renames a work and reports unknown works", async () => {
     const work = await createWork("改名前の作品");
 

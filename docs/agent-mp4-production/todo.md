@@ -2,7 +2,8 @@
 
 [spec.md](./spec.md) を正とする。上から順に進める。P1 の完了で
 「人間プリフライト済みの環境で MP4 を出せる」状態を作り、P2 は運用の
-取りこぼしを減らす改善、P3 は将来項目として [roadmap.md](./roadmap.md) へ送る。
+取りこぼしを減らす改善、P3-1 は入力契約の探索性を上げる改善である。
+残る P3-2 以降は将来項目として [roadmap.md](./roadmap.md) へ送る。
 
 ## P0 現状の再現と固定（コード変更なし）
 
@@ -70,12 +71,33 @@ P1 完了時点で MP4 は出せる。P2 は、エージェントが手順を飛
 完了条件: TTS Job を失っても `job.list` で再発見できる。
 全体置換の競合が検出できる。既存の操作契約は破壊しない。
 
-## P3 品質・診断（将来）
+## P3-1 入力契約の探索性（完了）
+
+複雑な VisualTemplate（表・グラフ・フロー・効果・入れ子）の入力を、試行錯誤ではなく
+公開された入力契約から組み立てられるようにする。`schema.get` の応答は増やさず、
+必要な1件だけを `template.get` で取得する（全スキーマを同梱すると約20KBが約58KBになり、
+MCP の二重出力でコストが増えるため）。
+
+- [x] `VisualTemplateDefinition` に `exampleInput` を必須で追加し、全14テンプレートに
+      保存時検証を通る例を置く
+- [x] `template.get`（`{ id, version }`）を追加し、`inputSchema`
+      （`toAgentJsonSchema` で導出）と `example` を返す
+- [x] 未知の `id` / `version` は `RESOURCE_NOT_FOUND` とする
+- [x] `schemaDigest` に `templateInputContracts` を含め、入力スキーマ・例の変更を
+      検知できるようにする
+- [x] ソケット統合テストで取得と `RESOURCE_NOT_FOUND` を固定する
+- [x] スキルとユーザーガイドに、複雑な入力は `template.get` から組み立てる手順を追加する
+- [x] `npm run typecheck` と `npm test` を通す
+
+完了条件: `schema.get` → `template.get` → `script.edit` で、表・グラフ・フローの
+入力を1回で組み立てられる。例は保存時検証を通り、`schema.get` の応答サイズは
+ほぼ変わらない。
+
+## P3-2 品質・診断（将来）
 
 以下は MP4 の生成自体には不要。必要になった時点で個別に仕様化する。
 詳細は [roadmap.md](./roadmap.md)。
 
-- [ ] `schema.get` にテンプレート入力の JSON Schema または例を追加する
 - [ ] 下書きプレビュー / 保存版プレビューのエージェント操作
 - [ ] 素材画像の確認（`assets/:id/frame` 相当）
 - [ ] `health` / ワーカー状態 / キューの診断

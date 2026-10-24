@@ -48,6 +48,8 @@ export const MCP_TOOL_NAME_PATTERN = /^[a-z][a-z0-9_]{0,127}$/u;
 const operationDescriptions: Record<AgentOperationName, string> = {
   "schema.get":
     "現在の Content Schema、VisualTemplate の入力フィールドと制約、警告コード、全操作カタログを返す。最初に呼ぶ。",
+  "template.get":
+    "VisualTemplate 1件の入力契約を返す。`inputSchema`（保存時検証と同じスキーマから導出した JSON Schema）と、そのまま使える入力例 `example` を含む。表・グラフ・フロー・セリフ同期の効果・入れ子など、`schema.get` の `inputFields` だけでは形が分からない入力を組み立てるときに呼ぶ。`example` の `<...>` は実在する ID に置き換える。",
   "work.list": "作品の一覧を返す。",
   "work.get": "作品 1 件を、言語版と現在の台本版の概要付きで返す。",
   "work.create": "作品、`ja-JP` 既定の言語版、初期台本版を作成する。",

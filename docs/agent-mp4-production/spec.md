@@ -98,7 +98,7 @@
 | 3 | `script.get` | 対象 Edition の current ScriptVersion と `content.locale` を確認 |
 | 4 | 声の確認 | 既存の Speaker に `voiceProfileId` があればそれを使う。無ければ `character.list` で対象 locale の声を持つキャラクターを選ぶ。どちらも無ければ停止 |
 | 5 | `script.edit`（1回目） | `character.addFromLibrary` で声付きキャラクターをコピーし、`created.speakerIds` を取得（既存の有効な話者を使う場合は省略可） |
-| 6 | `script.edit`（2回目以降） | Scene・セリフ・Cue・BGM・立ち絵を追加。話者 ID は 5 で得た ID を使う |
+| 6 | `script.edit`（2回目以降） | Scene・セリフ・Cue・BGM・立ち絵を追加。話者 ID は 5 で得た ID を使う。表・グラフ・フロー・効果・入れ子の入力は `template.get` の JSON Schema と例から組み立てる |
 | 7 | `asset.list` / `asset.import` / `job.wait` / `asset.get` | 参照する素材がすべて `ready` |
 | 8 | `script.validate` | `VALIDATION_ERROR` が無い。警告は `warningCodes` と照合 |
 | 9 | `tts.createBulk`（`requestId` 必須） | `jobs` と `excluded` を取得。`excluded` に `TTS_INPUT_INVALID` があれば声の前提を見直す |
@@ -116,6 +116,10 @@
   台帳に残らない操作だけである。
 - `preview.frame` は必須ではない。エージェントが絵を確認したい場合の補助とし、
   最終判断は人間に残す。
+- 表・グラフ・フロー・セリフ同期効果・入れ子など、`inputFields` だけでは
+  JSON の形が分からない入力は、`template.get` で `inputSchema` と `example` を
+  取得してから組み立てる。`example` の `<...>` は実在する ID に置き換える。
+  テンプレート契約を推測しない。
 
 ## 停止条件
 
@@ -127,7 +131,8 @@
 | `TTS_ENGINE_UNAVAILABLE` | TTS エンジンの起動を依頼する。Adapter 設定を変更しない |
 | `ASSET_UNAVAILABLE` | 素材の ready を確認する。代替素材を探す |
 | `SCRIPT_BASE_STALE` | current を読み直す。一括TTS中なら新しい `bulkRequestId` でやり直す |
-| `VALIDATION_ERROR` | `issues` の path を直す。テンプレート契約を推測しない |
+| `VALIDATION_ERROR` | `issues` の path を直す。テンプレート契約を推測せず `template.get` を読む |
+| `RESOURCE_NOT_FOUND`（`template.get`） | `schema.get.templates` にある `id` / `version` をそのまま使う。推測しない |
 | `JOB_NOT_CANCELLABLE` | 実行中 Job は待つ。無理に取り消さない |
 | `RENDER_FAILED` / `RENDER_INPUT_INVALID` | `job.error` を報告する。素材・尺・テンプレート入力を確認する |
 | Worker が進まない | `job.get` の `queued` / `running` を確認し、人間に状態を報告する |
@@ -203,6 +208,19 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 - `render.start` の `requestId` 再送で Job が増えないこと
 - レンダー成功時の MP4 Artifact
 
+### R8. テンプレート入力の契約を公開する（P3-1）
+
+- `template.get`（`{ id, version }`）は VisualTemplate 1件の `inputSchema` と
+  `example` を返す。`inputSchema` はテンプレート定義の `inputSchema` を
+  `toAgentJsonSchema` で変換したもので、保存時検証と同じスキーマから導出する。
+  別の検証スキーマを持たない。
+- `example` は全テンプレートに必須で、保存時検証を通ることをテストで固定する。
+- `schema.get` の応答はカタログのまま増やさない。未知の `id` / `version` は
+  `RESOURCE_NOT_FOUND` とする。
+- `schemaDigest` は `templateInputContracts` を含み、入力スキーマや例の変更でも
+  変化する。新操作の追加は任意フィールドの追加と同じ扱いで、プロトコル版は
+  上げない。
+
 ## 受け入れ基準
 
 - 人間プリフライト済みの ja-JP 新規作品で、エージェントが
@@ -214,6 +232,8 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
   一括生成が1つの ScriptVersion に確定する。
 - `render.start` の再送で二重レンダーにならない。
 - レンダー成功時に MP4 Artifact の ID・尺・寸法を報告できる。
+- `template.get` だけで、表・グラフ・フロー・効果・入れ子の入力 JSON を
+  推測せずに組み立てられる。`schema.get` の応答サイズはほぼ変わらない。
 - スキルとガイドに、声のプリフライト、MP4 の合格ライン、`preview.frame`
   が任意であること、一括TTSの順序が明記されている。
 - `npm run typecheck` と `npm test` が通る。
@@ -238,5 +258,9 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 - **P2: 完了。** `job.list` の `kind`（`render` / `tts`）と `script.save` の
   基準版ガード / `sourceScriptVersionId` を実装済み。`work.create` の冪等化は
   `requestId` を追加せず、`work.list` で確認するガイド路線。
-- **P3 / 将来: 未着手。** 項目は [todo.md](./todo.md) と
+- **P3-1 入力契約の探索性: 完了。** `template.get` が VisualTemplate 1件の
+  `inputSchema`（保存時検証と同じスキーマから導出）と検証済みの `example` を返す。
+  `schema.get` の応答は増やさず、`schemaDigest` に `templateInputContracts` を
+  含めた。
+- **P3-2 以降 / 将来: 未着手。** 項目は [todo.md](./todo.md) と
   [roadmap.md](./roadmap.md) に残している。

@@ -293,6 +293,22 @@ export const agentVisualTemplateSchema = z.strictObject({
 });
 export type AgentVisualTemplate = z.infer<typeof agentVisualTemplateSchema>;
 
+/**
+ * The input contract of one Visual Template. `inputSchema` is derived from the
+ * definition's own `inputSchema` (the same Zod schema that validates saves), so
+ * the Agent surface never keeps a second copy. `example` is a complete input
+ * that passes that schema.
+ */
+export const agentTemplateInputContractSchema = z.strictObject({
+  id: z.string().min(1),
+  version: positiveInt,
+  inputSchema: z.record(z.string(), z.unknown()),
+  example: z.unknown(),
+});
+export type AgentTemplateInputContract = z.infer<
+  typeof agentTemplateInputContractSchema
+>;
+
 export const scriptOperationCategorySchema = z.enum([
   "scene",
   "line",
@@ -313,6 +329,7 @@ export type AgentOperationCatalogEntry = z.infer<typeof agentOperationCatalogEnt
 /** Operations exposed by the A3 local control socket and later bindings. */
 export const agentOperationNames = [
   "schema.get",
+  "template.get",
   "work.list",
   "work.get",
   "work.create",
@@ -348,6 +365,7 @@ export type AgentOperationName = (typeof agentOperationNames)[number];
 
 export const agentReadOperationNames = [
   "schema.get",
+  "template.get",
   "work.list",
   "work.get",
   "script.get",
@@ -697,6 +715,12 @@ export interface AgentSchemaDigestSource {
   warningCodes: AgentWarningCode[];
   assetKinds: Array<z.infer<typeof assetKindSchema>>;
   /**
+   * The published input contract (JSON Schema and example) of every template.
+   * Folding it into the schema digest is what makes a template input change
+   * visible to an agent that cached a previous `template.get` result.
+   */
+  templateInputContracts: readonly AgentTemplateInputContract[];
+  /**
    * The normalised input/output schema of every agent operation. Folding it
    * into the schema digest is what makes an operation contract change visible
    * to an agent that cached the previous digest.
@@ -711,6 +735,7 @@ export interface AgentSchemaDigestInput {
   agentOperations: AgentOperationDescriptor[];
   warningCodes: AgentWarningCode[];
   assetKinds: Array<z.infer<typeof assetKindSchema>>;
+  templateInputContracts: readonly AgentTemplateInputContract[];
   operationContracts: readonly AgentOperationContract[];
 }
 
@@ -769,6 +794,14 @@ const agentEmptyInputSchema = z.strictObject({});
 
 export const agentSchemaGetInputSchema = agentEmptyInputSchema;
 export const agentSchemaGetOutputSchema = agentSchemaGetResultSchema;
+
+export const agentTemplateGetInputSchema = z.strictObject({
+  id: idSchema,
+  version: positiveInt,
+});
+export const agentTemplateGetOutputSchema = z.strictObject({
+  template: agentTemplateInputContractSchema,
+});
 
 export const agentWorkListInputSchema = agentEmptyInputSchema;
 export const agentWorkListOutputSchema = z.strictObject({
@@ -1081,6 +1114,7 @@ export const agentCharacterGetOutputSchema = z.strictObject({
 
 export const agentOperationInputSchemas = {
   "schema.get": agentSchemaGetInputSchema,
+  "template.get": agentTemplateGetInputSchema,
   "work.list": agentWorkListInputSchema,
   "work.get": agentWorkGetInputSchema,
   "work.create": agentWorkCreateInputSchema,
@@ -1115,6 +1149,7 @@ export const agentOperationInputSchemas = {
 
 export const agentOperationOutputSchemas = {
   "schema.get": agentSchemaGetOutputSchema,
+  "template.get": agentTemplateGetOutputSchema,
   "work.list": agentWorkListOutputSchema,
   "work.get": agentWorkGetOutputSchema,
   "work.create": agentWorkCreateOutputSchema,
@@ -1224,6 +1259,49 @@ function deepFreeze<T>(value: T): T {
 }
 
 /**
+ * The input contract of one definition. The JSON Schema is converted from the
+ * same Zod schema that validates saves; the example is data that a test keeps
+ * valid. Nothing here re-implements validation.
+ */
+function toAgentTemplateInputContract(
+  definition: VisualTemplateDefinition,
+): AgentTemplateInputContract {
+  return deepFreeze({
+    id: definition.id,
+    version: definition.version,
+    inputSchema: toAgentJsonSchema(definition.inputSchema, "input"),
+    example: definition.exampleInput,
+  });
+}
+
+const templateInputContractsCache: {
+  value?: readonly AgentTemplateInputContract[];
+} = {};
+
+/**
+ * The input contracts of this build, built once from the template registry.
+ * They are a digest input, so they must not change while the build is running.
+ */
+export function agentTemplateInputContracts(): readonly AgentTemplateInputContract[] {
+  if (templateInputContractsCache.value === undefined) {
+    templateInputContractsCache.value = Object.freeze(
+      visualTemplateDefinitions.map(toAgentTemplateInputContract),
+    );
+  }
+  return templateInputContractsCache.value;
+}
+
+/** One template's input contract, or undefined when id/version is unknown. */
+export function buildAgentTemplateInputContract(
+  id: string,
+  version: number,
+): AgentTemplateInputContract | undefined {
+  return agentTemplateInputContracts().find(
+    (contract) => contract.id === id && contract.version === version,
+  );
+}
+
+/**
  * Builds the contract of every agent operation, in the fixed operation order.
  * The order is part of the digest input, so it must not change.
  */
@@ -1280,6 +1358,7 @@ export function agentSchemaDigestInputOf(
     agentOperations: source.agentOperations,
     warningCodes: source.warningCodes,
     assetKinds: source.assetKinds,
+    templateInputContracts: source.templateInputContracts,
     operationContracts: source.operationContracts,
   };
 }
@@ -1295,6 +1374,7 @@ export function buildAgentSchemaGetResult(): AgentSchemaGetResult {
   const warningCodes = [...agentWarningCodes];
   const assetKinds = [...assetKindSchema.options];
   const operationContracts = agentOperationContracts();
+  const templateInputContracts = agentTemplateInputContracts();
   const schema = {
     contentSchemaVersion,
     templates,
@@ -1309,7 +1389,11 @@ export function buildAgentSchemaGetResult(): AgentSchemaGetResult {
     ...schema,
     operationDigest: computeAgentOperationDigest(operationContracts),
     schemaDigest: computeAgentSchemaDigest(
-      agentSchemaDigestInputOf({ ...schema, operationContracts }),
+      agentSchemaDigestInputOf({
+        ...schema,
+        templateInputContracts,
+        operationContracts,
+      }),
     ),
   };
 }

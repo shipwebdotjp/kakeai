@@ -194,14 +194,15 @@ MP4主線では「Job が queued のまま進まない」ことを `job.get` で
 `VisualCue.input` は契約上 `z.unknown()` で、テンプレート固有の検証は
 保存時に `definition.inputSchema.safeParse` で行う
 （[`packages/contracts/src/content/visual.ts`](../../packages/contracts/src/content/visual.ts)）。
-`schema.get` はフィールド種別・選択肢・数値範囲を返すが、表・グラフ・フロー・
-効果・`videoPlayback.gates` の入れ子JSONの形や例は返さない
-（[`packages/contracts/src/agent.ts`](../../packages/contracts/src/agent.ts)）。
+`schema.get` はフィールド種別・選択肢・数値範囲を返すだけで、表・グラフ・フロー・
+効果・`videoPlayback.gates` の入れ子JSONの形や例は返さないため、以前は
+`VALIDATION_ERROR` を見ながらの試行錯誤が必要だった。
 
-基本的なテキスト・画像・動画の Cue は比較的素直に作れる。一方、
-`chart.*` / `table.*` / `flow.diagram` / 効果トリガーを使い始めると、
-`VALIDATION_ERROR` を見ながらの試行錯誤になる。MP4を出すだけなら
-必須ではないが、表現の幅を出すほど反復が増える。
+P3-1 で `template.get` を追加し、テンプレート1件について、保存時検証と同じ
+Zod スキーマから導出した `inputSchema`（JSON Schema）と、そのスキーマを通る
+`example` を返すようにした。`schema.get` の応答は増やさないので、複雑な入力を
+使うときだけ1件取得すればよい。テンプレート定義の `inputSchema` が唯一の正で、
+Agent 向けの第二の検証スキーマは持たない。
 
 ### 3.2 視覚確認
 
@@ -263,7 +264,7 @@ MP4主線では `preview.frame` を必須にしないことで、このコスト
 | 一括TTSの順序 | **設計上の制約** | 守れば動くが、飛ばすと一括生成が無駄になる。スキルとテストで固定 |
 | TTS Job の回復 | **解消済み（P2）** | `job.list { kind: "tts" }` で再発見できる。`requestId` なしの一括は確定不可 |
 | `work.create` / `script.save` の冪等 | **一部解消（P2）** | `script.save` は基準版ガード / source を追加。`work.create` は `work.list` 確認のガイド路線 |
-| テンプレート入力の探索 | **コスト** | 基本テンプレートなら影響小。複雑な表現で反復増 |
+| テンプレート入力の探索 | **解消済み（P3-1）** | `template.get` が入力 JSON Schema と検証済みの例を返す。推測せずに組み立てられる |
 | 視覚確認 | **今回の非ゴール** | 人間が最終確認するため blocker ではない |
 | Composition authoring | **今回の非ゴール** | 既存テンプレートでMP4を出す主線から外す |
 | サムネイル / SRT / YouTube / Artifact取得 | **将来** | MP4の生成自体には不要 |

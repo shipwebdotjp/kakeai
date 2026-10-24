@@ -380,10 +380,12 @@ the `kakeai-production` skill uses), referencing the published version ID:
 }
 ```
 
-Read the exact template fields from `schema.get`; do not infer them. `schema.get`
-also returns `schemaDigest` and `operationDigest`; if either differs from what
-you recorded earlier, re-read `schema.get` and the published input schemas
-before publishing or editing a draft.
+Read the exact template fields from `schema.get`; do not infer them. For the
+input JSON itself, call `template.get` with the template `id`/`version` and use
+its `inputSchema` and `example`. `schema.get` also returns `schemaDigest` and
+`operationDigest`; if either differs from what you recorded earlier, re-read
+`schema.get` and any cached `template.get` result before publishing or editing a
+draft.
 
 Rules enforced at script save: `layer` must be `background` (`scene` / `lines` /
 `offset` ranges are all allowed). The same CompositionVersion may be referenced
