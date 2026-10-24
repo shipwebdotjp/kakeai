@@ -105,8 +105,21 @@ function createCollapsibleStore(
       };
     },
     replaceAll: (entries) => {
+      const next = new Map(entries);
+      let same = next.size === values.size;
+      if (same) {
+        for (const [key, value] of next) {
+          if (values.get(key) !== value) {
+            same = false;
+            break;
+          }
+        }
+      }
+      if (same) {
+        return;
+      }
       values.clear();
-      for (const [key, value] of entries) {
+      for (const [key, value] of next) {
         values.set(key, value);
       }
       notify();

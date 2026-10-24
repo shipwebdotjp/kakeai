@@ -58,7 +58,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 
 コードの実装や影響の大きい変更では、次の流れを1サイクルとして行う。
 
-1. `ocr review --audience agent -b "<変更の背景>" > /tmp/ocr_review.txt 2>&1` でレビューし、指摘を確認する。
+1. `ocr review --audience agent -b "<変更の背景>" > /tmp/ocr_review.txt 2>&1` でレビューし、指摘を確認する。`ocr review` は6分以上かかることがあるため、タイムアウトは10分以上に取る（短いと応答なしのまま打ち切りになる）。
 2. 正当な指摘のみを修正する。
 3. 再度レビューして修正する。ocrレビューは最大3回までで打ち切る。
 4. 打ち切り・指摘0、いずれの場合でも指示がなくてもコミットを行なう。
