@@ -412,6 +412,24 @@ export const thumbnailAppearanceViewSchema = z.object({
 });
 export type ThumbnailAppearanceView = z.infer<typeof thumbnailAppearanceViewSchema>;
 
+export const thumbnailAppearancePresetSummarySchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+export type ThumbnailAppearancePresetSummary = z.infer<
+  typeof thumbnailAppearancePresetSummarySchema
+>;
+
+export const thumbnailAppearancePresetSchema =
+  thumbnailAppearancePresetSummarySchema.extend({
+    appearance: thumbnailAppearanceSchema,
+  });
+export type ThumbnailAppearancePreset = z.infer<
+  typeof thumbnailAppearancePresetSchema
+>;
+
 export const thumbnailPreviewSchema = z.object({
   html: z.string().min(1),
   width: positiveInt,

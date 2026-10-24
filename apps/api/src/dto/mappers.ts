@@ -27,6 +27,8 @@ import {
   type ScriptVersion,
   type ScriptVersionSummary,
   type Thumbnail,
+  type ThumbnailAppearancePreset,
+  type ThumbnailAppearancePresetSummary,
   type TtsJobResult,
   type VoiceProfile,
   type Work,
@@ -44,6 +46,7 @@ import type {
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
   Thumbnail as ThumbnailRow,
+  ThumbnailAppearancePreset as ThumbnailAppearancePresetRow,
   VoiceProfile as VoiceProfileRow,
   Work as WorkRow,
 } from "../generated/prisma/client.ts";
@@ -386,5 +389,26 @@ export function toThumbnail(row: ThumbnailRow, isPrimary: boolean): Thumbnail {
     isPrimary,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export function toThumbnailAppearancePresetSummary(
+  row: Pick<ThumbnailAppearancePresetRow, "id" | "name" | "createdAt" | "updatedAt">,
+): ThumbnailAppearancePresetSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export function toThumbnailAppearancePreset(
+  row: ThumbnailAppearancePresetRow,
+  appearance: ThumbnailAppearancePreset["appearance"],
+): ThumbnailAppearancePreset {
+  return {
+    ...toThumbnailAppearancePresetSummary(row),
+    appearance,
   };
 }

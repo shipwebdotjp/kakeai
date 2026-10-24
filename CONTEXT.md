@@ -296,6 +296,10 @@ _Avoid_: Visual Template, scene, Visual Cue
 A sparse visual override for thumbnails that is layered over the current Visual Theme. One appearance belongs to a Language Edition and each Thumbnail may carry a further sparse override; unset properties keep following the Theme.
 _Avoid_: Theme, Theme Draft, template preset
 
+**Thumbnail Appearance Preset**:
+An app-wide named snapshot of a sparse Thumbnail Appearance patch. Applying it copies the patch into a Language Edition's common appearance draft; the edition does not reference the preset afterwards.
+_Avoid_: Theme, live preset, Theme Draft
+
 **Foreground Cutout**:
 A transparent-background image Asset placed as the subject of a thumbnail template, anchored to the bottom edge. Its transparency is not inspected by the app.
 _Avoid_: background removal result, character image, main visual

@@ -1,9 +1,11 @@
 import { Router, type RequestHandler } from "express";
 import {
+  createThumbnailAppearancePresetRequestSchema,
   createThumbnailRequestSchema,
   saveThumbnailRequestSchema,
   setPrimaryThumbnailRequestSchema,
   thumbnailPreviewRequestSchema,
+  updateThumbnailAppearancePresetRequestSchema,
   updateThumbnailAppearanceRequestSchema,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
@@ -13,6 +15,7 @@ import { getSharedRasterizer } from "../../media/rasterize.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
 import { parseBody, pathParam } from "../validation.ts";
 import * as thumbnails from "../../services/thumbnails.ts";
+import * as thumbnailAppearancePresets from "../../services/thumbnail-appearance-presets.ts";
 
 export interface ThumbnailsRouterDependencies {
   prisma: PrismaClient;
@@ -25,6 +28,66 @@ export function createThumbnailsRouter(dependencies: ThumbnailsRouterDependencie
   const { prisma, directories, mediaGuard } = dependencies;
   const rasterizer = dependencies.rasterizer ?? getSharedRasterizer();
   const router = Router();
+
+  router.get(
+    "/thumbnail-appearance-presets",
+    asyncHandler(async (_req, res) => {
+      sendData(res, 200, await thumbnailAppearancePresets.listThumbnailAppearancePresets(prisma));
+    }),
+  );
+
+  router.post(
+    "/thumbnail-appearance-presets",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(createThumbnailAppearancePresetRequestSchema, req.body);
+      sendData(
+        res,
+        201,
+        await thumbnailAppearancePresets.createThumbnailAppearancePreset(prisma, input),
+      );
+    }),
+  );
+
+  router.get(
+    "/thumbnail-appearance-presets/:presetId",
+    asyncHandler(async (req, res) => {
+      sendData(
+        res,
+        200,
+        await thumbnailAppearancePresets.getThumbnailAppearancePreset(
+          prisma,
+          pathParam(req, "presetId"),
+        ),
+      );
+    }),
+  );
+
+  router.put(
+    "/thumbnail-appearance-presets/:presetId",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(updateThumbnailAppearancePresetRequestSchema, req.body);
+      sendData(
+        res,
+        200,
+        await thumbnailAppearancePresets.updateThumbnailAppearancePreset(
+          prisma,
+          pathParam(req, "presetId"),
+          input,
+        ),
+      );
+    }),
+  );
+
+  router.delete(
+    "/thumbnail-appearance-presets/:presetId",
+    asyncHandler(async (req, res) => {
+      await thumbnailAppearancePresets.deleteThumbnailAppearancePreset(
+        prisma,
+        pathParam(req, "presetId"),
+      );
+      res.status(204).end();
+    }),
+  );
 
   router.get(
     "/language-editions/:editionId/thumbnails",

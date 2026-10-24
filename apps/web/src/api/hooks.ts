@@ -42,11 +42,15 @@ import type {
   DraftPreview,
   Thumbnail,
   ThumbnailAppearance,
+  ThumbnailAppearancePreset,
+  ThumbnailAppearancePresetSummary,
   ThumbnailAppearanceView,
   ThumbnailPreview,
+  CreateThumbnailAppearancePresetRequest,
   CreateThumbnailRequest,
   SaveThumbnailRequest,
   ThumbnailPreviewRequest,
+  UpdateThumbnailAppearancePresetRequest,
 } from "@kakeai/contracts";
 import { type AdapterVoicesState } from "../lib/voiceAdapters";
 import { ApiError, apiRequest, apiUpload, type Envelope } from "./client";
@@ -1133,6 +1137,83 @@ export function useSaveThumbnailAppearance(editionId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance", editionId] });
       queryClient.invalidateQueries({ queryKey: ["thumbnails", editionId] });
+    },
+  });
+}
+
+export function useThumbnailAppearancePresets() {
+  return useQuery({
+    queryKey: ["thumbnail-appearance-presets"],
+    queryFn: async () =>
+      (await apiRequest<ThumbnailAppearancePresetSummary[]>("/thumbnail-appearance-presets"))
+        .data,
+  });
+}
+
+export function useThumbnailAppearancePreset(presetId: string | undefined) {
+  return useQuery({
+    queryKey: ["thumbnail-appearance-preset", presetId],
+    enabled: presetId !== undefined && presetId.length > 0,
+    queryFn: async () =>
+      (
+        await apiRequest<ThumbnailAppearancePreset>(
+          `/thumbnail-appearance-presets/${encodeURIComponent(presetId ?? "")}`,
+        )
+      ).data,
+  });
+}
+
+export function useCreateThumbnailAppearancePreset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateThumbnailAppearancePresetRequest) =>
+      (
+        await apiRequest<ThumbnailAppearancePreset>("/thumbnail-appearance-presets", {
+          method: "POST",
+          body: input,
+        })
+      ).data,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance-presets"] }),
+  });
+}
+
+export function useUpdateThumbnailAppearancePreset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: UpdateThumbnailAppearancePresetRequest;
+    }) =>
+      (
+        await apiRequest<ThumbnailAppearancePreset>(
+          `/thumbnail-appearance-presets/${encodeURIComponent(id)}`,
+          { method: "PUT", body: input },
+        )
+      ).data,
+    onSuccess: (preset) => {
+      queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance-presets"] });
+      queryClient.invalidateQueries({
+        queryKey: ["thumbnail-appearance-preset", preset.id],
+      });
+    },
+  });
+}
+
+export function useDeleteThumbnailAppearancePreset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/thumbnail-appearance-presets/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance-presets"] });
+      queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance-preset", id] });
     },
   });
 }

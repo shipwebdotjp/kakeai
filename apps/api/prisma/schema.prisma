@@ -344,3 +344,16 @@ model Thumbnail {
 
   @@index([languageEditionId])
 }
+
+/// App-wide named snapshot of a Thumbnail Appearance patch. Applying a preset
+/// copies its patch into LanguageEdition.thumbnailAppearanceJson; the edition
+/// does not reference the preset afterwards.
+model ThumbnailAppearancePreset {
+  id             String   @id @default(cuid())
+  name           String
+  appearanceJson String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([updatedAt])
+}

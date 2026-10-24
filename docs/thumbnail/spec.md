@@ -27,6 +27,7 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 | --- | --- | --- |
 | `Thumbnail` | `id`, `languageEditionId`, `label`, `schemaVersion`, `templateId`, `templateVersion`, `inputJson`, `createdAt`, `updatedAt` | Language Edition 配下の可変なサムネイル候補。`@@index([languageEditionId])`。テンプレート版のGC条件に使うため `templateId`/`templateVersion` を検索用カラムにも持つ。 |
 | `LanguageEdition`（追加列） | `primaryThumbnailId?`, `thumbnailAppearanceJson?` | `primaryThumbnailId` は選択中の候補。`thumbnailAppearanceJson` は言語版共通のサムネイル外観（疎な上書きJSON）。 |
+| `ThumbnailAppearancePreset` | `id`, `name`, `appearanceJson`, `createdAt`, `updatedAt` | アプリ全体で再利用する名前付きのサムネイル外観プリセット。`appearanceJson` は疎な上書きJSON。適用は言語版の `thumbnailAppearanceJson` へのスナップショットコピーで、プリセットへの参照は保存しない。`@@index([updatedAt])`。 |
 
 - 候補は可変とし、明示保存で `inputJson` をその場で上書きする（last-write-wins）。版履歴・復元は持たない。
 - 候補の追加・削除・選択は自由。`primaryThumbnailId` を指す候補を削除する場合は、同一トランザクションで別候補へ付け替えるか NULL にする。
@@ -65,6 +66,37 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 - 明示した `accent` は自動でコントラスト補正しない。テンプレートの scrim・常時影・任意の縁取りで可読性を支える。未指定時は Theme primary accent を背景とのコントラスト比3以上へ解決する。
 - 縁取り色を未指定にした場合、文字色と背景から Theme ニュートラルを選ぶ。明示色はそのまま使う。縁取りの太さは自動文字サイズ補正には連動しない。
 - 空のオブジェクト・空の入れ子は保存正規化で削除する。
+
+## 外観プリセット
+
+言語版共通 Appearance を、作品・言語版をまたいで再利用するための名前付きプリセットを持つ（[ADR 0085](../adr/0085-thumbnail-appearance-presets-as-snapshots.md)）。
+
+- プリセットはアプリ全体の共有資産で、Work や LanguageEdition に属さない。異なるテーマの作品にも適用できる。
+- プリセットは**解決済みの値ではなく、疎な上書きパッチ**を保存する。適用先のテーマで未指定プロパティはそのテーマの値に従い、明示したプロパティだけが上書きされる。
+- 適用は**スナップショット**とする。プリセットを読み込むと、現在の言語版共通 Appearance の下書きをそのパッチで置き換える。ユーザーが明示保存して初めて言語版へ反映される。
+- 言語版はプリセットへの参照を保存しない。プリセットを後から上書き・削除しても、適用済みの言語版の外観は変わらない。
+- プリセットの作成・上書きは、現在の言語版共通 Appearance の下書きから行える。空のパッチはプリセットとして保存できない。
+- プリセットの一覧は更新日時の新しい順に返す。名前は一意でなくてよい。UI は ID で選択する。
+- プリセットのライブ参照、テーマごとの既定プリセット、プリセットのインポート／エクスポートは今回の対象外とする。
+
+### データモデルとAPI
+
+`ThumbnailAppearancePreset` は `id`、`name`、`appearanceJson`、`createdAt`、`updatedAt` を持つ。`appearanceJson` は `Thumbnail Appearance` のスキーマで保存時に検証し、空のパッチは拒否する。
+
+- `GET /api/v1/thumbnail-appearance-presets` は一覧（id、name、createdAt、updatedAt）を返す。
+- `POST /api/v1/thumbnail-appearance-presets` は `{ name, appearance }` で作成する。
+- `GET /api/v1/thumbnail-appearance-presets/:presetId` は `appearance` を含む完全なプリセットを返す。
+- `PUT /api/v1/thumbnail-appearance-presets/:presetId` は `{ name, appearance }` でプリセット自体を上書きする。適用済みの言語版には影響しない。
+- `DELETE /api/v1/thumbnail-appearance-presets/:presetId` はプリセットを削除する。適用済みの言語版には影響しない。
+
+### UI
+
+- 共通の見た目セクションに「外観プリセット」を置く。
+- 現在の下書きを名前付きで新規保存できる。
+- 一覧からプリセットを選び、現在の下書きへ読み込める。未保存の変更がある場合は確認する。
+- 選択中のプリセットを現在の下書きで上書きできる。適用済みの言語版は自動では変わらないことを確認ダイアログと注記で示す。
+- 選択中のプリセットを削除できる。
+- 共通の見た目に上書きがない場合は、新規保存・上書きを無効にする。読み込みは可能とする。
 
 ## テンプレート
 
@@ -160,16 +192,22 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 - `GET /api/v1/language-editions/:editionId/thumbnail-appearance` は言語版共通 Appearance と、Theme 由来の既定値・解決済み値を返す。
 - `PUT /api/v1/language-editions/:editionId/thumbnail-appearance` は `{ appearance }`（解除は null）で共通 Appearance を保存する。
 - `POST /api/v1/language-editions/:editionId/thumbnail-preview` は未保存の編集中入力（`template`、`input`、`appearanceOverride`、任意の `appearance`）のコンパイル済み HTML を返す。`appearance` を省略すると保存済み共通 Appearance を使い、null なら共通 Appearance なしでプレビューする。DBへ書かない。
+- `GET /api/v1/thumbnail-appearance-presets` は外観プリセットの一覧を返す。
+- `POST /api/v1/thumbnail-appearance-presets` は `{ name, appearance }` で外観プリセットを作成する。
+- `GET /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを返す。
+- `PUT /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを上書きする。適用済みの言語版へは波及しない。
+- `DELETE /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを削除する。適用済みの言語版へは波及しない。
 - `GET /api/v1/thumbnails/:thumbnailId/image` は PNG バイト列を返す。オンデマンド生成で、DBへ書かない。
   - `Content-Type: image/png`
   - `Content-Disposition: attachment`（ファイル名は Work タイトル由来の `.png`、空題は `thumbnail.png`）
   - `X-Content-Type-Options: nosniff`、`Cache-Control: private, max-age=0, must-revalidate`
-- 検証不正は `VALIDATION_ERROR`、存在しない候補は `RESOURCE_NOT_FOUND`、素材欠損は既存の `ASSET_UNAVAILABLE` 系で返す。
+- 検証不正は `VALIDATION_ERROR`、存在しない候補・言語版・外観プリセットは `RESOURCE_NOT_FOUND`、素材欠損は既存の `ASSET_UNAVAILABLE` 系で返す。
 
 ## UI
 
 - 作品編集画面から、各 Language Edition のサムネイル編集を開く。
 - サムネイル画面に「共通の見た目」を置き、Theme 継承中の項目をプロパティ単位でリセットできる。共通 Appearance は明示保存する。
+- 共通の見た目セクションに「外観プリセット」を置き、現在の下書きの新規保存、読込み、上書き、削除ができる。読込みは下書きへのスナップショット適用で、共通 Appearance の保存とは独立する。
 - 候補フォームでは、必要な項目だけ候補単位の上書きを有効化できる。Font Face は既存の Font Catalog から選ぶ。
 - 未保存の共通 Appearance は、候補フォームのプレビューに反映される。
 - テンプレートを選び、文字・背景・前景を入力する。プレビューを表示し、明示保存で候補を保存する。
@@ -187,12 +225,12 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 - 16:9 以外の比率、複数サイズの同時出力
 - 利用者によるテンプレート作成
 - カード状の主役写真テンプレート、AI背景除去
-- Work横断のAppearanceプリセットライブラリ
+- プリセットのライブ参照、テーマごとの既定プリセット、プリセットのインポート／エクスポート
 - 前景画像の透過メタデータ検査
 
 ## 検証
 
 - 契約テスト: サムネイル文書v1/v2の検証、テンプレート参照、未知テンプレート拒否、素材種別の検証、Appearanceのプロパティ単位マージと正規化、縁取り色・太さの範囲。部分装飾記法の解析（入れ子・エスケープ・対になっていない記号・未許可装飾）とフィールド宣言との一致。
 - コンパイラテスト: Theme トークンの適用、Appearance の継承順、背景クロップ、前景の左右・反転・倍率、1280x720 の確定性、文字量による自動サイズ、アクセント色のコントラスト解決と明示色の保持、縁取り色・太さ（全体と `%%`）、HTMLエスケープ、改行保持。
-- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、共通 Appearance の取得・保存・解除、未保存 Appearance のプレビュー、背景・前景両 Asset の検証、PNGのオンデマンド生成、Work削除での連鎖削除、v1文書の読み取り。
+- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、共通 Appearance の取得・保存・解除、未保存 Appearance のプレビュー、背景・前景両 Asset の検証、PNGのオンデマンド生成、Work削除での連鎖削除、v1文書の読み取り。外観プリセットの CRUD、空パッチの拒否、プリセット更新・削除が適用済み言語版へ波及しないこと。
 - Webテスト: テンプレ選択・入力の往復、候補の追加・選択・削除、選択範囲への装飾適用、Appearance の set/clear と継承シード。

@@ -11,6 +11,7 @@ import { assetStorageKey, commitFile } from "../storage/asset-store.ts";
 import { ensureDataDirectories, type DataDirectories } from "../storage/paths.ts";
 import type { Rasterizer } from "../media/rasterize.ts";
 import * as thumbnails from "./thumbnails.ts";
+import * as appearancePresets from "./thumbnail-appearance-presets.ts";
 import * as works from "./works.ts";
 
 const PNG_BASE64 =
@@ -325,5 +326,106 @@ describe("thumbnail flow", () => {
     });
     await works.deleteWork(prisma, directories, work.id);
     expect(await prisma.thumbnail.count({ where: { languageEditionId: editionId } })).toBe(0);
+  });
+
+  it("creates, lists, gets, updates, and deletes appearance presets", async () => {
+    const created = await appearancePresets.createThumbnailAppearancePreset(prisma, {
+      name: "プリセットA",
+      appearance: {
+        headline: { fontSize: 120, outline: { color: "#00FF00", width: 6 } },
+        accent: "#FF00FF",
+      },
+    });
+    expect(created.name).toBe("プリセットA");
+    expect(created.appearance.headline?.fontSize).toBe(120);
+
+    const listed = await appearancePresets.listThumbnailAppearancePresets(prisma);
+    expect(listed.some((preset) => preset.id === created.id)).toBe(true);
+
+    const fetched = await appearancePresets.getThumbnailAppearancePreset(prisma, created.id);
+    expect(fetched.appearance).toEqual(created.appearance);
+
+    const updated = await appearancePresets.updateThumbnailAppearancePreset(
+      prisma,
+      created.id,
+      {
+        name: "プリセットA 改",
+        appearance: { scrim: { opacity: 0.2 } },
+      },
+    );
+    expect(updated.name).toBe("プリセットA 改");
+    expect(updated.appearance).toEqual({ scrim: { opacity: 0.2 } });
+
+    await appearancePresets.deleteThumbnailAppearancePreset(prisma, created.id);
+    await expect(
+      appearancePresets.getThumbnailAppearancePreset(prisma, created.id),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("rejects an empty preset appearance and a missing preset", async () => {
+    await expect(
+      appearancePresets.createThumbnailAppearancePreset(prisma, {
+        name: "空",
+        appearance: {},
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    await expect(
+      appearancePresets.updateThumbnailAppearancePreset(prisma, "tap_missing", {
+        name: "なし",
+        appearance: { accent: "#FF00FF" },
+      }),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("rejects corrupt or empty stored preset JSON and missing deletes", async () => {
+    const created = await appearancePresets.createThumbnailAppearancePreset(prisma, {
+      name: "破損",
+      appearance: { accent: "#FF00FF" },
+    });
+    await prisma.thumbnailAppearancePreset.update({
+      where: { id: created.id },
+      data: { appearanceJson: "not-json" },
+    });
+    await expect(
+      appearancePresets.getThumbnailAppearancePreset(prisma, created.id),
+    ).rejects.toMatchObject({ code: "INTERNAL_ERROR" });
+
+    await prisma.thumbnailAppearancePreset.update({
+      where: { id: created.id },
+      data: { appearanceJson: "{}" },
+    });
+    await expect(
+      appearancePresets.getThumbnailAppearancePreset(prisma, created.id),
+    ).rejects.toMatchObject({ code: "INTERNAL_ERROR" });
+
+    await appearancePresets.deleteThumbnailAppearancePreset(prisma, created.id);
+    await expect(
+      appearancePresets.deleteThumbnailAppearancePreset(prisma, "tap_missing"),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("keeps applied editions unchanged when a preset is updated or deleted", async () => {
+    const editionId = await createEdition();
+    const original = {
+      headline: { fontSize: 120, color: "#00FFFF" },
+      accent: "#FF00FF",
+    };
+    const created = await appearancePresets.createThumbnailAppearancePreset(prisma, {
+      name: "スナップショット",
+      appearance: original,
+    });
+    await thumbnails.saveThumbnailAppearance(prisma, editionId, created.appearance);
+
+    await appearancePresets.updateThumbnailAppearancePreset(prisma, created.id, {
+      name: "スナップショット 改",
+      appearance: { accent: "#00FF00" },
+    });
+    const afterUpdate = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    expect(afterUpdate.appearance).toEqual(original);
+
+    await appearancePresets.deleteThumbnailAppearancePreset(prisma, created.id);
+    const afterDelete = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    expect(afterDelete.appearance).toEqual(original);
   });
 });

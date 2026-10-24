@@ -28,6 +28,7 @@ import {
 } from "../api/hooks";
 import { MediaPicker } from "../components/MediaPicker";
 import { ThumbnailAppearanceEditor } from "../components/ThumbnailAppearanceEditor";
+import { ThumbnailAppearancePresetPanel } from "../components/ThumbnailAppearancePresetPanel";
 import { RICH_TEXT_DELIMITER, wrapSelection } from "../lib/richTextEditing";
 import { defaultThumbnailInput } from "../lib/thumbnailTemplate";
 import {
@@ -562,6 +563,12 @@ export function ThumbnailsPage() {
   const appearanceDefaults = appearanceQuery.data?.defaults ?? null;
   const fontFaces = fontCatalog.data?.faces ?? [];
   const fontCatalogSupported = fontCatalog.data?.supported ?? true;
+  const selectedEdition = work.data?.languageEditions.find((entry) => entry.id === editionId);
+  const presetBaseName =
+    work.data === undefined
+      ? "サムネイル外観"
+      : `${work.data.title}${selectedEdition === undefined ? "" : ` (${selectedEdition.locale})`}`;
+  const presetDefaultName = presetBaseName.slice(0, 80).replace(/[\uD800-\uDBFF]$/u, "");
 
   useEffect(() => {
     appearanceDirtyRef.current = false;
@@ -588,6 +595,14 @@ export function ThumbnailsPage() {
       setSelectedId(null);
     }
   }, [candidates, selectedId, thumbnails.isFetching, thumbnails.isSuccess]);
+
+  const updateAppearanceDraft = (next: ThumbnailAppearance | null) => {
+    setAppearanceDraft(next);
+    appearanceDirtyRef.current = true;
+    appearanceRevisionRef.current += 1;
+    setAppearanceDirty(true);
+    setAppearanceError(null);
+  };
 
   const saveAppearanceDraft = () => {
     setAppearanceError(null);
@@ -638,13 +653,7 @@ export function ThumbnailsPage() {
               <ThumbnailAppearanceEditor
                 base={appearanceDefaults}
                 value={appearanceDraft}
-                onChange={(next) => {
-                  setAppearanceDraft(next);
-                  appearanceDirtyRef.current = true;
-                  appearanceRevisionRef.current += 1;
-                  setAppearanceDirty(true);
-                  setAppearanceError(null);
-                }}
+                onChange={updateAppearanceDraft}
                 fontFaces={fontFaces}
                 fontCatalogSupported={fontCatalogSupported}
                 idPrefix="common"
@@ -662,6 +671,13 @@ export function ThumbnailsPage() {
               {appearanceDirty && <span className={metaTextClass}>未保存の変更があります</span>}
               {appearanceError !== null && <span className={errorTextClass}>{appearanceError}</span>}
             </div>
+            <ThumbnailAppearancePresetPanel
+              key={editionId}
+              appearanceDraft={appearanceDraft}
+              dirty={appearanceDirty}
+              defaultName={presetDefaultName}
+              onApply={updateAppearanceDraft}
+            />
           </>
         )}
       </section>

@@ -6,7 +6,10 @@ import { canvasProfileSchema } from "./composition";
 import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 import { voiceIdSchema } from "./voice-profile";
 import { assetTagsSchema } from "./asset";
-import { thumbnailAppearanceSchema } from "./thumbnail/appearance";
+import {
+  normalizeThumbnailAppearance,
+  thumbnailAppearanceSchema,
+} from "./thumbnail/appearance";
 
 export const createWorkRequestSchema = z.strictObject({
   title: z.string().trim().min(1),
@@ -199,4 +202,31 @@ export const updateThumbnailAppearanceRequestSchema = z.strictObject({
 });
 export type UpdateThumbnailAppearanceRequest = z.infer<
   typeof updateThumbnailAppearanceRequestSchema
+>;
+
+const thumbnailAppearancePresetInputSchema = z
+  .strictObject({
+    name: thumbnailLabelSchema,
+    appearance: thumbnailAppearanceSchema,
+  })
+  .superRefine((value, context) => {
+    if (normalizeThumbnailAppearance(value.appearance) === null) {
+      context.addIssue({
+        code: "custom",
+        path: ["appearance"],
+        message: "外観の上書きがありません。",
+      });
+    }
+  });
+
+export const createThumbnailAppearancePresetRequestSchema =
+  thumbnailAppearancePresetInputSchema;
+export type CreateThumbnailAppearancePresetRequest = z.infer<
+  typeof createThumbnailAppearancePresetRequestSchema
+>;
+
+export const updateThumbnailAppearancePresetRequestSchema =
+  thumbnailAppearancePresetInputSchema;
+export type UpdateThumbnailAppearancePresetRequest = z.infer<
+  typeof updateThumbnailAppearancePresetRequestSchema
 >;

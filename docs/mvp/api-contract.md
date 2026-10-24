@@ -75,6 +75,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | Thumbnail | id, languageEditionId, label, schemaVersion, template, input, appearanceOverride, isPrimary, createdAt, updatedAt | 言語版のサムネイル候補。`template` は `{ id, version }`、`input` はテンプレート固有のJSON、`appearanceOverride` は候補単位の疎な外観上書き（v1文書ではnull）。複数候補を持ち、`isPrimary` が投稿に使う1枚。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
 | ThumbnailAppearance | headline, subline, accent, scrim | サムネイルの疎な外観上書き。`headline`/`subline` は font・fontFace・fontSize・color・lineHeight・decoration・outline、`scrim` は color・opacity を持つ。未指定プロパティはTheme継承。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
 | ThumbnailAppearanceView | appearance, defaults, resolved | 言語版共通のサムネイル外観。`appearance` は保存済みの疎な上書き（未設定はnull）、`defaults` はTheme由来の既定値、`resolved` は `appearance` 適用後の値。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
+| ThumbnailAppearancePresetSummary | id, name, createdAt, updatedAt | アプリ全体で再利用する名前付きサムネイル外観プリセットの一覧用要約。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
+| ThumbnailAppearancePreset | id, name, appearance, createdAt, updatedAt | 名前付きサムネイル外観プリセット。`appearance` は疎な上書き。適用は言語版の共通Appearanceへのスナップショットコピーで、プリセットへの参照は保存しない。 |
 | ThumbnailPreview | html, width, height | 未保存のサムネイル入力をコンパイルした静止画HTML（1280x720）。DBへ書かない。 |
 | CharacterLibraryEntry | id, name, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
 | FaceSet | id, name, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
@@ -120,6 +122,11 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | PUT | /language-editions/:editionId/primary-thumbnail | 200 | 投稿に使うサムネイル候補を選択 |
 | GET | /language-editions/:editionId/thumbnail-appearance | 200 | 言語版共通のサムネイル外観とTheme既定値を取得 |
 | PUT | /language-editions/:editionId/thumbnail-appearance | 200 | 言語版共通のサムネイル外観を保存（nullで解除） |
+| GET | /thumbnail-appearance-presets | 200 | アプリ全体のサムネイル外観プリセット一覧を取得 |
+| POST | /thumbnail-appearance-presets | 201 | サムネイル外観プリセットを作成 |
+| GET | /thumbnail-appearance-presets/:presetId | 200 | サムネイル外観プリセットを取得 |
+| PUT | /thumbnail-appearance-presets/:presetId | 200 | サムネイル外観プリセットを上書き |
+| DELETE | /thumbnail-appearance-presets/:presetId | 204 | サムネイル外観プリセットを削除 |
 | POST | /language-editions/:editionId/thumbnail-preview | 200 | 未保存のサムネイル入力を書込みなしでプレビュー |
 | GET | /thumbnails/:thumbnailId | 200 | サムネイル候補を取得 |
 | PUT | /thumbnails/:thumbnailId | 200 | サムネイル候補を明示保存（上書き） |
@@ -746,12 +753,17 @@ GET /api/v1/script-versions/scr_003/subtitles
 - PUT /language-editions/:editionId/primary-thumbnail は `{ thumbnailId }`（解除は null）で投稿用の候補を切り替える。
 - GET /language-editions/:editionId/thumbnail-appearance は `{ appearance, defaults, resolved }` を返す。
 - PUT /language-editions/:editionId/thumbnail-appearance は `{ appearance }`（解除は null）で言語版共通の外観を保存する。
+- GET /thumbnail-appearance-presets はアプリ全体の外観プリセット一覧を返す。
+- POST /thumbnail-appearance-presets は `{ name, appearance }` で外観プリセットを作成する。空の `appearance` は 422 `VALIDATION_ERROR`。
+- GET /thumbnail-appearance-presets/:presetId は `appearance` を含む完全なプリセットを返す。
+- PUT /thumbnail-appearance-presets/:presetId は `{ name, appearance }` でプリセット自体を上書きする。適用済みの言語版へは波及しない。
+- DELETE /thumbnail-appearance-presets/:presetId はプリセットを削除する。適用済みの言語版へは波及しない。
 - PUT /thumbnails/:thumbnailId は `{ label, template, input, appearanceOverride? }` で候補を明示保存（上書き）する。
 - DELETE /thumbnails/:thumbnailId は候補を削除する。投稿用を削除した場合は別の候補へ付け替えるか null にする。
 - POST /language-editions/:editionId/thumbnail-preview は `{ template, input, appearanceOverride?, appearance? }` のコンパイル済みHTMLを返す。`appearance` を省略すると保存済み共通Appearanceを使い、nullなら共通Appearanceなしでプレビューする。DBへ書かない。
 - GET /thumbnails/:thumbnailId/image は 1280x720 のPNGをオンデマンド生成して返す。JobもArtifactも作らない。
 
-未知のテンプレート参照・入力不整合・素材種別違反は 422 `VALIDATION_ERROR`、静止画へ変換できない場合は 422 `THUMBNAIL_INPUT_INVALID` を返す。存在しない候補・言語版は 404 `RESOURCE_NOT_FOUND`（候補のPNGは `Content-Disposition: attachment` と `Cache-Control: private, max-age=0, must-revalidate` を付け、メディアセッションCookieで認可する）。
+未知のテンプレート参照・入力不整合・素材種別違反は 422 `VALIDATION_ERROR`、静止画へ変換できない場合は 422 `THUMBNAIL_INPUT_INVALID` を返す。存在しない候補・言語版・外観プリセットは 404 `RESOURCE_NOT_FOUND`（候補のPNGは `Content-Disposition: attachment` と `Cache-Control: private, max-age=0, must-revalidate` を付け、メディアセッションCookieで認可する）。
 
 ## エラー契約
 
