@@ -30,7 +30,10 @@ import { MediaPicker } from "../components/MediaPicker";
 import { ThumbnailAppearanceEditor } from "../components/ThumbnailAppearanceEditor";
 import { ThumbnailAppearancePresetPanel } from "../components/ThumbnailAppearancePresetPanel";
 import { RICH_TEXT_DELIMITER, wrapSelection } from "../lib/richTextEditing";
-import { defaultThumbnailInput } from "../lib/thumbnailTemplate";
+import {
+  defaultThumbnailInput,
+  thumbnailInputWithDefaults,
+} from "../lib/thumbnailTemplate";
 import {
   badgeInfoClass,
   buttonDangerClass,
@@ -145,6 +148,84 @@ function RichTextField({ field, value, onChange }: RichTextFieldProps) {
   );
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function NumberSliderField({
+  field,
+  value,
+  onChange,
+}: {
+  field: Extract<TemplateFieldSpec, { kind: "number" }>;
+  value: unknown;
+  onChange: (value: number) => void;
+}) {
+  const min = field.min ?? 0;
+  const max = field.max ?? 100;
+  const step = field.step ?? 1;
+  const current =
+    typeof value === "number" ? clampNumber(value, min, max) : min;
+  const [draft, setDraft] = useState(String(current));
+
+  useEffect(() => {
+    setDraft(String(current));
+  }, [current]);
+
+  const commit = () => {
+    const raw = draft.trim();
+    if (raw === "") {
+      setDraft(String(current));
+      return;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      setDraft(String(current));
+      return;
+    }
+    const next = clampNumber(parsed, min, max);
+    setDraft(String(next));
+    onChange(next);
+  };
+
+  return (
+    <div className="my-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{field.label}</span>
+        <span className={`${metaTextClass} tabular-nums`}>{current}</span>
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        <input
+          type="range"
+          aria-label={field.label}
+          min={min}
+          max={max}
+          step={step}
+          className="min-w-0 flex-1"
+          value={current}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        <input
+          type="number"
+          aria-label={`${field.label}（数値）`}
+          min={min}
+          max={max}
+          step={step}
+          className={`${textFieldClass} w-20`}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 interface FieldProps {
   field: TemplateFieldSpec;
   input: Record<string, unknown>;
@@ -209,7 +290,7 @@ function ThumbnailField({ field, input, setValue, clearValue }: FieldProps) {
       candidate !== null &&
       typeof (candidate as { x?: unknown }).x === "number" &&
       typeof (candidate as { y?: unknown }).y === "number";
-    const clamp = (n: number) => Math.min(1, Math.max(0, n));
+    const clamp = (n: number) => clampNumber(n, 0, 1);
     const focal = isFocal(value)
       ? { x: clamp(value.x), y: clamp(value.y) }
       : { x: 0.5, y: 0.5 };
@@ -246,6 +327,15 @@ function ThumbnailField({ field, input, setValue, clearValue }: FieldProps) {
           </label>
         )}
       </div>
+    );
+  }
+  if (field.kind === "number" && field.min !== undefined && field.max !== undefined) {
+    return (
+      <NumberSliderField
+        field={field}
+        value={value}
+        onChange={(next) => setValue(field.key, next)}
+      />
     );
   }
   if (field.kind === "number" || field.kind === "decimal") {
@@ -348,8 +438,11 @@ function ThumbnailForm({
   const [templateId, setTemplateId] = useState(initialTemplate.id);
   const [templateVersion, setTemplateVersion] = useState(initialTemplate.version);
   const [input, setInput] = useState<Record<string, unknown>>(
-    (candidate?.input as Record<string, unknown> | undefined) ??
-      defaultThumbnailInput(initialTemplate.id, initialTemplate.version),
+    thumbnailInputWithDefaults(
+      initialTemplate.id,
+      initialTemplate.version,
+      candidate?.input,
+    ),
   );
   const [appearanceOverride, setAppearanceOverride] = useState<ThumbnailAppearance | null>(
     candidate?.appearanceOverride ?? null,

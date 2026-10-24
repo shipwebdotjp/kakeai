@@ -40,7 +40,48 @@ describe("thumbnail templates", () => {
     const parsed = thumbnailCutoutHeroInputSchema.parse(VALID_INPUT);
     expect(parsed.subjectSide).toBe("right");
     expect(parsed.flipForeground).toBe(false);
+    expect(parsed.subjectAnchor).toBe("bottom-center");
     expect(parsed.subjectScale).toBe(1);
+    expect(parsed.textWidth).toBe(50);
+    expect(parsed.wrapText).toBe(true);
+  });
+
+  it("keeps the template UI defaults aligned with the schema defaults", () => {
+    const definition = getThumbnailTemplate("thumbnail.cutout-hero", 1);
+    const parsed = thumbnailCutoutHeroInputSchema.parse(VALID_INPUT);
+    expect(definition?.uiDefaults).toEqual({
+      subjectSide: parsed.subjectSide,
+      flipForeground: parsed.flipForeground,
+      subjectAnchor: parsed.subjectAnchor,
+      subjectScale: parsed.subjectScale,
+      textWidth: parsed.textWidth,
+      wrapText: parsed.wrapText,
+    });
+    const fieldKeys = new Set(definition?.inputFields?.map((field) => field.key));
+    for (const key of Object.keys(definition?.uiDefaults ?? {})) {
+      expect(fieldKeys.has(key)).toBe(true);
+    }
+  });
+
+  it("validates the new scale, text width, and anchor ranges", () => {
+    expect(
+      thumbnailCutoutHeroInputSchema.safeParse({
+        ...VALID_INPUT,
+        subjectScale: 1.8,
+        textWidth: 100,
+        subjectAnchor: "top-left",
+        wrapText: false,
+      }).success,
+    ).toBe(true);
+    expect(
+      thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, subjectScale: 1.81 }).success,
+    ).toBe(false);
+    expect(
+      thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, textWidth: 29 }).success,
+    ).toBe(false);
+    expect(
+      thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, subjectAnchor: "middle" }).success,
+    ).toBe(false);
   });
 
   it("requires both background and foreground images", () => {

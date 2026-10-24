@@ -70,16 +70,43 @@ describe("compileThumbnail", () => {
   it("changes the subject side", () => {
     const right = compile();
     const left = compile({ ...BASE_INPUT, subjectSide: "left" });
-    expect(right.html).toContain("bottom:0;right:0;width:50%");
-    expect(left.html).toContain("bottom:0;left:0;width:50%");
+    expect(right.html).toContain('class="kakeai-thumb-foreground" style="position:absolute;bottom:0;left:75%');
+    expect(left.html).toContain('class="kakeai-thumb-foreground" style="position:absolute;bottom:0;left:25%');
     expect(right.html).not.toBe(left.html);
   });
 
-  it("flips the foreground and changes its scale", () => {
+  it("flips the foreground and scales it up to 1.8", () => {
     const flipped = compile({ ...BASE_INPUT, flipForeground: true });
     expect(flipped.html).toContain("transform:scaleX(-1)");
-    const scaled = compile({ ...BASE_INPUT, subjectScale: 1.5 });
-    expect(scaled.html).toContain("height:117%");
+    const scaled = compile({ ...BASE_INPUT, subjectScale: 1.8 });
+    expect(scaled.html).toContain("transform:scale(1.8)");
+    expect(scaled.html).toContain("transform-origin:50% 100%");
+  });
+
+  it("changes the subject scaling anchor", () => {
+    const expected: Record<string, string> = {
+      "bottom-center": "50% 100%",
+      center: "50% 50%",
+      "top-left": "0% 0%",
+      "top-right": "100% 0%",
+      "bottom-left": "0% 100%",
+      "bottom-right": "100% 100%",
+    };
+    for (const [anchor, origin] of Object.entries(expected)) {
+      expect(compile({ ...BASE_INPUT, subjectAnchor: anchor }).html).toContain(
+        `transform-origin:${origin}`,
+      );
+    }
+  });
+
+  it("changes the text block width and can disable wrapping", () => {
+    const wide = compile({ ...BASE_INPUT, textWidth: 80 });
+    expect(wide.html).toContain("width:80%");
+    const wrapped = compile();
+    expect(wrapped.html).toContain("white-space:pre-line");
+    const noWrap = compile({ ...BASE_INPUT, wrapText: false });
+    expect(noWrap.html).toContain("white-space:pre;");
+    expect(noWrap.html).not.toContain("white-space:pre-line");
   });
 
   it("applies common appearance and lets the candidate override it", () => {

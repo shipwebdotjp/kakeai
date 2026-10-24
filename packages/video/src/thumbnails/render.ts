@@ -4,6 +4,7 @@ import {
   type ResolvedThumbnailTextStyle,
   type RichTextSpan,
   type ThumbnailCutoutHeroInput,
+  type ThumbnailSubjectAnchor,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
@@ -275,9 +276,20 @@ function richParagraph(options: {
   theme: VisualThemeDefinition;
   path: (string | number)[];
   baseShadow: string;
+  whiteSpace?: "pre-line" | "pre";
   extra?: string;
 }): string {
-  const { text, css, style, colors, theme, path, baseShadow, extra = "" } = options;
+  const {
+    text,
+    css,
+    style,
+    colors,
+    theme,
+    path,
+    baseShadow,
+    whiteSpace = "pre-line",
+    extra = "",
+  } = options;
   const shadow = paragraphShadow(theme, style, colors.background, baseShadow);
   // A span-level outline replaces the paragraph text-shadow, so the span list
   // includes the always-on shadow and the theme decoration shadow itself.
@@ -287,7 +299,7 @@ function richParagraph(options: {
   ]
     .filter((part) => part.length > 0)
     .join(",");
-  const extraStyle = `white-space:pre-line;${shadow.length > 0 ? `text-shadow:${shadow};` : ""}${extra}`;
+  const extraStyle = `white-space:${whiteSpace};${shadow.length > 0 ? `text-shadow:${shadow};` : ""}${extra}`;
   return `<p style="${textStyle(css, extraStyle)}">${richTextHtml(
     text,
     css,
@@ -318,6 +330,15 @@ function resolvePhoto(context: ThumbnailRenderContext, assetId: string, key: str
  * to the resolved appearance font size; explicit appearance sizes still scale
  * down for longer copy.
  */
+const SUBJECT_ANCHOR_ORIGINS: Record<ThumbnailSubjectAnchor, string> = {
+  "bottom-center": "50% 100%",
+  center: "50% 50%",
+  "top-left": "0% 0%",
+  "top-right": "100% 0%",
+  "bottom-left": "0% 100%",
+  "bottom-right": "100% 100%",
+};
+
 export function headlineFitFactor(text: string): number {
   const visible = parseRichText(text).spans.reduce(
     (total, span) => total + [...span.text].filter((character) => !/\s/u.test(character)).length,
@@ -369,16 +390,27 @@ export function renderCutoutHero(
     // scrim does not shift hue through the gradient's transparent end.
     `background:linear-gradient(180deg, ${scrimTransparent} 42%, ${scrim} 100%)`,
   ].join(";");
-  const subjectStyle = [
+  const subjectCenterX = data.subjectSide === "right" ? 75 : 25;
+  const subjectPositionStyle = [
     "position:absolute",
     "bottom:0",
-    data.subjectSide === "right" ? "right:0" : "left:0",
-    "width:50%",
-    `height:${Math.round(78 * data.subjectScale)}%`,
-    "object-fit:contain",
-    "object-position:50% 100%",
+    `left:${subjectCenterX}%`,
+    "transform:translateX(-50%)",
+    "height:78%",
     "z-index:2",
+  ].join(";");
+  const subjectScaleStyle = [
+    "height:100%",
+    "width:max-content",
+    `transform:scale(${data.subjectScale})`,
+    `transform-origin:${SUBJECT_ANCHOR_ORIGINS[data.subjectAnchor]}`,
+  ].join(";");
+  const subjectImageStyle = [
+    "display:block",
+    "height:100%",
+    "width:auto",
     data.flipForeground ? "transform:scaleX(-1)" : "",
+    "transform-origin:center",
   ]
     .filter((segment) => segment.length > 0)
     .join(";");
@@ -387,7 +419,7 @@ export function renderCutoutHero(
     "position:absolute",
     "bottom:0",
     textOnLeft ? "left:0" : "right:0",
-    "width:50%",
+    `width:${data.textWidth}%`,
     "display:flex",
     "flex-direction:column",
     "justify-content:flex-end",
@@ -398,6 +430,7 @@ export function renderCutoutHero(
     "box-sizing:border-box",
     "z-index:3",
   ].join(";");
+  const whiteSpace = data.wrapText ? "pre-line" : "pre";
 
   const headlineCss = textCss(appearance.headline, headlineFitFactor(data.headline));
   const sublineCss = textCss(appearance.subline, 1);
@@ -406,7 +439,11 @@ export function renderCutoutHero(
     `<div class="kakeai-thumb" style="position:absolute;inset:0;overflow:hidden;background:${context.theme.canvas.ink}">`,
     `<img class="kakeai-thumb-bg" src="${background}" alt="" style="${backgroundStyle}">`,
     `<div class="kakeai-thumb-scrim" style="${scrimStyle}"></div>`,
-    `<img class="kakeai-thumb-foreground" src="${foreground}" alt="" style="${subjectStyle}">`,
+    `<div class="kakeai-thumb-foreground" style="${subjectPositionStyle}">`,
+    `<div class="kakeai-thumb-foreground-scale" style="${subjectScaleStyle}">`,
+    `<img class="kakeai-thumb-foreground-image" src="${foreground}" alt="" style="${subjectImageStyle}">`,
+    "</div>",
+    "</div>",
     `<div class="kakeai-thumb-text" style="${textWrapper}">`,
     data.subline !== undefined && hasVisibleText(data.subline)
       ? richParagraph({
@@ -417,6 +454,7 @@ export function renderCutoutHero(
           theme: context.theme,
           path: [...context.path, "subline"],
           baseShadow,
+          whiteSpace,
         })
       : "",
     richParagraph({
@@ -427,6 +465,7 @@ export function renderCutoutHero(
       theme: context.theme,
       path: [...context.path, "headline"],
       baseShadow,
+      whiteSpace,
     }),
     "</div>",
     "</div>",
