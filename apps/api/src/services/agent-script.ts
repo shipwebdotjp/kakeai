@@ -10,6 +10,9 @@ import {
   type ScriptOperationCreated,
   type ScriptSaveRequest,
   type ScriptSaveResult,
+  type ScriptListVersionsResult,
+  type ScriptRestoreRequest,
+  type ScriptRestoreResult,
   type ScriptValidateRequest,
   type ScriptValidateResult,
   type Warning,
@@ -41,6 +44,7 @@ import {
   collectInsertWarnings,
   getCurrentScriptVersion,
   getScriptVersion,
+  getScriptVersionHistory,
   renderSourceDurationMs,
   saveScriptVersion,
   throwIfFatalTimelineError,
@@ -49,6 +53,7 @@ import {
   type SaveScriptVersionGuard,
 } from "./script-versions.ts";
 import { AgentOperationError, agentIssue } from "../agent/errors.ts";
+import { normalizeAgentId } from "./attribution.ts";
 import { sha256RequestHash } from "./agent-request-hash.ts";
 
 interface ScriptResources {
@@ -80,6 +85,20 @@ export function computeScriptEditRequestHash(
   return sha256RequestHash({
     baseScriptVersionId: request.baseScriptVersionId,
     operations: request.operations,
+  });
+}
+
+/**
+ * Hash of one `script.restore` request. The caller-supplied author identity is
+ * not part of the logical request, so a retry that only changes it replays the
+ * existing version.
+ */
+export function computeScriptRestoreRequestHash(
+  request: Pick<ScriptRestoreRequest, "scriptVersionId" | "baseScriptVersionId">,
+): string {
+  return sha256RequestHash({
+    scriptVersionId: request.scriptVersionId,
+    baseScriptVersionId: request.baseScriptVersionId,
   });
 }
 
@@ -217,28 +236,78 @@ async function findRequestVersion(
   });
 }
 
-async function replayVersion(
+type RequestVersionRow = NonNullable<
+  Awaited<ReturnType<typeof findRequestVersion>>
+>;
+
+/**
+ * Shared replay path for the version-level idempotency of `script.edit` and
+ * `script.restore`. Both operations persist `agentRequestHash` on the created
+ * version, so a replay must verify the hash, rebuild warnings from the saved
+ * content and hand the result to the operation-specific builder.
+ */
+async function replayRequestVersion<T>(
   prisma: PrismaClient,
-  row: NonNullable<Awaited<ReturnType<typeof findRequestVersion>>>,
+  row: RequestVersionRow,
   requestHash: string,
-): Promise<ScriptEditResult> {
+  build: (
+    content: ContentDocument,
+    warnings: Warning[],
+    scriptVersion: ReturnType<typeof toScriptVersion>,
+  ) => T,
+): Promise<T> {
   if (row.agentRequestHash !== requestHash) {
-    throw new AgentOperationError(AGENT_ERROR_CODES.IDEMPOTENCY_CONFLICT, [
-      agentIssue(
-        ["requestId"],
-        "idempotency_conflict",
-        "同じ requestId が異なる入力で使われました。",
-      ),
-    ]);
+    throw idempotencyConflictError();
   }
   const content = deserializeContent(row.contentJson);
-  return {
-    scriptVersion: toScriptVersion(row, content),
-    created: emptyCreated(),
-    warnings: await warningsForContent(prisma, content),
-    timeline: timelineOf(content),
-    replay: true,
-  };
+  const warnings = await warningsForContent(prisma, content);
+  return build(content, warnings, toScriptVersion(row, content));
+}
+
+async function replayVersion(
+  prisma: PrismaClient,
+  row: RequestVersionRow,
+  requestHash: string,
+): Promise<ScriptEditResult> {
+  return replayRequestVersion(
+    prisma,
+    row,
+    requestHash,
+    (content, warnings, scriptVersion) => ({
+      scriptVersion,
+      created: emptyCreated(),
+      warnings,
+      timeline: timelineOf(content),
+      replay: true,
+    }),
+  );
+}
+
+function idempotencyConflictError(): AgentOperationError {
+  return new AgentOperationError(AGENT_ERROR_CODES.IDEMPOTENCY_CONFLICT, [
+    agentIssue(
+      ["requestId"],
+      "idempotency_conflict",
+      "同じ requestId が異なる入力で使われました。",
+    ),
+  ]);
+}
+
+async function replayRestoreVersion(
+  prisma: PrismaClient,
+  row: RequestVersionRow,
+  requestHash: string,
+): Promise<ScriptRestoreResult> {
+  return replayRequestVersion(
+    prisma,
+    row,
+    requestHash,
+    (_content, warnings, scriptVersion) => ({
+      scriptVersion,
+      warnings,
+      replay: true,
+    }),
+  );
 }
 
 function scriptBaseStaleError(): AgentOperationError {
@@ -251,12 +320,41 @@ function scriptBaseStaleError(): AgentOperationError {
   ]);
 }
 
-function normalizedAgentId(value: string | undefined): string | null {
-  if (value === undefined) {
-    return null;
+/**
+ * Builds the optional compare-and-set guard for `script.save` and
+ * `script.restore`. The base must exist in the same Edition; the current
+ * version is checked inside the save transaction.
+ */
+async function baseGuardFor(
+  prisma: PrismaClient,
+  editionId: string,
+  baseScriptVersionId: string | undefined,
+): Promise<SaveScriptVersionGuard | undefined> {
+  if (baseScriptVersionId === undefined) {
+    return undefined;
   }
-  const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed;
+  const base = await prisma.scriptVersion.findUnique({
+    where: { id: baseScriptVersionId },
+    select: { languageEditionId: true },
+  });
+  if (base === null) {
+    throw new AgentOperationError(AGENT_ERROR_CODES.WORK_NOT_FOUND, [
+      agentIssue(["baseScriptVersionId"], "not_found", "基準の台本版が見つかりません。"),
+    ]);
+  }
+  if (base.languageEditionId !== editionId) {
+    throw new AgentOperationError(AGENT_ERROR_CODES.VALIDATION_ERROR, [
+      agentIssue(
+        ["baseScriptVersionId"],
+        "invalid_value",
+        "基準の台本版は同じ言語版の版を指定してください。",
+      ),
+    ]);
+  }
+  return {
+    expectedCurrentScriptVersionId: baseScriptVersionId,
+    staleError: scriptBaseStaleError,
+  };
 }
 
 export async function editAgentScript(
@@ -306,7 +404,7 @@ export async function editAgentScript(
       {
         author: "agent",
         authorAgentId:
-          normalizedAgentId(request.authorAgentId) ?? normalizedAgentId(defaultAgentId),
+          normalizeAgentId(request.authorAgentId) ?? normalizeAgentId(defaultAgentId),
         agentRequestId: request.requestId,
         agentRequestHash: requestHash,
       },
@@ -385,31 +483,7 @@ export async function saveAgentScript(
     ]);
   }
 
-  let guard: SaveScriptVersionGuard | undefined;
-  if (request.baseScriptVersionId !== undefined) {
-    const base = await prisma.scriptVersion.findUnique({
-      where: { id: request.baseScriptVersionId },
-      select: { languageEditionId: true },
-    });
-    if (base === null) {
-      throw new AgentOperationError(AGENT_ERROR_CODES.WORK_NOT_FOUND, [
-        agentIssue(["baseScriptVersionId"], "not_found", "基準の台本版が見つかりません。"),
-      ]);
-    }
-    if (base.languageEditionId !== edition.id) {
-      throw new AgentOperationError(AGENT_ERROR_CODES.VALIDATION_ERROR, [
-        agentIssue(
-          ["baseScriptVersionId"],
-          "invalid_value",
-          "基準の台本版は同じ言語版の版を指定してください。",
-        ),
-      ]);
-    }
-    guard = {
-      expectedCurrentScriptVersionId: request.baseScriptVersionId,
-      staleError: scriptBaseStaleError,
-    };
-  }
+  const guard = await baseGuardFor(prisma, edition.id, request.baseScriptVersionId);
 
   return saveScriptVersion(
     prisma,
@@ -417,12 +491,101 @@ export async function saveAgentScript(
     { sourceScriptVersionId: request.sourceScriptVersionId, content: request.content },
     {
       author: "agent",
-      authorAgentId: normalizedAgentId(request.authorAgentId) ?? normalizedAgentId(defaultAgentId),
+      authorAgentId: normalizeAgentId(request.authorAgentId) ?? normalizeAgentId(defaultAgentId),
       agentRequestId: null,
       agentRequestHash: null,
     },
     guard,
   );
+}
+
+export async function listAgentScriptVersions(
+  prisma: PrismaClient,
+  languageEditionId: string,
+): Promise<ScriptListVersionsResult> {
+  const history = await getScriptVersionHistory(prisma, languageEditionId);
+  return {
+    languageEditionId,
+    currentScriptVersionId: history.currentScriptVersionId,
+    scriptVersions: history.scriptVersions,
+  };
+}
+
+/**
+ * Restores an earlier version as a new version. The source content is read on
+ * the server, so the caller never uploads a ContentDocument and cannot change
+ * it in transit. The new version records the source id and is attributed to
+ * the agent. `requestId` is idempotent on the created version, like
+ * `script.edit`: a replay returns the existing version instead of creating a
+ * second one.
+ */
+export async function restoreAgentScript(
+  prisma: PrismaClient,
+  request: ScriptRestoreRequest,
+  defaultAgentId?: string,
+): Promise<ScriptRestoreResult> {
+  const source = await prisma.scriptVersion.findUnique({
+    where: { id: request.scriptVersionId },
+    include: {
+      languageEdition: { select: { currentScriptVersionId: true } },
+    },
+  });
+  if (source === null) {
+    throw new AgentOperationError(AGENT_ERROR_CODES.WORK_NOT_FOUND, [
+      agentIssue(["scriptVersionId"], "not_found", "復元元の台本版が見つかりません。"),
+    ]);
+  }
+
+  const editionId = source.languageEditionId;
+  const requestHash = computeScriptRestoreRequestHash(request);
+  const existing = await findRequestVersion(prisma, editionId, request.requestId);
+  if (existing !== null) {
+    return replayRestoreVersion(prisma, existing, requestHash);
+  }
+
+  if (source.languageEdition.currentScriptVersionId === source.id) {
+    throw new AgentOperationError(AGENT_ERROR_CODES.VALIDATION_ERROR, [
+      agentIssue(
+        ["scriptVersionId"],
+        "invalid_value",
+        "指定した版は現在の版です。復元する必要はありません。",
+      ),
+    ]);
+  }
+
+  const guard = await baseGuardFor(prisma, editionId, request.baseScriptVersionId);
+
+  const content = deserializeContent(source.contentJson);
+  let saved: Awaited<ReturnType<typeof saveScriptVersion>>;
+  try {
+    saved = await saveScriptVersion(
+      prisma,
+      editionId,
+      { sourceScriptVersionId: source.id, content },
+      {
+        author: "agent",
+        authorAgentId:
+          normalizeAgentId(request.authorAgentId) ?? normalizeAgentId(defaultAgentId),
+        agentRequestId: request.requestId,
+        agentRequestHash: requestHash,
+      },
+      guard,
+    );
+  } catch (error) {
+    // A concurrent identical restore may have won the race after the replay
+    // lookup. Re-read the request id before reporting a failure.
+    const raced = await findRequestVersion(prisma, editionId, request.requestId);
+    if (raced !== null) {
+      return replayRestoreVersion(prisma, raced, requestHash);
+    }
+    throw error;
+  }
+
+  return {
+    scriptVersion: saved.scriptVersion,
+    warnings: saved.warnings,
+    replay: false,
+  };
 }
 
 export async function getAgentScript(

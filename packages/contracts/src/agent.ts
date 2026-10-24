@@ -19,8 +19,8 @@ import {
   jobSchema,
   previewTimelineSchema,
   scriptVersionSchema,
+  scriptVersionSummarySchema,
   workSchema,
-  workSummarySchema,
 } from "./dto";
 import { assetTagsSchema } from "./asset";
 import { assetListInputSchema, assetListPageSchema } from "./asset-list";
@@ -346,11 +346,14 @@ export const agentOperationNames = [
   "work.get",
   "work.create",
   "work.update",
+  "work.clone",
   "edition.create",
   "script.get",
+  "script.listVersions",
   "script.validate",
   "script.save",
   "script.edit",
+  "script.restore",
   "asset.list",
   "asset.get",
   "asset.import",
@@ -383,6 +386,7 @@ export const agentReadOperationNames = [
   "work.list",
   "work.get",
   "script.get",
+  "script.listVersions",
   "script.validate",
   "asset.list",
   "asset.get",
@@ -402,9 +406,11 @@ export const agentReadOperationNames = [
 export const agentMutationOperationNames = [
   "work.create",
   "work.update",
+  "work.clone",
   "edition.create",
   "script.save",
   "script.edit",
+  "script.restore",
   "asset.import",
   "asset.tag",
   "render.start",
@@ -427,6 +433,24 @@ export const agentLongRunningOperationNames = [
   "tts.create",
   "tts.createBulk",
 ] as const satisfies readonly AgentOperationName[];
+
+/**
+ * Version-creating operations whose required `requestId` makes a replay safe.
+ * Bindings use this list to advertise `idempotentHint` without keeping a
+ * second classification. The request id is idempotent on the created version
+ * (`ScriptVersion.agentRequestId`), not through the Job ledger.
+ */
+export const agentRequestIdRequiredOperationNames = [
+  "script.edit",
+  "script.restore",
+  "tts.attachBulk",
+] as const satisfies readonly AgentOperationName[];
+
+export function isAgentRequestIdRequiredOperation(operation: string): boolean {
+  return (agentRequestIdRequiredOperationNames as readonly string[]).includes(
+    operation,
+  );
+}
 
 export function isAgentOperationName(value: string): value is AgentOperationName {
   return (agentOperationNames as readonly string[]).includes(value);
@@ -886,7 +910,7 @@ export const agentTemplateGetOutputSchema = z.strictObject({
 
 export const agentWorkListInputSchema = agentEmptyInputSchema;
 export const agentWorkListOutputSchema = z.strictObject({
-  works: z.array(workSummarySchema),
+  works: z.array(workSchema),
 });
 
 export const agentWorkGetInputSchema = z.strictObject({ workId: idSchema });
@@ -904,6 +928,17 @@ export const agentWorkUpdateInputSchema = z.strictObject({
   title: z.string().trim().min(1),
 });
 export const agentWorkUpdateOutputSchema = z.strictObject({ work: workSchema });
+
+/**
+ * Clones the primary edition's current version into a new child Work. The
+ * operation has no `requestId`; a timed-out clone is checked through
+ * `work.list` (`parentWorkId` / `createdAt`) before retrying.
+ */
+export const agentWorkCloneInputSchema = z.strictObject({
+  workId: idSchema,
+  title: z.string().trim().min(1),
+});
+export const agentWorkCloneOutputSchema = z.strictObject({ work: workSchema });
 
 export const agentEditionCreateInputSchema = z.strictObject({
   workId: idSchema,
@@ -929,6 +964,24 @@ export const agentScriptGetOutputSchema = z.strictObject({
   scriptVersion: scriptVersionSchema,
 });
 
+/**
+ * The Edition's ScriptVersion history, newest first. The current version id is
+ * included so a restore can pass it as a base guard without a second read.
+ * The full history is returned: an edition's version count is expected to stay
+ * small. Add pagination here if long-lived editions make the payload large.
+ */
+export const agentScriptListVersionsInputSchema = z.strictObject({
+  languageEditionId: idSchema,
+});
+export const agentScriptListVersionsOutputSchema = z.strictObject({
+  languageEditionId: idSchema,
+  currentScriptVersionId: idSchema,
+  scriptVersions: z.array(scriptVersionSummarySchema),
+});
+export type ScriptListVersionsResult = z.infer<
+  typeof agentScriptListVersionsOutputSchema
+>;
+
 export const agentScriptValidateInputSchema = scriptValidateRequestSchema;
 export const agentScriptValidateOutputSchema = scriptValidateResultSchema;
 
@@ -937,6 +990,25 @@ export const agentScriptSaveOutputSchema = scriptSaveResultSchema;
 
 export const agentScriptEditInputSchema = scriptEditRequestSchema;
 export const agentScriptEditOutputSchema = scriptEditResultSchema;
+
+/**
+ * Restores an earlier ScriptVersion as a new version. The caller sends the
+ * source version id, never a ContentDocument. `requestId` is required and is
+ * idempotent on the created version, like `script.edit`.
+ */
+export const agentScriptRestoreInputSchema = z.strictObject({
+  scriptVersionId: idSchema,
+  baseScriptVersionId: idSchema.optional(),
+  requestId: agentRequestIdSchema,
+  authorAgentId: z.string().trim().min(1).optional(),
+});
+export const agentScriptRestoreOutputSchema = z.strictObject({
+  scriptVersion: scriptVersionSchema,
+  warnings: z.array(warningSchema),
+  replay: z.boolean(),
+});
+export type ScriptRestoreRequest = z.infer<typeof agentScriptRestoreInputSchema>;
+export type ScriptRestoreResult = z.infer<typeof agentScriptRestoreOutputSchema>;
 
 export const agentAssetListInputSchema = assetListInputSchema;
 export const agentAssetListOutputSchema = assetListPageSchema;
@@ -1265,11 +1337,14 @@ export const agentOperationInputSchemas = {
   "work.get": agentWorkGetInputSchema,
   "work.create": agentWorkCreateInputSchema,
   "work.update": agentWorkUpdateInputSchema,
+  "work.clone": agentWorkCloneInputSchema,
   "edition.create": agentEditionCreateInputSchema,
   "script.get": agentScriptGetInputSchema,
+  "script.listVersions": agentScriptListVersionsInputSchema,
   "script.validate": agentScriptValidateInputSchema,
   "script.save": agentScriptSaveInputSchema,
   "script.edit": agentScriptEditInputSchema,
+  "script.restore": agentScriptRestoreInputSchema,
   "asset.list": agentAssetListInputSchema,
   "asset.get": agentAssetGetInputSchema,
   "asset.import": agentAssetImportInputSchema,
@@ -1302,11 +1377,14 @@ export const agentOperationOutputSchemas = {
   "work.get": agentWorkGetOutputSchema,
   "work.create": agentWorkCreateOutputSchema,
   "work.update": agentWorkUpdateOutputSchema,
+  "work.clone": agentWorkCloneOutputSchema,
   "edition.create": agentEditionCreateOutputSchema,
   "script.get": agentScriptGetOutputSchema,
+  "script.listVersions": agentScriptListVersionsOutputSchema,
   "script.validate": agentScriptValidateOutputSchema,
   "script.save": agentScriptSaveOutputSchema,
   "script.edit": agentScriptEditOutputSchema,
+  "script.restore": agentScriptRestoreOutputSchema,
   "asset.list": agentAssetListOutputSchema,
   "asset.get": agentAssetGetOutputSchema,
   "asset.import": agentAssetImportOutputSchema,

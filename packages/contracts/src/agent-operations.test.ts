@@ -18,6 +18,10 @@ import {
   agentPreviewScriptFrameInputSchema,
   agentPreviewScriptFrameOutputSchema,
   agentSchemaDigestInputOf,
+  agentScriptListVersionsInputSchema,
+  agentScriptListVersionsOutputSchema,
+  agentScriptRestoreInputSchema,
+  agentScriptRestoreOutputSchema,
   agentTemplateInputContracts,
   agentTtsAttachBulkInputSchema,
   agentTtsAttachBulkOutputSchema,
@@ -25,6 +29,8 @@ import {
   agentTtsCreateBulkOutputSchema,
   agentTtsCreateInputSchema,
   agentTtsCreateOutputSchema,
+  agentWorkCloneInputSchema,
+  agentWorkCloneOutputSchema,
   agentWorkUpdateInputSchema,
   agentWorkUpdateOutputSchema,
   buildAgentSchemaGetResult,
@@ -33,6 +39,7 @@ import {
   isAgentMutationOperation,
   resolveAgentReadTimeoutMs,
 } from "./agent";
+import { fixtureScriptVersion, fixtureWork } from "./testing/agent-fixtures";
 
 const job = {
   id: "job-1",
@@ -421,6 +428,129 @@ describe("preview.assetFrame operation contract", () => {
     });
     expect(Object.keys(agentOperationInputSchemas)).toContain("preview.assetFrame");
     expect(Object.keys(agentOperationOutputSchemas)).toContain("preview.assetFrame");
+  });
+});
+
+describe("work.clone operation contract", () => {
+  it("takes a work id and a non-empty title", () => {
+    expect(
+      agentWorkCloneInputSchema.parse({ workId: "work-1", title: "  複製  " }),
+    ).toEqual({ workId: "work-1", title: "複製" });
+    expect(agentWorkCloneInputSchema.safeParse({ workId: "work-1" }).success).toBe(false);
+    expect(
+      agentWorkCloneInputSchema.safeParse({ workId: "work-1", title: "  " }).success,
+    ).toBe(false);
+    expect(
+      agentWorkCloneInputSchema.safeParse({
+        workId: "work-1",
+        title: "複製",
+        extra: true,
+      }).success,
+    ).toBe(false);
+    expect(agentWorkCloneOutputSchema.safeParse({ work: fixtureWork() }).success).toBe(true);
+  });
+
+  it("registers work.clone as a non-long-running mutation", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("work.clone");
+    expect(isAgentMutationOperation("work.clone")).toBe(true);
+    expect(isAgentLongRunningOperation("work.clone")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "work.clone",
+      kind: "mutation",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("work.clone");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("work.clone");
+  });
+});
+
+describe("script.listVersions operation contract", () => {
+  const { content: _content, ...summary } = fixtureScriptVersion();
+
+  it("takes a language edition and returns the history with the current id", () => {
+    expect(
+      agentScriptListVersionsInputSchema.parse({ languageEditionId: "led-1" }),
+    ).toEqual({ languageEditionId: "led-1" });
+    expect(agentScriptListVersionsInputSchema.safeParse({}).success).toBe(false);
+    expect(
+      agentScriptListVersionsInputSchema.safeParse({
+        languageEditionId: "led-1",
+        extra: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      agentScriptListVersionsOutputSchema.safeParse({
+        languageEditionId: "led-1",
+        currentScriptVersionId: summary.id,
+        scriptVersions: [summary],
+      }).success,
+    ).toBe(true);
+    expect(
+      agentScriptListVersionsOutputSchema.safeParse({
+        languageEditionId: "led-1",
+        currentScriptVersionId: summary.id,
+        scriptVersions: [{ ...summary, sourceScriptVersionId: undefined }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("registers script.listVersions as a read", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("script.listVersions");
+    expect(isAgentMutationOperation("script.listVersions")).toBe(false);
+    expect(isAgentLongRunningOperation("script.listVersions")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "script.listVersions",
+      kind: "read",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("script.listVersions");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("script.listVersions");
+  });
+});
+
+describe("script.restore operation contract", () => {
+  it("requires a source version and a request id", () => {
+    const input = { scriptVersionId: "scr-1", requestId: "restore-1" };
+    expect(agentScriptRestoreInputSchema.parse(input)).toEqual(input);
+    expect(
+      agentScriptRestoreInputSchema.safeParse({
+        ...input,
+        baseScriptVersionId: "scr-2",
+        authorAgentId: "agent-1",
+      }).success,
+    ).toBe(true);
+    expect(
+      agentScriptRestoreInputSchema.safeParse({ scriptVersionId: "scr-1" }).success,
+    ).toBe(false);
+    expect(
+      agentScriptRestoreInputSchema.safeParse({ requestId: "restore-1" }).success,
+    ).toBe(false);
+    expect(
+      agentScriptRestoreInputSchema.safeParse({ ...input, extra: true }).success,
+    ).toBe(false);
+    expect(
+      agentScriptRestoreOutputSchema.safeParse({
+        scriptVersion: fixtureScriptVersion("scr-2", 2),
+        warnings: [],
+        replay: false,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("registers script.restore as a non-long-running mutation", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("script.restore");
+    expect(isAgentMutationOperation("script.restore")).toBe(true);
+    expect(isAgentLongRunningOperation("script.restore")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "script.restore",
+      kind: "mutation",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("script.restore");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("script.restore");
   });
 });
 

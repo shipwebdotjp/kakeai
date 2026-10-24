@@ -50,8 +50,8 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | --- | --- |
 | スキーマ確認 | `kakeai_schema_get` |
 | テンプレート入力の形 | `kakeai_template_get`（1件の JSON Schema と入力例） |
-| 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` / `kakeai_work_update` |
-| 台本 | `kakeai_script_get` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` |
+| 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` / `kakeai_work_update` / `kakeai_work_clone` |
+| 台本 | `kakeai_script_get` / `kakeai_script_list_versions` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` / `kakeai_script_restore` |
 | 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` |
 | キャラクター | `kakeai_character_list` / `kakeai_character_get` |
 | 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_tts_attach_bulk` |
@@ -72,6 +72,12 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 - `kakeai_script_save` は任意の `baseScriptVersionId`（基準版ガード）と `sourceScriptVersionId`（同一 Edition の復元元）を受け付けます。基準版を省略すると従来どおり last-write-wins です。
 - `kakeai_work_create` は指定した `locale`（既定 `ja-JP`、`en-US` も可）で初期台本を作ります。
 
+### 制作履歴・復元
+
+- `kakeai_script_list_versions` は Edition の版履歴を新しい順に全件返します（Edition の版数は通常小さい想定です）。`currentScriptVersionId` と各版の要約（版番号・作成者・要求ID・復元元・作成日時）を含み、ContentDocument は含みません。過去版を選ぶときや、復元の基準版を決めるときに使います。
+- `kakeai_script_restore` は過去版の `scriptVersionId` を指定して、その内容を新しい版として復元します。ContentDocument を取得して送り直す必要はありません。`requestId` は必須で、同じ ID・同じ復元元の再送は既存の版を返します。任意の `baseScriptVersionId` を渡すと、その版が current のときだけ復元し、一致しなければ `SCRIPT_BASE_STALE` になります。復元元が current の場合は `VALIDATION_ERROR` です。
+- `kakeai_work_clone` は作品の現在版から子 Work を作ります。元の Work は変更せず、子には `parentWorkId` が付き、初期版には `sourceScriptVersionId` が記録されます。複製されるのは元の `originalLocale` の Edition の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しません。`requestId` はありません。タイムアウト後は `kakeai_work_list` で `parentWorkId`・`title`・`createdAt` を確認してから再実行してください。
+
 ### 冪等化（requestId）
 
 `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_render_start` / `kakeai_composition_publish` は、任意の `requestId` を受け付けます。同じ `requestId` と同じ入力で呼び直すと、Job や CompositionVersion を作らず、既存のものの現在の状態を返します。タイムアウト後の再送でも二重生成は起こりません。
@@ -84,11 +90,11 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 
 台帳の鍵には接続時の `agentId` も含みます。識別子を送らないクライアントは `unknown` の枠を共有するため、衝突を避けるには `KAKEAI_AGENT_ID`（MCP）や `--agent-id`（CLI）で識別子を指定してください。
 
-`kakeai_tts_attach_bulk` は台帳に載りません。`requestId` が必須で、`kakeai_script_edit` と同じ版単位の冪等になります。同じ `requestId` の再送は既存の版を返し、異なる内容での再利用は `IDEMPOTENCY_CONFLICT` になります。
+`kakeai_tts_attach_bulk` と `kakeai_script_restore` は台帳に載りません。`requestId` が必須で、`kakeai_script_edit` と同じ版単位の冪等になります。同じ `requestId` の再送は既存の版を返し、異なる内容での再利用は `IDEMPOTENCY_CONFLICT` になります。
 
-`kakeai_work_create` と `kakeai_script_save` は `requestId` を持たず、再送で Work や版が増える可能性があります。`AGENT_REQUEST_TIMEOUT` の後は、`kakeai_work_list` / `kakeai_script_get` で変更が反映されたかを確認してから再実行してください。
+`kakeai_work_create` / `kakeai_work_clone` / `kakeai_script_save` は operation の `requestId` を持たず、再送で Work や版が増える可能性があります。`AGENT_REQUEST_TIMEOUT` の後は、`kakeai_work_list`（作成済みの Work は `createdAt`、複製した子 Work は `parentWorkId` で確認）/ `kakeai_script_get` / `kakeai_script_list_versions` で変更が反映されたかを確認してから再実行してください。MCP/CLI の要求 ID は応答の対応づけ用で、再送の重複排除ではありません。
 
-`kakeai_script_save` の `baseScriptVersionId` は任意です。省略すると last-write-wins、指定するとその版が current のときだけ保存し、一致しなければ `SCRIPT_BASE_STALE` になります。
+`kakeai_script_save` と `kakeai_script_restore` の `baseScriptVersionId` は任意です。省略すると last-write-wins、指定するとその版が current のときだけ保存・復元し、一致しなければ `SCRIPT_BASE_STALE` になります。
 
 CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"scriptVersionId":"scr-123","requestId":"render-1"}'`）。
 
@@ -289,8 +295,8 @@ ln -s /path/to/kakeai/skills/kakeai-composition .opencode/skills/kakeai-composit
 | `AGENT_APP_UNAVAILABLE` | Kakeai が起動していない、またはソケットに接続できない |
 | `AGENT_PROTOCOL_MISMATCH` | ソケットのプロトコル版が一致しない |
 | `AGENT_OPERATION_UNKNOWN` | 操作名が未登録。`schema.get` / `operations` で正規名を確認する |
-| `AGENT_REQUEST_TIMEOUT` | 操作がタイムアウトした。`script.edit` と `kakeai_tts_attach_bulk` は同じ `requestId` で再送してよい（既存の版が返る）。`tts.create` / `tts.createBulk` / `render.start` / `composition.publish` も任意の `requestId` を付けて再送すると既存の Job／Version が返る。`work.create` / `script.save` は `requestId` を持たないため、`work.list` / `script.get` で反映を確認してから再実行する。それ以外の変更操作は `script.get`・`job.list`・`asset.list` などで結果を確認してから再実行する |
-| `SCRIPT_BASE_STALE` | `baseScriptVersionId` が現在の版と異なる。`kakeai_script_get` で取り直し、同じ意図を適用し直す。`kakeai_tts_attach_bulk` では一括生成の後に台本を保存した場合、`kakeai_script_save` では基準版ガードに指定した版が古い場合に返る |
+| `AGENT_REQUEST_TIMEOUT` | 操作がタイムアウトした。`script.edit`・`script.restore`・`kakeai_tts_attach_bulk` は同じ `requestId` で再送してよい（既存の版が返る）。`tts.create` / `tts.createBulk` / `render.start` / `composition.publish` も任意の `requestId` を付けて再送すると既存の Job／Version が返る。`work.create` / `work.clone` / `script.save` は operation の `requestId` を持たないため、`work.list`（`createdAt` / `parentWorkId`）/ `script.get` / `script.listVersions` で反映を確認してから再実行する。それ以外の変更操作は `script.get`・`job.list`・`asset.list` などで結果を確認してから再実行する |
+| `SCRIPT_BASE_STALE` | `baseScriptVersionId` が現在の版と異なる。`kakeai_script_get` で取り直し、同じ意図を適用し直す。`kakeai_tts_attach_bulk` では一括生成の後に台本を保存した場合、`kakeai_script_save` / `kakeai_script_restore` では基準版ガードに指定した版が古い場合に返る |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` を異なる内容で使った。既存の版を確認し、同じ ID を別内容で再利用しない |
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった。実行中の Job を `kakeai_job_get` / `kakeai_job_wait` で確認する |
 | `AGENT_BACKPRESSURE` | 短時間に多すぎる要求を送り、接続内の未処理要求が上限を超えた。接続は閉じられない。しばらく待ってから再送する |

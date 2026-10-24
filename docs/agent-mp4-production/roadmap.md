@@ -23,10 +23,10 @@
 | 中 | 入力契約の探索性（P3-1） | `template.get` の入力 JSON Schema / 例、表・グラフ・フローの試行錯誤削減 | 完了（2026-10-24） | 複雑なテンプレートを使う制作が増えたとき |
 | 中 | 視覚確認（P3） | 保存版プレビュー、素材画像、複数フレーム | 一部実装（保存版・素材） | レンダーやり直しコストが問題になったとき |
 | 低 | 納品物（将来） | サムネイル、SRT、YouTube 設定、MP4 取得 | 未着手 | 投稿までエージェントに任せたくなったとき |
-| 低 | 制作履歴（将来） | 版履歴・復元・Work 複製 | 一部実装（同一 Edition の復元のみ） | 反復制作ややり直しが増えたとき |
+| 低 | 制作履歴（P4） | 版履歴・復元・Work 複製・タイムアウト回復 | 完了（2026-10-24） | 反復制作ややり直しが増えたとき |
 | 低 | 表現の拡張（将来） | 新規 Composition、縦型、リモート | 未着手 | 商品として必要になったとき |
 
-## 実装済み（P1 / P2）
+## 実装済み（P1 / P2 / P4）
 
 - P1: `work.create` が指定 locale（ja-JP / en-US）の初期 ContentDocument を
   作る。声のプリフライト、一括TTSの順序、MP4 の合格ラインと
@@ -43,6 +43,12 @@
   `preview.assetFrame`（素材）を追加した。レンダー前に headless でシークした
   PNG を取得でき、版・Job・Artifact は作らない。詳細は
   [visual-confirmation/spec.md](../visual-confirmation/spec.md)。
+- P4 制作履歴・復旧: `script.listVersions`（版履歴）、`script.restore`
+  （過去版を新しい版として復元）、`work.clone`（現在版から子 Work）を追加した。
+  `script.restore` は ContentDocument を再送せず、`requestId` 必須の版単位冪等。
+  `work.create` / `work.clone` は `requestId` を持たず、`work.list` の
+  `createdAt` / `parentWorkId` でタイムアウト後の重複を避ける。
+  詳細は [spec.md](./spec.md) の R9 と [todo.md](./todo.md) の P4。
 
 ## 将来の候補
 
@@ -69,16 +75,7 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
 | 下書きプレビュー | 未保存の ContentDocument を HTML 化して確認 | 未着手。エージェントは `script.edit` で保存するため後回し |
 | 複数フレーム確認 | 複数時刻の一括取得・コンタクトシート | 未着手。単一フレームの利用実績後。出力サイズとタイムアウトの設計が必要 |
 
-### 3. 制作履歴・復旧
-
-| 項目 | 内容 | 状態・依存 |
-| --- | --- | --- |
-| 版履歴一覧 | Edition の ScriptVersion 一覧をエージェントへ | 未着手。`GET /language-editions/:id/script-versions` が既にある |
-| 版復元 | 過去版を新しい版として復元 | `script.save` の `sourceScriptVersionId` による同一 Edition の復元のみ実装済み。履歴一覧からの選択は将来 |
-| Work 複製 | 現在版から子 Work を作る | 未着手。`POST /works/:id/clone` が既にある |
-| Work 作成の冪等化 | `work.create` の再送対策 | 未実装。`requestId` は追加せず、タイムアウト後に `work.list` で確認するガイド路線 |
-
-### 4. ライブラリ管理・表現
+### 3. ライブラリ管理・表現
 
 | 項目 | 内容 | 依存・注意 |
 | --- | --- | --- |

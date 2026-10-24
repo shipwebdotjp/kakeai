@@ -60,14 +60,17 @@ export const workSummarySchema = z.object({
   id: idSchema,
   title: z.string(),
   originalLocale: localeSchema,
+  createdAt: timestampSchema,
+  parentWorkId: idSchema.nullable(),
   updatedAt: timestampSchema,
   languageEditions: z.array(languageEditionSummarySchema),
 });
 
-export const workSchema = workSummarySchema.extend({
-  createdAt: timestampSchema,
-  parentWorkId: idSchema.nullable(),
-});
+/**
+ * A Work carries the same fields as its list summary. The two names remain
+ * distinct so callers can keep using the one that matches their intent.
+ */
+export const workSchema = workSummarySchema;
 
 export const scriptVersionAuthorSchema = z.enum(["human", "agent"]);
 
@@ -80,6 +83,7 @@ export const scriptVersionSummarySchema = z.object({
   authorAgentId: z.string().min(1).nullable(),
   agentRequestId: z.string().min(1).nullable(),
   agentRequestHash: z.string().min(1).nullable(),
+  sourceScriptVersionId: idSchema.nullable(),
   createdAt: timestampSchema,
 });
 

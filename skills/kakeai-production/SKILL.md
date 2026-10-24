@@ -105,6 +105,30 @@ a second copy of that contract.
 - `work.update` renames the Work's management title (`workId` + `title`). The
   title shown inside the video is a Scene slot in the ContentDocument, not this
   field; change that through `script.edit`.
+- `work.clone` (`workId` + `title`) creates a child Work from the source Work's
+  current version. It copies only the `originalLocale` edition's current
+  ScriptVersion, records `parentWorkId` and `sourceScriptVersionId`, and does
+  not copy the other editions, version history, Jobs, Artifacts or thumbnails.
+  Use it to branch an experiment without rewriting the original. The child Work
+  blocks deletion of the parent until a human deletes it, so do not clone
+  casually. `work.clone` has no `requestId`; after a timeout, check
+  `work.list` for a child with the same `parentWorkId` and title before
+  retrying (§9).
+- `script.listVersions` (`languageEditionId`) returns the edition's Script
+  Version history newest first, with `currentScriptVersionId` and per-version
+  summaries (version number, author, request id, `sourceScriptVersionId`,
+  createdAt). The ContentDocument is not included; use `script.get` for one
+  version. The response is the full history; editions are expected to stay
+  small, so pagination is not part of this surface.
+- `script.restore` (`scriptVersionId`, optional `baseScriptVersionId`, required
+  `requestId`) restores an earlier version as a new version. You never send the
+  ContentDocument: the server reads the source, validates it, records
+  `sourceScriptVersionId`, and attributes the new version to the agent. Pass the
+  current version as `baseScriptVersionId` when a concurrent edit should make
+  the restore fail with `SCRIPT_BASE_STALE`; omit it only when last-write-wins
+  is intended. Restoring the current version is `VALIDATION_ERROR`. A replay
+  with the same `requestId` and the same source/base returns the existing
+  version (`replay: true`); do not retry with a different source or base.
 - `script.get` with `languageEditionId` returns that edition's current version;
   with `scriptVersionId` it returns one specific version. Keep the returned
   `scriptVersion.id` as the base for the next edit.
@@ -336,20 +360,22 @@ generation.
 | --- | --- |
 | Normal edit | Give every `script.edit` a fresh `requestId` that is unique per logical change (for example `<agentId>:<date>-<n>`). |
 | Retrying the same edit | Reuse the same `requestId` only when the base and operations are unchanged. A replay returns `replay: true` and creates no new version. |
-| `SCRIPT_BASE_STALE` | The base is no longer current. For `script.edit`, `script.get` the current version and re-apply the **same intent** to the new base; reuse the `requestId` only if the failed call created no version (it did not), and use a new one if the operations changed. For `script.save`, omitting `baseScriptVersionId` keeps last-write-wins; when it is given, a mismatch is `SCRIPT_BASE_STALE` — re-read the current version and decide whether the replacement is still wanted. |
-| `IDEMPOTENCY_CONFLICT` | A version with that `requestId` already exists with different content. Never reuse the ID with different content. Read the current version (`script.get` with `languageEditionId`) and continue from there. |
-| `work.create` / `script.save` timeout | These operations have no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `work.list` / `script.get` to check whether the change landed, then retry only if it did not. |
-| `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `work.list`, `job.list` — pass `{ kind: "tts" }` for TTS Jobs — `asset.list`, `composition.get`) and only then retry. The exception is `script.edit`, which may be replayed immediately with the same `requestId`. |
-| `replay: true` | The edit was already applied. Do not apply the operations again. |
+| `SCRIPT_BASE_STALE` | The base is no longer current. For `script.edit`, `script.get` the current version and re-apply the **same intent** to the new base; reuse the `requestId` only if the failed call created no version (it did not), and use a new one if the operations changed. For `script.save`, omitting `baseScriptVersionId` keeps last-write-wins; when it is given, a mismatch is `SCRIPT_BASE_STALE` — re-read the current version and decide whether the replacement is still wanted. For `script.restore`, the same applies to its optional base guard: re-read `script.listVersions` (`currentScriptVersionId`) and decide whether restoring the old content is still wanted. |
+| `IDEMPOTENCY_CONFLICT` | A version with that `requestId` already exists with different input. Never reuse the ID with different content. Read the current version (`script.get` with `languageEditionId`) or the history (`script.listVersions`) and continue from there. |
+| `work.create` / `work.clone` timeout | These operations have no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `work.list` and look for the created Work (same title and `createdAt` at or after your request) or child (`parentWorkId` = the source Work). Retry only when you are sure nothing was created; if several candidates match, ask the human instead of guessing. |
+| `script.save` timeout | It has no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `script.get` / `script.listVersions` to check whether the new version landed, then retry only if it did not. |
+| `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `work.list`, `job.list` — pass `{ kind: "tts" }` for TTS Jobs — `asset.list`, `composition.get`) and only then retry. The exceptions are `script.edit` and `script.restore`, which may be replayed immediately with the same `requestId`. |
+| `replay: true` | The edit or restore was already applied. Do not apply the operations or restore again. |
 | Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. `schemaDigest` also covers each template's input contract, so re-fetch any `template.get` result you cached. |
 
 ### 9.1 High-cost operations
 
-`script.edit` is idempotent by version. The expensive operations — `tts.create`,
-`tts.createBulk`, `render.start` and `composition.publish` — accept an **optional**
-`requestId` and keep their own idempotency ledger. `tts.attachBulk` is not in
-that ledger: its `requestId` is required and works like `script.edit` (same id
-returns the existing ScriptVersion; a different input is `IDEMPOTENCY_CONFLICT`).
+`script.edit` and `script.restore` are idempotent by version. The expensive
+operations — `tts.create`, `tts.createBulk`, `render.start` and
+`composition.publish` — accept an **optional** `requestId` and keep their own
+idempotency ledger. `tts.attachBulk` is not in that ledger: its `requestId` is
+required and works like `script.edit` (same id returns the existing
+ScriptVersion; a different input is `IDEMPOTENCY_CONFLICT`).
 A bulk run started without a `requestId` is never recorded and can never be
 finalized. A lost TTS Job can be found again with `job.list { kind: "tts" }`,
 but the finalization still needs the original `requestId`. `tts.attachBulk`
@@ -393,7 +419,7 @@ to the user when the fix is on their side.
 | `AGENT_OPERATION_UNKNOWN` | The operation is not exposed. Re-read `schema.get` / `operations`; the catalog may have changed. |
 | `VALIDATION_ERROR` | Input or saved document violates the contract. Fix the `issues` paths. |
 | `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` | The script or operation is not valid in the current state. Re-read the script and adjust; do not bypass. |
-| `SCRIPT_BASE_STALE` | Base version is no longer current (`script.edit`'s base or `script.save`'s optional base guard). Re-read and reapply (see above). |
+| `SCRIPT_BASE_STALE` | Base version is no longer current (`script.edit`'s base, `script.save`'s optional base guard, or `script.restore`'s optional base guard). Re-read and reapply (see above). |
 | `IDEMPOTENCY_CONFLICT` | Same `requestId`, different content. Read the current version and continue; never reuse the ID for other content. |
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | The same `requestId` is still running. Poll the running job with `job.get` / `job_wait` instead of starting a second one. |
 | `AGENT_BACKPRESSURE` | Too many in-flight requests on one connection. The request was not executed. Wait briefly, then retry it. |

@@ -3,6 +3,7 @@ import {
   agentOperationCatalog,
   agentOperationInputSchemas,
   agentOperationOutputSchemas,
+  isAgentRequestIdRequiredOperation,
   toAgentJsonSchema,
   type AgentOperationName,
 } from "@kakeai/contracts";
@@ -55,16 +56,22 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "work.create": "作品、`ja-JP` 既定の言語版、初期台本版を作成する。",
   "work.update":
     "作品の管理上の作品名（`title`）を変更する。動画内に表示するタイトルは台本側の Scene スロットで、これとは別。",
+  "work.clone":
+    "元作品の現在版から子 Work を作る。元作品は変更せず、子 Work には `parentWorkId` が付く。複製されるのは元作品の `originalLocale` の Edition の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しない。`requestId` は持たないため、タイムアウト後は work.list で `parentWorkId` と `title`、`createdAt` を確認してから再実行する。不明な作品は WORK_NOT_FOUND。",
   "edition.create":
     "既存作品に言語版を追加する。シード元の現行台本をコピーし、声と音声を取り除いた初期版を作る。翻訳は script.save で別途保存する。",
   "script.get":
     "台本版を取得する。`scriptVersionId` または `languageEditionId`（その Edition の current）のどちらか一方を指定する。",
+  "script.listVersions":
+    "Edition の台本版履歴を新しい順に全件返す（Edition の版数は通常小さい）。`languageEditionId` が必要で、`currentScriptVersionId` と各版の要約（版番号・作成者・要求ID・復元元・作成日時）を含む。ContentDocument は含まない。過去版を選んで script.restore するときに使う。",
   "script.validate":
     "保存せずに台本を検証し、警告と解決済み timeline を返す。`content` または `baseScriptVersionId` + `operations` を渡す。",
   "script.save":
     "ContentDocument 全体を検証して新しい台本版として保存する。取り込み向けで、通常の編集は script.edit を使う。任意の `baseScriptVersionId` を渡すと現在の版と一致する場合だけ保存し、`sourceScriptVersionId` には同じ Edition の復元元の版を指定できる。",
   "script.edit":
     "操作コアの ScriptOperation 配列を適用し、新しい台本版を作成する。`baseScriptVersionId` が current と一致している必要があり、`requestId` は再送を冪等にする。",
+  "script.restore":
+    "過去の台本版（`scriptVersionId`）を新しい版として復元する。ContentDocument は送らず、サーバーが復元元の内容を保存する。`requestId` は必須で、同じ ID の再送は既存の版を返す。任意の `baseScriptVersionId` を渡すと、その版が current のときだけ復元する。復元元が current の場合は VALIDATION_ERROR。",
   "asset.list":
     "素材を検索して `{ assets, nextCursor, total }` の1ページを返す。`kind`・`status`・`filename`（部分一致）・`tags`（`tagMode` で AND / OR、既定 `and`）・`favorite`・`archived`（既定 `exclude`）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせ、`sort`（既定 `createdAt_desc`）で `limit`（最大100）件ずつページングする。`total` は絞り込み条件に一致する件数。続きを取得するときは受け取った `nextCursor` を `cursor` に渡す（`nextCursor` が null なら最終ページ）。`sort` を変えると `cursor` は無効になるので、並べ替えたら先頭から取得し直す。",
   "asset.get": "素材 1 件を返す。",
@@ -123,8 +130,9 @@ function operationAnnotations(
   return {
     readOnlyHint: readOnly,
     destructiveHint: false,
-    // Reads are repeatable; script.edit is repeatable through its requestId.
-    idempotentHint: readOnly || operation === "script.edit",
+    // Reads are repeatable. Version-creating operations are repeatable through
+    // their required requestId; the classification lives in contracts.
+    idempotentHint: readOnly || isAgentRequestIdRequiredOperation(operation),
     openWorldHint: false,
   };
 }

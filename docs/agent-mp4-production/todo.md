@@ -5,6 +5,7 @@
 取りこぼしを減らす改善、P3-1 は入力契約の探索性を上げる改善である。
 P3-2 のうち保存版・素材の視覚確認は実装済みで、下書き・複数フレームなど
 残る項目は将来項目として [roadmap.md](./roadmap.md) へ送る。
+P4 は制作履歴・復旧（版履歴・復元・Work 複製・タイムアウト回復）である。
 
 ## P0 現状の再現と固定（コード変更なし）
 
@@ -108,13 +109,38 @@ MCP の二重出力でコストが増えるため）。
 - [ ] Composition 単体のプレビュー
 - [ ] MCP の `structuredContent` と `content.text` の二重出力の見直し
 
+## P4 制作履歴・復旧（完了）
+
+[roadmap.md](./roadmap.md) の「制作履歴・復旧」を実装する。MP4主線は変えず、
+反復制作・やり直し・タイムアウト回復をエージェントだけで完結させる。
+
+- [x] `script.listVersions` を追加する。`languageEditionId` を受け、
+      新しい順の版要約と `currentScriptVersionId` を返す
+- [x] `ScriptVersionSummary` に `sourceScriptVersionId` を追加する
+- [x] `script.restore` を追加する。復元元の ID だけを受け、サーバー側で内容を読む。
+      `requestId` 必須の版単位冪等、任意の `baseScriptVersionId` ガード、
+      復元元が current なら `VALIDATION_ERROR`
+- [x] `work.clone` を追加する。元 Work の primary Edition の current 版から
+      子 Work を作り、`parentWorkId` と `sourceScriptVersionId` を記録する。
+      Agent 経由は `author: "agent"` / `authorAgentId` を記録する
+- [x] `work.create` / `work.clone` のタイムアウト回復をガイド路線で固定する。
+      `WorkSummary` に `createdAt` / `parentWorkId` を追加し、`work.list` で
+      作成済みかを確認する手順をスキルとユーザーガイドに書く
+- [x] Agent Access 仕様・HTTP API 契約・MP4制作仕様・roadmap・findings を更新する
+- [x] 契約・サービス・ソケット統合テストを追加する
+- [x] `npm run typecheck` と `npm test` を通す
+
+完了条件: エージェントが版履歴を取得し、ContentDocument を再送せずに過去版を
+復元できる。Work 複製が系統を記録し、Work 作成・複製のタイムアウト後に
+`work.list` で二重作成を避けられる。
+
 ## 将来（今回の非ゴール）
 
 - サムネイルの作成・選択・PNG取得
 - SRT 字幕のエクスポート
 - YouTube 投稿設定・チャプター
 - MP4 Artifact のダウンロード
-- 版履歴一覧・Work 複製（同一 Edition の復元は `script.save` の `sourceScriptVersionId` で実装済み）
+- 版の削除・履歴圧縮、全 Edition の複製、Edition をまたぐ復元
 - Theme / Face Set / Voice Profile の管理
 - 縦型（9:16）の完成動画
 - リモート/クラウド接続、アプリ自動起動

@@ -50,6 +50,10 @@ import {
   agentScriptEditOutputSchema,
   agentScriptGetInputSchema,
   agentScriptGetOutputSchema,
+  agentScriptListVersionsInputSchema,
+  agentScriptListVersionsOutputSchema,
+  agentScriptRestoreInputSchema,
+  agentScriptRestoreOutputSchema,
   agentScriptSaveInputSchema,
   agentScriptSaveOutputSchema,
   agentScriptValidateInputSchema,
@@ -64,6 +68,8 @@ import {
   agentTtsCreateOutputSchema,
   agentWorkCreateInputSchema,
   agentWorkCreateOutputSchema,
+  agentWorkCloneInputSchema,
+  agentWorkCloneOutputSchema,
   agentWorkGetInputSchema,
   agentWorkGetOutputSchema,
   agentWorkListInputSchema,
@@ -91,6 +97,8 @@ import { getAsset, searchAssets, updateAsset } from "../services/assets.ts";
 import {
   editAgentScript,
   getAgentScript,
+  listAgentScriptVersions,
+  restoreAgentScript,
   saveAgentScript,
   validateAgentScript,
 } from "../services/agent-script.ts";
@@ -115,7 +123,7 @@ import {
   invalidResultReference,
   parseResultReference,
 } from "../services/agent-result-references.ts";
-import { createWork, createLanguageEdition, getWork, listWorks, updateWork } from "../services/works.ts";
+import { createWork, createLanguageEdition, getWork, listWorks, updateWork, cloneWork } from "../services/works.ts";
 import { AgentOperationError, agentIssue } from "./errors.ts";
 import { runWithAgentRequest } from "./idempotency.ts";
 
@@ -243,6 +251,21 @@ const definitions: AgentOperationDefinitions = {
       work: await updateWork(context.prisma, input.workId, input.title),
     }),
   },
+  "work.clone": {
+    input: agentWorkCloneInputSchema,
+    output: agentWorkCloneOutputSchema,
+    // Work creation is not recorded in the idempotency ledger. A timed-out
+    // clone is checked through work.list (parentWorkId / createdAt) before it
+    // is retried, so the agent never blindly creates a second child.
+    run: async (input, context) => ({
+      work: await asWorkResource(
+        cloneWork(context.prisma, input.workId, input.title, {
+          author: "agent",
+          authorAgentId: context.agentId,
+        }),
+      ),
+    }),
+  },
   "edition.create": {
     input: agentEditionCreateInputSchema,
     output: agentEditionCreateOutputSchema,
@@ -258,6 +281,12 @@ const definitions: AgentOperationDefinitions = {
     run: async (input, context) => ({
       scriptVersion: await asWorkResource(getAgentScript(context.prisma, input)),
     }),
+  },
+  "script.listVersions": {
+    input: agentScriptListVersionsInputSchema,
+    output: agentScriptListVersionsOutputSchema,
+    run: async (input, context) =>
+      asWorkResource(listAgentScriptVersions(context.prisma, input.languageEditionId)),
   },
   "script.validate": {
     input: agentScriptValidateInputSchema,
@@ -277,6 +306,14 @@ const definitions: AgentOperationDefinitions = {
     invalidInputCode: AGENT_ERROR_CODES.INVALID_INPUT,
     run: async (input, context) =>
       editAgentScript(context.prisma, input, context.agentId),
+  },
+  "script.restore": {
+    input: agentScriptRestoreInputSchema,
+    output: agentScriptRestoreOutputSchema,
+    // Version-level idempotency on ScriptVersion.agentRequestId, like
+    // script.edit; the Job idempotency ledger does not apply.
+    run: async (input, context) =>
+      restoreAgentScript(context.prisma, input, context.agentId),
   },
   "asset.list": {
     input: agentAssetListInputSchema,

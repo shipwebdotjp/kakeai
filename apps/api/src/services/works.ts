@@ -2,8 +2,8 @@ import {
   CONTENT_SCHEMA_VERSION,
   createInitialContentDocument,
   type ContentDocument,
+  type ScriptVersionAuthor,
   type Work,
-  type WorkSummary,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent, serializeContent } from "../domain/content-json.ts";
@@ -12,10 +12,10 @@ import { removeStorageFile } from "../storage/asset-store.ts";
 import type { DataDirectories } from "../storage/paths.ts";
 import {
   toWork,
-  toWorkSummary,
   type EditionWithCurrent,
   type RenderJobRefRow,
 } from "../dto/mappers.ts";
+import { normalizeAgentId } from "./attribution.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 
@@ -45,7 +45,7 @@ async function latestRenderJobsByEdition(
   return latestJobs;
 }
 
-export async function listWorks(prisma: PrismaClient): Promise<WorkSummary[]> {
+export async function listWorks(prisma: PrismaClient): Promise<Work[]> {
   const works = await prisma.work.findMany({
     orderBy: { updatedAt: "desc" },
     include: { languageEditions: { include: editionInclude } },
@@ -53,7 +53,7 @@ export async function listWorks(prisma: PrismaClient): Promise<WorkSummary[]> {
   const editionIds = works.flatMap((work) => work.languageEditions.map((edition) => edition.id));
   const latestJobs = await latestRenderJobsByEdition(prisma, editionIds);
   return works.map((work) =>
-    toWorkSummary(work, work.languageEditions as EditionWithCurrent[], latestJobs),
+    toWork(work, work.languageEditions as EditionWithCurrent[], latestJobs),
   );
 }
 
@@ -101,10 +101,16 @@ export async function createWork(
   return getWork(prisma, workId);
 }
 
+export interface CloneWorkAttribution {
+  author?: ScriptVersionAuthor;
+  authorAgentId?: string | null;
+}
+
 export async function cloneWork(
   prisma: PrismaClient,
   workId: string,
   title: string,
+  attribution?: CloneWorkAttribution,
 ): Promise<Work> {
   const work = await prisma.work.findUnique({
     where: { id: workId },
@@ -129,6 +135,9 @@ export async function cloneWork(
     throw new ApiError(500, "INTERNAL_ERROR", "現在の台本版が設定されていません。");
   }
   const sourceScript = primaryEdition.currentScriptVersion;
+  const author = attribution?.author ?? "human";
+  const authorAgentId =
+    author === "agent" ? normalizeAgentId(attribution?.authorAgentId) : null;
 
   const newWorkId = await prisma.$transaction(async (tx) => {
     const newWork = await tx.work.create({
@@ -150,8 +159,9 @@ export async function cloneWork(
         versionNumber: 1,
         contentSchemaVersion: sourceScript.contentSchemaVersion,
         contentJson: sourceScript.contentJson,
-        sourceScriptVersionId: null,
-        author: "human",
+        sourceScriptVersionId: sourceScript.id,
+        author,
+        authorAgentId,
       },
     });
     await tx.languageEdition.update({

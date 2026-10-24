@@ -67,7 +67,7 @@
 - YouTube 投稿設定・チャプター（人間 / 将来）
 - MP4 Artifact のダウンロード（人間 / 将来）
 - 下書きプレビュー（将来）
-- 版履歴・復元・Work 複製（将来）
+- 版の削除・履歴圧縮、全 Edition の複製、Work 作成・複製の `requestId` 冪等化
 - Theme / Face Set / Voice Profile の作成・更新・削除（人専用）
 - 新規 Composition の authoring（必要時のみ別スキル）
 - 縦型（9:16）の完成動画、リモート接続、アプリ自動起動
@@ -188,14 +188,15 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 - TTS Job を失った場合は `job.list { kind: "tts" }` で再発見できる。
   ただし `requestId` なしで開始した一括生成は、再発見しても確定できない。
 - `AGENT_REQUEST_TIMEOUT` 後は、状態確認を先に行う。
-- `script.edit` と `tts.attachBulk` は同じ `requestId` で再送してよい。
+- `script.edit` / `script.restore` / `tts.attachBulk` は同じ `requestId` で再送してよい。
 - 高コスト操作は `requestId` で冪等。
 
 ### R6. 非ゴールを混ぜない
 
-今回の変更で、サムネイル・SRT・YouTube・Artifact ダウンロード・
-下書きプレビュー・版履歴一覧・Work 複製・Theme / FaceSet / Voice 管理を
-追加しない。必要になった時点で [roadmap.md](./roadmap.md) から個別に立ち上げる。
+R6 は P1 時点の非ゴールである。P4 で版履歴一覧・復元・Work 複製を追加した。
+引き続き、サムネイル・SRT・YouTube・Artifact ダウンロード・下書きプレビュー・
+Theme / FaceSet / Voice 管理は今回の変更に混ぜない。必要になった時点で
+[roadmap.md](./roadmap.md) から個別に立ち上げる。
 
 ### R7. 回帰を固定する
 
@@ -221,6 +222,31 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
   変化する。新操作の追加は任意フィールドの追加と同じ扱いで、プロトコル版は
   上げない。
 
+### R9. 制作履歴・復旧を実装する（P4）
+
+- `script.listVersions` は `{ languageEditionId }` を受け、Edition の Script Version 履歴を
+  新しい順に返す。応答は `{ languageEditionId, currentScriptVersionId, scriptVersions }` で、
+  各要素は版番号・作成者・要求 ID・`sourceScriptVersionId`・作成日時を持つ要約であり、
+  `ContentDocument` を含めない。Edition が存在しなければ `WORK_NOT_FOUND`。
+- `script.restore` は `{ scriptVersionId, baseScriptVersionId?, requestId, authorAgentId? }` を
+  受け、復元元の内容をサーバー側で読み、新しい版として保存する。呼び出し側は
+  `ContentDocument` を送らない。`sourceScriptVersionId` に復元元を記録し、復元元が
+  current の場合は `VALIDATION_ERROR`。`requestId` は必須で、同じ入力の再送は
+  既存版を返す（`replay: true`）。異なる入力は `IDEMPOTENCY_CONFLICT`。
+  `baseScriptVersionId` は任意の基準版ガードで、不一致は `SCRIPT_BASE_STALE`。
+- `work.clone` は `{ workId, title }` を受け、元 Work の `originalLocale` の Edition の
+  current 版から子 Work を作る。子 Work は `parentWorkId` を持ち、初期版は
+  `sourceScriptVersionId` に複製元を記録する。他の Edition・版履歴・Job・Artifact・
+  サムネイルは複製しない。Agent 経由の初期版は `author: "agent"` / `authorAgentId` になる。
+- `work.create` / `work.clone` は operation の `requestId` を持たない。タイムアウト後は
+  `work.list` の `createdAt` と `parentWorkId` で作成済みかを確認し、推測できない場合は
+  人間に返す。トランスポートの `requestId` は再送の重複排除ではない。
+- 既存 DTO への追加は非破壊とする。`WorkSummary` に `createdAt` / `parentWorkId`、
+  `ScriptVersionSummary` に `sourceScriptVersionId` を追加する。`operationDigest` と
+  `schemaDigest` は変わるが、`AGENT_PROTOCOL_VERSION` は上げない。
+- 版の削除・履歴圧縮、Edition をまたぐ復元、全 Edition の複製、`work.create` /
+  `work.clone` の台帳冪等化は今回の非ゴールとする。
+
 ## 受け入れ基準
 
 - 人間プリフライト済みの ja-JP 新規作品で、エージェントが
@@ -236,6 +262,13 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
   推測せずに組み立てられる。`schema.get` の応答サイズはほぼ変わらない。
 - スキルとガイドに、声のプリフライト、MP4 の合格ライン、`preview.frame`
   が任意であること、一括TTSの順序が明記されている。
+- `script.listVersions` で現在版と履歴を取得でき、`script.restore` で
+  ContentDocument を再送せずに過去版を新しい版として復元できる。
+- `script.restore` の同じ `requestId` 再送で版が増えず、異なる入力は
+  `IDEMPOTENCY_CONFLICT` になる。
+- `work.clone` が `parentWorkId` と `sourceScriptVersionId` を記録した子 Work を作る。
+- `work.create` / `work.clone` のタイムアウト後、`work.list` の
+  `createdAt` / `parentWorkId` で作成済みかを判断する手順がスキルとガイドにある。
 - `npm run typecheck` と `npm test` が通る。
 
 ## 関連文書
@@ -267,3 +300,9 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
   下書きプレビューと複数フレームは将来項目として残している。契約・実測は
   [../visual-confirmation/spec.md](../visual-confirmation/spec.md) と
   [../visual-confirmation/spike.md](../visual-confirmation/spike.md) を正とする。
+- **P4 制作履歴・復旧: 完了。** `script.listVersions` で Edition の版履歴と
+  current を取得し、`script.restore` で過去版を新しい版として復元できるように
+  した。`work.clone` は現在版から子 Work を作り、`parentWorkId` と
+  `sourceScriptVersionId` を記録する。`WorkSummary` に `createdAt` /
+  `parentWorkId`、`ScriptVersionSummary` に `sourceScriptVersionId` を追加し、
+  `work.create` / `work.clone` のタイムアウト回復をスキルとガイドに固定した。

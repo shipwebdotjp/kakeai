@@ -168,6 +168,8 @@ export function toWorkSummary(
     id: work.id,
     title: work.title,
     originalLocale: localeSchema.parse(work.originalLocale),
+    createdAt: toIso(work.createdAt),
+    parentWorkId: work.parentWorkId,
     updatedAt: toIso(work.updatedAt),
     languageEditions: editions.map((edition) =>
       toLanguageEditionSummary(edition, latestJobs.get(edition.id)),
@@ -180,11 +182,7 @@ export function toWork(
   editions: readonly EditionWithCurrent[],
   latestJobs: Map<string, RenderJobRefRow>,
 ): Work {
-  return {
-    ...toWorkSummary(work, editions, latestJobs),
-    createdAt: toIso(work.createdAt),
-    parentWorkId: work.parentWorkId,
-  };
+  return toWorkSummary(work, editions, latestJobs);
 }
 
 export function toScriptVersionSummary(row: ScriptVersionRow): ScriptVersionSummary {
@@ -197,6 +195,7 @@ export function toScriptVersionSummary(row: ScriptVersionRow): ScriptVersionSumm
     authorAgentId: row.authorAgentId,
     agentRequestId: row.agentRequestId,
     agentRequestHash: row.agentRequestHash,
+    sourceScriptVersionId: row.sourceScriptVersionId,
     createdAt: toIso(row.createdAt),
   };
 }

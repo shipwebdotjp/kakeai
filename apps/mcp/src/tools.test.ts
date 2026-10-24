@@ -6,8 +6,10 @@ import {
   agentOperationNames,
   agentOperationOutputSchemas,
   agentReadOperationNames,
+  agentRequestIdRequiredOperationNames,
   isAgentLongRunningOperation,
   isAgentMutationOperation,
+  isAgentRequestIdRequiredOperation,
   toAgentJsonSchema,
 } from "@kakeai/contracts";
 import {
@@ -48,6 +50,20 @@ describe("MCP tool catalog", () => {
     expect(agentReadOperationNames.length + agentMutationOperationNames.length).toBe(
       agentOperationNames.length,
     );
+  });
+
+  it("advertises idempotent hints only for version-creating operations", () => {
+    for (const entry of operationToolEntries) {
+      expect(entry.annotations.idempotentHint).toBe(
+        entry.readOnly || isAgentRequestIdRequiredOperation(entry.operation),
+      );
+    }
+    expect(
+      operationToolEntries
+        .filter((entry) => entry.annotations.idempotentHint && !entry.readOnly)
+        .map((entry) => entry.operation)
+        .sort(),
+    ).toEqual([...agentRequestIdRequiredOperationNames].sort());
   });
 
   it("uses unique MCP-safe names with the canonical operation in the description", () => {

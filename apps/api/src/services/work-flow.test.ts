@@ -259,6 +259,10 @@ describe("work and script version flow", () => {
       sourceScriptVersionId: null,
       content,
     });
+    const parentCurrent = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      parentEdition.id,
+    );
 
     const clonedWork = await works.cloneWork(prisma, parentWork.id, "親作品のコピー");
     expect(clonedWork.title).toBe("親作品のコピー");
@@ -270,6 +274,13 @@ describe("work and script version flow", () => {
     const clonedCurrent = await scriptVersions.getCurrentScriptVersion(prisma, clonedEdition.id);
     expect(clonedCurrent.versionNumber).toBe(1);
     expect(clonedCurrent.content.scenes[0]!.label).toBe("カスタム導入");
+    expect(clonedCurrent.sourceScriptVersionId).toBe(parentCurrent.id);
+    expect(clonedCurrent.author).toBe("human");
+
+    const listed = await works.listWorks(prisma);
+    const listedChild = listed.find((entry) => entry.id === clonedWork.id);
+    expect(listedChild?.parentWorkId).toBe(parentWork.id);
+    expect(listedChild?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
 
     // Attempting to delete parentWork while cloned child exists should fail with WORK_HAS_CHILDREN
     await expect(works.deleteWork(prisma, directories, parentWork.id)).rejects.toMatchObject({
@@ -281,6 +292,28 @@ describe("work and script version flow", () => {
 
     // Now deleting parent work should succeed
     await works.deleteWork(prisma, directories, parentWork.id);
+  });
+
+  it("records agent attribution on a clone", async () => {
+    const parentWork = await works.createWork(prisma, "Agent複製元", "ja-JP");
+    const parentEdition = parentWork.languageEditions[0]!;
+    const parentCurrent = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      parentEdition.id,
+    );
+
+    const clonedWork = await works.cloneWork(prisma, parentWork.id, "Agent複製先", {
+      author: "agent",
+      authorAgentId: " agent-1 ",
+    });
+    const clonedEdition = clonedWork.languageEditions[0]!;
+    const clonedCurrent = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      clonedEdition.id,
+    );
+    expect(clonedCurrent.author).toBe("agent");
+    expect(clonedCurrent.authorAgentId).toBe("agent-1");
+    expect(clonedCurrent.sourceScriptVersionId).toBe(parentCurrent.id);
   });
 
   it("restores a past version by saving a new version with sourceScriptVersionId", async () => {

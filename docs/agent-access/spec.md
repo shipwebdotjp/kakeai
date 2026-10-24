@@ -16,7 +16,7 @@
 
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
-| 可逆 | 作品作成、台本保存（新しい Script Version の追加と current の前進）、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピーの編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル | 可 |
+| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピーの編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル | 可 |
 | 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成 | 人のみ |
 
 「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
@@ -44,10 +44,14 @@
 | `work.get` | read | no | `kakeai_work_get` |
 | `work.create` | mutation | no | `kakeai_work_create` |
 | `work.update` | mutation | no | `kakeai_work_update` |
+| `work.clone` | mutation | no | `kakeai_work_clone` |
+| `edition.create` | mutation | no | `kakeai_edition_create` |
 | `script.get` | read | no | `kakeai_script_get` |
+| `script.listVersions` | read | no | `kakeai_script_list_versions` |
 | `script.validate` | read | no | `kakeai_script_validate` |
 | `script.save` | mutation | no | `kakeai_script_save` |
 | `script.edit` | mutation | no | `kakeai_script_edit` |
+| `script.restore` | mutation | no | `kakeai_script_restore` |
 | `asset.list` | read | no | `kakeai_asset_list` |
 | `asset.get` | read | no | `kakeai_asset_get` |
 | `asset.import` | mutation | yes | `kakeai_asset_import` |
@@ -73,7 +77,7 @@
 | `character.get` | read | no | `kakeai_character_get` |
 
 - 長尺操作は Job の投入と ID の返却までで完了する。`asset.import` は内容が既存 Asset と同一なら `jobId: null` を返す。`render.start` と `tts.create` は `job` を返す。`tts.createBulk` は投入した Job の組（`jobs`）と生成できなかったセリフ（`excluded`）を返す。`tts.attachBulk` は短時間の確定操作で Job を待機しない（`pending` / `finalized` と件数を返す）。呼び出し側は `job.get` または `job.list` で状態を確認する。
-- `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` は任意の `requestId` を受け付ける（[冪等台帳](#冪等台帳高コスト操作)）。`tts.attachBulk` は版を作る操作のため `requestId` が必須で、版単位の冪等（`script.edit` と同じ規則）になる。束縛は入力をそのまま転送するだけで、台帳の規則を持つのは操作コア側だけである。
+- `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` は任意の `requestId` を受け付ける（[冪等台帳](#冪等台帳高コスト操作)）。`tts.attachBulk` と `script.restore` は版を作る操作のため `requestId` が必須で、版単位の冪等（`script.edit` と同じ規則）になる。`work.create` / `work.clone` / `script.save` は operation の `requestId` を持たない。束縛は入力をそのまま転送するだけで、台帳の規則を持つのは操作コア側だけである。
 - MCP 束縛は `job.get` の有界ポーリングを `kakeai_job_wait` として提供する。`timeoutMs`（既定 60 秒、最大 600 秒）と `intervalMs`（既定 500 ミリ秒、10〜30000 ミリ秒）を受け、終端状態（`succeeded` / `failed` / `cancelled`）に達したら `{ job, timedOut: false, polls }`、予算超過なら最後の Job と `timedOut: true` を返す。`job_wait` は MCP 束縛の便宜ツールであり、Agent 操作ではない。
 - 失敗はすべて `isError: true` のツール結果として返し、サーバーを落とさない。本文は JSON `{ "code": "...", "issues": [...] }` で、Agent Access と操作コアのコードをそのまま透過する。MCP 自身の失敗は `MCP_TOOL_UNKNOWN`（未知のツール名）、`VALIDATION_ERROR`（入力スキーマ不一致、`issues` 付き）、`MCP_INTERNAL_ERROR`（想定外。詳細は返さない）とする。アプリ未起動は `AGENT_APP_UNAVAILABLE`、未知の操作は `AGENT_OPERATION_UNKNOWN` である。
 - 実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は MCP にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
@@ -135,8 +139,9 @@
 
 - `schema.get` — 現在の `contentSchemaVersion`、各 VisualTemplate の `inputFields`・layer・transition・animation の制約、操作カタログ、Asset 種別と用途の制約、警告コードを返す。`schemaDigest` を含め、アプリ更新による変化を検知できるようにする。エージェントが値を推測しないための必須操作。`schemaDigest` はスキーマ関連データを正規化した非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。`operations` は台本編集の `ScriptOperation` カタログ（名前とカテゴリ）を従来どおり返し、`agentOperations` は束縛が公開してよい全 Agent 操作のカタログ（`name`、`kind` の `read` / `mutation`、Job を返す `longRunning`）を返す。`agentOperations` は読み取り・変更の分類リストから導出し、束縛ごとに第二の操作一覧を持たない。`operationDigest` は全 Agent 操作の入出力スキーマを正規化した契約のダイジェストで、操作の入力・出力が変わると必ず変化する。`minProtocolVersion` は対応するプロトコル版の下限、`protocolVersion` は上限（対応版）である。テンプレートごとの入力 JSON Schema と入力例は応答に含めず、`template.get` で必要な1件だけを取得する。`schemaDigest` はそれらも含むため、テンプレート入力の変更でも変化する。
 - `template.get` — VisualTemplate 1件の入力契約を `{ id, version }` で取得する。`inputSchema` はそのテンプレート定義の `inputSchema`（保存時検証と同じ Zod スキーマ）を `toAgentJsonSchema` で変換した JSON Schema（draft 2020-12。`$schema` は付けない）で、`example` は同じスキーマを通ることがテストで固定された入力例である。入力の正はテンプレート定義の `inputSchema` ひとつで、Agent 向けの第二のスキーマは持たない。`id` / `version` は `schema.get` の `templates` から取り、存在しなければ `RESOURCE_NOT_FOUND` とする。`inputFields` を持たないテンプレートでも取得できる。`example` の ID は `<assetId>` のようなプレースホルダなので、実在する ID に置き換えて使う。
-- `work.list` / `work.get`
+- `work.list` / `work.get` — `work.list` は更新日時の降順で Work を返す。`createdAt` と `parentWorkId` を含むため、タイムアウト後に作成済みかを確認できる（後述）。
 - `script.get` — `scriptVersionId` を指定するとその版、`languageEditionId` を指定するとその Edition の current の `ContentDocument` と帰属を返す。どちらか一方を必須とする。
+- `script.listVersions` — `{ languageEditionId }` を受け、Edition の Script Version 履歴を `versionNumber` の降順で返す。応答は `{ languageEditionId, currentScriptVersionId, scriptVersions }` で、各要素は版番号・作成者・要求 ID・復元元（`sourceScriptVersionId`）・作成日時を持つ要約であり、`ContentDocument` は含めない。Edition が存在しなければ `WORK_NOT_FOUND`。件数は全件で、ページングは履歴が大きくなった時点で追加する。
 - `script.validate` — 保存せずに検証する。`{ content }` または `{ baseScriptVersionId, operations }` を受け、`warnings` と解決済み `timeline` を返す。書込みを行わない。
 - `asset.list` — 素材を検索し、`{ assets, nextCursor, total }` の1ページを返す。`total` は同じ絞り込み条件に一致する素材の総数で、同一条件のどのページでも同じ値になる。
   - 絞り込みは `kind`・`status`・`filename`（大文字小文字を区別しない部分一致）・`tags`（`tagMode` で AND / OR を明示）・`favorite`・`archived`（既定は除外）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせる。`durationMinMs` / `durationMaxMs` は0以上のミリ秒で、長さを持たない素材（`durationMs` がnull）は範囲に一致しない。下限が上限より大きい場合は `VALIDATION_ERROR` とする。
@@ -156,9 +161,11 @@
 
 - `work.create` — Work、指定 locale（既定は `ja-JP`）の LanguageEdition、その locale の初期 ContentDocument を持つ初期 ScriptVersion を [../mvp/spec.md](../mvp/spec.md) の作成規則で作る。初期 ContentDocument の `locale` は Edition の `originalLocale` と一致する。
 - `work.update` — Work の管理上の作品名 `title` を変更する。動画内に表示するタイトルは ContentDocument 側の Scene スロットであり、これとは別である（[../mvp/api-contract.md](../mvp/api-contract.md) の `PATCH /works/:workId` と同じ規則）。
+- `work.clone` — 元 Work の現在版から子 Work を作る。引数は `{ workId, title }`。HTTP の `POST /works/:workId/clone` と同じ規則で、元 Work の `originalLocale` の Edition（無ければ先頭の Edition）の current Script Version だけをコピーする。子 Work は `parentWorkId` を持ち、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。Agent 経由の初期版は `author: "agent"` / `authorAgentId` になる（HTTP は `human`）。`requestId` を持たず、タイムアウト後は `work.list` で `parentWorkId`・`title`・`createdAt` を確認してから再実行する。存在しない Work は `WORK_NOT_FOUND`。
 - `edition.create` — 既存 Work に言語版を追加する。引数は HTTP の `POST /works/:workId/language-editions` と同じ（`workId`、`locale`、`sourceEditionId`）。初期版はシード元 current のコピーに置き換え規則を適用したもの（[../multilingual-editions/spec.md](../multilingual-editions/spec.md)）。重複 locale は `LANGUAGE_EDITION_EXISTS`、他 Work の Edition は `WORK_NOT_FOUND` とする。
 - `script.save` — `languageEditionId` と全 `ContentDocument` を受け、検証して新しい Script Version を追加し current を進める。任意の `baseScriptVersionId`（基準版ガード）と `sourceScriptVersionId`（同じ Edition の復元元）も受け付ける（後述）。全体の置換や取り込み向けであり、通常の編集は `script.edit` を使う。
 - `script.edit` — 基準版と `ScriptOperation` の配列を受け、操作コアで一括適用し、保存検証を通して新しい Script Version を追加する。1 呼び出しは 1 版とし、途中失敗時は版を作らない。
+- `script.restore` — 過去の Script Version を新しい版として復元する。`{ scriptVersionId, baseScriptVersionId?, requestId, authorAgentId? }` を受け、復元元の `ContentDocument` をサーバー側で読み、保存検証を通して新しい版を追加する。呼び出し側は ContentDocument を送らない。復元元の Edition にだけ保存し、新しい版の `sourceScriptVersionId` に復元元を記録する。復元元が current の場合は `VALIDATION_ERROR`。`requestId` は必須で、同じ ID・同じ復元元の再送は既存の版を返す（`replay: true`）。異なる復元元・基準版で同じ ID を使うと `IDEMPOTENCY_CONFLICT`。`baseScriptVersionId` は任意の基準版ガードで、省略時は last-write-wins（[ADR 0021](../adr/0021-script-save-last-write-wins.md)）。
 - `asset.import` — 後述の手順で Asset を取り込む。
 - `asset.tag` — Asset のタグを更新する。
 - `composition.create` / `composition.draft.save` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。publish は `dryRun` を受け付ける。
@@ -201,7 +208,33 @@
 - `baseScriptVersionId` は任意である。省略時は HTTP の保存と同じ last-write-wins で、Edition の current を新しい版へ進める。指定時はその版が Edition の current と一致する場合だけ保存し、一致しなければ `SCRIPT_BASE_STALE`（409）で版を作らない。存在しない版は `WORK_NOT_FOUND`、別 Edition の版は `VALIDATION_ERROR` とする。
 - `sourceScriptVersionId` は任意で、省略時は `null`。HTTP の保存と同じく、同じ Edition の版だけを復元元として受け付け、別 Edition や存在しない版は `VALIDATION_ERROR`（issue path は `["sourceScriptVersionId"]`）とする。
 - `authorAgentId` は `script.edit` と同じく任意で、省略時は接続の `agentId` を使う。
-- `requestId` は持たない。再送の冪等化は `script.edit` と TTS 系の操作の対象であり、`script.save` は版単位の冪等化を行わない。
+- `requestId` は持たない。再送の冪等化は `script.edit` / `script.restore` と TTS 系の操作の対象であり、`script.save` は版単位の冪等化を行わない。
+
+### `script.restore` の契約
+
+```jsonc
+{
+  "scriptVersionId": "scr_001",
+  "baseScriptVersionId": "scr_003",
+  "requestId": "restore-2026-10-24-1",
+  "authorAgentId": "mcp"
+}
+```
+
+- `scriptVersionId` は復元元の版で必須。対象 Edition は復元元から決まり、別の Edition を指定する入力は持たない。存在しない版は `WORK_NOT_FOUND`（issue path は `["scriptVersionId"]`）。
+- 復元元の `ContentDocument` はサーバーが読み、HTTP の保存と同じ検証を通して新しい版にする。呼び出し側は ContentDocument を送らない。
+- 復元元が current の場合は `VALIDATION_ERROR`（issue path は `["scriptVersionId"]`）。既存版は変更せず、新しい版の `sourceScriptVersionId` に復元元を記録する。
+- `baseScriptVersionId` は任意の基準版ガード。指定時は同じ Edition の版でなければ `VALIDATION_ERROR`、current と一致しなければ `SCRIPT_BASE_STALE`。省略時は last-write-wins（[ADR 0021](../adr/0021-script-save-last-write-wins.md)）。
+- `requestId` は必須。同じ Edition・同じ `requestId` の版が既にあれば、同じ `{ scriptVersionId, baseScriptVersionId }` のときはその版を返し `replay: true`、異なる入力では `IDEMPOTENCY_CONFLICT`。`authorAgentId` は要求ハッシュに含めない。
+- 成功時は `{ scriptVersion, warnings, replay }` を返す。`script.edit` と同じく、同時実行で競合した場合は既存の要求版を読み直して replay する。
+
+### Work 作成・複製の回復
+
+`work.create` / `work.clone` は operation の `requestId` を持たない。トランスポートの `requestId` は応答の対応づけ用であり、再送の重複排除ではない。
+
+- `work.create` が `AGENT_REQUEST_TIMEOUT` になったら、再実行せず `work.list` を呼び、同じ `title` かつ `createdAt` が要求時刻以降の Work を探す。1件ならそれを使い、0件なら再実行する。複数ある場合は推測せず人間に返す。
+- `work.clone` がタイムアウトしたら、`work.list` で `parentWorkId` が元 Work と一致する子を探し、`title` と `createdAt` で特定する。特定できなければ再実行しない。
+- `work.list` は `createdAt` と `parentWorkId` を返す。Work の並び順は従来どおり更新日時の降順である。
 
 ### Composition authoring の契約
 
@@ -261,7 +294,7 @@
 
 ## 冪等台帳（高コスト操作）
 
-高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）は、任意の `requestId` を受け付ける。`requestId` が渡されたときだけ冪等台帳（`AgentRequest`）に記録し、タイムアウト後の再送でも Job や Version が増えないようにする。`tts.attachBulk` は台帳に載せず、必須の `requestId` を `script.edit` と同じ版単位の冪等（`ScriptVersion.agentRequestId`）で扱う。
+高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）は、任意の `requestId` を受け付ける。`requestId` が渡されたときだけ冪等台帳（`AgentRequest`）に記録し、タイムアウト後の再送でも Job や Version が増えないようにする。`tts.attachBulk` と `script.restore` は台帳に載せず、必須の `requestId` を `script.edit` と同じ版単位の冪等（`ScriptVersion.agentRequestId`）で扱う。
 
 - 台帳の鍵は `(operation, agentId, requestId)` の一意制約で決まる。`agentId` は接続時の識別子で、識別子を送らないクライアントは予約値 `none` を使う。クライアントが送った識別子は `agent:` を前置して保存するので、予約値を偽装できない。識別子を送らないクライアントは `none` の枠を共有するため、衝突を避けるには接続時に `agentId` を送る。同じ `requestId` を別の操作や別のエージェントで使っても別の行になる。
 - `requestId` は任意のままにする。必須化は破壊的変更 ([../mvp/api-contract.md](../mvp/api-contract.md) の互換性方針) になるため行わない。渡さない呼び出しは台帳に記録されず、従来どおり毎回新しい Job を作る。
@@ -275,7 +308,7 @@
 - `composition.publish` の `dryRun: true` は副作用がないので台帳に記録しない。同じ `requestId` で実 publish を另行実行できる。
 - 保存した参照が既に存在しない資源を指した場合は、新しい呼び出しと同じ安定コード（`RESOURCE_NOT_FOUND`）を返す。汎用の内部エラーにはしない。
 - 台帳の行は定期（数分に 1 回程度）に掃除する。完了した行は記録の保持期間（30 日）を超えると削除し、結果を残していない請求は請求の有効期間（10 分）を超えたら削除する。台帳は再送に耐える短期の記録として保つ。
-- `script.edit` は従来どおり版単位の冪等（`ScriptVersion.agentRequestId` / `agentRequestHash`）を維持し、台帳には載せない。
+- `script.edit` / `script.restore` は従来どおり版単位の冪等（`ScriptVersion.agentRequestId` / `agentRequestHash`）を維持し、台帳には載せない。
 
 ## 長尺操作
 
@@ -288,8 +321,9 @@
 - `ScriptVersion` は作成者が利用者かエージェントかを示す `author`（`human` / `agent`）と、エージェントを識別する任意の `authorAgentId` を持つ。作成時に確定し、以後変更しない。
 - `authorAgentId` は接続時の `agentId` を既定とし、操作ごとに上書きできる。空文字は保存しない。
 - 帰属は `ContentDocument` ではなく DB の列として持つ。`contentSchemaVersion` は上げない。
-- 帰属は、履歴でエージェント作の版を識別し、巻き戻すために使う。`sourceScriptVersionId`（復元・翻訳・下書きの系統）とは別軸である。
-- `script.edit` の `requestId` は `ScriptVersion.agentRequestId` として保存し、Edition 内で一意にする。`script.save` と UI 保存は `null` とする。要求内容のハッシュ（`agentRequestHash`）も保存し、同じ ID の再送と衝突を区別する。
+- 帰属は、履歴でエージェント作の版を識別し、巻き戻すために使う。`sourceScriptVersionId`（復元・翻訳・Work 複製・下書きの系統）とは別軸である。
+- `script.edit` / `script.restore` の `requestId` は `ScriptVersion.agentRequestId` として保存し、Edition 内で一意にする。`script.save` と UI 保存は `null` とする。要求内容のハッシュ（`agentRequestHash`）も保存し、同じ ID の再送と衝突を区別する。
+- `work.clone` の初期版は Agent 経由なら `author: "agent"` と接続の `agentId`、HTTP 経由なら `human` を記録する。複製元は `sourceScriptVersionId` に残す。
 - Asset の生成元は既存の `origin`（`generated`）と `provenanceJson` で表し、別の帰属列は持たない。
 
 ## エラー
@@ -307,7 +341,7 @@
 | `CLI_USAGE_ERROR` | 未知のサブコマンド、不正な引数、`--wait` などの誤用（CLI 束縛のみ） |
 | `CLI_INPUT_ERROR` | `--input` のファイル・標準入力を読めない、または JSON として解析できない（CLI 束縛のみ） |
 | `CLI_INTERNAL_ERROR` | CLI 束縛で想定外の失敗。詳細は返さない（CLI 束縛のみ） |
-| `SCRIPT_BASE_STALE` | `baseScriptVersionId` が current と一致しない（`script.edit` の必須の基準版と、`script.save` の任意の基準版ガード） |
+| `SCRIPT_BASE_STALE` | `baseScriptVersionId` が current と一致しない（`script.edit` の必須の基準版、`script.save` / `script.restore` の任意の基準版ガード） |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` が異なる入力で使われた |
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった |
 | `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` / `EDIT_ID_GENERATION_FAILED` | 操作コアのエラー（[../editor-core/spec.md](../editor-core/spec.md)） |
@@ -317,7 +351,7 @@
 | `TTS_INPUT_INVALID` | TTS 生成要求の入力が不正（空の読み上げテキスト、話者・声の未設定、Adapter 外の声） |
 | `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した |
 | `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` のキャラクターなど、参照先の資源が存在しない |
-| `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない |
+| `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない（`work.get` / `work.clone` / `script.listVersions` / `script.restore` を含む） |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。
 
@@ -333,4 +367,4 @@
 ## 将来
 
 - アプリ内ネイティブの AI 編集機能が必要になった場合は、同じ操作コアの上に任意の束縛として載せる。操作コアを変更しない限り、MCP・CLI を置き換えない。
-- 操作契約のダイジェストとプロトコル版、素材検索の索引化、Voice／Face Set の読み取り面、Job 操作の一般化、スキル配布などの拡張候補は [roadmap.md](./roadmap.md) に整理する。TTS の冪等化と Take 添付の一体化（`tts.attachBulk`）は実装済みで、視覚確認（R3-4）は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) へ切り出して実装した。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。
+- 操作契約のダイジェストとプロトコル版、素材検索の索引化、Voice／Face Set の読み取り面、Job 操作の一般化、スキル配布などの拡張候補は [roadmap.md](./roadmap.md) に整理する。TTS の冪等化と Take 添付の一体化（`tts.attachBulk`）は実装済みで、視覚確認（R3-4）は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) へ切り出して実装した。制作履歴・復旧（R2-4）は `script.listVersions` / `script.restore` / `work.clone` として実装済みである。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。

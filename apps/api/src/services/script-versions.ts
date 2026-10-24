@@ -64,6 +64,7 @@ import {
   getCompositionDurationsByVersionId,
 } from "./compositions.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
+import { normalizeAgentId } from "./attribution.ts";
 
 export interface SaveScriptVersionResult {
   scriptVersion: ScriptVersionDto;
@@ -98,14 +99,6 @@ export interface SaveScriptVersionGuard {
   staleError: () => Error;
 }
 
-function nonEmptyOrNull(value: string | null | undefined): string | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed;
-}
-
 function normalizeScriptVersionAttribution(
   attribution: ScriptVersionAttribution | undefined,
 ): NormalizedScriptVersionAttribution {
@@ -120,9 +113,9 @@ function normalizeScriptVersionAttribution(
   }
   return {
     author,
-    authorAgentId: nonEmptyOrNull(attribution?.authorAgentId),
-    agentRequestId: nonEmptyOrNull(attribution?.agentRequestId),
-    agentRequestHash: nonEmptyOrNull(attribution?.agentRequestHash),
+    authorAgentId: normalizeAgentId(attribution?.authorAgentId),
+    agentRequestId: normalizeAgentId(attribution?.agentRequestId),
+    agentRequestHash: normalizeAgentId(attribution?.agentRequestHash),
   };
 }
 
@@ -521,6 +514,11 @@ export async function getCurrentScriptVersion(
   return toScriptVersion(current, deserializeContent(current.contentJson));
 }
 
+export interface ScriptVersionHistory {
+  currentScriptVersionId: string;
+  scriptVersions: ScriptVersionSummary[];
+}
+
 export async function listScriptVersions(
   prisma: PrismaClient,
   editionId: string,
@@ -531,6 +529,31 @@ export async function listScriptVersions(
     orderBy: { versionNumber: "desc" },
   });
   return rows.map(toScriptVersionSummary);
+}
+
+/**
+ * The Edition's version history and its current version id. The Agent surface
+ * needs both in one read so it can choose a restore source and a base guard
+ * without a second call.
+ */
+export async function getScriptVersionHistory(
+  prisma: PrismaClient,
+  editionId: string,
+): Promise<ScriptVersionHistory> {
+  const edition = await prisma.languageEdition.findUnique({
+    where: { id: editionId },
+    select: { currentScriptVersionId: true },
+  });
+  if (edition === null) {
+    throw resourceNotFound("language_edition", editionId);
+  }
+  if (edition.currentScriptVersionId === null) {
+    throw new ApiError(500, "INTERNAL_ERROR", "現在の台本版が設定されていません。");
+  }
+  return {
+    currentScriptVersionId: edition.currentScriptVersionId,
+    scriptVersions: await listScriptVersions(prisma, editionId),
+  };
 }
 
 export async function getScriptVersion(

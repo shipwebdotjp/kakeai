@@ -16,6 +16,11 @@ _Avoid_: Translation, locale
 An immutable version of the editorial structure for one Language Edition.
 _Avoid_: Composition HTML, timeline
 
+**Script Version Restore**:
+Creating a new Script Version from an earlier version's content, recording the
+earlier version as its source. The earlier version is never modified.
+_Avoid_: rollback, undo
+
 **Version Author**:
 The user or Agent recorded as the creator of a Script Version, used to identify and revert AI-authored revisions.
 _Avoid_: owner, editor

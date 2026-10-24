@@ -51,6 +51,7 @@ export function fixtureScriptVersion(
     authorAgentId: "mcp",
     agentRequestId: `request-${versionNumber}`,
     agentRequestHash: `hash-${versionNumber}`,
+    sourceScriptVersionId: null,
     createdAt: FIXTURE_TIMESTAMP,
     content: validContentDocument(),
   };

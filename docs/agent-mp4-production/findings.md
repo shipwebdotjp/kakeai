@@ -1,10 +1,12 @@
 # エージェントMP4制作 調査結果
 
-> **実装状況（2026-10-24）**: 本調査で挙げた P1 / P2 の項目は、実装または
+> **実装状況（2026-10-24）**: 本調査で挙げた P1 / P2 / P4 の項目は、実装または
 > ガイド路線で対応済み。
 > en-US の初期台本は P1 で修正し、`job.list` の `kind` と `script.save` の
 > 基準版ガード / source は P2 で追加した。`work.create` の冪等化は
 > `requestId` を追加せず、`work.list` で確認するガイド路線としている。
+> P4 で `script.listVersions` / `script.restore` / `work.clone` を追加し、
+> `work.list` は `createdAt` / `parentWorkId` を返すようになった。
 
 ## 調査の前提
 
@@ -156,21 +158,26 @@ Job は一覧できなかった
 - 素材取り込みは内容ハッシュで重複排除されるため、再取り込みの実害は小さい。
 - 完了した TTS Job は `ttsResult.narrationSegmentId` でセリフに対応づけられる。
 
-### 2.5 再送・冪等の穴（P2で一部解消）
+### 2.5 再送・冪等の穴（P2 / P4で一部解消）
 
-- `work.create` は `requestId` を持たない。タイムアウト後の再送で Work が
-  増え得る。P2 では `requestId` を追加せず、`work.list` で確認してから
-  再実行するガイド路線にした。
+- `work.create` と `work.clone` は operation の `requestId` を持たない。
+  タイムアウト後の再送で Work が増え得る。P2 / P4 では `requestId` を追加せず、
+  `work.list` の `createdAt` / `parentWorkId` で確認してから再実行する
+  ガイド路線にした。トランスポートの `requestId` は応答の対応づけ用で、
+  再送の重複排除ではない。
 - `script.save` は `requestId` を持たない。P2 で任意の
   `baseScriptVersionId`（基準版ガード）と `sourceScriptVersionId`
   （同一 Edition の復元元）を追加した。基準版を指定しない場合は従来どおり
   last-write-wins で、再送すると版が増える。翻訳元の別 Edition は
   `sourceScriptVersionId` では記録できない。
+- P4 で `script.restore` を追加した。復元元の ID だけを送り、サーバーが内容を
+  読む。必須の `requestId` は版単位で冪等（`script.edit` と同じ）であり、
+  同じ入力の再送で版が増えない。current を復元元にすると `VALIDATION_ERROR`。
 - `asset.tag` はタグ全体の置換なので、読み→書きの間に人間が編集すると
   上書きする。
 - 高コスト操作（`tts.create` / `tts.createBulk` / `render.start` /
   `composition.publish`）は `requestId` で冪等化される。
-  `script.edit` と `tts.attachBulk` は版単位で冪等。
+  `script.edit` / `script.restore` / `tts.attachBulk` は版単位で冪等。
 
 MP4主線は `script.edit` と `render.start(requestId)` を使うため、
 この穴の影響は限定的である。全体取り込みで基準版ガードを使う運用は
@@ -248,9 +255,9 @@ MP4主線では `preview.frame` を必須にしないことで、このコスト
 | SRT字幕 | 人間 / 将来 | エージェント操作が無い。HTTPの字幕ダウンロードはある |
 | YouTube投稿設定・チャプター | 人間 / 将来 | 現時点で未実装（[`docs/youtube-publication/plan.md`](../youtube-publication/plan.md)） |
 | MP4 Artifact のダウンロード | 人間 / 将来 | Artifact content のエージェント操作が無い |
-| 下書きプレビュー・視覚確認 | 将来 | レンダー前確認は別スコープ |
-| 素材画像の確認 | 将来 | `assets/:id/frame` 相当のエージェント操作が無い |
-| 版履歴・復元・Work複製 | 一部実装 / 将来 | 同一 Edition の復元は `script.save` の `sourceScriptVersionId` で可能。履歴一覧・Work複製は将来 |
+| 下書きプレビュー・視覚確認 | 一部実装 | 保存版・素材のプレビューは `preview.scriptFrame` / `preview.assetFrame` で実装済み。下書き・複数フレームは将来 |
+| 素材画像の確認 | 実装済み | `preview.assetFrame` で画像は原本、動画は静止画 PNG を返す |
+| 版履歴・復元・Work複製 | P4で実装済み | `script.listVersions` / `script.restore` / `work.clone`。Work 作成・複製は `work.list` でタイムアウト回復 |
 | Theme / Face Set / Voice Profile の管理 | 将来 | 人専用の境界を維持 |
 | 縦型（9:16）の完成動画 | 対象外 | 出力は 1920x1080。portrait は Composition の入れ子のみ |
 | リモート/クラウド接続、アプリ自動起動 | 対象外 | 現行の非ゴール |

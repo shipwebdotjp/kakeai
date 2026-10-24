@@ -55,6 +55,7 @@ const scriptVersion = {
   authorAgentId: "agent-1",
   agentRequestId: "edit-1",
   agentRequestHash: "hash-1",
+  sourceScriptVersionId: null,
   createdAt: "2026-10-21T00:00:00.000Z",
   content: validContentDocument(),
 };
