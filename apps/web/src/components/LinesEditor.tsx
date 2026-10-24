@@ -89,6 +89,8 @@ interface LinesEditorProps {
   faceSetsReady: boolean;
   onSplitScene: (sceneIndex: number, lineIndex: number) => void;
   onJumpToLine?: (lineId: string) => void;
+  /** SceneEditor側の折りたたみ内に置くときは外枠と見出しを出さない */
+  bare?: boolean;
 }
 
 function formatDuration(durationMs: number): string {
@@ -899,6 +901,7 @@ export function LinesEditor({
   faceSetsReady,
   onSplitScene,
   onJumpToLine,
+  bare = false,
 }: LinesEditorProps) {
   const { fields, replace } = useFieldArray({
     control,
@@ -1003,8 +1006,8 @@ export function LinesEditor({
   };
 
   return (
-    <div className={editAreaClass}>
-      <h4 className="mb-2 text-sm font-semibold text-foreground">セリフ</h4>
+    <div className={bare ? undefined : editAreaClass}>
+      {!bare && <h4 className="mb-2 text-sm font-semibold text-foreground">セリフ</h4>}
       {fields.map((field, lineIndex) => {
         const line = watchedLines[lineIndex];
         if (line === undefined) {

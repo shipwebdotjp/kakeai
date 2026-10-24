@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -15,6 +15,7 @@ import {
   useForm,
   useWatch,
   type Control,
+  type UseFormGetValues,
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
@@ -26,8 +27,11 @@ import {
   type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
   type ContentDocument,
+  type FaceSet,
   type ScriptOperation,
   type ScriptVersion,
+  type VoiceAdapterId,
+  type VoiceProfile,
   type Warning,
   type ThemeAccentToken,
   type TtsJobResult,
@@ -79,6 +83,7 @@ import {
 import { SCENE_LABELS, sceneDisplayName } from "../content/labels";
 import { sceneNavProjection } from "../content/navProjection";
 import { AssetThumbnail, assetLabel } from "../lib/assets";
+import type { AdapterVoicesState } from "../lib/voiceAdapters";
 import {
   captureEditorScrollAnchor,
   restoreEditorScrollAnchor,
@@ -88,12 +93,15 @@ import {
 import { errorMessage } from "../lib/errorMessage";
 import type { UnsavedDocumentState } from "../lib/useDraftPreview";
 import {
+  badgeDangerClass,
   badgeInfoClass,
   badgeNeutralClass,
+  badgeWarningClass,
   buttonDangerClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   colorFieldClass,
+  detailsSummaryClass,
   editAreaClass,
   errorTextClass,
   formLabelClass,
@@ -105,7 +113,11 @@ import {
   textFieldClass,
 } from "../ui";
 import { CharacterFields } from "./CharacterFields";
-import { Collapsible, useStoredCollapsible } from "./Collapsible";
+import { Collapsible, useCollapsibleStore, useStoredCollapsible } from "./Collapsible";
+import {
+  sceneFoldKey,
+  sectionFoldKey,
+} from "../lib/collapseState";
 import { CueList, ScriptSkinProvider } from "./CueList";
 import { LinesEditor } from "./LinesEditor";
 import { MediaPicker } from "./MediaPicker";
@@ -343,6 +355,8 @@ interface InsertSceneFieldsProps {
   register: UseFormRegister<DocumentFormValues>;
   setValue: UseFormSetValue<DocumentFormValues>;
   onError: (message: string) => void;
+  /** SceneEditor側の折りたたみ内に置くときは外枠を出さない */
+  bare?: boolean;
 }
 
 function InsertSceneFields({
@@ -354,6 +368,7 @@ function InsertSceneFields({
   register,
   setValue,
   onError,
+  bare = false,
 }: InsertSceneFieldsProps) {
   const mainCueIndex = resolveMainCueIndex(scene.cues, scene.mainVisualCueId);
   const mainCue = mainCueIndex === -1 ? undefined : scene.cues[mainCueIndex];
@@ -417,7 +432,7 @@ function InsertSceneFields({
   };
 
   return (
-    <div className={`${editAreaClass} flex flex-col gap-2`}>
+    <div className={bare ? "flex flex-col gap-2" : `${editAreaClass} flex flex-col gap-2`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">インサート動画</span>
         {asset === undefined ? (
@@ -560,6 +575,314 @@ function InsertSceneFields({
   );
 }
 
+interface SceneBlockProps {
+  control: Control<DocumentFormValues>;
+  register: UseFormRegister<DocumentFormValues>;
+  getValues: UseFormGetValues<DocumentFormValues>;
+  setValue: UseFormSetValue<DocumentFormValues>;
+  base: ContentDocument;
+  scene: SceneFormValue;
+  sceneIndex: number;
+  pointOrdinal: number;
+  prevKind: SceneFormValue["kind"] | undefined;
+  nextKind: SceneFormValue["kind"] | undefined;
+  durationMs: number | null;
+  durationError: string | null;
+  durationLines: readonly {
+    lineId: string;
+    startMs: number;
+    endMs: number;
+    gapBeforeMs: number;
+    durationMs: number;
+  }[];
+  errorCount: number;
+  warningCount: number;
+  assets: readonly Asset[];
+  assetsLoading: boolean;
+  assetsError: boolean;
+  speakers: SpeakerFormValue[];
+  characters: CharacterFormValue[];
+  voiceProfiles: VoiceProfile[];
+  adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
+  savedVoiceByLineId: ReadonlyMap<string, string | null>;
+  bulkRunning: boolean;
+  faceSets: FaceSet[];
+  faceSetsReady: boolean;
+  scriptVersionId: string;
+  onMove: (sceneIndex: number, direction: -1 | 1) => void;
+  onRemoveScene: (sceneIndex: number) => void;
+  onClonePrevious: (sceneIndex: number) => void;
+  onRemoveCue: (sceneIndex: number, cueId: string) => void;
+  onCommitCue: (sceneIndex: number, cueId: string) => void;
+  onCommitStanding: (sceneIndex: number, side: "left" | "right") => void;
+  onCommitAudioCue: (sceneIndex: number, cueIndex: number) => void;
+  onSplitScene: (sceneIndex: number, lineIndex: number) => void;
+  onJumpToLine?: (lineId: string) => void;
+  onWarnings: (warnings: Warning[]) => void;
+  onError: (message: string) => void;
+}
+
+function SceneBlock(props: SceneBlockProps) {
+  const { scene, sceneIndex } = props;
+  const [sceneOpen, setSceneOpen] = useStoredCollapsible(sceneFoldKey(scene.id), false);
+  const bodyId = useId();
+  const displayName = sceneDisplayName(scene, props.pointOrdinal);
+  const lineCount = scene.lines.length;
+  const cueCount = scene.cues.length;
+  const audioCount = scene.audioCues.length;
+  const unvoicedCount =
+    scene.kind === "point"
+      ? scene.lines.filter((line) => line.selectedAudioTakeId === null).length
+      : 0;
+  const durationText =
+    props.durationMs !== null
+      ? `${(props.durationMs / 1000).toFixed(1)}秒`
+      : (props.durationError ?? "尺不明");
+  const headerSummary =
+    scene.kind === "point"
+      ? `セリフ${lineCount}件・映像演出${cueCount}件・${durationText}`
+      : `映像演出${cueCount}件・${durationText}`;
+
+  return (
+    <section id={`scene-${scene.id}`} className={sectionCardClass}>
+      <div className="mt-0 mb-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          aria-expanded={sceneOpen}
+          aria-controls={bodyId}
+          aria-label={`シーン「${displayName}」を${sceneOpen ? "閉じる" : "開く"}`}
+          onClick={() => setSceneOpen(!sceneOpen)}
+          className={detailsSummaryClass}
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 shrink-0 transition-transform ${sceneOpen ? "" : "-rotate-90"}`}
+          />
+          <span className="font-normal text-muted-foreground">{headerSummary}</span>
+          {unvoicedCount > 0 && (
+            <span className={badgeWarningClass}>未音声{unvoicedCount}件</span>
+          )}
+          {props.errorCount > 0 && (
+            <span className={badgeDangerClass}>エラー{props.errorCount}件</span>
+          )}
+          {props.warningCount > 0 && (
+            <span className={badgeWarningClass}>警告{props.warningCount}件</span>
+          )}
+        </button>
+        <input
+          aria-label="シーン名"
+          placeholder="シーン名"
+          className={`min-w-[160px] flex-1 font-semibold ${textFieldClass}`}
+          {...props.register(`scenes.${sceneIndex}.label`)}
+        />
+        <span className={scene.kind === "point" ? badgeInfoClass : badgeNeutralClass}>
+          {SCENE_LABELS[scene.kind] ?? scene.kind}
+        </span>
+        <span className="font-mono text-xs text-muted-foreground">{scene.id}</span>
+        {(scene.kind === "point" || scene.kind === "insert") && (
+          <span className="ml-auto flex gap-1">
+            {scene.kind === "point" && (
+              <button
+                type="button"
+                className={buttonNeutralClass}
+                disabled={props.prevKind !== "point"}
+                onClick={() => props.onClonePrevious(sceneIndex)}
+              >
+                <Copy aria-hidden="true" className="h-4 w-4" />
+                前のシーンを複製
+              </button>
+            )}
+            <button
+              type="button"
+              className={iconButtonLargeClass}
+              aria-label="上へ移動"
+              title="上へ移動"
+              disabled={!isMiddleScene(props.prevKind)}
+              onClick={() => props.onMove(sceneIndex, -1)}
+            >
+              <ChevronUp aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className={iconButtonLargeClass}
+              aria-label="下へ移動"
+              title="下へ移動"
+              disabled={!isMiddleScene(props.nextKind)}
+              onClick={() => props.onMove(sceneIndex, 1)}
+            >
+              <ChevronDown aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className={buttonDangerClass}
+              onClick={() => props.onRemoveScene(sceneIndex)}
+            >
+              <Trash2 aria-hidden="true" className="h-4 w-4" />
+              削除
+            </button>
+          </span>
+        )}
+      </div>
+
+      <div id={bodyId} hidden={!sceneOpen}>
+        <Collapsible title="シーン設定" summary={sceneSettingsSummary(scene, sceneIndex)} storageKey={`scene-settings-${scene.id}`}>
+          <TimingFields
+            control={props.control}
+            register={props.register}
+            setValue={props.setValue}
+            sceneIndex={sceneIndex}
+            sceneKind={scene.kind}
+            insertLoop={
+              scene.kind === "insert" &&
+              scene.cues.find((cue) => cue.id === scene.mainVisualCueId)?.fields.loop ===
+                "true"
+            }
+          />
+
+          <Collapsible title="尺の内訳" className="mt-1 text-xs" storageKey={`scene-duration-${scene.id}`}>
+            {(() => {
+              if (props.durationMs === null) {
+                return props.durationError !== null ? <p>尺の計算: {props.durationError}</p> : null;
+              }
+              return (
+                <>
+                  <p>シーン尺: {(props.durationMs / 1000).toFixed(1)}秒</p>
+                  {props.durationLines.length > 0 && (
+                    <ol className="my-1 ml-4 list-decimal p-0">
+                      {props.durationLines.flatMap((line) => {
+                        const entries: { key: string; text: string }[] = [];
+                        if (line.gapBeforeMs > 0) {
+                          entries.push({
+                            key: `${line.lineId}-gap`,
+                            text: `間 ${((line.startMs - line.gapBeforeMs) / 1000).toFixed(2)}s 〜 ${(line.startMs / 1000).toFixed(2)}s（${(line.gapBeforeMs / 1000).toFixed(2)}秒）`,
+                          });
+                        }
+                        entries.push({
+                          key: line.lineId,
+                          text: `${(line.startMs / 1000).toFixed(2)}s 〜 ${(line.endMs / 1000).toFixed(2)}s（${(line.durationMs / 1000).toFixed(2)}秒）`,
+                        });
+                        return entries;
+                      }).map((entry) => (
+                        <li key={entry.key}>{entry.text}</li>
+                      ))}
+                    </ol>
+                  )}
+                </>
+              );
+            })()}
+          </Collapsible>
+        </Collapsible>
+
+        <Collapsible
+          title={
+            scene.kind === "insert"
+              ? `映像演出（インサート動画）`
+              : `映像演出（${cueCount}件）`
+          }
+          storageKey={sectionFoldKey(scene.id, "visual")}
+          defaultOpen
+          className={editAreaClass}
+        >
+          {scene.kind === "insert" ? (
+            <InsertSceneFields
+              scene={scene}
+              sceneIndex={sceneIndex}
+              assets={props.assets}
+              assetsLoading={props.assetsLoading}
+              assetsError={props.assetsError}
+              register={props.register}
+              setValue={props.setValue}
+              onError={props.onError}
+              bare
+            />
+          ) : (
+            <CueList
+              control={props.control}
+              register={props.register}
+              setValue={props.setValue}
+              getValues={props.getValues}
+              sceneIndex={sceneIndex}
+              sceneId={scene.id}
+              lines={scene.lines}
+              speakers={props.speakers}
+              sceneDurationMs={props.durationMs}
+              onRemoveCue={(cueId) => props.onRemoveCue(sceneIndex, cueId)}
+              onCommitCue={(cueId) => props.onCommitCue(sceneIndex, cueId)}
+              bare
+            />
+          )}
+        </Collapsible>
+
+        {scene.kind !== "insert" && (
+          <StandingFields
+            control={props.control}
+            register={props.register}
+            getValues={props.getValues}
+            setValue={props.setValue}
+            sceneIndex={sceneIndex}
+            sceneId={scene.id}
+            characters={props.characters}
+            onCommitStanding={(side) => props.onCommitStanding(sceneIndex, side)}
+          />
+        )}
+
+        <Collapsible
+          title={
+            audioCount === 0 ? "シーン音声（未設定）" : `シーン音声（${audioCount}件）`
+          }
+          storageKey={sectionFoldKey(scene.id, "audio")}
+          defaultOpen
+          className={editAreaClass}
+        >
+          <SceneAudioFields
+            control={props.control}
+            register={props.register}
+            getValues={props.getValues}
+            setValue={props.setValue}
+            sceneIndex={sceneIndex}
+            onCommitAudioCue={(cueIndex) => props.onCommitAudioCue(sceneIndex, cueIndex)}
+            bare
+          />
+        </Collapsible>
+
+        {scene.kind === "point" && (
+          <Collapsible
+            title={`セリフ（${lineCount}件）`}
+            summary={unvoicedCount > 0 ? `未音声${unvoicedCount}件` : undefined}
+            storageKey={sectionFoldKey(scene.id, "lines")}
+            defaultOpen
+            className={editAreaClass}
+          >
+            <LinesEditor
+              control={props.control}
+              register={props.register}
+              getValues={props.getValues}
+              setValue={props.setValue}
+              base={props.base}
+              onError={props.onError}
+              sceneIndex={sceneIndex}
+              sceneId={scene.id}
+              scriptVersionId={props.scriptVersionId}
+              speakers={props.speakers}
+              characters={props.characters}
+              voiceProfiles={props.voiceProfiles}
+              adapterVoices={props.adapterVoices}
+              savedVoiceByLineId={props.savedVoiceByLineId}
+              bulkRunning={props.bulkRunning}
+              faceSets={props.faceSets}
+              faceSetsReady={props.faceSetsReady}
+              onSplitScene={props.onSplitScene}
+              onJumpToLine={props.onJumpToLine}
+              onWarnings={props.onWarnings}
+              bare
+            />
+          </Collapsible>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValuesChange, onJumpToLine, onJumpToTarget, onDocumentChange, onDirtyChange, scrollContainerRef }: SceneEditorProps) {
   const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
@@ -629,6 +952,14 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
   const watchedScenes = useMemo(() => watchedScenesValue ?? [], [watchedScenesValue]);
   const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
   const watchedSpeakers = useWatch({ control, name: "speakers" }) ?? [];
+
+  const foldStore = useCollapsibleStore();
+  const openScene = useCallback(
+    (sceneId: string) => {
+      foldStore?.set(sceneFoldKey(sceneId), true);
+    },
+    [foldStore],
+  );
 
   const pendingScrollRef = useRef<PendingEditorScroll | null>(null);
 
@@ -994,6 +1325,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     });
     const newSceneId = next?.result.created.sceneIds[0];
     if (newSceneId !== undefined) {
+      openScene(newSceneId);
       revealTarget(`scene-${newSceneId}`);
     }
   };
@@ -1004,14 +1336,17 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     if (previous === undefined || previous.kind !== "point") {
       return;
     }
+    const clonedSceneId = newSceneId(collectSceneIds(scenes));
     insert(
       index,
       cloneSceneFormValue(
         previous as SceneFormValue & { kind: "point" },
-        newSceneId(collectSceneIds(scenes)),
+        clonedSceneId,
         nextPointLabel(scenes, index),
       ),
     );
+    openScene(clonedSceneId);
+    revealTarget(`scene-${clonedSceneId}`);
   };
 
   const onInsertVideo = (assetId: string | null) => {
@@ -1038,6 +1373,7 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     });
     const newSceneId = next?.result.created.sceneIds[0];
     if (newSceneId !== undefined) {
+      openScene(newSceneId);
       revealTarget(`scene-${newSceneId}`);
     }
   };
@@ -1071,11 +1407,18 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     if (scene === undefined || scene.kind !== "point" || lineId === undefined) {
       return;
     }
-    runStructural({
+    const next = runStructural({
       op: "scene.splitAtLine",
       sceneId: scene.id,
       lineId,
     });
+    const created = next?.result.created.sceneIds ?? [];
+    for (const createdId of created) {
+      openScene(createdId);
+    }
+    if (created[0] !== undefined) {
+      revealTarget(`scene-${created[0]}`);
+    }
   };
 
   const bulkCandidateCount = useMemo(() => bulkTtsCandidateLineIds(base).length, [base]);
@@ -1257,6 +1600,34 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     [timing.placements],
   );
 
+  const diagBySceneId = useMemo(() => {
+    const map = new Map<string, { errors: number; warnings: number }>();
+    const add = (path: (string | number)[] | undefined, kind: "errors" | "warnings") => {
+      if (
+        path === undefined ||
+        path.length < 2 ||
+        path[0] !== "scenes" ||
+        typeof path[1] !== "number"
+      ) {
+        return;
+      }
+      const scene = watchedScenes[path[1]];
+      if (scene === undefined) {
+        return;
+      }
+      const entry = map.get(scene.id) ?? { errors: 0, warnings: 0 };
+      entry[kind] += 1;
+      map.set(scene.id, entry);
+    };
+    for (const diag of diagnostics.errors) {
+      add(diag.path, "errors");
+    }
+    for (const diag of diagnostics.warnings) {
+      add(diag.path, "warnings");
+    }
+    return map;
+  }, [diagnostics, watchedScenes]);
+
   const watchedBgm = allValues?.bgm;
 
   return (
@@ -1274,6 +1645,32 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         >
           <Save aria-hidden="true" className="h-4 w-4" />
           保存
+        </button>
+        <button
+          type="button"
+          className={buttonNeutralClass}
+          disabled={watchedScenes.length === 0}
+          onClick={() =>
+            foldStore?.setMany(
+              watchedScenes.map((scene) => sceneFoldKey(scene.id)),
+              true,
+            )
+          }
+        >
+          すべて開く
+        </button>
+        <button
+          type="button"
+          className={buttonNeutralClass}
+          disabled={watchedScenes.length === 0}
+          onClick={() =>
+            foldStore?.setMany(
+              watchedScenes.map((scene) => sceneFoldKey(scene.id)),
+              false,
+            )
+          }
+        >
+          すべて閉じる
         </button>
         {diagnostics.errors.length > 0 && (
           <button
@@ -1610,197 +2007,50 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
         if (scene === undefined) {
           return null;
         }
+        const placement = placementBySceneId.get(scene.id);
+        const diag = diagBySceneId.get(scene.id) ?? { errors: 0, warnings: 0 };
         return (
-          <section
+          <SceneBlock
             key={field.id}
-            id={`scene-${scene.id}`}
-            className={sectionCardClass}
-          >
-            <div className="mt-0 mb-2 flex flex-wrap items-center gap-2">
-              <input
-                aria-label="シーン名"
-                placeholder="シーン名"
-                className={`min-w-[160px] flex-1 font-semibold ${textFieldClass}`}
-                {...register(`scenes.${sceneIndex}.label`)}
-              />
-              <span className={scene.kind === "point" ? badgeInfoClass : badgeNeutralClass}>
-                {SCENE_LABELS[scene.kind] ?? scene.kind}
-              </span>
-              <span className="font-mono text-xs text-muted-foreground">{scene.id}</span>
-              {(scene.kind === "point" || scene.kind === "insert") && (
-                <span className="ml-auto flex gap-1">
-                  {scene.kind === "point" && (
-                    <button
-                      type="button"
-                      className={buttonNeutralClass}
-                      disabled={watchedScenes[sceneIndex - 1]?.kind !== "point"}
-                      onClick={() => onClonePrevious(sceneIndex)}
-                    >
-                      <Copy aria-hidden="true" className="h-4 w-4" />
-                      前のシーンを複製
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className={iconButtonLargeClass}
-                    aria-label="上へ移動"
-                    title="上へ移動"
-                    disabled={
-                      !isMiddleScene(watchedScenes[sceneIndex - 1]?.kind)
-                    }
-                    onClick={() => onMove(sceneIndex, -1)}
-                  >
-                    <ChevronUp aria-hidden="true" className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    className={iconButtonLargeClass}
-                    aria-label="下へ移動"
-                    title="下へ移動"
-                    disabled={
-                      !isMiddleScene(watchedScenes[sceneIndex + 1]?.kind)
-                    }
-                    onClick={() => onMove(sceneIndex, 1)}
-                  >
-                    <ChevronDown aria-hidden="true" className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    className={buttonDangerClass}
-                    onClick={() => onRemoveScene(sceneIndex)}
-                  >
-                    <Trash2 aria-hidden="true" className="h-4 w-4" />
-                    削除
-                  </button>
-                </span>
-              )}
-            </div>
-
-            <Collapsible title="シーン設定" summary={sceneSettingsSummary(scene, sceneIndex)} storageKey={`scene-settings-${scene.id}`}>
-              <TimingFields
-                control={control}
-                register={register}
-                setValue={setValue}
-                sceneIndex={sceneIndex}
-                sceneKind={scene.kind}
-                insertLoop={
-                  scene.kind === "insert" &&
-                  scene.cues.find((cue) => cue.id === scene.mainVisualCueId)?.fields.loop ===
-                    "true"
-                }
-              />
-
-              <Collapsible title="尺の内訳" className="mt-1 text-xs" storageKey={`scene-duration-${scene.id}`}>
-                {(() => {
-                  const placement = placementBySceneId.get(scene.id);
-                  if (placement === undefined) {
-                    return timing.error !== null ? <p>尺の計算: {timing.error}</p> : null;
-                  }
-                  return (
-                    <>
-                      <p>シーン尺: {(placement.durationMs / 1000).toFixed(1)}秒</p>
-                      {placement.lines.length > 0 && (
-                        <ol className="my-1 ml-4 list-decimal p-0">
-                          {placement.lines.flatMap((line) => {
-                            const entries: { key: string; text: string }[] = [];
-                            if (line.gapBeforeMs > 0) {
-                              entries.push({
-                                key: `${line.lineId}-gap`,
-                                text: `間 ${((line.startMs - line.gapBeforeMs) / 1000).toFixed(2)}s 〜 ${(line.startMs / 1000).toFixed(2)}s（${(line.gapBeforeMs / 1000).toFixed(2)}秒）`,
-                              });
-                            }
-                            entries.push({
-                              key: line.lineId,
-                              text: `${(line.startMs / 1000).toFixed(2)}s 〜 ${(line.endMs / 1000).toFixed(2)}s（${(line.durationMs / 1000).toFixed(2)}秒）`,
-                            });
-                            return entries;
-                          }).map((entry) => (
-                            <li key={entry.key}>{entry.text}</li>
-                          ))}
-                        </ol>
-                      )}
-                    </>
-                  );
-                })()}
-              </Collapsible>
-            </Collapsible>
-
-            {scene.kind === "insert" ? (
-              <InsertSceneFields
-                scene={scene}
-                sceneIndex={sceneIndex}
-                assets={assetsQuery.data ?? []}
-                assetsLoading={assetsQuery.isLoading}
-                assetsError={assetsQuery.isError}
-                register={register}
-                setValue={setValue}
-                onError={showMessage}
-              />
-            ) : (
-              <CueList
-                control={control}
-                register={register}
-                setValue={setValue}
-                getValues={getValues}
-                sceneIndex={sceneIndex}
-                sceneId={scene.id}
-                lines={scene.lines}
-                speakers={watchedSpeakers}
-                sceneDurationMs={placementBySceneId.get(scene.id)?.durationMs ?? null}
-                onRemoveCue={(cueId) => onRemoveCue(sceneIndex, cueId)}
-                onCommitCue={(cueId) => onCommitCue(sceneIndex, cueId)}
-              />
-            )}
-
-            {scene.kind !== "insert" && (
-              <StandingFields
-                control={control}
-                register={register}
-                getValues={getValues}
-                setValue={setValue}
-                sceneIndex={sceneIndex}
-                sceneId={scene.id}
-                characters={watchedCharacters}
-                onCommitStanding={(side) => onCommitStanding(sceneIndex, side)}
-              />
-            )}
-
-            <SceneAudioFields
-              control={control}
-              register={register}
-              getValues={getValues}
-              setValue={setValue}
-              sceneIndex={sceneIndex}
-              onCommitAudioCue={(cueIndex) =>
-                onCommitAudioCue(sceneIndex, cueIndex)
-              }
-            />
-
-            {scene.kind === "point" && (
-                <LinesEditor
-                  control={control}
-                  register={register}
-                  getValues={getValues}
-                  setValue={setValue}
-                  base={base}
-                  onError={showMessage}
-                  sceneIndex={sceneIndex}
-                  sceneId={scene.id}
-                  scriptVersionId={scriptVersionId}
-                  speakers={watchedSpeakers}
-                  characters={watchedCharacters}
-                  voiceProfiles={voiceProfiles.data ?? []}
-                  adapterVoices={adapterVoices}
-                  savedVoiceByLineId={savedVoiceByLineId}
-                  bulkRunning={bulkGenerate.isPending}
-                  faceSets={faceSets.data ?? []}
-                  faceSetsReady={faceSets.isSuccess}
-                  onSplitScene={onSplitScene}
-                  onJumpToLine={onJumpToLine}
-                  onWarnings={showWarnings}
-                />
-            )}
-          </section>
+            control={control}
+            register={register}
+            getValues={getValues}
+            setValue={setValue}
+            base={base}
+            scene={scene}
+            sceneIndex={sceneIndex}
+            pointOrdinal={pointOrdinals[sceneIndex] ?? 0}
+            prevKind={watchedScenes[sceneIndex - 1]?.kind}
+            nextKind={watchedScenes[sceneIndex + 1]?.kind}
+            durationMs={placement?.durationMs ?? null}
+            durationError={timing.error}
+            durationLines={placement?.lines ?? []}
+            errorCount={diag.errors}
+            warningCount={diag.warnings}
+            assets={assetsQuery.data ?? []}
+            assetsLoading={assetsQuery.isLoading}
+            assetsError={assetsQuery.isError}
+            speakers={watchedSpeakers}
+            characters={watchedCharacters}
+            voiceProfiles={voiceProfiles.data ?? []}
+            adapterVoices={adapterVoices}
+            savedVoiceByLineId={savedVoiceByLineId}
+            bulkRunning={bulkGenerate.isPending}
+            faceSets={faceSets.data ?? []}
+            faceSetsReady={faceSets.isSuccess}
+            scriptVersionId={scriptVersionId}
+            onMove={onMove}
+            onRemoveScene={onRemoveScene}
+            onClonePrevious={onClonePrevious}
+            onRemoveCue={onRemoveCue}
+            onCommitCue={onCommitCue}
+            onCommitStanding={onCommitStanding}
+            onCommitAudioCue={onCommitAudioCue}
+            onSplitScene={onSplitScene}
+            onJumpToLine={onJumpToLine}
+            onWarnings={showWarnings}
+            onError={showMessage}
+          />
         );
       })}
       </ScriptSkinProvider>
@@ -1854,7 +2104,16 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       scenes={watchedScenes}
       speakers={watchedSpeakers}
       disabled={save.isPending}
-      onApply={(nextScenes) => replaceScenes(nextScenes)}
+      onApply={(nextScenes) => {
+        const prevIds = new Set(getValues("scenes").map((scene) => scene.id));
+        replaceScenes(nextScenes);
+        foldStore?.setMany(
+          nextScenes
+            .filter((scene) => !prevIds.has(scene.id))
+            .map((scene) => sceneFoldKey(scene.id)),
+          true,
+        );
+      }}
     />
     </>
   );

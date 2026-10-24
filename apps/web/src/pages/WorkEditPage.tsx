@@ -7,7 +7,13 @@ import { CueMap } from "../components/CueMap";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
-import { CollapsibleStateProvider } from "../components/Collapsible";
+import { CollapsibleStateProvider, useCollapsibleStore } from "../components/Collapsible";
+import {
+  foldStorageKey,
+  sceneFoldKey,
+  sectionFoldKey,
+  type SceneSectionKind,
+} from "../lib/collapseState";
 import { errorMessage } from "../lib/errorMessage";
 import { findEditorTarget, scrollEditorTargetIntoView } from "../lib/editorScroll";
 import { PreviewControllerProvider, usePreviewActions } from "../lib/PreviewController";
@@ -374,8 +380,18 @@ interface WorkEditPanesProps {
 }
 
 function WorkEditPanes(props: WorkEditPanesProps) {
+  const persistence = useMemo(
+    () => ({
+      storage: getLayoutStorage(),
+      storageKey: foldStorageKey(`${props.workId ?? ""}/${props.editionId ?? ""}`),
+    }),
+    [props.workId, props.editionId],
+  );
   return (
-    <CollapsibleStateProvider resetKey={`${props.workId ?? ""}/${props.editionId ?? ""}`}>
+    <CollapsibleStateProvider
+      resetKey={`${props.workId ?? ""}/${props.editionId ?? ""}`}
+      persistence={persistence}
+    >
       <WorkEditPanesContent {...props} />
     </CollapsibleStateProvider>
   );
@@ -392,6 +408,7 @@ function WorkEditPanesContent({
   onDirtyChange,
 }: WorkEditPanesProps) {
   const actions = usePreviewActions();
+  const foldStore = useCollapsibleStore();
   const [formScenes, setFormScenes] = useState<SceneFormValue[] | null>(null);
   const [formCharacters, setFormCharacters] = useState<CharacterFormValue[]>([]);
   const [activeTargetId, setActiveTargetId] = useState<string | null>(null);
@@ -518,10 +535,45 @@ function WorkEditPanesContent({
     return () => cancelAnimationFrame(frame);
   }, [view, scrollToTarget]);
 
+  const targetSceneMap = useMemo(() => {
+    const map = new Map<string, { sceneId: string; section: SceneSectionKind | null }>();
+    for (const scene of formScenes ?? []) {
+      map.set(`scene-${scene.id}`, { sceneId: scene.id, section: null });
+      for (const cue of scene.cues) {
+        map.set(`cue-${cue.id}`, { sceneId: scene.id, section: "visual" });
+      }
+      for (const line of scene.lines) {
+        map.set(`line-${line.id}`, { sceneId: scene.id, section: "lines" });
+      }
+    }
+    return map;
+  }, [formScenes]);
+
   const jump = useCallback(
     (targetId: string, seek: PreviewSeekTarget) => {
+      const entry = targetSceneMap.get(targetId);
+      let needsFrame = false;
+      if (entry !== undefined && foldStore !== null) {
+        const sceneKey = sceneFoldKey(entry.sceneId);
+        if ((foldStore.get(sceneKey) ?? false) !== true) {
+          foldStore.set(sceneKey, true);
+          needsFrame = true;
+        }
+        if (entry.section !== null) {
+          const sectionKey = sectionFoldKey(entry.sceneId, entry.section);
+          if ((foldStore.get(sectionKey) ?? true) !== true) {
+            foldStore.set(sectionKey, true);
+            needsFrame = true;
+          }
+        }
+      }
+      const scroll = () => scrollToTarget(targetId);
       if (wideRef.current || viewRef.current === "edit") {
-        scrollToTarget(targetId);
+        if (needsFrame) {
+          requestAnimationFrame(scroll);
+        } else {
+          scroll();
+        }
       } else {
         pendingTargetRef.current = targetId;
         setView("edit");
@@ -535,7 +587,7 @@ function WorkEditPanesContent({
         actions.jumpToLine(seek.id);
       }
     },
-    [scrollToTarget, actions.jumpToScene, actions.jumpToCue, actions.jumpToLine],
+    [scrollToTarget, actions.jumpToScene, actions.jumpToCue, actions.jumpToLine, targetSceneMap, foldStore],
   );
 
   const onJumpToLine = useCallback(
@@ -583,6 +635,9 @@ function WorkEditPanesContent({
       for (const id of targetIds) {
         const element = findEditorTarget(root, id);
         if (element === null) {
+          continue;
+        }
+        if (element.getBoundingClientRect().height === 0) {
           continue;
         }
         if (element.getBoundingClientRect().top >= containerTop - 4) {

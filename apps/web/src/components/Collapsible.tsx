@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -10,17 +11,31 @@ import {
 } from "react";
 import { ChevronDown } from "lucide-react";
 import { detailsSummaryClass } from "../ui";
+import {
+  isPersistedFoldKey,
+  loadFoldEntries,
+  saveFoldEntries,
+  type FoldStorage,
+} from "../lib/collapseState";
+
+export interface CollapsiblePersistence {
+  storage: FoldStorage | null;
+  storageKey: string;
+}
 
 interface CollapsibleStore {
   get: (key: string) => boolean | undefined;
   set: (key: string, open: boolean) => void;
+  setMany: (keys: readonly string[], open: boolean) => void;
   subscribe: (key: string, listener: () => void) => () => void;
-  reset: () => void;
+  replaceAll: (entries: Iterable<readonly [string, boolean]>) => void;
 }
 
 const CollapsibleStoreContext = createContext<CollapsibleStore | null>(null);
 
-function createCollapsibleStore(): CollapsibleStore {
+function createCollapsibleStore(
+  persist?: () => CollapsiblePersistence | undefined,
+): CollapsibleStore {
   const values = new Map<string, boolean>();
   const listeners = new Map<string, Set<() => void>>();
   const notify = (key?: string) => {
@@ -36,6 +51,22 @@ function createCollapsibleStore(): CollapsibleStore {
       listener();
     }
   };
+  const persistChanged = (changedKeys: readonly string[]) => {
+    const persistence = persist?.();
+    if (persistence === undefined) {
+      return;
+    }
+    if (!changedKeys.some((key) => isPersistedFoldKey(key))) {
+      return;
+    }
+    const persisted = new Map<string, boolean>();
+    for (const [key, value] of values) {
+      if (isPersistedFoldKey(key)) {
+        persisted.set(key, value);
+      }
+    }
+    saveFoldEntries(persistence.storage, persistence.storageKey, persisted);
+  };
   return {
     get: (key) => values.get(key),
     set: (key, open) => {
@@ -43,7 +74,24 @@ function createCollapsibleStore(): CollapsibleStore {
         return;
       }
       values.set(key, open);
+      persistChanged([key]);
       notify(key);
+    },
+    setMany: (keys, open) => {
+      const changed: string[] = [];
+      for (const key of keys) {
+        if (values.get(key) !== open) {
+          values.set(key, open);
+          changed.push(key);
+        }
+      }
+      if (changed.length === 0) {
+        return;
+      }
+      persistChanged(changed);
+      for (const key of changed) {
+        notify(key);
+      }
     },
     subscribe: (key, listener) => {
       let group = listeners.get(key);
@@ -56,32 +104,50 @@ function createCollapsibleStore(): CollapsibleStore {
         group?.delete(listener);
       };
     },
-    reset: () => {
-      if (values.size === 0) {
-        return;
-      }
+    replaceAll: (entries) => {
       values.clear();
+      for (const [key, value] of entries) {
+        values.set(key, value);
+      }
       notify();
     },
   };
 }
 
+export function useCollapsibleStore(): CollapsibleStore | null {
+  return useContext(CollapsibleStoreContext);
+}
+
 export function CollapsibleStateProvider({
   resetKey,
+  persistence,
   children,
 }: {
   resetKey: string;
+  persistence?: CollapsiblePersistence;
   children: ReactNode;
 }) {
+  const persistenceRef = useRef(persistence);
+  persistenceRef.current = persistence;
+  const getPersistence = useCallback(
+    () => persistenceRef.current,
+    [],
+  );
   const storeRef = useRef<CollapsibleStore | null>(null);
   if (storeRef.current === null) {
-    storeRef.current = createCollapsibleStore();
+    storeRef.current = createCollapsibleStore(getPersistence);
   }
   const store = storeRef.current;
 
+  const storageKey = persistence?.storageKey;
   useEffect(() => {
-    store.reset();
-  }, [resetKey, store]);
+    const current = persistenceRef.current;
+    const initial =
+      current === undefined
+        ? new Map<string, boolean>()
+        : loadFoldEntries(current.storage, current.storageKey);
+    store.replaceAll(initial);
+  }, [resetKey, storageKey, store]);
 
   return (
     <CollapsibleStoreContext.Provider value={store}>
@@ -159,11 +225,13 @@ export function Collapsible({
     }
     onOpenChange?.(next);
   };
+  const bodyId = useId();
   return (
     <div className={className}>
       <button
         type="button"
         aria-expanded={open}
+        aria-controls={bodyId}
         onClick={toggle}
         className={detailsSummaryClass}
       >
@@ -176,7 +244,7 @@ export function Collapsible({
           <span className="font-normal text-muted-foreground">{summary}</span>
         )}
       </button>
-      <div hidden={!open} className="mt-1">
+      <div id={bodyId} hidden={!open} className="mt-1">
         {children}
       </div>
     </div>

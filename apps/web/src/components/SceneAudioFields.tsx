@@ -31,6 +31,8 @@ interface SceneAudioFieldsProps {
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
   onCommitAudioCue: (cueIndex: number) => void;
+  /** SceneEditor側の折りたたみ内に置くときは外枠と見出しを出さない */
+  bare?: boolean;
 }
 
 export function SceneAudioFields({
@@ -40,6 +42,7 @@ export function SceneAudioFields({
   setValue,
   sceneIndex,
   onCommitAudioCue,
+  bare = false,
 }: SceneAudioFieldsProps) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -51,8 +54,8 @@ export function SceneAudioFields({
     (getValues(`scenes.${sceneIndex}.audioCues`) ?? [])[cueIndex];
 
   return (
-    <div className={editAreaClass}>
-      <h4 className="text-sm font-semibold text-foreground">シーン音声</h4>
+    <div className={bare ? undefined : editAreaClass}>
+      {!bare && <h4 className="text-sm font-semibold text-foreground">シーン音声</h4>}
       <p className={metaTextClass}>
         このシーンの先頭から終端まで再生する音声です。開始オフセット・フェード・ダッキングはありません。
       </p>

@@ -185,6 +185,8 @@ interface CueListProps {
   sceneDurationMs: number | null;
   onRemoveCue: (cueId: string) => void;
   onCommitCue: (cueId: string) => void;
+  /** SceneEditor側の折りたたみ内に置くときは外枠と見出しを出さない */
+  bare?: boolean;
 }
 
 interface CueRowProps {
@@ -1185,6 +1187,7 @@ export function CueList({
   sceneDurationMs,
   onRemoveCue,
   onCommitCue,
+  bare = false,
 }: CueListProps) {
   const { fields, append } = useFieldArray({ control, name: `scenes.${sceneIndex}.cues` });
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.cues` }) ?? [];
@@ -1227,8 +1230,8 @@ export function CueList({
   };
 
   return (
-    <div className={editAreaClass}>
-      <h4 className="text-sm font-semibold text-foreground">映像演出</h4>
+    <div className={bare ? undefined : editAreaClass}>
+      {!bare && <h4 className="text-sm font-semibold text-foreground">映像演出</h4>}
       {fields.map((field, cueIndex) => {
         const cue = watched[cueIndex];
         if (cue === undefined) {
