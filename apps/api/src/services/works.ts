@@ -75,9 +75,9 @@ export async function getWork(prisma: PrismaClient, workId: string): Promise<Wor
 export async function createWork(
   prisma: PrismaClient,
   title: string,
-  originalLocale: string,
+  originalLocale: ContentDocument["locale"],
 ): Promise<Work> {
-  const contentJson = serializeContent(createInitialContentDocument());
+  const contentJson = serializeContent(createInitialContentDocument(originalLocale));
   const workId = await prisma.$transaction(async (tx) => {
     const work = await tx.work.create({ data: { title, originalLocale } });
     const edition = await tx.languageEdition.create({

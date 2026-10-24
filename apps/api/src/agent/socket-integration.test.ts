@@ -341,6 +341,71 @@ describe("agent socket integration", () => {
     expect(await countVersions(edition.id)).toBe(3);
   });
 
+  it("guards script.save with a base version and records a same-edition restore source", async () => {
+    const work = await createWork("保存ガードテスト作品");
+    const edition = firstEdition(work);
+    const initial = await client.request("script.get", {
+      scriptVersionId: edition.currentScriptVersion.id,
+    });
+
+    const guarded = await client.request("script.save", {
+      languageEditionId: edition.id,
+      content: initial.scriptVersion.content,
+      baseScriptVersionId: initial.scriptVersion.id,
+    });
+    expect(guarded.scriptVersion.versionNumber).toBe(2);
+    expect(await countVersions(edition.id)).toBe(2);
+
+    await expectAgentError(
+      client.request("script.save", {
+        languageEditionId: edition.id,
+        content: initial.scriptVersion.content,
+        baseScriptVersionId: initial.scriptVersion.id,
+      }),
+      "SCRIPT_BASE_STALE",
+    );
+    expect(await countVersions(edition.id)).toBe(2);
+
+    const unguarded = await client.request("script.save", {
+      languageEditionId: edition.id,
+      content: initial.scriptVersion.content,
+    });
+    expect(unguarded.scriptVersion.versionNumber).toBe(3);
+    expect(await countVersions(edition.id)).toBe(3);
+
+    const restored = await client.request("script.save", {
+      languageEditionId: edition.id,
+      content: initial.scriptVersion.content,
+      sourceScriptVersionId: initial.scriptVersion.id,
+    });
+    expect(restored.scriptVersion.versionNumber).toBe(4);
+    const restoredRow = await prisma.scriptVersion.findUniqueOrThrow({
+      where: { id: restored.scriptVersion.id },
+      select: { sourceScriptVersionId: true },
+    });
+    expect(restoredRow.sourceScriptVersionId).toBe(initial.scriptVersion.id);
+
+    const otherEdition = await client.request("edition.create", {
+      workId: work.id,
+      locale: "en-US",
+      sourceEditionId: edition.id,
+    });
+    const other = otherEdition.work.languageEditions.find((entry) => entry.locale === "en-US");
+    if (other === undefined) {
+      throw new Error("other edition missing");
+    }
+    const invalidSource = await expectAgentError(
+      client.request("script.save", {
+        languageEditionId: edition.id,
+        content: initial.scriptVersion.content,
+        sourceScriptVersionId: other.currentScriptVersion.id,
+      }),
+      "VALIDATION_ERROR",
+    );
+    expect(invalidSource.issues?.[0]?.path).toEqual(["sourceScriptVersionId"]);
+    expect(await countVersions(edition.id)).toBe(4);
+  });
+
   it("imports a local asset with provenance, dedupes and tags it", async () => {
     let probeAvailable = true;
     try {
@@ -623,8 +688,27 @@ describe("agent socket integration", () => {
     expect(worker.status()).toBe("notReady");
     expect(await prisma.job.count({ where: { status: "running" } })).toBe(0);
 
+    // The default listing stays render-only, so a TTS Job of the same Work
+    // must not leak into it.
+    const ttsJob = await prisma.job.create({
+      data: {
+        kind: "tts",
+        status: "queued",
+        workId: work.id,
+        languageEditionId: edition.id,
+        scriptVersionId: edition.currentScriptVersion.id,
+        snapshotSchemaVersion: 1,
+        inputSnapshotJson: "{}",
+      },
+    });
+
     const listed = await client.request("job.list", { workId: work.id });
     expect(listed.jobs.some((job) => job.id === started.job.id)).toBe(true);
+    expect(listed.jobs.every((job) => job.kind === "render")).toBe(true);
+    expect(listed.jobs.some((job) => job.id === ttsJob.id)).toBe(false);
+
+    const listedTts = await client.request("job.list", { workId: work.id, kind: "tts" });
+    expect(listedTts.jobs.map((job) => job.id)).toEqual([ttsJob.id]);
 
     const cancelled = await client.request("job.cancel", { jobId: started.job.id });
     expect(cancelled.job.status).toBe("cancelled");

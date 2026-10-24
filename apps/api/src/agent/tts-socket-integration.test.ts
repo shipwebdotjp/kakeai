@@ -353,6 +353,18 @@ describe("agent tts operations over the socket", () => {
     const stillQueued = await client.request("job.get", { jobId: created[0]!.job.id });
     expect(stillQueued.job.status).toBe("queued");
 
+    // TTS Jobs are rediscovered by kind; the default listing stays render-only.
+    const workId = created[0]!.job.workId;
+    if (workId === null) {
+      throw new Error("tts Job has no workId");
+    }
+    const listedTts = await client.request("job.list", { workId, kind: "tts" });
+    expect(listedTts.jobs.map((job) => job.id).sort()).toEqual(
+      created.map((entry) => entry.job.id).sort(),
+    );
+    const listedRender = await client.request("job.list", { workId });
+    expect(listedRender.jobs).toEqual([]);
+
     await drainWorker();
 
     const waited = await waitForJob(

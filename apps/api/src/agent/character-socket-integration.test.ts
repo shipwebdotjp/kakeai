@@ -453,16 +453,10 @@ describe("agent character operations over the socket", () => {
       const work = await createWork("Character locale test", "en-US");
       const edition = firstEdition(work);
       const initial = await client.request("script.get", { languageEditionId: edition.id });
-      // `work.create` seeds the initial document with the default locale, so
-      // align the document with the Edition before copying.
-      const saved = await client.request("script.save", {
-        languageEditionId: edition.id,
-        content: { ...initial.scriptVersion.content, locale: "en-US" },
-      });
-      expect(saved.scriptVersion.content.locale).toBe("en-US");
+      expect(initial.scriptVersion.content.locale).toBe("en-US");
 
       const edited = await client.request("script.edit", {
-        baseScriptVersionId: saved.scriptVersion.id,
+        baseScriptVersionId: initial.scriptVersion.id,
         requestId: "character-copy-en",
         operations: [{ op: "character.addFromLibrary", libraryCharacterId }],
       });

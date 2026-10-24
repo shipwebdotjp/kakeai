@@ -1,6 +1,6 @@
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { toJob } from "../dto/mappers.ts";
-import type { Job as JobDto } from "@kakeai/contracts";
+import type { Job as JobDto, JobKind } from "@kakeai/contracts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 
@@ -15,13 +15,17 @@ export async function getJob(prisma: PrismaClient, jobId: string): Promise<JobDt
   return toJob(row);
 }
 
-export async function listWorkJobs(prisma: PrismaClient, workId: string): Promise<JobDto[]> {
+export async function listWorkJobs(
+  prisma: PrismaClient,
+  workId: string,
+  kind: JobKind = "render",
+): Promise<JobDto[]> {
   const work = await prisma.work.findUnique({ where: { id: workId }, select: { id: true } });
   if (work === null) {
     throw resourceNotFound("work", workId);
   }
   const rows = await prisma.job.findMany({
-    where: { workId, kind: "render" },
+    where: { workId, kind },
     include: { artifacts: true },
     orderBy: { createdAt: "desc" },
   });

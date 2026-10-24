@@ -109,11 +109,13 @@ export function createInsertScene(
   };
 }
 
-export function createInitialContentDocument(): ContentDocument {
+export function createInitialContentDocument(
+  locale: ContentDocument["locale"] = SUPPORTED_LOCALES[0],
+): ContentDocument {
   return {
     schemaVersion: CONTENT_SCHEMA_VERSION,
     visualTheme: { ...DEFAULT_VISUAL_THEME },
-    locale: SUPPORTED_LOCALES[0],
+    locale,
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
     speakers: [],
     characters: [],

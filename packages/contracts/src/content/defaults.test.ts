@@ -40,6 +40,17 @@ describe("createInitialContentDocument", () => {
     expect(document.visualTheme).toEqual(DEFAULT_VISUAL_THEME);
   });
 
+  it("defaults the locale to the first supported locale", () => {
+    const document = createInitialContentDocument();
+    expect(document.locale).toBe("ja-JP");
+  });
+
+  it("uses the requested locale", () => {
+    const document = createInitialContentDocument("en-US");
+    expect(document.locale).toBe("en-US");
+    expect(contentDocumentSchema.safeParse(document).success).toBe(true);
+  });
+
   it("applies the template default accent and timing", () => {
     const document = createInitialContentDocument();
     expect(document.scenes.map((scene) => scene.accent)).toEqual([

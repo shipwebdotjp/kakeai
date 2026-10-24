@@ -158,7 +158,7 @@ Render Jobを作る時点で、次を `inputSnapshotJson` に不変の値とし�
 
 ### 書込みとJob状態遷移
 
-1. **作品作成**：1つのWork、`originalLocale` のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accent`（`theme.primary`）・`label` を設定した導入、要点1件、結びを持ち、`visualTheme: soft-editorial@1` を固定した、`schemaVersion: 1` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` をその版へ設定する。
+1. **作品作成**：1つのWork、`originalLocale` のLanguageEdition、`explanation-scenes@1` とテンプレート既定の `accent`（`theme.primary`）・`label` を設定した導入、要点1件、結びを持ち、`visualTheme: soft-editorial@1` を固定した、`schemaVersion: 1` のScriptVersion（`versionNumber: 1`）を1トランザクションで作成する。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。初期ContentDocumentの `locale` は `originalLocale` と一致させる。Editionの `currentScriptVersionId` をその版へ設定する。
 2. **台本保存**：利用者は明示的に保存する（自動保存はしない）。フォーム値をZodで検証し、`ready` のAsset参照を確認して、新しいScriptVersionを追加する。過去の版は更新しない。テキスト量の目安を超える入力は保存を拒否せず、警告を返す。保存はlast-write-winsとし、クライアントは版番号を送らない。同一トランザクションで新しい版をcurrentへ進める。過去版の復元は、その内容を新しい版として保存し、復元元を `sourceScriptVersionId` に記録する。
 3. **素材取り込み**：アップロードで原本Assetを作成し、`asset_ingest` Jobをキューへ追加する。Jobは形式・長さ・寸法を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってAssetを `ready` にする。失敗時は `failed` にし、台本保存・プレビュー・レンダーでそのAssetを使わせない。
 4. **レンダー投入**：特定のScriptVersionとreadyなRenditionから、入力スナップショットを持つ `queued` Jobを追加する。MVPでは「現在版をレンダー」がUIの入口だが、Job自体は必ず版IDと素材Renditionを固定する。

@@ -46,6 +46,7 @@ import {
   throwIfFatalTimelineError,
   type AssetWithRenditions,
   type FaceSetDetails,
+  type SaveScriptVersionGuard,
 } from "./script-versions.ts";
 import { AgentOperationError, agentIssue } from "../agent/errors.ts";
 import { sha256RequestHash } from "./agent-request-hash.ts";
@@ -383,16 +384,44 @@ export async function saveAgentScript(
       agentIssue(["languageEditionId"], "not_found", "言語版が見つかりません。"),
     ]);
   }
+
+  let guard: SaveScriptVersionGuard | undefined;
+  if (request.baseScriptVersionId !== undefined) {
+    const base = await prisma.scriptVersion.findUnique({
+      where: { id: request.baseScriptVersionId },
+      select: { languageEditionId: true },
+    });
+    if (base === null) {
+      throw new AgentOperationError(AGENT_ERROR_CODES.WORK_NOT_FOUND, [
+        agentIssue(["baseScriptVersionId"], "not_found", "基準の台本版が見つかりません。"),
+      ]);
+    }
+    if (base.languageEditionId !== edition.id) {
+      throw new AgentOperationError(AGENT_ERROR_CODES.VALIDATION_ERROR, [
+        agentIssue(
+          ["baseScriptVersionId"],
+          "invalid_value",
+          "基準の台本版は同じ言語版の版を指定してください。",
+        ),
+      ]);
+    }
+    guard = {
+      expectedCurrentScriptVersionId: request.baseScriptVersionId,
+      staleError: scriptBaseStaleError,
+    };
+  }
+
   return saveScriptVersion(
     prisma,
     edition.id,
-    { sourceScriptVersionId: null, content: request.content },
+    { sourceScriptVersionId: request.sourceScriptVersionId, content: request.content },
     {
       author: "agent",
       authorAgentId: normalizedAgentId(request.authorAgentId) ?? normalizedAgentId(defaultAgentId),
       agentRequestId: null,
       agentRequestHash: null,
     },
+    guard,
   );
 }
 

@@ -47,6 +47,12 @@ files.
    validation, same error codes.
    `kakeai-agent operations --pretty` lists the catalog with `kind` and
    `longRunning` if you need it without a schema fetch.
+5. Check the voice precondition before planning TTS. For an existing Work,
+   read the current script and confirm the speakers you will use have a
+   `voiceProfileId` (`script.get` → `speakers[]`). For a new Work, check
+   `character.list` for an entry with a voice for the target locale. If neither
+   exists, stop before starting TTS and ask the human to create a character
+   with a voice (§4). Do not queue TTS for voice-less speakers.
 
 ## 2. Order of work
 
@@ -54,21 +60,28 @@ files.
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
-| 3 | Characters | `character.list`, `character.get`, `script.edit` + `character.addFromLibrary` | Library entry with a voice for this locale |
+| 3 | Characters (voice preflight) | `character.list`, `character.get`, `script.edit` + `character.addFromLibrary` | Returned voices cover the speakers for this locale |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
-| 8 | Render | `render.start`, `job.get` / `job.wait` | Target version fixed |
-| 9 | Visual check | `preview.frame`, user review | Frames match intent; user confirms |
+| 8 | Render | `render.start`, `job.get` / `job.wait` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`) |
+| 9 | Optional visual check | `preview.frame`, user review | Frames inform the report; the user judges quality |
 
 Do not interleave a later phase into an earlier one unless the earlier phase is
 saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
 
+The acceptance line for the MP4 production flow (voice preflight, render
+success + MP4 Artifact, optional stills) is defined in
+`docs/agent-mp4-production/spec.md`. This skill is the order of operations, not
+a second copy of that contract.
+
 ## 3. Work and script
 
-- `work.create` returns the Work with its `languageEditions`. Use the first
-  edition (default locale `ja-JP`) unless the user asked for another locale.
+- `work.create` returns the Work with its `languageEditions`. The initial
+  ContentDocument is created in the requested `locale` (`ja-JP` by default;
+  `en-US` is supported), so the first `script.edit` does not fail on a locale
+  mismatch. Use the first edition unless the user asked for another locale.
 - To make another language of the same Work, use `edition.create` with
   `workId`, the target `locale` (`en-US`) and `sourceEditionId` (the current
   edition you translated from). It copies the source current script
@@ -81,7 +94,9 @@ saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
   target `languageEditionId`. The document `locale` must equal the target
   edition's locale or the save is `VALIDATION_ERROR`. Then continue the
   normal flow on the new edition: pick voices for its locale, run TTS,
-  validate, render.
+  validate, render. The translation source is a different Edition, so it
+  cannot be recorded with `sourceScriptVersionId` (that field only accepts a
+  version of the same Edition).
 - `work.update` renames the Work's management title (`workId` + `title`). The
   title shown inside the video is a Scene slot in the ContentDocument, not this
   field; change that through `script.edit`.
@@ -92,6 +107,14 @@ saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
   `ContentDocument`. Use it when the script was authored outside Kakeai. It is a
   whole-document replacement and one new version. Validate before sending if the
   document is machine-generated.
+  - Optional `baseScriptVersionId` is a base guard: when given, the save only
+    succeeds if that version is still current, otherwise `SCRIPT_BASE_STALE`.
+    Omitting it keeps the last-write-wins behaviour.
+  - Optional `sourceScriptVersionId` records the restore source. It must be a
+    version of the same Edition; a version of another Edition (including a
+    translation source) is `VALIDATION_ERROR`.
+  - `script.save` has no `requestId`. After a timeout, confirm with `script.get`
+    before saving again (§9).
 - **Structural edits** — `script.edit` with `baseScriptVersionId`, a unique
   `requestId`, and the operation array. Use it for scenes, lines, cues, standing,
   audio and takes.
@@ -109,6 +132,24 @@ saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
 ## 4. Characters
 
 The character library is **read-only** on the agent surface.
+
+### Voice preflight
+
+1. **Existing Work** — `script.get` the edition and read
+   `speakers[].voiceProfileId`. A speaker with a valid voice can keep it; reuse
+   it for TTS.
+2. **New Work, or a speaker without a voice** — `character.list` and choose an
+   entry whose `voices` has a voice for the target locale.
+3. If neither exists, **stop before TTS** and ask the human to create a
+   character with a voice in the app. Do not start TTS with a voice-less
+   speaker.
+4. The standard way to add a voice to a new Work is `character.addFromLibrary`:
+   it copies the entry and its locale voice into the script. There is **no
+   dedicated operation to assign a `voiceProfileId` to an existing speaker**.
+   A whole-document `script.save` can technically set the field, but that is
+   not the standard flow; ask the human instead.
+
+### Copying a character
 
 1. `character.list` returns all library entries; `character.get` returns one by
    `characterId`. Each entry carries `name`, locale-keyed `voices`, and
@@ -181,8 +222,10 @@ TTS is available only through the adapter the user already configured
 credentials, adapter settings, voice profiles, or trigger any other paid
 generation.
 
-1. Make sure the target script is saved. Both TTS operations take a
-   `scriptVersionId`; unsaved local edits are not visible to them.
+1. Make sure the target script is saved and every target speaker has a
+   `voiceProfileId` (§4). Both TTS operations take a `scriptVersionId`; unsaved
+   local edits are not visible to them. If any target speaker has no voice,
+   stop and ask the human — do not start TTS.
 2. `tts.create` synthesizes one Narration Segment:
    - Required: `scriptVersionId`, `narrationSegmentId`.
    - Optional: `speechText` (defaults to the saved segment text),
@@ -192,12 +235,13 @@ generation.
      you override it, update the line to the same text before attaching.
    - Returns `{ job }` with `kind: "tts"`.
 3. `tts.createBulk` synthesizes every point-scene line that has no selected
-   take. Give it a stable `requestId` (§9.1) — only a bulk started with a
-   `requestId` can later be finalized. It returns `{ jobs, excluded }`;
+   take. The contract makes `requestId` optional, but **finalization requires
+   it** — always pass one (§9.1). It returns `{ jobs, excluded }`;
    `excluded` carries per-line stable codes and safe reasons and does not
    fail the whole call.
 4. Finalize with `tts.attachBulk` (`scriptVersionId`, the bulk's
-   `bulkRequestId`, and a fresh `requestId` for the attach itself):
+   `bulkRequestId`, and a fresh `requestId` for the attach itself). Call it on
+   the **same binding with the same `agentId`** that started the bulk:
    - While any Job is still running it returns `pending` with the per-status
      counts. Poll it again instead of attaching takes yourself.
    - Once every Job is terminal it returns `finalized` and attaches only the
@@ -239,14 +283,20 @@ generation.
    queue a second Job.
 3. Poll `job_wait` / `job.wait` (MCP `kakeai_job_wait`) or `job.get`. A timeout
    (`timedOut: true`) is not a failure; call again with the same job ID.
-   A failed job exposes `job.error`. Render output is an Artifact, not an Asset.
-4. Visual check — after the render succeeds, fetch stills with `preview.frame`
-   (`artifactId` from `job.get`, `timeMs` at the key moments: scene changes,
-   telop-heavy frames, the ending). Describe what you actually see in each
-   frame and report it to the user; do not claim the video looks correct on
-   your own. The final quality judgment stays with the user. If the first
-   call ends in `AGENT_REQUEST_TIMEOUT` on a long video, call once more with
-   the same input — the second hit uses the warm server-side cache.
+   A failed job exposes `job.error`. The phase is complete only when
+   `status: "succeeded"` **and** `artifacts` contains an Artifact with
+   `role: "render"` / `format: "mp4"`. Report its `id`, `durationMs`,
+   `widthPx` and `heightPx`. Render output is an Artifact, not an Asset.
+4. **Optional** visual check — if you want to inspect the picture, fetch stills
+   with `preview.frame` (`artifactId` from `job.get`, `timeMs` at key moments:
+   scene changes, telop-heavy frames, the ending). Describe what you actually
+   see in each frame. `preview.frame` is not part of the acceptance line and
+   the final quality judgment stays with the user. If the first call ends in
+   `AGENT_REQUEST_TIMEOUT` on a long video, call once more with the same input
+   — the second hit uses the warm server-side cache.
+5. The human handles the final look and sound check, downloading the MP4, the
+   thumbnail, the SRT and the YouTube settings. Do not claim the video is
+   correct on their behalf.
 
 ## 9. Idempotency, stale bases and timeouts
 
@@ -254,9 +304,10 @@ generation.
 | --- | --- |
 | Normal edit | Give every `script.edit` a fresh `requestId` that is unique per logical change (for example `<agentId>:<date>-<n>`). |
 | Retrying the same edit | Reuse the same `requestId` only when the base and operations are unchanged. A replay returns `replay: true` and creates no new version. |
-| `SCRIPT_BASE_STALE` | `script.get` the current version, re-apply the **same intent** to the new base. Reuse the `requestId` only if the failed call created no version (it did not); if you change the operations, use a new `requestId`. |
+| `SCRIPT_BASE_STALE` | The base is no longer current. For `script.edit`, `script.get` the current version and re-apply the **same intent** to the new base; reuse the `requestId` only if the failed call created no version (it did not), and use a new one if the operations changed. For `script.save`, omitting `baseScriptVersionId` keeps last-write-wins; when it is given, a mismatch is `SCRIPT_BASE_STALE` — re-read the current version and decide whether the replacement is still wanted. |
 | `IDEMPOTENCY_CONFLICT` | A version with that `requestId` already exists with different content. Never reuse the ID with different content. Read the current version (`script.get` with `languageEditionId`) and continue from there. |
-| `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `job.list`, `asset.list`, `composition.get`) and only then retry. The exception is `script.edit`, which may be replayed immediately with the same `requestId`. |
+| `work.create` / `script.save` timeout | These operations have no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `work.list` / `script.get` to check whether the change landed, then retry only if it did not. |
+| `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `work.list`, `job.list` — pass `{ kind: "tts" }` for TTS Jobs — `asset.list`, `composition.get`) and only then retry. The exception is `script.edit`, which may be replayed immediately with the same `requestId`. |
 | `replay: true` | The edit was already applied. Do not apply the operations again. |
 | Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. |
 
@@ -268,7 +319,10 @@ generation.
 that ledger: its `requestId` is required and works like `script.edit` (same id
 returns the existing ScriptVersion; a different input is `IDEMPOTENCY_CONFLICT`).
 A bulk run started without a `requestId` is never recorded and can never be
-finalized — always pass one when the bulk's takes should land in the script.
+finalized. A lost TTS Job can be found again with `job.list { kind: "tts" }`,
+but the finalization still needs the original `requestId`. `tts.attachBulk`
+must be called with the same binding and `agentId` that started the bulk;
+another `agentId` is `RESOURCE_NOT_FOUND`.
 
 - Give each of these calls a stable `requestId` that names the logical request
   (for example `render-<workId>-v<versionNumber>` or
@@ -307,7 +361,7 @@ to the user when the fix is on their side.
 | `AGENT_OPERATION_UNKNOWN` | The operation is not exposed. Re-read `schema.get` / `operations`; the catalog may have changed. |
 | `VALIDATION_ERROR` | Input or saved document violates the contract. Fix the `issues` paths. |
 | `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` | The script or operation is not valid in the current state. Re-read the script and adjust; do not bypass. |
-| `SCRIPT_BASE_STALE` | Base version is no longer current. Re-read and reapply (see above). |
+| `SCRIPT_BASE_STALE` | Base version is no longer current (`script.edit`'s base or `script.save`'s optional base guard). Re-read and reapply (see above). |
 | `IDEMPOTENCY_CONFLICT` | Same `requestId`, different content. Read the current version and continue; never reuse the ID for other content. |
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | The same `requestId` is still running. Poll the running job with `job.get` / `job_wait` instead of starting a second one. |
 | `AGENT_BACKPRESSURE` | Too many in-flight requests on one connection. The request was not executed. Wait briefly, then retry it. |
@@ -315,8 +369,10 @@ to the user when the fix is on their side.
 | `COMPOSITION_UNAVAILABLE` | Referenced CompositionVersion is not published or its bundle is missing. Publish it first. |
 | `TTS_INPUT_INVALID` | Empty text, missing speaker/voice, voice outside the configured adapter, or bad speed. Fix the line or ask the user. |
 | `TTS_ENGINE_UNAVAILABLE` | The configured TTS adapter is unreachable. Ask the user to start the engine. |
-| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | The referenced script version, line, asset or work no longer exists. Re-read and re-plan. |
+| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | The referenced script version, line, asset or work no longer exists. Includes a `tts.attachBulk` whose bulk was started by another `agentId` or without a `requestId`. Re-read and re-plan. |
 | `AGENT_PAYLOAD_TOO_LARGE` | One request exceeded 32 MiB. Split the work; never inline large media in a script. |
+| `JOB_NOT_CANCELLABLE` | Only queued Jobs can be cancelled. A running or terminal Job must be waited for, not cancelled. |
+| `RENDER_FAILED` / `RENDER_INPUT_INVALID` | The render Job failed. Report `job.error`; check assets, duration and template inputs. Do not retry identical input indefinitely. |
 | `AGENT_PROTOCOL_MISMATCH` | Client/server protocol mismatch. Update the MCP/CLI package; do not work around it. |
 
 ## 11. Non-goals
@@ -329,8 +385,10 @@ to the user when the fix is on their side.
 - Paid generation other than Jobs on the user's configured TTS adapter.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.
-- Claiming render quality without checking `preview.frame` stills, or making
-  the final quality judgment instead of the user.
+- Making the final quality judgment (picture, sound, delivery) for the user.
+  `preview.frame` is optional: not checking stills is not a failure, and
+  checking them does not replace the human's final review. The human also
+  downloads the MP4 and handles the thumbnail, SRT and YouTube settings.
 
 ## 12. Related skills
 

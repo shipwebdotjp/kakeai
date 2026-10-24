@@ -81,6 +81,9 @@ describe("MCP tool catalog", () => {
     }
     const workGet = operationToolEntries.find((entry) => entry.operation === "work.get");
     expect(workGet?.inputSchema.properties).toHaveProperty("workId");
+    const jobList = operationToolEntries.find((entry) => entry.operation === "job.list");
+    expect(jobList?.inputSchema.properties).toHaveProperty("kind");
+    expect(jobList?.inputSchema.required).toEqual(["workId"]);
     const scriptEdit = operationToolEntries.find((entry) => entry.operation === "script.edit");
     expect(scriptEdit?.inputSchema.properties).toHaveProperty("baseScriptVersionId");
     expect(scriptEdit?.inputSchema.properties).toHaveProperty("operations");

@@ -60,7 +60,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "script.validate":
     "保存せずに台本を検証し、警告と解決済み timeline を返す。`content` または `baseScriptVersionId` + `operations` を渡す。",
   "script.save":
-    "ContentDocument 全体を検証して新しい台本版として保存する。取り込み向けで、通常の編集は script.edit を使う。",
+    "ContentDocument 全体を検証して新しい台本版として保存する。取り込み向けで、通常の編集は script.edit を使う。任意の `baseScriptVersionId` を渡すと現在の版と一致する場合だけ保存し、`sourceScriptVersionId` には同じ Edition の復元元の版を指定できる。",
   "script.edit":
     "操作コアの ScriptOperation 配列を適用し、新しい台本版を作成する。`baseScriptVersionId` が current と一致している必要があり、`requestId` は再送を冪等にする。",
   "asset.list":
@@ -72,7 +72,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "render.start":
     "指定した台本版のレンダー Job を投入し、Job を返す。完了は job_wait または job.get で確認する。",
   "job.get": "Job 1 件の状態を返す。",
-  "job.list": "作品の Job 一覧を返す。",
+  "job.list":
+    "作品の Job 一覧を返す。`kind` で種別を選ぶ（既定 `render`、`render` / `tts`）。`asset_ingest` は作品に紐づかないため指定できない。",
   "job.cancel": "queued の Job をキャンセルする。",
   "preview.frame":
     "render 成果物（MP4）の指定時刻（`timeMs` ミリ秒）の静止画を原寸 PNG で返す。絵は image ブロック、解決時刻と寸法は JSON で返る。JSON にも原寸 PNG の base64（`pngBase64`）が入るため転記せず、絵が必要なときは image ブロックを使う。",

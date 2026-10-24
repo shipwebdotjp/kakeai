@@ -58,6 +58,25 @@ describe("work and script version flow", () => {
     ]);
   });
 
+  it("seeds the initial v1 script version with the work locale", async () => {
+    const work = await works.createWork(prisma, "英語作品", "en-US");
+    expect(work.originalLocale).toBe("en-US");
+    expect(work.languageEditions).toHaveLength(1);
+    const edition = work.languageEditions[0]!;
+    expect(edition.locale).toBe("en-US");
+
+    const initial = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+    expect(initial.versionNumber).toBe(1);
+    expect(initial.content.locale).toBe("en-US");
+
+    const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content: initial.content,
+    });
+    expect(saved.scriptVersion.versionNumber).toBe(2);
+    expect(saved.scriptVersion.content.locale).toBe("en-US");
+  });
+
   it("saves documents with zero or many point scenes", async () => {
     const work = await works.createWork(prisma, "可変シーン", "ja-JP");
     const edition = work.languageEditions[0]!;

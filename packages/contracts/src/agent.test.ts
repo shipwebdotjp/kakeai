@@ -8,6 +8,7 @@ import {
   agentCompositionPublishInputSchema,
   agentCompositionPublishOutputSchema,
   agentErrorCodeSchema,
+  agentJobListInputSchema,
   agentMutationOperationNames,
   agentOperationContracts,
   agentOperationInputSchemas,
@@ -443,6 +444,21 @@ describe("script.edit", () => {
   });
 });
 
+describe("job.list input", () => {
+  it("defaults to render and rejects job kinds that are not work-scoped", () => {
+    expect(agentJobListInputSchema.parse({ workId: "wrk-1" }).kind).toBe("render");
+    expect(
+      agentJobListInputSchema.safeParse({ workId: "wrk-1", kind: "tts" }).success,
+    ).toBe(true);
+    expect(
+      agentJobListInputSchema.safeParse({ workId: "wrk-1", kind: "asset_ingest" }).success,
+    ).toBe(false);
+    expect(
+      agentJobListInputSchema.safeParse({ workId: "wrk-1", kind: "unknown" }).success,
+    ).toBe(false);
+  });
+});
+
 describe("script.save and script.validate", () => {
   it("accepts a full document for save and rejects unknown fields", () => {
     expect(
@@ -466,6 +482,32 @@ describe("script.save and script.validate", () => {
         warnings: [],
       }).success,
     ).toBe(true);
+  });
+
+  it("accepts an optional base guard and the HTTP restore source", () => {
+    const withBase = scriptSaveRequestSchema.parse({
+      languageEditionId: "led-1",
+      content: validContentDocument(),
+      baseScriptVersionId: "scr-002",
+      sourceScriptVersionId: "scr-001",
+    });
+    expect(withBase.baseScriptVersionId).toBe("scr-002");
+    expect(withBase.sourceScriptVersionId).toBe("scr-001");
+
+    expect(
+      scriptSaveRequestSchema.parse({
+        languageEditionId: "led-1",
+        content: validContentDocument(),
+      }).sourceScriptVersionId,
+    ).toBeNull();
+
+    expect(
+      scriptSaveRequestSchema.safeParse({
+        languageEditionId: "led-1",
+        content: validContentDocument(),
+        baseScriptVersionId: null,
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts either a document or a base version with operations", () => {

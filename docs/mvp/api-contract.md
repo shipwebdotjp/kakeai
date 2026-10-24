@@ -223,7 +223,7 @@ latestRenderJobはRender Jobがまだないときはnullとする。失敗した
 
 ### 作品作成と名称変更
 
-POST /works は、Work、`originalLocale` のLanguageEdition、`schemaVersion: 1` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
+POST /works は、Work、`originalLocale` のLanguageEdition、`schemaVersion: 1` の `explanation-scenes@1` と `visualTheme: soft-editorial@1` を持つ初期ScriptVersion（`versionNumber: 1`）を同じトランザクションで作成する。初期Sceneは導入、要点1件、結びとし、各Sceneにはテンプレート既定の `accent`（`theme.primary`）と `label` を入れる。要点Sceneは音声主導の `timing.mode: "auto"`、導入と結びはテンプレート既定の固定尺にする。初期ContentDocumentの `locale` は `originalLocale` と一致させる。Editionの `currentScriptVersionId` を初期版に設定する。クライアントは初期のContentDocumentを送らない。
 
 ~~~http
 POST /api/v1/works

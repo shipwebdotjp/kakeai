@@ -15,6 +15,7 @@ import {
   assetSchema,
   bulkTtsJobExclusionSchema,
   bulkTtsJobsResultSchema,
+  jobKindSchema,
   jobSchema,
   previewTimelineSchema,
   scriptVersionSchema,
@@ -38,6 +39,7 @@ import {
   createCompositionRequestSchema,
   createTtsJobRequestSchema,
   publishCompositionRequestSchema,
+  saveScriptVersionRequestSchema,
   updateCompositionDraftRequestSchema,
 } from "./requests";
 import {
@@ -729,9 +731,15 @@ export const scriptEditResultSchema = z.strictObject({
 });
 export type ScriptEditResult = z.infer<typeof scriptEditResultSchema>;
 
-export const scriptSaveRequestSchema = z.strictObject({
+/**
+ * `script.save` shares the HTTP save body (`sourceScriptVersionId`, `content`)
+ * and adds the target Edition. `baseScriptVersionId` is an optional guard: when
+ * it is given, the save only succeeds while that version is the current one.
+ * Omitting it keeps the last-write-wins behaviour of the HTTP save.
+ */
+export const scriptSaveRequestSchema = saveScriptVersionRequestSchema.extend({
   languageEditionId: idSchema,
-  content: contentDocumentSchema,
+  baseScriptVersionId: idSchema.optional(),
   authorAgentId: z.string().trim().min(1).optional(),
 });
 export type ScriptSaveRequest = z.infer<typeof scriptSaveRequestSchema>;
@@ -864,7 +872,16 @@ export const agentRenderStartOutputSchema = z.strictObject({ job: jobSchema });
 export const agentJobGetInputSchema = z.strictObject({ jobId: idSchema });
 export const agentJobGetOutputSchema = z.strictObject({ job: jobSchema });
 
-export const agentJobListInputSchema = z.strictObject({ workId: idSchema });
+/**
+ * `job.list` reads the Jobs of one Work. `asset_ingest` is not Work-scoped, so
+ * it is not selectable; the default keeps the historical render-only listing.
+ */
+export const agentJobListKindSchema = jobKindSchema.extract(["render", "tts"]);
+
+export const agentJobListInputSchema = z.strictObject({
+  workId: idSchema,
+  kind: agentJobListKindSchema.default("render"),
+});
 export const agentJobListOutputSchema = z.strictObject({ jobs: z.array(jobSchema) });
 
 export const agentJobCancelInputSchema = z.strictObject({ jobId: idSchema });

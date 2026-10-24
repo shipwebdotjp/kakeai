@@ -132,6 +132,7 @@ export const ttsJobResultSchema = z.object({
 });
 
 export type TtsJobResult = z.infer<typeof ttsJobResultSchema>;
+export type JobKind = z.infer<typeof jobKindSchema>;
 
 export const jobSchema = z
   .object({

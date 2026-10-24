@@ -284,7 +284,7 @@ const definitions: AgentOperationDefinitions = {
     input: agentJobListInputSchema,
     output: agentJobListOutputSchema,
     run: async (input, context) => ({
-      jobs: await listWorkJobs(context.prisma, input.workId),
+      jobs: await listWorkJobs(context.prisma, input.workId, input.kind),
     }),
   },
   "job.cancel": {

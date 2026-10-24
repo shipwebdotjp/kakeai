@@ -35,8 +35,9 @@
 
 1. エージェントが、人間プリフライト済みの環境で、新規 ja-JP 作品を
    `work.create` から `render.start` まで通せる。
-2. `render` Job が `succeeded` になり、MP4 Artifact の ID・尺・寸法を
-   エージェントが報告できる。
+2. `render` Job が `succeeded` になり、`artifacts` に
+   `role: "render"` / `format: "mp4"` の Artifact があり、エージェントが
+   その `id`・`durationMs`・`widthPx`・`heightPx` を報告できる。
 3. 人間が UI から MP4 を取得して確認できる。
 4. 声の前提が欠けている場合、エージェントは TTS を開始する前に停止し、
    人間に「声付きキャラクターの作成」を依頼する。無駄な TTS Job を積まない。
@@ -146,11 +147,13 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 - MP4主線の最初に `character.list` で対象 locale の声を確認する。
 - 無い場合は TTS を開始せず、人間にキャラクター作成を依頼する。
 - 標準の声の設定は `character.addFromLibrary` によるコピーである。
-- 既存話者へ声を割り当てる操作は現時点で無いことを明記する。
+- 既存話者へ声を割り当てる専用操作は無い。`script.save` の全体置換では
+  技術的に設定できるが、標準手順ではない。
 
 ### R3. 一括TTSの順序を固定する
 
-- `tts.createBulk` は必ず `requestId` 付きで開始する。
+- `tts.createBulk` は必ず `requestId` 付きで開始する。`requestId` は契約上
+  任意だが、確定には必須である。
 - `tts.createBulk` から `tts.attachBulk` の間は台本を保存しない。
 - `tts.attachBulk` は同じ `agentId` で呼ぶ。
 - `pending` は失敗ではない。`finalized` まで繰り返す。
@@ -160,24 +163,34 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 
 - `render.start` は `requestId` を付ける。
 - 完了は `job.status === "succeeded"` かつ MP4 Artifact の存在で判定する。
+- Skill §8/§11 の `preview.frame` 必須表現を修正し、任意にする。
 - `job.wait` の `timedOut: true` は失敗ではない。同じ Job ID で続ける。
 - エージェントは「絵が正しい」と断定しない。最終確認は人間に返す。
 
-### R5. 失敗時の回復を明文化する
+### R5. 失敗時の回復を実装する（P2）
 
+- `job.list` は `{ workId, kind? }` を受け、`kind` は `render`（既定）または
+  `tts`。`asset_ingest` は Work に紐づかないため enum に含めず、指定すると
+  `VALIDATION_ERROR` になる。HTTP の `GET /works/:workId/jobs` は既定の
+  render のまま。
+- `script.save` は任意の `baseScriptVersionId`（基準版ガード）と
+  `sourceScriptVersionId`（同一 Edition の復元元）を受け付ける。
+  `baseScriptVersionId` 省略時は last-write-wins、指定時は current と
+  一致しなければ `SCRIPT_BASE_STALE`。存在しない版は `WORK_NOT_FOUND`、
+  別 Edition の版は `VALIDATION_ERROR` になる。
+- `work.create` の重複対策は `requestId` を追加せず、タイムアウト後に
+  `work.list` で確認してから再実行するガイド路線とした。
+- TTS Job を失った場合は `job.list { kind: "tts" }` で再発見できる。
+  ただし `requestId` なしで開始した一括生成は、再発見しても確定できない。
 - `AGENT_REQUEST_TIMEOUT` 後は、状態確認を先に行う。
 - `script.edit` と `tts.attachBulk` は同じ `requestId` で再送してよい。
 - 高コスト操作は `requestId` で冪等。
-- `work.create` / `script.save` は再送で重複し得るため、`work.list` /
-  `script.get` で確認してから再実行する。
-- TTS Job を失った場合は、`requestId` が無ければ復元できないため、
-  新しい `requestId` で作り直す。この制約はガイドに明記する。
 
 ### R6. 非ゴールを混ぜない
 
 今回の変更で、サムネイル・SRT・YouTube・Artifact ダウンロード・
-下書きプレビュー・履歴復元・Theme / FaceSet / Voice 管理を追加しない。
-必要になった時点で [roadmap.md](./roadmap.md) から個別に立ち上げる。
+下書きプレビュー・版履歴一覧・Work 複製・Theme / FaceSet / Voice 管理を
+追加しない。必要になった時点で [roadmap.md](./roadmap.md) から個別に立ち上げる。
 
 ### R7. 回帰を固定する
 
@@ -201,6 +214,8 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
   一括生成が1つの ScriptVersion に確定する。
 - `render.start` の再送で二重レンダーにならない。
 - レンダー成功時に MP4 Artifact の ID・尺・寸法を報告できる。
+- スキルとガイドに、声のプリフライト、MP4 の合格ライン、`preview.frame`
+  が任意であること、一括TTSの順序が明記されている。
 - `npm run typecheck` と `npm test` が通る。
 
 ## 関連文書
@@ -212,3 +227,16 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 - [エージェント新規作成の信頼性向上](../agent-new-work/spec.md)
 - [制作スキル](../../skills/kakeai-production/SKILL.md)
 - [ユーザーガイド: エージェント連携](../../user-guide/docs/agent-access.md)
+
+## 実装状況
+
+2026-10-24 時点。
+
+- **P1: 完了。** `work.create` は指定 locale の初期 ContentDocument を作る
+  （ja-JP 既定 / en-US 可）。声のプリフライトと MP4 の合格ラインをスキルと
+  ガイドへ反映済み。
+- **P2: 完了。** `job.list` の `kind`（`render` / `tts`）と `script.save` の
+  基準版ガード / `sourceScriptVersionId` を実装済み。`work.create` の冪等化は
+  `requestId` を追加せず、`work.list` で確認するガイド路線。
+- **P3 / 将来: 未着手。** 項目は [todo.md](./todo.md) と
+  [roadmap.md](./roadmap.md) に残している。

@@ -19,6 +19,7 @@
    - 専用APIは追加しない。
    - 既存の版一覧 (`GET /language-editions/:editionId/script-versions`)、特定版取得 (`GET /script-versions/:scriptVersionId`)、台本保存 (`POST /language-editions/:editionId/script-versions`) を組み合わせる。
    - 選んだ過去版の内容 (`content`) を `sourceScriptVersionId` に過去版IDを指定して送信・保存する。
+   - `sourceScriptVersionId` は同じ Edition の版に限り、別 Edition の版を指定した保存は `VALIDATION_ERROR` とする。
    - 復元は既存版を上書きせず、新しい最大版番号を持つ現在版を作成する。
    - 現在版は復元対象として表示のみとし、操作を出さない。
 

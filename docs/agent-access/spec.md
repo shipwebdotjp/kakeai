@@ -142,15 +142,15 @@
 - `asset.get` — Asset 1件を返す。
 - `composition.list` / `composition.get` / `composition.draft.get` / `composition.authoringContext`
 - `character.list` / `character.get` — キャラクターライブラリの読み取り（後述）。
-- `job.get` / `job.list`
+- `job.get` / `job.list` — `job.list` は `{ workId, kind? }` を受け、`kind` は `render`（既定）または `tts` を選ぶ。`asset_ingest` は Work に紐づかないため指定できず、指定すると `VALIDATION_ERROR` になる。
 - `preview.frame` — render 成果物（`role: "render"`・`format: "mp4"` の Artifact）の指定時刻（`timeMs`）の静止画を原寸 PNG（base64）で返す。時刻解決とキャッシュは既存の静止画抽出の規則を再利用する。詳細は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) を正とする。
 
 可逆な変更:
 
-- `work.create` — Work、指定 locale（既定は `ja-JP`）の LanguageEdition、初期 ScriptVersion を [../mvp/spec.md](../mvp/spec.md) の作成規則で作る。
+- `work.create` — Work、指定 locale（既定は `ja-JP`）の LanguageEdition、その locale の初期 ContentDocument を持つ初期 ScriptVersion を [../mvp/spec.md](../mvp/spec.md) の作成規則で作る。初期 ContentDocument の `locale` は Edition の `originalLocale` と一致する。
 - `work.update` — Work の管理上の作品名 `title` を変更する。動画内に表示するタイトルは ContentDocument 側の Scene スロットであり、これとは別である（[../mvp/api-contract.md](../mvp/api-contract.md) の `PATCH /works/:workId` と同じ規則）。
 - `edition.create` — 既存 Work に言語版を追加する。引数は HTTP の `POST /works/:workId/language-editions` と同じ（`workId`、`locale`、`sourceEditionId`）。初期版はシード元 current のコピーに置き換え規則を適用したもの（[../multilingual-editions/spec.md](../multilingual-editions/spec.md)）。重複 locale は `LANGUAGE_EDITION_EXISTS`、他 Work の Edition は `WORK_NOT_FOUND` とする。
-- `script.save` — `languageEditionId` と全 `ContentDocument` を受け、検証して新しい Script Version を追加し current を進める。全体の置換や取り込み向けであり、通常の編集は `script.edit` を使う。
+- `script.save` — `languageEditionId` と全 `ContentDocument` を受け、検証して新しい Script Version を追加し current を進める。任意の `baseScriptVersionId`（基準版ガード）と `sourceScriptVersionId`（同じ Edition の復元元）も受け付ける（後述）。全体の置換や取り込み向けであり、通常の編集は `script.edit` を使う。
 - `script.edit` — 基準版と `ScriptOperation` の配列を受け、操作コアで一括適用し、保存検証を通して新しい Script Version を追加する。1 呼び出しは 1 版とし、途中失敗時は版を作らない。
 - `asset.import` — 後述の手順で Asset を取り込む。
 - `asset.tag` — Asset のタグを更新する。
@@ -179,6 +179,22 @@
 - 操作は配列順に適用する。作成操作の `key` は同一呼び出し内の後続操作から `{ "key": "..." }` で参照できる。
 - 成功時は新しい Script Version、作成した ID、`warnings`、解決済み `timeline` を返す。`script.get` の往復を省略できる。
 - 操作コアのエラーは `EDIT_*` のまま返し、保存検証の `VALIDATION_ERROR` と区別する。
+
+### `script.save` の契約
+
+```jsonc
+{
+  "languageEditionId": "led_001",
+  "content": { "...": "ContentDocument" },
+  "baseScriptVersionId": "scr_003",
+  "sourceScriptVersionId": "scr_001"
+}
+```
+
+- `baseScriptVersionId` は任意である。省略時は HTTP の保存と同じ last-write-wins で、Edition の current を新しい版へ進める。指定時はその版が Edition の current と一致する場合だけ保存し、一致しなければ `SCRIPT_BASE_STALE`（409）で版を作らない。存在しない版は `WORK_NOT_FOUND`、別 Edition の版は `VALIDATION_ERROR` とする。
+- `sourceScriptVersionId` は任意で、省略時は `null`。HTTP の保存と同じく、同じ Edition の版だけを復元元として受け付け、別 Edition や存在しない版は `VALIDATION_ERROR`（issue path は `["sourceScriptVersionId"]`）とする。
+- `authorAgentId` は `script.edit` と同じく任意で、省略時は接続の `agentId` を使う。
+- `requestId` は持たない。再送の冪等化は `script.edit` と TTS 系の操作の対象であり、`script.save` は版単位の冪等化を行わない。
 
 ### Composition authoring の契約
 
@@ -257,6 +273,7 @@
 ## 長尺操作
 
 - 素材取り込み・TTS・レンダーは Job として実行し、操作は Job の投入と ID の返却まで行う。状態は `job.get` のポーリングで確認する。
+- 投入済み Job の再発見は `job.list` で行う。`kind` は `render`（既定）または `tts` を選び、Work に紐づく Job だけを返す。取り込み Job は Work に紐づかないため `job.list` の対象外であり、`job.get` で確認する。
 - Job の状態遷移、単一 worker、リースなし、起動時 `WORKER_INTERRUPTED` 掃除は [../mvp/spec.md](../mvp/spec.md) と [ADR 0020](../adr/0020-no-job-lease-startup-reap.md) の規則をそのまま適用する。
 
 ## 帰属
@@ -283,7 +300,7 @@
 | `CLI_USAGE_ERROR` | 未知のサブコマンド、不正な引数、`--wait` などの誤用（CLI 束縛のみ） |
 | `CLI_INPUT_ERROR` | `--input` のファイル・標準入力を読めない、または JSON として解析できない（CLI 束縛のみ） |
 | `CLI_INTERNAL_ERROR` | CLI 束縛で想定外の失敗。詳細は返さない（CLI 束縛のみ） |
-| `SCRIPT_BASE_STALE` | `baseScriptVersionId` が current と一致しない |
+| `SCRIPT_BASE_STALE` | `baseScriptVersionId` が current と一致しない（`script.edit` の必須の基準版と、`script.save` の任意の基準版ガード） |
 | `IDEMPOTENCY_CONFLICT` | 同じ `requestId` が異なる入力で使われた |
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった |
 | `EDIT_TARGET_NOT_FOUND` / `EDIT_PRECONDITION_FAILED` / `EDIT_INVALID_INPUT` / `EDIT_UNSUPPORTED_TEMPLATE` / `EDIT_ID_GENERATION_FAILED` | 操作コアのエラー（[../editor-core/spec.md](../editor-core/spec.md)） |
