@@ -14,9 +14,13 @@ import {
   type JobWaitResult,
 } from "@kakeai/agent-client";
 import {
+  agentImageBase64Of,
+  agentImageMetadataOf,
   agentOperationInputSchemas,
   agentOperationOutputSchemas,
+  isAgentImagePreviewOperation,
   type AgentErrorIssue,
+  type AgentImagePreviewOperationName,
   type AgentOperationInputMap,
   type AgentOperationName,
   type AgentOperationOutputMap,
@@ -115,18 +119,22 @@ function waitInputOf(
 }
 
 /**
- * `preview.frame --out <path>`: the PNG bytes go to the file so stdout stays
- * a small metadata JSON. Validation already passed, so this only reshapes
- * validated output and never prints an undescribed shape by accident.
+ * Image preview operations with `--out <path>`: the image bytes go to the file
+ * so stdout stays a small metadata JSON. Validation already passed, so this
+ * only reshapes validated output and never prints an undescribed shape.
  */
-async function writePreviewFrameFile(
-  output: AgentOperationOutputMap["preview.frame"],
+async function writePreviewImageFile(
+  output: AgentOperationOutputMap[AgentImagePreviewOperationName],
   out: string,
   io: CliIo,
 ): Promise<Record<string, unknown>> {
   const target = resolve(io.cwd ?? process.cwd(), out);
+  const base64 = agentImageBase64Of(output);
+  if (base64 === undefined) {
+    throw internalError();
+  }
   try {
-    await writeFile(target, Buffer.from(output.pngBase64, "base64"));
+    await writeFile(target, Buffer.from(base64, "base64"));
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new CliError(CLI_ERROR_CODES.OUTPUT_ERROR, 1, [
@@ -137,7 +145,10 @@ async function writePreviewFrameFile(
       },
     ]);
   }
-  const { pngBase64: _omitted, ...metadata } = output;
+  const metadata = agentImageMetadataOf(output);
+  if (metadata === undefined) {
+    throw internalError();
+  }
   return { ...metadata, path: target };
 }
 
@@ -187,9 +198,9 @@ async function executeOperation(
   }
 
   if (!command.options.wait) {
-    if (operation === "preview.frame" && command.options.out !== undefined) {
-      return writePreviewFrameFile(
-        validatedOutput.data as AgentOperationOutputMap["preview.frame"],
+    if (isAgentImagePreviewOperation(operation) && command.options.out !== undefined) {
+      return writePreviewImageFile(
+        validatedOutput.data as AgentOperationOutputMap[AgentImagePreviewOperationName],
         command.options.out,
         io,
       );

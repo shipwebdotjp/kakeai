@@ -70,8 +70,8 @@ files.
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
-| 8 | Render | `render.start`, `job.get` / `job.wait` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`) |
-| 9 | Optional visual check | `preview.frame`, user review | Frames inform the report; the user judges quality |
+| 8 | Optional pre-render visual check | `preview.scriptFrame`, `preview.assetFrame` | Layout, text overflow, overlap, missing media |
+| 9 | Render and optional visual check | `render.start`, `job.get` / `job.wait`, `preview.frame` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`); the user judges final quality |
 
 Do not interleave a later phase into an earlier one unless the earlier phase is
 saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
@@ -287,29 +287,46 @@ generation.
    means the user's TTS engine is not reachable: ask them to start it. Do not
    switch adapters or invent an endpoint.
 
-## 8. Validate and render
+## 8. Validate, preview and render
 
 1. `script.validate` the exact version you intend to render. Fix every
    `VALIDATION_ERROR` issue (JSON Pointer + reason). Read warnings against
    `schema.get.warningCodes`; fix real problems and leave intentional layout
    warnings alone.
-2. `render.start` with `scriptVersionId`. It returns `{ job }` of kind `render`.
+2. **Optional pre-render visual check** — before paying for a render, you may
+   inspect the saved version:
+   - Pick 2–3 times from the resolved `timeline`: the first scene after its
+     transition (start + ~500ms), the densest cue/line scene, a table/chart/
+     flow/composition scene, and the ending.
+   - Call `preview.scriptFrame` with `{ scriptVersionId, timeMs }`. It returns
+     a full-resolution PNG without creating a version, Job, or Artifact. In MCP
+     the picture is an image block; in the CLI use `--out frame.png` to write
+     the file and keep stdout small.
+   - Look for text overflow, overlapping elements, missing images, table
+     clipping and standing-character placement. If you find a real problem,
+     fix it with `script.edit` and preview the new version again.
+   - Use `preview.assetFrame` when the visual content of an asset matters
+     (for example choosing a video frame). Images return their source bytes;
+     videos return a PNG at `timeMs`; audio is rejected.
+   - The preview is for layout, not final quality. Do not claim that colors,
+     motion, or sound are correct. If the call times out, retry once and then
+     continue to render; a preview is not part of the acceptance line.
+3. `render.start` with `scriptVersionId`. It returns `{ job }` of kind `render`.
    It also accepts an optional `requestId` (§9.1), so a retried render does not
    queue a second Job.
-3. Poll `job_wait` / `job.wait` (MCP `kakeai_job_wait`) or `job.get`. A timeout
+4. Poll `job_wait` / `job.wait` (MCP `kakeai_job_wait`) or `job.get`. A timeout
    (`timedOut: true`) is not a failure; call again with the same job ID.
    A failed job exposes `job.error`. The phase is complete only when
    `status: "succeeded"` **and** `artifacts` contains an Artifact with
    `role: "render"` / `format: "mp4"`. Report its `id`, `durationMs`,
    `widthPx` and `heightPx`. Render output is an Artifact, not an Asset.
-4. **Optional** visual check — if you want to inspect the picture, fetch stills
-   with `preview.frame` (`artifactId` from `job.get`, `timeMs` at key moments:
-   scene changes, telop-heavy frames, the ending). Describe what you actually
-   see in each frame. `preview.frame` is not part of the acceptance line and
-   the final quality judgment stays with the user. If the first call ends in
-   `AGENT_REQUEST_TIMEOUT` on a long video, call once more with the same input
-   — the second hit uses the warm server-side cache.
-5. The human handles the final look and sound check, downloading the MP4, the
+5. **Optional post-render visual check** — if you want to inspect the rendered
+   picture, fetch stills with `preview.frame` (`artifactId` from `job.get`,
+   `timeMs` at the same key moments). Describe what you actually see in each
+   frame. If the first call ends in `AGENT_REQUEST_TIMEOUT` on a long video,
+   call once more with the same input — the second hit uses the warm
+   server-side cache.
+6. The human handles the final look and sound check, downloading the MP4, the
    thumbnail, the SRT and the YouTube settings. Do not claim the video is
    correct on their behalf.
 
@@ -401,9 +418,10 @@ to the user when the fix is on their side.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.
 - Making the final quality judgment (picture, sound, delivery) for the user.
-  `preview.frame` is optional: not checking stills is not a failure, and
-  checking them does not replace the human's final review. The human also
-  downloads the MP4 and handles the thumbnail, SRT and YouTube settings.
+  `preview.scriptFrame` / `preview.assetFrame` / `preview.frame` are optional:
+  not checking stills is not a failure, and checking them does not replace the
+  human's final review. The human also downloads the MP4 and handles the
+  thumbnail, SRT and YouTube settings.
 
 ## 12. Related skills
 

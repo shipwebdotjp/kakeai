@@ -33,7 +33,7 @@
 - 実体は `apps/mcp`（`@kakeai/mcp`、bin `kakeai-mcp`）の stdio サーバーである。`@kakeai/agent-client` でローカル制御ソケットへ接続する薄いクライアントであり、Prisma・DB・ファイル書込み・業務ロジックを持たない。MCP は操作を選び、入力と出力を契約スキーマで検証して転送するだけである。
 - 公式の `@modelcontextprotocol/sdk`（`^1.32.1`）を使い、低レベルの stdio サーバーとして `initialize` / `tools/list` / `tools/call` を実装する。stdout は JSON-RPC 専用とし、ログは stderr にだけ書く。起動失敗や内部エラーでもスタックトレースを stdout に出さない。
 - 設定は `KAKEAI_DATA_DIR`（未指定ならプラットフォーム既定のデータルート）からソケットを解決し、`KAKEAI_SOCKET` または `--socket` で明示パスを指定できる。`--data-dir` も受け付ける。`KAKEAI_AGENT_ID` または `--agent-id` をハンドシェイクの `agentId` に使い、既定は `mcp` とする。`--help` と `--version` をサポートする。ソケット接続時の `protocolVersion` は `1` である。
-- ツール名は MCP の命名制約に合わせて `kakeai_<domain>_<verb>` の snake_case とし、説明文に正規の `domain.verb` を必ず含める。`inputSchema` と `outputSchema` は `packages/contracts` の Zod スキーマから `z.toJSONSchema` で生成し、束縛側に JSON Schema を手書きしない。成功時は JSON を `content[].text` と `structuredContent` の両方で返す。`preview.frame` に限り、`content[0].text` は `pngBase64` を除いたメタ情報の要約 JSON とし、全出力は `structuredContent`、画像バイトは標準の image コンテントブロックで返す（[ADR 0079](../adr/0079-mcp-preview-frame-text-summary.md)）。
+- ツール名は MCP の命名制約に合わせて `kakeai_<domain>_<verb>` の snake_case とし、説明文に正規の `domain.verb` を必ず含める。`inputSchema` と `outputSchema` は `packages/contracts` の Zod スキーマから `z.toJSONSchema` で生成し、束縛側に JSON Schema を手書きしない。成功時は JSON を `content[].text` と `structuredContent` の両方で返す。画像を返す操作（`agentImagePreviewOperationNames`）に限り、`content[0].text` は `pngBase64` / `imageBase64` を除いたメタ情報の要約 JSON とし、全出力は `structuredContent`、画像バイトは標準の image コンテントブロックで返す（[ADR 0079](../adr/0079-mcp-preview-frame-text-summary.md)）。
 - ツール一覧は次のとおり。読み取り・変更の区分と長尺かどうかは `schema.get` の `agentOperations` と同じ分類を使う。
 
 | 操作 | 種別 | 長尺（Job） | MCP ツール名 |
@@ -57,6 +57,8 @@
 | `job.list` | read | no | `kakeai_job_list` |
 | `job.cancel` | mutation | no | `kakeai_job_cancel` |
 | `preview.frame` | read | no | `kakeai_preview_frame` |
+| `preview.scriptFrame` | read | no | `kakeai_preview_script_frame` |
+| `preview.assetFrame` | read | no | `kakeai_preview_asset_frame` |
 | `composition.list` | read | no | `kakeai_composition_list` |
 | `composition.get` | read | no | `kakeai_composition_get` |
 | `composition.draft.get` | read | no | `kakeai_composition_draft_get` |
@@ -78,10 +80,11 @@
 
 ## CLI 束縛
 
-- 実体は `apps/cli`（`@kakeai/cli`、bin `kakeai-agent`）である。`@kakeai/agent-client` で同じローカル制御ソケットへ接続する薄いクライアントであり、Prisma・DB・業務ロジックを持たない。書き込みは stdout と stderr だけで、ファイルは `--input` の読取りにしか使わない。
+- 実体は `apps/cli`（`@kakeai/cli`、bin `kakeai-agent`）である。`@kakeai/agent-client` で同じローカル制御ソケットへ接続する薄いクライアントであり、Prisma・DB・業務ロジックを持たない。書き込みは stdout と stderr、および画像を返す操作の `--out` だけで、ファイルは `--input` の読取りと `--out` の画像書込みに使う。
 - サブコマンドは正規の `domain.verb` をそのまま使う（`kakeai-agent work.create --input input.json`、`kakeai-agent schema.get`）。`job.wait <jobId>` は MCP の `kakeai_job_wait` と同じ便利コマンド、`operations` は `agentOperationCatalog` を返す。サブコマンド一覧は操作カタログから導出し、束縛側に第二の一覧を持たない。
 - `--input` はインライン JSON・ファイルパス・`-`（標準入力）を受け付ける。省略時は `{}` として扱う。送信前に `packages/contracts` の入力スキーマで検証し、受信後も出力スキーマで検証してから stdout に 1 つの JSON を書く。`--pretty` は出力をインデントする。
 - グローバルオプションは `--agent-id`（既定 `cli`）、`--data-dir`、`--socket`、`--timeout`（1 要求のタイムアウト。読み取り・変更の両方に適用）。解決順は MCP と同じく、引数、環境変数（`KAKEAI_AGENT_ID` / `KAKEAI_DATA_DIR` / `KAKEAI_SOCKET`）、プラットフォーム既定の順である。`--help` は種別ごとの操作一覧、`--version` はバージョンを返す。
+- `--out <path>` は画像を返す操作（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame`）だけで使える。指定時は画像バイトをそのファイルに書き、stdout JSON は `pngBase64` / `imageBase64` を除いて `path` を付す。書込み失敗は `CLI_OUTPUT_ERROR`（終了コード1）で、入力・出力の契約検証後にだけ書く。
 - 長尺操作は `job.wait <jobId>` または `asset.import` / `render.start` / `tts.create` / `tts.createBulk` の `--wait` で待てる。どちらも MCP と同じ `jobWaitInputSchema` と `waitForJob` を使い、`--timeout-ms`（既定 60000、最大 600000）と `--interval-ms`（既定 500、10〜30000）を受ける。`job.wait` は `{ job, timedOut, polls }` を返し、予算超過は成功（終了コード 0）で `timedOut: true` とする。`--wait` は操作結果を `{ result, wait }` に包み、Job を投入しなかった場合（`asset.import` の重複）と複数 Job を投入した場合（`tts.createBulk`）は `wait: null` とする。後者は Job ID ごとに `job.wait` するか `job.get` で確認する。
 - 失敗は stderr に `{ code, issues? }` の 1 行 JSON だけを書き、スタックトレースや自由文を出さない。stdout は常にコマンド出力専用である。終了コードは、`0` が成功（help・version・`operations` を含む）、`1` が操作または契約検証の失敗と応答の出力失敗（`--out` の書込み失敗など。code は `CLI_OUTPUT_ERROR`）、`2` が使い方または `--input` の誤り（`CLI_USAGE_ERROR` / `CLI_INPUT_ERROR`）である。CLI 自身の想定外の失敗は `CLI_INTERNAL_ERROR`（終了コード 1）とし、詳細を返さない。
 - MCP と同じく、実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は CLI にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
@@ -105,7 +108,7 @@
 - 起動時、ソケットファイルが既にある場合はアプリプロセスだけが後始末する。接続できるソケットは稼働中として残し、接続できないソケットだけを削除してから listen する。ソケットでないファイルは削除しない。終了時は自分が作ったソケットを unlink する。
 - 接続時に `{ "protocolVersion": 1, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
 - フレームは 1 行 1 JSON（NDJSON）とし、要求は `{ "requestId": "<呼び出し内で一意>", "operation": "<name>", "input": <object> }`、応答は `{ "requestId": "...", "ok": true, "data": ... }` または `{ "requestId": "...", "ok": false, "error": { "code": "...", "issues": [...] } }` とする。`issues` は `{ path, code, message }` の配列で、スタックトレースや自由文の詳細は返さない。
-- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは 10 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
+- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは原則 10 秒、画像を返すプレビュー（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame`）だけ 30 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
 - サーバーは応答を返した後も同じ接続で次の要求を受け付けるが、5 分間何も受信しない接続は閉じる。
 - ソケットファイルが残っていて接続できない場合、クライアントは削除せず `AGENT_APP_UNAVAILABLE` を返す。所有者はアプリプロセスだけとする。
 
@@ -146,6 +149,8 @@
 - `character.list` / `character.get` — キャラクターライブラリの読み取り（後述）。
 - `job.get` / `job.list` — `job.list` は `{ workId, kind? }` を受け、`kind` は `render`（既定）または `tts` を選ぶ。`asset_ingest` は Work に紐づかないため指定できず、指定すると `VALIDATION_ERROR` になる。
 - `preview.frame` — render 成果物（`role: "render"`・`format: "mp4"` の Artifact）の指定時刻（`timeMs`）の静止画を原寸 PNG（base64）で返す。時刻解決とキャッシュは既存の静止画抽出の規則を再利用する。詳細は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) を正とする。
+- `preview.scriptFrame` — 保存済み ScriptVersion を、Web UI と同じコンパイラの HTML から headless でシークし、指定時刻（`timeMs`）の原寸 PNG（base64）で返す。版・Job・Artifact は作らない。`timeMs` は解決済み尺以下。コンパイル不能は `PREVIEW_INPUT_INVALID`、描画失敗は `INTERNAL_ERROR`。render 前の構図確認用で、最終的な品質判断は人に残す。
+- `preview.assetFrame` — Asset 1件の絵を返す。画像は原本（正規化 rendition があればそれ）のバイトと MIME、動画は指定時刻（`timeMs`、既定0）の PNG 静止画、音声は `VALIDATION_ERROR`。画像は `timeMs` を指定できない。巨大な画像は `VALIDATION_ERROR`。
 
 可逆な変更:
 

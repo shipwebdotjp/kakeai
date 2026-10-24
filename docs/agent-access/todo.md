@@ -114,7 +114,7 @@
 
 ### [x] B6 視覚確認（R3-4）
 
-- [x] 実施は [../visual-confirmation/todo.md](../visual-confirmation/todo.md) を正とする。`preview.frame`（render 成果物の指定時刻の原寸 PNG）を操作コア・MCP・CLI へ公開し、仕様・roadmap・ユーザーガイド・スキル・用語を更新する。
+- [x] 実施は [../visual-confirmation/todo.md](../visual-confirmation/todo.md) を正とする。`preview.frame`（render 成果物の指定時刻の原寸 PNG）を操作コア・MCP・CLI へ公開し、仕様・roadmap・ユーザーガイド・スキル・用語を更新する。V2 の保存版・素材プレビューは同フォルダの D1〜D4 で追加済み。
 - 完了条件: ソケット・MCP・CLI から指定時刻の静止画が取得でき、異常系が安定コードで返る。
 
 ### [ ] B7 エージェント一括TTS確定（R2-2）

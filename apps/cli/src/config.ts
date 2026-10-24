@@ -5,11 +5,17 @@ import {
   MAX_JOB_WAIT_TIMEOUT_MS,
   MIN_JOB_WAIT_INTERVAL_MS,
 } from "@kakeai/agent-client";
-import { agentLongRunningOperationNames } from "@kakeai/contracts";
+import {
+  agentImagePreviewOperationNames,
+  agentLongRunningOperationNames,
+  isAgentImagePreviewOperation,
+} from "@kakeai/contracts";
 import { usageError } from "./errors.ts";
 import { resolveCliCommand, type CliCommand } from "./commands.ts";
 
 export const DEFAULT_AGENT_ID = "cli";
+
+const OUT_IMAGE_OPERATIONS_MESSAGE = `--out は画像を返す操作（${agentImagePreviewOperationNames.join(" / ")}）だけに指定できます。`;
 
 /** Node clamps timer delays above this value to 1 ms. */
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -28,7 +34,7 @@ export interface CliRunOptions {
   waitIntervalMs?: number;
   /** `job.wait <jobId>` positional. Overrides the `jobId` inside `--input`. */
   jobId?: string;
-  /** `preview.frame` only: write the PNG bytes to this path instead of stdout. */
+  /** Image preview operations only: write the image bytes to this path. */
   out?: string;
 }
 
@@ -158,7 +164,7 @@ export function parseCliArgs(
       throw usageError("operations は追加の引数を受け取りません。");
     }
     if (values.out !== undefined) {
-      throw usageError("--out は preview.frame だけに指定できます。");
+      throw usageError(OUT_IMAGE_OPERATIONS_MESSAGE);
     }
     return { kind: "operations", pretty: values.pretty === true };
   }
@@ -217,9 +223,9 @@ export function parseCliArgs(
   const out = nonEmpty(outRaw);
   if (
     out !== undefined &&
-    (command.kind !== "operation" || command.operation !== "preview.frame")
+    (command.kind !== "operation" || !isAgentImagePreviewOperation(command.operation))
   ) {
-    throw usageError("--out は preview.frame だけに指定できます。");
+    throw usageError(OUT_IMAGE_OPERATIONS_MESSAGE);
   }
 
   const agentId = nonEmpty(values["agent-id"]) ?? nonEmpty(env.KAKEAI_AGENT_ID) ?? DEFAULT_AGENT_ID;

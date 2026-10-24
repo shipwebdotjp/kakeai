@@ -13,6 +13,7 @@ import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
 import { applySqlitePragmas } from "../db/pragmas.ts";
+import type { PreviewRasterizer } from "../media/preview-rasterize.ts";
 import { FakeFontCatalogAdapter, FontCatalogService } from "../services/font-catalog.ts";
 import { ensureDataDirectories } from "../storage/paths.ts";
 import { commitFile } from "../storage/asset-store.ts";
@@ -24,6 +25,10 @@ const PNG_1X1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=",
   "base64",
 );
+
+const fakePreviewRasterizer: PreviewRasterizer = {
+  renderFrame: async () => PNG_1X1,
+};
 
 let dataDir: string;
 let fixtureDir: string;
@@ -86,6 +91,7 @@ beforeAll(async () => {
     config,
     prisma,
     fontCatalogService,
+    previewRasterizer: fakePreviewRasterizer,
   });
   client = createAgentClient({ dataRoot: config.dataRoot, agentId: "e2e-agent" });
   try {
@@ -261,6 +267,115 @@ describe("agent socket integration", () => {
     await expectAgentError(
       client.request("preview.frame", { artifactId: caption.id, timeMs: 0 }),
       "VALIDATION_ERROR",
+    );
+  });
+
+  it("rasterizes a saved script version without creating a render", async () => {
+    const work = await createWork("台本プレビュー作品");
+    const edition = firstEdition(work);
+    const scriptVersionId = edition.currentScriptVersion.id;
+    const before = {
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    };
+
+    const frame = await client.request("preview.scriptFrame", {
+      scriptVersionId,
+      timeMs: 1000,
+    });
+    expect(frame.scriptVersionId).toBe(scriptVersionId);
+    expect(frame.requestedTimeMs).toBe(1000);
+    expect(frame.durationMs).toBeGreaterThan(0);
+    expect(frame.width).toBe(1);
+    expect(frame.height).toBe(1);
+    expect(frame.mimeType).toBe("image/png");
+    expect(Buffer.from(frame.imageBase64, "base64")).toEqual(PNG_1X1);
+
+    await expectAgentError(
+      client.request("preview.scriptFrame", {
+        scriptVersionId,
+        timeMs: 24 * 60 * 60 * 1000,
+      }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("preview.scriptFrame", {
+        scriptVersionId: "scr_missing",
+        timeMs: 0,
+      }),
+      "RESOURCE_NOT_FOUND",
+    );
+
+    expect({
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    }).toEqual(before);
+  });
+
+  it("returns asset image bytes and rejects non-visual assets", async () => {
+    const bytes = Buffer.concat([PNG_1X1, Buffer.from(randomUUID())]);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const storageKey = `assets/test-preview-${randomUUID()}`;
+    const tempPath = join(fixtureDir, `preview-asset-${randomUUID()}.png`);
+    await writeFile(tempPath, bytes);
+    await commitFile(tempPath, storageKey, config.directories);
+    const asset = await prisma.asset.create({
+      data: {
+        kind: "image",
+        origin: "uploaded",
+        status: "ready",
+        storageKey,
+        originalFilename: "preview.png",
+        mediaType: "image/png",
+        byteSize: BigInt(bytes.length),
+        sha256,
+        widthPx: 1,
+        heightPx: 1,
+      },
+    });
+
+    const frame = await client.request("preview.assetFrame", {
+      assetId: asset.id,
+    });
+    expect(frame).toMatchObject({
+      assetId: asset.id,
+      kind: "image",
+      requestedTimeMs: null,
+      resolvedTimeMs: null,
+      width: 1,
+      height: 1,
+      mimeType: "image/png",
+    });
+    expect(Buffer.from(frame.imageBase64, "base64")).toEqual(bytes);
+
+    await expectAgentError(
+      client.request("preview.assetFrame", { assetId: asset.id, timeMs: 0 }),
+      "VALIDATION_ERROR",
+    );
+
+    const audioPath = join(fixtureDir, `preview-audio-${randomUUID()}.wav`);
+    await writeFile(audioPath, Buffer.from("not audio"));
+    const audio = await prisma.asset.create({
+      data: {
+        kind: "audio",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: `assets/test-preview-audio-${randomUUID()}`,
+        originalFilename: "preview.wav",
+        mediaType: "audio/wav",
+        byteSize: BigInt(9),
+        sha256: createHash("sha256").update("not audio").digest("hex"),
+      },
+    });
+    await expectAgentError(
+      client.request("preview.assetFrame", { assetId: audio.id }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("preview.assetFrame", { assetId: "ast_missing" }),
+      "RESOURCE_NOT_FOUND",
     );
   });
 

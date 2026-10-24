@@ -5,11 +5,11 @@ import {
   AGENT_MAX_PENDING_FRAMES_PER_CONNECTION,
   AGENT_MAX_REQUEST_BYTES,
   AGENT_MUTATION_TIMEOUT_MS,
-  AGENT_READ_TIMEOUT_MS,
   agentHandshakeSchema,
   agentRequestEnvelopeSchema,
   agentSuccessResponseSchema,
   isAgentProtocolVersionSupported,
+  resolveAgentReadTimeoutMs,
   type AgentErrorCode,
   type AgentResponse,
 } from "@kakeai/contracts";
@@ -68,7 +68,7 @@ function requestTimeoutError(): AgentOperationError {
  */
 export function attachAgentProtocol(socket: Socket, options: AgentProtocolOptions): void {
   const maxRequestBytes = options.maxRequestBytes ?? AGENT_MAX_REQUEST_BYTES;
-  const readTimeoutMs = options.readTimeoutMs ?? AGENT_READ_TIMEOUT_MS;
+  const readTimeoutOverrideMs = options.readTimeoutMs;
   const mutationTimeoutMs = options.mutationTimeoutMs ?? AGENT_MUTATION_TIMEOUT_MS;
   const idleTimeoutMs = options.idleTimeoutMs ?? AGENT_IDLE_TIMEOUT_MS;
   const maxPendingFrames = Math.max(
@@ -290,7 +290,9 @@ export function attachAgentProtocol(socket: Socket, options: AgentProtocolOption
     input: unknown,
   ): Promise<unknown> {
     const timeoutMs =
-      options.operationKind(operation) === "mutation" ? mutationTimeoutMs : readTimeoutMs;
+      options.operationKind(operation) === "mutation"
+        ? mutationTimeoutMs
+        : resolveAgentReadTimeoutMs(operation, readTimeoutOverrideMs);
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {

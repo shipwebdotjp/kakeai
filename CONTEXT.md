@@ -152,6 +152,14 @@ _Avoid_: Asset, Render
 A full-resolution still PNG extracted from a render Artifact at a requested time, used by an Agent to report visual observations. The final quality judgment stays with the user.
 _Avoid_: Thumbnail, preview video
 
+**Script Preview Frame**:
+A full-resolution still PNG rasterized from a saved ScriptVersion's compiled preview HTML at a requested time, before any render Job exists. It reads the same HTML compiler as the Web UI preview.
+_Avoid_: Render, draft preview
+
+**Asset Preview Frame**:
+The visual content of one Asset returned to an Agent: the stored image bytes for an image, or a still PNG at a requested time for a video. Audio has no visual content.
+_Avoid_: Thumbnail, Asset content URL
+
 **Visual Template**:
 A trusted reusable visual expression with a defined input contract.
 _Avoid_: Visual cue, scene

@@ -160,6 +160,153 @@ describe("MCP server over an in-memory transport", () => {
     }
   });
 
+  it("returns preview.scriptFrame bytes as an image block", async () => {
+    const frame = {
+      scriptVersionId: "scr-1",
+      requestedTimeMs: 1500,
+      durationMs: 9000,
+      width: 320,
+      height: 240,
+      mimeType: "image/png",
+      imageBase64:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=",
+    };
+    const harness = await connectHarness((operation) => {
+      if (operation === "preview.scriptFrame") {
+        return frame;
+      }
+      throw new Error(`unexpected operation: ${operation}`);
+    });
+    try {
+      const result = await harness.client.callTool({
+        name: "kakeai_preview_script_frame",
+        arguments: { scriptVersionId: "scr-1", timeMs: 1500 },
+      });
+      expect(result.isError).toBeUndefined();
+      const { imageBase64: _omitted, ...metadata } = frame;
+      expect(textPayload(result)).toEqual(metadata);
+      expect(result.structuredContent).toEqual(frame);
+      const content = result.content as Array<{
+        type?: string;
+        data?: string;
+        mimeType?: string;
+      }>;
+      expect(content).toHaveLength(2);
+      expect(content[1]).toEqual({
+        type: "image",
+        data: frame.imageBase64,
+        mimeType: "image/png",
+      });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("returns preview.assetFrame bytes with the source MIME type", async () => {
+    const frame = {
+      assetId: "ast-1",
+      kind: "image",
+      requestedTimeMs: null,
+      resolvedTimeMs: null,
+      width: 100,
+      height: 80,
+      mimeType: "image/jpeg",
+      imageBase64: "/9j/4AAQSkZJRg==",
+    };
+    const harness = await connectHarness((operation) => {
+      if (operation === "preview.assetFrame") {
+        return frame;
+      }
+      throw new Error(`unexpected operation: ${operation}`);
+    });
+    try {
+      const result = await harness.client.callTool({
+        name: "kakeai_preview_asset_frame",
+        arguments: { assetId: "ast-1" },
+      });
+      expect(result.isError).toBeUndefined();
+      const { imageBase64: _omitted, ...metadata } = frame;
+      expect(textPayload(result)).toEqual(metadata);
+      expect(result.structuredContent).toEqual(frame);
+      const content = result.content as Array<{
+        type?: string;
+        data?: string;
+        mimeType?: string;
+      }>;
+      expect(content).toHaveLength(2);
+      expect(content[1]).toEqual({
+        type: "image",
+        data: frame.imageBase64,
+        mimeType: "image/jpeg",
+      });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("strips image bytes from text even when the image block cannot be built", async () => {
+    const malformed = {
+      assetId: "ast-1",
+      kind: "image",
+      requestedTimeMs: null,
+      resolvedTimeMs: null,
+      width: 100,
+      height: 80,
+      imageBase64: "aGVsbG8=",
+    };
+    const harness = await connectHarness((operation) => {
+      if (operation === "preview.assetFrame") {
+        return malformed;
+      }
+      throw new Error(`unexpected operation: ${operation}`);
+    });
+    try {
+      const result = await harness.client.callTool({
+        name: "kakeai_preview_asset_frame",
+        arguments: { assetId: "ast-1" },
+      });
+      expect(result.isError).toBeUndefined();
+      expect(textPayload(result)).not.toHaveProperty("imageBase64");
+      expect(result.structuredContent).toEqual(malformed);
+      const content = result.content as Array<{ type?: string }>;
+      expect(content).toHaveLength(1);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("does not add an image block for a non-PNG/JPEG asset MIME", async () => {
+    const webp = {
+      assetId: "ast-1",
+      kind: "image",
+      requestedTimeMs: null,
+      resolvedTimeMs: null,
+      width: 100,
+      height: 80,
+      mimeType: "image/webp",
+      imageBase64: "UklGRg==",
+    };
+    const harness = await connectHarness((operation) => {
+      if (operation === "preview.assetFrame") {
+        return webp;
+      }
+      throw new Error(`unexpected operation: ${operation}`);
+    });
+    try {
+      const result = await harness.client.callTool({
+        name: "kakeai_preview_asset_frame",
+        arguments: { assetId: "ast-1" },
+      });
+      expect(result.isError).toBeUndefined();
+      expect(textPayload(result)).not.toHaveProperty("imageBase64");
+      expect(result.structuredContent).toEqual(webp);
+      const content = result.content as Array<{ type?: string }>;
+      expect(content).toHaveLength(1);
+    } finally {
+      await harness.close();
+    }
+  });
+
   it("returns preview.frame bytes as an image block", async () => {
     const frame = {
       artifactId: "art-1",

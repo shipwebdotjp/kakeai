@@ -3,7 +3,8 @@
 [spec.md](./spec.md) を正とする。上から順に進める。P1 の完了で
 「人間プリフライト済みの環境で MP4 を出せる」状態を作り、P2 は運用の
 取りこぼしを減らす改善、P3-1 は入力契約の探索性を上げる改善である。
-残る P3-2 以降は将来項目として [roadmap.md](./roadmap.md) へ送る。
+P3-2 のうち保存版・素材の視覚確認は実装済みで、下書き・複数フレームなど
+残る項目は将来項目として [roadmap.md](./roadmap.md) へ送る。
 
 ## P0 現状の再現と固定（コード変更なし）
 
@@ -93,13 +94,16 @@ MCP の二重出力でコストが増えるため）。
 入力を1回で組み立てられる。例は保存時検証を通り、`schema.get` の応答サイズは
 ほぼ変わらない。
 
-## P3-2 品質・診断（将来）
+## P3-2 品質・診断（一部実装）
 
 以下は MP4 の生成自体には不要。必要になった時点で個別に仕様化する。
-詳細は [roadmap.md](./roadmap.md)。
+視覚確認の契約・実測は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) と
+[../visual-confirmation/spike.md](../visual-confirmation/spike.md) を正とする。
 
-- [ ] 下書きプレビュー / 保存版プレビューのエージェント操作
-- [ ] 素材画像の確認（`assets/:id/frame` 相当）
+- [x] 保存版プレビュー（`preview.scriptFrame`）
+- [x] 素材画像の確認（`preview.assetFrame`）
+- [ ] 下書きプレビュー（未保存 ContentDocument）
+- [ ] 複数時刻の一括取得・コンタクトシート
 - [ ] `health` / ワーカー状態 / キューの診断
 - [ ] Composition 単体のプレビュー
 - [ ] MCP の `structuredContent` と `content.text` の二重出力の見直し

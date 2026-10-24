@@ -36,6 +36,42 @@
 
 - [x] `npm run typecheck`、`npm test`、最大3回の OCR レビューで妥当な指摘を修正し、コミットする
 
-## 拡張（V2）
+## V2 レンダー前の視覚確認
 
-- render なし確認（保存版・下書きプレビューのラスタライズ）は本 TODO の対象外とする。headless シークの可否を別途スパイクで判断し、結果をもとに本フォルダの `roadmap.md` へ計画を落とす。
+判断と実測は [spike.md](./spike.md)、契約は [spec.md](./spec.md) を正とする。
+
+### [x] D1 保存版プレビュー
+
+- [x] `@hyperframes/engine` と `@hyperframes/core/runtime-script` で、保存版 HTML を headless シークして PNG 化するラスタライザを追加する
+- [x] runtime を composition の inline script より先に `<head>` へ注入する
+- [x] same-origin の media session cookie を受けるため `/api/v1/preview-host` を追加する
+- [x] `preview.scriptFrame`（`{ scriptVersionId, timeMs }`）を操作コア・契約へ追加する
+- [x] MCP の image ブロックと CLI `--out` を画像操作へ一般化する
+- [x] Fake rasterizer のサービステストとソケット統合テストを追加する
+
+### [x] D2 素材プレビュー
+
+- [x] `preview.assetFrame`（`{ assetId, timeMs? }`）を追加する
+- [x] 画像は原本バイト、動画は `still-frame.ts` の PNG、音声は `VALIDATION_ERROR` とする
+- [x] 画像サイズ上限と MIME の契約を追加する
+- [x] サービステストで画像・動画・音声・未知 ID を固定する
+
+### [x] D3 文書・スキル・ガイド
+
+- [x] `docs/visual-confirmation/spec.md` / `roadmap.md` / `spike.md` を更新する
+- [x] `docs/agent-access/spec.md` の操作表・束縛・説明を更新する
+- [x] `docs/agent-mp4-production/todo.md` / `roadmap.md` の P3 の状態を更新する
+- [x] `skills/kakeai-production/SKILL.md` に render 前後の Visual QA を追加する
+- [x] `user-guide/docs/agent-access.md` のツール表・CLI 例・`--out` を更新する
+- [x] `CONTEXT.md` に用語を追加する
+
+### [x] D4 検証とコミット
+
+- [x] `npm run typecheck` と `npm test` を通す
+- [x] OCR レビューの正当な指摘を修正する
+- [x] コミットする
+
+## 拡張（将来）
+
+- 下書きプレビューは、エージェントが未保存の候補を確認したくなった時点で個別に仕様化する。
+- 複数時刻の一括取得・コンタクトシートは、単一フレームの利用実績を見てから `roadmap.md` へ計画を落とす。

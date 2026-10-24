@@ -79,6 +79,10 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "job.cancel": "queued の Job をキャンセルする。",
   "preview.frame":
     "render 成果物（MP4）の指定時刻（`timeMs` ミリ秒）の静止画を原寸 PNG で返す。絵は image ブロック、解決時刻と寸法は JSON で返る。JSON にも原寸 PNG の base64（`pngBase64`）が入るため転記せず、絵が必要なときは image ブロックを使う。",
+  "preview.scriptFrame":
+    "保存済みの台本版（`scriptVersionId`）を、指定時刻（`timeMs` ミリ秒）のプレビュー PNG にする。レンダー Job・台本版・Artifact は作らない。render 前に表・グラフ・フロー・立ち絵・字幕の配置を確認したいときに使う。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。プレビューは構図確認用で、最終的な色・動き・音の判断は render 後に人が行う。",
+  "preview.assetFrame":
+    "素材 1 件の絵を返す。画像は保存されている画像そのもの（MIME は `mimeType`）、動画は指定時刻（`timeMs`、既定 0）の PNG 静止画を返す。音声素材は指定できない。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。素材の見た目を確認したいときに使う。",
   "composition.list": "Composition の一覧を返す。",
   "composition.get": "Composition 1 件を返す。",
   "composition.draft.get": "Composition の draft ファイルと manifest を返す。",

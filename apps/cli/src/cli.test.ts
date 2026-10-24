@@ -182,7 +182,7 @@ describe("CLI argument parsing", () => {
     ).toMatchObject({ options: { wait: true, waitTimeoutMs: 20, waitIntervalMs: 10 } });
   });
 
-  it("restricts --out to preview.frame", () => {
+  it("restricts --out to image preview operations", () => {
     expect(() => parseCliArgs(["work.get", "--out", "frame.png"], {})).toThrow(CliError);
     expect(() => parseCliArgs(["schema.get", "--out", "frame.png"], {})).toThrow(CliError);
     expect(() => parseCliArgs(["job.wait", "job-1", "--out", "frame.png"], {})).toThrow(
@@ -190,9 +190,15 @@ describe("CLI argument parsing", () => {
     );
     expect(() => parseCliArgs(["preview.frame", "--out", "  "], {})).toThrow(CliError);
     expect(() => parseCliArgs(["operations", "--out", "frame.png"], {})).toThrow(CliError);
-    expect(parseCliArgs(["preview.frame", "--out", "frame.png"], {})).toMatchObject({
-      options: { out: "frame.png" },
-    });
+    for (const operation of [
+      "preview.frame",
+      "preview.scriptFrame",
+      "preview.assetFrame",
+    ]) {
+      expect(parseCliArgs([operation, "--out", "frame.png"], {})).toMatchObject({
+        options: { out: "frame.png" },
+      });
+    }
   });
 
   it("validates numeric and unknown options", () => {
@@ -295,6 +301,84 @@ describe("CLI invocation", () => {
     expect(stdout.path).toBe(outPath);
     expect(stdout.artifactId).toBe("art-1");
     expect(stdout.resolvedTimeMs).toBe(1500);
+  });
+
+  it("writes preview.scriptFrame image bytes with --out and prints metadata", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kakeai-cli-out-"));
+    dirs.push(dir);
+    const frame = {
+      scriptVersionId: "scr-1",
+      requestedTimeMs: 1000,
+      durationMs: 9000,
+      width: 320,
+      height: 240,
+      mimeType: "image/png",
+      imageBase64: "aVBORw0KGgo=",
+    };
+    const handler: Handler = (operation, input) => {
+      expect(operation).toBe("preview.scriptFrame");
+      expect(input).toEqual({ scriptVersionId: "scr-1", timeMs: 1000 });
+      return frame;
+    };
+    const outPath = join(dir, "script-frame.png");
+    const captured = capture(handler);
+    expect(
+      await runCli(
+        [
+          "preview.scriptFrame",
+          "--input",
+          '{"scriptVersionId":"scr-1","timeMs":1000}',
+          "--out",
+          outPath,
+        ],
+        captured.io,
+      ),
+    ).toBe(0);
+    expect(captured.stderr()).toBe("");
+    expect(await readFile(outPath)).toEqual(Buffer.from(frame.imageBase64, "base64"));
+    const stdout = JSON.parse(captured.stdout()) as Record<string, unknown>;
+    expect(stdout.imageBase64).toBeUndefined();
+    expect(stdout.path).toBe(outPath);
+    expect(stdout.scriptVersionId).toBe("scr-1");
+    expect(stdout.durationMs).toBe(9000);
+  });
+
+  it("writes preview.assetFrame image bytes with --out and prints metadata", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kakeai-cli-out-"));
+    dirs.push(dir);
+    const frame = {
+      assetId: "ast-1",
+      kind: "image",
+      requestedTimeMs: null,
+      resolvedTimeMs: null,
+      width: 100,
+      height: 80,
+      mimeType: "image/jpeg",
+      imageBase64: "/9j/4AAQSkZJRg==",
+    };
+    const captured = capture((operation) => {
+      expect(operation).toBe("preview.assetFrame");
+      return frame;
+    });
+    const outPath = join(dir, "asset.jpg");
+    expect(
+      await runCli(
+        [
+          "preview.assetFrame",
+          "--input",
+          '{"assetId":"ast-1"}',
+          "--out",
+          outPath,
+        ],
+        captured.io,
+      ),
+    ).toBe(0);
+    expect(captured.stderr()).toBe("");
+    expect(await readFile(outPath)).toEqual(Buffer.from(frame.imageBase64, "base64"));
+    const stdout = JSON.parse(captured.stdout()) as Record<string, unknown>;
+    expect(stdout.imageBase64).toBeUndefined();
+    expect(stdout.path).toBe(outPath);
+    expect(stdout.mimeType).toBe("image/jpeg");
   });
 
   it("reports an unwritable --out path without a stack trace", async () => {

@@ -6,6 +6,14 @@ export const API_BASE_PATH = "/api/v1";
 export const MEDIA_SESSION_COOKIE = "Kakeai-Media-Session";
 export const MEDIA_SESSION_PATH = "/api/v1/";
 
+/** Internal blank HTML page used by the headless preview rasterizer. */
+export const PREVIEW_HOST_ROUTE = "/preview-host";
+export const PREVIEW_HOST_PATH = `${API_BASE_PATH}${PREVIEW_HOST_ROUTE}`;
+
+export function previewHostUrl(origin: string): string {
+  return `${origin}${PREVIEW_HOST_PATH}`;
+}
+
 export interface AccessContext {
   hostHeader: string | undefined;
   origin: string | undefined;

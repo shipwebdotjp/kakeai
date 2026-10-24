@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { runFfmpeg, runFfprobeFramePts } from "./ffmpeg.ts";
 
@@ -94,6 +94,17 @@ export async function ensureStillFramePngAtPts(
   }
   await extractStillFramePng(source, ptsMs, target);
   return target;
+}
+
+/** 指定時刻を解決し、正規化PNGのバイトまで読み出す。 */
+export async function readStillFramePng(
+  source: StillFrameSource,
+  sourceMs: number,
+  cacheDir: string,
+): Promise<{ resolvedTimeMs: number; png: Buffer }> {
+  const resolvedTimeMs = await resolveStillFramePtsMs(source, sourceMs);
+  const pngPath = await ensureStillFramePngAtPts(source, resolvedTimeMs, cacheDir);
+  return { resolvedTimeMs, png: await readFile(pngPath) };
 }
 
 /** 解決済み PTS(ms) のフレームを指定パスへPNG抽出する。一時ファイルへ書いてから rename する。 */

@@ -36,8 +36,12 @@ import {
   agentJobGetOutputSchema,
   agentJobListInputSchema,
   agentJobListOutputSchema,
+  agentPreviewAssetFrameInputSchema,
+  agentPreviewAssetFrameOutputSchema,
   agentPreviewFrameInputSchema,
   agentPreviewFrameOutputSchema,
+  agentPreviewScriptFrameInputSchema,
+  agentPreviewScriptFrameOutputSchema,
   agentRenderStartInputSchema,
   agentRenderStartOutputSchema,
   agentSchemaGetInputSchema,
@@ -100,7 +104,10 @@ import {
 } from "../services/composition-publishing.ts";
 import type { FontCatalogService } from "../services/font-catalog.ts";
 import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
+import type { PreviewRasterizer } from "../media/preview-rasterize.ts";
+import { getAssetFrame } from "../services/preview-asset-frames.ts";
 import { getPreviewFrame } from "../services/preview-frames.ts";
+import { getScriptVersionFrame } from "../services/preview-script-frames.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
 import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
 import { attachBulkTts, bulkTtsResultRefOf } from "../services/tts-attach-bulk.ts";
@@ -121,8 +128,23 @@ export interface AgentOperationContext {
   fontCatalogService: FontCatalogService;
   compositions: CompositionService;
   compositionAuthoring: CompositionAuthoringService;
+  /** Headless rasterizer used by the pre-render preview operations. */
+  previewRasterizer: PreviewRasterizer;
   /** `agentId` from the connection handshake, if the client sent one. */
   agentId?: string;
+}
+
+/**
+ * The app's own loopback origin. The preview rasterizer navigates here once to
+ * receive the same-origin media session cookie before loading compiled HTML.
+ * Kakeai serves plain HTTP on loopback only; TLS and non-loopback origins are
+ * outside the security policy.
+ */
+export function previewOrigin(config: AppConfig): string {
+  const host =
+    config.host === "0.0.0.0" || config.host === "::" ? "127.0.0.1" : config.host;
+  const formatted = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+  return `http://${formatted}:${config.port}`;
 }
 
 /**
@@ -321,6 +343,24 @@ const definitions: AgentOperationDefinitions = {
     output: agentPreviewFrameOutputSchema,
     run: async (input, context) =>
       getPreviewFrame(context.prisma, context.directories, input),
+  },
+  "preview.scriptFrame": {
+    input: agentPreviewScriptFrameInputSchema,
+    output: agentPreviewScriptFrameOutputSchema,
+    run: async (input, context) =>
+      getScriptVersionFrame(
+        context.prisma,
+        context.directories,
+        context.previewRasterizer,
+        previewOrigin(context.config),
+        input,
+      ),
+  },
+  "preview.assetFrame": {
+    input: agentPreviewAssetFrameInputSchema,
+    output: agentPreviewAssetFrameOutputSchema,
+    run: async (input, context) =>
+      getAssetFrame(context.prisma, context.directories, input),
   },
   "composition.list": {
     input: agentCompositionListInputSchema,

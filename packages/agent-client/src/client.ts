@@ -5,11 +5,11 @@ import {
   AGENT_MAX_REQUEST_BYTES,
   AGENT_MUTATION_TIMEOUT_MS,
   AGENT_PROTOCOL_VERSION,
-  AGENT_READ_TIMEOUT_MS,
   agentOperationOutputSchemas,
   agentResponseSchema,
   isAgentMutationOperation,
   isAgentOperationName,
+  resolveAgentReadTimeoutMs,
   type AgentErrorCode,
   type AgentErrorIssue,
   type AgentOperationInputMap,
@@ -63,7 +63,7 @@ export function createAgentClient(options: AgentClientOptions = {}): AgentClient
   const socketPath =
     options.socketPath ??
     resolveAgentSocketPath(options.dataRoot ?? defaultAgentDataRoot());
-  const readTimeoutMs = options.readTimeoutMs ?? AGENT_READ_TIMEOUT_MS;
+  const readTimeoutOverrideMs = options.readTimeoutMs;
   const mutationTimeoutMs = options.mutationTimeoutMs ?? AGENT_MUTATION_TIMEOUT_MS;
 
   function request<N extends AgentOperationName>(
@@ -77,7 +77,7 @@ export function createAgentClient(options: AgentClientOptions = {}): AgentClient
     }
     const timeoutMs = isAgentMutationOperation(operation)
       ? mutationTimeoutMs
-      : readTimeoutMs;
+      : resolveAgentReadTimeoutMs(operation, readTimeoutOverrideMs);
     const requestId = randomUUID();
     const frame = `${JSON.stringify({ requestId, operation, input })}\n`;
     if (Buffer.byteLength(frame, "utf8") > AGENT_MAX_REQUEST_BYTES) {

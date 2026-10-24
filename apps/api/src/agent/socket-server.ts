@@ -5,6 +5,10 @@ import { AGENT_MAX_CONNECTIONS } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
+import {
+  getSharedPreviewRasterizer,
+  type PreviewRasterizer,
+} from "../media/preview-rasterize.ts";
 import { agentSocketFilePath, ensureAgentDirectory } from "../storage/paths.ts";
 import { CompositionService } from "../services/compositions.ts";
 import { CompositionAuthoringService } from "../services/authoring-context.ts";
@@ -49,6 +53,8 @@ export interface StartAgentSocketServerOptions {
   config: AppConfig;
   prisma: PrismaClient;
   fontCatalogService?: FontCatalogService;
+  /** Tests inject a fake; production uses the shared headless rasterizer. */
+  previewRasterizer?: PreviewRasterizer;
 }
 
 async function lstatOrNull(path: string) {
@@ -214,11 +220,14 @@ export async function startAgentSocketServer(
   const { config, prisma } = options;
   const fontCatalogService =
     options.fontCatalogService ?? getSharedFontCatalogService();
+  const previewRasterizer =
+    options.previewRasterizer ?? getSharedPreviewRasterizer();
   const baseContext: Omit<AgentOperationContext, "agentId"> = {
     prisma,
     config,
     directories: config.directories,
     fontCatalogService,
+    previewRasterizer,
     // The agent bindings call the same services as the HTTP routes; no
     // authoring logic lives in the dispatcher.
     compositions: new CompositionService({

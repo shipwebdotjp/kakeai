@@ -48,7 +48,7 @@ export function helpText(): string {
     "options:",
     "  --input <json|path|->  操作の入力を JSON 文字列・ファイル・標準入力で指定する",
     "  --wait                 Job を返す操作の完了まで待ち、{ result, wait } を出力する",
-    "  --out <path>           preview.frame の PNG をファイルに書き、stdout は画像なしの JSON にする",
+    "  --out <path>           preview.* の画像をファイルに書き、stdout は画像なしの JSON にする",
     "  --pretty               出力 JSON をインデントする",
     "  --agent-id <id>        ハンドシェイクで送るエージェント識別子（既定: cli）",
     "  --data-dir <path>      Kakeai のデータディレクトリ（KAKEAI_DATA_DIR 相当）",

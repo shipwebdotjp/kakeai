@@ -29,6 +29,7 @@ import { getSharedFontCatalogService, type FontCatalogService } from "./services
 import { getRequestId, requestIdMiddleware } from "./http/requestId.ts";
 import {
   API_BASE_PATH,
+  PREVIEW_HOST_ROUTE,
   jsonAccessGuard,
   mediaAccessGuard,
   setMediaSessionCookie,
@@ -139,6 +140,14 @@ export function createApp(dependencies: AppDependencies): Express {
       getStorageStatus: dependencies.getStorageStatus ?? (() => "ok"),
     }),
   );
+  // Blank same-origin HTML document for the headless preview rasterizer. It
+  // must be text/html (scripts run) and must pass through the media-cookie
+  // middleware, so it lives under /api/v1. It is not a public agent/HTTP API.
+  api.get(PREVIEW_HOST_ROUTE, (_req, res) => {
+    res
+      .type("html")
+      .send("<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>");
+  });
   api.use(
     createWorksRouter({
       prisma: dependencies.prisma,

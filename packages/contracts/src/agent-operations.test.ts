@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_PREVIEW_READ_TIMEOUT_MS,
+  AGENT_READ_TIMEOUT_MS,
   agentCharacterGetInputSchema,
   agentCharacterGetOutputSchema,
   agentCharacterListInputSchema,
@@ -8,8 +10,13 @@ import {
   agentOperationInputSchemas,
   agentOperationNames,
   agentOperationOutputSchemas,
+  agentOperationReadTimeoutMs,
+  agentPreviewAssetFrameInputSchema,
+  agentPreviewAssetFrameOutputSchema,
   agentPreviewFrameInputSchema,
   agentPreviewFrameOutputSchema,
+  agentPreviewScriptFrameInputSchema,
+  agentPreviewScriptFrameOutputSchema,
   agentSchemaDigestInputOf,
   agentTemplateInputContracts,
   agentTtsAttachBulkInputSchema,
@@ -24,6 +31,7 @@ import {
   computeAgentSchemaDigest,
   isAgentLongRunningOperation,
   isAgentMutationOperation,
+  resolveAgentReadTimeoutMs,
 } from "./agent";
 
 const job = {
@@ -289,6 +297,130 @@ describe("preview.frame operation contract", () => {
     });
     expect(Object.keys(agentOperationInputSchemas)).toContain("preview.frame");
     expect(Object.keys(agentOperationOutputSchemas)).toContain("preview.frame");
+  });
+});
+
+describe("preview read timeouts", () => {
+  it("extends the read timeout only for image previews", () => {
+    expect(agentOperationReadTimeoutMs("preview.frame")).toBe(
+      AGENT_PREVIEW_READ_TIMEOUT_MS,
+    );
+    expect(agentOperationReadTimeoutMs("preview.scriptFrame")).toBe(
+      AGENT_PREVIEW_READ_TIMEOUT_MS,
+    );
+    expect(agentOperationReadTimeoutMs("preview.assetFrame")).toBe(
+      AGENT_PREVIEW_READ_TIMEOUT_MS,
+    );
+    expect(agentOperationReadTimeoutMs("schema.get")).toBeUndefined();
+    expect(agentOperationReadTimeoutMs("script.get")).toBeUndefined();
+    expect(resolveAgentReadTimeoutMs("schema.get", undefined)).toBe(AGENT_READ_TIMEOUT_MS);
+    expect(resolveAgentReadTimeoutMs("preview.scriptFrame", undefined)).toBe(
+      AGENT_PREVIEW_READ_TIMEOUT_MS,
+    );
+    expect(resolveAgentReadTimeoutMs("preview.scriptFrame", 5_000)).toBe(5_000);
+  });
+});
+
+describe("preview.scriptFrame operation contract", () => {
+  const frame = {
+    scriptVersionId: "scr-1",
+    requestedTimeMs: 1500,
+    durationMs: 9000,
+    width: 1920,
+    height: 1080,
+    mimeType: "image/png" as const,
+    imageBase64: "aVBORw0KGgo=",
+  };
+
+  it("takes a script version and a non-negative time", () => {
+    expect(
+      agentPreviewScriptFrameInputSchema.parse({ scriptVersionId: "scr-1", timeMs: 0 }),
+    ).toEqual({ scriptVersionId: "scr-1", timeMs: 0 });
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({ scriptVersionId: "scr-1", timeMs: -1 })
+        .success,
+    ).toBe(false);
+    expect(agentPreviewScriptFrameInputSchema.safeParse({ timeMs: 0 }).success).toBe(false);
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({
+        scriptVersionId: "scr-1",
+        timeMs: 0,
+        extra: true,
+      }).success,
+    ).toBe(false);
+    expect(agentPreviewScriptFrameOutputSchema.safeParse(frame).success).toBe(true);
+    expect(
+      agentPreviewScriptFrameOutputSchema.safeParse({ ...frame, imageBase64: "" }).success,
+    ).toBe(false);
+  });
+
+  it("registers preview.scriptFrame as a sync read", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("preview.scriptFrame");
+    expect(isAgentMutationOperation("preview.scriptFrame")).toBe(false);
+    expect(isAgentLongRunningOperation("preview.scriptFrame")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "preview.scriptFrame",
+      kind: "read",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("preview.scriptFrame");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("preview.scriptFrame");
+  });
+});
+
+describe("preview.assetFrame operation contract", () => {
+  const image = {
+    assetId: "ast-1",
+    kind: "image" as const,
+    requestedTimeMs: null,
+    resolvedTimeMs: null,
+    width: 800,
+    height: 600,
+    mimeType: "image/jpeg" as const,
+    imageBase64: "/9j/4AAQSkZJRg==",
+  };
+  const video = {
+    assetId: "ast-2",
+    kind: "video" as const,
+    requestedTimeMs: 500,
+    resolvedTimeMs: 466,
+    width: 1920,
+    height: 1080,
+    mimeType: "image/png" as const,
+    imageBase64: "aVBORw0KGgo=",
+  };
+
+  it("takes an asset id and an optional time", () => {
+    expect(agentPreviewAssetFrameInputSchema.parse({ assetId: "ast-1" })).toEqual({
+      assetId: "ast-1",
+    });
+    expect(
+      agentPreviewAssetFrameInputSchema.parse({ assetId: "ast-2", timeMs: 0 }),
+    ).toEqual({ assetId: "ast-2", timeMs: 0 });
+    expect(
+      agentPreviewAssetFrameInputSchema.safeParse({ assetId: "ast-1", timeMs: -1 }).success,
+    ).toBe(false);
+    expect(agentPreviewAssetFrameInputSchema.safeParse({ timeMs: 0 }).success).toBe(false);
+    expect(agentPreviewAssetFrameOutputSchema.safeParse(image).success).toBe(true);
+    expect(agentPreviewAssetFrameOutputSchema.safeParse(video).success).toBe(true);
+    expect(
+      agentPreviewAssetFrameOutputSchema.safeParse({ ...image, kind: "audio" }).success,
+    ).toBe(false);
+  });
+
+  it("registers preview.assetFrame as a sync read", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("preview.assetFrame");
+    expect(isAgentMutationOperation("preview.assetFrame")).toBe(false);
+    expect(isAgentLongRunningOperation("preview.assetFrame")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "preview.assetFrame",
+      kind: "read",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("preview.assetFrame");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("preview.assetFrame");
   });
 });
 

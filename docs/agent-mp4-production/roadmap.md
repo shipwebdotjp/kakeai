@@ -21,7 +21,7 @@
 | 高 | MP4主線の安定（P1） | en-US の初期台本、声のプリフライト、一括TTSの順序 | 完了（2026-10-24） | 今すぐ |
 | 中 | 復旧力（P2） | TTS Job の再発見、全体置換の競合検出、タイムアウト後の回復整理 | 完了（2026-10-24） | エージェントの取りこぼしが運用で問題になったとき |
 | 中 | 入力契約の探索性（P3-1） | `template.get` の入力 JSON Schema / 例、表・グラフ・フローの試行錯誤削減 | 完了（2026-10-24） | 複雑なテンプレートを使う制作が増えたとき |
-| 中 | 視覚確認（P3） | 下書きプレビュー、素材画像、複数フレーム | 未着手 | レンダーやり直しコストが問題になったとき |
+| 中 | 視覚確認（P3） | 保存版プレビュー、素材画像、複数フレーム | 一部実装（保存版・素材） | レンダーやり直しコストが問題になったとき |
 | 低 | 納品物（将来） | サムネイル、SRT、YouTube 設定、MP4 取得 | 未着手 | 投稿までエージェントに任せたくなったとき |
 | 低 | 制作履歴（将来） | 版履歴・復元・Work 複製 | 一部実装（同一 Edition の復元のみ） | 反復制作ややり直しが増えたとき |
 | 低 | 表現の拡張（将来） | 新規 Composition、縦型、リモート | 未着手 | 商品として必要になったとき |
@@ -39,6 +39,10 @@
 - P3-1: `template.get` が VisualTemplate 1件の `inputSchema`（保存時検証と
   同じスキーマから導出）と検証済みの `example` を返す。`schema.get` の応答は
   増やさず、`schemaDigest` に `templateInputContracts` を含めた。
+- P3-2 視覚確認（一部）: `preview.scriptFrame`（保存版）と
+  `preview.assetFrame`（素材）を追加した。レンダー前に headless でシークした
+  PNG を取得でき、版・Job・Artifact は作らない。詳細は
+  [visual-confirmation/spec.md](../visual-confirmation/spec.md)。
 
 ## 将来の候補
 
@@ -58,12 +62,12 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
 
 レンダー前の確認を上げる。テンプレート入力の探索性は P3-1 で実装済み。
 
-| 項目 | 内容 | 依存・注意 |
+| 項目 | 内容 | 状態・依存 |
 | --- | --- | --- |
-| 下書きプレビュー | 未保存の ContentDocument を HTML 化して確認 | 既存の `draft-preview` をエージェント操作へ。シーク可能なプレビューが必要 |
-| 保存版プレビュー | 保存済み ScriptVersion の HTML を確認 | 既存の `script-versions/:id/preview` |
-| 素材画像の確認 | Asset の静止画・サムネイルを確認 | `assets/:id/frame` 相当。画像生成のキャッシュ |
-| 複数フレーム確認 | 複数時刻の一括取得・コンタクトシート | `preview.frame` の拡張。出力サイズとタイムアウトの設計が必要 |
+| 保存版プレビュー | 保存済み ScriptVersion の HTML を確認 | 実装済み（`preview.scriptFrame`）。[visual-confirmation/spec.md](../visual-confirmation/spec.md) |
+| 素材画像の確認 | Asset の静止画・サムネイルを確認 | 実装済み（`preview.assetFrame`）。画像は原本、動画は静止画 PNG |
+| 下書きプレビュー | 未保存の ContentDocument を HTML 化して確認 | 未着手。エージェントは `script.edit` で保存するため後回し |
+| 複数フレーム確認 | 複数時刻の一括取得・コンタクトシート | 未着手。単一フレームの利用実績後。出力サイズとタイムアウトの設計が必要 |
 
 ### 3. 制作履歴・復旧
 

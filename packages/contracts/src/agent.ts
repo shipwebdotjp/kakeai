@@ -87,6 +87,18 @@ export const AGENT_SOCKET_FILENAME = "agent.sock" as const;
 export const AGENT_MAX_REQUEST_BYTES = 32 * 1024 * 1024;
 /** Timeouts shared by the client and the resident server. */
 export const AGENT_READ_TIMEOUT_MS = 10_000;
+/**
+ * Image previews compile a composition, wait for assets/fonts and rasterize a
+ * frame. Typical calls finish in about a second, but a long script with many
+ * video stills may take longer than the standard read budget. The extension is
+ * limited to image-returning operations.
+ */
+export const AGENT_PREVIEW_READ_TIMEOUT_MS = 30_000;
+/** Byte budget for an asset image before base64 expansion. */
+export const AGENT_PREVIEW_IMAGE_MAX_BYTES = 12 * 1024 * 1024;
+/** Base64 length budget (4/3 expansion plus padding). */
+export const AGENT_PREVIEW_IMAGE_BASE64_MAX =
+  Math.ceil((AGENT_PREVIEW_IMAGE_MAX_BYTES * 4) / 3) + 16;
 export const AGENT_MUTATION_TIMEOUT_MS = 120_000;
 /** A connection that sends nothing for this long is closed by the server. */
 export const AGENT_IDLE_TIMEOUT_MS = 300_000;
@@ -360,6 +372,8 @@ export const agentOperationNames = [
   "character.list",
   "character.get",
   "preview.frame",
+  "preview.scriptFrame",
+  "preview.assetFrame",
 ] as const;
 export type AgentOperationName = (typeof agentOperationNames)[number];
 
@@ -381,6 +395,8 @@ export const agentReadOperationNames = [
   "character.list",
   "character.get",
   "preview.frame",
+  "preview.scriptFrame",
+  "preview.assetFrame",
 ] as const;
 
 export const agentMutationOperationNames = [
@@ -422,6 +438,71 @@ export function isAgentMutationOperation(operation: string): boolean {
 
 export function isAgentLongRunningOperation(operation: string): boolean {
   return (agentLongRunningOperationNames as readonly string[]).includes(operation);
+}
+
+/**
+ * Read operations whose output contains image bytes. Bindings surface these
+ * as standard image content blocks and let CLI `--out` write the bytes to a
+ * file. The list is shared so bindings do not keep a second operation list.
+ */
+export const agentImagePreviewOperationNames = [
+  "preview.frame",
+  "preview.scriptFrame",
+  "preview.assetFrame",
+] as const satisfies readonly AgentOperationName[];
+export type AgentImagePreviewOperationName =
+  (typeof agentImagePreviewOperationNames)[number];
+
+export function isAgentImagePreviewOperation(
+  operation: string,
+): operation is AgentImagePreviewOperationName {
+  return (agentImagePreviewOperationNames as readonly string[]).includes(operation);
+}
+
+/** The image read timeout for an operation, or undefined for the default. */
+export function agentOperationReadTimeoutMs(operation: string): number | undefined {
+  return isAgentImagePreviewOperation(operation)
+    ? AGENT_PREVIEW_READ_TIMEOUT_MS
+    : undefined;
+}
+
+/** Shared server/client read-timeout policy; an explicit override wins. */
+export function resolveAgentReadTimeoutMs(
+  operation: string,
+  overrideMs: number | undefined,
+): number {
+  return overrideMs ?? agentOperationReadTimeoutMs(operation) ?? AGENT_READ_TIMEOUT_MS;
+}
+
+const AGENT_IMAGE_BASE64_FIELDS = ["pngBase64", "imageBase64"] as const;
+
+/** Returns the image bytes from any preview output, without a binding-local list. */
+export function agentImageBase64Of(output: unknown): string | undefined {
+  if (typeof output !== "object" || output === null) {
+    return undefined;
+  }
+  const record = output as Record<string, unknown>;
+  for (const field of AGENT_IMAGE_BASE64_FIELDS) {
+    const value = record[field];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/** Returns the output without its image bytes, for the MCP text summary. */
+export function agentImageMetadataOf(
+  output: unknown,
+): Record<string, unknown> | undefined {
+  if (typeof output !== "object" || output === null) {
+    return undefined;
+  }
+  const { pngBase64: _png, imageBase64: _image, ...metadata } = output as Record<
+    string,
+    unknown
+  >;
+  return metadata;
 }
 
 export const agentOperationKindSchema = z.enum(["read", "mutation"]);
@@ -937,10 +1018,75 @@ export const agentPreviewFrameOutputSchema = z.strictObject({
   width: positiveInt,
   height: positiveInt,
   mimeType: z.literal("image/png"),
-  pngBase64: z.string().min(1),
+  pngBase64: z.string().min(1).max(AGENT_PREVIEW_IMAGE_BASE64_MAX),
 });
 export type AgentPreviewFrameInput = z.input<typeof agentPreviewFrameInputSchema>;
 export type AgentPreviewFrameOutput = z.infer<typeof agentPreviewFrameOutputSchema>;
+
+/**
+ * Image media types that can cross the Agent Access boundary. Asset previews
+ * return the source image bytes (or the normalized PNG rendition) without
+ * re-encoding, so the binding needs the real MIME type.
+ */
+export const agentPreviewImageMimeTypeSchema = z.enum([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/avif",
+]);
+
+/**
+ * `preview.scriptFrame` rasterizes a saved ScriptVersion with the same HTML
+ * compiler as the Web UI and render worker, seeking to `timeMs` without
+ * creating a render Job, ScriptVersion, or Artifact.
+ */
+export const agentPreviewScriptFrameInputSchema = z.strictObject({
+  scriptVersionId: idSchema,
+  timeMs: nonNegativeInt,
+});
+export const agentPreviewScriptFrameOutputSchema = z.strictObject({
+  scriptVersionId: idSchema,
+  requestedTimeMs: nonNegativeInt,
+  durationMs: nonNegativeInt,
+  width: positiveInt,
+  height: positiveInt,
+  mimeType: z.literal("image/png"),
+  imageBase64: z.string().min(1).max(AGENT_PREVIEW_IMAGE_BASE64_MAX),
+});
+export type AgentPreviewScriptFrameInput = z.input<
+  typeof agentPreviewScriptFrameInputSchema
+>;
+export type AgentPreviewScriptFrameOutput = z.infer<
+  typeof agentPreviewScriptFrameOutputSchema
+>;
+
+/**
+ * `preview.assetFrame` returns the visual content of one Asset. Images keep
+ * their source MIME type; videos return a PNG still at `timeMs` (default 0).
+ * Audio Assets have no visual content and are rejected by the operation.
+ */
+export const agentPreviewAssetFrameInputSchema = z.strictObject({
+  assetId: idSchema,
+  timeMs: nonNegativeInt.optional(),
+});
+export const agentPreviewAssetFrameOutputSchema = z.strictObject({
+  assetId: idSchema,
+  kind: z.enum(["image", "video"]),
+  requestedTimeMs: nonNegativeInt.nullable(),
+  resolvedTimeMs: nonNegativeInt.nullable(),
+  width: positiveInt,
+  height: positiveInt,
+  mimeType: agentPreviewImageMimeTypeSchema,
+  imageBase64: z.string().min(1).max(AGENT_PREVIEW_IMAGE_BASE64_MAX),
+});
+export type AgentPreviewAssetFrameInput = z.input<
+  typeof agentPreviewAssetFrameInputSchema
+>;
+export type AgentPreviewAssetFrameOutput = z.infer<
+  typeof agentPreviewAssetFrameOutputSchema
+>;
 
 export const agentCompositionListInputSchema = agentEmptyInputSchema;
 export const agentCompositionListOutputSchema = z.strictObject({
@@ -1133,6 +1279,8 @@ export const agentOperationInputSchemas = {
   "job.list": agentJobListInputSchema,
   "job.cancel": agentJobCancelInputSchema,
   "preview.frame": agentPreviewFrameInputSchema,
+  "preview.scriptFrame": agentPreviewScriptFrameInputSchema,
+  "preview.assetFrame": agentPreviewAssetFrameInputSchema,
   "composition.list": agentCompositionListInputSchema,
   "composition.get": agentCompositionGetInputSchema,
   "composition.draft.get": agentCompositionDraftGetInputSchema,
@@ -1168,6 +1316,8 @@ export const agentOperationOutputSchemas = {
   "job.list": agentJobListOutputSchema,
   "job.cancel": agentJobCancelOutputSchema,
   "preview.frame": agentPreviewFrameOutputSchema,
+  "preview.scriptFrame": agentPreviewScriptFrameOutputSchema,
+  "preview.assetFrame": agentPreviewAssetFrameOutputSchema,
   "composition.list": agentCompositionListOutputSchema,
   "composition.get": agentCompositionGetOutputSchema,
   "composition.draft.get": agentCompositionDraftGetOutputSchema,

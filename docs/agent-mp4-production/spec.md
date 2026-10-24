@@ -66,7 +66,7 @@
 - SRT 字幕のエクスポート（人間 / 将来）
 - YouTube 投稿設定・チャプター（人間 / 将来）
 - MP4 Artifact のダウンロード（人間 / 将来）
-- 下書きプレビュー、保存版プレビュー、素材画像の確認（将来）
+- 下書きプレビュー（将来）
 - 版履歴・復元・Work 複製（将来）
 - Theme / Face Set / Voice Profile の作成・更新・削除（人専用）
 - 新規 Composition の authoring（必要時のみ別スキル）
@@ -262,5 +262,8 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
   `inputSchema`（保存時検証と同じスキーマから導出）と検証済みの `example` を返す。
   `schema.get` の応答は増やさず、`schemaDigest` に `templateInputContracts` を
   含めた。
-- **P3-2 以降 / 将来: 未着手。** 項目は [todo.md](./todo.md) と
-  [roadmap.md](./roadmap.md) に残している。
+- **P3-2 視覚確認: 一部実装済み。** 保存版プレビュー
+  （`preview.scriptFrame`）と素材プレビュー（`preview.assetFrame`）を追加した。
+  下書きプレビューと複数フレームは将来項目として残している。契約・実測は
+  [../visual-confirmation/spec.md](../visual-confirmation/spec.md) と
+  [../visual-confirmation/spike.md](../visual-confirmation/spike.md) を正とする。

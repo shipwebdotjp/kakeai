@@ -14,7 +14,10 @@ import {
   type JobWaitResult,
 } from "@kakeai/agent-client";
 import {
+  agentImageBase64Of,
+  agentImageMetadataOf,
   agentOperationInputSchemas,
+  isAgentImagePreviewOperation,
   type AgentOperationInputMap,
   type AgentOperationName,
   type AgentOperationOutputMap,
@@ -73,27 +76,35 @@ function successResult(data: unknown, text?: string): CallToolResult {
  * output without the bytes; `structuredContent` keeps the full output and the
  * image block keeps the bytes.
  */
-function previewFrameTextOf(output: unknown): string | undefined {
-  if (typeof output !== "object" || output === null) {
-    return undefined;
-  }
-  const { pngBase64: _omitted, ...metadata } = output as Record<string, unknown>;
-  return JSON.stringify(metadata);
+function previewTextOf(output: unknown): string | undefined {
+  const metadata = agentImageMetadataOf(output);
+  return metadata === undefined ? undefined : JSON.stringify(metadata);
 }
 
-/** Image bytes for `preview.frame`, surfaced as a standard image block. */
+/**
+ * MCP clients are only required to render PNG / JPEG image blocks. Other asset
+ * MIME types stay reachable through `structuredContent` or CLI `--out`.
+ */
+const MCP_RENDERABLE_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg"]);
+
+/** Image bytes for a preview operation, surfaced as a standard image block. */
 function previewImageOf(
   operation: AgentOperationName,
   output: unknown,
 ): { type: "image"; data: string; mimeType: string } | undefined {
-  if (operation !== "preview.frame" || typeof output !== "object" || output === null) {
+  if (!isAgentImagePreviewOperation(operation) || typeof output !== "object" || output === null) {
     return undefined;
   }
   const record = output as Record<string, unknown>;
-  if (typeof record.pngBase64 !== "string" || typeof record.mimeType !== "string") {
+  const data = agentImageBase64Of(output);
+  if (
+    data === undefined ||
+    typeof record.mimeType !== "string" ||
+    !MCP_RENDERABLE_IMAGE_MIME_TYPES.has(record.mimeType)
+  ) {
     return undefined;
   }
-  return { type: "image", data: record.pngBase64, mimeType: record.mimeType };
+  return { type: "image", data, mimeType: record.mimeType };
 }
 
 function sleepFor(ms: number): Promise<void> {
@@ -138,7 +149,9 @@ export function createKakeaiMcpServer(options: McpServerOptions): Server {
     }
     const output = await request.request(operation, parsed.data);
     const image = previewImageOf(operation, output);
-    const text = image === undefined ? undefined : previewFrameTextOf(output);
+    const text = isAgentImagePreviewOperation(operation)
+      ? previewTextOf(output)
+      : undefined;
     const result = successResult(output, text);
     if (image !== undefined) {
       result.content.push(image);

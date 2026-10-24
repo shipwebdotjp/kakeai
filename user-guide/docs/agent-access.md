@@ -57,7 +57,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_tts_attach_bulk` |
 | Composition | `kakeai_composition_list` / `kakeai_composition_get` / `kakeai_composition_draft_get` / `kakeai_composition_authoring_context` / `kakeai_composition_create` / `kakeai_composition_draft_save` / `kakeai_composition_publish` |
 | レンダー | `kakeai_render_start` |
-| プレビュー | `kakeai_preview_frame`（render 成果物の指定時刻の原寸 PNG。絵は image ブロックでも返る） |
+| プレビュー | `kakeai_preview_script_frame`（保存版の指定時刻）/ `kakeai_preview_asset_frame`（素材）/ `kakeai_preview_frame`（render 成果物）。いずれも絵は image ブロックでも返る |
 | Job | `kakeai_job_get` / `kakeai_job_list` / `kakeai_job_cancel` / `kakeai_job_wait` |
 
 `kakeai_schema_get` の `agentOperations` が、公開されている全操作（読み取り／変更、Job を返すか）の正です。`kakeai_job_wait` は Job を待つための束縛の便宜ツールで、Agent 操作ではありません。
@@ -134,7 +134,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 1. `render` Job が `succeeded` になる。
 2. `kakeai_job_get` の `artifacts` に `role: "render"` / `format: "mp4"` の Artifact が存在する。
 
-エージェントは Artifact の ID・尺（`durationMs`）・寸法（`widthPx` / `heightPx`）を報告します。最終的な絵・音の確認、MP4 の取得、サムネイル、SRT 字幕、YouTube の投稿設定は人間が行います。`kakeai_preview_frame` による静止画確認は任意の補助で、合格ラインには含みません。詳しい手順は [スキル](#スキル) の `kakeai-production` を参照してください。
+エージェントは Artifact の ID・尺（`durationMs`）・寸法（`widthPx` / `heightPx`）を報告します。最終的な絵・音の確認、MP4 の取得、サムネイル、SRT 字幕、YouTube の投稿設定は人間が行います。`kakeai_preview_script_frame` / `kakeai_preview_asset_frame` / `kakeai_preview_frame` による静止画確認は任意の補助で、合格ラインには含みません。詳しい手順は [スキル](#スキル) の `kakeai-production` を参照してください。
 
 ## 長尺操作
 
@@ -178,10 +178,30 @@ kakeai-agent --help
 | `kakeai_tts_create_bulk` | `kakeai-agent tts.createBulk --input ...` |
 | `kakeai_tts_attach_bulk` | `kakeai-agent tts.attachBulk --input ...` |
 | `kakeai_render_start` | `kakeai-agent render.start --input ...` |
+| `kakeai_preview_script_frame` | `kakeai-agent preview.scriptFrame --input ... [--out ...]` |
+| `kakeai_preview_asset_frame` | `kakeai-agent preview.assetFrame --input ... [--out ...]` |
 | `kakeai_preview_frame` | `kakeai-agent preview.frame --input ... [--out ...]` |
 | `kakeai_job_wait` | `kakeai-agent job.wait <jobId>` |
 
-MCP ツール名は `kakeai_<domain>_<verb>` の snake_case、CLI のサブコマンドは正規の `domain.verb` です。`createBulk` や `authoringContext` のように語が複数ある操作では機械的な読み替えが一致しないため、`kakeai-agent operations` か `schema.get` の `agentOperations` で正規名を確認してください。同じ操作・同じ入力なら、CLI の stdout JSON は MCP の `structuredContent` と一致します（`preview.frame` の `--out` 指定時を除く。`--out` 指定時は PNG がファイルに書かれ、stdout JSON は `pngBase64` の代わりに `path` を含みます）。
+MCP ツール名は `kakeai_<domain>_<verb>` の snake_case、CLI のサブコマンドは正規の `domain.verb` です。`createBulk` や `authoringContext` のように語が複数ある操作では機械的な読み替えが一致しないため、`kakeai-agent operations` か `schema.get` の `agentOperations` で正規名を確認してください。同じ操作・同じ入力なら、CLI の stdout JSON は MCP の `structuredContent` と一致します（画像を返す操作の `--out` 指定時を除く。`--out` 指定時は画像がファイルに書かれ、stdout JSON は `pngBase64` / `imageBase64` の代わりに `path` を含みます）。
+
+### レンダー前のプレビュー（`preview.scriptFrame` / `preview.assetFrame`）
+
+レンダーする前に、保存済みの台本版や素材の絵を確認できます。これは任意の補助で、MP4 の合格ラインには含まれません。最終的な絵・音の判断は人間が行います。
+
+```sh
+# 保存版の 5 秒時点を PNG で確認する
+kakeai-agent preview.scriptFrame --input '{"scriptVersionId":"scr-123","timeMs":5000}' --out script-frame.png
+
+# 素材（画像は原本、動画は指定時刻の PNG）を確認する
+kakeai-agent preview.assetFrame --input '{"assetId":"ast-123","timeMs":1500}' --out asset-frame.png
+```
+
+- `preview.scriptFrame` は `script.get` / `script.edit` が返す `scriptVersionId` と、`script.validate` の解決済み `timeline` から時刻を選びます。シーンの開始直後はトランジション中なので、開始から 500ms ほど後にすると構図を確認しやすくなります。
+- 文字切れ、要素の重なり、画像の欠落、表の見切れ、立ち絵の位置を確認します。問題があれば `script.edit` で直し、新しい版で再度プレビューします。
+- `preview.assetFrame` の画像は保存されている画像そのもの（正規化された画像があればそれ）で、`mimeType` が実際の形式です。動画は指定時刻の PNG、音声は `VALIDATION_ERROR` になります。画像に `timeMs` は指定できません。MCP の image ブロックは PNG / JPEG の素材だけに付き、WebP / GIF / BMP / AVIF は `structuredContent` または CLI の `--out` で取得します。
+- `preview.scriptFrame` は台本版・Job・Artifact を作りません。読み取り操作です。
+- 画像プレビューの読み取りタイムアウトは最大 30 秒です。タイムアウトした場合は同じ入力で 1 回だけ再送し、それでもだめならレンダーに進んで人間に確認を返します。プレビューは構図確認用で、色・動き・音の最終判断には代わりません。
 
 ### 静止画の取得（`preview.frame`）
 
