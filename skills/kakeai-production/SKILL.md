@@ -314,8 +314,9 @@ Character into the script, or assign an existing Voice Profile to a speaker.
 
 TTS is available only through the adapter the user already configured
 (`voicevox`, `aivisspeech` or `openai-compatible`). You cannot change endpoints,
-credentials, adapter settings, voice profiles, or trigger any other paid
-generation.
+credentials, adapter settings, or voice profiles. Kakeai ships no other
+generation adapter; images, video and music are yours to produce with your own
+tools and bring in through `asset.import`.
 
 1. Make sure the target script is saved and every target speaker has a
    `voiceProfileId` whose Profile exists and matches the script locale (§4).

@@ -148,3 +148,8 @@
 - [x] 契約・操作コア・ソケット統合テストで、声だけの話者の作成、`{ key }` 参照、locale 不一致、Character Voice 不一致、`expressionId` の自動消去・拒否、Theme の最新 Revision 制限を固定する。`speaker.add` の replay が `created` を返さないことも確認する。
 - [x] Agent Access 仕様・roadmap・TTS 仕様・多言語声仕様・MP4 制作仕様・操作コア仕様・ユーザーガイド・制作スキルを更新する。DB migration と HTTP API の変更は行わない。
 - 完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`（`speakerId: { key }`）→ TTS → 確定 → レンダーが通り、Character 付き話者の制約と Theme の最新 Revision 制限がテストで固定されている。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] 生成境界の見直し（ADR 0086）
+
+- [x] 課金の有無を公開条件から外し、利用者が設定した接続先だけを使うことを条件にする。[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md) を追加し、ADR 0074 / 0077 を amendment する。Agent Access 仕様・roadmap・ユーザーガイド・制作スキルを同じ境界へ揃える。現時点（B2）では Kakeai は接続先（URL）だけを知り、生成サービスの認証情報を保持しない。
+- 完了条件: 仕様・ガイド・スキルに金額を根拠にした禁止が残らず、可逆性と接続先の帰属で境界が説明されている。

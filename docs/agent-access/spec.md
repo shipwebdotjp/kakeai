@@ -17,9 +17,11 @@
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
 | 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル | 可 |
-| 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成 | 人のみ |
+| 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、外部サービスへの公開 | 人のみ |
 
 「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
+
+可逆な操作を公開する条件は、金額ではなく接続先で決める。エージェントが使えるのは利用者が設定した接続先だけで、接続先・認証情報・Adapter 設定を作成・変更・読取できない（[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)）。現時点では Kakeai は接続先（URL）だけを知り、生成サービスの認証情報を保持しない。Kakeai の外で発生する費用は公開条件に含めない。
 
 ## 操作コアと束縛
 
@@ -86,7 +88,7 @@
 - `tts.create` / `tts.createBulk` / `render.start` / `composition.publish` は任意の `requestId` を受け付ける（[冪等台帳](#冪等台帳高コスト操作)）。`tts.attachBulk` と `script.restore` は版を作る操作のため `requestId` が必須で、版単位の冪等（`script.edit` と同じ規則）になる。`work.create` / `work.clone` / `script.save` は operation の `requestId` を持たない。束縛は入力をそのまま転送するだけで、台帳の規則を持つのは操作コア側だけである。
 - MCP 束縛は `job.get` の有界ポーリングを `kakeai_job_wait` として提供する。`timeoutMs`（既定 60 秒、最大 600 秒）と `intervalMs`（既定 500 ミリ秒、10〜30000 ミリ秒）を受け、終端状態（`succeeded` / `failed` / `cancelled`）に達したら `{ job, timedOut: false, polls }`、予算超過なら最後の Job と `timedOut: true` を返す。`job_wait` は MCP 束縛の便宜ツールであり、Agent 操作ではない。
 - 失敗はすべて `isError: true` のツール結果として返し、サーバーを落とさない。本文は JSON `{ "code": "...", "issues": [...] }` で、Agent Access と操作コアのコードをそのまま透過する。MCP 自身の失敗は `MCP_TOOL_UNKNOWN`（未知のツール名）、`VALIDATION_ERROR`（入力スキーマ不一致、`issues` 付き）、`MCP_INTERNAL_ERROR`（想定外。詳細は返さない）とする。アプリ未起動は `AGENT_APP_UNAVAILABLE`、未知の操作は `AGENT_OPERATION_UNKNOWN` である。
-- 実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は MCP にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
+- 実体削除と外部サービスへの公開は MCP にも公開しない。生成操作は利用者が設定した接続先だけを使い、接続先・認証情報・Adapter 設定の読み書きは公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
 
 ## CLI 束縛
 
@@ -97,7 +99,7 @@
 - `--out <path>` は画像を返す操作（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame`）だけで使える。指定時は画像バイトをそのファイルに書き、stdout JSON は `pngBase64` / `imageBase64` を除いて `path` を付す。書込み失敗は `CLI_OUTPUT_ERROR`（終了コード1）で、入力・出力の契約検証後にだけ書く。
 - 長尺操作は `job.wait <jobId>` または `asset.import` / `render.start` / `tts.create` / `tts.createBulk` の `--wait` で待てる。どちらも MCP と同じ `jobWaitInputSchema` と `waitForJob` を使い、`--timeout-ms`（既定 60000、最大 600000）と `--interval-ms`（既定 500、10〜30000）を受ける。`job.wait` は `{ job, timedOut, polls }` を返し、予算超過は成功（終了コード 0）で `timedOut: true` とする。`--wait` は操作結果を `{ result, wait }` に包み、Job を投入しなかった場合（`asset.import` の重複）と複数 Job を投入した場合（`tts.createBulk`）は `wait: null` とする。後者は Job ID ごとに `job.wait` するか `job.get` で確認する。
 - 失敗は stderr に `{ code, issues? }` の 1 行 JSON だけを書き、スタックトレースや自由文を出さない。stdout は常にコマンド出力専用である。終了コードは、`0` が成功（help・version・`operations` を含む）、`1` が操作または契約検証の失敗と応答の出力失敗（`--out` の書込み失敗など。code は `CLI_OUTPUT_ERROR`）、`2` が使い方または `--input` の誤り（`CLI_USAGE_ERROR` / `CLI_INPUT_ERROR`）である。CLI 自身の想定外の失敗は `CLI_INTERNAL_ERROR`（終了コード 1）とし、詳細を返さない。
-- MCP と同じく、実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成は CLI にも公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
+- MCP と同じく、実体削除と外部サービスへの公開は CLI にも公開しない。生成操作は利用者が設定した接続先だけを使い、接続先・認証情報・Adapter 設定の読み書きは公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
 - 束縛間で共有する実装は `@kakeai/agent-client` に置く。`jobWaitInputSchema`・`waitForJob`・`createJobGetter` と、`{ code, issues? }` の整形（`zodIssues`・`bindingErrorPayload`）を MCP と CLI が共有し、ポーリングやエラー整形を複製しない。
 
 ## スキル
@@ -388,10 +390,12 @@
 
 ## 非ゴール
 
+これらは現時点の非ゴールであり、恒久の禁止ではない。前提が変わったときは新しい ADR で置き換える（[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)）。
+
 - アプリ内への LLM 組込、プロバイダ・モデル・API キー・課金・会話履歴の管理。
 - アプリ内の画像生成・音声モデルの組込。画像生成はエージェント側に委ね、Agent Access は取り込みだけを公開する。TTS は利用者が設定したループバック Adapter への合成 Job 投入に限る。
 - 複数プロセスによる SQLite 共有、worker の外部起動。
-- 実体削除、外部サービスへの公開、TTS 以外の課金を伴う生成をエージェントへ開放すること。
+- 実体削除、外部サービスへの公開をエージェントへ開放すること。
 - リモート・クラウドの MCP 接続、HTTP 経由のエージェント接続。
 - 台本編集の意味論を Agent Access 側で持つこと。編集は操作コアだけが行う。
 

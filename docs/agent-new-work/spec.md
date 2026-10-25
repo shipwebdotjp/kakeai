@@ -8,7 +8,7 @@
 
 - 正は本フォルダの3文書とする。既存の正（`docs/agent-access/spec.md`、台本編集は`docs/editor-core/spec.md`、HTTPは`docs/mvp/api-contract.md`、台本構造は`docs/mvp/content-schema.md`）と矛盾しない。矛盾時は本フォルダではなく既存正を優先し、本フォルダを直す。
 - 破壊的契約変更は行わない。`AGENT_PROTOCOL_VERSION`据え置き、`operationDigest`/`schemaDigest`の意味変更なし。やることは運用・技能・文書・テストと、非破壊の小改善に限定する。
-- 不可逆操作の開放は行わない。削除系・外部公開・Voice/FaceSet/Adapter設定変更・TTS以外の課金生成は人専用（`docs/agent-access/spec.md`の可逆/不可逆境界を維持）。
+- 不可逆操作の開放は行わない。削除系・外部公開・Voice/FaceSet/Adapter設定変更・利用者が設定していない接続先での生成は人専用（`docs/agent-access/spec.md`の可逆/不可逆境界を維持）。
 
 ## 対象フロー（新規完走の主線）
 

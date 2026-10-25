@@ -17,8 +17,9 @@ export type CliCommand =
 
 /**
  * Subcommands are derived from the Agent operation catalog, so the CLI can
- * never expose an operation the operation core does not publish (deletion,
- * external publishing and paid generation are absent by construction).
+ * never expose an operation the operation core does not publish (deletion and
+ * external publishing are absent by construction; generation resolves only the
+ * adapters the user configured).
  */
 export function resolveCliCommand(name: string): CliCommand | undefined {
   if (name === JOB_WAIT_COMMAND) {

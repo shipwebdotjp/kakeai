@@ -1,6 +1,7 @@
 # AIエージェントは可逆な操作を直接実行してよく、不可逆な操作だけ人に限る
 
 > amended by [ADR-0077](./0077-agent-tts-on-configured-adapters.md): 利用者が設定したループバック TTS Adapter への合成 Job 投入は、生成 Asset と Script Version のいずれも履歴から戻せるため可逆な操作に含める。接続設定の変更と TTS 以外の課金生成は引き続き人に限る。
+> amended by [ADR-0086](./0086-agent-generation-boundary-by-configured-endpoints.md): 課金の有無を公開条件から外し、利用者が設定した接続先だけを使うことを条件にする。可逆性の基準は維持する。
 
 Status: accepted
 

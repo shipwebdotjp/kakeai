@@ -5,7 +5,7 @@
 ## 方針
 
 - 正本は `ContentDocument` と SQLite のままとする。Agent Access は操作コアを呼ぶ薄い束縛であり、束縛ごとに業務ロジックを持たない。
-- 可逆な操作だけをエージェントへ公開する。実体削除、外部サービスへの公開、Adapter 設定の変更、TTS 以外の課金生成は人に限る（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
+- 可逆な操作だけをエージェントへ公開する。実体削除、外部サービスへの公開、Adapter 設定の変更は人に限る。生成操作は、利用者が設定した接続先だけを使えることを条件に公開する（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)、[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)）。
 - 互換性は「追加は自由、破壊は版を上げる」で扱う。エージェントは古いスキーマをキャッシュし得るため、契約の変更は `schemaDigest` とプロトコル版で検知できなければならない。
 - スキルは `schema.get` を正とし、操作スキーマや Template 契約を複製しない。
 - 個人利用のローカルアプリを前提に、運用負荷より再現性と巻き戻しやすさを優先する。
@@ -150,7 +150,7 @@ A9 完了時点で認識している制約である。B1〜B4 の完了で大部
 
 ## 変わらない原則
 
-- エージェントは実体削除、外部公開、Adapter 設定の変更、TTS 以外の課金生成を行えない。
+- エージェントは実体削除、外部公開、Adapter 設定の変更、利用者が設定していない接続先の利用を行えない。
 - すべての台本変更は新しい ScriptVersion の追加であり、既存版を書き換えない。
 - 操作の意味は束縛に依存しない。MCP・CLI・将来の束縛は同じ操作コアを呼ぶ。
 - スキルは `schema.get` を正とし、契約を複製しない。

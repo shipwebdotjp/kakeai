@@ -2,7 +2,7 @@
 
 ## 方針
 
-段階ごとに、前段で確立した正本データとJobの枠組みを利用する。AIや外部サービスの出力は、不変の Asset または新しい Script Version として保存し、常に人が確認・巻き戻しできる形で扱う。台本編集・素材割り当て・素材取り込み・レンダー投入のような可逆な操作は AI が直接実行してよい。実体の削除・外部公開・課金を伴う生成などの不可逆な操作は人に限る（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[Agent Access](../agent-access/spec.md)）。利用者が設定済みのループバック TTS Adapter への合成 Job は、生成 Asset と Script Version を戻せるため可逆な操作に含む（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
+段階ごとに、前段で確立した正本データとJobの枠組みを利用する。AIや外部サービスの出力は、不変の Asset または新しい Script Version として保存し、常に人が確認・巻き戻しできる形で扱う。台本編集・素材割り当て・素材取り込み・レンダー投入のような可逆な操作は AI が直接実行してよい。実体の削除・外部公開などの不可逆な操作は人に限る（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[Agent Access](../agent-access/spec.md)）。利用者が設定済みのループバック TTS Adapter への合成 Job は、生成 Asset と Script Version を戻せるため可逆な操作に含む（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。生成の可否は金額ではなく、利用者が設定した接続先かどうかで決める（[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)）。
 
 優先順位は「手作業でも再現可能な動画制作」から「編集表現の拡張」、「制作の一部自動化」、「複数言語・派生コンテンツの量産」へ進める。
 

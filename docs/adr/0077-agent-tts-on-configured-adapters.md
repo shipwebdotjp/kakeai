@@ -1,5 +1,7 @@
 # 利用者が設定したTTS Adapterへの合成Jobはエージェントに公開し、接続設定の変更とTTS以外の課金生成は人に限る
 
+> amended by [ADR-0086](./0086-agent-generation-boundary-by-configured-endpoints.md): 「TTS 以外の課金生成は許可しない」を、利用者が設定した接続先だけを使う条件へ置き換える。TTS を可逆として公開する決定は維持する。
+
 Status: accepted
 
 Kakeai の TTS は、利用者が事前に設定したループバックの TTS Adapter（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入するだけで、生成された音声は `origin: generated` の Audio Asset として追加され、台本への反映も新しい Script Version の追加だけで行う。どちらも既存の正本を書き換えず、Asset の参照と Script Version は履歴から戻せるため、この合成は [ADR 0074](./0074-agent-direct-reversible-operations.md) の可逆な操作に含まれる。したがって Agent Access は `tts.create` / `tts.createBulk` を公開する。ただしエージェントは接続先・認証情報・Adapter 設定を変更できず、TTS 以外の課金生成を一般に許可しない。

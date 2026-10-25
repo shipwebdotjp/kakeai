@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、既存 Voice Profile の話者への割り当て、Theme / Face Set / Voice Profile の読み取り、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、ライブラリの管理（作成・更新・削除）、TTS 以外の課金を伴う生成は公開していません。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、既存 Voice Profile の話者への割り当て、Theme / Face Set / Voice Profile の読み取り、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、ライブラリの管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
@@ -115,7 +115,7 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 
 ### TTS（音声合成）
 
-TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。接続先・認証情報・アダプター設定・Voice Profile 自体の作成や編集はエージェントから行えませんが、既存の Voice Profile を話者へ割り当てることはできます（[声だけの話者](#声だけの話者)）。TTS 以外の課金を伴う生成も公開していません。
+TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。接続先・認証情報・アダプター設定・Voice Profile 自体の作成や編集はエージェントから行えませんが、既存の Voice Profile を話者へ割り当てることはできます（[声だけの話者](#声だけの話者)）。TTS 以外の生成アダプターは現時点でありません。画像などの生成はエージェント側の道具で行い、`kakeai_asset_import` で素材として取り込みます。Kakeai は生成サービスの認証情報を保持しません。
 
 対象の話者に `voiceProfileId` が無い場合は TTS を開始しないでください。既存作品は `kakeai_script_get` の `speakers[]` と `kakeai_voice_profile_get` で有効な声を確認します。新規作品は `kakeai_voice_profile_list` で対象 locale と完全一致する Profile を探し、無ければ人間に Voice Profile の作成を依頼して停止します（[声だけの話者](#声だけの話者)）。立ち絵が必要な場合は、声付きキャラクターの作成も依頼します（[キャラクター](#キャラクター)）。
 
