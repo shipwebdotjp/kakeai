@@ -7,6 +7,8 @@ import {
   THEME_ACCENT_TOKENS,
   getVisualSkinDefinition,
   getVisualTheme,
+  isLatestVisualThemeDefinition,
+  latestVisualThemeDefinitions,
   listVisualSkinDefinitions,
   listVisualThemes,
   resolveVisualThemeSkin,
@@ -148,5 +150,20 @@ describe("visualSkinRegistry", () => {
     expect(upgraded.skin).toEqual(NEUTRAL_VISUAL_SKIN_REF);
     const kept = toVisualThemeDefinitionV2(upgraded);
     expect(kept).toBe(upgraded);
+  });
+
+  it("reports only the latest built-in definition as selectable", () => {
+    const latest = latestVisualThemeDefinitions();
+    expect(latest.map((definition) => `${definition.id}@${definition.version}`)).toContain(
+      `${SOFT_EDITORIAL_THEME_ID}@${SOFT_EDITORIAL_THEME_VERSION}`,
+    );
+    expect(
+      isLatestVisualThemeDefinition(
+        SOFT_EDITORIAL_THEME_ID,
+        SOFT_EDITORIAL_THEME_VERSION,
+      ),
+    ).toBe(true);
+    expect(isLatestVisualThemeDefinition(SOFT_EDITORIAL_THEME_ID, 999)).toBe(false);
+    expect(isLatestVisualThemeDefinition("missing", 1)).toBe(false);
   });
 });

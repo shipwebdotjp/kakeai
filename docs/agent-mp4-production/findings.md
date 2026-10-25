@@ -1,12 +1,14 @@
 # エージェントMP4制作 調査結果
 
-> **実装状況（2026-10-24）**: 本調査で挙げた P1 / P2 / P4 の項目は、実装または
+> **実装状況（2026-10-25）**: 本調査で挙げた P1 / P2 / P4 の項目は、実装または
 > ガイド路線で対応済み。
 > en-US の初期台本は P1 で修正し、`job.list` の `kind` と `script.save` の
 > 基準版ガード / source は P2 で追加した。`work.create` の冪等化は
 > `requestId` を追加せず、`work.list` で確認するガイド路線としている。
 > P4 で `script.listVersions` / `script.restore` / `work.clone` を追加し、
 > `work.list` は `createdAt` / `parentWorkId` を返すようになった。
+> P5 で Theme / Face Set / Voice Profile の読み取りと、既存 Voice Profile の
+> 話者への割り当て（声だけの話者）を追加した。声の前提はキャラクター必須ではなくなった。
 
 ## 調査の前提
 
@@ -29,11 +31,12 @@ Job 待機まで、設計された順序で呼べば動く。
 調査時点で MP4主線を止めていたのは編集APIではなく、次の3点だった。
 
 1. **声の前提**: 新規作品は話者を持たず、TTS は
-   `speaker.voiceProfileId` を必須とする。エージェントには Voice Profile を
-   一覧・作成する操作も、既存話者へ声を割り当てる専用操作も無い
-   （`script.save` の全体置換では技術的に設定できるが標準手順ではない）。
-   声付きキャラクターをライブラリからコピーするのが標準経路で、
-   ライブラリに該当が無いと人間の事前設定なしには TTS できない。
+   `speaker.voiceProfileId` を必須とする。調査時点ではエージェントに Voice Profile を
+   一覧する操作も、既存話者へ声を割り当てる操作も無かった。P5 で
+   `voiceProfile.list` / `voiceProfile.get` と `speaker.add` / `speaker.setVoiceProfile` を
+   追加し、対象 locale の既存 Profile を声だけの話者へ割り当てられるようになった。
+   声付きキャラクターのコピーは、立ち絵が必要な場合の経路として残る。
+   対象 locale の Profile も声付きキャラクターも無い場合だけ、人間の事前設定が要る。
 2. **en-US の初期台本**: `work.create` は Edition の locale だけを指定値にし、
    初期台本は常に ja-JP で作っていた。en-US 作品の最初の `script.edit` は
    locale 不一致で失敗していた。**P1 で修正済み**（現在は指定 locale で
@@ -44,9 +47,9 @@ Job 待機まで、設計された順序で呼べば動く。
 
 この3点のうち en-US は P1 で解消した。TTS Job の再発見は P2 の
 `job.list { kind: "tts" }` で可能になり、`script.save` は P2 で基準版ガードと
-`sourceScriptVersionId` を得た（`requestId` は未対応のまま）。声の前提は
-設計上の制約として残る。視覚確認、サムネイル、字幕、YouTube 設定は
-今回のスコープ外であり、MP4主線の blocker ではない。
+`sourceScriptVersionId` を得た（`requestId` は未対応のまま）。声の前提は P5 で
+Voice Profile の読み取りと既存 Profile の割り当てを追加して解消した。視覚確認、
+サムネイル、字幕、YouTube 設定は今回のスコープ外であり、MP4主線の blocker ではない。
 
 ## 1. 成立している部分
 
@@ -54,15 +57,16 @@ Job 待機まで、設計された順序で呼べば動く。
 | --- | --- | --- |
 | 作品・台本 | `work.create`（ja-JP / en-US）、`script.get`、`script.edit`、`script.validate`、`script.save`（任意の基準版ガード・同一 Edition の復元元） | `script.edit` は `baseScriptVersionId` と `requestId` で競合検出・冪等再送ができる |
 | 素材 | `asset.list`（検索・ソート・ページング）、`asset.import`（ローカルパス）、内容ハッシュ重複排除、`asset.tag`、`job.wait` | アプリと同じマシンで読めるファイルであること |
-| キャラクター | `character.list` / `character.get`、`character.addFromLibrary`、`line.setSpeaker`、`standing.set` | ライブラリに locale 一致の声を持つキャラクターがあること |
-| TTS | `tts.create`、`tts.createBulk`、`tts.attachBulk`、`line.assignTake`、話速指定、`requestId` 冪等 | 利用者が設定済みの TTS Adapter と、話者に紐づく Voice Profile があること |
+| キャラクター・話者 | `character.list` / `character.get`、`character.addFromLibrary`、`speaker.add` / `speaker.setVoiceProfile`、`line.setSpeaker`、`standing.set` | 対象 locale の Voice Profile、または locale 一致の声を持つ Character があること |
+| ライブラリ読み取り | `theme.list` / `theme.get`、`faceSet.list` / `faceSet.get`、`voiceProfile.list` / `voiceProfile.get` | 読み取りのみ。Theme は最新公開 Revision だけを返す |
+| TTS | `tts.create`、`tts.createBulk`、`tts.attachBulk`、`line.assignTake`、話速指定、`requestId` 冪等 | 利用者が設定済みの TTS Adapter と、話者に紐づく locale 一致の Voice Profile があること |
 | レンダー・Job | `render.start`、`job.get` / `job.list` / `job.cancel`（queuedのみ）/ `job.wait`、`preview.frame` | ワーカーが動作していること。`preview.frame` はレンダー成果物が前提 |
 | 契約・束縛 | `schema.get`、`schemaDigest` / `operationDigest`、MCP/CLI の同じ操作・同じエラーコード | 最初に `schema.get` を呼ぶ運用が前提 |
-| 多言語 | `edition.create`、翻訳 ContentDocument の `script.save` | 声は引き継がれない。TTS には別途声の設定が必要 |
+| 多言語 | `edition.create`、翻訳 ContentDocument の `script.save` | 声は引き継がれない。TTS には別途、対象 locale の声の設定が必要 |
 
 ## 2. MP4主線を止めるもの
 
-### 2.1 声の前提（最重要）
+### 2.1 声の前提（P5で解消）
 
 新規作品の初期 ContentDocument は `speakers: []` で作られる
 （[`packages/contracts/src/content/defaults.ts`](../../packages/contracts/src/content/defaults.ts)）。
@@ -75,19 +79,23 @@ TTS は次の順で検証するため、話者と Voice Profile が無いと必�
 
 （[`apps/api/src/services/tts-jobs.ts`](../../apps/api/src/services/tts-jobs.ts)）
 
-エージェントの操作カタログには、Voice Profile の一覧・作成・更新・削除も、
-既存 Speaker へ声を割り当てる専用操作も無い。標準の手段は
-`character.addFromLibrary` で、声付きキャラクターを台本へコピーする
-（`Speaker.voiceProfileId` は `Character.voices` の locale 一致から決まる）。
-`script.save` で ContentDocument 全体を置換すれば `voiceProfileId` を
-技術的に設定できるが、標準手順ではなく、運用上は人間の設定に委ねる。
-**新規インストールでライブラリが空の場合、エージェントだけでは声を
-用意できない**。
+P5 で `voiceProfile.list` / `voiceProfile.get` と `speaker.add` /
+`speaker.setVoiceProfile` を追加した。標準経路は次の2つである。
+
+- 立ち絵が不要な場合: `voiceProfile.list` で `ContentDocument.locale` と完全一致する
+  Profile を選び、`speaker.add` で声だけの話者を作る。同じ `script.edit` で
+  `line.add` に `speakerId: { key }` を渡せる。
+- 立ち絵が必要な場合: `character.addFromLibrary` で声付きキャラクターを台本へ
+  コピーする（`Speaker.voiceProfileId` は `Character.voices` の完全一致から決まる）。
+
+`speaker.setVoiceProfile` は既存話者の声を変更・解除する。Character 付き話者は、
+その Character の文書 locale の Voice と一致する場合だけ設定でき、Character に
+その声が無い場合は `null` への解除だけを許す。声の変更は以後の TTS にだけ影響し、
+既存の Audio Take は変えない。`script.save` による全体置換は引き続き標準手順ではない。
 
 既存作品ですでに TTS 対象の話者が有効な `voiceProfileId` を持っている場合は、
-ライブラリのキャラクターを追加しなくても TTS できる。MP4主線の前提は
-「新規作品なら声付きキャラクター、既存作品なら有効な `voiceProfileId`」と
-整理するのが正確である。
+新しい話者を追加しなくても TTS できる。**新規インストールで Voice Profile も
+声付きキャラクターも無い場合だけ、人間が Profile または Character を用意する**。
 
 `docs/agent-new-work/todo.md` の P0 実測でも、停止の支配因は
 「話者/声未設定」と「`requestId` なしの一括TTS開始」と記録されている。
@@ -213,12 +221,13 @@ Agent 向けの第二の検証スキーマは持たない。
 
 ### 3.2 視覚確認
 
-下書き・保存版のプレビュー HTML をエージェントが取得する操作は無い。
-`preview.frame` はレンダー済み MP4 の静止画だけを返す
+下書きプレビュー（未保存 ContentDocument）をエージェントが取得する操作は無い。
+保存済み ScriptVersion は `preview.scriptFrame`、素材は `preview.assetFrame` で
+静止画を確認でき、`preview.frame` はレンダー済み MP4 の静止画を返す
 （[`docs/visual-confirmation/spec.md`](../visual-confirmation/spec.md)）。
-今回の合格ラインでは最終確認を人間が行うため、これは blocker ではない。
-ただし、エージェントが絵を自分で確認できないままレンダーを繰り返すと、
-待ち時間とレンダー回数が増える。
+今回の合格ラインでは最終確認を人間が行うため、下書きプレビューの欠如は
+blocker ではない。ただし、エージェントが絵を自分で確認できないままレンダーを
+繰り返すと、待ち時間とレンダー回数が増える。
 
 ### 3.3 Composition authoring
 
@@ -258,7 +267,7 @@ MP4主線では `preview.frame` を必須にしないことで、このコスト
 | 下書きプレビュー・視覚確認 | 一部実装 | 保存版・素材のプレビューは `preview.scriptFrame` / `preview.assetFrame` で実装済み。下書き・複数フレームは将来 |
 | 素材画像の確認 | 実装済み | `preview.assetFrame` で画像は原本、動画は静止画 PNG を返す |
 | 版履歴・復元・Work複製 | P4で実装済み | `script.listVersions` / `script.restore` / `work.clone`。Work 作成・複製は `work.list` でタイムアウト回復 |
-| Theme / Face Set / Voice Profile の管理 | 将来 | 人専用の境界を維持 |
+| Theme / Face Set / Voice Profile の管理 | 人専用 | 読み取りと既存 Profile の割り当ては P5 で実装済み。作成・更新・削除は人専用の境界を維持 |
 | 縦型（9:16）の完成動画 | 対象外 | 出力は 1920x1080。portrait は Composition の入れ子のみ |
 | リモート/クラウド接続、アプリ自動起動 | 対象外 | 現行の非ゴール |
 
@@ -267,7 +276,7 @@ MP4主線では `preview.frame` を必須にしないことで、このコスト
 | 項目 | 分類 | MP4主線への影響 |
 | --- | --- | --- |
 | en-US の初期台本 | **解消済み（P1）** | P1 で修正済み。en-US でも作成直後から編集できる |
-| 声の前提 | **設計上の制約 + 運用前提** | ライブラリに声付きキャラクターが無いと TTS 不可。人間プリフライトが必要 |
+| 声の前提 | **解消済み（P5）** | Voice Profile の読み取りと既存 Profile の割り当てで声だけの話者を作れる。Profile も声付き Character も無い場合だけ人間のプリフライトが必要 |
 | 一括TTSの順序 | **設計上の制約** | 守れば動くが、飛ばすと一括生成が無駄になる。スキルとテストで固定 |
 | TTS Job の回復 | **解消済み（P2）** | `job.list { kind: "tts" }` で再発見できる。`requestId` なしの一括は確定不可 |
 | `work.create` / `script.save` の冪等 | **一部解消（P2）** | `script.save` は基準版ガード / source を追加。`work.create` は `work.list` 確認のガイド路線 |

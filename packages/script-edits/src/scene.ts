@@ -15,7 +15,7 @@ import {
 import { resolveTimeline } from "@kakeai/video/timeline";
 import type { ScriptContext } from "./context.ts";
 import { invalidOperation, preconditionFailed, targetNotFound } from "./errors.ts";
-import { createLine } from "./line-utils.ts";
+import { assertNewLineSpeaker, createLine } from "./line-utils.ts";
 
 export interface SceneEditResult {
   document: ContentDocument;
@@ -133,9 +133,10 @@ export function addPointScene(
   const sceneId = context.ids.scene(sceneIds);
   const label = operation.label?.trim() || nextLabel(document, operation.index, "point");
   const scene: PointScene = createPointScene(sceneId, label);
-  const lines = (operation.lines ?? []).map((input) =>
-    createLine(sceneId, input, context, existingLines),
-  );
+  const lines = (operation.lines ?? []).map((input) => {
+    assertNewLineSpeaker(document, input);
+    return createLine(sceneId, input, context, existingLines);
+  });
   const withLines: PointScene = { ...scene, lines };
   return {
     document: insertMiddleScene(document, withLines, operation.index),

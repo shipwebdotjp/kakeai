@@ -26,6 +26,7 @@ Voice Profile はアプリ共通の声の設定であり、作品台本（`Speak
 - `locale` は選択した声の申告 locale（アダプターの一覧の `locale` またはアダプター記述子の既定）から導出・検証する。キャラクターの言語別割り当て（[../multilingual-voice/spec.md](../multilingual-voice/spec.md)）に使う。
 - `voicevox` と `aivisspeech` の `voiceId` は `{speakerUuid}:{styleId}` の形で話者とスタイルを畳む。追加設定は持たない。
 - 変更は将来の生成だけに効く。既に生成済みの Asset と Job スナップショットは変えない。
+- Agent Access では、Voice Profile の一覧・取得（`voiceProfile.list` / `voiceProfile.get`）を公開し、利用者が用意した既存 Profile を `speaker.add` / `speaker.setVoiceProfile` で Speaker に割り当てられる。割り当ては新しい Script Version を作る可逆な変更であり、以後の生成にだけ影響する。既存の Audio Take は変えない。Profile の作成・更新・削除は人専用のままである（[Agent Access 仕様](../agent-access/spec.md)）。
 - Voice Profile を参照する ScriptVersion が存在する間は削除を拒否する。
 - Profile を参照する Speaker を持たない台本、または参照先 Profile が欠けた台本は保存できる。生成時にだけ「未設定」として拒否する。
 

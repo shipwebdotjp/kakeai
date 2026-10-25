@@ -16,9 +16,11 @@
 
 解決規則は次のとおり。
 
-- Edition の locale（言語部分一致、`en` ↔ `en-US`）に一致する voice を `Speaker.voiceProfileId` へ束ねる。一致する声がない場合は TTS 未設定として扱う。
+- Edition の locale と完全一致する voice（`ja-JP`、`en-US`）を `Speaker.voiceProfileId` へ束ねる。部分一致（`en` ↔ `en-US`）は行わない。一致する声がない場合は TTS 未設定として扱う。
+- `speaker.add` / `speaker.setVoiceProfile` で割り当てる Voice Profile も、`ContentDocument.locale` と完全一致しなければならない。
+- Character を持つ Speaker は、その Character の文書 locale の Voice と一致しなければならない。Character に文書 locale の Voice が無い場合、エージェントは非 null の声を割り当てられず、`null` への解除だけができる。Character に声がある場合は Character Voice を維持する。
 - ライブラリから台本へ「追加」でコピーするときは `voices` をそのまま引き継ぐ。
-- `characterId` を持たない話者（声だけのナレーター）は従来どおり `Speaker.voiceProfileId` を直接持つ。
+- `characterId` を持たない話者（声だけの話者）は従来どおり `Speaker.voiceProfileId` を直接持つ。
 
 ## ContentDocument の声対応
 

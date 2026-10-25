@@ -30,8 +30,10 @@
 | `assets` | `assetId` から `kind`・`status`・`durationMs`・`hasAudio` を返す読み取り専用の参照。ready でない Asset は解決しない |
 | `ids` | Scene・行・Cue・Audio Take・Character・Appearance・Speaker の ID 生成器。テストでは連番に差し替える |
 | `libraryCharacters` | 任意。`characterId` から Character ライブラリのキャラクター（名前・locale 別の声・外観）を返す読み取り専用の参照。ライブラリをコピーする操作だけが要求する |
+| `voiceProfiles` | 任意。`voiceProfileId` から `id` と `locale` を返す読み取り専用の参照。Speaker の声を設定する操作だけが要求する |
+| `themes` | 任意。`(themeId, version)` が新しい Script Version で選択できるかを返す参照。Theme Draft・アーカイブ済み Theme・最新でない Revision は選択できないと答える。組み込み Theme は操作コアが静的レジストリで判定する |
 
-テンプレート定義・入力スキーマ・既定値は `packages/contracts` の静的なレジストリを使う。Face Set・Theme・Composition のグローバル整合は操作コアでは検証せず、保存時の検証に委ねる。操作コアが文書と `ScriptContext` から判定できる参照整合だけをここで守る。
+テンプレート定義・入力スキーマ・既定値は `packages/contracts` の静的なレジストリを使う。Theme の選択可否と Voice Profile の実在・locale は `ScriptContext` で検証する。Face Set・Composition・Asset のグローバル整合は操作コアでは検証せず、保存時の検証に委ねる。操作コアが文書と `ScriptContext` から判定できる参照整合だけをここで守る。
 
 ### 操作の形
 
@@ -65,6 +67,7 @@ type ScriptOperation =
   | { op: "scene.add"; key?: string; /* ... */ }
   | { op: "line.add"; key?: string; /* ... */ }
   | { op: "cue.add"; key?: string; /* ... */ }
+  | { op: "speaker.add"; key?: string; /* ... */ }
   | { op: "scene.splitAtLine"; /* ... */ }
   | { op: "cue.setRange"; /* ... */ };
 ```
@@ -93,13 +96,13 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `line.add` | `sceneId`、任意の挿入位置、任意の初期値 | `point` のみ。ID は `<sceneの短縮トークン>` を含む。`speakerId: null` なら `expressionId: null`。空の行も作れる |
+| `line.add` | `sceneId`、任意の挿入位置、任意の初期値 | `point` のみ。ID は `<sceneの短縮トークン>` を含む。`speakerId` は ID または `{ key }`（ScriptIdRef）、`null` も可。存在しない Speaker は `EDIT_TARGET_NOT_FOUND`。`speakerId: null` なら `expressionId: null`。`characterId: null` の Speaker に明示的な `expressionId` を指定すると拒否する。`scene.add` の `lines[].speakerId` は ID のみで `{ key }` を取らないが、Speaker の実在と声だけ話者の表情検査は同じ規則を使う。空の行も作れる |
 | `line.remove` | `sceneId`、`lineId` | Cue 範囲の端点を詰め、単一行の Cue を削除し、効果トリガーと `videoPlayback.gates` から当該行への参照を外す。当該行の Audio Take を削除する |
 | `line.move` | `sceneId`、`lineId`、移動先 | 同一 Scene 内。`range: lines` の開始・終了が逆転したら入れ替える |
 | `line.split` | `sceneId`、`lineId`、前半と後半の `captionText`/`speechText` | 後述の解決規則に従う |
 | `line.setText` | `sceneId`、`lineId`、`captionText` / `speechText` | 選択済み Audio Take は変更しない。空文字を許す |
-| `line.setSpeaker` | `sceneId`、`lineId`、`speakerId` | `speakerId: null` は `expressionId` も `null` にする。存在しない Speaker は拒否する |
-| `line.setExpression` | `sceneId`、`lineId`、`expressionId` | `speakerId: null` の行には `null` 以外を指定できない。Face Set 内の実在は保存時に検証する |
+| `line.setSpeaker` | `sceneId`、`lineId`、`speakerId` | `speakerId` は ID / `{ key }` / `null`。存在しない Speaker は `EDIT_TARGET_NOT_FOUND`。`null` または `characterId: null` の Speaker へ変えると `expressionId` を `null` にする |
+| `line.setExpression` | `sceneId`、`lineId`、`expressionId` | `speakerId: null` の行と `characterId: null` の話者の行には `null` 以外を指定できない。Face Set 内の実在は保存時に検証する |
 | `line.setGap` | `sceneId`、`lineId`、`gapBeforeMs` | 非負整数。0 は省略できる |
 | `line.assignTake` | `sceneId`、`lineId`、`assetId`、`source` | ready な `audio` Asset。`durationMs` は Asset の尺。新しい Audio Take を作り、既定で選択する |
 | `line.selectTake` | `sceneId`、`lineId`、`takeId` / `null` | Take は当該行に属する。`null` は字幕のみ |
@@ -148,6 +151,16 @@ type ScriptOperation =
 - ライブラリの参照能力が `ScriptContext` に無い場合は `EDIT_PRECONDITION_FAILED`、指定した `libraryCharacterId` が存在しない場合は `EDIT_TARGET_NOT_FOUND` とする。ライブラリの作成・更新・削除は操作コアに公開しない。
 - 新規 ID は既存の Character・Appearance・Speaker と衝突してはならない。同じ操作を複数回適用した場合、または同じライブラリ項目を同一呼び出し内で2回コピーした場合も、それぞれ独立した ID を持つ。
 
+### Speaker
+
+| 操作 | 入力 | 不変条件 |
+| --- | --- | --- |
+| `speaker.add` | 任意の `key`、`name`、`voiceProfileId` | `characterId: null` の Speaker を作る。`voiceProfileId` は必須で、`ScriptContext.voiceProfiles` に存在し、`document.locale` と完全一致する。作成 ID は結果の `created.speakerIds` で返す。`key` を持ち、同一呼び出し内の `line.add` / `line.setSpeaker` から `{ key }` で参照できる |
+| `speaker.setVoiceProfile` | `speakerId`（ScriptIdRef）、`voiceProfileId` / `null` | Speaker が実在する。非 null の Profile は実在し `document.locale` と完全一致する。Character 付き Speaker は、文書 locale の Character Voice と一致する場合だけ設定でき、Character にその声が無い場合は `null` への解除だけを許す。Character に声がある場合は `null` にできない |
+
+- `voiceProfiles` を用意できない場合、声を設定する操作は `EDIT_PRECONDITION_FAILED`、参照先の Profile が存在しない場合は `EDIT_TARGET_NOT_FOUND`、locale または Character Voice の不一致は `EDIT_PRECONDITION_FAILED` とする。
+- 声の変更は文書と以後の TTS にだけ影響し、既存の Audio Take は変更しない。Character・Voice Profile・Face Set・Theme のライブラリ管理操作は操作コアに公開しない。
+
 ### AudioCue
 
 | 操作 | 入力 | 不変条件 |
@@ -160,7 +173,7 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `document.setVisualTheme` | `id`、`version` | 既知のテーマ参照のみ。保存時に再検証する |
+| `document.setVisualTheme` | `id`、`version` | 組み込み Theme は最新 Revision、利用者 Theme は `ScriptContext.themes` が選択可能と答えた最新公開 Revision だけを選べる。Theme Draft・アーカイブ済み Theme・最新でない Revision は選べない。`themes` を用意できない場合、組み込み Theme 以外は選べない。既存の参照を変更しない保存は保存検証に委ねる |
 
 ## 個別の意味論
 
@@ -198,7 +211,7 @@ type ScriptOperation =
 
 ### 変更しないもの
 
-操作コアは、Scene の `label` の重複、行の話速、テキストの自動改行、フォントの実測を行わない。テキスト量の警告は保存と同じ近似規則で返す。固定尺の Scene では、行の追加・間の変更・音声の割り当て・選択・削除の後に `A + G <= D` を再検証し、超える操作を拒否する。Face Set・CompositionVersion・Asset のグローバル整合は保存時に検証する。
+操作コアは、Scene の `label` の重複、行の話速、テキストの自動改行、フォントの実測を行わない。テキスト量の警告は保存と同じ近似規則で返す。固定尺の Scene では、行の追加・間の変更・音声の割り当て・選択・削除の後に `A + G <= D` を再検証し、超える操作を拒否する。Theme の選択可否と Voice Profile の実在・locale は `ScriptContext` で検証する。Face Set・CompositionVersion・Asset のグローバル整合は保存時に検証する。
 
 ## タイミングの解決
 
@@ -219,9 +232,9 @@ type ScriptOperation =
 
 | code | 発生条件 |
 | --- | --- |
-| `EDIT_TARGET_NOT_FOUND` | 指定した Scene・行・Cue・AudioCue・Audio Take・ライブラリのキャラクターが存在しない |
-| `EDIT_PRECONDITION_FAILED` | 尺の不足、固定尺の等式違反、Scene 順序、layer 制約など、文書の状態が操作を許さない |
-| `EDIT_INVALID_INPUT` | 入力が操作の Zod スキーマに適合しない、または ID 参照 `key` が解決できない |
+| `EDIT_TARGET_NOT_FOUND` | 指定した Scene・行・Cue・AudioCue・Audio Take・ライブラリのキャラクター・Speaker・Voice Profile が存在しない。選択できない Theme Revision もここに含む |
+| `EDIT_PRECONDITION_FAILED` | 尺の不足、固定尺の等式違反、Scene 順序、layer 制約、声の locale 不一致、Character Voice との不一致、声だけの話者への `line.setExpression`、参照に必要な `ScriptContext` が無いなど、文書または文脈の状態が操作を許さない |
+| `EDIT_INVALID_INPUT` | 入力が操作の Zod スキーマに適合しない、ID 参照 `key` が解決できない、`line.add` で声だけの話者に明示的な `expressionId` を指定した |
 | `EDIT_UNSUPPORTED_TEMPLATE` | 指定した VisualTemplate の版が存在しない、または操作が未対応 |
 | `EDIT_ID_GENERATION_FAILED` | 衝突を避けて ID を生成できなかった（通常は発生しない） |
 

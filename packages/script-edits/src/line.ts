@@ -11,10 +11,15 @@ import type { ScriptContext } from "./context.ts";
 import { invalidOperation, preconditionFailed, targetNotFound } from "./errors.ts";
 import type { SceneEditResult } from "./scene.ts";
 import {
+  assertNewLineSpeaker,
   createLine,
   existingLineIds,
   findLineIndex,
   findPointScene,
+  findSpeaker,
+  isVoiceOnlySpeaker,
+  NO_SPEAKER_EXPRESSION_MESSAGE,
+  VOICE_ONLY_SPEAKER_EXPRESSION_MESSAGE,
   withScene,
 } from "./line-utils.ts";
 import { pruneCueForLines } from "./prune.ts";
@@ -159,6 +164,7 @@ export function addLine(
   context: ScriptContext,
 ): LineEditResult {
   const { scene, sceneIndex } = findPointScene(document, sceneId);
+  assertNewLineSpeaker(document, input);
   const line = createLine(sceneId, input, context, existingLineIds(document));
   const at = clamp(index ?? scene.lines.length, 0, scene.lines.length);
   const lines = [...scene.lines];
@@ -348,7 +354,11 @@ export function setLineSpeaker(
   const { scene, sceneIndex } = findPointScene(document, sceneId);
   const lineIndex = findLineIndex(scene, lineId);
   const line = { ...scene.lines[lineIndex]!, speakerId };
-  if (speakerId === null) {
+  const speaker = findSpeaker(document, speakerId);
+  if (speakerId !== null && speaker === undefined) {
+    throw targetNotFound(["speakerId"], `話者が見つかりません: ${speakerId}`);
+  }
+  if (speakerId === null || isVoiceOnlySpeaker(speaker)) {
     line.expressionId = null;
   }
   return {
@@ -373,11 +383,20 @@ export function setLineExpression(
   const { scene, sceneIndex } = findPointScene(document, sceneId);
   const lineIndex = findLineIndex(scene, lineId);
   const line = scene.lines[lineIndex]!;
-  if (line.speakerId === null && expressionId !== null) {
-    throw preconditionFailed(
-      ["expressionId"],
-      "話者のいない行に表情は指定できません。",
-    );
+  if (expressionId !== null) {
+    if (line.speakerId === null) {
+      throw preconditionFailed(
+        ["expressionId"],
+        NO_SPEAKER_EXPRESSION_MESSAGE,
+      );
+    }
+    const speaker = findSpeaker(document, line.speakerId);
+    if (isVoiceOnlySpeaker(speaker)) {
+      throw preconditionFailed(
+        ["expressionId"],
+        VOICE_ONLY_SPEAKER_EXPRESSION_MESSAGE,
+      );
+    }
   }
   return {
     document: withScene(

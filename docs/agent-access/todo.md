@@ -77,9 +77,9 @@
 
 - [x] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。
 
-## 拡張フェーズ（B1〜B6）
+## 拡張フェーズ（B1〜B9）
 
-[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 → B6 の順に実装する。
+[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 → B6 → B8 → B9 の順に実装する。B7 は B2 の後に実装中である。
 
 ### [x] B1 操作契約ダイジェストと版折衝の機構（R1-1）
 
@@ -125,3 +125,26 @@
 - [ ] `skills/kakeai-production` の一括 TTS 手順を、`tts.createBulk`（`requestId` 付き）→ `tts.attachBulk` の状態確認／確定→未音声だけ新バッチ、へ変更する。単体 TTS は従来どおり個別の `line.assignTake` を使う
 - [ ] TTS 仕様、Agent Access 仕様・roadmap、ユーザーガイドを更新し、Web と Agent の差分、失敗後の再実行、確定前に台本を書き換えない規則を明記する
 - 完了条件: 契約・MCP・CLI 公開のテスト、一括未完了／全完了後の一部添付、失敗・取消・対象外を含む部分成功、冪等再送、requestId なし／別 Agent の一括要求、基準版の競合が検証できる。Web の一括生成フローで部分失敗時の件数と保存後の再実行案内が表示され、成功分の保存・次回の未音声一括生成を妨げない。
+
+### [x] B8 ライブラリ読み取り（R2-3）
+
+- [x] 契約に `theme.list` / `theme.get`（`{ themes: [{ id, name, isBuiltIn, version }] }` / `{ theme: { id, name, isBuiltIn, version, definition } }`）を追加する。アーカイブされていない利用者 Theme の最新公開 Revision と組み込み Theme だけを返し、Theme Draft・アーカイブ済み Theme・最新でない Revision・Font 診断は返さない。
+- [x] 契約に `faceSet.list` / `faceSet.get`（`{ faceSets }` / `{ faceSet }`）と `voiceProfile.list` / `voiceProfile.get`（`{ voiceProfiles }` / `{ voiceProfile }`）を追加する。既存 DTO をそのまま返し、一覧はページングしない。
+- [x] 未知の `themeId` / `faceSetId` / `voiceProfileId` を `RESOURCE_NOT_FOUND` とする。Theme・Face Set・Voice Profile の作成・更新・削除・アーカイブは公開しない。
+- [x] 6 操作を `schema.get` の Agent 操作カタログと契約ダイジェストへ反映し、MCP・CLI がカタログから自動公開することを保つ。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上げない。
+- [x] ソケット・MCP・CLI のテストで、6 操作の取得、Theme の最新 Revision 限定、未知 ID の `RESOURCE_NOT_FOUND` を固定する。
+- [x] Agent Access 仕様・roadmap・ユーザーガイド・制作スキルを更新する。
+- 完了条件: ソケット・MCP・CLI から 6 操作を呼べ、Theme が最新公開 Revision だけを返し、未知 ID が `RESOURCE_NOT_FOUND` になる。束縛とアプリが同じビルドで公開される。
+
+### [x] B9 声だけの話者と声の割り当て（R2-3）
+
+- [x] `speaker.add`（任意の `key`・`name`・必須 `voiceProfileId`）と `speaker.setVoiceProfile`（`speakerId`・`voiceProfileId` / `null`）を操作コアと契約に追加し、`speaker` カテゴリを新設する。作成 ID は `script.edit` の `created.speakerIds` で返す。
+- [x] `line.add` / `line.setSpeaker` の `speakerId` を ID または `{ key }` で参照できるようにする。`scene.add.lines[].speakerId` は ID のみのままとする。
+- [x] 声の割り当て規則を操作コアに実装する。Profile は実在し `ContentDocument.locale` と完全一致すること、Character 付き Speaker は文書 locale の Character Voice と一致すること。参照欠落は `EDIT_TARGET_NOT_FOUND`、locale・Character Voice の不一致は `EDIT_PRECONDITION_FAILED`。Character に声が無い場合だけ `null` への解除を許す。
+- [x] `line.setSpeaker` で声だけの話者へ変えたときに `expressionId` を自動で消し、`line.add` は声だけの話者への明示的な `expressionId` を拒否する。`line.setExpression` も声だけの話者には指定できない。
+- [x] `document.setVisualTheme` を、組み込み Theme の最新 Revision とアーカイブされていない利用者 Theme の最新公開 Revision だけに制限する。`script.save` は Theme の変更がアーカイブ済み・最新でない Revision を指す場合だけ拒否し、Theme を変えない保存と `script.restore` を許可する。
+- [x] `ScriptContext` に `voiceProfiles` / `themes` の任意参照を追加し、`voiceProfiles` を用意できない場合の `EDIT_PRECONDITION_FAILED` と、選択できない Theme の `EDIT_TARGET_NOT_FOUND` を固定する。
+- [x] 声の変更が以後の TTS にだけ影響し、既存の Audio Take を変えないことを仕様に明記する。
+- [x] 契約・操作コア・ソケット統合テストで、声だけの話者の作成、`{ key }` 参照、locale 不一致、Character Voice 不一致、`expressionId` の自動消去・拒否、Theme の最新 Revision 制限を固定する。`speaker.add` の replay が `created` を返さないことも確認する。
+- [x] Agent Access 仕様・roadmap・TTS 仕様・多言語声仕様・MP4 制作仕様・操作コア仕様・ユーザーガイド・制作スキルを更新する。DB migration と HTTP API の変更は行わない。
+- 完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`（`speakerId: { key }`）→ TTS → 確定 → レンダーが通り、Character 付き話者の制約と Theme の最新 Revision 制限がテストで固定されている。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

@@ -374,6 +374,31 @@ const softEditorialV1 = visualThemeDefinitionV1Schema.parse({
 
 export const visualThemeDefinitions: readonly VisualThemeDefinition[] = [softEditorialV1];
 
+const latestVisualThemeDefinitionCache: readonly VisualThemeDefinition[] = (() => {
+  const latestById = new Map<string, VisualThemeDefinition>();
+  for (const definition of visualThemeDefinitions) {
+    const current = latestById.get(definition.id);
+    if (current === undefined || definition.version > current.version) {
+      latestById.set(definition.id, definition);
+    }
+  }
+  return [...latestById.values()];
+})();
+
+/**
+ * The latest built-in definition per theme id, in registry order. Built-in
+ * Themes are selectable at their latest version only, matching user Themes.
+ */
+export function latestVisualThemeDefinitions(): readonly VisualThemeDefinition[] {
+  return latestVisualThemeDefinitionCache;
+}
+
+export function isLatestVisualThemeDefinition(id: string, version: number): boolean {
+  return latestVisualThemeDefinitionCache.some(
+    (definition) => definition.id === id && definition.version === version,
+  );
+}
+
 export const visualThemeRegistry: ReadonlyMap<string, VisualThemeDefinition> = new Map(
   visualThemeDefinitions.map((definition) => [`${definition.id}@${definition.version}`, definition]),
 );

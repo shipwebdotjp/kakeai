@@ -1,4 +1,8 @@
-import type { CharacterAppearance, CharacterVoice } from "@kakeai/contracts";
+import type {
+  CharacterAppearance,
+  CharacterVoice,
+  ContentDocument,
+} from "@kakeai/contracts";
 
 export type ScriptAssetKind = "image" | "video" | "audio";
 export type ScriptAssetStatus = "processing" | "ready" | "failed";
@@ -39,6 +43,26 @@ export interface ScriptLibraryCharacterLookup {
   get(characterId: string): ScriptLibraryCharacter | null;
 }
 
+/** A Voice Profile projection: the operation core needs its locale only. */
+export interface ScriptVoiceProfileInfo {
+  id: string;
+  locale: ContentDocument["locale"];
+}
+
+export interface ScriptVoiceProfileLookup {
+  get(voiceProfileId: string): ScriptVoiceProfileInfo | null;
+}
+
+/**
+ * Selectable Visual Theme revisions. The lookup answers only "may a new
+ * Script Version select this revision?", so it excludes Theme Drafts, archived
+ * Themes, and non-latest revisions. Existing Script Versions are validated by
+ * the save path, not by this lookup.
+ */
+export interface ScriptThemeLookup {
+  isSelectable(themeId: string, version: number): boolean;
+}
+
 export interface ScriptIdGenerator {
   scene(existing: ReadonlySet<string>): string;
   line(sceneId: string, existing: ReadonlySet<string>): string;
@@ -55,4 +79,8 @@ export interface ScriptContext {
   ids: ScriptIdGenerator;
   /** Optional: only operations that copy from the library require it. */
   libraryCharacters?: ScriptLibraryCharacterLookup;
+  /** Optional: only operations that assign a Voice Profile require it. */
+  voiceProfiles?: ScriptVoiceProfileLookup;
+  /** Optional: only `document.setVisualTheme` requires it. */
+  themes?: ScriptThemeLookup;
 }

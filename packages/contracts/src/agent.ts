@@ -25,6 +25,9 @@ import {
 import { assetTagsSchema } from "./asset";
 import { assetListInputSchema, assetListPageSchema } from "./asset-list";
 import { characterLibraryEntrySchema } from "./character-library";
+import { faceSetSchema } from "./face-set";
+import { voiceProfileSchema } from "./voice-profile";
+import { visualThemeDefinitionSchema } from "./content/theme";
 import {
   compositionAuthoringContextSchema,
   compositionDraftFilesSchema,
@@ -327,6 +330,7 @@ export const scriptOperationCategorySchema = z.enum([
   "cue",
   "standing",
   "character",
+  "speaker",
   "audio",
   "document",
 ]);
@@ -374,6 +378,12 @@ export const agentOperationNames = [
   "tts.attachBulk",
   "character.list",
   "character.get",
+  "theme.list",
+  "theme.get",
+  "faceSet.list",
+  "faceSet.get",
+  "voiceProfile.list",
+  "voiceProfile.get",
   "preview.frame",
   "preview.scriptFrame",
   "preview.assetFrame",
@@ -398,6 +408,12 @@ export const agentReadOperationNames = [
   "composition.authoringContext",
   "character.list",
   "character.get",
+  "theme.list",
+  "theme.get",
+  "faceSet.list",
+  "faceSet.get",
+  "voiceProfile.list",
+  "voiceProfile.get",
   "preview.frame",
   "preview.scriptFrame",
   "preview.assetFrame",
@@ -1330,6 +1346,64 @@ export const agentCharacterGetOutputSchema = z.strictObject({
   character: characterLibraryEntrySchema,
 });
 
+/**
+ * A selectable Visual Theme. Only the latest published Revision of an
+ * unarchived user Theme (or a built-in) is listed. The definition is returned
+ * by `theme.get`, not by `theme.list`, so a list read stays small.
+ */
+export const agentThemeSummarySchema = z.strictObject({
+  id: idSchema,
+  name: z.string().min(1),
+  isBuiltIn: z.boolean(),
+  version: positiveInt,
+});
+export type AgentThemeSummary = z.infer<typeof agentThemeSummarySchema>;
+
+export const agentThemeDetailSchema = z.strictObject({
+  id: idSchema,
+  name: z.string().min(1),
+  isBuiltIn: z.boolean(),
+  version: positiveInt,
+  definition: visualThemeDefinitionSchema,
+});
+export type AgentThemeDetail = z.infer<typeof agentThemeDetailSchema>;
+
+export const agentThemeListInputSchema = agentEmptyInputSchema;
+export const agentThemeListOutputSchema = z.strictObject({
+  themes: z.array(agentThemeSummarySchema),
+});
+
+export const agentThemeGetInputSchema = z.strictObject({
+  themeId: idSchema,
+});
+export const agentThemeGetOutputSchema = z.strictObject({
+  theme: agentThemeDetailSchema,
+});
+
+export const agentFaceSetListInputSchema = agentEmptyInputSchema;
+export const agentFaceSetListOutputSchema = z.strictObject({
+  faceSets: z.array(faceSetSchema),
+});
+
+export const agentFaceSetGetInputSchema = z.strictObject({
+  faceSetId: idSchema,
+});
+export const agentFaceSetGetOutputSchema = z.strictObject({
+  faceSet: faceSetSchema,
+});
+
+export const agentVoiceProfileListInputSchema = agentEmptyInputSchema;
+export const agentVoiceProfileListOutputSchema = z.strictObject({
+  voiceProfiles: z.array(voiceProfileSchema),
+});
+
+export const agentVoiceProfileGetInputSchema = z.strictObject({
+  voiceProfileId: idSchema,
+});
+export const agentVoiceProfileGetOutputSchema = z.strictObject({
+  voiceProfile: voiceProfileSchema,
+});
+
 export const agentOperationInputSchemas = {
   "schema.get": agentSchemaGetInputSchema,
   "template.get": agentTemplateGetInputSchema,
@@ -1368,6 +1442,12 @@ export const agentOperationInputSchemas = {
   "tts.attachBulk": agentTtsAttachBulkInputSchema,
   "character.list": agentCharacterListInputSchema,
   "character.get": agentCharacterGetInputSchema,
+  "theme.list": agentThemeListInputSchema,
+  "theme.get": agentThemeGetInputSchema,
+  "faceSet.list": agentFaceSetListInputSchema,
+  "faceSet.get": agentFaceSetGetInputSchema,
+  "voiceProfile.list": agentVoiceProfileListInputSchema,
+  "voiceProfile.get": agentVoiceProfileGetInputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export const agentOperationOutputSchemas = {
@@ -1408,6 +1488,12 @@ export const agentOperationOutputSchemas = {
   "tts.attachBulk": agentTtsAttachBulkOutputSchema,
   "character.list": agentCharacterListOutputSchema,
   "character.get": agentCharacterGetOutputSchema,
+  "theme.list": agentThemeListOutputSchema,
+  "theme.get": agentThemeGetOutputSchema,
+  "faceSet.list": agentFaceSetListOutputSchema,
+  "faceSet.get": agentFaceSetGetOutputSchema,
+  "voiceProfile.list": agentVoiceProfileListOutputSchema,
+  "voiceProfile.get": agentVoiceProfileGetOutputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export type AgentOperationInputMap = {

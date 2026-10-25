@@ -54,10 +54,11 @@ files.
    `longRunning` if you need it without a schema fetch.
 5. Check the voice precondition before planning TTS. For an existing Work,
    read the current script and confirm the speakers you will use have a
-   `voiceProfileId` (`script.get` → `speakers[]`). For a new Work, check
-   `character.list` for an entry with a voice for the target locale. If neither
-   exists, stop before starting TTS and ask the human to create a character
-   with a voice (§4). Do not queue TTS for voice-less speakers.
+   `voiceProfileId` (`script.get` → `speakers[]`), and check that Profile with
+   `voiceProfile.get`. For a new Work, call `voiceProfile.list` and choose a
+   Profile whose `locale` exactly matches the target locale. If no Profile
+   exists, stop before starting TTS and ask the human to create a Voice Profile
+   in the app (§4). Do not queue TTS for voice-less speakers.
 
 ## 2. Order of work
 
@@ -65,7 +66,7 @@ files.
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
-| 3 | Characters (voice preflight) | `character.list`, `character.get`, `script.edit` + `character.addFromLibrary` | Returned voices cover the speakers for this locale |
+| 3 | Characters and voices | `voiceProfile.list`, `character.list`, `character.get`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching Voice Profile exists; use `character.addFromLibrary` when an on-screen Character is needed |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
@@ -158,25 +159,57 @@ a second copy of that contract.
   ones with `scene.splitAtLine` or `line.split`, and add narration with
   `line.add`.
 
-## 4. Characters
+## 4. Characters, voices and libraries
 
-The character library is **read-only** on the agent surface.
+The character, voice profile, face set and theme libraries are **read-only** on
+the agent surface. `speaker.add` and `speaker.setVoiceProfile` change the
+script's speakers, never a library entry.
 
 ### Voice preflight
 
 1. **Existing Work** — `script.get` the edition and read
-   `speakers[].voiceProfileId`. A speaker with a valid voice can keep it; reuse
-   it for TTS.
-2. **New Work, or a speaker without a voice** — `character.list` and choose an
-   entry whose `voices` has a voice for the target locale.
-3. If neither exists, **stop before TTS** and ask the human to create a
-   character with a voice in the app. Do not start TTS with a voice-less
+   `speakers[].voiceProfileId`. Check the Profile with `voiceProfile.get`: it
+   must exist and its `locale` must exactly equal the script `locale`. A speaker
+   with a valid voice can keep it; reuse it for TTS.
+2. **New Work, or a speaker without a voice** — call `voiceProfile.list` and
+   choose a Profile whose `locale` exactly equals the target locale (for example
+   `ja-JP`; `en` does not match `en-US`). Use `character.list` only when an
+   on-screen Character is also needed.
+3. If no matching Profile exists, **stop before TTS** and ask the human to
+   create a Voice Profile in the app. Do not start TTS with a voice-less
    speaker.
-4. The standard way to add a voice to a new Work is `character.addFromLibrary`:
-   it copies the entry and its locale voice into the script. There is **no
-   dedicated operation to assign a `voiceProfileId` to an existing speaker**.
-   A whole-document `script.save` can technically set the field, but that is
-   not the standard flow; ask the human instead.
+4. **Standard voice-only speaker flow** — in one `script.edit`, create the
+   speaker and its first line together. The `key` lets `line.add` reference the
+   speaker in the same call:
+
+   ```json
+   {
+     "baseScriptVersionId": "scr-003",
+     "requestId": "edit-2026-10-25-1",
+     "operations": [
+       { "op": "speaker.add", "key": "speaker-1", "name": "Narration", "voiceProfileId": "vp-001" },
+       { "op": "line.add", "sceneId": "scene-002", "speakerId": { "key": "speaker-1" }, "captionText": "First point." }
+     ]
+   }
+   ```
+
+   `speaker.add` creates a Speaker with `characterId: null` and the given
+   Profile. Read `created.speakerIds` if you need the new ID later.
+5. **Existing speaker** — `speaker.setVoiceProfile` with the `speakerId` and an
+   existing `voiceProfileId`, or `null` to clear it. For a Character-linked
+   speaker the Character Voice is authoritative: the Profile must equal the
+   Character's Voice for the document locale. If the Character has no Voice for
+   the locale, only clearing to `null` is allowed. A missing speaker/Profile is
+   `EDIT_TARGET_NOT_FOUND`; a locale or Character Voice mismatch is
+   `EDIT_PRECONDITION_FAILED`. Changing a voice affects future TTS only;
+   existing Audio Takes do not change.
+6. **On-screen Character** — `character.addFromLibrary` remains the path when a
+   standing appearance is needed. It copies the Character and its locale voice
+   into the script.
+
+A replay of a `script.edit` (same `requestId`) does **not** return `created` IDs.
+If a call containing only `speaker.add` times out, replay it to confirm the
+version, then `script.get` the new version to find the Speaker.
 
 ### Copying a character
 
@@ -195,9 +228,32 @@ The character library is **read-only** on the agent surface.
 5. In a **second** `script.edit`, use those IDs with `line.setSpeaker` and
    `standing.set`. Same-call `{ "key": ... }` references cannot point at a
    `character.addFromLibrary` result.
+6. When you switch a line to a voice-only speaker, omit `expressionId`.
+   `line.setSpeaker` clears it automatically, but `line.add` rejects an explicit
+   `expressionId` for a speaker with no Character, and `line.setExpression` also
+   rejects one.
 
-Never create, update or delete library characters, voices or face sets. Library
-changes are the user's job; agents only copy into the script.
+### Face sets
+
+`character.get` → an appearance's `faceSetId` → `faceSet.get` → an
+`expressions[].id` → `line.setExpression` with `expressionId`. Use it only for
+lines whose speaker has a Character; a voice-only speaker has no face to switch.
+
+### Themes
+
+`theme.list` returns the selectable Themes with their latest published
+`version`; `theme.get` returns that revision and its `definition`. Only the
+listed version is selectable, and any other id/version is `RESOURCE_NOT_FOUND`.
+Theme Drafts, archived Themes, non-latest revisions and font diagnostics are not
+exposed. `document.setVisualTheme`
+accepts a built-in revision or the latest revision of an unarchived user Theme.
+`script.save` rejects a **change** to an archived or non-latest revision but
+allows saving a document that keeps its existing Theme, even if that Theme is
+archived.
+
+Never create, update, archive or delete library characters, voices, face sets or
+themes. Library changes are the user's job; agents only read them, copy a
+Character into the script, or assign an existing Voice Profile to a speaker.
 
 ## 5. Assets
 
@@ -262,9 +318,10 @@ credentials, adapter settings, voice profiles, or trigger any other paid
 generation.
 
 1. Make sure the target script is saved and every target speaker has a
-   `voiceProfileId` (§4). Both TTS operations take a `scriptVersionId`; unsaved
-   local edits are not visible to them. If any target speaker has no voice,
-   stop and ask the human — do not start TTS.
+   `voiceProfileId` whose Profile exists and matches the script locale (§4).
+   Both TTS operations take a `scriptVersionId`; unsaved local edits are not
+   visible to them. If any target speaker has no voice, stop and ask the human
+   to create a Voice Profile — do not start TTS.
 2. `tts.create` synthesizes one Narration Segment:
    - Required: `scriptVersionId`, `narrationSegmentId`.
    - Optional: `speechText` (defaults to the saved segment text),
@@ -364,6 +421,7 @@ generation.
 | `IDEMPOTENCY_CONFLICT` | A version with that `requestId` already exists with different input. Never reuse the ID with different content. Read the current version (`script.get` with `languageEditionId`) or the history (`script.listVersions`) and continue from there. |
 | `work.create` / `work.clone` timeout | These operations have no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `work.list` and look for the created Work (same title and `createdAt` at or after your request) or child (`parentWorkId` = the source Work). Retry only when you are sure nothing was created; if several candidates match, ask the human instead of guessing. |
 | `script.save` timeout | It has no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `script.get` / `script.listVersions` to check whether the new version landed, then retry only if it did not. |
+| `speaker.add`-only edit timeout | Replaying `script.edit` with the same `requestId` returns the version but an empty `created`. Call `script.get` on that version to find the new Speaker before using it. |
 | `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `work.list`, `job.list` — pass `{ kind: "tts" }` for TTS Jobs — `asset.list`, `composition.get`) and only then retry. The exceptions are `script.edit` and `script.restore`, which may be replayed immediately with the same `requestId`. |
 | `replay: true` | The edit or restore was already applied. Do not apply the operations or restore again. |
 | Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. `schemaDigest` also covers each template's input contract, so re-fetch any `template.get` result you cached. |
@@ -438,8 +496,10 @@ to the user when the fix is on their side.
 - Deleting Works, Assets, Composition Versions, Artifacts or library entries.
 - Publishing anything to an external service (Composition publish inside Kakeai
   is an immutable version, not an external publish).
-- Creating, updating or deleting character library entries, voice profiles, face
-  sets, TTS adapters, endpoints or credentials.
+- Creating, updating, archiving or deleting character library entries, voice
+  profiles, face sets, themes, TTS adapters, endpoints or credentials. Existing
+  Voice Profiles may be assigned to speakers; libraries themselves stay
+  read-only.
 - Paid generation other than Jobs on the user's configured TTS adapter.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.

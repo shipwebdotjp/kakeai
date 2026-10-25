@@ -47,6 +47,7 @@ import {
 import { removeStanding, setStanding } from "./standing.ts";
 import { addAudio, removeAudio, setAudio } from "./audio.ts";
 import { addCharacterFromLibrary } from "./character.ts";
+import { addSpeaker, setSpeakerVoiceProfile } from "./speaker.ts";
 import { setVisualTheme } from "./theme.ts";
 
 export type { ScriptOperationCreated };
@@ -210,6 +211,10 @@ export function applyScriptOperation(
     }
     case "line.add": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const speakerId =
+        operation.speakerId === undefined || operation.speakerId === null
+          ? operation.speakerId
+          : resolveId(operation.speakerId, keys, ["speakerId"]);
       const result = addLine(
         document,
         sceneId,
@@ -217,7 +222,7 @@ export function applyScriptOperation(
         {
           captionText: operation.captionText,
           speechText: operation.speechText,
-          speakerId: operation.speakerId,
+          speakerId,
           expressionId: operation.expressionId,
           gapBeforeMs: operation.gapBeforeMs,
         },
@@ -252,8 +257,12 @@ export function applyScriptOperation(
     case "line.setSpeaker": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
       const lineId = resolveId(operation.lineId, keys, ["lineId"]);
+      const speakerId =
+        operation.speakerId === null
+          ? null
+          : resolveId(operation.speakerId, keys, ["speakerId"]);
       return toResult(
-        setLineSpeaker(document, sceneId, lineId, operation.speakerId),
+        setLineSpeaker(document, sceneId, lineId, speakerId),
       );
     }
     case "line.setExpression": {
@@ -447,9 +456,28 @@ export function applyScriptOperation(
     case "character.addFromLibrary": {
       return toResult(addCharacterFromLibrary(document, operation, context));
     }
+    case "speaker.add": {
+      const result = addSpeaker(document, operation, context);
+      registerKey(operation.key, keys, result.primaryId);
+      return toResult(result);
+    }
+    case "speaker.setVoiceProfile": {
+      const speakerId = resolveId(operation.speakerId, keys, ["speakerId"]);
+      return toResult(
+        setSpeakerVoiceProfile(
+          document,
+          {
+            op: "speaker.setVoiceProfile",
+            speakerId,
+            voiceProfileId: operation.voiceProfileId,
+          },
+          context,
+        ),
+      );
+    }
     case "document.setVisualTheme": {
       return toResult(
-        setVisualTheme(document, operation.id, operation.version),
+        setVisualTheme(document, operation.id, operation.version, context),
       );
     }
     default: {

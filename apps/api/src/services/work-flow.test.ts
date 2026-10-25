@@ -4,9 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   SNAPSHOT_SCHEMA_VERSION,
+  SOFT_EDITORIAL_THEME_ID,
+  SOFT_EDITORIAL_THEME_VERSION,
   createInitialContentDocument,
   createInsertScene,
   createPointScene,
+  getVisualTheme,
+  toVisualThemeDefinitionV2,
 } from "@kakeai/contracts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
@@ -743,5 +747,81 @@ describe("work and script version flow", () => {
     });
     await expect(stat(artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(prisma.artifact.findUnique({ where: { id: artifact.id } })).resolves.toBeNull();
+  });
+});
+
+describe("selectable Theme on script save", () => {
+  it("allows a latest user revision, rejects an older revision, and keeps an unchanged archived theme", async () => {
+    const work = await works.createWork(prisma, "テーマ保存テスト", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const current = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+
+    const base = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION);
+    if (base === undefined) {
+      throw new Error("built-in theme missing");
+    }
+    const theme = await prisma.theme.create({ data: { name: "保存テスト" } });
+    for (const version of [1, 2]) {
+      await prisma.themeRevision.create({
+        data: {
+          themeId: theme.id,
+          versionNumber: version,
+          definitionJson: JSON.stringify({
+            ...toVisualThemeDefinitionV2(base),
+            id: theme.id,
+            name: "保存テスト",
+            version,
+          }),
+        },
+      });
+    }
+
+    const latestContent = structuredClone(current.content);
+    latestContent.visualTheme = { id: theme.id, version: 2 };
+    const savedLatest = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content: latestContent,
+    });
+    expect(savedLatest.scriptVersion.content.visualTheme).toEqual({
+      id: theme.id,
+      version: 2,
+    });
+
+    const olderContent = structuredClone(latestContent);
+    olderContent.visualTheme = { id: theme.id, version: 1 };
+    await expect(
+      scriptVersions.saveScriptVersion(prisma, edition.id, {
+        sourceScriptVersionId: null,
+        content: olderContent,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    await prisma.theme.update({
+      where: { id: theme.id },
+      data: { archivedAt: new Date() },
+    });
+    const unchanged = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content: latestContent,
+    });
+    expect(unchanged.scriptVersion.content.visualTheme).toEqual({
+      id: theme.id,
+      version: 2,
+    });
+
+    const otherWork = await works.createWork(prisma, "テーマ保存テスト2", "ja-JP");
+    const otherEdition = otherWork.languageEditions[0]!;
+    const otherCurrent = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      otherEdition.id,
+    );
+    const archivedSelection = structuredClone(otherCurrent.content);
+    archivedSelection.visualTheme = { id: theme.id, version: 2 };
+    await expect(
+      scriptVersions.saveScriptVersion(prisma, otherEdition.id, {
+        sourceScriptVersionId: null,
+        content: archivedSelection,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 });

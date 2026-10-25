@@ -43,3 +43,58 @@ describe("character.addFromLibrary operation schema", () => {
     ).toBe(false);
   });
 });
+
+describe("speaker operations", () => {
+  it("registers speaker.add and speaker.setVoiceProfile", () => {
+    expect(scriptOperationNames).toContain("speaker.add");
+    expect(scriptOperationNames).toContain("speaker.setVoiceProfile");
+    expect(
+      scriptOperationSchema.safeParse({
+        op: "speaker.add",
+        key: "narration",
+        name: "ナレーター",
+        voiceProfileId: "vp-ja",
+      }).success,
+    ).toBe(true);
+    expect(
+      scriptOperationSchema.safeParse({
+        op: "speaker.add",
+        name: "ナレーター",
+      }).success,
+    ).toBe(false);
+    expect(
+      scriptOperationSchema.safeParse({
+        op: "speaker.setVoiceProfile",
+        speakerId: "speaker-1",
+        voiceProfileId: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts string, keyed and null Speaker references", () => {
+    for (const speakerId of ["speaker-1", { key: "narration" }, null] as const) {
+      expect(
+        scriptOperationSchema.safeParse({
+          op: "line.setSpeaker",
+          sceneId: "scene-1",
+          lineId: "line-1",
+          speakerId,
+        }).success,
+      ).toBe(true);
+      expect(
+        scriptOperationSchema.safeParse({
+          op: "line.add",
+          sceneId: "scene-1",
+          speakerId,
+        }).success,
+      ).toBe(true);
+    }
+    expect(
+      scriptOperationSchema.safeParse({
+        op: "speaker.setVoiceProfile",
+        speakerId: { key: "narration" },
+        voiceProfileId: "vp-ja",
+      }).success,
+    ).toBe(true);
+  });
+});

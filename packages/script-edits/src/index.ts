@@ -9,6 +9,9 @@ export type {
   ScriptLibraryCharacter,
   ScriptLibraryCharacterLookup,
   ScriptLibraryVoice,
+  ScriptThemeLookup,
+  ScriptVoiceProfileInfo,
+  ScriptVoiceProfileLookup,
 } from "./context.ts";
 export {
   SCRIPT_EDIT_ERROR_CODES,

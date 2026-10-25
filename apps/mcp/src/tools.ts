@@ -109,6 +109,18 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "キャラクターライブラリの一覧を返す。台本へ入れるときは script.edit の character.addFromLibrary でコピーする。ライブラリ自体の作成・更新・削除は公開しない。",
   "character.get":
     "キャラクターライブラリの 1 件を、locale 別の声と外観（Face Set 参照を含む）付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
+  "theme.list":
+    "選択できる Visual Theme の一覧を返す。組み込み Theme と、アーカイブされていないユーザー Theme の最新 Revision だけを含む。Theme Draft・アーカイブ済み Theme・古い Revision は含まない。",
+  "theme.get":
+    "選択できる Visual Theme 1件の最新 Revision 定義を返す。`theme.list` の `id` を `themeId` に渡す。Theme Draft・アーカイブ済み Theme・古い Revision・存在しない ID は RESOURCE_NOT_FOUND。",
+  "faceSet.list":
+    "Face Set の一覧を、Face Layer と Expression Preset 付きで返す。台詞の表情は `faceSet.get` か `character.get` の外観が参照する Face Set の `expressions[].id` を使う。Face Set の作成・更新・削除は公開しない。",
+  "faceSet.get":
+    "Face Set 1件を、Face Layer と Expression Preset 付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
+  "voiceProfile.list":
+    "Voice Profile の一覧を、Adapter・voice ID・locale・設定付きで返す。声の割当て前に、台本の locale と一致する Profile を選ぶ。Profile の作成・更新・削除は公開しない。",
+  "voiceProfile.get":
+    "Voice Profile 1件を返す。存在しない ID は RESOURCE_NOT_FOUND。",
 };
 
 function describeOperation(

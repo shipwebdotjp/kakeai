@@ -23,7 +23,7 @@
 
 ## 実施順序
 
-B1 → B2 → B3 → B4 の順で実装し、B5・B6・B7 は B4 の後に実装する。
+B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9 は B4 の後に実装する。B7 は B2 の後に実装中である。
 
 | フェーズ | 対象 | 依存 | 順序の理由 |
 | --- | --- | --- | --- |
@@ -34,6 +34,8 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B7 は B4 の後に実装
 | B5 | 作品名の更新 | B1 | 小規模な追加操作。カタログとダイジェストの仕組みに乗る |
 | B6 | 視覚確認（R3-4） | B1 | render 成果物の静止画を読むだけの操作。詳細は visual-confirmation 側で管理する |
 | B7 | R2-2 TTS 冪等化・`tts.attach` | B2 | B2 の冪等台帳のうえで一括確定を載せる。Web の一括 TTS 契約は変えない |
+| B8 | R2-3 ライブラリ読み取り（Theme / Face Set / Voice Profile） | B1 | 既存 DTO とサービスを読むだけ。制作前の判断材料を増やし、編集の往復を減らす |
+| B9 | R2-3 声だけの話者と声の割り当て | B1 | `speaker` カテゴリと `ScriptContext` の参照を追加する編集操作。声のプリフライトをキャラクター依存から外す |
 
 ## フェーズ詳細
 
@@ -78,9 +80,24 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B7 は B4 の後に実装
 - 一括生成の HTTP 契約・DB スキーマ・Job 種別は変更しない。失敗後の再生成は新しい `bulkRequestId` で `tts.createBulk` を実行する。
 - 完了条件: 契約・MCP・CLI 公開のテスト、一括未完了／全完了後の一部添付、失敗・取消・対象外を含む部分成功、冪等再送、`requestId` なし／別 Agent の一括要求、基準版の競合が検証できる。
 
+### B8 ライブラリ読み取り（R2-3）
+
+- 状態: 完了。`theme.list` / `theme.get`、`faceSet.list` / `faceSet.get`、`voiceProfile.list` / `voiceProfile.get` を追加した。一覧はページングせず、既存の DTO（`FaceSet` / `VoiceProfile`）をそのまま返す。未知の ID は `RESOURCE_NOT_FOUND`。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
+- Theme は、アーカイブされていない利用者 Theme の最新公開 Revision と組み込み Theme だけを返す。Theme Draft、アーカイブ済み Theme、最新でない Revision、Font 診断は返さない。`theme.get` は `theme` として `{ id, name, isBuiltIn, version, definition }` を返す。
+- Face Set は `id`・`name`・`layers`・`expressions`・作成日時を、Voice Profile は `id`・`name`・`adapterId`・`voiceId`・`locale`・`settings`・作成日時を返す。書き込み（作成・更新・削除・アーカイブ）は公開しない。
+- 完了条件: ソケット・MCP・CLI から同じ 6 操作を呼べ、Theme が最新公開 Revision だけを返し、未知の ID が `RESOURCE_NOT_FOUND` になる。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
+### B9 声だけの話者と声の割り当て（R2-3）
+
+- 状態: 完了。`speaker.add`（`key?`・`name`・`voiceProfileId`）と `speaker.setVoiceProfile`（`speakerId`・`voiceProfileId` / `null`）を追加し、`speaker` カテゴリを新設した。`line.add` / `line.setSpeaker` の `speakerId` は ID または `{ key }` を受け付ける。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
+- 割り当てる Profile は実在し、`ContentDocument.locale` と完全一致する。Character 付き Speaker は、その Character の文書 locale の Voice と一致する場合だけ設定でき、Character にその声が無い場合は `null` への解除だけを許す。参照欠落は `EDIT_TARGET_NOT_FOUND`、locale・Character Voice の不一致は `EDIT_PRECONDITION_FAILED`。
+- `line.setSpeaker` は声だけの話者へ変えると `expressionId` を自動で消す。`line.add` は声だけの話者への明示的な `expressionId` を拒否し、`line.setExpression` も拒否する。`document.setVisualTheme` は最新 Revision だけを選べる。`script.save` は Theme の変更がアーカイブ済み・最新でない Revision を指す場合だけ拒否し、Theme を変えない保存と `script.restore` は許可する。
+- 声の変更は以後の TTS にだけ影響し、既存の Audio Take は変えない。Character・Voice Profile・Face Set・Theme の管理は引き続き人専用である。
+- 完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`（`speakerId: { key }`）→ TTS → 確定 → レンダーが通り、Character 付き話者・locale 不一致・Character Voice 不一致・`expressionId` の拒否がテストで固定されている。DB migration と HTTP API の変更はない。
+
 ## 保留する拡張
 
-今回の4フェーズでは扱わない。必要になった時点で改めて計画する。
+今回の拡張フェーズでは扱わない。必要になった時点で改めて計画する。
 
 | 項目 | 保留理由 |
 | --- | --- |
@@ -108,7 +125,7 @@ A9 完了時点で認識している制約である。B1〜B4 の完了で大部
 | `tts.create` などはタイムアウト後の再送で Job が重複し得る | 二重生成・課金・待機の無駄 | B2 で解消。任意の `requestId` で冪等台帳に記録し、再送しても Job が増えない |
 | ソケットのフレームキューと接続数に上限がない | 大量要求時にメモリが膨らむ | B3 で解消。接続ごとの未処理フレーム数と同時接続数に上限を設け、超過は `AGENT_BACKPRESSURE` で返す |
 | `asset.list` のタグ検索は SQLite の JSON をメモリで後フィルタする | タグ条件が厳しいとページ取得で走査が増える | B4 で解消。DB 側のクエリで絞り込む（索引化は保留） |
-| `script.edit`/`validate` は毎回ライブラリ全体の Asset・Face Set・Character を読み込む | 大規模ライブラリで編集のたびにコストがかかる | 保留 |
+| `script.edit`/`validate` は毎回ライブラリ全体の Asset・Face Set・Character・Theme・Voice Profile を読み込む | 大規模ライブラリで編集のたびにコストがかかる | 保留 |
 | `job.list` はレンダー Job のみ | TTS Job の一覧を取得できない | 解消。`kind` で `render`（既定）と `tts` を選べる。`asset_ingest` は Work に紐づかないため対象外 |
 | `work.create` / `work.clone` は operation の `requestId` を持たない | タイムアウト後の再送で Work が増え得る | 解消しない。`work.list` の `createdAt` / `parentWorkId` で確認するガイド路線を維持（台帳適用は保留） |
 | `asset.import` は同一ユーザーが読める任意のローカルパスを受け付ける | プロンプト注入時に意図しないファイルを複製し得る | 保留 |
@@ -124,7 +141,7 @@ A9 完了時点で認識している制約である。B1〜B4 の完了で大部
 | 高 | B3 ソケットの流量制御 | ローカル操作面の安定性 |
 | 高 | B4 素材検索の拡張 | 制作スキルの検索品質を上げる |
 | 中 | R2-2 TTS 冪等化・`tts.attach` | 音声制作の反復コストを下げる。B7 で `tts.attachBulk` として実装中 |
-| 中 | R2-3 Voice／Face Set 読み取り・`key` 対応 | 制作往復を減らす |
+| 中 | R2-3 Voice／Face Set／Theme 読み取り・`key` 対応 | B8 / B9 で実装済み。Theme・Face Set・Voice Profile の読み取りと、既存 Profile の話者への割り当てに限定し、ライブラリ管理は人専用を維持する |
 | 中 | R2-4 言語版・履歴・復元 | 多言語・反復制作の入口。履歴一覧・復元・Work 複製は P4（`script.listVersions` / `script.restore` / `work.clone`）で実装済み |
 | 低 | R2-5 Job 一般化 | 運用が複雑になった段階で必要 |
 | 低 | R3-2 監査ログ／UI | 複数エージェント運用時に必要 |

@@ -18,6 +18,12 @@ import { ensureDataDirectories } from "../storage/paths.ts";
 import { FakeFontCatalogAdapter, FontCatalogService } from "./font-catalog.ts";
 import { ThemeService } from "./themes.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
+import {
+  getSelectableTheme,
+  isSelectableUserTheme,
+  listSelectableThemes,
+  selectableThemeKeys,
+} from "./theme-library.ts";
 import { compileThemeRepresentativePreview } from "./theme-preview.ts";
 
 let dataDir: string;
@@ -210,5 +216,119 @@ describe("Theme Services & Routes", () => {
     expect(catalog.supported).toBe(false);
     expect(catalog.reason).toBe("unsupported_platform");
     expect(catalog.faces.length).toBe(0);
+  });
+});
+
+describe("selectable Theme reads", () => {
+  const baseDefinition = getVisualTheme(
+    SOFT_EDITORIAL_THEME_ID,
+    SOFT_EDITORIAL_THEME_VERSION,
+  )!;
+
+  async function createThemeWithRevisions(
+    name: string,
+    versions: number[],
+  ): Promise<{ id: string }> {
+    const theme = await prisma.theme.create({ data: { name } });
+    for (const version of versions) {
+      await prisma.themeRevision.create({
+        data: {
+          themeId: theme.id,
+          versionNumber: version,
+          definitionJson: JSON.stringify({
+            ...toVisualThemeDefinitionV2(baseDefinition),
+            id: theme.id,
+            name,
+            version,
+          }),
+        },
+      });
+    }
+    return { id: theme.id };
+  }
+
+  beforeEach(async () => {
+    await prisma.themeDraft.deleteMany();
+    await prisma.themeRevision.deleteMany();
+    await prisma.theme.deleteMany();
+  });
+
+  it("lists built-ins and only the latest revision of unarchived themes", async () => {
+    const theme = await createThemeWithRevisions("最新だけ", [1, 2]);
+    const list = await listSelectableThemes(prisma);
+    expect(list).toContainEqual({
+      id: SOFT_EDITORIAL_THEME_ID,
+      name: "Soft Editorial",
+      isBuiltIn: true,
+      version: SOFT_EDITORIAL_THEME_VERSION,
+    });
+    expect(list).toContainEqual({
+      id: theme.id,
+      name: "最新だけ",
+      isBuiltIn: false,
+      version: 2,
+    });
+    expect(list).not.toContainEqual(
+      expect.objectContaining({ id: theme.id, version: 1 }),
+    );
+  });
+
+  it("excludes Theme Drafts, archived Themes, and corrupt revisions", async () => {
+    const draftOnly = await prisma.theme.create({ data: { name: "下書きだけ" } });
+    await prisma.themeDraft.create({
+      data: {
+        themeId: draftOnly.id,
+        definitionJson: JSON.stringify(baseDefinition),
+      },
+    });
+    const archived = await createThemeWithRevisions("アーカイブ", [1]);
+    await prisma.theme.update({
+      where: { id: archived.id },
+      data: { archivedAt: new Date() },
+    });
+    const corrupt = await prisma.theme.create({ data: { name: "壊れている" } });
+    await prisma.themeRevision.create({
+      data: {
+        themeId: corrupt.id,
+        versionNumber: 1,
+        definitionJson: "{not json",
+      },
+    });
+
+    const list = await listSelectableThemes(prisma);
+    expect(list.some((entry) => entry.id === draftOnly.id)).toBe(false);
+    expect(list.some((entry) => entry.id === archived.id)).toBe(false);
+    expect(list.some((entry) => entry.id === corrupt.id)).toBe(false);
+  });
+
+  it("gets the latest definition and returns RESOURCE_NOT_FOUND for unselectable themes", async () => {
+    const theme = await createThemeWithRevisions("取得", [1, 2]);
+    const detail = await getSelectableTheme(prisma, theme.id);
+    expect(detail.version).toBe(2);
+    expect(detail.definition.id).toBe(theme.id);
+    expect(detail.isBuiltIn).toBe(false);
+
+    const builtIn = await getSelectableTheme(prisma, SOFT_EDITORIAL_THEME_ID);
+    expect(builtIn.isBuiltIn).toBe(true);
+    expect(builtIn.version).toBe(SOFT_EDITORIAL_THEME_VERSION);
+
+    await expect(getSelectableTheme(prisma, "missing")).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
+    });
+  });
+
+  it("reports selectable keys and rejects older or archived revisions", async () => {
+    const theme = await createThemeWithRevisions("キー", [1, 2]);
+    const keys = await selectableThemeKeys(prisma);
+    expect(keys.has(`${theme.id}@2`)).toBe(true);
+    expect(keys.has(`${theme.id}@1`)).toBe(false);
+    expect(await isSelectableUserTheme(prisma, theme.id, 2)).toBe(true);
+    expect(await isSelectableUserTheme(prisma, theme.id, 1)).toBe(false);
+
+    await prisma.theme.update({
+      where: { id: theme.id },
+      data: { archivedAt: new Date() },
+    });
+    expect(await isSelectableUserTheme(prisma, theme.id, 2)).toBe(false);
   });
 });

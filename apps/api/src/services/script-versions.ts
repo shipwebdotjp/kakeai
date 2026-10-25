@@ -43,6 +43,7 @@ import {
   type ScriptVersionPreview,
   type ScriptVersionSummary,
   type VisualCue,
+  type VisualThemeDefinition,
   type Warning,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
@@ -97,6 +98,20 @@ interface NormalizedScriptVersionAttribution {
 export interface SaveScriptVersionGuard {
   expectedCurrentScriptVersionId: string;
   staleError: () => Error;
+}
+
+/**
+ * Save-time policies that are not part of the HTTP request. `script.restore`
+ * opts out of the selectable-Theme change rule because restoring an old version
+ * must preserve its archived Theme reference.
+ */
+export interface SaveScriptVersionOptions {
+  /**
+   * When true (the default), a Visual Theme change must select a built-in or the
+   * latest revision of an unarchived user Theme. Keeping the current Theme is
+   * always allowed, so an existing archived-Theme document can still be edited.
+   */
+  enforceSelectableTheme?: boolean;
 }
 
 function normalizeScriptVersionAttribution(
@@ -1213,12 +1228,35 @@ export function throwIfFatalTimelineError(error: unknown): void {
   }
 }
 
+/**
+ * Reads the stored Theme identity so an unchanged Theme can be grandfathered
+ * even when the old document is otherwise corrupt. It deliberately does not
+ * validate the whole document; the incoming content is validated separately.
+ */
+function storedVisualTheme(
+  contentJson: string,
+): ContentDocument["visualTheme"] | undefined {
+  try {
+    const parsed = JSON.parse(contentJson) as {
+      visualTheme?: { id?: unknown; version?: unknown };
+    };
+    const id = parsed.visualTheme?.id;
+    const version = parsed.visualTheme?.version;
+    return typeof id === "string" && typeof version === "number"
+      ? { id, version }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function saveScriptVersion(
   prisma: PrismaClient,
   editionId: string,
   input: SaveScriptVersionRequest,
   attribution?: ScriptVersionAttribution,
   guard?: SaveScriptVersionGuard,
+  options?: SaveScriptVersionOptions,
 ): Promise<SaveScriptVersionResult> {
   const edition = await requireEdition(prisma, editionId);
   const { content, sourceScriptVersionId } = input;
@@ -1367,23 +1405,61 @@ export async function saveScriptVersion(
   for (let attempt = 1; ; attempt += 1) {
     try {
       const created = await prisma.$transaction(async (tx) => {
-        if (guard !== undefined) {
-          const current = await tx.languageEdition.findUnique({
-            where: { id: editionId },
-            select: { currentScriptVersionId: true },
+        const currentEdition = await tx.languageEdition.findUnique({
+          where: { id: editionId },
+          select: { currentScriptVersionId: true },
+        });
+        if (
+          guard !== undefined &&
+          (currentEdition === null ||
+            currentEdition.currentScriptVersionId !== guard.expectedCurrentScriptVersionId)
+        ) {
+          throw guard.staleError();
+        }
+
+        const enforceSelectableTheme = options?.enforceSelectableTheme !== false;
+        let currentTheme: ContentDocument["visualTheme"] | undefined;
+        const currentVersionId = currentEdition?.currentScriptVersionId;
+        if (
+          enforceSelectableTheme &&
+          currentVersionId !== null &&
+          currentVersionId !== undefined
+        ) {
+          const currentRow = await tx.scriptVersion.findUnique({
+            where: { id: currentVersionId },
+            select: { contentJson: true },
           });
-          if (
-            current === null ||
-            current.currentScriptVersionId !== guard.expectedCurrentScriptVersionId
-          ) {
-            throw guard.staleError();
+          if (currentRow !== null) {
+            currentTheme = storedVisualTheme(currentRow.contentJson);
           }
         }
+        const keepsCurrentTheme =
+          currentTheme !== undefined &&
+          currentTheme.id === content.visualTheme.id &&
+          currentTheme.version === content.visualTheme.version;
         const themeResolver = new ThemeResolver(tx);
-        const resolvedTheme = await themeResolver.resolve(
-          content.visualTheme.id,
-          content.visualTheme.version,
-        );
+        let resolvedTheme: VisualThemeDefinition | undefined;
+        if (enforceSelectableTheme && !keepsCurrentTheme) {
+          resolvedTheme = await themeResolver.resolveSelectable(
+            content.visualTheme.id,
+            content.visualTheme.version,
+          );
+          if (!resolvedTheme) {
+            throw validationError([
+              {
+                path: ["visualTheme"],
+                code: "invalid_value",
+                message:
+                  "新しく選択できるVisual Themeは、組み込みThemeまたは未アーカイブThemeの最新Revisionだけです。",
+              },
+            ]);
+          }
+        } else {
+          resolvedTheme = await themeResolver.resolve(
+            content.visualTheme.id,
+            content.visualTheme.version,
+          );
+        }
         if (!resolvedTheme) {
           throw validationError([
             {

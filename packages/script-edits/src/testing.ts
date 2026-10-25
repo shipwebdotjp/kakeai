@@ -1,7 +1,14 @@
+import type { ContentDocument } from "@kakeai/contracts";
 import type { ScriptAssetInfo, ScriptContext } from "./context.ts";
+
+export interface TestContextOptions {
+  voiceProfiles?: Record<string, ContentDocument["locale"]>;
+  selectableThemes?: Record<string, readonly number[]>;
+}
 
 export function createTestContext(
   assets: Record<string, ScriptAssetInfo> = {},
+  options: TestContextOptions = {},
 ): ScriptContext {
   let sceneCount = 0;
   let lineCount = 0;
@@ -10,8 +17,26 @@ export function createTestContext(
   let characterCount = 0;
   let appearanceCount = 0;
   let speakerCount = 0;
+  const voiceProfiles =
+    options.voiceProfiles === undefined
+      ? undefined
+      : {
+          get: (voiceProfileId: string) => {
+            const locale = options.voiceProfiles?.[voiceProfileId];
+            return locale === undefined ? null : { id: voiceProfileId, locale };
+          },
+        };
+  const themes =
+    options.selectableThemes === undefined
+      ? undefined
+      : {
+          isSelectable: (themeId: string, version: number) =>
+            (options.selectableThemes?.[themeId] ?? []).includes(version),
+        };
   return {
     assets: { get: (assetId) => assets[assetId] ?? null },
+    voiceProfiles,
+    themes,
     ids: {
       scene: (existing) => {
         let id = `scene-new-${(sceneCount += 1)}`;

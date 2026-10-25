@@ -22,11 +22,12 @@
 | 中 | 復旧力（P2） | TTS Job の再発見、全体置換の競合検出、タイムアウト後の回復整理 | 完了（2026-10-24） | エージェントの取りこぼしが運用で問題になったとき |
 | 中 | 入力契約の探索性（P3-1） | `template.get` の入力 JSON Schema / 例、表・グラフ・フローの試行錯誤削減 | 完了（2026-10-24） | 複雑なテンプレートを使う制作が増えたとき |
 | 中 | 視覚確認（P3） | 保存版プレビュー、素材画像、複数フレーム | 一部実装（保存版・素材） | レンダーやり直しコストが問題になったとき |
+| 中 | ライブラリ読み取りと声の割り当て（P5） | Voice Profile / Face Set / Theme の読み取り、声だけの話者 | 完了（2026-10-25） | 新規作品で声付きキャラクターが無いとき |
 | 低 | 納品物（将来） | サムネイル、SRT、YouTube 設定、MP4 取得 | 未着手 | 投稿までエージェントに任せたくなったとき |
 | 低 | 制作履歴（P4） | 版履歴・復元・Work 複製・タイムアウト回復 | 完了（2026-10-24） | 反復制作ややり直しが増えたとき |
 | 低 | 表現の拡張（将来） | 新規 Composition、縦型、リモート | 未着手 | 商品として必要になったとき |
 
-## 実装済み（P1 / P2 / P4）
+## 実装済み（P1 / P2 / P4 / P5）
 
 - P1: `work.create` が指定 locale（ja-JP / en-US）の初期 ContentDocument を
   作る。声のプリフライト、一括TTSの順序、MP4 の合格ラインと
@@ -49,6 +50,13 @@
   `work.create` / `work.clone` は `requestId` を持たず、`work.list` の
   `createdAt` / `parentWorkId` でタイムアウト後の重複を避ける。
   詳細は [spec.md](./spec.md) の R9 と [todo.md](./todo.md) の P4。
+- P5 ライブラリ読み取りと声の割り当て: `theme.list` / `theme.get`、
+  `faceSet.list` / `faceSet.get`、`voiceProfile.list` / `voiceProfile.get` を
+  追加した。Theme はアーカイブされていない利用者 Theme の最新公開 Revision と
+  組み込み Theme だけを返す。`speaker.add` / `speaker.setVoiceProfile` により、
+  対象 locale の既存 Voice Profile を声だけの話者へ割り当てられる。
+  `line.add` / `line.setSpeaker` は `speakerId` を ID または `{ key }` で受ける。
+  詳細は [spec.md](./spec.md) の R10 と [todo.md](./todo.md) の P5。
 
 ## 将来の候補
 
@@ -79,13 +87,18 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
 
 | 項目 | 内容 | 依存・注意 |
 | --- | --- | --- |
-| Theme の読み取り | 利用可能な Theme / Revision の一覧 | 現状は既存作品の台本から拾うしかない |
-| Face Set の読み取り | Face Layer / Expression の一覧 | `line.setExpression` の ID 探索 |
-| Voice Profile の読み取り | 声の一覧・locale・Adapter | 書き込みは人専用のまま。読み取りだけでも診断が楽になる |
-| Voice の割当て | Speaker への `voiceProfileId` 設定 | 声の管理をどこまでエージェントへ開くかの判断が必要 |
+| Theme の読み取り | `theme.list` / `theme.get`。利用可能な Theme と最新公開 Revision の定義 | 実装済み（P5）。Draft・アーカイブ済み・最新でない Revision・Font 診断は返さない |
+| Face Set の読み取り | `faceSet.list` / `faceSet.get`。Face Layer / Expression の一覧 | 実装済み（P5）。`line.setExpression` の ID 探索に使う |
+| Voice Profile の読み取り | `voiceProfile.list` / `voiceProfile.get`。声・locale・Adapter | 実装済み（P5）。書き込みは人専用のまま |
+| Voice の割当て | `speaker.add` / `speaker.setVoiceProfile`。既存 Profile を声だけの話者へ | 実装済み（P5）。Profile の作成・更新・削除と Character Voice の形成は人専用 |
 | Composition プレビュー | 新規 Composition の絵の確認 | 外部 HyperFrames CLI 依存を減らす |
 | 縦型動画 | 9:16 の完成動画 | 出力全体の設計変更。Composition の portrait とは別 |
 | リモート接続 | クラウドのエージェントから接続 | 現行のローカルソケット前提を崩す。認証・公開の再設計が必要 |
+
+P5 の境界は「読み取り + 既存 Profile の割り当て」までである。Theme・Face Set・
+Voice Profile・Character の作成・更新・削除、アーカイブ、Character Voice の形成は
+人専用のまま残す。割り当ては新しい Script Version を作る可逆な変更であり、
+既存の Audio Take を書き換えない。
 
 ## 今回の非ゴールを維持する理由
 
@@ -96,7 +109,8 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
   エージェントの確認ループは、レンダーやり直しコストが実測で問題になった
   時点で入れる方が効果が測れる。
 - ライブラリ管理・削除・外部公開は不可逆または人専用の境界であり、
-  MP4主線の安定とは独立に判断する。
+  MP4主線の安定とは独立に判断する。P5 で追加したのは読み取りと既存 Voice Profile の
+  割り当てだけで、ライブラリの作成・更新・削除は開かない。
 
 ## 更新ルール
 

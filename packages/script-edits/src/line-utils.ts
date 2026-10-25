@@ -4,13 +4,60 @@ import type {
   NewNarrationLineInput,
   PointScene,
   Scene,
+  Speaker,
 } from "@kakeai/contracts";
 import type { ScriptContext } from "./context.ts";
 import { invalidOperation, preconditionFailed, targetNotFound } from "./errors.ts";
 
+export const NO_SPEAKER_EXPRESSION_MESSAGE = "話者のいない行に表情は指定できません。";
+export const VOICE_ONLY_SPEAKER_EXPRESSION_MESSAGE =
+  "声だけの話者の行には表情を指定できません。";
+
 export interface PointSceneLocation {
   scene: PointScene;
   sceneIndex: number;
+}
+
+export function findSpeaker(
+  document: ContentDocument,
+  speakerId: string | null | undefined,
+): Speaker | undefined {
+  return speakerId === null || speakerId === undefined
+    ? undefined
+    : document.speakers.find((entry) => entry.id === speakerId);
+}
+
+export function isVoiceOnlySpeaker(speaker: Speaker | undefined): boolean {
+  return speaker?.characterId === null;
+}
+
+/** Shared preconditions for a new line created by `line.add` or `scene.add`. */
+export function assertNewLineSpeaker(
+  document: ContentDocument,
+  input: NewNarrationLineInput,
+): Speaker | undefined {
+  const speaker = findSpeaker(document, input.speakerId);
+  if (
+    input.speakerId !== undefined &&
+    input.speakerId !== null &&
+    speaker === undefined
+  ) {
+    throw targetNotFound(
+      ["speakerId"],
+      `話者が見つかりません: ${input.speakerId}`,
+    );
+  }
+  if (
+    input.expressionId !== undefined &&
+    input.expressionId !== null &&
+    isVoiceOnlySpeaker(speaker)
+  ) {
+    throw invalidOperation(
+      ["expressionId"],
+      VOICE_ONLY_SPEAKER_EXPRESSION_MESSAGE,
+    );
+  }
+  return speaker;
 }
 
 export function findPointScene(
@@ -55,7 +102,7 @@ export function createLine(
   if (speakerId === null && expressionId !== null) {
     throw invalidOperation(
       ["expressionId"],
-      "話者のいない行に表情は指定できません。",
+      NO_SPEAKER_EXPRESSION_MESSAGE,
     );
   }
   const line: NarrationSegment = {

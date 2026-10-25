@@ -2,6 +2,7 @@ import {
   AGENT_ERROR_CODES,
   computeContentWarnings,
   getVisualTheme,
+  localeSchema,
   type CharacterLibraryEntry,
   type ContentDocument,
   type PreviewTimeline,
@@ -52,6 +53,7 @@ import {
   type FaceSetDetails,
   type SaveScriptVersionGuard,
 } from "./script-versions.ts";
+import { selectableThemeKeys } from "./theme-library.ts";
 import { AgentOperationError, agentIssue } from "../agent/errors.ts";
 import { normalizeAgentId } from "./attribution.ts";
 import { sha256RequestHash } from "./agent-request-hash.ts";
@@ -112,19 +114,28 @@ function assetInfo(asset: AssetWithRenditions): ScriptAssetInfo {
 }
 
 async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResources> {
-  const [assets, faceSets, compositionIds, themeRevisions, characterEntries] =
-    await Promise.all([
-      prisma.asset.findMany({ include: { renditions: true } }),
-      prisma.faceSet.findMany({
-        include: {
-          layers: { orderBy: { position: "asc" } },
-          expressions: { orderBy: { position: "asc" } },
-        },
-      }),
-      prisma.compositionVersion.findMany({ select: { id: true } }),
-      prisma.themeRevision.findMany({ select: { themeId: true, versionNumber: true } }),
-      listCharacters(prisma),
-    ]);
+  const [
+    assets,
+    faceSets,
+    compositionIds,
+    themeRevisions,
+    characterEntries,
+    voiceProfileRows,
+    selectableThemeKeySet,
+  ] = await Promise.all([
+    prisma.asset.findMany({ include: { renditions: true } }),
+    prisma.faceSet.findMany({
+      include: {
+        layers: { orderBy: { position: "asc" } },
+        expressions: { orderBy: { position: "asc" } },
+      },
+    }),
+    prisma.compositionVersion.findMany({ select: { id: true } }),
+    prisma.themeRevision.findMany({ select: { themeId: true, versionNumber: true } }),
+    listCharacters(prisma),
+    prisma.voiceProfile.findMany({ select: { id: true, locale: true } }),
+    selectableThemeKeys(prisma),
+  ]);
 
   const assetById = new Map<string, AssetWithRenditions>(
     assets.map((asset) => [asset.id, asset]),
@@ -135,6 +146,19 @@ async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResource
   const libraryCharacterById = new Map<string, ScriptLibraryCharacter>(
     characterEntries.map((entry) => [entry.id, toScriptLibraryCharacter(entry)]),
   );
+  const voiceProfileById = new Map<
+    string,
+    { id: string; locale: ContentDocument["locale"] }
+  >();
+  for (const row of voiceProfileRows) {
+    // A locale outside the supported registry is corrupt data. Skip it so the
+    // profile behaves as "not found" for assignment instead of failing every
+    // script edit that loads the voice-profile context.
+    const locale = localeSchema.safeParse(row.locale);
+    if (locale.success) {
+      voiceProfileById.set(row.id, { id: row.id, locale: locale.data });
+    }
+  }
   const versionIds = compositionIds.map((row) => row.id);
   const [compositionDurations, compositionProfiles] = await Promise.all([
     getCompositionDurationsByVersionId(prisma, versionIds),
@@ -157,6 +181,14 @@ async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResource
       // from it into the document without writing the library back.
       libraryCharacters: {
         get: (characterId) => libraryCharacterById.get(characterId) ?? null,
+      },
+      voiceProfiles: {
+        get: (voiceProfileId) => voiceProfileById.get(voiceProfileId) ?? null,
+      },
+      // User Theme keys; the operation core checks built-ins directly.
+      themes: {
+        isSelectable: (id, version) =>
+          selectableThemeKeySet.has(`${id}@${version}`),
       },
     },
     references: {
@@ -570,6 +602,7 @@ export async function restoreAgentScript(
         agentRequestHash: requestHash,
       },
       guard,
+      { enforceSelectableTheme: false },
     );
   } catch (error) {
     // A concurrent identical restore may have won the race after the replay

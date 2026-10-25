@@ -14,6 +14,18 @@ import {
   agentCharacterGetOutputSchema,
   agentCharacterListInputSchema,
   agentCharacterListOutputSchema,
+  agentFaceSetGetInputSchema,
+  agentFaceSetGetOutputSchema,
+  agentFaceSetListInputSchema,
+  agentFaceSetListOutputSchema,
+  agentThemeGetInputSchema,
+  agentThemeGetOutputSchema,
+  agentThemeListInputSchema,
+  agentThemeListOutputSchema,
+  agentVoiceProfileGetInputSchema,
+  agentVoiceProfileGetOutputSchema,
+  agentVoiceProfileListInputSchema,
+  agentVoiceProfileListOutputSchema,
   agentCompositionAuthoringContextInputSchema,
   agentCompositionAuthoringContextOutputSchema,
   agentCompositionCreateInputSchema,
@@ -105,6 +117,9 @@ import {
 import { importAgentAsset } from "../services/agent-assets.ts";
 import type { CompositionAuthoringService } from "../services/authoring-context.ts";
 import { getCharacter, listCharacters } from "../services/character-library.ts";
+import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
+import { getSelectableTheme, listSelectableThemes } from "../services/theme-library.ts";
+import { getVoiceProfile, listVoiceProfiles } from "../services/voice-profiles.ts";
 import type { CompositionService } from "../services/compositions.ts";
 import {
   diagnoseCompositionFonts,
@@ -577,6 +592,50 @@ const definitions: AgentOperationDefinitions = {
     output: agentCharacterGetOutputSchema,
     run: async (input, context) => ({
       character: await getCharacter(context.prisma, input.characterId),
+    }),
+  },
+  // Library reads. Theme / Face Set / Voice Profile writes stay in the app UI
+  // and are not exposed on the Agent surface.
+  "theme.list": {
+    input: agentThemeListInputSchema,
+    output: agentThemeListOutputSchema,
+    run: async (_input, context) => ({
+      themes: await listSelectableThemes(context.prisma),
+    }),
+  },
+  "theme.get": {
+    input: agentThemeGetInputSchema,
+    output: agentThemeGetOutputSchema,
+    run: async (input, context) => ({
+      theme: await getSelectableTheme(context.prisma, input.themeId),
+    }),
+  },
+  "faceSet.list": {
+    input: agentFaceSetListInputSchema,
+    output: agentFaceSetListOutputSchema,
+    run: async (_input, context) => ({
+      faceSets: await listFaceSets(context.prisma),
+    }),
+  },
+  "faceSet.get": {
+    input: agentFaceSetGetInputSchema,
+    output: agentFaceSetGetOutputSchema,
+    run: async (input, context) => ({
+      faceSet: await getFaceSet(context.prisma, input.faceSetId),
+    }),
+  },
+  "voiceProfile.list": {
+    input: agentVoiceProfileListInputSchema,
+    output: agentVoiceProfileListOutputSchema,
+    run: async (_input, context) => ({
+      voiceProfiles: await listVoiceProfiles(context.prisma),
+    }),
+  },
+  "voiceProfile.get": {
+    input: agentVoiceProfileGetInputSchema,
+    output: agentVoiceProfileGetOutputSchema,
+    run: async (input, context) => ({
+      voiceProfile: await getVoiceProfile(context.prisma, input.voiceProfileId),
     }),
   },
 };

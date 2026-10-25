@@ -63,6 +63,8 @@ const sceneIndexSchema = nonNegativeInt;
 export const newNarrationLineInputSchema = z.strictObject({
   captionText: z.string().optional(),
   speechText: z.string().optional(),
+  // `scene.add`'s initial lines take a concrete Speaker ID only. Keyed refs
+  // are supported by the standalone `line.add` / `line.setSpeaker` operations.
   speakerId: z.string().min(1).nullable().optional(),
   expressionId: z.string().min(1).nullable().optional(),
   gapBeforeMs: nonNegativeInt.optional(),
@@ -155,7 +157,7 @@ export const lineAddOperationSchema = z.strictObject({
   index: nonNegativeInt.optional(),
   captionText: z.string().optional(),
   speechText: z.string().optional(),
-  speakerId: z.string().min(1).nullable().optional(),
+  speakerId: scriptIdRefSchema.nullable().optional(),
   expressionId: z.string().min(1).nullable().optional(),
   gapBeforeMs: nonNegativeInt.optional(),
 });
@@ -190,7 +192,7 @@ export const lineSetSpeakerOperationSchema = z.strictObject({
   op: z.literal("line.setSpeaker"),
   sceneId: scriptIdRefSchema,
   lineId: scriptIdRefSchema,
-  speakerId: z.string().min(1).nullable(),
+  speakerId: scriptIdRefSchema.nullable(),
 });
 
 export const lineSetExpressionOperationSchema = z.strictObject({
@@ -358,6 +360,19 @@ export const characterAddFromLibraryOperationSchema = z.strictObject({
   libraryCharacterId: idSchema,
 });
 
+export const speakerAddOperationSchema = z.strictObject({
+  op: z.literal("speaker.add"),
+  key: scriptKeySchema.optional(),
+  name: z.string().trim().min(1),
+  voiceProfileId: idSchema,
+});
+
+export const speakerSetVoiceProfileOperationSchema = z.strictObject({
+  op: z.literal("speaker.setVoiceProfile"),
+  speakerId: scriptIdRefSchema,
+  voiceProfileId: idSchema.nullable(),
+});
+
 export const documentSetVisualThemeOperationSchema = z.strictObject({
   op: z.literal("document.setVisualTheme"),
   id: idSchema,
@@ -399,6 +414,8 @@ const scriptOperationSchemas = [
   audioSetOperationSchema,
   audioRemoveOperationSchema,
   characterAddFromLibraryOperationSchema,
+  speakerAddOperationSchema,
+  speakerSetVoiceProfileOperationSchema,
   documentSetVisualThemeOperationSchema,
 ] as const;
 
@@ -448,6 +465,10 @@ export type AudioSetOperation = z.infer<typeof audioSetOperationSchema>;
 export type AudioRemoveOperation = z.infer<typeof audioRemoveOperationSchema>;
 export type CharacterAddFromLibraryOperation = z.infer<
   typeof characterAddFromLibraryOperationSchema
+>;
+export type SpeakerAddOperation = z.infer<typeof speakerAddOperationSchema>;
+export type SpeakerSetVoiceProfileOperation = z.infer<
+  typeof speakerSetVoiceProfileOperationSchema
 >;
 export type DocumentSetVisualThemeOperation = z.infer<
   typeof documentSetVisualThemeOperationSchema

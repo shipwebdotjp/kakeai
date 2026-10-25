@@ -6,6 +6,18 @@ import {
   agentCharacterGetOutputSchema,
   agentCharacterListInputSchema,
   agentCharacterListOutputSchema,
+  agentFaceSetGetInputSchema,
+  agentFaceSetGetOutputSchema,
+  agentFaceSetListInputSchema,
+  agentFaceSetListOutputSchema,
+  agentThemeGetInputSchema,
+  agentThemeGetOutputSchema,
+  agentThemeListInputSchema,
+  agentThemeListOutputSchema,
+  agentVoiceProfileGetInputSchema,
+  agentVoiceProfileGetOutputSchema,
+  agentVoiceProfileListInputSchema,
+  agentVoiceProfileListOutputSchema,
   agentOperationContracts,
   agentOperationInputSchemas,
   agentOperationNames,
@@ -40,6 +52,7 @@ import {
   resolveAgentReadTimeoutMs,
 } from "./agent";
 import { fixtureScriptVersion, fixtureWork } from "./testing/agent-fixtures";
+import { visualThemeDefinitions } from "./content/theme";
 
 const job = {
   id: "job-1",
@@ -600,5 +613,116 @@ describe("character read operation contracts", () => {
         ),
       }),
     ).not.toBe(schema.schemaDigest);
+  });
+});
+
+describe("library read operations", () => {
+  const timestamp = "2026-01-01T00:00:00.000Z";
+  const faceSet = {
+    id: "face-set-1",
+    name: "基本",
+    layers: [],
+    expressions: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const voiceProfile = {
+    id: "voice-profile-1",
+    name: "ナレーター",
+    adapterId: "voicevox" as const,
+    voiceId: "speaker:style",
+    locale: "ja-JP" as const,
+    settings: {},
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const themeDefinition = visualThemeDefinitions[0]!;
+  const themeSummary = {
+    id: themeDefinition.id,
+    name: themeDefinition.name ?? themeDefinition.id,
+    isBuiltIn: true,
+    version: themeDefinition.version,
+  };
+
+  it("registers all six reads in the catalog and the schema digest", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of [
+      "theme.list",
+      "theme.get",
+      "faceSet.list",
+      "faceSet.get",
+      "voiceProfile.list",
+      "voiceProfile.get",
+    ] as const) {
+      expect(agentOperationNames).toContain(name);
+      expect(isAgentMutationOperation(name)).toBe(false);
+      expect(isAgentLongRunningOperation(name)).toBe(false);
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "read",
+        longRunning: false,
+      });
+      expect(Object.keys(agentOperationInputSchemas)).toContain(name);
+      expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
+      expect(agentOperationContracts().map((contract) => contract.name)).toContain(name);
+    }
+
+    const digestInput = agentSchemaDigestInputOf({
+      ...schema,
+      templateInputContracts: agentTemplateInputContracts(),
+      operationContracts: agentOperationContracts(),
+    });
+    expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);
+    expect(
+      computeAgentSchemaDigest({
+        ...digestInput,
+        agentOperations: digestInput.agentOperations.filter(
+          (entry) => entry.name !== "theme.list",
+        ),
+      }),
+    ).not.toBe(schema.schemaDigest);
+  });
+
+  it("uses strict inputs and the existing library DTOs", () => {
+    expect(agentThemeListInputSchema.safeParse({}).success).toBe(true);
+    expect(agentThemeListInputSchema.safeParse({ extra: true }).success).toBe(false);
+    expect(agentThemeGetInputSchema.safeParse({ themeId: themeDefinition.id }).success).toBe(
+      true,
+    );
+    expect(agentThemeGetInputSchema.safeParse({}).success).toBe(false);
+    expect(
+      agentThemeListOutputSchema.safeParse({ themes: [themeSummary] }).success,
+    ).toBe(true);
+    expect(
+      agentThemeGetOutputSchema.safeParse({
+        theme: { ...themeSummary, definition: themeDefinition },
+      }).success,
+    ).toBe(true);
+
+    expect(agentFaceSetListInputSchema.safeParse({}).success).toBe(true);
+    expect(agentFaceSetGetInputSchema.safeParse({ faceSetId: faceSet.id }).success).toBe(
+      true,
+    );
+    expect(agentFaceSetGetInputSchema.safeParse({}).success).toBe(false);
+    expect(agentFaceSetListOutputSchema.safeParse({ faceSets: [faceSet] }).success).toBe(
+      true,
+    );
+    expect(agentFaceSetGetOutputSchema.safeParse({ faceSet }).success).toBe(true);
+
+    expect(agentVoiceProfileListInputSchema.safeParse({}).success).toBe(true);
+    expect(
+      agentVoiceProfileGetInputSchema.safeParse({
+        voiceProfileId: voiceProfile.id,
+      }).success,
+    ).toBe(true);
+    expect(agentVoiceProfileGetInputSchema.safeParse({}).success).toBe(false);
+    expect(
+      agentVoiceProfileListOutputSchema.safeParse({
+        voiceProfiles: [voiceProfile],
+      }).success,
+    ).toBe(true);
+    expect(
+      agentVoiceProfileGetOutputSchema.safeParse({ voiceProfile }).success,
+    ).toBe(true);
   });
 });

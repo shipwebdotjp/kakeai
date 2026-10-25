@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   createInitialContentDocument,
+  DEFAULT_SCENE_IDS,
   type ContentDocument,
   type Job,
 } from "@kakeai/contracts";
@@ -529,6 +530,70 @@ describe("agent tts operations over the socket", () => {
     );
     const line = scene?.lines.find((entry) => entry.id === "line-attach");
     expect(line?.selectedAudioTakeId).toBe(takeId);
+  });
+
+  it("creates a voice-only narrator and synthesizes with its assigned profile", async () => {
+    resetCounters();
+    const created = await client.request("work.create", {
+      title: `ナレーターTTS-${randomUUID()}`,
+    });
+    const edition = created.work.languageEditions[0]!;
+    const initial = await client.request("script.get", {
+      languageEditionId: edition.id,
+    });
+
+    const edited = await client.request("script.edit", {
+      baseScriptVersionId: initial.scriptVersion.id,
+      requestId: "narrator-create-1",
+      operations: [
+        {
+          op: "speaker.add",
+          key: "narrator",
+          name: "ナレーター",
+          voiceProfileId: voicevoxProfileId,
+        },
+        {
+          op: "line.add",
+          key: "narrator-line",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          captionText: "こんにちは",
+          speechText: "こんにちは",
+          speakerId: { key: "narrator" },
+        },
+      ],
+    });
+    expect(edited.created.speakerIds).toHaveLength(1);
+    expect(edited.created.lineIds).toHaveLength(1);
+    const speakerId = edited.created.speakerIds[0]!;
+    const lineId = edited.created.lineIds[0]!;
+    expect(
+      edited.scriptVersion.content.speakers.find((speaker) => speaker.id === speakerId),
+    ).toMatchObject({
+      name: "ナレーター",
+      characterId: null,
+      voiceProfileId: voicevoxProfileId,
+    });
+
+    const bulk = await client.request("tts.createBulk", {
+      scriptVersionId: edited.scriptVersion.id,
+      requestId: "narrator-bulk-1",
+    });
+    expect(bulk.jobs.map((entry) => entry.narrationSegmentId)).toEqual([lineId]);
+    await drainWorker();
+
+    const attached = await client.request("tts.attachBulk", {
+      scriptVersionId: edited.scriptVersion.id,
+      bulkRequestId: "narrator-bulk-1",
+      requestId: "narrator-attach-1",
+    });
+    expect(attached.status).toBe("finalized");
+    expect(attached.counts.succeeded).toBe(1);
+    expect(attached.scriptVersion).not.toBeNull();
+    const line = attached.scriptVersion?.content.scenes
+      .flatMap((scene) => scene.lines)
+      .find((entry) => entry.id === lineId);
+    expect(line?.selectedAudioTakeId).not.toBeNull();
+    expect(voicevoxMock.counters.synthesis).toBe(1);
   });
 
   it("returns stable errors for missing segments, invalid input and unavailable engines", async () => {

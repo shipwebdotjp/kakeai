@@ -6,6 +6,8 @@
 P3-2 のうち保存版・素材の視覚確認は実装済みで、下書き・複数フレームなど
 残る項目は将来項目として [roadmap.md](./roadmap.md) へ送る。
 P4 は制作履歴・復旧（版履歴・復元・Work 複製・タイムアウト回復）である。
+P5 はライブラリ読み取りと声の割り当て（Theme / Face Set / Voice Profile の読み取り、
+声だけの話者）である。
 
 ## P0 現状の再現と固定（コード変更なし）
 
@@ -134,6 +136,45 @@ MCP の二重出力でコストが増えるため）。
 復元できる。Work 複製が系統を記録し、Work 作成・複製のタイムアウト後に
 `work.list` で二重作成を避けられる。
 
+## P5 ライブラリ読み取りと声の割り当て（完了）
+
+新規作品で声付きキャラクターが無くても、対象 locale の既存 Voice Profile を
+声だけの話者へ割り当てて TTS できるようにする。ライブラリの管理は人専用のまま、
+読み取りと既存 Profile の割り当てだけを開く。
+
+- [x] `theme.list` / `theme.get` を追加する。アーカイブされていない利用者 Theme の
+      最新公開 Revision と組み込み Theme だけを返し、Draft・アーカイブ済み・
+      最新でない Revision・Font 診断は返さない
+- [x] `faceSet.list` / `faceSet.get` を追加し、既存 `FaceSet` DTO を返す
+- [x] `voiceProfile.list` / `voiceProfile.get` を追加し、既存 `VoiceProfile` DTO を返す
+- [x] 一覧はページングせず、未知の ID は `RESOURCE_NOT_FOUND` とする
+- [x] `speaker.add` / `speaker.setVoiceProfile` を操作コアへ追加し、`speaker`
+      カテゴリを新設する。`line.add` / `line.setSpeaker` の `speakerId` を
+      ID または `{ key }` で参照できるようにする
+- [x] Profile の実在と `ContentDocument.locale` の完全一致、Character 付き話者の
+      Character Voice 一致を検証する。参照欠落は `EDIT_TARGET_NOT_FOUND`、
+      locale・Character Voice の不一致は `EDIT_PRECONDITION_FAILED`
+- [x] `line.setSpeaker` の `expressionId` 自動消去と、`line.add` の明示的な
+      `expressionId` 拒否を実装する
+- [x] `document.setVisualTheme` を最新 Revision だけに制限し、`script.save` の
+      Theme 変更検証と `script.restore` の参照保持を固定する
+- [x] `ScriptContext` に `voiceProfiles` / `themes` の任意参照を追加する
+- [x] 操作カタログ・カテゴリ enum・契約ダイジェストへ反映し、MCP / CLI が
+      カタログから自動公開することを保つ。`AGENT_PROTOCOL_VERSION` は上げない
+- [x] 契約・操作コア・ソケット統合テストで、声だけの話者の作成、`{ key }` 参照、
+      locale 不一致、Character Voice 不一致、`expressionId` の挙動、Theme の
+      最新 Revision 制限、`speaker.add` の replay が `created` を返さないことを固定する
+- [x] スキルとユーザーガイドに `voiceProfile.list` → `speaker.add` → `line.add` の
+      標準手順、既存話者への `speaker.setVoiceProfile`、立ち絵が必要な場合の
+      `character.addFromLibrary`、Face Set / Theme の読み取り手順を追加する
+- [x] Agent Access 仕様・MP4制作仕様・roadmap・findings・TTS 仕様・多言語声仕様・
+      操作コア仕様を更新する
+- [x] `npm run typecheck` と `npm test` を通す
+
+完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`
+（`speakerId: { key }`）→ 一括TTS → 確定 → レンダーまで通る。声付きキャラクターの
+経路も維持され、Theme・Face Set・Voice Profile の管理は人専用のままである。
+
 ## 将来（今回の非ゴール）
 
 - サムネイルの作成・選択・PNG取得
@@ -141,7 +182,7 @@ MCP の二重出力でコストが増えるため）。
 - YouTube 投稿設定・チャプター
 - MP4 Artifact のダウンロード
 - 版の削除・履歴圧縮、全 Edition の複製、Edition をまたぐ復元
-- Theme / Face Set / Voice Profile の管理
+- Theme / Face Set / Voice Profile の作成・更新・削除（管理）
 - 縦型（9:16）の完成動画
 - リモート/クラウド接続、アプリ自動起動
 

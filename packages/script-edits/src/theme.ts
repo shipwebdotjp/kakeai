@@ -1,14 +1,25 @@
-import { getVisualTheme, type ContentDocument } from "@kakeai/contracts";
-import { invalidOperation } from "./errors.ts";
+import {
+  isLatestVisualThemeDefinition,
+  type ContentDocument,
+} from "@kakeai/contracts";
+import type { ScriptContext } from "./context.ts";
+import { targetNotFound } from "./errors.ts";
 import type { SceneEditResult } from "./scene.ts";
 
 export function setVisualTheme(
   document: ContentDocument,
   id: string,
   version: number,
+  context: ScriptContext,
 ): SceneEditResult {
-  if (getVisualTheme(id, version) === undefined) {
-    throw invalidOperation(["id"], `未対応のVisualThemeです: ${id}@${version}`);
+  const selectable =
+    isLatestVisualThemeDefinition(id, version) ||
+    (context.themes?.isSelectable(id, version) ?? false);
+  if (!selectable) {
+    throw targetNotFound(
+      ["id"],
+      `選択できないVisualThemeです: ${id}@${version}`,
+    );
   }
   return {
     document: { ...document, visualTheme: { id, version } },

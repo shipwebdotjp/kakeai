@@ -1,12 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AGENT_PROTOCOL_VERSION,
+  DEFAULT_SCENE_IDS,
+  SOFT_EDITORIAL_THEME_ID,
+  SOFT_EDITORIAL_THEME_VERSION,
   agentResponseSchema,
+  getVisualTheme,
+  toVisualThemeDefinitionV2,
   type AgentResponse,
   type AgentOperationName,
   type ContentDocument,
@@ -59,7 +65,10 @@ let libraryCharacterId: string;
 let imageAssetId: string;
 let faceSetId: string;
 let jaVoiceProfileId: string;
+let jaVoiceProfile2Id: string;
 let enVoiceProfileId: string;
+let themeId: string;
+let archivedThemeId: string;
 
 async function drainWorker(): Promise<void> {
   while (await worker.runOnce()) {
@@ -81,6 +90,32 @@ async function createWork(title: string, locale?: ContentDocument["locale"]): Pr
     ...(locale === undefined ? {} : { locale }),
   });
   return result.work;
+}
+
+async function seedTheme(name: string, archived = false): Promise<string> {
+  const base = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION);
+  if (base === undefined) {
+    throw new Error("built-in theme missing");
+  }
+  const theme = await prisma.theme.create({
+    data: {
+      name,
+      ...(archived ? { archivedAt: new Date() } : {}),
+    },
+  });
+  await prisma.themeRevision.create({
+    data: {
+      themeId: theme.id,
+      versionNumber: 1,
+      definitionJson: JSON.stringify({
+        ...toVisualThemeDefinitionV2(base),
+        id: theme.id,
+        name,
+        version: 1,
+      }),
+    },
+  });
+  return theme.id;
 }
 
 async function expectAgentError(
@@ -154,6 +189,47 @@ beforeAll(async () => {
   });
   client = createAgentClient({ dataRoot: config.dataRoot, agentId: "character-e2e-agent" });
 
+  jaVoiceProfileId = (
+    await createVoiceProfile(prisma, {
+      name: "めたん",
+      adapterId: "voicevox",
+      voiceId: "uuid-metan:1",
+      locale: "ja-JP",
+      settings: {},
+    })
+  ).id;
+  jaVoiceProfile2Id = (
+    await createVoiceProfile(prisma, {
+      name: "めたん（別スタイル）",
+      adapterId: "voicevox",
+      voiceId: "uuid-metan:3",
+      locale: "ja-JP",
+      settings: {},
+    })
+  ).id;
+  enVoiceProfileId = (
+    await createVoiceProfile(prisma, {
+      name: "Metan",
+      adapterId: "voicevox",
+      voiceId: "uuid-metan:2",
+      locale: "en-US",
+      settings: {},
+    })
+  ).id;
+
+  const faceSet = await prisma.faceSet.create({
+    data: {
+      name: "キャラクター表情",
+      expressions: {
+        create: [{ id: "smile", name: "smile", position: 0 }],
+      },
+    },
+  });
+  faceSetId = faceSet.id;
+
+  themeId = await seedTheme("エージェント用テーマ");
+  archivedThemeId = await seedTheme("アーカイブ済みテーマ", true);
+
   // The copy path needs a ready image Asset for the appearances, so the
   // library fixture is seeded only when the probe can make one.
   if (!probeAvailable) {
@@ -169,28 +245,6 @@ beforeAll(async () => {
     throw new Error("imported character image did not become ready");
   }
   imageAssetId = ready.asset.id;
-
-  const faceSet = await prisma.faceSet.create({ data: { name: "キャラクター表情" } });
-  faceSetId = faceSet.id;
-
-  jaVoiceProfileId = (
-    await createVoiceProfile(prisma, {
-      name: "めたん",
-      adapterId: "voicevox",
-      voiceId: "uuid-metan:1",
-      locale: "ja-JP",
-      settings: {},
-    })
-  ).id;
-  enVoiceProfileId = (
-    await createVoiceProfile(prisma, {
-      name: "Metan",
-      adapterId: "voicevox",
-      voiceId: "uuid-metan:2",
-      locale: "en-US",
-      settings: {},
-    })
-  ).id;
 
   const entry = await createCharacter(prisma, {
     name: "四国めたん",
@@ -258,6 +312,282 @@ describe("agent character operations over the socket", () => {
       "AGENT_OPERATION_UNKNOWN",
     );
   });
+
+  it("catalogs library reads and keeps Theme / Face Set / Voice Profile writes unregistered", async () => {
+    const schema = await client.request("schema.get", {});
+    for (const name of [
+      "theme.list",
+      "theme.get",
+      "faceSet.list",
+      "faceSet.get",
+      "voiceProfile.list",
+      "voiceProfile.get",
+    ] as const) {
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "read",
+        longRunning: false,
+      });
+    }
+    expect(schema.operations).toContainEqual({
+      name: "speaker.add",
+      category: "speaker",
+    });
+    expect(schema.operations).toContainEqual({
+      name: "speaker.setVoiceProfile",
+      category: "speaker",
+    });
+
+    for (const operation of [
+      "theme.create",
+      "theme.update",
+      "theme.archive",
+      "faceSet.create",
+      "faceSet.update",
+      "voiceProfile.create",
+      "voiceProfile.update",
+      "voiceProfile.delete",
+    ]) {
+      const response = await rawRequest(
+        client.socketPath,
+        operation,
+        {},
+        `raw-${operation}`,
+      );
+      expect(response.ok).toBe(false);
+      if (!response.ok) {
+        expect(response.error.code).toBe("AGENT_OPERATION_UNKNOWN");
+      }
+    }
+  });
+
+  it("reads selectable Themes, Face Sets and Voice Profiles", async () => {
+    const themes = await client.request("theme.list", {});
+    expect(themes.themes).toContainEqual({
+      id: SOFT_EDITORIAL_THEME_ID,
+      name: "Soft Editorial",
+      isBuiltIn: true,
+      version: SOFT_EDITORIAL_THEME_VERSION,
+    });
+    expect(themes.themes).toContainEqual({
+      id: themeId,
+      name: "エージェント用テーマ",
+      isBuiltIn: false,
+      version: 1,
+    });
+    expect(themes.themes.some((theme) => theme.id === archivedThemeId)).toBe(false);
+
+    const theme = await client.request("theme.get", { themeId });
+    expect(theme.theme.definition.id).toBe(themeId);
+    await expectAgentError(
+      client.request("theme.get", { themeId: archivedThemeId }),
+      "RESOURCE_NOT_FOUND",
+    );
+
+    const faceSets = await client.request("faceSet.list", {});
+    const listedFaceSet = faceSets.faceSets.find((entry) => entry.id === faceSetId);
+    expect(listedFaceSet?.expressions.map((expression) => expression.id)).toEqual([
+      "smile",
+    ]);
+    const faceSet = await client.request("faceSet.get", { faceSetId });
+    expect(faceSet.faceSet.id).toBe(faceSetId);
+    await expectAgentError(
+      client.request("faceSet.get", { faceSetId: "missing" }),
+      "RESOURCE_NOT_FOUND",
+    );
+
+    const profiles = await client.request("voiceProfile.list", {});
+    expect(profiles.voiceProfiles).toContainEqual(
+      expect.objectContaining({ id: jaVoiceProfileId, locale: "ja-JP" }),
+    );
+    const profile = await client.request("voiceProfile.get", {
+      voiceProfileId: jaVoiceProfileId,
+    });
+    expect(profile.voiceProfile.id).toBe(jaVoiceProfileId);
+    await expectAgentError(
+      client.request("voiceProfile.get", { voiceProfileId: "missing" }),
+      "RESOURCE_NOT_FOUND",
+    );
+  });
+
+  it("creates a keyed narrator, selects a user Theme, and enforces voice rules", async () => {
+    const work = await createWork(`ナレーター-${randomUUID()}`);
+    const edition = firstEdition(work);
+    const initial = await client.request("script.get", {
+      languageEditionId: edition.id,
+    });
+
+    const edited = await client.request("script.edit", {
+      baseScriptVersionId: initial.scriptVersion.id,
+      requestId: `narrator-${randomUUID()}`,
+      operations: [
+        {
+          op: "speaker.add",
+          key: "narrator",
+          name: "ナレーター",
+          voiceProfileId: jaVoiceProfileId,
+        },
+        {
+          op: "line.add",
+          key: "narrator-line",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          captionText: "こんにちは",
+          speechText: "こんにちは",
+          speakerId: { key: "narrator" },
+        },
+        {
+          op: "document.setVisualTheme",
+          id: themeId,
+          version: 1,
+        },
+      ],
+    });
+    const speakerId = edited.created.speakerIds[0]!;
+    const lineId = edited.created.lineIds[0]!;
+    expect(edited.scriptVersion.content.visualTheme).toEqual({
+      id: themeId,
+      version: 1,
+    });
+    expect(
+      edited.scriptVersion.content.speakers.find((speaker) => speaker.id === speakerId),
+    ).toMatchObject({
+      name: "ナレーター",
+      characterId: null,
+      voiceProfileId: jaVoiceProfileId,
+    });
+    expect(
+      edited.scriptVersion.content.scenes
+        .flatMap((scene) => scene.lines)
+        .find((line) => line.id === lineId)?.speakerId,
+    ).toBe(speakerId);
+
+    const changed = await client.request("script.edit", {
+      baseScriptVersionId: edited.scriptVersion.id,
+      requestId: `narrator-voice-${randomUUID()}`,
+      operations: [
+        {
+          op: "speaker.setVoiceProfile",
+          speakerId,
+          voiceProfileId: jaVoiceProfile2Id,
+        },
+      ],
+    });
+    expect(
+      changed.scriptVersion.content.speakers.find((speaker) => speaker.id === speakerId)
+        ?.voiceProfileId,
+    ).toBe(jaVoiceProfile2Id);
+
+    await expectAgentError(
+      client.request("script.edit", {
+        baseScriptVersionId: changed.scriptVersion.id,
+        requestId: `narrator-locale-${randomUUID()}`,
+        operations: [
+          {
+            op: "speaker.setVoiceProfile",
+            speakerId,
+            voiceProfileId: enVoiceProfileId,
+          },
+        ],
+      }),
+      "EDIT_PRECONDITION_FAILED",
+    );
+    await expectAgentError(
+      client.request("script.edit", {
+        baseScriptVersionId: changed.scriptVersion.id,
+        requestId: `archived-theme-${randomUUID()}`,
+        operations: [
+          {
+            op: "document.setVisualTheme",
+            id: archivedThemeId,
+            version: 1,
+          },
+        ],
+      }),
+      "EDIT_TARGET_NOT_FOUND",
+    );
+  });
+
+  it("returns an empty created set when a speaker.add edit is replayed", async () => {
+    const work = await createWork(`再生-${randomUUID()}`);
+    const edition = firstEdition(work);
+    const initial = await client.request("script.get", {
+      languageEditionId: edition.id,
+    });
+    const requestId = `speaker-replay-${randomUUID()}`;
+    const operations = [
+      {
+        op: "speaker.add" as const,
+        name: "ナレーター",
+        voiceProfileId: jaVoiceProfileId,
+      },
+    ];
+    const first = await client.request("script.edit", {
+      baseScriptVersionId: initial.scriptVersion.id,
+      requestId,
+      operations,
+    });
+    expect(first.replay).toBe(false);
+    expect(first.created.speakerIds).toHaveLength(1);
+
+    const replay = await client.request("script.edit", {
+      baseScriptVersionId: initial.scriptVersion.id,
+      requestId,
+      operations,
+    });
+    expect(replay.replay).toBe(true);
+    expect(replay.created.speakerIds).toEqual([]);
+    expect(replay.scriptVersion.id).toBe(first.scriptVersion.id);
+
+    const current = await client.request("script.get", {
+      languageEditionId: edition.id,
+    });
+    expect(
+      current.scriptVersion.content.speakers.some(
+        (speaker) => speaker.id === first.created.speakerIds[0],
+      ),
+    ).toBe(true);
+  });
+
+  it.skipIf(!probeAvailable)(
+    "rejects a Speaker voice that differs from the Character Voice",
+    async () => {
+      const work = await createWork(`キャラクター声-${randomUUID()}`);
+      const edition = firstEdition(work);
+      const initial = await client.request("script.get", {
+        languageEditionId: edition.id,
+      });
+      const copied = await client.request("script.edit", {
+        baseScriptVersionId: initial.scriptVersion.id,
+        requestId: `copy-${randomUUID()}`,
+        operations: [
+          {
+            op: "character.addFromLibrary",
+            libraryCharacterId,
+          },
+        ],
+      });
+      const speakerId = copied.created.speakerIds[0]!;
+      expect(
+        copied.scriptVersion.content.speakers.find((speaker) => speaker.id === speakerId)
+          ?.voiceProfileId,
+      ).toBe(jaVoiceProfileId);
+
+      await expectAgentError(
+        client.request("script.edit", {
+          baseScriptVersionId: copied.scriptVersion.id,
+          requestId: `character-voice-${randomUUID()}`,
+          operations: [
+            {
+              op: "speaker.setVoiceProfile",
+              speakerId,
+              voiceProfileId: jaVoiceProfile2Id,
+            },
+          ],
+        }),
+        "EDIT_PRECONDITION_FAILED",
+      );
+    },
+  );
 
   it.skipIf(!probeAvailable)(
     "lists and fetches a library character with voices and Face Set references",
