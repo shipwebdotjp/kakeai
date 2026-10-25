@@ -192,6 +192,22 @@ MCP の二重出力でコストが増えるため）。
 完了条件: 新規作品で `voiceProfile.listVoices` → `voiceProfile.create` →
 `speaker.add` → `line.add` → 一括TTS → 確定 → レンダーまでエージェントだけで通る。
 
+## P7 Character への声付け公開（完了）
+
+既存 Character に対象 locale の声が無い場合に、エージェントが
+`character.setVoices` で声を付けてから `character.addFromLibrary` でコピー
+できるようにする。Character 自体の新規作成・外観変更・削除は人専用のまま残す。
+詳細は [Agent Access の B12](../agent-access/todo.md) と
+[ADR 0089](../adr/0089-agent-character-set-voices.md) を正とする。
+
+- [x] MP4主線の声の確認（手順 4）と R2 を、`character.setVoices` の手順へ更新する
+- [x] スキルとユーザーガイドの「声付きキャラクターの作成を依頼する」を「既存 Character への声付けはエージェントが行い、新規作成だけを依頼する」へ置き換える
+- [x] spec の P6 完了記録と roadmap のライブラリ管理表を B12 に合わせて更新する
+- [x] `npm run typecheck` と `npm test` を通す
+
+完了条件: 声の無い既存 Character へ `character.setVoices` で声を付け、
+`character.addFromLibrary` → TTS → 確定 → レンダーまでエージェントだけで通る。
+
 ## 将来（今回の非ゴール）
 
 - サムネイルの作成・選択・PNG取得

@@ -99,7 +99,7 @@
 | 1 | `schema.get` | `contentSchemaVersion`、Template、`warningCodes`、`agentOperations`、`schemaDigest` / `operationDigest` を取得 |
 | 2 | `work.create` | Work と Edition、初期 ScriptVersion を取得。ja-JP を既定とする |
 | 3 | `script.get` | 対象 Edition の current ScriptVersion と `content.locale` を確認 |
-| 4 | 声の確認 | 既存の Speaker に `voiceProfileId` があればそれを使う。無ければ `voiceProfile.list` で対象 locale と完全一致する Profile を選ぶ。無ければ `voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成する。立ち絵が必要なら `character.list` で対象 locale の声を持つキャラクターを選ぶ。どちらも無ければ停止 |
+| 4 | 声の確認 | 既存の Speaker に `voiceProfileId` があればそれを使う。無ければ `voiceProfile.list` で対象 locale と完全一致する Profile を選ぶ。無ければ `voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成する。立ち絵が必要なら `character.list` で対象 locale の声を持つキャラクターを選ぶ。声の無い既存 Character には `character.setVoices` で声を付ける。使える Character が無い場合だけ停止し、Character 自体の新規作成を人間に依頼する |
 | 5 | `script.edit`（1回目） | 声だけの話者なら `speaker.add`（既存 Profile）と `line.add`（`speakerId: { key }`）を同じ呼び出しに入れる。立ち絵が必要なら `character.addFromLibrary` で声付きキャラクターをコピーし、`created.speakerIds` を取得する。既存の有効な話者を使う場合は省略可 |
 | 6 | `script.edit`（2回目以降） | Scene・セリフ・Cue・BGM・立ち絵を追加。話者 ID は 5 で得た ID または `{ key }` を使う。表・グラフ・フロー・効果・入れ子の入力は `template.get` の JSON Schema と例から組み立てる |
 | 7 | `asset.list` / `asset.import` / `job.wait` / `asset.get` | 参照する素材がすべて `ready` |
@@ -164,10 +164,10 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 `skills/kakeai-production/SKILL.md` と `user-guide/docs/agent-access.md` に次を明記する。
 
 - MP4主線の最初に `voiceProfile.list` で対象 locale と完全一致する Voice Profile を確認する。
-- Profile が無い場合は、`voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成する（`locale` は台本の locale と完全一致させ、`openai-compatible` では `settings.model` を `voiceProfile.listModels` で選ぶ）。立ち絵が必要な場合は、声付きキャラクターの作成を人間に依頼する。
+- Profile が無い場合は、`voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成する（`locale` は台本の locale と完全一致させ、`openai-compatible` では `settings.model` を `voiceProfile.listModels` で選ぶ）。立ち絵が必要な場合は、`character.list` で対象 locale の声を持つキャラクターを選び、声の無い既存 Character には `character.setVoices` で声を付ける。使える Character が無い場合だけ、Character 自体の新規作成を人間に依頼する。
 - 声だけの話者は、`speaker.add` と `line.add`（`speakerId: { key }`）を同じ `script.edit` に入れて作る。既存話者へは `speaker.setVoiceProfile` で割り当てる。
 - 立ち絵が必要な場合の標準は `character.addFromLibrary` によるコピーである。
-- Voice Profile の削除は人専用であり、エージェントは作成・更新と既存 Profile の割り当てだけを行う。
+- Voice Profile の削除と Character の作成・外観変更・削除は人専用であり、エージェントは Voice Profile の作成・更新、Character への声付け、既存 Profile の割り当てを行う。
 
 ### R3. 一括TTSの順序を固定する
 

@@ -173,3 +173,13 @@
 - [x] ソケット統合テストで、一覧取得、作成→取得→話者割当て、モデル付き作成、入力不正、更新成功・対象不明・`adapterId` 変更拒否、エンジン停止時の `TTS_ENGINE_UNAVAILABLE` を固定する。既存の「Voice Profile 書き込み未登録」テストを新方針へ更新する
 - [x] Agent Access 仕様・TTS 仕様・MP4 制作仕様・制作スキル・ユーザーガイドの「Profile が無ければ人間に依頼する」手順を `listVoices` → `create` → `speaker.add` へ置き換える。DB migration と HTTP API の変更は行わない
 - 完了条件: 新規作品で `voiceProfile.listVoices` → `voiceProfile.create` → `speaker.add` → `line.add` → TTS → 確定 → レンダーが通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B12 Character Voice 付け替えの公開（ADR 0089）
+
+- [x] [ADR 0089](../adr/0089-agent-character-set-voices.md) を追加し、Character の声の付け替えの公開と作成・外観変更・削除の人専用維持を決定する
+- [x] 契約に `character.setVoices`（mutation）を追加する。入力は `{ characterId, voices }`、出力は `{ character }` とし、`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスに `setCharacterVoices` を追加し、既存の声検証（実在・locale 一致・重複不可）をそのまま使う。Character の作成・外観変更・削除は公開しない。未知の Character は `RESOURCE_NOT_FOUND`、声の参照欠落・不一致は `VALIDATION_ERROR` とする
+- [x] MCP の説明文を 1 操作分追加する。CLI はカタログ導出のため変更しない
+- [x] ソケット統合テストで、声の置換・全解除、未知 Character、未知 Profile、locale 不一致・重複、外観の不変、付け替え後の `addFromLibrary` コピーへの反映を固定する。`character.create` / `update` / `delete` が `AGENT_OPERATION_UNKNOWN` のままであることも確認する
+- [x] Agent Access 仕様・MP4 制作仕様・制作スキル・ユーザーガイドの「声付きキャラクターの作成を依頼する」を「既存 Character への声付けはエージェントが行い、Character 自体の新規作成だけを依頼する」へ置き換える。DB migration と HTTP API の変更は行わない
+- 完了条件: 既存 Character へ `character.setVoices` で声を付け、`character.addFromLibrary` → TTS → 確定 → レンダーが通る。Character の作成・外観変更・削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

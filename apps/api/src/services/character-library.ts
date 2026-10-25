@@ -316,6 +316,37 @@ export async function updateCharacter(
   }
 }
 
+export async function setCharacterVoices(
+  prisma: PrismaClient,
+  characterId: string,
+  voices: readonly VoiceInput[],
+): Promise<CharacterLibraryEntry> {
+  await assertVoiceProfilesExist(prisma, voices);
+  const existing = await prisma.character.findUnique({
+    where: { id: characterId },
+    select: { id: true },
+  });
+  if (existing === null) {
+    throw resourceNotFound("character", characterId);
+  }
+  try {
+    const row = await prisma.$transaction(async (transaction) => {
+      await transaction.characterVoice.deleteMany({ where: { characterId } });
+      return transaction.character.update({
+        where: { id: characterId },
+        data: { voices: { create: toVoiceCreate(voices) } },
+        include: characterInclude,
+      });
+    });
+    return toCharacterLibraryEntry(row);
+  } catch (error) {
+    if (isPrismaCode(error, "P2025")) {
+      throw resourceNotFound("character", characterId);
+    }
+    throw error;
+  }
+}
+
 export async function deleteCharacter(
   prisma: PrismaClient,
   characterId: string,

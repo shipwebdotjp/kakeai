@@ -296,6 +296,12 @@ describe("agent character operations over the socket", () => {
       category: "character",
     });
 
+    expect(schema.agentOperations).toContainEqual({
+      name: "character.setVoices",
+      kind: "mutation",
+      longRunning: false,
+    });
+
     for (const operation of ["character.create", "character.update", "character.delete"]) {
       const response = await rawRequest(client.socketPath, operation, {});
       expect(response.ok).toBe(false);
@@ -624,6 +630,117 @@ describe("agent character operations over the socket", () => {
         client.request("character.get", { characterId: "missing-character" }),
         "RESOURCE_NOT_FOUND",
       );
+    },
+  );
+
+  it("replaces a library character's voices without touching appearances", async () => {
+    const entry = await createCharacter(prisma, {
+      name: `声付け替え-${randomUUID()}`,
+      voices: [],
+      appearances: [],
+    });
+
+    const assigned = await client.request("character.setVoices", {
+      characterId: entry.id,
+      voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfileId }],
+    });
+    expect(assigned.character.id).toBe(entry.id);
+    expect(assigned.character.voices).toEqual([
+      { locale: "ja-JP", voiceProfileId: jaVoiceProfileId },
+    ]);
+    expect(assigned.character.appearances).toEqual([]);
+
+    const replaced = await client.request("character.setVoices", {
+      characterId: entry.id,
+      voices: [
+        { locale: "ja-JP", voiceProfileId: jaVoiceProfile2Id },
+        { locale: "en-US", voiceProfileId: enVoiceProfileId },
+      ],
+    });
+    expect(replaced.character.voices).toEqual([
+      { locale: "ja-JP", voiceProfileId: jaVoiceProfile2Id },
+      { locale: "en-US", voiceProfileId: enVoiceProfileId },
+    ]);
+
+    const cleared = await client.request("character.setVoices", {
+      characterId: entry.id,
+      voices: [],
+    });
+    expect(cleared.character.voices).toEqual([]);
+
+    const fetched = await client.request("character.get", { characterId: entry.id });
+    expect(fetched.character.voices).toEqual([]);
+
+    await expectAgentError(
+      client.request("character.setVoices", {
+        characterId: "missing-character",
+        voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfileId }],
+      }),
+      "RESOURCE_NOT_FOUND",
+    );
+    await expectAgentError(
+      client.request("character.setVoices", {
+        characterId: entry.id,
+        voices: [{ locale: "ja-JP", voiceProfileId: "missing-profile" }],
+      }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("character.setVoices", {
+        characterId: entry.id,
+        voices: [{ locale: "en-US", voiceProfileId: jaVoiceProfileId }],
+      }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("character.setVoices", {
+        characterId: entry.id,
+        voices: [
+          { locale: "ja-JP", voiceProfileId: jaVoiceProfileId },
+          { locale: "ja-JP", voiceProfileId: jaVoiceProfile2Id },
+        ],
+      }),
+      "VALIDATION_ERROR",
+    );
+  });
+
+  it.skipIf(!probeAvailable)(
+    "copies the voice assigned by character.setVoices into a script",
+    async () => {
+      const entry = await createCharacter(prisma, {
+        name: `声コピー-${randomUUID()}`,
+        voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfile2Id }],
+        appearances: [
+          {
+            id: `appearance-${randomUUID()}`,
+            assetId: imageAssetId,
+            expression: "normal",
+            pose: "front",
+            faceSetId: null,
+          },
+        ],
+      });
+
+      await client.request("character.setVoices", {
+        characterId: entry.id,
+        voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfileId }],
+      });
+
+      const work = await createWork(`声コピー-${randomUUID()}`);
+      const edition = firstEdition(work);
+      const initial = await client.request("script.get", {
+        languageEditionId: edition.id,
+      });
+      const copied = await client.request("script.edit", {
+        baseScriptVersionId: initial.scriptVersion.id,
+        requestId: `set-voices-copy-${randomUUID()}`,
+        operations: [{ op: "character.addFromLibrary", libraryCharacterId: entry.id }],
+      });
+      const speakerId = copied.created.speakerIds[0]!;
+      expect(
+        copied.scriptVersion.content.speakers.find((speaker) => speaker.id === speakerId)
+          ?.voiceProfileId,
+      ).toBe(jaVoiceProfileId);
     },
   );
 

@@ -14,6 +14,8 @@ import {
   agentCharacterGetOutputSchema,
   agentCharacterListInputSchema,
   agentCharacterListOutputSchema,
+  agentCharacterSetVoicesInputSchema,
+  agentCharacterSetVoicesOutputSchema,
   agentFaceSetGetInputSchema,
   agentFaceSetGetOutputSchema,
   agentFaceSetListInputSchema,
@@ -124,7 +126,11 @@ import {
 } from "../services/agent-script.ts";
 import { importAgentAsset } from "../services/agent-assets.ts";
 import type { CompositionAuthoringService } from "../services/authoring-context.ts";
-import { getCharacter, listCharacters } from "../services/character-library.ts";
+import {
+  getCharacter,
+  listCharacters,
+  setCharacterVoices,
+} from "../services/character-library.ts";
 import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
 import { getSelectableTheme, listSelectableThemes } from "../services/theme-library.ts";
 import {
@@ -607,6 +613,15 @@ const definitions: AgentOperationDefinitions = {
     output: agentCharacterGetOutputSchema,
     run: async (input, context) => ({
       character: await getCharacter(context.prisma, input.characterId),
+    }),
+  },
+  // Voice assignment only. Character creation, appearance edits and deletion
+  // stay human-only; the script copy path is `character.addFromLibrary`.
+  "character.setVoices": {
+    input: agentCharacterSetVoicesInputSchema,
+    output: agentCharacterSetVoicesOutputSchema,
+    run: async (input, context) => ({
+      character: await setCharacterVoices(context.prisma, input.characterId, input.voices),
     }),
   },
   // Library reads. Theme / Face Set writes stay in the app UI and are not

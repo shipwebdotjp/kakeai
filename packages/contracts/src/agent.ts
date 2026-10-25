@@ -25,6 +25,7 @@ import {
 import { assetTagsSchema } from "./asset";
 import { assetListInputSchema, assetListPageSchema } from "./asset-list";
 import { characterLibraryEntrySchema } from "./character-library";
+import { characterVoicesSchema } from "./content/character";
 import { faceSetSchema } from "./face-set";
 import {
   createVoiceProfileRequestSchema,
@@ -387,6 +388,7 @@ export const agentOperationNames = [
   "tts.attachBulk",
   "character.list",
   "character.get",
+  "character.setVoices",
   "theme.list",
   "theme.get",
   "faceSet.list",
@@ -454,6 +456,7 @@ export const agentMutationOperationNames = [
   "tts.attachBulk",
   "voiceProfile.create",
   "voiceProfile.update",
+  "character.setVoices",
 ] as const satisfies readonly AgentOperationName[];
 
 /**
@@ -1363,6 +1366,14 @@ export const agentCharacterGetOutputSchema = z.strictObject({
   character: characterLibraryEntrySchema,
 });
 
+export const agentCharacterSetVoicesInputSchema = z.strictObject({
+  characterId: idSchema,
+  voices: characterVoicesSchema,
+});
+export const agentCharacterSetVoicesOutputSchema = z.strictObject({
+  character: characterLibraryEntrySchema,
+});
+
 /**
  * A selectable Visual Theme. Only the latest published Revision of an
  * unarchived user Theme (or a built-in) is listed. The definition is returned
@@ -1486,6 +1497,7 @@ export const agentOperationInputSchemas = {
   "tts.attachBulk": agentTtsAttachBulkInputSchema,
   "character.list": agentCharacterListInputSchema,
   "character.get": agentCharacterGetInputSchema,
+  "character.setVoices": agentCharacterSetVoicesInputSchema,
   "theme.list": agentThemeListInputSchema,
   "theme.get": agentThemeGetInputSchema,
   "faceSet.list": agentFaceSetListInputSchema,
@@ -1536,6 +1548,7 @@ export const agentOperationOutputSchemas = {
   "tts.attachBulk": agentTtsAttachBulkOutputSchema,
   "character.list": agentCharacterListOutputSchema,
   "character.get": agentCharacterGetOutputSchema,
+  "character.setVoices": agentCharacterSetVoicesOutputSchema,
   "theme.list": agentThemeListOutputSchema,
   "theme.get": agentThemeGetOutputSchema,
   "faceSet.list": agentFaceSetListOutputSchema,

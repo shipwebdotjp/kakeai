@@ -5,7 +5,7 @@
 ## 方針
 
 - 正本は `ContentDocument` と SQLite のままとする。Agent Access は操作コアを呼ぶ薄い束縛であり、束縛ごとに業務ロジックを持たない。
-- 可逆な操作だけをエージェントへ公開する。実体削除、外部サービスへの公開、Adapter 設定の変更は人に限る。Voice Profile の削除は人専用に残す。生成操作は、利用者が設定した接続先だけを使えることを条件に公開する（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)、[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)、[ADR 0088](../adr/0088-agent-voice-profile-writes.md)）。
+- 可逆な操作だけをエージェントへ公開する。実体削除、外部サービスへの公開、Adapter 設定の変更は人に限る。Voice Profile の削除と Character の作成・外観変更・削除は人専用に残す。生成操作は、利用者が設定した接続先だけを使えることを条件に公開する（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)、[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)、[ADR 0088](../adr/0088-agent-voice-profile-writes.md)、[ADR 0089](../adr/0089-agent-character-set-voices.md)）。
 - 互換性は「追加は自由、破壊は版を上げる」で扱う。エージェントは古いスキーマをキャッシュし得るため、契約の変更は `schemaDigest` とプロトコル版で検知できなければならない。
 - スキルは `schema.get` を正とし、操作スキーマや Template 契約を複製しない。
 - 個人利用のローカルアプリを前提に、運用負荷より再現性と巻き戻しやすさを優先する。
@@ -39,6 +39,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9 は B4 の後に�
 | B9 | R2-3 声だけの話者と声の割り当て | B1 | `speaker` カテゴリと `ScriptContext` の参照を追加する編集操作。声のプリフライトをキャラクター依存から外す |
 | B10 | R3-3 スキル配布と版管理 | なし | 配布経路だけの変更で、操作契約を変えない。リリース後に互換性履歴を更新できるよう B1 のダイジェスト機構と併用する |
 | B11 | Voice Profile の作成・更新公開 | B1 | 既存サービスを呼ぶだけの追加操作。声候補の取得と合わせて公開し、人間への作成依頼を不要にする |
+| B12 | Character Voice 付け替えの公開 | B1 | 既存の声検証を呼ぶだけの追加操作。外観に触れず声だけを置換し、人間への声付け依頼を不要にする |
 
 ## フェーズ詳細
 
@@ -95,7 +96,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9 は B4 の後に�
 - 状態: 完了。`speaker.add`（`key?`・`name`・`voiceProfileId`）と `speaker.setVoiceProfile`（`speakerId`・`voiceProfileId` / `null`）を追加し、`speaker` カテゴリを新設した。`line.add` / `line.setSpeaker` の `speakerId` は ID または `{ key }` を受け付ける。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
 - 割り当てる Profile は実在し、`ContentDocument.locale` と完全一致する。Character 付き Speaker は、その Character の文書 locale の Voice と一致する場合だけ設定でき、Character にその声が無い場合は `null` への解除だけを許す。参照欠落は `EDIT_TARGET_NOT_FOUND`、locale・Character Voice の不一致は `EDIT_PRECONDITION_FAILED`。
 - `line.setSpeaker` は声だけの話者へ変えると `expressionId` を自動で消す。`line.add` は声だけの話者への明示的な `expressionId` を拒否し、`line.setExpression` も拒否する。`document.setVisualTheme` は最新 Revision だけを選べる。`script.save` は Theme の変更がアーカイブ済み・最新でない Revision を指す場合だけ拒否し、Theme を変えない保存と `script.restore` は許可する。
-- 声の変更は以後の TTS にだけ影響し、既存の Audio Take は変えない。Character・Face Set・Theme の管理は引き続き人専用である。Voice Profile 自体の作成・更新は B11 で公開する。
+- 声の変更は以後の TTS にだけ影響し、既存の Audio Take は変えない。Character の作成・外観変更・削除と Face Set・Theme の管理は引き続き人専用である。Voice Profile 自体の作成・更新は B11、Character への声付けは B12 で公開する。
 - 完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`（`speakerId: { key }`）→ TTS → 確定 → レンダーが通り、Character 付き話者・locale 不一致・Character Voice 不一致・`expressionId` の拒否がテストで固定されている。DB migration と HTTP API の変更はない。
 
 ### B10 スキル配布と版管理（R3-3）
@@ -111,6 +112,12 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9 は B4 の後に�
 - 状態: 完了。`voiceProfile.listVoices` / `voiceProfile.listModels`（read）と `voiceProfile.create` / `voiceProfile.update`（mutation）を追加した。入出力は HTTP の声・モデル一覧と作成・更新契約と同じ形で、既存サービスをそのまま呼ぶ。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0088](../adr/0088-agent-voice-profile-writes.md) を参照。
 - `create` は `requestId` を持たず冪等台帳に載せない（`work.create` と同じ扱い）。タイムアウト後は `voiceProfile.list` で確認してから再実行する。`update` の `adapterId` は変更できず、未知の ID は `RESOURCE_NOT_FOUND`、エンジン接続失敗は `TTS_ENGINE_UNAVAILABLE` とする。削除は人専用のまま残す。
 - 完了条件: 新規作品で `voiceProfile.listVoices` → `voiceProfile.create` → `speaker.add` → `line.add`（`speakerId: { key }`）→ TTS → 確定 → レンダーが通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
+### B12 Character Voice 付け替えの公開
+
+- 状態: 完了。`character.setVoices`（mutation）を追加した。`{ characterId, voices }` を受け、`{ character }` を返す。既存サービスの声検証（実在・locale 一致・重複不可）をそのまま使い、外観には触れない。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0089](../adr/0089-agent-character-set-voices.md) を参照。
+- `requestId` は持たず冪等台帳に載せない（`work.create`・`voiceProfile.create` と同じ扱い）。タイムアウト後は `character.get` で確認してから再実行する。未知の Character は `RESOURCE_NOT_FOUND`、声の参照欠落・不一致は `VALIDATION_ERROR` とする。Character の作成・外観変更・削除は人専用のまま残す。
+- 完了条件: 既存 Character へ声を付けて `character.addFromLibrary` → TTS → 確定 → レンダーが通り、作成・外観変更・削除は `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
 ## 保留する拡張
 

@@ -752,10 +752,11 @@ describe("production flow through the MCP binding", () => {
         edit4.scriptVersion.id,
       );
 
-      // The library stays read-only on the agent surface.
+      // Only voice assignment is writable on the agent surface.
       expect(agentOperationNames.filter((name) => name.startsWith("character."))).toEqual([
         "character.list",
         "character.get",
+        "character.setVoices",
       ]);
       const unknownTool = await mcpClient.callTool({
         name: "kakeai_character_create",

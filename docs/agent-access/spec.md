@@ -77,6 +77,7 @@
 | `tts.attachBulk` | mutation | no | `kakeai_tts_attach_bulk` |
 | `character.list` | read | no | `kakeai_character_list` |
 | `character.get` | read | no | `kakeai_character_get` |
+| `character.setVoices` | mutation | no | `kakeai_character_set_voices` |
 | `theme.list` | read | no | `kakeai_theme_list` |
 | `theme.get` | read | no | `kakeai_theme_get` |
 | `faceSet.list` | read | no | `kakeai_face_set_list` |
@@ -296,6 +297,7 @@
 - `schema.get` の応答には `operationDigest` と `minProtocolVersion` が入る。両方ともこの機構の導入前に作られた応答には存在しないため、応答スキーマでは任意扱いにする（現在のサーバーは必ず返す）。これにより、新しい束縛は古いアプリの応答も検証できる。
 - Theme・Face Set・Voice Profile の読み取り6操作と `speaker` カテゴリの追加は加算的変更であり、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。DB migration と HTTP API の変更はない。ただし `operationDigest` と `schemaDigest` は変わり、`schema.get` の操作カタログとカテゴリ enum も変わるため、束縛（MCP / CLI）とアプリは同じビルドで揃える。古い束縛は新しい応答を厳格な検証で拒否し得る。
 - `voiceProfile.listVoices` / `voiceProfile.listModels` / `voiceProfile.create` / `voiceProfile.update` の追加も加算的変更であり、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く（[ADR 0088](../adr/0088-agent-voice-profile-writes.md)）。DB migration と HTTP API の変更はない。ただし `operationDigest` と `schemaDigest` は変わるため、束縛とアプリは同じビルドで揃える。
+- `character.setVoices` の追加も加算的変更であり、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く（[ADR 0089](../adr/0089-agent-character-set-voices.md)）。DB migration と HTTP API の変更はない。ただし `operationDigest` と `schemaDigest` は変わるため、束縛とアプリは同じビルドで揃える。
 - 古い束縛は厳格な応答検証で未知のキーを弾くため、`schema.get` の応答にフィールドを増やす変更は、束縛とアプリが同じバージョンで同居することを前提とする。ずれが起きたら束縛も同じ版へ更新する。
 - 版の機構は、破壊的変更が実際に起きたときに使う。`AGENT_PROTOCOL_VERSION` を上げると、古い束縛は handshake で `AGENT_PROTOCOL_MISMATCH` になって接続时被弾する（応答検証の失敗ではなく、原因が明確な失敗になる）。
 
@@ -310,13 +312,13 @@
 
 利用者が事前に設定したループバックの TTS Adapter（`voicevox` / `aivisspeech` / `openai-compatible`）への合成 Job 投入は、生成 Asset と Script Version のいずれも履歴から戻せるため、可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
 
-- 対象は利用者が設定済みの Adapter と Voice Profile に限る。接続先・認証情報・Adapter 設定の変更、Voice Profile の削除、Character の作成・更新・削除（Voice の形成を含む）、Face Set と Theme の作成・更新・アーカイブ・削除は公開しない。
+- 対象は利用者が設定済みの Adapter と Voice Profile に限る。接続先・認証情報・Adapter 設定の変更、Voice Profile の削除、Character の作成・外観変更・削除、Face Set と Theme の作成・更新・アーカイブ・削除は公開しない。Character の声の付け替え（`character.setVoices`）は公開する。
 - Voice Profile は読み取り（一覧・取得・声候補・モデル候補）と作成・更新を公開し、Face Set・Theme は読み取り（一覧・取得）を公開する。利用者が用意した既存 Profile、またはエージェントが `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作った Profile は、`speaker.add` / `speaker.setVoiceProfile` で Speaker に割り当てられる。割り当ては新しい Script Version を作る可逆な変更であり、以後の TTS にだけ影響する。既存の Audio Take は変更しない。
 - 割り当てる Voice Profile は実在し、`locale` が `ContentDocument.locale` と完全一致しなければならない。Character を持つ Speaker は、その Character の文書 locale の Voice と一致する場合だけ設定できる。Character に文書 locale の Voice が無い場合は非 null の割り当てを拒否し、`null` への解除だけを許す。Character に Voice がある場合は `null` にできない。参照先が無い場合は `EDIT_TARGET_NOT_FOUND`、locale または Character Voice の不一致は `EDIT_PRECONDITION_FAILED` とする。
 - TTS の入力・出力は HTTP の TTS 契約（[../tts/spec.md](../tts/spec.md)）と同じスキーマ・Adapter 解決・エラーコードを共有し、束縛ごとに生成ロジックを複製しない。Job は既存の `job.get`（MCP / CLI では Job 待機）で状態を確認する。
 - 完了した Job の `ttsResult` を Take として台本へ入れる操作は公開しない。`script.edit` の `line.assignTake` で新しい Script Version を追加する。
 - 生成物は既存の `origin: generated` と `provenanceJson` で帰属し、TTS 専用の課金管理・プロバイダ管理・新しい帰属列は持たない。
-- Character・Face Set・Theme のライブラリは読み取りだけを公開する。Voice Profile は読み取りに加えて作成・更新を公開し、削除だけを人専用に残す。台本へ入れるときは操作コアの `character.addFromLibrary` で新しいローカル ID へコピーし、Face Set は参照のまま引き継ぐ（[../editor-core/spec.md](../editor-core/spec.md)）。立ち絵を必要としない声だけの話者は、`voiceProfile.list` で選んだ既存 Profile、または `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作った Profile を `speaker.add` で割り当てる。Character・Face Set・Theme の作成・更新・削除と Voice Profile の削除は公開しない。
+- Character・Face Set・Theme のライブラリは読み取りだけを公開する。Voice Profile は読み取りに加えて作成・更新を公開し、削除だけを人専用に残す。Character は読み取りに加えて声の付け替え（`character.setVoices`）を公開し、作成・外観変更・削除は人専用に残す。台本へ入れるときは操作コアの `character.addFromLibrary` で新しいローカル ID へコピーし、Face Set は参照のまま引き継ぐ（[../editor-core/spec.md](../editor-core/spec.md)）。立ち絵を必要としない声だけの話者は、`voiceProfile.list` で選んだ既存 Profile、または `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作った Profile を `speaker.add` で割り当てる。Character・Face Set・Theme の作成・更新・削除と Voice Profile の削除は公開しない。
 
 ### TTS の契約
 
@@ -332,7 +334,8 @@
 
 ### Character の契約
 
-- `character.list` はキャラクターライブラリの全件を `{ characters }` で返す。`character.get` は `{ characterId }` を受け、`{ character }` を返す。いずれも `id`・`name`・locale 別の `voices`・外観（`assetId`・`expression`・`pose`・任意の `label`・`faceSetId`）・`createdAt` / `updatedAt` を持ち、HTTP の Character 契約と同じ `characterLibraryEntrySchema` を使う。存在しない `characterId` は `RESOURCE_NOT_FOUND` とする。Character の作成・更新・削除（Voice の形成を含む）は公開しない。
+- `character.list` はキャラクターライブラリの全件を `{ characters }` で返す。`character.get` は `{ characterId }` を受け、`{ character }` を返す。いずれも `id`・`name`・locale 別の `voices`・外観（`assetId`・`expression`・`pose`・任意の `label`・`faceSetId`）・`createdAt` / `updatedAt` を持ち、HTTP の Character 契約と同じ `characterLibraryEntrySchema` を使う。存在しない `characterId` は `RESOURCE_NOT_FOUND` とする。Character の作成・外観変更・削除は公開しない。
+- `character.setVoices` — Character の声の付け替え（[ADR 0089](../adr/0089-agent-character-set-voices.md)）。`{ characterId, voices }` を受け、`{ character }` を返す。`voices` は `{ locale, voiceProfileId }[]` で、参照する Profile は実在し、その `locale` と voice の `locale` が一致しなければならない。空配列も許し、全解除できる。外観は変えない。存在しない `characterId` は `RESOURCE_NOT_FOUND`、参照欠落・locale 不一致・locale 重複は `VALIDATION_ERROR` とする。付け替えは以後の `character.addFromLibrary` コピーにだけ影響し、既存の Script Version は変えない。`requestId` は持たないため、タイムアウト後は `character.get` で確認してから再実行する。
 - 台本へ入れるときは `script.edit` の操作コア操作 `character.addFromLibrary`（`{ op, libraryCharacterId }`）を使う。ライブラリのキャラクターを、名前・`voices`・全外観を引き継いだ新しいローカル ID の Character・Appearance・Speaker として文書へコピーする。`faceSetId` は参照のまま引き継ぎ、Face Set の内容はコピーしない。Speaker の `voiceProfileId` は `ContentDocument.locale` に一致する `voices` の声、一致がなければ `null` とする。ライブラリ側は変更しない。
 - コピーで作られた ID は `script.edit` の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` で返る。後続の `line.add`・`line.setSpeaker`・`standing.set` にはこの ID をそのまま使う。`character.addFromLibrary` は `key` を持たないため、同一呼び出し内で作った ID を `{ key }` で参照することはできない。
 - 未知の `libraryCharacterId` は `EDIT_TARGET_NOT_FOUND`、`ScriptContext.libraryCharacters` を用意できない場合は `EDIT_PRECONDITION_FAILED` とする。
@@ -395,7 +398,7 @@
 | `COMPOSITION_UNAVAILABLE` | 参照する Composition Version が publish 済みでない、または bundle が欠損している |
 | `TTS_INPUT_INVALID` | TTS 生成要求の入力が不正（空の読み上げテキスト、話者・声の未設定、Adapter 外の声） |
 | `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した（`tts.create` / `tts.createBulk` / `voiceProfile.listVoices` / `voiceProfile.listModels`） |
-| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `theme.get` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` の対象など、参照先の資源が存在しない |
+| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.setVoices` / `theme.get` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` の対象など、参照先の資源が存在しない |
 | `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない（`work.get` / `work.clone` / `script.listVersions` / `script.restore` を含む） |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。

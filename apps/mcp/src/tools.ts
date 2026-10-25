@@ -109,6 +109,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "キャラクターライブラリの一覧を返す。台本へ入れるときは script.edit の character.addFromLibrary でコピーする。ライブラリ自体の作成・更新・削除は公開しない。",
   "character.get":
     "キャラクターライブラリの 1 件を、locale 別の声と外観（Face Set 参照を含む）付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
+  "character.setVoices":
+    "キャラクターの声（locale 別の Voice Profile 割り当て）を置き換えて返す。`voices` は `{ locale, voiceProfileId }` の配列で、Profile は実在し `locale` が一致すること。空配列で全解除もできる。外観の変更・作成・削除は公開しない。存在しない ID は RESOURCE_NOT_FOUND。",
   "theme.list":
     "選択できる Visual Theme の一覧を返す。組み込み Theme と、アーカイブされていないユーザー Theme の最新 Revision だけを含む。Theme Draft・アーカイブ済み Theme・古い Revision は含まない。",
   "theme.get":

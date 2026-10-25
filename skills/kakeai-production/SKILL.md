@@ -66,7 +66,7 @@ files.
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
-| 3 | Characters and voices | `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching Voice Profile exists (create one when missing); use `character.addFromLibrary` when an on-screen Character is needed |
+| 3 | Characters and voices | `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); use `character.addFromLibrary` when an on-screen Character is needed |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
@@ -161,11 +161,13 @@ a second copy of that contract.
 
 ## 4. Characters, voices and libraries
 
-The character, face set and theme libraries are **read-only** on the agent
-surface. Voice profiles are the exception: besides reading them you may create
-and update them (`voiceProfile.create` / `voiceProfile.update`); only deletion
-stays with the human. `speaker.add` and `speaker.setVoiceProfile` change the
-script's speakers, never a library entry.
+The face set and theme libraries are **read-only** on the agent surface.
+Characters and voice profiles are the exceptions: besides reading them you may
+create and update voice profiles (`voiceProfile.create` / `voiceProfile.update`)
+and replace a Character's voices (`character.setVoices`); voice profile
+deletion and character creation, appearance edits and deletion stay with the
+human. `speaker.add` and `speaker.setVoiceProfile` change the script's
+speakers, never a library entry.
 
 ### Voice preflight
 
@@ -216,7 +218,12 @@ script's speakers, never a library entry.
    existing Audio Takes do not change.
 6. **On-screen Character** — `character.addFromLibrary` remains the path when a
    standing appearance is needed. It copies the Character and its locale voice
-   into the script.
+   into the script. If the entry you need has no voice for the script locale,
+   attach one first with `character.setVoices` (`{ characterId, voices:
+   [{ locale, voiceProfileId }] }`): the Profile must exist and its `locale`
+   must equal the voice `locale`. An empty array clears all voices. Only the
+   voices change; appearances are untouched, and creating the Character itself
+   stays with the human.
 
 A replay of a `script.edit` (same `requestId`) does **not** return `created` IDs.
 If a call containing only `speaker.add` times out, replay it to confirm the
@@ -227,9 +234,11 @@ version, then `script.get` the new version to find the Speaker.
 1. `character.list` returns all library entries; `character.get` returns one by
    `characterId`. Each entry carries `name`, locale-keyed `voices`, and
    appearances (`assetId`, `expression`, `pose`, optional `label`, `faceSetId`).
-2. Choose an entry that has a voice for the edition's locale. A copy without a
-   matching voice gets `voiceProfileId: null`, and TTS on its lines fails with
-   `TTS_INPUT_INVALID`; ask the user instead of guessing a voice.
+2. Choose an entry that has a voice for the edition's locale. If the entry you
+   need has none, attach one with `character.setVoices` before copying (pick
+   the `voiceProfileId` with `voiceProfile.list` / `voiceProfile.listVoices`
+   as in §4 step 3). A copy without a matching voice gets `voiceProfileId:
+   null`, and TTS on its lines fails with `TTS_INPUT_INVALID`.
 3. In the **first** `script.edit`, include
    `{ "op": "character.addFromLibrary", "libraryCharacterId": "..." }`. This
    copies the character into new local Character / Appearance / Speaker IDs.
@@ -262,9 +271,10 @@ accepts a built-in revision or the latest revision of an unarchived user Theme.
 allows saving a document that keeps its existing Theme, even if that Theme is
 archived.
 
-Never create, update, archive or delete library characters, face sets or
-themes, and never delete a Voice Profile. Library changes are the user's job,
-except creating or updating a Voice Profile; agents otherwise only read
+Never create a library character, edit its appearances, archive or delete
+library characters, face sets or themes, and never delete a Voice Profile.
+Library changes are otherwise the user's job, except creating or updating a
+Voice Profile and replacing a Character's voices; agents otherwise only read
 libraries, copy a Character into the script, or assign a Voice Profile to a
 speaker.
 
