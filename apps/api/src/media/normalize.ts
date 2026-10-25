@@ -6,9 +6,11 @@ export async function createRendition(
   outputPath: string,
   kind: AssetKindName,
 ): Promise<void> {
+  // Do not pass -autorotate: FFmpeg 6.x treats the bare boolean option as
+  // taking a value, while newer versions reject a value. Autorotation is on
+  // by default, so omitting it is portable across both versions.
   if (kind === "image") {
     await runFfmpeg([
-      "-autorotate",
       "-i",
       inputPath,
       "-frames:v",
@@ -22,7 +24,6 @@ export async function createRendition(
   }
   if (kind === "video") {
     await runFfmpeg([
-      "-autorotate",
       "-i",
       inputPath,
       "-map",
