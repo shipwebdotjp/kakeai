@@ -10,6 +10,7 @@ import {
   TABLE_ROW_GUIDELINE,
   TEXT_CONSTRAINTS,
   computeContentWarnings,
+  textWidthUnits,
 } from "./warnings";
 
 function tableCue(input: unknown): VisualCue {
@@ -41,6 +42,31 @@ function chartCue(input: unknown): VisualCue {
     input,
   };
 }
+
+describe("textWidthUnits", () => {
+  it("counts halfwidth characters as one unit and fullwidth as two", () => {
+    expect(textWidthUnits("abc")).toBe(3);
+    expect(textWidthUnits("あいう")).toBe(6);
+    expect(textWidthUnits("aあ")).toBe(3);
+  });
+
+  it("counts fullwidth ASCII and emoji as two units", () => {
+    expect(textWidthUnits("Ａ")).toBe(2);
+    expect(textWidthUnits("😀")).toBe(2);
+  });
+
+  it("counts pictographs and regional indicators as two units", () => {
+    expect(textWidthUnits("⌚")).toBe(2);
+    expect(textWidthUnits("✅")).toBe(2);
+    expect(textWidthUnits("⭐")).toBe(2);
+    expect(textWidthUnits("🇯🇵")).toBe(4);
+  });
+
+  it("ignores combining marks and control characters", () => {
+    expect(textWidthUnits("é".normalize("NFD"))).toBe(1);
+    expect(textWidthUnits("a\r")).toBe(1);
+  });
+});
 
 describe("computeContentWarnings", () => {
   it("returns no warnings for a document within the template limits", () => {
@@ -104,6 +130,42 @@ describe("computeContentWarnings", () => {
     ]);
   });
 
+  it("estimates English captions by halfwidth units", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    if (scene.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    scene.lines[0]!.captionText = "a".repeat(
+      CAPTION_CONSTRAINT.charsPerLine * CAPTION_CONSTRAINT.maxLines * 2,
+    );
+    expect(computeContentWarnings(document)).toEqual([]);
+
+    scene.lines[0]!.captionText = "a".repeat(
+      CAPTION_CONSTRAINT.charsPerLine * CAPTION_CONSTRAINT.maxLines * 2 + 1,
+    );
+    expect(
+      computeContentWarnings(document).map((warning) => warning.path),
+    ).toContainEqual(["scenes", 1, "lines", 0, "captionText"]);
+  });
+
+  it("does not warn for English body text that fits on screen", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    const bodyCue = scene.visualCues.find(
+      (cue) => (cue.input as { role?: string }).role === "body",
+    )!;
+    (bodyCue.input as { text: string }).text = "a".repeat(300);
+    expect(computeContentWarnings(document)).toEqual([]);
+
+    (bodyCue.input as { text: string }).text = "a".repeat(
+      TEXT_CONSTRAINTS.body.charsPerLine * TEXT_CONSTRAINTS.body.maxLines * 2 + 1,
+    );
+    expect(
+      computeContentWarnings(document).map((warning) => warning.code),
+    ).toContain("text_overflow");
+  });
+
   it("warns when a table cell exceeds the character guideline", () => {
     const document = validContentDocument();
     document.scenes[1]!.visualCues.push(
@@ -127,6 +189,31 @@ describe("computeContentWarnings", () => {
       0,
       "name",
     ]);
+  });
+
+  it("estimates English table cells by halfwidth units", () => {
+    const document = validContentDocument();
+    document.scenes[1]!.visualCues.push(
+      tableCue({
+        data: {
+          columns: [{ key: "name", label: "項目", type: "text" }],
+          rows: [{ name: "a".repeat(TABLE_CELL_CHAR_GUIDELINE * 2) }],
+        },
+      }),
+    );
+    expect(
+      computeContentWarnings(document).map((warning) => warning.code),
+    ).not.toContain("table_cell_overflow");
+
+    document.scenes[1]!.visualCues[2] = tableCue({
+      data: {
+        columns: [{ key: "name", label: "項目", type: "text" }],
+        rows: [{ name: "a".repeat(TABLE_CELL_CHAR_GUIDELINE * 2 + 1) }],
+      },
+    });
+    expect(
+      computeContentWarnings(document).map((warning) => warning.code),
+    ).toContain("table_cell_overflow");
   });
 
   it("warns when table rows and columns exceed the guidelines", () => {

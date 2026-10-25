@@ -8,4 +8,4 @@
 - [x] 完了条件: `npm run typecheck` と `npm test` を通す。既存の voicevox/aivisspeech の一覧・生成フローがV2形式で変わらず動く。ja版の既存作品がv8として読み出せる
 - [x] OpenAI互換アダプター（`openai-compatible`）: `/v1/audio/speech` 合成、`/v1/models`・`/v1/audio/voices` 一覧、settings `{model}`、snapshot v3
 - [ ] D（将来）: 翻訳の外部取り込み（対象Editionの候補ScriptVersion＋人の承認）
-- [ ] E（将来）: locale別テキスト制約
+- [x] E: locale別テキスト制約 → 文字幅ベースの推定（全角=2/半角=1）で解消。[ADR-0090](../adr/0090-text-overflow-estimate-by-character-width.md)。locale による基準の切り替えは行わない

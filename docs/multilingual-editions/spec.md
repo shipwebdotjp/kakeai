@@ -45,7 +45,7 @@
 
 - アプリ内翻訳 Job・アプリ内翻訳 UI
 - Edition 間の同期表示・未同期検知・再翻訳リスト
-- locale 別のテキスト上限・読速チェック（[../multilingual-voice/todo.md](../multilingual-voice/todo.md) の TODO E）
+- locale 別のテキスト上限・読速チェック（[ADR-0090](../adr/0090-text-overflow-estimate-by-character-width.md) の文字幅推定で対応済み。locale による基準の切り替えは行わない）
 - 素材の言語自動差し替え（`Asset.language`）。素材は当面素材タグで扱う。
 - `en-US` 以外の locale 追加（`localeSchema` に足すだけで追加可能な実装にしておく）
 
