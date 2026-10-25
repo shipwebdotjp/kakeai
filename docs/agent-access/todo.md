@@ -77,9 +77,9 @@
 
 - [x] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。
 
-## 拡張フェーズ（B1〜B9）
+## 拡張フェーズ（B1〜B10）
 
-[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 → B6 → B8 → B9 の順に実装する。B7 は B2 の後に実装中である。
+[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 → B6 → B8 → B9 の順に実装する。B7 は B2 の後に実装中である。B10 は独立して実装済みである。
 
 ### [x] B1 操作契約ダイジェストと版折衝の機構（R1-1）
 
@@ -148,6 +148,16 @@
 - [x] 契約・操作コア・ソケット統合テストで、声だけの話者の作成、`{ key }` 参照、locale 不一致、Character Voice 不一致、`expressionId` の自動消去・拒否、Theme の最新 Revision 制限を固定する。`speaker.add` の replay が `created` を返さないことも確認する。
 - [x] Agent Access 仕様・roadmap・TTS 仕様・多言語声仕様・MP4 制作仕様・操作コア仕様・ユーザーガイド・制作スキルを更新する。DB migration と HTTP API の変更は行わない。
 - 完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`（`speakerId: { key }`）→ TTS → 確定 → レンダーが通り、Character 付き話者の制約と Theme の最新 Revision 制限がテストで固定されている。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B10 スキル配布と版管理（R3-3）
+
+- [x] [ADR 0087](../adr/0087-agent-skills-distribution.md) を追加し、GitHub Release と対になる本リポジトリの不変タグ `vMAJOR.MINOR.PATCH` を配布の正本にする。`main` からの導入、独自 installer、独自 lock 形式を採らない。初回公開版を `v0.1.0` とし、アプリとスキルの共通バージョンにする。root・CLI・MCP の `package.json` は `0.0.0` のままにする。
+- [x] スキルの導入・ロック・配置・復元を `skills@1.7.4` に委譲する。プロジェクト導入は `skills-lock.json` を Git 管理し、`.agents/` を再生成対象として無視する。更新は新しいタグを指定した `add` の再実行、復元は `experimental_install` とする。
+- [x] [スキル互換性履歴](./skill-compatibility.md) を追加し、v0.1.0 の対応リリース、含まれるスキル、各スキルの必須の正規操作、互換性上の注意を記録する。操作スキーマ・Template 契約・ダイジェスト値は複製しない。
+- [x] `skills@1.7.4` を root の固定開発依存に追加し、スキル発見確認用の `npm run skills:check` を追加する。Node.js 要件を `>=22.20.0` に揃え、`.npmrc` の `engine-strict` で強制する。`Makefile` の `skill-install` を削除する。
+- [x] 手動起動の release workflow を追加する。版の形式、互換性履歴の当該版エントリ、型検査、全テスト、スキル発見を確認した後、同じコミットから注釈付きタグと GitHub Release を作る。`v*` タグの更新・削除はリポジトリ設定で禁止する。
+- [x] ユーザーガイドの Agent Access 節を、`skills@1.7.4` を使うプロジェクト導入、グローバル導入、新しいタグでの更新、ロックからの復元の4コマンドへ置き換える。共有ワークスペースの `skills-lock.json` と `.agents/` の扱いを明記する。
+- 完了条件: 空のワークスペースへ公開タグを導入して `skills-lock.json` が生成され、新しいタグで更新でき、ロックから同じ版を復元できる。release workflow が互換性履歴・型検査・全テスト・スキル発見のいずれかが欠けるとタグと Release を作らない。
 
 ### [x] 生成境界の見直し（ADR 0086）
 

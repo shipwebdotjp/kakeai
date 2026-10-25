@@ -313,7 +313,7 @@ stdout は常にコマンド出力専用で、失敗時は空です。スタッ�
 
 ## スキル
 
-Kakeai は、エージェントが制作手順をたどるためのスキル（手順書）をリポジトリに同梱しています。どちらも MCP / CLI の同じ Agent Access 操作だけを使い、HTTP API・ソケット・Prisma を直接使いません。
+Kakeai は、エージェントが制作手順をたどるためのスキル（手順書）をリポジトリで配布しています。どちらも MCP / CLI の同じ Agent Access 操作だけを使い、HTTP API・ソケット・Prisma を直接使いません。
 
 | スキル | 内容 |
 | --- | --- |
@@ -322,16 +322,46 @@ Kakeai は、エージェントが制作手順をたどるためのスキル（�
 
 `kakeai-production` には、声のプリフライト（`voiceProfile.list`、無ければ人間に Profile 作成を依頼）、声だけの話者の作り方（`speaker.add` + `line.add`）、既存話者への声の割り当て（`speaker.setVoiceProfile`）、Face Set / Theme の読み取り、一括TTSの順序（`requestId`、同じ `agentId`、確定までの台本保存禁止）、MP4の合格ライン（render Job 成功 + MP4 Artifact）が含まれます。
 
-使い方は、各スキルのディレクトリを、利用するエージェントランタイムのスキルディレクトリへコピーするかシンボリックリンクします。
+スキルは、Kakeai リポジトリの GitHub Release と対になる不変タグ `vMAJOR.MINOR.PATCH` からのみ導入します。`main` からは導入しません。タグは Kakeai アプリとスキルの共通バージョンです。どのタグでどの操作が必要かは [スキル互換性履歴](https://github.com/shipwebdotjp/kakeai/blob/main/docs/agent-access/skill-compatibility.md) に記録しています。
+
+### プロジェクトへ導入する
 
 ```sh
-# 例: プロジェクト単位で検出させる場合
-mkdir -p .opencode/skills
-ln -s /path/to/kakeai/skills/kakeai-production .opencode/skills/kakeai-production
-ln -s /path/to/kakeai/skills/kakeai-composition .opencode/skills/kakeai-composition
+npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.0 \
+  --skill kakeai-production --skill kakeai-composition
 ```
 
-スキルの検出場所はランタイムごとに異なります（プロジェクト内の `.opencode/skills/`、ホームの `~/.claude/skills/` など）。実際のパスは利用するランタイムの設定に合わせてください。リポジトリの `skills/` は配布元で、Kakeai 本体が実行時に読みに行く場所ではありません。
+エージェントの選択を聞かれたら、利用するエージェントを選びます。`skills-lock.json` が作られ、`.agents/skills/` にスキルの実体が置かれます。共有ワークスペースでは `skills-lock.json` をコミットし、`.agents/` は再生成対象として `.gitignore` に入れます。
+
+### すべてのプロジェクトで使う
+
+```sh
+npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.0 \
+  --skill kakeai-production --skill kakeai-composition -g
+```
+
+グローバル導入は `skills-lock.json` を作りません。更新は、同じ `-g` 付きの `add` を新しいタグで再実行します。
+
+### 新しいタグへ更新する
+
+```sh
+npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.1 \
+  --skill kakeai-production --skill kakeai-composition
+```
+
+`npx skills update` は使いません。`update` はロックに記録された ref を追うだけで、Kakeai の新しいタグへは進みません。更新は必ず新しいタグを指定して `add` を再実行し、`skills-lock.json` の `ref` が新しいタグに変わったことを確認してコミットします。スキルと Kakeai アプリは同じタグに揃えてください。
+
+### ロックから復元する
+
+```sh
+npx skills@1.7.4 experimental_install
+```
+
+`skills@1.7.4` では、ロックからの復元コマンド名が `experimental_install` です（`install` というコマンドはありません）。`skills-lock.json` の `ref` が指す不変タグから `.agents/skills/` を再生成します。clone 直後や `.agents/` を削除した後に実行します。
+
+:::note[エージェント固有のリンク]
+`experimental_install` が復元するのは `.agents/skills/` です。`.claude/skills/` などエージェント固有のディレクトリにもリンクが必要な場合は、同じタグを指定して `add` を再実行してください。
+:::
 
 スキルは `schema.get` を正とし、テンプレート契約や操作の JSON スキーマを複製しません。操作の入力は MCP の `inputSchema` または CLI の検証に従います。
 

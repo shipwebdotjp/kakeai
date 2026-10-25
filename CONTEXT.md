@@ -41,6 +41,10 @@ _Avoid_: admin command, shell API
 A packaged workflow that tells an external agent the order and decision points for producing a Kakeai video through Agent Access, while treating the live schema and operation contracts as authoritative rather than duplicating them.
 _Avoid_: prompt, plugin, template contract
 
+**Skill Release**:
+An immutable `vMAJOR.MINOR.PATCH` Git tag on the Kakeai repository and its paired GitHub Release, used as the only install source for the Production Skills and as the common version of the Kakeai app and skills.
+_Avoid_: latest tag, branch install
+
 **Script Operation**:
 A named, reversible edit applied to a Content Document, such as adding a scene, splitting a line, or changing a cue range. Operations are applied to a document and never persist themselves.
 _Avoid_: JSON patch, mutation, form update

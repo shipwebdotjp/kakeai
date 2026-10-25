@@ -16,7 +16,7 @@ Kakeai は開発中です。作品の作成・台本の編集・素材の取り�
 | 項目 | 要件 |
 | --- | --- |
 | OS | macOS |
-| Node.js | 22 以上 |
+| Node.js | 22.20.0 以上 |
 | npm | Node.js に同梱 |
 
 バージョンを確認します。
@@ -129,5 +129,5 @@ KAKEAI_PORT=5000 KAKEAI_DATA_DIR="$HOME/kakeai-data" npm run start -w @kakeai/ap
 ## トラブルシューティング
 
 - **ポートが使用中**: `KAKEAI_PORT` を別の値に変えて起動します。
-- **Node.js のバージョンが古い**: Node.js 22 以上をインストールします。
+- **Node.js のバージョンが古い**: Node.js 22.20.0 以上をインストールします。
 - **データを初期化したい**: 保存先（既定では `~/Library/Application Support/Kakeai`）を削除して再起動します。作品・素材・出力がすべて消える点に注意してください。

@@ -220,7 +220,7 @@ VisualCueの表示区間はフレーム番号ではなく判別union（Scene全�
 - テンプレート版の不変性：`template.id@version` の意味とレイアウト規約を不変に保ち、見た目や制約を変える場合は同じ版を書き換えず新しい版（`@2`）を追加する。過去の版の描画コードは原則削除しない。ただし、どの保存済みScriptVersionからも参照されていない版は削除してよい（参照ゼロで削除可）。
 - プレビュー・映像出力：HyperFrames。編集データをComposition HTMLの正本にせず、検証済みJSONからHTML/CSS/JavaScriptを派生させる。`@hyperframes/player`をプレビューに、`@hyperframes/producer`をMP4出力に使う。
 - HyperFramesの採用は、実装開始前の別PoCを通過条件にしない。最初の縦切り実装で実素材の取り込み・プレビュー・レンダーを継続的に検証し、問題が出た場合も正本JSONとコンパイラ境界を保って対処または差し替える。
-- 実行環境：Node.js 22以上、FFmpeg、HyperFramesで指定したChrome、明示的に管理した日本語フォントを必要とする。依存バージョンは通常のlockfileで管理し、Jobには障害調査用の実行版を記録する。バイト単位の出力再現性は要件にせず、更新時は代表素材でレンダー回帰テストを実行する。
+- 実行環境：Node.js 22.20.0以上、FFmpeg、HyperFramesで指定したChrome、明示的に管理した日本語フォントを必要とする。依存バージョンは通常のlockfileで管理し、Jobには障害調査用の実行版を記録する。バイト単位の出力再現性は要件にせず、更新時は代表素材でレンダー回帰テストを実行する。
 - リソース上限：サーバー設定の既定値を、アップロード1ファイルあたり4GiB、動画・音声の最大長30分、入力映像の最大寸法3840x2160、管理領域の警告しきい値80GiBとする。出力は常に1920x1080である。上限値は環境設定で変更可能にし、80GiB到達は新規書込みを止めずUIとhealthで警告する。
 - 安全性：無認証のローカルAPIをループバックに束縛し、JSON／アップロードAPIには厳密な `Host` と `Origin` の検証を要求する。素材・Artifact・published CompositionVersion bundleのcontent URLは、同一オリジンかつ `HttpOnly; SameSite=Strict` のメディアセッションCookieで認可し、JSON APIではCookieだけによる認可を許可しない。DNSリバインディングは `Host` 検証で、CSRFと素材漏洩は `Origin` 検証と `SameSite=Strict` Cookieで防ぐ。素材やArtifactの保存パスは内容ハッシュ由来とし、利用者入力のファイル名をパス生成に使わない。利用者または将来のAIが任意のHTML/JavaScriptをCompositionへ直接書き込むことは許可しない。例外はKakeaiが管理し不変bundleへpublishしたCompositionVersionだけであり、外部URL・絶対パスを含まないことを検証する。Zodで検証したVisualTemplate入力だけから、アプリが管理するHTMLを生成する。
 

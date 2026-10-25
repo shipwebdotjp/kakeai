@@ -4,9 +4,17 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,6 +28,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check skill discovery
+        run: npm run skills:check
 
       - name: Run typecheck
         run: npm run typecheck

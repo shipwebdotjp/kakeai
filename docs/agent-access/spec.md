@@ -107,7 +107,12 @@
 - リポジトリの `skills/kakeai-production/` と `skills/kakeai-composition/` に、外部エージェント向けの手順書（スキル）を置く。`kakeai-production` は台本・キャラクター・素材・Cue・TTS・検証・レンダーをまたぐ制作フロー、`kakeai-composition` は再利用する Composition の authoring を扱う。
 - スキルは束縛ではない。実行時の入口は MCP または CLI のままとし、スキルはその操作の呼び出し順と判断点だけを定める。HTTP API・ローカルソケット・Prisma を直接使う手順を書かない。
 - テンプレート契約・操作の入出力スキーマをスキルへ複製しない。`schema.get`、`template.get`、MCP の `inputSchema` / CLI の検証を正とする。
-- 配布はリポジトリの `skills/` を配布元とし、利用するエージェントランタイムのスキルディレクトリへディレクトリごとコピーまたはシンボリックリンクして検出させる。検出先はランタイム依存であり、特定ベンダーのパスを前提にしない。アプリは実行時に `skills/` を読みに行かない。
+- 配布元は本リポジトリだけとし、GitHub Release と対になる `vMAJOR.MINOR.PATCH` の不変タグからのみ導入する。`main` やその他の可変 ref を導入元にしない。タグは Kakeai アプリとスキルの共通バージョンであり、初回公開版は `v0.1.0` とする。root・CLI・MCP の `package.json` は当面 `0.0.0` のままとし、リリース版はタグで識別する（[ADR 0087](../adr/0087-agent-skills-distribution.md)）。
+- 導入・ロック・配置・復元は `skills@1.7.4` に委譲し、独自の installer や lock 形式を作らない。代表コマンドは `npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.0 --skill kakeai-production --skill kakeai-composition` である。プロジェクト導入は `skills-lock.json` を Git 管理し、`.agents/` は再生成対象として Git 管理しない。グローバル導入（`-g`）は `skills-lock.json` を作らない。
+- 更新は `skills update` で可変 ref に追従させず、新しいタグを指定して同じ `add` を再実行する。復元は `skills@1.7.4` の `experimental_install` を使う。この版に `install` コマンドはない。
+- 各公開タグの互換性は [スキル互換性履歴](./skill-compatibility.md) に記録する。対応リリース、含まれるスキル、必須の正規操作、互換性上の注意だけを書き、操作スキーマ・Template 契約・ダイジェスト値は複製しない。
+- リリースは手動起動の workflow で行い、版の形式、互換性履歴の当該版エントリ、型検査、全テスト、スキル発見を確認した後、同じコミットから注釈付きタグと GitHub Release を作る。`v*` タグの更新・削除はリポジトリ設定で禁止する。
+- リポジトリの Node.js 要件は `>=22.20.0` とし、`.npmrc` の `engine-strict` でインストール時に強制する。`skills@1.7.4` をスキル発見確認用の固定開発依存に置く。アプリは実行時に `skills/` を読みに行かない。
 - 導入手順は [ユーザーガイドのエージェント連携](../../user-guide/docs/agent-access.md) に記載する。
 
 ## ローカル制御ソケット
@@ -402,4 +407,4 @@
 ## 将来
 
 - アプリ内ネイティブの AI 編集機能が必要になった場合は、同じ操作コアの上に任意の束縛として載せる。操作コアを変更しない限り、MCP・CLI を置き換えない。
-- 操作契約のダイジェストとプロトコル版、素材検索の索引化、Job 操作の一般化、スキル配布などの拡張候補は [roadmap.md](./roadmap.md) に整理する。Theme・Face Set・Voice Profile の読み取りと声の割り当て（B8 / B9）は実装済みである。TTS の冪等化と Take 添付の一体化（`tts.attachBulk`）は実装済みで、視覚確認（R3-4）は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) へ切り出して実装した。制作履歴・復旧（R2-4）は `script.listVersions` / `script.restore` / `work.clone` として実装済みである。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。
+- 操作契約のダイジェストとプロトコル版、素材検索の索引化、Job 操作の一般化などの拡張候補は [roadmap.md](./roadmap.md) に整理する。スキル配布（R3-3）は [ADR 0087](../adr/0087-agent-skills-distribution.md) と [スキル互換性履歴](./skill-compatibility.md) に従って実装済みである。Theme・Face Set・Voice Profile の読み取りと声の割り当て（B8 / B9）は実装済みである。TTS の冪等化と Take 添付の一体化（`tts.attachBulk`）は実装済みで、視覚確認（R3-4）は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) へ切り出して実装した。制作履歴・復旧（R2-4）は `script.listVersions` / `script.restore` / `work.clone` として実装済みである。実装時は本仕様と [todo.md](./todo.md) に詳細を落とす。

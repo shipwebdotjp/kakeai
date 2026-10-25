@@ -18,6 +18,7 @@ apps/api/prisma/*.db-journal
 apps/api/prisma/*.db-wal
 apps/api/prisma/*.db-shm
 
+# Agent skills are regenerated from skills-lock.json
 .agents/
 
 # Playwright CLI scratch output
