@@ -173,7 +173,24 @@ MCP の二重出力でコストが増えるため）。
 
 完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`
 （`speakerId: { key }`）→ 一括TTS → 確定 → レンダーまで通る。声付きキャラクターの
-経路も維持され、Theme・Face Set・Voice Profile の管理は人専用のままである。
+経路も維持され、Theme・Face Set・Voice Profile の管理は人専用のままである
+（P5 時点。Voice Profile の作成・更新は P6 で公開した）。
+
+## P6 Voice Profile の作成・更新公開（完了）
+
+新規作品で対象 locale の Voice Profile が無い場合に、エージェントが
+`voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成し、
+`speaker.add` で割り当てられるようにする。削除は人専用のまま残す。
+詳細は [Agent Access の B11](../agent-access/todo.md) と
+[ADR 0088](../adr/0088-agent-voice-profile-writes.md) を正とする。
+
+- [x] MP4主線の声の確認（手順 4）と前提表を、`listVoices` → `create` の手順へ更新する
+- [x] スキルとユーザーガイドの「Profile が無ければ人間に依頼する」を新手順へ置き換える
+- [x] spec の P5 完了記録と roadmap のライブラリ管理表を B11 に合わせて更新する
+- [x] `npm run typecheck` と `npm test` を通す
+
+完了条件: 新規作品で `voiceProfile.listVoices` → `voiceProfile.create` →
+`speaker.add` → `line.add` → 一括TTS → 確定 → レンダーまでエージェントだけで通る。
 
 ## 将来（今回の非ゴール）
 

@@ -83,7 +83,7 @@
 | 前提 | エージェントの確認方法 | 欠けた場合 |
 | --- | --- | --- |
 | Kakeai が起動している | ソケット接続。失敗は `AGENT_APP_UNAVAILABLE` | アプリ起動を依頼する |
-| TTS 対象の話者に有効な声がある | 既存作品は `script.get` の `speakers[].voiceProfileId` を確認し、`voiceProfile.get` で実在と locale を確かめる。新規作品は `voiceProfile.list` で対象 locale と完全一致する Profile を探し、立ち絵が必要なら `character.list` の `voices` も確認する | 新規で Profile が無ければ、人間に Voice Profile の作成を依頼する。立ち絵が必要なら声付きキャラクターの作成も依頼する。既存作品は有効な声を持つ話者を再利用する。TTS を開始しない |
+| TTS 対象の話者に有効な声がある | 既存作品は `script.get` の `speakers[].voiceProfileId` を確認し、`voiceProfile.get` で実在と locale を確かめる。新規作品は `voiceProfile.list` で対象 locale と完全一致する Profile を探し、立ち絵が必要なら `character.list` の `voices` も確認する | 新規で Profile が無ければ、`voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成する。立ち絵が必要なら声付きキャラクターの作成を人間に依頼する。既存作品は有効な声を持つ話者を再利用する。TTS を開始しない |
 | TTS Adapter が利用できる | 事前確認の操作は無い。TTS Job の `TTS_ENGINE_UNAVAILABLE` で判明 | エンジン起動を依頼する。Adapter 設定は変更しない |
 | 素材がある、または取り込める | `asset.list` / `asset.import`。参照前に `asset.get` で `ready` を確認 | 素材を用意するか、取り込み先を確認する |
 | テーマが決まっている | 既存作品の `script.get` から参照をコピー、または `theme.list` / `theme.get` で最新 Revision を確認して選ぶ | 既定テーマで進める。人間の指定があれば従う |
@@ -99,7 +99,7 @@
 | 1 | `schema.get` | `contentSchemaVersion`、Template、`warningCodes`、`agentOperations`、`schemaDigest` / `operationDigest` を取得 |
 | 2 | `work.create` | Work と Edition、初期 ScriptVersion を取得。ja-JP を既定とする |
 | 3 | `script.get` | 対象 Edition の current ScriptVersion と `content.locale` を確認 |
-| 4 | 声の確認 | 既存の Speaker に `voiceProfileId` があればそれを使う。無ければ `voiceProfile.list` で対象 locale と完全一致する Profile を選ぶ。立ち絵が必要なら `character.list` で対象 locale の声を持つキャラクターを選ぶ。どちらも無ければ停止 |
+| 4 | 声の確認 | 既存の Speaker に `voiceProfileId` があればそれを使う。無ければ `voiceProfile.list` で対象 locale と完全一致する Profile を選ぶ。無ければ `voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成する。立ち絵が必要なら `character.list` で対象 locale の声を持つキャラクターを選ぶ。どちらも無ければ停止 |
 | 5 | `script.edit`（1回目） | 声だけの話者なら `speaker.add`（既存 Profile）と `line.add`（`speakerId: { key }`）を同じ呼び出しに入れる。立ち絵が必要なら `character.addFromLibrary` で声付きキャラクターをコピーし、`created.speakerIds` を取得する。既存の有効な話者を使う場合は省略可 |
 | 6 | `script.edit`（2回目以降） | Scene・セリフ・Cue・BGM・立ち絵を追加。話者 ID は 5 で得た ID または `{ key }` を使う。表・グラフ・フロー・効果・入れ子の入力は `template.get` の JSON Schema と例から組み立てる |
 | 7 | `asset.list` / `asset.import` / `job.wait` / `asset.get` | 参照する素材がすべて `ready` |
@@ -164,10 +164,10 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 `skills/kakeai-production/SKILL.md` と `user-guide/docs/agent-access.md` に次を明記する。
 
 - MP4主線の最初に `voiceProfile.list` で対象 locale と完全一致する Voice Profile を確認する。
-- Profile が無い場合は TTS を開始せず、人間に Voice Profile の作成を依頼する。立ち絵が必要な場合は、声付きキャラクターの作成も依頼する。
+- Profile が無い場合は、`voiceProfile.listVoices` で声候補を探して `voiceProfile.create` で作成する（`locale` は台本の locale と完全一致させ、`openai-compatible` では `settings.model` を `voiceProfile.listModels` で選ぶ）。立ち絵が必要な場合は、声付きキャラクターの作成を人間に依頼する。
 - 声だけの話者は、`speaker.add` と `line.add`（`speakerId: { key }`）を同じ `script.edit` に入れて作る。既存話者へは `speaker.setVoiceProfile` で割り当てる。
 - 立ち絵が必要な場合の標準は `character.addFromLibrary` によるコピーである。
-- Voice Profile の作成・更新・削除は人専用であり、エージェントは既存 Profile を割り当てるだけである。
+- Voice Profile の削除は人専用であり、エージェントは作成・更新と既存 Profile の割り当てだけを行う。
 
 ### R3. 一括TTSの順序を固定する
 
@@ -357,4 +357,4 @@ Theme / FaceSet / Voice の管理（作成・更新・削除）は P5 の対象�
   操作コアへ追加した。新規作品は、対象 locale の既存 Voice Profile を割り当てた
   声だけの話者でも TTS できる。立ち絵が必要な場合だけ
   `character.addFromLibrary` を使う。Theme は最新公開 Revision だけを選択でき、
-  ライブラリと Profile の管理は人専用のままである。
+  ライブラリと Profile の削除は人専用のままである（Voice Profile の作成・更新は B11 で公開した）。

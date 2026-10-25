@@ -57,8 +57,8 @@ files.
    `voiceProfileId` (`script.get` → `speakers[]`), and check that Profile with
    `voiceProfile.get`. For a new Work, call `voiceProfile.list` and choose a
    Profile whose `locale` exactly matches the target locale. If no Profile
-   exists, stop before starting TTS and ask the human to create a Voice Profile
-   in the app (§4). Do not queue TTS for voice-less speakers.
+   exists, pick a voice with `voiceProfile.listVoices` and create one with
+   `voiceProfile.create` (§4). Do not queue TTS for voice-less speakers.
 
 ## 2. Order of work
 
@@ -66,7 +66,7 @@ files.
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
-| 3 | Characters and voices | `voiceProfile.list`, `character.list`, `character.get`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching Voice Profile exists; use `character.addFromLibrary` when an on-screen Character is needed |
+| 3 | Characters and voices | `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching Voice Profile exists (create one when missing); use `character.addFromLibrary` when an on-screen Character is needed |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
@@ -161,8 +161,10 @@ a second copy of that contract.
 
 ## 4. Characters, voices and libraries
 
-The character, voice profile, face set and theme libraries are **read-only** on
-the agent surface. `speaker.add` and `speaker.setVoiceProfile` change the
+The character, face set and theme libraries are **read-only** on the agent
+surface. Voice profiles are the exception: besides reading them you may create
+and update them (`voiceProfile.create` / `voiceProfile.update`); only deletion
+stays with the human. `speaker.add` and `speaker.setVoiceProfile` change the
 script's speakers, never a library entry.
 
 ### Voice preflight
@@ -175,9 +177,18 @@ script's speakers, never a library entry.
    choose a Profile whose `locale` exactly equals the target locale (for example
    `ja-JP`; `en` does not match `en-US`). Use `character.list` only when an
    on-screen Character is also needed.
-3. If no matching Profile exists, **stop before TTS** and ask the human to
-   create a Voice Profile in the app. Do not start TTS with a voice-less
-   speaker.
+3. If no matching Profile exists, create one: call `voiceProfile.listVoices`
+   with the adapter you will use (`voicevox` / `aivisspeech` /
+   `openai-compatible`) and pick a `voiceId` from the result. For
+   `openai-compatible`, first call `voiceProfile.listModels` to choose the
+   `settings.model`. Then call `voiceProfile.create` with `name`, `adapterId`,
+   the picked `voiceId`, `locale` exactly equal to the script locale, and
+   `settings` (`{ "model": "<model>" }` for `openai-compatible`, `{}` for the
+   others). A wrong voice can be fixed afterwards with `voiceProfile.update`
+   (`adapterId` is immutable; an unknown id is `RESOURCE_NOT_FOUND`). Do not
+   start TTS with a voice-less speaker. Only when no voice fits at all — for
+   example the engine is down (`TTS_ENGINE_UNAVAILABLE`: ask the human to
+   start it) — stop before TTS and ask the human.
 4. **Standard voice-only speaker flow** — in one `script.edit`, create the
    speaker and its first line together. The `key` lets `line.add` reference the
    speaker in the same call:
@@ -251,9 +262,11 @@ accepts a built-in revision or the latest revision of an unarchived user Theme.
 allows saving a document that keeps its existing Theme, even if that Theme is
 archived.
 
-Never create, update, archive or delete library characters, voices, face sets or
-themes. Library changes are the user's job; agents only read them, copy a
-Character into the script, or assign an existing Voice Profile to a speaker.
+Never create, update, archive or delete library characters, face sets or
+themes, and never delete a Voice Profile. Library changes are the user's job,
+except creating or updating a Voice Profile; agents otherwise only read
+libraries, copy a Character into the script, or assign a Voice Profile to a
+speaker.
 
 ## 5. Assets
 
@@ -314,15 +327,16 @@ Character into the script, or assign an existing Voice Profile to a speaker.
 
 TTS is available only through the adapter the user already configured
 (`voicevox`, `aivisspeech` or `openai-compatible`). You cannot change endpoints,
-credentials, adapter settings, or voice profiles. Kakeai ships no other
+credentials or adapter settings, but you may create and update voice profiles
+(`voiceProfile.create` / `voiceProfile.update`). Kakeai ships no other
 generation adapter; images, video and music are yours to produce with your own
 tools and bring in through `asset.import`.
 
 1. Make sure the target script is saved and every target speaker has a
    `voiceProfileId` whose Profile exists and matches the script locale (§4).
    Both TTS operations take a `scriptVersionId`; unsaved local edits are not
-   visible to them. If any target speaker has no voice, stop and ask the human
-   to create a Voice Profile — do not start TTS.
+   visible to them. If any target speaker has no voice, create a Voice Profile
+   first (§4, step 3) — do not start TTS with a voice-less speaker.
 2. `tts.create` synthesizes one Narration Segment:
    - Required: `scriptVersionId`, `narrationSegmentId`.
    - Optional: `speechText` (defaults to the saved segment text),
@@ -421,6 +435,7 @@ tools and bring in through `asset.import`.
 | `SCRIPT_BASE_STALE` | The base is no longer current. For `script.edit`, `script.get` the current version and re-apply the **same intent** to the new base; reuse the `requestId` only if the failed call created no version (it did not), and use a new one if the operations changed. For `script.save`, omitting `baseScriptVersionId` keeps last-write-wins; when it is given, a mismatch is `SCRIPT_BASE_STALE` — re-read the current version and decide whether the replacement is still wanted. For `script.restore`, the same applies to its optional base guard: re-read `script.listVersions` (`currentScriptVersionId`) and decide whether restoring the old content is still wanted. |
 | `IDEMPOTENCY_CONFLICT` | A version with that `requestId` already exists with different input. Never reuse the ID with different content. Read the current version (`script.get` with `languageEditionId`) or the history (`script.listVersions`) and continue from there. |
 | `work.create` / `work.clone` timeout | These operations have no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `work.list` and look for the created Work (same title and `createdAt` at or after your request) or child (`parentWorkId` = the source Work). Retry only when you are sure nothing was created; if several candidates match, ask the human instead of guessing. |
+| `voiceProfile.create` timeout | It has no `requestId` either. After `AGENT_REQUEST_TIMEOUT`, call `voiceProfile.list` and look for the created Profile (same `name` and `createdAt` at or after your request). Retry only when you are sure nothing was created. |
 | `script.save` timeout | It has no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `script.get` / `script.listVersions` to check whether the new version landed, then retry only if it did not. |
 | `speaker.add`-only edit timeout | Replaying `script.edit` with the same `requestId` returns the version but an empty `created`. Call `script.get` on that version to find the new Speaker before using it. |
 | `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `work.list`, `job.list` — pass `{ kind: "tts" }` for TTS Jobs — `asset.list`, `composition.get`) and only then retry. The exceptions are `script.edit` and `script.restore`, which may be replayed immediately with the same `requestId`. |

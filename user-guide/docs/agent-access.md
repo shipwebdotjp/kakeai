@@ -5,12 +5,12 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、既存 Voice Profile の話者への割り当て、Theme / Face Set / Voice Profile の読み取り、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、ライブラリの管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピー、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile の削除、Character・Face Set・Theme の管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
 - Kakeai アプリが同じユーザーで起動していること。MCP サーバーはアプリのローカル制御ソケットへ接続するだけで、アプリを自動起動しません。
-- TTS を使う場合は、**対象 locale と完全一致する Voice Profile**（既存 Profile を声だけの話者へ割り当てる）または**対象 locale の声を持つキャラクター**が必要です。どちらも無い場合、エージェントは TTS を開始せず、Voice Profile の作成を依頼して停止します。立ち絵が必要な場合は、声付きキャラクターの作成も依頼します。
+- TTS を使う場合は、**対象 locale と完全一致する Voice Profile**（既存 Profile を声だけの話者へ割り当てる。無ければエージェントが声を選んで作成する）または**対象 locale の声を持つキャラクター**が必要です。どちらも無い場合、エージェントは TTS を開始せず停止します。立ち絵が必要な場合は、声付きキャラクターの作成を依頼します。
 - TTS を使う場合は、利用者が設定した TTS エンジン（VOICEVOX / AivisSpeech / OpenAI 互換）が起動していること。事前確認の操作は無く、`TTS_ENGINE_UNAVAILABLE` で判明します。
 - リポジトリで `npm install` が完了していること。
 - 既定のソケットは `<データディレクトリ>/agent/agent.sock` です。データディレクトリを変えている場合は `KAKEAI_DATA_DIR` を設定してください。
@@ -115,9 +115,9 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 
 ### TTS（音声合成）
 
-TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。接続先・認証情報・アダプター設定・Voice Profile 自体の作成や編集はエージェントから行えませんが、既存の Voice Profile を話者へ割り当てることはできます（[声だけの話者](#声だけの話者)）。TTS 以外の生成アダプターは現時点でありません。画像などの生成はエージェント側の道具で行い、`kakeai_asset_import` で素材として取り込みます。Kakeai は生成サービスの認証情報を保持しません。
+TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。接続先・認証情報・アダプター設定の変更と Voice Profile の削除はエージェントから行えませんが、Voice Profile の作成・更新と話者への割り当てはできます（[声だけの話者](#声だけの話者)）。TTS 以外の生成アダプターは現時点でありません。画像などの生成はエージェント側の道具で行い、`kakeai_asset_import` で素材として取り込みます。Kakeai は生成サービスの認証情報を保持しません。
 
-対象の話者に `voiceProfileId` が無い場合は TTS を開始しないでください。既存作品は `kakeai_script_get` の `speakers[]` と `kakeai_voice_profile_get` で有効な声を確認します。新規作品は `kakeai_voice_profile_list` で対象 locale と完全一致する Profile を探し、無ければ人間に Voice Profile の作成を依頼して停止します（[声だけの話者](#声だけの話者)）。立ち絵が必要な場合は、声付きキャラクターの作成も依頼します（[キャラクター](#キャラクター)）。
+対象の話者に `voiceProfileId` が無い場合は TTS を開始しないでください。既存作品は `kakeai_script_get` の `speakers[]` と `kakeai_voice_profile_get` で有効な声を確認します。新規作品は `kakeai_voice_profile_list` で対象 locale と完全一致する Profile を探し、無ければ声候補から選んで作成します（[声だけの話者](#声だけの話者)）。立ち絵が必要な場合は、声付きキャラクターの作成を依頼します（[キャラクター](#キャラクター)）。
 
 1. 対象の台本を保存し、`scriptVersionId` を用意します。**一括生成から確定までは台本を書き換えないでください。**確定前に保存し直すと元の版が最新でなくなり、確定は `SCRIPT_BASE_STALE` で停止します。
 2. 1 セリフなら `kakeai_tts_create`（`scriptVersionId` と `narrationSegmentId`、任意で `speechText` / `voiceId` / `speedScale`）を使います。`speedScale` の既定は 1.0、範囲は 0.5〜2.0 です。通常は `speechText` を省略し、保存済みの読み上げテキストを使います。上書きする場合は、添付前にセリフ側も同じテキストへ更新します。
@@ -130,7 +130,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 台本の Speaker は、Character を持たない「声だけの話者」として作れます。立ち絵が不要なナレーションは、この経路が最も少ない往復で済みます。利用者名は「ナレーター（声だけの話者）」でもかまいません。
 
-1. `kakeai_voice_profile_list` で、台本の `locale` と**完全一致**する `locale` を持つ Profile を選びます。`ja-JP` と `en-US` は別物で、`en` のような部分一致はしません。
+1. `kakeai_voice_profile_list` で、台本の `locale` と**完全一致**する `locale` を持つ Profile を選びます。`ja-JP` と `en-US` は別物で、`en` のような部分一致はしません。無ければ `kakeai_voice_profile_list_voices`（`adapterId`、OpenAI 互換の絞り込みには `kakeai_voice_profile_list_models` で選んだ `model`）で声候補を探し、`kakeai_voice_profile_create`（`name`・`adapterId`・`voiceId`・`locale`・`settings`。OpenAI 互換は `settings.model` が必須）で作成します。声を選び間違えたら `kakeai_voice_profile_update` で直せます（`adapterId` は変更できません）。
 2. 1 回の `kakeai_script_edit` に `speaker.add` と `line.add` を入れます。`speaker.add` の `key` を `line.add` の `speakerId` で参照できます。
 
 ```json
@@ -151,7 +151,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 - Voice Profile は実在し、台本の `locale` と完全一致する必要があります。参照先が無い場合は `EDIT_TARGET_NOT_FOUND`、locale が違う場合は `EDIT_PRECONDITION_FAILED` です。
 - Character を持つ話者は、その Character の同じ locale の声と一致する Profile しか設定できません。Character にその locale の声が無い場合は `null` への解除だけができます。Character に声がある場合は `null` にできません。不一致は `EDIT_PRECONDITION_FAILED` です。
 - 声の変更は以後の TTS にだけ影響し、既存の Audio Take は変わりません。
-- Voice Profile の作成・更新・削除は UI で人間が行います。エージェントは既存 Profile を割り当てるだけです。
+- Voice Profile の削除は UI で人間が行います。エージェントは作成・更新と話者への割り当てができます。更新は以後の TTS にだけ影響し、既存の Audio Take は変わりません。
 
 声だけの話者へ切り替えるときは `expressionId` を指定しないでください。`line.setSpeaker` は自動で消しますが、`line.add` は声だけの話者への明示的な `expressionId` を拒否し、`line.setExpression` も声だけの話者には指定できません。
 
@@ -227,6 +227,10 @@ kakeai-agent --help
 | `kakeai_asset_import` | `kakeai-agent asset.import --input ...` |
 | `kakeai_character_list` | `kakeai-agent character.list` |
 | `kakeai_voice_profile_list` | `kakeai-agent voiceProfile.list` |
+| `kakeai_voice_profile_list_voices` | `kakeai-agent voiceProfile.listVoices --input '{"adapterId":"voicevox"}'` |
+| `kakeai_voice_profile_list_models` | `kakeai-agent voiceProfile.listModels --input '{"adapterId":"openai-compatible"}'` |
+| `kakeai_voice_profile_create` | `kakeai-agent voiceProfile.create --input ...` |
+| `kakeai_voice_profile_update` | `kakeai-agent voiceProfile.update --input ...` |
 | `kakeai_theme_list` | `kakeai-agent theme.list` |
 | `kakeai_face_set_list` | `kakeai-agent faceSet.list` |
 | `kakeai_tts_create` | `kakeai-agent tts.create --input ...` |
@@ -320,7 +324,7 @@ Kakeai は、エージェントが制作手順をたどるためのスキル（�
 | [`skills/kakeai-production/`](https://github.com/shipwebdotjp/kakeai/tree/main/skills/kakeai-production) | 1 本の動画を作る横断手順。`schema.get` → 作品と台本 → キャラクター → 素材 → 映像演出・立ち絵・BGM → TTS → 検証 → レンダー、および再送・古い基準版の扱い |
 | [`skills/kakeai-composition/`](https://github.com/shipwebdotjp/kakeai/tree/main/skills/kakeai-composition) | 再利用する Composition の draft 作成・QA・publish と、台本からの参照 |
 
-`kakeai-production` には、声のプリフライト（`voiceProfile.list`、無ければ人間に Profile 作成を依頼）、声だけの話者の作り方（`speaker.add` + `line.add`）、既存話者への声の割り当て（`speaker.setVoiceProfile`）、Face Set / Theme の読み取り、一括TTSの順序（`requestId`、同じ `agentId`、確定までの台本保存禁止）、MP4の合格ライン（render Job 成功 + MP4 Artifact）が含まれます。
+`kakeai-production` には、声のプリフライト（`voiceProfile.list`、無ければ `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作成）、声だけの話者の作り方（`speaker.add` + `line.add`）、既存話者への声の割り当て（`speaker.setVoiceProfile`）、Face Set / Theme の読み取り、一括TTSの順序（`requestId`、同じ `agentId`、確定までの台本保存禁止）、MP4の合格ライン（render Job 成功 + MP4 Artifact）が含まれます。
 
 スキルは、Kakeai リポジトリの GitHub Release と対になる不変タグ `vMAJOR.MINOR.PATCH` からのみ導入します。`main` からは導入しません。タグは Kakeai アプリとスキルの共通バージョンです。どのタグでどの操作が必要かは [スキル互換性履歴](https://github.com/shipwebdotjp/kakeai/blob/main/docs/agent-access/skill-compatibility.md) に記録しています。
 

@@ -163,3 +163,13 @@
 
 - [x] 課金の有無を公開条件から外し、利用者が設定した接続先だけを使うことを条件にする。[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md) を追加し、ADR 0074 / 0077 を amendment する。Agent Access 仕様・roadmap・ユーザーガイド・制作スキルを同じ境界へ揃える。現時点（B2）では Kakeai は接続先（URL）だけを知り、生成サービスの認証情報を保持しない。
 - 完了条件: 仕様・ガイド・スキルに金額を根拠にした禁止が残らず、可逆性と接続先の帰属で境界が説明されている。
+
+### [x] B11 Voice Profile の作成・更新公開（ADR 0088）
+
+- [x] [ADR 0088](../adr/0088-agent-voice-profile-writes.md) を追加し、Voice Profile の作成・更新の公開と削除の人専用維持を決定する
+- [x] 契約に `voiceProfile.listVoices` / `voiceProfile.listModels`（read）と `voiceProfile.create` / `voiceProfile.update`（mutation）を追加する。入出力は HTTP の声・モデル一覧と作成・更新契約と同じ形とし、`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスに 4 操作を追加し、既存の `services/voice-profiles.ts`（声・モデル一覧、作成、更新）をそのまま呼ぶ。`create` は `requestId` を持たず冪等台帳に載せない（`work.create` と同じ扱い）。未知の更新対象は `RESOURCE_NOT_FOUND`、エンジン接続失敗は `TTS_ENGINE_UNAVAILABLE` とする
+- [x] MCP の説明文を 4 操作分追加し、`voiceProfile.list` の「作成・更新・削除は公開しない」を改める。CLI はカタログ導出のため変更しない
+- [x] ソケット統合テストで、一覧取得、作成→取得→話者割当て、モデル付き作成、入力不正、更新成功・対象不明・`adapterId` 変更拒否、エンジン停止時の `TTS_ENGINE_UNAVAILABLE` を固定する。既存の「Voice Profile 書き込み未登録」テストを新方針へ更新する
+- [x] Agent Access 仕様・TTS 仕様・MP4 制作仕様・制作スキル・ユーザーガイドの「Profile が無ければ人間に依頼する」手順を `listVoices` → `create` → `speaker.add` へ置き換える。DB migration と HTTP API の変更は行わない
+- 完了条件: 新規作品で `voiceProfile.listVoices` → `voiceProfile.create` → `speaker.add` → `line.add` → TTS → 確定 → レンダーが通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

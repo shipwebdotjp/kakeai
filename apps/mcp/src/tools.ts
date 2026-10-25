@@ -118,9 +118,17 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "faceSet.get":
     "Face Set 1件を、Face Layer と Expression Preset 付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
   "voiceProfile.list":
-    "Voice Profile の一覧を、Adapter・voice ID・locale・設定付きで返す。声の割当て前に、台本の locale と一致する Profile を選ぶ。Profile の作成・更新・削除は公開しない。",
+    "Voice Profile の一覧を、Adapter・voice ID・locale・設定付きで返す。声の割当て前に、台本の locale と一致する Profile を選ぶ。無ければ voiceProfile.listVoices で声候補を探して voiceProfile.create で作る。Profile の削除は公開しない。",
   "voiceProfile.get":
     "Voice Profile 1件を返す。存在しない ID は RESOURCE_NOT_FOUND。",
+  "voiceProfile.listVoices":
+    "TTS Adapter の声候補一覧を返す。voiceProfile.create の `voiceId` 選びに使う。接続できない Adapter は TTS_ENGINE_UNAVAILABLE。",
+  "voiceProfile.listModels":
+    "TTS Adapter のモデル候補一覧を返す。`openai-compatible` の voiceProfile.create の `settings.model` 選びに使う。接続できない Adapter は TTS_ENGINE_UNAVAILABLE。",
+  "voiceProfile.create":
+    "Voice Profile を新規作成して返す。`adapterId`・実在する `voiceId`（voiceProfile.listVoices で確認）・`locale`（台本の locale と一致させる）・`settings`（`openai-compatible` は `model` 必須）を指定する。タイムアウト後は voiceProfile.list で確認してから再実行する。",
+  "voiceProfile.update":
+    "Voice Profile の `name`・`voiceId`・`locale`・`settings` を更新して返す。`adapterId` は変更できない。存在しない ID は RESOURCE_NOT_FOUND。反映は以後の TTS だけに影響し、既存の Audio Take は変えない。",
 };
 
 function describeOperation(

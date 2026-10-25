@@ -26,7 +26,16 @@ import { assetTagsSchema } from "./asset";
 import { assetListInputSchema, assetListPageSchema } from "./asset-list";
 import { characterLibraryEntrySchema } from "./character-library";
 import { faceSetSchema } from "./face-set";
-import { voiceProfileSchema } from "./voice-profile";
+import {
+  createVoiceProfileRequestSchema,
+  modelListSchema,
+  updateVoiceProfileRequestSchema,
+  voiceAdapterIdSchema,
+  voiceIdSchema,
+  voiceListSchema,
+  voiceProfileExtrasSchema,
+  voiceProfileSchema,
+} from "./voice-profile";
 import { visualThemeDefinitionSchema } from "./content/theme";
 import {
   compositionAuthoringContextSchema,
@@ -384,6 +393,10 @@ export const agentOperationNames = [
   "faceSet.get",
   "voiceProfile.list",
   "voiceProfile.get",
+  "voiceProfile.listVoices",
+  "voiceProfile.listModels",
+  "voiceProfile.create",
+  "voiceProfile.update",
   "preview.frame",
   "preview.scriptFrame",
   "preview.assetFrame",
@@ -414,6 +427,8 @@ export const agentReadOperationNames = [
   "faceSet.get",
   "voiceProfile.list",
   "voiceProfile.get",
+  "voiceProfile.listVoices",
+  "voiceProfile.listModels",
   "preview.frame",
   "preview.scriptFrame",
   "preview.assetFrame",
@@ -437,6 +452,8 @@ export const agentMutationOperationNames = [
   "tts.create",
   "tts.createBulk",
   "tts.attachBulk",
+  "voiceProfile.create",
+  "voiceProfile.update",
 ] as const satisfies readonly AgentOperationName[];
 
 /**
@@ -1404,6 +1421,33 @@ export const agentVoiceProfileGetOutputSchema = z.strictObject({
   voiceProfile: voiceProfileSchema,
 });
 
+export const agentVoiceProfileListVoicesInputSchema = z.strictObject({
+  adapterId: voiceAdapterIdSchema,
+  model: z.string().trim().min(1).max(200).optional(),
+});
+export const agentVoiceProfileListVoicesOutputSchema = voiceListSchema;
+
+export const agentVoiceProfileListModelsInputSchema = z.strictObject({
+  adapterId: voiceAdapterIdSchema,
+});
+export const agentVoiceProfileListModelsOutputSchema = modelListSchema;
+
+export const agentVoiceProfileCreateInputSchema = createVoiceProfileRequestSchema;
+export const agentVoiceProfileCreateOutputSchema = z.strictObject({
+  voiceProfile: voiceProfileSchema,
+});
+
+export const agentVoiceProfileUpdateInputSchema = z.strictObject({
+  voiceProfileId: idSchema,
+  name: updateVoiceProfileRequestSchema.shape.name,
+  voiceId: voiceIdSchema,
+  locale: localeSchema,
+  settings: voiceProfileExtrasSchema,
+});
+export const agentVoiceProfileUpdateOutputSchema = z.strictObject({
+  voiceProfile: voiceProfileSchema,
+});
+
 export const agentOperationInputSchemas = {
   "schema.get": agentSchemaGetInputSchema,
   "template.get": agentTemplateGetInputSchema,
@@ -1448,6 +1492,10 @@ export const agentOperationInputSchemas = {
   "faceSet.get": agentFaceSetGetInputSchema,
   "voiceProfile.list": agentVoiceProfileListInputSchema,
   "voiceProfile.get": agentVoiceProfileGetInputSchema,
+  "voiceProfile.listVoices": agentVoiceProfileListVoicesInputSchema,
+  "voiceProfile.listModels": agentVoiceProfileListModelsInputSchema,
+  "voiceProfile.create": agentVoiceProfileCreateInputSchema,
+  "voiceProfile.update": agentVoiceProfileUpdateInputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export const agentOperationOutputSchemas = {
@@ -1494,6 +1542,10 @@ export const agentOperationOutputSchemas = {
   "faceSet.get": agentFaceSetGetOutputSchema,
   "voiceProfile.list": agentVoiceProfileListOutputSchema,
   "voiceProfile.get": agentVoiceProfileGetOutputSchema,
+  "voiceProfile.listVoices": agentVoiceProfileListVoicesOutputSchema,
+  "voiceProfile.listModels": agentVoiceProfileListModelsOutputSchema,
+  "voiceProfile.create": agentVoiceProfileCreateOutputSchema,
+  "voiceProfile.update": agentVoiceProfileUpdateOutputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export type AgentOperationInputMap = {

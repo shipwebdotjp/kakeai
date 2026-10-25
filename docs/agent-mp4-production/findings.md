@@ -9,6 +9,9 @@
 > `work.list` は `createdAt` / `parentWorkId` を返すようになった。
 > P5 で Theme / Face Set / Voice Profile の読み取りと、既存 Voice Profile の
 > 話者への割り当て（声だけの話者）を追加した。声の前提はキャラクター必須ではなくなった。
+> P6（Agent Access の B11）で Voice Profile の声候補・モデル候補の取得と作成・更新を
+> 公開し、対象 locale の Profile が無い新規作品もエージェントだけで進める。
+> 削除は人専用のまま残す。
 
 ## 調査の前提
 
@@ -267,7 +270,7 @@ MP4主線では `preview.frame` を必須にしないことで、このコスト
 | 下書きプレビュー・視覚確認 | 一部実装 | 保存版・素材のプレビューは `preview.scriptFrame` / `preview.assetFrame` で実装済み。下書き・複数フレームは将来 |
 | 素材画像の確認 | 実装済み | `preview.assetFrame` で画像は原本、動画は静止画 PNG を返す |
 | 版履歴・復元・Work複製 | P4で実装済み | `script.listVersions` / `script.restore` / `work.clone`。Work 作成・複製は `work.list` でタイムアウト回復 |
-| Theme / Face Set / Voice Profile の管理 | 人専用 | 読み取りと既存 Profile の割り当ては P5 で実装済み。作成・更新・削除は人専用の境界を維持 |
+| Theme / Face Set / Voice Profile の管理 | 一部実装 | 読み取りと既存 Profile の割り当ては P5 で実装済み。Voice Profile の声候補・モデル候補の取得と作成・更新は P6 で公開。削除と Character・Face Set・Theme の書き込みは人専用 |
 | 縦型（9:16）の完成動画 | 対象外 | 出力は 1920x1080。portrait は Composition の入れ子のみ |
 | リモート/クラウド接続、アプリ自動起動 | 対象外 | 現行の非ゴール |
 
@@ -276,7 +279,7 @@ MP4主線では `preview.frame` を必須にしないことで、このコスト
 | 項目 | 分類 | MP4主線への影響 |
 | --- | --- | --- |
 | en-US の初期台本 | **解消済み（P1）** | P1 で修正済み。en-US でも作成直後から編集できる |
-| 声の前提 | **解消済み（P5）** | Voice Profile の読み取りと既存 Profile の割り当てで声だけの話者を作れる。Profile も声付き Character も無い場合だけ人間のプリフライトが必要 |
+| 声の前提 | **解消済み（P5・P6）** | Voice Profile の読み取りと既存 Profile の割り当てで声だけの話者を作れる。P6 で声候補・モデル候補の取得と作成・更新を公開し、Profile が無い場合もエージェントが作れる。声付き Character が要る場合だけ人間のプリフライトが必要 |
 | 一括TTSの順序 | **設計上の制約** | 守れば動くが、飛ばすと一括生成が無駄になる。スキルとテストで固定 |
 | TTS Job の回復 | **解消済み（P2）** | `job.list { kind: "tts" }` で再発見できる。`requestId` なしの一括は確定不可 |
 | `work.create` / `script.save` の冪等 | **一部解消（P2）** | `script.save` は基準版ガード / source を追加。`work.create` は `work.list` 確認のガイド路線 |

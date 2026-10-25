@@ -313,7 +313,7 @@ describe("agent character operations over the socket", () => {
     );
   });
 
-  it("catalogs library reads and keeps Theme / Face Set / Voice Profile writes unregistered", async () => {
+  it("catalogs library reads and keeps Theme / Face Set writes and Voice Profile deletion unregistered", async () => {
     const schema = await client.request("schema.get", {});
     for (const name of [
       "theme.list",
@@ -322,10 +322,19 @@ describe("agent character operations over the socket", () => {
       "faceSet.get",
       "voiceProfile.list",
       "voiceProfile.get",
+      "voiceProfile.listVoices",
+      "voiceProfile.listModels",
     ] as const) {
       expect(schema.agentOperations).toContainEqual({
         name,
         kind: "read",
+        longRunning: false,
+      });
+    }
+    for (const name of ["voiceProfile.create", "voiceProfile.update"] as const) {
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "mutation",
         longRunning: false,
       });
     }
@@ -344,8 +353,6 @@ describe("agent character operations over the socket", () => {
       "theme.archive",
       "faceSet.create",
       "faceSet.update",
-      "voiceProfile.create",
-      "voiceProfile.update",
       "voiceProfile.delete",
     ]) {
       const response = await rawRequest(

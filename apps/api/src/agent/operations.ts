@@ -22,10 +22,18 @@ import {
   agentThemeGetOutputSchema,
   agentThemeListInputSchema,
   agentThemeListOutputSchema,
+  agentVoiceProfileCreateInputSchema,
+  agentVoiceProfileCreateOutputSchema,
   agentVoiceProfileGetInputSchema,
   agentVoiceProfileGetOutputSchema,
   agentVoiceProfileListInputSchema,
+  agentVoiceProfileListModelsInputSchema,
+  agentVoiceProfileListModelsOutputSchema,
   agentVoiceProfileListOutputSchema,
+  agentVoiceProfileListVoicesInputSchema,
+  agentVoiceProfileListVoicesOutputSchema,
+  agentVoiceProfileUpdateInputSchema,
+  agentVoiceProfileUpdateOutputSchema,
   agentCompositionAuthoringContextInputSchema,
   agentCompositionAuthoringContextOutputSchema,
   agentCompositionCreateInputSchema,
@@ -119,7 +127,14 @@ import type { CompositionAuthoringService } from "../services/authoring-context.
 import { getCharacter, listCharacters } from "../services/character-library.ts";
 import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
 import { getSelectableTheme, listSelectableThemes } from "../services/theme-library.ts";
-import { getVoiceProfile, listVoiceProfiles } from "../services/voice-profiles.ts";
+import {
+  createVoiceProfile,
+  getVoiceProfile,
+  listAdapterModels,
+  listAdapterVoices,
+  listVoiceProfiles,
+  updateVoiceProfile,
+} from "../services/voice-profiles.ts";
 import type { CompositionService } from "../services/compositions.ts";
 import {
   diagnoseCompositionFonts,
@@ -594,8 +609,40 @@ const definitions: AgentOperationDefinitions = {
       character: await getCharacter(context.prisma, input.characterId),
     }),
   },
-  // Library reads. Theme / Face Set / Voice Profile writes stay in the app UI
-  // and are not exposed on the Agent surface.
+  // Library reads. Theme / Face Set writes stay in the app UI and are not
+  // exposed on the Agent surface. Voice Profile deletion stays human-only.
+  "voiceProfile.listVoices": {
+    input: agentVoiceProfileListVoicesInputSchema,
+    output: agentVoiceProfileListVoicesOutputSchema,
+    run: async (input, context) =>
+      listAdapterVoices(context.config, input.adapterId, input.model),
+  },
+  "voiceProfile.listModels": {
+    input: agentVoiceProfileListModelsInputSchema,
+    output: agentVoiceProfileListModelsOutputSchema,
+    run: async (input, context) => listAdapterModels(context.config, input.adapterId),
+  },
+  "voiceProfile.create": {
+    input: agentVoiceProfileCreateInputSchema,
+    output: agentVoiceProfileCreateOutputSchema,
+    // A new library resource, like work.create: no requestId, so callers
+    // confirm with voiceProfile.list before retrying after a timeout.
+    run: async (input, context) => ({
+      voiceProfile: await createVoiceProfile(context.prisma, input),
+    }),
+  },
+  "voiceProfile.update": {
+    input: agentVoiceProfileUpdateInputSchema,
+    output: agentVoiceProfileUpdateOutputSchema,
+    run: async (input, context) => ({
+      voiceProfile: await updateVoiceProfile(context.prisma, input.voiceProfileId, {
+        name: input.name,
+        voiceId: input.voiceId,
+        locale: input.locale,
+        settings: input.settings,
+      }),
+    }),
+  },
   "theme.list": {
     input: agentThemeListInputSchema,
     output: agentThemeListOutputSchema,
