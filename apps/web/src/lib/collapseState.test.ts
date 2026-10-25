@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  faceSetFoldKey,
   foldStorageKey,
   isPersistedFoldKey,
   loadFoldEntries,
@@ -14,12 +15,14 @@ describe("fold keys", () => {
   it("builds namespaced keys", () => {
     expect(sceneFoldKey("abc")).toBe("scene-open:abc");
     expect(sectionFoldKey("abc", "visual")).toBe("section:visual:abc");
+    expect(faceSetFoldKey("abc")).toBe("faceset-open:abc");
     expect(foldStorageKey("work/edition")).toBe("kakeai.editor.fold.v1:work/edition");
   });
 
   it("only persists scene and section keys", () => {
     expect(isPersistedFoldKey("scene-open:abc")).toBe(true);
     expect(isPersistedFoldKey("section:visual:abc")).toBe(true);
+    expect(isPersistedFoldKey("faceset-open:abc")).toBe(true);
     expect(isPersistedFoldKey("theme")).toBe(false);
     expect(isPersistedFoldKey("scene-settings-abc")).toBe(false);
   });

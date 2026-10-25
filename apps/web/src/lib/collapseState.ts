@@ -1,5 +1,7 @@
 export const EDITOR_FOLD_STORAGE_PREFIX = "kakeai.editor.fold.v1:";
 
+const FACESET_OPEN_PREFIX = "faceset-open:";
+
 export type SceneSectionKind = "visual" | "audio" | "lines";
 
 export function sceneFoldKey(sceneId: string): string {
@@ -10,8 +12,14 @@ export function sectionFoldKey(sceneId: string, section: SceneSectionKind): stri
   return `section:${section}:${sceneId}`;
 }
 
+export function faceSetFoldKey(faceSetId: string): string {
+  return `${FACESET_OPEN_PREFIX}${faceSetId}`;
+}
+
 export function isPersistedFoldKey(key: string): boolean {
-  return key.startsWith("scene-open:") || key.startsWith("section:");
+  return (
+    key.startsWith("scene-open:") || key.startsWith("section:") || key.startsWith(FACESET_OPEN_PREFIX)
+  );
 }
 
 export function foldStorageKey(scope: string): string {
