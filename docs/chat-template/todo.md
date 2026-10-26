@@ -56,6 +56,15 @@
 - [x] ステータスバー/キーボードのCSSをコンテナ相対（`--kakeai-status-u`）へ統一
 - [x] 契約・描画テスト、`spec.md`・`composite-visuals/spec.md`・`content-schema.md`・ユーザーガイドを更新
 
+## Phase 8 — 字幕セーフエリアと入力ドック
+
+- [x] コンパイラがテーマの字幕トークンから `--kakeai-caption-safe` を導出し、`#kakeai-root` に出力する（既定 216px・2行）
+- [x] `.kakeai-caption` の下端72pxを `--kakeai-caption-offset` に置き換える
+- [x] `phone`・`desktop` のチャットを字幕セーフエリアの上に収める
+- [x] `phone` に静的な入力ドック（空の入力欄・送信アイコン）を追加し、メッセージ列をその上で止める
+- [x] 字幕セーフエリアの導出と、ドックの有無・非フォーム要素をテストする
+- [x] `spec.md`・`roadmap.md`・`CONTEXT.md`・`content-schema.md`・ユーザーガイドと ADR-0093 を更新
+
 ## 未着手（roadmap 参照）
 
 - [ ] Cue Map の代表画像へのアイコン反映

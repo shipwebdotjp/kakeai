@@ -46,6 +46,9 @@ function emphasizeOffVars(
   return { backgroundColor: base.backgroundColor, color: base.color };
 }
 
+const SEND_ICON_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V6M6.5 11.5 12 6l5.5 5.5"/></svg>';
+
 export function renderChatThread(input: unknown, context: RenderContext): RenderedCue {
   const parsed = chatThreadInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -160,6 +163,10 @@ export function renderChatThread(input: unknown, context: RenderContext): Render
   const showStatus = frame === "phone" && statusBar !== false;
   const statusHtml = showStatus ? statusBarHtml("kakeai-chatstatus", statusTime) : "";
   const showKeyboard = frame === "laptop" && keyboard !== false;
+  const showDock = frame === "phone";
+  const dockHtml = showDock
+    ? `<div class="kakeai-chatdock" aria-hidden="true"><span class="kakeai-chatdockfield"></span><span class="kakeai-chatdocksend">${SEND_ICON_SVG}</span></div>`
+    : "";
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
@@ -195,7 +202,7 @@ export function renderChatThread(input: unknown, context: RenderContext): Render
     })
     .join("");
 
-  const inner = `<div class="kakeai-chatinner">${statusHtml}${titleHtml}<div class="kakeai-chatmessages">${messagesHtml}</div><span class="kakeai-chatbezel" aria-hidden="true"></span></div>`;
+  const inner = `<div class="kakeai-chatinner">${statusHtml}${titleHtml}<div class="kakeai-chatmessages">${messagesHtml}</div>${dockHtml}<span class="kakeai-chatbezel" aria-hidden="true"></span></div>`;
   const panel = `<div class="kakeai-chatpanel kakeai-chatpanel-${frame}" style="--kakeai-chat-accent:${accent};--kakeai-chat-accent-fg:${accentFg}">${inner}</div>`;
   const content = showKeyboard
     ? `<div class="kakeai-chatdeck">${panel}${laptopBaseHtml()}</div>`

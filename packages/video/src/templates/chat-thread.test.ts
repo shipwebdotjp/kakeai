@@ -97,6 +97,24 @@ describe("renderChatThread", () => {
     expect(phoneKeyboard.html).not.toContain("kakeai-laptopbase");
   });
 
+  it("adds a decorative composer dock below the messages on the phone frame", () => {
+    const phone = renderChatThread({ ...baseInput, frame: "phone" }, context());
+    expect(phone.html).toContain("kakeai-chatdock");
+    expect(phone.html).toContain("kakeai-chatdockfield");
+    expect(phone.html).toContain("kakeai-chatdocksend");
+    expect(phone.html).not.toMatch(/<(input|textarea)/);
+    expect(phone.html).not.toContain("contenteditable");
+    expect(phone.html.indexOf("kakeai-chatdock")).toBeGreaterThan(
+      phone.html.indexOf("kakeai-chatmessages"),
+    );
+
+    for (const frame of ["laptop", "desktop", "none"] as const) {
+      expect(renderChatThread({ ...baseInput, frame }, context()).html).not.toContain(
+        "kakeai-chatdock",
+      );
+    }
+  });
+
   it("honors statusBar off and a custom status time", () => {
     const off = renderChatThread({ ...baseInput, frame: "phone", statusBar: false }, context());
     expect(off.html).not.toContain("kakeai-chatstatus");

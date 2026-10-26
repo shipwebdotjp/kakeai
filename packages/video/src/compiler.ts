@@ -13,6 +13,7 @@ import {
 } from "@kakeai/contracts";
 import type { CompositionVersionResolver, CompositionVersionResolved } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
+import { CAPTION_BOTTOM_OFFSET_PX, CAPTION_SAFE_AREA_FALLBACK_PX, CAPTION_FALLBACK_PADDING_HORIZONTAL_PX, CAPTION_FALLBACK_PADDING_VERTICAL_PX, captionLayoutStyle } from "./caption-layout";
 import { escapeHtmlAttribute, escapeHtmlText } from "./escape";
 import { getGsapBundleSource } from "./gsap-bundle";
 import { hexToRgb } from "./theme";
@@ -620,8 +621,8 @@ const STYLES = [
   ".kakeai-laptopspeaker-left{left:2%;}",
   ".kakeai-laptopspeaker-right{right:2%;}",
   ".kakeai-laptopnotch{position:absolute;left:46.5%;width:7%;bottom:0;height:2.2%;background:rgba(0,0,0,.42);border-radius:0 0 50% 50%/0 0 100% 100%;}",
-  ".kakeai-caption{position:absolute;left:0;right:0;bottom:72px;display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}",
-  ".kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:var(--kakeai-scrim);border-radius:var(--kakeai-radius-sm);padding:12px 36px;color:var(--kakeai-onmedia);text-shadow:0 2px 12px rgba(0,0,0,.6);}",
+  `.kakeai-caption{position:absolute;left:0;right:0;bottom:var(--kakeai-caption-offset,${CAPTION_BOTTOM_OFFSET_PX}px);display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}`,
+  `.kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:var(--kakeai-scrim);border-radius:var(--kakeai-radius-sm);padding:${CAPTION_FALLBACK_PADDING_VERTICAL_PX}px ${CAPTION_FALLBACK_PADDING_HORIZONTAL_PX}px;color:var(--kakeai-onmedia);text-shadow:0 2px 12px rgba(0,0,0,.6);}`,
   ".kakeai-mockup{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
   ".kakeai-mockup-chrome{position:relative;width:auto;max-width:90%;max-height:92%;border-radius:var(--kakeai-radius-md);overflow:hidden;box-shadow:0 24px 60px var(--kakeai-shadow);display:flex;flex-direction:column;background:var(--kakeai-mockup-surface,var(--kakeai-surface));color:var(--kakeai-mockup-fg,var(--kakeai-text));}",
   ".kakeai-mockup-chrome::before{content:'';display:block;height:8px;background:var(--kakeai-mockup-accent,#6b7280);}",
@@ -718,6 +719,7 @@ const STYLES = [
   ".kakeai-quoteauthor{font-weight:700;color:var(--kakeai-text);}",
   ".kakeai-quotesource{font-style:normal;}",
   ".kakeai-chatwrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}",
+  `.kakeai-chatwrap-phone,.kakeai-chatwrap-desktop{padding-bottom:var(--kakeai-caption-safe,${CAPTION_SAFE_AREA_FALLBACK_PX}px);box-sizing:border-box;}`,
   ".kakeai-chatpanel{position:relative;overflow:hidden;background:transparent;container-type:size;}",
   ".kakeai-chatpanel-none{width:100%;height:100%;}",
   ".kakeai-chatpanel-phone{height:94%;aspect-ratio:9/16;}",
@@ -752,6 +754,10 @@ const STYLES = [
   ".kakeai-chatname{font-size:calc(var(--kakeai-chat-u) * 2.8);font-weight:700;opacity:.85;}",
   ".kakeai-chatbody{font-size:calc(var(--kakeai-chat-u) * 3.8);line-height:1.4;white-space:pre-line;word-break:break-word;}",
   ".kakeai-chattime{align-self:flex-end;font-size:calc(var(--kakeai-chat-u) * 2.4);opacity:.7;}",
+  ".kakeai-chatdock{flex:0 0 auto;display:flex;align-items:center;gap:calc(var(--kakeai-chat-u) * 2);padding:calc(var(--kakeai-chat-u) * 1.6) calc(var(--kakeai-chat-u) * 3) calc(var(--kakeai-chat-u) * 3.4);border-top:1px solid var(--kakeai-border);background:var(--kakeai-surface);}",
+  ".kakeai-chatdockfield{flex:1 1 auto;display:block;height:calc(var(--kakeai-chat-u) * 9);border-radius:999px;background:var(--kakeai-surface-muted);}",
+  ".kakeai-chatdocksend{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:calc(var(--kakeai-chat-u) * 9);height:calc(var(--kakeai-chat-u) * 9);border-radius:50%;background:var(--kakeai-chat-accent,var(--kakeai-accent-primary));color:var(--kakeai-chat-accent-fg,#fff);}",
+  ".kakeai-chatdocksend svg{display:block;width:calc(var(--kakeai-chat-u) * 5);height:calc(var(--kakeai-chat-u) * 5);}",
   ".kakeai-onsetoverlay{position:absolute;inset:0;pointer-events:none;opacity:0;display:block;}",
   ".kakeai-onset-sweep{--kakeai-onset-progress:1;border-radius:inherit;padding:6px;background:conic-gradient(from calc(var(--kakeai-onset-progress,0) * 360deg),transparent 0deg,var(--kakeai-onset-color,#fff) 45deg,transparent 110deg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;}",
   ".kakeai-onset-flash{border-radius:inherit;background:var(--kakeai-onset-color,#fff);}",
@@ -1675,7 +1681,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     `<style>${STYLES}</style>`,
     "</head>",
     "<body>",
-    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme)}">`,
+    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme)};${captionLayoutStyle(theme)}">`,
     ...clips,
     ...audios,
     "</div>",

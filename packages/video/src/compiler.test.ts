@@ -1653,6 +1653,13 @@ describe("visual theme", () => {
     expect(compiled.html).toContain("--kakeai-radius-lg:20px");
   });
 
+  it("emits the caption safe area derived from the caption style", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain("--kakeai-caption-offset:72px");
+    expect(compiled.html).toContain("--kakeai-caption-safe:216px");
+    expect(compiled.html).toContain("padding-bottom:var(--kakeai-caption-safe");
+  });
+
   it("resolves a theme accent token into a soft scene background", () => {
     const document = validContentDocument();
     document.scenes[1]!.accent = { kind: "theme", token: "secondary" };

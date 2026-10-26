@@ -181,6 +181,14 @@ _Avoid_: responsive breakpoint, media query, scaling
 A data-driven Visual Template that arranges a short conversation as chat bubbles, with an optional phone or laptop frame and a static status bar. It is shown as video only and is not tied to narration, speakers, or TTS.
 _Avoid_: Narration, Speaker, site mockup
 
+**Caption Safe Area** (字幕セーフエリア):
+The bottom band of the canvas reserved for the baked-in caption layer, derived from the caption text style and surface. Visual Templates that must stay readable beside a caption keep their content above it instead of relying on layer order.
+_Avoid_: caption margin, safe zone config, caption layer padding
+
+**Chat Composer** (入力ドック):
+The decorative input bar and send icon at the bottom of a phone-framed Chat Template. It is a static part of the frame's appearance, holds no editable value, and is not a template input.
+_Avoid_: message input, form field, composer schema
+
 **Node**:
 An item of a Flow Diagram, referenced by its position in the diagram's node list. It carries a label and an optional caption.
 _Avoid_: Step, box

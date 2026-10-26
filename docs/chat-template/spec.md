@@ -2,7 +2,7 @@
 
 ## 目的と境界
 
-この文書は、会話を吹き出しで並べた「チャット画面」を表示するデータ駆動の VisualTemplate `chat.thread@1` の正とする。複合ビジュアルの基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md)、台本の契約は [../mvp/content-schema.md](../mvp/content-schema.md)、決定は [ADR-0070](../adr/0070-container-relative-visual-template-layout.md) を参照する。
+この文書は、会話を吹き出しで並べた「チャット画面」を表示するデータ駆動の VisualTemplate `chat.thread@1` の正とする。複合ビジュアルの基盤は [../composite-visuals/spec.md](../composite-visuals/spec.md)、台本の契約は [../mvp/content-schema.md](../mvp/content-schema.md)、決定は [ADR-0070](../adr/0070-container-relative-visual-template-layout.md) と [ADR-0093](../adr/0093-caption-safe-area-for-chat-frames.md) を参照する。
 
 - 会話は**映像として見せるだけ**とする。Sceneの `lines`・`speakers`・TTS・字幕とは結びつけない。正本は引き続き Scene のセリフであり、チャットは独立した VisualCue の入力である。
 - 正本は自前の小さな構造化JSON（タイトル・メッセージ列・枠・ステータスバー）とする。HTML・SVG・スクリプト・実時刻は正本にしない。
@@ -86,11 +86,33 @@
   - `laptop`: 中央に 16:9 のパネル。
   - `desktop`: 中央に 21:9 のワイドなパネル（薄いベゼル、小さめの角丸）。
   - `none`: キャンバス全面。
+- `phone` と `desktop` は、字幕セーフエリア（後述）の上に収める。パネルは残りの領域で中央寄せするため、字幕が2行表示されてもパネルと重ならない。`laptop`・`none` はこの予約を行わない（[roadmap](roadmap.md) 参照）。
 - `laptop` では既定で画面の下に、開いたノートPCのベース（キーボード・トラックパッド・スピーカーグリル）をパース投影で描く（`keyboard: false` で消せる）。画面＋ベースの全体が縦に収まるよう、画面幅を縮める。
 - パネル要素を `container-type: size` にする。パネル自体は背景を持たず、角丸で切り抜いた内側（`.kakeai-chatinner`）が surface を描く。これにより枠の外側の角は透明になり、背景が透ける。キーボード付きラップトップでは画面の下辺の角丸を0にしてベースと接合する。内側の要素で `--kakeai-chat-u: min(1cqw, 1cqh)` を定義し、**すべての寸法（文字・余白・角丸・アイコン径・ステータスバー高さ）をこの倍数**で表す。固定pxを書かない。
 - `min(1cqw, 1cqh)` により、縦横比が変わっても短辺基準で見た目の密度が揃う（幅基準で拡大したい場合は `1cqw` に替える）。横長の枠（`laptop`・`desktop`）は高さで頭打ちになるため、縦に収まる件数はスマートフォン枠より少ない。件数上限6は短いメッセージを前提とした目安であり、長い会話はプレビューで確認する。
 - 縦方向は内蔵flexで吸収する。ヘッダは固定、メッセージ列は `flex: 1` かつ下寄せ、`overflow: hidden`。
 - コンパイラは Cue 本体（`.kakeai-cuebody`）を `container-type: size` にして、任意の Cue が `cq` 単位を使えるようにする。`scene.device-frame` の画面が内側にある場合は、より近いその要素がコンテナになる。
+
+## 字幕セーフエリア
+
+字幕はコンパイラ固定層で、キャンバス下端から72pxの位置に描く。`phone`・`desktop` のチャットは、字幕と物理的に領域を分けるため、キャンバス下端に字幕の高さぶんの余白を予約する。
+
+- 余白は `--kakeai-caption-safe`（コンパイラが `#kakeai-root` に出力する）で受け取る。チャット側は値を計算しない。
+- 値はテーマの `textRoles.caption`（`fontSize`・`lineHeight`）と `surfaces.caption`（上下padding・border）から導出する。既定テーマでは **216px**（下端72 + 2行×60px + 上下padding 24）。
+- 基準は**2行**とする。字幕は2行まで警告せず、3行から `text_overflow` を警告する既存方針（[../mvp/content-schema.md](../mvp/content-schema.md)）に合わせる。3行以上の字幕は保証外とし、プレビューで確認する。
+- 字幕の無いシーンでも常に予約する。シーンの内容で端末の大きさが変わると、見た目の一貫性を損なうため。
+- レイヤーの前後（`card` / `overlay`）では解決しない。`card` では字幕がチャットを覆い、`overlay` ではチャットが字幕を覆うため、どちらでも読めなくなる。物理的に重ならないことが要件である。
+- `laptop`・`none` は今回の対象外とする（`laptop` はキーボードベースを含めた再フィットが別途必要）。
+
+## 入力ドック（スマートフォン）
+
+`phone` のときだけ、パネル下端にチャットアプリ風の入力ドックを静的に描く。
+
+- 中身は空の丸角入力欄と、円形の送信ボタン（inline SVG の矢印）。入力欄は空で、プレースホルダ文言を持たない。
+- **装飾のみ**であり、`<input>`・`<textarea>`・`contenteditable`・`tabindex`・スクリプトを持たない。実時刻も読まないため、プレビューのシークとMP4が一致する。
+- ドックはメッセージ列の次の flex 兄弟として置く。メッセージ列は `flex: 1` かつ下寄せのままなので、最新メッセージはドックの上で止まり、入力欄へ潜り込まない。
+- 寸法は `--kakeai-chat-u` の倍数で表し、固定pxを書かない。`laptop`・`desktop`・`none` では描かない。
+- 入力内容・送信先・操作性は持たない。将来必要になっても、この見た目のための新しい入力フィールド（例: `composer`）は追加しない。スマートフォン枠の標準外観とする（[ADR-0071](../adr/0071-pre-release-appearance-changes-without-version-bump.md)）。
 
 ## ステータスバー
 
@@ -102,7 +124,7 @@
 
 ## レンダリング
 
-- DOM 構造: `div.kakeai-chatwrap` > `div.kakeai-chatpanel`（コンテナ）> `div.kakeai-chatinner`（`--kakeai-chat-u`）> ステータスバー / ヘッダ / `div.kakeai-chatmessages` > `div.kakeai-chatrow` > `span.kakeai-chaticon` + `div.kakeai-chatbubble`（名前・本文・時刻）。最後にベゼルのオーバーレイ。
+- DOM 構造: `div.kakeai-chatwrap` > `div.kakeai-chatpanel`（コンテナ）> `div.kakeai-chatinner`（`--kakeai-chat-u`）> ステータスバー / ヘッダ / `div.kakeai-chatmessages` > `div.kakeai-chatrow` > `span.kakeai-chaticon` + `div.kakeai-chatbubble`（名前・本文・時刻）、続いて `div.kakeai-chatdock`（`phone` のみ）、最後にベゼルのオーバーレイ。
 - 各行と吹き出しに Cue scope 配下の要素IDを割り当てる。`appear` は行、`emphasize`・`onset` は吹き出しを対象にし、`onset` のオーバーレイは吹き出し内に置く。
 - アクセント色はテーマの `accents.primary` とし、`right` の吹き出しの文字色はコントラストから算出する。
 - テキストはエスケープして描画する。要素IDは Cue scope 配下に閉じ、アイコンごとに子 scope を割り当てる。複数配置・入れ子で衝突しない。
@@ -113,6 +135,7 @@
 - メッセージは最大6件。超過は保存時に拒否する。
 - 本文は目安（4行・全角16文字/行、半角32文字/行相当）を超えると保存を拒否せず、`meta.warnings`（`text_overflow`）で該当フィールドのJSON Pointerと理由を返す。
 - 描画時に黙って縮小・切り詰めしない。あふれる場合はプレビューで確認して修正する。
+- `phone` は字幕セーフエリア（216px）と入力ドックのぶんだけ描画領域が減る。既定テーマの1080pでパネルは約457×812px（従来は約571×1015px）になり、本文は約17px相当になる。6件の長文は窮屈になるため、プレビューで確認する。
 
 ## 非ゴール
 
@@ -120,11 +143,17 @@
 - 実時刻のライブ表示、実機アイコン素材・ブランドロゴの同梱。
 - `scene.device-frame@1` の画面への入れ子配置（エディタが入れ子テンプレートを編集できないため）。任意テンプレートの入れ子編集は別途。
 - 複数種類のチャットアプリ風ガワ（LINE/Twitter 等）の作り分け。
+- 入力欄の編集・送信・プレースホルダ文言。`composer` のような入力フィールドの追加。
+- `laptop`・`none` への字幕セーフエリア適用と、`laptop` のキーボードベースを含めた再フィット。
+- 3行以上の字幕との非重複保証。
 
 ## 受け入れ条件
 
 - `chat.thread@1` の会話を `card` / `overlay` の両レイヤーで保存し、プレビューでシークし、MP4をレンダーできる。
 - `frame` を `phone` / `laptop` / `desktop` / `none` に切り替えても同じ入力で表示でき、固定pxに依存しない。
+- `phone` と `desktop` のパネルが、2行の字幕と重ならない（既定テーマで下端から216pxを予約する）。
+- `phone` で、メッセージ列の下に空の入力欄と送信アイコンのドックが表示され、最新メッセージがドックに潜り込まない。ドックは `input` / `textarea` / `contenteditable` を持たない。
+- `laptop` / `desktop` / `none` では入力ドックを描かない。
 - `phone` でステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）が表示され、`laptop` / `desktop` / `none` では表示されない。
 - `laptop` でキーボードベースが既定で表示され、`keyboard: false` で消える。画面＋ベースがキャンバスに収まる。
 - アイコン素材の参照が `collectAssetRefs` で収集され、存在・ready が保存時に検証される。

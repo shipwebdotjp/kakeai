@@ -235,7 +235,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `stat@1` | 数値、ラベル、補足、書式、トーン、効果 | 対応。大きな数値を行トリガーでカウントする（[../stat-template/spec.md](../stat-template/spec.md)） |
 | `flow.diagram@1` | タイトル、ノード、辺、向き、スタイル、効果 | 対応。縦横を `style.orientation` で切替える。行トリガーでノードを強調する（[../flow-template/spec.md](../flow-template/spec.md)） |
 | `quote@1` | 引用本文、著者、出典、トーン、スタイル、効果 | 対応。著者・出典付きの引用カードを行トリガーで強調する（[../quote-template/spec.md](../quote-template/spec.md)） |
-| `chat.thread@1` | タイトル、メッセージ列（名前・本文・左右・時刻・アイコン）、枠、ステータスバー、キーボード、効果 | 対応。会話を吹き出しで並べる。`frame` でスマートフォン／ノートPC／デスクトップ／全面を選び、コンテナ相対で同じレイアウトを表示する。`effects` でメッセージ単位のセリフ同期（登場・強調）ができる（[../chat-template/spec.md](../chat-template/spec.md)） |
+| `chat.thread@1` | タイトル、メッセージ列（名前・本文・左右・時刻・アイコン）、枠、ステータスバー、キーボード、効果 | 対応。会話を吹き出しで並べる。`frame` でスマートフォン／ノートPC／デスクトップ／全面を選び、コンテナ相対で同じレイアウトを表示する。`phone` は下端に入力欄と送信アイコンの装飾ドックを持ち、`phone`・`desktop` は字幕セーフエリアの上に収まる。`effects` でメッセージ単位のセリフ同期（登場・強調）ができる（[../chat-template/spec.md](../chat-template/spec.md)） |
 
 テンプレート定義は、入力Zodスキーマに加えて `inputFields`（編集画面のフィールド仕様）、`layers`（許可レイヤー）、`transitionPolicy`・`animationPolicy`（許可preset・既定値・最大尺）、`collectAssetRefs`（素材参照走査）を持つ。編集画面は `inputFields` からフォームを生成し、テンプレート追加でエディタのコードを増やさない。入退場と内部アニメーションは有限preset（`none`/`fade`/`slide-*`/`scale-in`/`pulse`）と尺だけで表し、任意CSSやスクリプトを持ち込まない。詳細は [../composite-visuals/spec.md](../composite-visuals/spec.md) を正とする。
 
@@ -263,7 +263,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 
 `1行の目安` は全角換算の1行の幅であり、半角文字（ASCII・半角カナなど）は2文字で全角1文字分とする。結合文字・制御文字は幅に数えない。locale によって基準を切り替えない。和文のみの台本では従来の文字数判定と一致し、英語では同じ幅に約2倍の文字数が入る。`最小フォントサイズ` を下回らない範囲で収める。収まらない入力は保存を拒否せず、警告（`meta.warnings`）として該当フィールドのJSON Pointerと理由を返す。利用者はプレビューで実際のはみ出しを確認して修正する。描画時に黙って縮小・切り詰めしない。
 
-字幕（`captionText`）はコンパイラ固定層で、1080pの最大幅1600px・既定フォント40pxを基準に1行全角38文字（半角76文字相当）とする。2行までは警告せず、推定3行から警告する。
+字幕（`captionText`）はコンパイラ固定層で、1080pの最大幅1600px・既定フォント40pxを基準に1行全角38文字（半角76文字相当）とする。2行までは警告せず、推定3行から警告する。字幕は下端から72pxの位置に描き、`chat.thread@1` の `phone`・`desktop` はテーマの字幕トークンから導出したセーフエリア（既定216px）を空ける（[../chat-template/spec.md](../chat-template/spec.md)）。
 
 ## レイアウトと音声配置
 
