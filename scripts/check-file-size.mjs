@@ -25,7 +25,6 @@ const BASELINE = new Map([
   ["apps/web/src/components/lines-editor/LineEditor.tsx", 860],
   ["apps/api/src/agent/operations.ts", 856],
   ["apps/web/src/pages/WorkEditPage.tsx", 830],
-  ["apps/web/src/content/structural.ts", 813],
 ]);
 
 const EXCLUDED_DIRS = new Set(["node_modules", "generated", "dist", ".git"]);
