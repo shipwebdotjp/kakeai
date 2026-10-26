@@ -34,6 +34,8 @@ import {
   agentScriptListVersionsOutputSchema,
   agentScriptRestoreInputSchema,
   agentScriptRestoreOutputSchema,
+  agentScriptSaveInputSchema,
+  agentScriptValidateInputSchema,
   agentTemplateInputContracts,
   agentTtsAttachBulkInputSchema,
   agentTtsAttachBulkOutputSchema,
@@ -52,6 +54,7 @@ import {
   resolveAgentReadTimeoutMs,
 } from "./agent";
 import { fixtureScriptVersion, fixtureWork } from "./testing/agent-fixtures";
+import { validContentDocument } from "./testing/fixtures";
 import { visualThemeDefinitions } from "./content/theme";
 
 const job = {
@@ -521,6 +524,34 @@ describe("script.listVersions operation contract", () => {
     });
     expect(Object.keys(agentOperationInputSchemas)).toContain("script.listVersions");
     expect(Object.keys(agentOperationOutputSchemas)).toContain("script.listVersions");
+  });
+});
+
+describe("script.save and script.validate with character locale names", () => {
+  it("accepts content carrying characters[].names", () => {
+    const content = validContentDocument();
+    content.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        names: [
+          { locale: "ja-JP", name: "リン" },
+          { locale: "en-US", name: "Rin" },
+        ],
+        voices: [],
+        appearances: [],
+      },
+    ];
+    expect(
+      agentScriptValidateInputSchema.safeParse({ content }).success,
+    ).toBe(true);
+    expect(
+      agentScriptSaveInputSchema.safeParse({
+        languageEditionId: "led-1",
+        sourceScriptVersionId: null,
+        content,
+      }).success,
+    ).toBe(true);
   });
 });
 

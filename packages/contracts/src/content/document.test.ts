@@ -114,6 +114,30 @@ describe("contentDocumentSchema", () => {
     }
   });
 
+  it("accepts a character with valid locale names", () => {
+    const doc = validContentDocument();
+    doc.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        names: [
+          { locale: "ja-JP", name: "リン" },
+          { locale: "en-US", name: "Rin" },
+        ],
+        voices: [],
+        appearances: [],
+      },
+    ];
+    const parsed = contentDocumentSchema.safeParse(doc);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.characters[0]!.names).toEqual([
+        { locale: "ja-JP", name: "リン" },
+        { locale: "en-US", name: "Rin" },
+      ]);
+    }
+  });
+
   it("resolves the locale name with fallback to the default name", () => {
     const character = {
       name: "ひなた",
