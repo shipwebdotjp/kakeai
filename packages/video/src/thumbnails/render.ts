@@ -16,12 +16,13 @@ import {
   hexToRgb,
   mixHex,
   overlayToRgba,
-  resolveFontFamilyCss,
+  resolveTextStyleFontFamilyCss,
 } from "../theme";
 import { mediaCropStyle, resolveCueMedia } from "../templates/shared";
 
 export interface ThumbnailRenderContext {
   theme: VisualThemeDefinition;
+  locale: string | undefined;
   assetResolver: AssetResolver;
   path: (string | number)[];
   appearance: ResolvedThumbnailAppearance;
@@ -48,9 +49,9 @@ interface TextCss {
   lineHeight: string;
 }
 
-function textCss(style: ResolvedThumbnailTextStyle, factor: number): TextCss {
+function textCss(style: ResolvedThumbnailTextStyle, factor: number, locale: string | undefined): TextCss {
   return {
-    fontFamily: resolveFontFamilyCss(style.fontFace, style.font),
+    fontFamily: resolveTextStyleFontFamilyCss(style, locale),
     fontSize: `${scaledSize(style.fontSize, factor)}px`,
     color: style.color,
     fontWeight: style.decoration.bold ? "700" : "400",
@@ -432,8 +433,8 @@ export function renderCutoutHero(
   ].join(";");
   const whiteSpace = data.wrapText ? "pre-line" : "pre";
 
-  const headlineCss = textCss(appearance.headline, headlineFitFactor(data.headline));
-  const sublineCss = textCss(appearance.subline, 1);
+  const headlineCss = textCss(appearance.headline, headlineFitFactor(data.headline), context.locale);
+  const sublineCss = textCss(appearance.subline, 1, context.locale);
 
   const html = [
     `<div class="kakeai-thumb" style="position:absolute;inset:0;overflow:hidden;background:${context.theme.canvas.ink}">`,

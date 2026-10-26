@@ -26,6 +26,21 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('window.__timelines["kakeai-main"]');
   });
 
+  it("uses the document locale for the html lang and locale font stacks", () => {
+    const document = validContentDocument();
+    document.locale = "zh-Hans";
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).toContain('<html lang="zh-Hans">');
+    expect(compiled.html).toContain("--kakeai-font-sans:'PingFang SC'");
+    expect(compiled.html).not.toContain("--kakeai-font-sans:'Noto Sans JP'");
+  });
+
+  it("keeps the ja-JP font stack for existing documents", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain('<html lang="ja-JP">');
+    expect(compiled.html).toContain("--kakeai-font-sans:'Noto Sans JP'");
+  });
+
   it("defines an onset overlay selector matching every preset class", () => {
     const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
     for (const preset of ONSET_PRESETS) {

@@ -18,7 +18,7 @@ import type {
   RenderContext,
   StateInterval,
 } from "../render-context";
-import { mixHex, overlayToRgba, resolveFontFamilyCss } from "../theme";
+import { mixHex, overlayToRgba, resolveTextStyleFontFamilyCss } from "../theme";
 import { onsetOverlayId } from "../cue-effects";
 import { calloutItemOverlayHtml, listCalloutLayoutStyle, planListCalloutEffects } from "../templates/list-callout";
 import { renderMediaCardMedia } from "../templates/media-card";
@@ -142,10 +142,11 @@ function slipHtml(options: {
 function themeTextCss(
   theme: VisualThemeDefinition,
   role: VisualThemeTextRole,
+  locale: string | undefined,
   options: { fontSize?: number; color?: string; weight?: string } = {},
 ): string {
   const token = theme.textRoles[role];
-  const fontFamily = resolveFontFamilyCss(token.fontFace, token.font);
+  const fontFamily = resolveTextStyleFontFamilyCss(token, locale);
   return [
     "margin:0",
     `font-family:${fontFamily}`,
@@ -182,7 +183,7 @@ const PIECE_ROTATE: Record<string, number> = {
 };
 
 function renderHandmadeTextBlock(input: unknown, context: RenderContext): RenderedCue {
-  const spec = resolveTextBlockSpec(input, context.path, context.theme);
+  const spec = resolveTextBlockSpec(input, context.path, context.theme, context.document.locale);
   if (spec === null) {
     return { html: "", assetIds: [], animation: [] };
   }
@@ -290,12 +291,12 @@ function renderHandmadeMediaCard(input: unknown, context: RenderContext): Render
   const notes: string[] = [];
   if (data.heading.length > 0) {
     notes.push(
-      `<div class="kakeai-paper-note-heading" style="${themeTextCss(context.theme, "heading", { fontSize: Math.min(context.theme.textRoles.heading.fontSize, 52) })}">${escapeHtmlText(data.heading)}</div>`,
+      `<div class="kakeai-paper-note-heading" style="${themeTextCss(context.theme, "heading", context.document.locale, { fontSize: Math.min(context.theme.textRoles.heading.fontSize, 52) })}">${escapeHtmlText(data.heading)}</div>`,
     );
   }
   if (data.caption !== undefined && data.caption.length > 0) {
     notes.push(
-      `<div class="kakeai-paper-note-caption" style="${themeTextCss(context.theme, "body", { fontSize: Math.min(context.theme.textRoles.body.fontSize, 34) })}">${escapeHtmlText(data.caption)}</div>`,
+      `<div class="kakeai-paper-note-caption" style="${themeTextCss(context.theme, "body", context.document.locale, { fontSize: Math.min(context.theme.textRoles.body.fontSize, 34) })}">${escapeHtmlText(data.caption)}</div>`,
     );
   }
   const noteHtml =
@@ -328,7 +329,7 @@ function renderHandmadeListCallout(input: unknown, context: RenderContext): Rend
   const slipIds = items.map((_item, index) => context.scope.id(`slip-${index}`));
   const layoutStyle = listCalloutLayoutStyle(width, align);
   const listStyleAttr = layoutStyle.length > 0 ? ` style="${layoutStyle}"` : "";
-  const titleBase = themeTextCss(theme, "heading", { fontSize: Math.min(theme.textRoles.heading.fontSize, 46) });
+  const titleBase = themeTextCss(theme, "heading", context.document.locale, { fontSize: Math.min(theme.textRoles.heading.fontSize, 46) });
   const titleStyle = [titleBase, layoutStyle].filter((part) => part.length > 0).join(";");
 
   const titleHtml =
@@ -340,7 +341,7 @@ function renderHandmadeListCallout(input: unknown, context: RenderContext): Rend
     .map((item, index) => {
       const effect = item.effect?.kind === "emphasize" ? item.effect : undefined;
       const rotate = (index % 2 === 0 ? -1 : 1) * (0.4 + (index % 3) * 0.2);
-      const textHtml = `<span class="kakeai-paper-listtext" style="${themeTextCss(theme, "body", { fontSize: 40 })}">${escapeHtmlText(item.text)}</span>`;
+      const textHtml = `<span class="kakeai-paper-listtext" style="${themeTextCss(theme, "body", context.document.locale, { fontSize: 40 })}">${escapeHtmlText(item.text)}</span>`;
       return `<li id="${itemIds[index]}" class="kakeai-paper-listitem" style="list-style:none;margin:0;position:relative;width:100%;">${slipHtml(
         {
           id: slipIds[index]!,
@@ -414,7 +415,7 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
       ? ""
       : `<span id="${onsetOverlayId(quoteId)}" class="kakeai-onsetoverlay kakeai-onset-${onsetInfo.preset}" style="--kakeai-onset-color:${onsetInfo.color}"></span>`;
   const quoteStyle = [
-    themeTextCss(theme, "heading", {
+    themeTextCss(theme, "heading", context.document.locale, {
       fontSize: Math.min(theme.textRoles.heading.fontSize, 52),
     }),
     "position:relative",
@@ -425,11 +426,11 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
   const authorHtml =
     author === undefined || author.trim().length === 0
       ? ""
-      : `<span id="${authorId}" class="kakeai-paper-quoteauthor" style="${themeTextCss(theme, "body", { fontSize: 30, weight: "700" })}">${escapeHtmlText(author)}</span>`;
+      : `<span id="${authorId}" class="kakeai-paper-quoteauthor" style="${themeTextCss(theme, "body", context.document.locale, { fontSize: 30, weight: "700" })}">${escapeHtmlText(author)}</span>`;
   const sourceHtml =
     source === undefined || source.trim().length === 0
       ? ""
-      : `<cite id="${sourceId}" class="kakeai-paper-quotesource" style="${themeTextCss(theme, "body", { fontSize: 28 })}">${escapeHtmlText(source)}</cite>`;
+      : `<cite id="${sourceId}" class="kakeai-paper-quotesource" style="${themeTextCss(theme, "body", context.document.locale, { fontSize: 28 })}">${escapeHtmlText(source)}</cite>`;
   const attribution =
     authorHtml.length === 0 && sourceHtml.length === 0
       ? ""

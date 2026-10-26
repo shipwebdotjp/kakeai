@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { accentColorSchema, nonNegativeInt, positiveInt } from "./primitives";
+import {
+  accentColorSchema,
+  asSupportedLocale,
+  localeSchema,
+  nonNegativeInt,
+  positiveInt,
+} from "./primitives";
 
 export const visualThemeRefSchema = z.strictObject({
   id: z.string().min(1),
@@ -114,9 +120,99 @@ export const fontFaceSpecSchema = z.strictObject({
 });
 export type FontFaceSpec = z.infer<typeof fontFaceSpecSchema>;
 
+/**
+ * Locale-specific font overrides for one text style. Keys are limited to the
+ * supported locales, so an unknown locale is rejected rather than silently kept.
+ */
+export const fontFaceByLocaleSchema = z.partialRecord(
+  localeSchema,
+  fontFaceSpecSchema,
+);
+export type FontFaceByLocale = z.infer<typeof fontFaceByLocaleSchema>;
+
+/**
+ * A text style carries one locale dictionary. An empty dictionary means "no
+ * override", so it is normalized away instead of persisted as `{}`.
+ */
+export function normalizeFontFaceByLocale(
+  value: FontFaceByLocale | undefined,
+): FontFaceByLocale | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const entries = Object.entries(value).filter(([, spec]) => spec !== undefined);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  if (entries.length === Object.keys(value).length) {
+    return value;
+  }
+  return Object.fromEntries(entries) as FontFaceByLocale;
+}
+
+function normalizeTextStyleFontFaces(style: TextStyle): TextStyle {
+  const normalized = normalizeFontFaceByLocale(style.fontFaceByLocale);
+  if (normalized === undefined && style.fontFaceByLocale === undefined) {
+    return style;
+  }
+  if (normalized === undefined) {
+    const { fontFaceByLocale: _dropped, ...rest } = style;
+    return rest;
+  }
+  return { ...style, fontFaceByLocale: normalized };
+}
+
+/** Resolves one text style's font face for a locale: locale override, then shared. */
+export function resolveTextStyleFontFace(
+  style: Pick<TextStyle, "fontFace" | "fontFaceByLocale">,
+  locale: string | undefined,
+): FontFaceSpec | undefined {
+  const parsed = asSupportedLocale(locale);
+  if (parsed === undefined) {
+    return style.fontFace;
+  }
+  return style.fontFaceByLocale?.[parsed] ?? style.fontFace;
+}
+
+/**
+ * Drops empty `fontFaceByLocale` dictionaries from every text style so a
+ * reset locale never survives as `{}` in a Theme Draft or Theme hash. Returns
+ * the same object when nothing changes.
+ */
+export function normalizeThemeFontFaceLocales<T extends VisualThemeDefinition>(
+  definition: T,
+): T {
+  let changed = false;
+  const textRoles = { ...definition.textRoles };
+  for (const role of Object.keys(textRoles) as (keyof typeof textRoles)[]) {
+    const normalized = normalizeTextStyleFontFaces(textRoles[role]);
+    if (normalized !== textRoles[role]) {
+      textRoles[role] = normalized;
+      changed = true;
+    }
+  }
+  let caption: VisualThemeDefinition["caption"] = definition.caption;
+  if (caption?.speaker !== undefined) {
+    const text = normalizeTextStyleFontFaces(caption.speaker.text);
+    if (text !== caption.speaker.text) {
+      caption = { ...caption, speaker: { ...caption.speaker, text } };
+      changed = true;
+    }
+  }
+  if (!changed) {
+    return definition;
+  }
+  return {
+    ...definition,
+    textRoles,
+    ...(caption === undefined ? {} : { caption }),
+  } as T;
+}
+
 export const textStyleSchema = z.strictObject({
   font: themeFontCategorySchema,
   fontFace: fontFaceSpecSchema.optional(),
+  fontFaceByLocale: fontFaceByLocaleSchema.optional(),
   fontSize: z.number().int().min(8).max(240),
   color: themeHexSchema,
   lineHeight: z.number().min(1).max(3),

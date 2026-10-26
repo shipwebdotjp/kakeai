@@ -2,6 +2,7 @@ import {
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
+  normalizeThemeFontFaceLocales,
   toVisualThemeDefinitionV2,
   visualThemeDefinitionSchema,
   visualThemeDefinitions,
@@ -249,12 +250,12 @@ export class ThemeService {
         data: { name },
       });
 
-      const initialDefinition: VisualThemeDefinitionV2 = {
+      const initialDefinition: VisualThemeDefinitionV2 = normalizeThemeFontFaceLocales({
         ...toVisualThemeDefinitionV2(baseDefinition),
         id: theme.id,
         name,
         version: 1,
-      };
+      });
 
       const draft = await tx.themeDraft.create({
         data: {
@@ -275,11 +276,11 @@ export class ThemeService {
       throw resourceNotFound("theme", themeId);
     }
 
-    const updatedDefinition: VisualThemeDefinitionV2 = {
+    const updatedDefinition: VisualThemeDefinitionV2 = normalizeThemeFontFaceLocales({
       ...toVisualThemeDefinitionV2(definition),
       id: themeId,
       name: theme.name,
-    };
+    });
 
     const definitionJson = JSON.stringify(updatedDefinition);
 
@@ -370,12 +371,12 @@ export class ThemeService {
 
       const nextVersion = (aggregate._max.versionNumber ?? 0) + 1;
 
-      const publishedDefinition: VisualThemeDefinitionV2 = {
+      const publishedDefinition: VisualThemeDefinitionV2 = normalizeThemeFontFaceLocales({
         ...toVisualThemeDefinitionV2(rawDefinition),
         id: themeId,
         name: theme.name,
         version: nextVersion,
-      };
+      });
 
       await tx.themeRevision.create({
         data: {

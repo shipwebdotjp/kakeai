@@ -2,9 +2,11 @@ import { z } from "zod";
 import { accentColorSchema } from "../content/primitives";
 import {
   fontFaceSpecSchema,
+  resolveTextStyleFontFace,
   textStyleSchema,
   themeFontCategorySchema,
   visualThemeOverlaySchema,
+  type TextStyle,
   type VisualThemeDefinition,
 } from "../content/theme";
 
@@ -76,25 +78,39 @@ export type ResolvedThumbnailAppearance = z.infer<typeof resolvedThumbnailAppear
 /**
  * The cutout template places both text roles on a photo, so the default text
  * color is the Theme's on-media neutral. Typography still comes from the
- * title/heading roles.
+ * title/heading roles. A locale-specific font replaces the shared face before
+ * any sparse appearance override is applied, so an explicit appearance font
+ * still wins over the Theme.
  */
 export function resolveThumbnailAppearanceDefaults(
   theme: VisualThemeDefinition,
+  locale: string | undefined,
 ): ResolvedThumbnailAppearance {
   return {
     headline: {
-      ...theme.textRoles.title,
+      ...localizeTextStyle(theme.textRoles.title, locale),
       color: theme.onMedia,
       outline: { color: null, width: DEFAULT_THUMBNAIL_OUTLINE_WIDTH },
     },
     subline: {
-      ...theme.textRoles.heading,
+      ...localizeTextStyle(theme.textRoles.heading, locale),
       color: theme.onMedia,
       outline: { color: null, width: DEFAULT_THUMBNAIL_OUTLINE_WIDTH },
     },
     accent: theme.accents.primary,
     scrim: { ...theme.scrim },
   };
+}
+
+/**
+ * Materializes the locale font into `fontFace` and drops the dictionary, so a
+ * later appearance override cannot be silently outranked by a stale locale
+ * entry inherited from the Theme.
+ */
+function localizeTextStyle(style: TextStyle, locale: string | undefined): TextStyle {
+  const { fontFaceByLocale: _dropped, ...rest } = style;
+  const fontFace = resolveTextStyleFontFace(style, locale);
+  return fontFace === undefined ? rest : { ...rest, fontFace };
 }
 
 function definedEntries<T extends object>(value: T | undefined): Partial<T> {

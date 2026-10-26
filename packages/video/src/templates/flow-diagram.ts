@@ -265,12 +265,12 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
-      : `<figcaption class="kakeai-flowtitle" style="${themeRoleFontStyle(theme, "heading")}">${escapeHtmlText(title)}</figcaption>`;
+      : `<figcaption class="kakeai-flowtitle" style="${themeRoleFontStyle(theme, "heading", context.document.locale)}">${escapeHtmlText(title)}</figcaption>`;
   const presetClass = preset === "boxed" ? " kakeai-flow-boxed" : "";
   const plot = `<div class="kakeai-flowplot kakeai-flow-${orientation}${presetClass}" style="width:${FLOW_PLOT_W}px;height:${FLOW_PLOT_H}px"><svg class="kakeai-flowsvg" width="${FLOW_PLOT_W}" height="${FLOW_PLOT_H}" viewBox="0 0 ${FLOW_PLOT_W} ${FLOW_PLOT_H}"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--kakeai-muted)"></path></marker></defs>${edgesHtml}</svg>${nodesHtml}</div>`;
 
   return {
-    html: `<figure class="kakeai-flowwrap" style="${themeRoleFontStyle(theme, "body")}">${titleHtml}${plot}</figure>`,
+    html: `<figure class="kakeai-flowwrap" style="${themeRoleFontStyle(theme, "body", context.document.locale)}">${titleHtml}${plot}</figure>`,
     assetIds: [],
     animation,
     stateIntervals,

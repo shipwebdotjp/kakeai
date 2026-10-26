@@ -183,9 +183,10 @@ async function requireEditionWithTheme(prisma: PrismaClient, editionId: string) 
 
 function appearanceView(
   theme: Parameters<typeof resolveThumbnailAppearanceDefaults>[0],
+  locale: string,
   appearance: ThumbnailAppearance | null,
 ): ThumbnailAppearanceView {
-  const defaults = resolveThumbnailAppearanceDefaults(theme);
+  const defaults = resolveThumbnailAppearanceDefaults(theme, locale);
   return {
     appearance,
     defaults,
@@ -196,11 +197,12 @@ function appearanceView(
 function compile(
   document: ThumbnailDocument,
   theme: Parameters<typeof compileThumbnail>[0]["theme"],
+  locale: string,
   assetResolver: AssetResolver,
   appearance: ThumbnailAppearance | null,
 ): CompiledThumbnail {
   try {
-    return compileThumbnail({ document, theme, assetResolver, appearance });
+    return compileThumbnail({ document, theme, locale, assetResolver, appearance });
   } catch (error) {
     if (error instanceof CompositionCompileError) {
       throw new ApiError(422, "THUMBNAIL_INPUT_INVALID", undefined, { issues: error.issues });
@@ -357,7 +359,7 @@ export async function getThumbnailAppearance(
   editionId: string,
 ): Promise<ThumbnailAppearanceView> {
   const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
-  return appearanceView(theme, parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson));
+  return appearanceView(theme, edition.locale, parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson));
 }
 
 export async function saveThumbnailAppearance(
@@ -365,7 +367,7 @@ export async function saveThumbnailAppearance(
   editionId: string,
   appearance: ThumbnailAppearance | null,
 ): Promise<ThumbnailAppearanceView> {
-  const { theme } = await requireEditionWithTheme(prisma, editionId);
+  const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
   const normalized = normalizeThumbnailAppearance(appearance);
   await prisma.languageEdition.update({
     where: { id: editionId },
@@ -373,7 +375,7 @@ export async function saveThumbnailAppearance(
       thumbnailAppearanceJson: normalized === null ? null : JSON.stringify(normalized),
     },
   });
-  return appearanceView(theme, normalized);
+  return appearanceView(theme, edition.locale, normalized);
 }
 
 export async function createThumbnailPreview(
@@ -388,7 +390,7 @@ export async function createThumbnailPreview(
     input.appearance === undefined
       ? parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson)
       : normalizeThumbnailAppearance(input.appearance);
-  const compiled = compile(document, theme, (assetId) => ({
+  const compiled = compile(document, theme, edition.locale, (assetId) => ({
     url: renderContentUrl(assetId),
     kind: "image",
   }), commonAppearance);
@@ -458,7 +460,7 @@ export async function generateThumbnailImage(
     ),
   );
 
-  const compiled = compile(document, theme, (assetId) => {
+  const compiled = compile(document, theme, row.languageEdition.locale, (assetId) => {
     const url = dataUrls.get(assetId);
     if (url === undefined) {
       throw new CompositionCompileError([

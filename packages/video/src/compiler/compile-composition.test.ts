@@ -224,6 +224,40 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("Custom Font");
   });
 
+  it("prefers the theme locale font face over the shared one", () => {
+    const document = validContentDocument();
+    document.locale = "zh-Hant";
+    const base = getVisualTheme("soft-editorial", 1)!;
+    const face = (family: string) => ({
+      family,
+      style: "normal" as const,
+      weight: 400,
+      fallbacks: [],
+    });
+    const theme = {
+      ...base,
+      textRoles: {
+        ...base.textRoles,
+        label: {
+          ...base.textRoles.label,
+          fontFace: face("Noto Sans JP"),
+          fontFaceByLocale: { "zh-Hant": face("PingFang TC") },
+        },
+      },
+    };
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-label-zh",
+        template: { id: "text.block", version: 1 },
+        layer: "overlay",
+        input: { text: "標籤", role: "label" },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver, resolvedTheme: theme });
+    expect(compiled.html).toContain("'PingFang TC'");
+    expect(compiled.html).not.toContain("'Noto Sans JP'");
+  });
+
   it("crossfades by extending the previous scene and fading in the entering scene", () => {
     const document = validContentDocument();
     document.scenes[1]!.transition = { enter: { preset: "crossfade", durationMs: 300 } };

@@ -18,27 +18,37 @@ import {
 
 describe("resolveFontFamilyCss", () => {
   it("falls back to the category stack without a font face", () => {
-    expect(resolveFontFamilyCss(undefined, "sans")).toContain("sans-serif");
-    expect(resolveFontFamilyCss({}, "serif")).toContain("serif");
+    expect(resolveFontFamilyCss(undefined, "sans", "ja-JP")).toContain("sans-serif");
+    expect(resolveFontFamilyCss({}, "serif", "ja-JP")).toContain("serif");
   });
 
   it("pins the selected local face before its family and the category stack", () => {
-    expect(resolveFontFamilyCss({ platformId: "YuMin-Medium", family: "游明朝体" }, "serif")).toBe(
-      "'YuMin-Medium','游明朝体','Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif",
-    );
+    expect(
+      resolveFontFamilyCss({ platformId: "YuMin-Medium", family: "游明朝体" }, "serif", "ja-JP"),
+    ).toBe("'YuMin-Medium','游明朝体','Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif");
   });
 
   it("keeps a family-only font face usable", () => {
-    expect(resolveFontFamilyCss({ family: "Hiragino Sans" }, "sans")).toMatch(
+    expect(resolveFontFamilyCss({ family: "Hiragino Sans" }, "sans", "ja-JP")).toMatch(
       /^'Hiragino Sans','Noto Sans JP'/,
     );
   });
 
   it("drops duplicate names and escapes unsafe characters", () => {
-    expect(resolveFontFamilyCss({ platformId: "YuMin-Medium", family: "yumin-medium" }, "serif")).toMatch(
-      /^'YuMin-Medium','Hiragino Mincho ProN'/,
+    expect(
+      resolveFontFamilyCss({ platformId: "YuMin-Medium", family: "yumin-medium" }, "serif", "ja-JP"),
+    ).toMatch(/^'YuMin-Medium','Hiragino Mincho ProN'/);
+    expect(resolveFontFamilyCss({ platformId: "Bad';}{Name" }, "sans", "ja-JP")).toMatch(
+      /^'BadName',/,
     );
-    expect(resolveFontFamilyCss({ platformId: "Bad';}{Name" }, "sans")).toMatch(/^'BadName',/);
+  });
+
+  it("uses the simplified and traditional Chinese stacks for zh locales", () => {
+    expect(resolveFontFamilyCss(undefined, "sans", "zh-Hans")).toMatch(/^'PingFang SC'/);
+    expect(resolveFontFamilyCss(undefined, "sans", "zh-Hant")).toMatch(/^'PingFang TC'/);
+    expect(resolveFontFamilyCss(undefined, "mono", "zh-Hans")).toMatch(
+      /^'SFMono-Regular'.*'PingFang SC','Noto Sans SC',monospace$/,
+    );
   });
 });
 
@@ -89,6 +99,6 @@ describe("theme resolution", () => {
     const theme = resolveVisualTheme(validContentDocument());
     expect(accentSoftHex("#123456", theme)).toBe(mixHex("#123456", "#FAF6EE", 0.8));
     expect(sceneAccentStyle("#123456", theme)).toContain("--kakeai-accent:#123456");
-    expect(themeRootStyle(theme)).toContain("--kakeai-canvas:#FAF6EE");
+    expect(themeRootStyle(theme, "ja-JP")).toContain("--kakeai-canvas:#FAF6EE");
   });
 });

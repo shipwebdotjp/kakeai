@@ -374,7 +374,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   const titleHtml =
     title === undefined || title.trim().length === 0
       ? ""
-      : `<figcaption class="kakeai-charttitle" style="${themeRoleFontStyle(context.theme, "heading")}">${escapeHtmlText(title)}</figcaption>`;
+      : `<figcaption class="kakeai-charttitle" style="${themeRoleFontStyle(context.theme, "heading", context.document.locale)}">${escapeHtmlText(title)}</figcaption>`;
   const legendHtml = buildLegend(
     seriesCount,
     colorBy,
@@ -387,7 +387,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   const orientationClass = orientation === "horizontal" ? " kakeai-chart-horizontal" : "";
 
   return {
-    html: `<figure class="kakeai-chartwrap" style="${themeRoleFontStyle(context.theme, "body")}"><div class="kakeai-chartframe${gridClass}${orientationClass}">${titleHtml}${legendHtml}${body}</div></figure>`,
+    html: `<figure class="kakeai-chartwrap" style="${themeRoleFontStyle(context.theme, "body", context.document.locale)}"><div class="kakeai-chartframe${gridClass}${orientationClass}">${titleHtml}${legendHtml}${body}</div></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

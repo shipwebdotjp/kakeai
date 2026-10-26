@@ -11,6 +11,7 @@ import {
   latestVisualThemeDefinitions,
   listVisualSkinDefinitions,
   listVisualThemes,
+  normalizeThemeFontFaceLocales,
   resolveVisualThemeSkin,
   toVisualThemeDefinitionV2,
   visualThemeDefinitionSchema,
@@ -85,6 +86,72 @@ describe("visualThemeRegistry", () => {
       accents: { ...theme.accents, primary: "#19736d" },
     };
     expect(visualThemeDefinitionSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it("accepts locale-specific font faces on a text role", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const withLocaleFonts = {
+      ...theme,
+      textRoles: {
+        ...theme.textRoles,
+        title: {
+          ...theme.textRoles.title,
+          fontFaceByLocale: {
+            "zh-Hant": { family: "PingFang TC" },
+            "zh-Hans": { family: "PingFang SC" },
+          },
+        },
+      },
+    };
+    expect(visualThemeDefinitionSchema.safeParse(withLocaleFonts).success).toBe(true);
+  });
+
+  it("rejects an unsupported locale key in fontFaceByLocale", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const broken = {
+      ...theme,
+      textRoles: {
+        ...theme.textRoles,
+        title: {
+          ...theme.textRoles.title,
+          fontFaceByLocale: { "fr-FR": { family: "Some Font" } },
+        },
+      },
+    };
+    expect(visualThemeDefinitionSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it("normalizes an empty fontFaceByLocale away from every text style", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const withEmpty = {
+      ...theme,
+      textRoles: {
+        ...theme.textRoles,
+        title: { ...theme.textRoles.title, fontFaceByLocale: {} },
+      },
+      caption: {
+        layout: "frame" as const,
+        speaker: {
+          text: {
+            ...theme.textRoles.body,
+            fontFaceByLocale: {},
+          },
+          surface: {
+            enabled: true,
+            backgroundColor: "#1B2740",
+            backgroundOpacity: 0.85,
+            paddingHorizontal: 16,
+            paddingVertical: 4,
+            borderRadius: 8,
+          },
+        },
+      },
+    };
+    const normalized = normalizeThemeFontFaceLocales(withEmpty);
+    expect("fontFaceByLocale" in normalized.textRoles.title).toBe(false);
+    expect(
+      "fontFaceByLocale" in (normalized.caption?.speaker?.text ?? {}),
+    ).toBe(false);
   });
 });
 

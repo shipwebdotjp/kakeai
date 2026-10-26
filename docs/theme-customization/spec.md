@@ -65,6 +65,10 @@ Theme RevisionとTheme Draftの定義JSONは`themeDefinitionSchemaVersion`を持
 
 `text.block@1`は`label` roleを追加し、個別Cueの文字上書きが必要なときにFont Face参照とText Styleの上書きを受け取れるようにする（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `@2` から `@1` へ再基準化）。旧`font: sans | serif | mono`指定は描画互換のため残し、選択ThemeのFont Face既定より優先する。
 
+Text Styleは、locale別のFont Face上書き `fontFaceByLocale`（`Partial<Record<SupportedLocale, FontFaceSpec>>`、optional）を持てる（[ADR 0097](../adr/0097-locale-specific-theme-fonts.md)）。`themeDefinitionSchemaVersion` は 2 のまま加算し、既存定義はそのまま解釈する。未知localeキーはZodで拒否し、最後のlocaleエントリを消した場合は `{}` を保存せず `fontFaceByLocale` 自体を省略する（空辞書と未指定を同義にする）。Font CatalogはUIの選択肢の根拠であり、未検出faceを保存・公開の拒否理由にはしない。`FontFaceSpec.fallbacks` はCSS出力に使わない。
+
+Font Faceの解決順は、Cueの明示上書き → `fontFaceByLocale[document.locale]` → Text Styleの共通 `fontFace` → locale依存のカテゴリスタックとする。サムネイルは候補Appearance → Edition共通Appearance → Themeのlocale別 → Themeの共通 → locale別スタックの順で、`resolveThumbnailAppearanceDefaults` がlocale別指定を `fontFace` へ具現化してからAppearanceを重ねる。カテゴリスタックは `THEME_FONT_STACKS` をja-JP・en-USの既定とし、zh-Hansは `PingFang SC`/`Noto Sans SC`、zh-Hantは `PingFang TC`/`Noto Sans TC` を先頭にする。`mono` はLatin等幅の後・generic `monospace` の前にCJKフォールバックを置く。HTMLの `lang` は動画がContentDocument locale、サムネイルがLanguage Edition localeを出力する。
+
 値の解決順はプロパティ単位で次のとおりとする。
 
 1. Cueの明示上書き

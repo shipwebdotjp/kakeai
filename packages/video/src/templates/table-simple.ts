@@ -129,9 +129,9 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
   const captionHtml =
     caption === undefined || caption.trim().length === 0
       ? ""
-      : `<figcaption class="kakeai-tablecaption" style="${themeRoleFontStyle(theme, "heading")}">${escapeHtmlText(caption)}</figcaption>`;
+      : `<figcaption class="kakeai-tablecaption" style="${themeRoleFontStyle(theme, "heading", context.document.locale)}">${escapeHtmlText(caption)}</figcaption>`;
   return {
-    html: `<figure class="kakeai-tablewrap" style="${themeRoleFontStyle(theme, "body")}"><div class="kakeai-tableframe kakeai-table-${preset}${zebra ? " kakeai-table-zebra" : ""}">${captionHtml}<table class="kakeai-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div></figure>`,
+    html: `<figure class="kakeai-tablewrap" style="${themeRoleFontStyle(theme, "body", context.document.locale)}"><div class="kakeai-tableframe kakeai-table-${preset}${zebra ? " kakeai-table-zebra" : ""}">${captionHtml}<table class="kakeai-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

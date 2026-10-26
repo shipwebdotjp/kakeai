@@ -46,11 +46,13 @@ function compile(
   options: {
     appearanceOverride?: ThumbnailAppearance;
     appearance?: Parameters<typeof compileThumbnail>[0]["appearance"];
+    locale?: Parameters<typeof compileThumbnail>[0]["locale"];
   } = {},
 ) {
   return compileThumbnail({
     document: document(input, options.appearanceOverride),
     theme,
+    locale: options.locale ?? "ja-JP",
     assetResolver,
     appearance: options.appearance,
   });
@@ -145,11 +147,48 @@ describe("compileThumbnail", () => {
         input: BASE_INPUT,
       },
       theme,
+      locale: "ja-JP",
       assetResolver,
       appearance: { headline: { color: "#00FFFF" } },
     });
     expect(compiled.html).toContain("color:#00FFFF");
     expect(compiled.assetIds).toEqual(["ast_bg", "ast_fg"]);
+  });
+
+  it("uses the language-edition locale for the html lang and the theme locale font", () => {
+    const face = (family: string) => ({
+      family,
+      style: "normal" as const,
+      weight: 400,
+      fallbacks: [],
+    });
+    const localizedTheme = {
+      ...theme,
+      textRoles: {
+        ...theme.textRoles,
+        title: {
+          ...theme.textRoles.title,
+          fontFaceByLocale: { "zh-Hant": face("PingFang TC") },
+        },
+      },
+    };
+    const compiled = compileThumbnail({
+      document: document(),
+      theme: localizedTheme,
+      locale: "zh-Hant",
+      assetResolver,
+    });
+    expect(compiled.html).toContain('<html lang="zh-Hant">');
+    expect(compiled.html).toContain("'PingFang TC'");
+    // An explicit appearance face still wins over the theme locale entry.
+    const overridden = compileThumbnail({
+      document: document(),
+      theme: localizedTheme,
+      locale: "zh-Hant",
+      assetResolver,
+      appearance: { headline: { fontFace: face("Explicit Font") } },
+    });
+    expect(overridden.html).toContain("font-family:'Explicit Font'");
   });
 
   it("uses an explicit accent without automatic contrast adjustment", () => {
@@ -224,6 +263,7 @@ describe("compileThumbnail", () => {
           input: BASE_INPUT,
         },
         theme,
+        locale: "ja-JP",
         assetResolver,
       }),
     ).toThrow(CompositionCompileError);

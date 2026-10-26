@@ -17,6 +17,7 @@ import type {
   CompositionVersionResolved,
 } from "../composition-resolver";
 import { CompositionCompileError } from "../compile-error";
+import { escapeHtmlAttribute } from "../escape";
 import { captionLayoutStyle } from "../caption-layout";
 import { getGsapBundleSource } from "../gsap-bundle";
 import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "../meta";
@@ -28,7 +29,7 @@ import type {
 import { type VideoPlaybackPlan } from "../video-playback";
 import {
   overlayToRgba,
-  resolveFontFamilyCss,
+  resolveTextStyleFontFamilyCss,
   resolveVisualTheme,
   themeRootStyle,
 } from "../theme";
@@ -117,9 +118,9 @@ export function compileDocument(
   const captionLayout: CaptionLayout = resolveThemeCaptionLayout(theme);
   const showSpeakerName = resolveCaptionSettings(document).showSpeakerName;
   const captionSpeakerStyle = resolveCaptionSpeakerStyle(theme);
-  const captionSpeakerFontFamily = resolveFontFamilyCss(
-    captionSpeakerStyle.text.fontFace,
-    captionSpeakerStyle.text.font,
+  const captionSpeakerFontFamily = resolveTextStyleFontFamilyCss(
+    captionSpeakerStyle.text,
+    document.locale,
   );
   const captionSpeakerScrim = `background:${overlayToRgba(theme.scrim)}`;
   const captionSpeakerSurfaceStyle = surfaceStyleCss(
@@ -246,7 +247,7 @@ export function compileDocument(
 
   const html = [
     "<!doctype html>",
-    `<html lang="ja">`,
+    `<html lang="${escapeHtmlAttribute(document.locale)}">`,
     "<head>",
     `<meta charset="UTF-8">`,
     `<meta name="viewport" content="width=${OUTPUT_WIDTH}, height=${OUTPUT_HEIGHT}">`,
@@ -254,7 +255,7 @@ export function compileDocument(
     `<style>${STYLES}</style>`,
     "</head>",
     "<body>",
-    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme)};${captionLayoutStyle(theme, captionLayout)}">`,
+    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme, document.locale)};${captionLayoutStyle(theme, captionLayout)}">`,
     ...clips,
     ...audios,
     "</div>",

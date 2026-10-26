@@ -26,8 +26,8 @@ import type { LineInterval } from "../render-context";
 import { type VideoPlaybackPlan } from "../video-playback";
 import {
   overlayToRgba,
-  resolveFontFamilyCss,
   resolveSceneAccentHex,
+  resolveTextStyleFontFamilyCss,
 } from "../theme";
 import type { ResolvedVisualSkin } from "../skins/types";
 import {
@@ -437,10 +437,7 @@ export function renderScenes(context: SceneRenderContext): void {
       const captionText = line.captionText.trim();
       if (captionText.length > 0) {
         const captionToken = theme.textRoles.caption;
-        const fontFamily = resolveFontFamilyCss(
-          captionToken.fontFace,
-          captionToken.font,
-        );
+        const fontFamily = resolveTextStyleFontFamilyCss(captionToken, document.locale);
 
         const captionSurface = theme.surfaces?.caption;
         const captionScrim = `background:${overlayToRgba(theme.scrim)}`;

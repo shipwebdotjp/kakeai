@@ -1,7 +1,11 @@
 import {
+  asSupportedLocale,
   getVisualTheme,
+  resolveTextStyleFontFace,
   type ContentDocument,
   type Scene,
+  type SupportedLocale,
+  type TextStyle,
   type ThemeFontCategory,
   type VisualThemeDefinition,
   type VisualThemeOverlay,
@@ -9,11 +13,60 @@ import {
 import { CompositionCompileError } from "./compile-error";
 import { escapeCssFontFamily, escapeHtmlAttribute } from "./escape";
 
+export { resolveTextStyleFontFace };
+
+const JA_SANS =
+  "'Noto Sans JP','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif";
+const JA_SERIF = "'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif";
+const LATIN_MONO = "'SFMono-Regular',Consolas,'Liberation Mono',Menlo";
+
+/** Locale-agnostic defaults. `ja-JP` and `en-US` keep using these stacks. */
 export const THEME_FONT_STACKS: Record<ThemeFontCategory, string> = {
-  sans: "'Noto Sans JP','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic','Meiryo',sans-serif",
-  serif: "'Hiragino Mincho ProN','Yu Mincho','MS PMincho',serif",
-  mono: "'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace",
+  sans: JA_SANS,
+  serif: JA_SERIF,
+  mono: `${LATIN_MONO},monospace`,
 };
+
+const LOCALE_FONT_STACKS: Partial<Record<SupportedLocale, Record<ThemeFontCategory, string>>> = {
+  "zh-Hans": {
+    sans: "'PingFang SC','Noto Sans SC','Noto Sans SC CJK','Hiragino Sans GB','Microsoft YaHei','Source Han Sans SC',sans-serif",
+    serif: "'Songti SC','Noto Serif SC','Noto Serif SC CJK','SimSun','Source Han Serif SC',serif",
+    // CJK fallback stays before the generic family so a missing glyph does not
+    // drop straight to the OS default monospace face.
+    mono: `${LATIN_MONO},'PingFang SC','Noto Sans SC',monospace`,
+  },
+  "zh-Hant": {
+    sans: "'PingFang TC','Noto Sans TC','Noto Sans TC CJK','Microsoft JhengHei','Source Han Sans TC',sans-serif",
+    serif: "'Songti TC','Noto Serif TC','Noto Serif TC CJK','PMingLiU','Source Han Serif TC',serif",
+    mono: `${LATIN_MONO},'PingFang TC','Noto Sans TC',monospace`,
+  },
+};
+
+/** The category fallback stack for a document locale. */
+export function themeFontStack(
+  category: ThemeFontCategory,
+  locale: string | undefined,
+): string {
+  const parsed = asSupportedLocale(locale);
+  const localized = parsed === undefined ? undefined : LOCALE_FONT_STACKS[parsed];
+  return localized?.[category] ?? THEME_FONT_STACKS[category];
+}
+
+/**
+ * Resolves a full `font-family` value for one text style: locale override,
+ * shared face, then the locale category stack. Single place for the precedence
+ * rules shared by captions, templates, skins, and thumbnails.
+ */
+export function resolveTextStyleFontFamilyCss(
+  style: Pick<TextStyle, "font" | "fontFace" | "fontFaceByLocale">,
+  locale: string | undefined,
+): string {
+  return resolveFontFamilyCss(
+    resolveTextStyleFontFace(style, locale),
+    style.font,
+    locale,
+  );
+}
 
 /**
  * Font names that identify a single local face, not just a family. The
@@ -30,28 +83,30 @@ export interface FontFaceNames {
 function themeRoleFont(
   theme: VisualThemeDefinition,
   role: keyof VisualThemeDefinition["textRoles"],
+  locale: string | undefined,
 ): string {
-  const token = theme.textRoles[role];
-  return resolveFontFamilyCss(token.fontFace, token.font);
+  return resolveTextStyleFontFamilyCss(theme.textRoles[role], locale);
 }
 
 /** Ready-made `font-family` declaration for a template's `style` attribute. */
 export function themeRoleFontStyle(
   theme: VisualThemeDefinition,
   role: keyof VisualThemeDefinition["textRoles"],
+  locale: string | undefined,
 ): string {
-  return `font-family:${escapeHtmlAttribute(themeRoleFont(theme, role))}`;
+  return `font-family:${escapeHtmlAttribute(themeRoleFont(theme, role, locale))}`;
 }
 
 /**
  * Builds the `font-family` value for a theme text role: the selected local
- * face first, then its family, then the category stack as a last resort.
- * Values come from the Font Catalog, never from free user input, and every
- * name is escaped before it reaches CSS.
+ * face first, then its family, then the locale category stack as a last
+ * resort. Values come from the Font Catalog, never from free user input, and
+ * every name is escaped before it reaches CSS.
  */
 export function resolveFontFamilyCss(
   fontFace: FontFaceNames | undefined,
   category: ThemeFontCategory,
+  locale: string | undefined,
 ): string {
   const names: string[] = [];
   const push = (name: string | undefined): void => {
@@ -67,7 +122,7 @@ export function resolveFontFamilyCss(
   push(fontFace?.platformId);
   push(fontFace?.family);
 
-  const stack = THEME_FONT_STACKS[category];
+  const stack = themeFontStack(category, locale);
   if (names.length === 0) {
     return stack;
   }
@@ -161,7 +216,7 @@ export function accentForegroundHex(softHex: string, theme: VisualThemeDefinitio
     : theme.text;
 }
 
-export function themeRootStyle(theme: VisualThemeDefinition): string {
+export function themeRootStyle(theme: VisualThemeDefinition, locale: string | undefined): string {
   return [
     `--kakeai-canvas:${theme.canvas.base}`,
     `--kakeai-ink:${theme.canvas.ink}`,
@@ -179,9 +234,9 @@ export function themeRootStyle(theme: VisualThemeDefinition): string {
     `--kakeai-accent-primary:${theme.accents.primary}`,
     `--kakeai-accent-secondary:${theme.accents.secondary}`,
     `--kakeai-accent-tertiary:${theme.accents.tertiary}`,
-    `--kakeai-font-sans:${THEME_FONT_STACKS.sans}`,
-    `--kakeai-font-serif:${THEME_FONT_STACKS.serif}`,
-    `--kakeai-font-mono:${THEME_FONT_STACKS.mono}`,
+    `--kakeai-font-sans:${themeFontStack("sans", locale)}`,
+    `--kakeai-font-serif:${themeFontStack("serif", locale)}`,
+    `--kakeai-font-mono:${themeFontStack("mono", locale)}`,
   ].join(";");
 }
 

@@ -10,6 +10,7 @@ import {
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
+import { escapeHtmlAttribute } from "../escape";
 import { THUMBNAIL_OUTPUT_HEIGHT, THUMBNAIL_OUTPUT_WIDTH } from "../meta";
 import type { AssetResolver } from "../resolver";
 import { renderCutoutHero, type RenderedThumbnail, type ThumbnailRenderContext } from "./render";
@@ -17,6 +18,8 @@ import { renderCutoutHero, type RenderedThumbnail, type ThumbnailRenderContext }
 export interface CompileThumbnailOptions {
   document: ThumbnailDocument;
   theme: VisualThemeDefinition;
+  /** Language Edition locale. Drives `lang` and the Theme's locale font. */
+  locale: string | undefined;
   assetResolver: AssetResolver;
   /** Saved language-edition appearance. Candidate overrides live in the document. */
   appearance?: ThumbnailAppearance | null;
@@ -34,6 +37,9 @@ const THUMBNAIL_STYLES = [
   "html,body{margin:0;padding:0}",
   `body{width:${THUMBNAIL_OUTPUT_WIDTH}px;height:${THUMBNAIL_OUTPUT_HEIGHT}px;overflow:hidden}`,
 ].join("");
+
+/** Fallback for callers that omit the Language Edition locale (legacy `lang="ja"`). */
+const DEFAULT_THUMBNAIL_LANG = "ja";
 
 function dispatch(
   key: string,
@@ -54,10 +60,10 @@ function dispatch(
   }
 }
 
-function assemble(inner: string): string {
+function assemble(inner: string, locale: string | undefined): string {
   return [
     "<!doctype html>",
-    `<html lang="ja">`,
+    `<html lang="${escapeHtmlAttribute(locale ?? DEFAULT_THUMBNAIL_LANG)}">`,
     "<head>",
     `<meta charset="UTF-8">`,
     `<meta name="viewport" content="width=${THUMBNAIL_OUTPUT_WIDTH}, height=${THUMBNAIL_OUTPUT_HEIGHT}">`,
@@ -74,7 +80,7 @@ function assemble(inner: string): string {
 }
 
 export function compileThumbnail(options: CompileThumbnailOptions): CompiledThumbnail {
-  const { document, theme, assetResolver } = options;
+  const { document, theme, assetResolver, locale } = options;
   const { id, version } = document.template;
   const definition = getThumbnailTemplate(id, version);
   if (definition === undefined) {
@@ -104,18 +110,19 @@ export function compileThumbnail(options: CompileThumbnailOptions): CompiledThum
     thumbnailAppearanceOverrideOf(document),
   );
   const appearance = applyThumbnailAppearance(
-    resolveThumbnailAppearanceDefaults(theme),
+    resolveThumbnailAppearanceDefaults(theme, locale),
     merged,
   );
   const rendered = dispatch(`${id}@${version}`, parsed.data, {
     theme,
+    locale,
     assetResolver,
     path: ["input"],
     appearance,
     accentOverridden: merged?.accent !== undefined,
   });
   return {
-    html: assemble(rendered.html),
+    html: assemble(rendered.html, locale),
     assetIds: rendered.assetIds,
     width: THUMBNAIL_OUTPUT_WIDTH,
     height: THUMBNAIL_OUTPUT_HEIGHT,

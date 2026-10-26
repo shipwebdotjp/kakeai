@@ -8,7 +8,7 @@ import {
 } from "@kakeai/contracts";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
-import { hexToRgb, resolveFontFamilyCss } from "../theme";
+import { hexToRgb, resolveFontFamilyCss, resolveTextStyleFontFamilyCss } from "../theme";
 
 export type TextAnchor = "left" | "center" | "right";
 export type VerticalAlign = "top" | "middle" | "bottom";
@@ -167,6 +167,7 @@ export function resolveTextBlockSpec(
   input: unknown,
   path: (string | number)[],
   theme: VisualThemeDefinition,
+  locale: string | undefined,
 ): TextBlockRenderSpec | null {
   const parsed = textBlockInputSchema.safeParse(input);
 
@@ -207,10 +208,11 @@ export function resolveTextBlockSpec(
     : themeToken?.lineHeight ?? fallback.lineHeight;
 
   const fontFaceSpec = "fontFace" in data ? data.fontFace : undefined;
-  const themeFontFace = themeToken?.fontFace;
-  const selectedFontFace = fontFaceSpec ?? themeFontFace;
-
-  const fontFamilyCss = resolveFontFamilyCss(selectedFontFace, font);
+  const fontFamilyCss = fontFaceSpec !== undefined
+    ? resolveFontFamilyCss(fontFaceSpec, font, locale)
+    : themeToken !== undefined
+      ? resolveTextStyleFontFamilyCss({ ...themeToken, font }, locale)
+      : resolveFontFamilyCss(undefined, font, locale);
 
   const decoration: TextDecoration = {
     bold: data.decoration?.bold ?? themeToken?.decoration.bold ?? fallback.decoration.bold,
@@ -241,8 +243,9 @@ export function renderTextBlock(
   input: unknown,
   path: (string | number)[],
   theme: VisualThemeDefinition,
+  locale: string | undefined,
 ): string {
-  const spec = resolveTextBlockSpec(input, path, theme);
+  const spec = resolveTextBlockSpec(input, path, theme, locale);
   if (spec === null) {
     return "";
   }
