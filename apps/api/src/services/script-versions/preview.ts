@@ -2,7 +2,9 @@ import {
   assertTakeDurations,
   assertAssetsAvailable,
   assertFaceSetReferences,
+  faceSetKey,
   loadAllReferences,
+  toSnapshotFaceSet,
   renderSourceDurationMs,
 } from "./references";
 import { assertInsertScenes, assertVideoPlayback } from "./validation";
@@ -35,7 +37,7 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import { deserializeContent } from "../../domain/content-json.ts";
-import { toFaceSet } from "../../dto/mappers.ts";
+
 import { ApiError } from "../../http/errors.ts";
 import { API_BASE_PATH } from "../../http/security.ts";
 import { resourceNotFound, validationError } from "../../http/validation.ts";
@@ -167,14 +169,14 @@ export async function compilePreview(
   content: ContentDocument,
   options: CompilePreviewOptions = {},
 ): Promise<CompiledPreview> {
-  const { references, assetById, faceSetById } = await loadAllReferences(
+  const { references, assetById, faceSetByKey } = await loadAllReferences(
     prisma,
     content,
   );
   assertAssetsAvailable(references, assetById);
   assertInsertScenes(content, assetById);
   assertVideoPlayback(content, assetById);
-  assertFaceSetReferences(content, faceSetById, assetById);
+  assertFaceSetReferences(content, faceSetByKey, assetById);
   if (options.strictTakeDurations === true) {
     assertTakeDurations(content, assetById);
   }
@@ -247,8 +249,8 @@ export async function compilePreview(
         }
         return found;
       },
-      faceSetResolver: (faceSetId) => {
-        const row = faceSetById.get(faceSetId);
+      faceSetResolver: (faceSetId, version) => {
+        const row = faceSetByKey.get(faceSetKey(faceSetId, version));
         if (row === undefined) {
           throw new CompositionCompileError([
             {
@@ -258,13 +260,7 @@ export async function compilePreview(
             },
           ]);
         }
-        const dto = toFaceSet(row);
-        return {
-          id: dto.id,
-          name: dto.name,
-          layers: dto.layers,
-          expressions: dto.expressions,
-        };
+        return toSnapshotFaceSet(row);
       },
       assetResolver: (assetId) => {
         const asset = assetById.get(assetId);

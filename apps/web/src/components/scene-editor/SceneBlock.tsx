@@ -9,7 +9,6 @@ import {
 import {
   type Asset,
   type ContentDocument,
-  type FaceSet,
   type VoiceAdapterId,
   type VoiceProfile,
   type Warning,
@@ -97,8 +96,6 @@ interface SceneBlockProps {
   adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
   bulkRunning: boolean;
-  faceSets: FaceSet[];
-  faceSetsReady: boolean;
   scriptVersionId: string;
   onMove: (sceneIndex: number, direction: -1 | 1) => void;
   onRemoveScene: (sceneIndex: number) => void;
@@ -412,8 +409,6 @@ export function SceneBlock(props: SceneBlockProps) {
               adapterVoices={props.adapterVoices}
               savedVoiceByLineId={props.savedVoiceByLineId}
               bulkRunning={props.bulkRunning}
-              faceSets={props.faceSets}
-              faceSetsReady={props.faceSetsReady}
               onSplitScene={props.onSplitScene}
               onJumpToLine={props.onJumpToLine}
               onWarnings={props.onWarnings}

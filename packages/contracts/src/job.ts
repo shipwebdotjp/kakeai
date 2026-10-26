@@ -18,6 +18,8 @@ export const snapshotCompositionVersionRefSchema = z.object({
 
 export const snapshotFaceSetRefSchema = z.object({
   id: idSchema,
+  /** Set for revisions created after Face Set versioning; absent in old jobs. */
+  version: positiveInt.optional(),
   name: z.string(),
   layers: z.array(faceLayerSchema),
   expressions: z.array(expressionPresetSchema),

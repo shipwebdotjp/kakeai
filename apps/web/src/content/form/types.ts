@@ -53,6 +53,10 @@ export interface AppearanceFormValue {
   pose: string;
   label: string;
   faceSetId: string | null;
+  /** Pinned Face Set revision. `null` with a non-null faceSetId means legacy v1. */
+  faceSetVersion: number | null;
+  /** Library source appearance; null for work-local additions. */
+  libraryAppearanceId: string | null;
 }
 
 export interface CharacterFormValue {
@@ -62,6 +66,8 @@ export interface CharacterFormValue {
   voiceProfileId: string | null;
   voices: CharacterVoice[];
   appearances: AppearanceFormValue[];
+  /** Library source character; null when not copied from the library. */
+  libraryCharacterId: string | null;
 }
 
 export interface SpeakerFormValue {

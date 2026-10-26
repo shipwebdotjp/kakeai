@@ -47,6 +47,7 @@ describe("faceSetSchema", () => {
       faceSetSchema.safeParse({
         ...validRequest(),
         id: "faceset-rin",
+        version: 1,
         createdAt: "2026-10-09T00:00:00.000Z",
         updatedAt: "2026-10-09T00:00:00.000Z",
       }).success,

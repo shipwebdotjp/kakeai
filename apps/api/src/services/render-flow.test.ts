@@ -190,8 +190,9 @@ describe("render job creation", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -345,8 +346,9 @@ describe("render job creation", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
+          { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id, faceSetVersion: 1, libraryAppearanceId: null },
         ],
       },
     ];
@@ -512,8 +514,9 @@ describe("render worker", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];

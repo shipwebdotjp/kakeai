@@ -4,6 +4,7 @@ import type {
   CharacterLibraryEntry,
   CharacterName,
   CharacterVoice,
+  FaceSet,
   VoiceProfile,
 } from "@kakeai/contracts";
 import {
@@ -46,6 +47,8 @@ function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
       pose: appearance.pose,
       label: appearance.label ?? "",
       faceSetId: appearance.faceSetId,
+      faceSetVersion: null,
+      libraryAppearanceId: null,
     })),
   };
 }
@@ -68,7 +71,7 @@ function emptyDraft(): CharacterDraft {
 interface CharacterFormProps {
   entry?: CharacterLibraryEntry;
   voiceProfiles: VoiceProfile[];
-  faceSets: { id: string; name: string }[];
+  faceSets: Pick<FaceSet, "id" | "name" | "version">[];
 }
 
 function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {

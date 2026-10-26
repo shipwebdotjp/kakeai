@@ -24,6 +24,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   THUMBNAIL_INPUT_INVALID: "サムネイルを生成できません。",
   VOICE_PROFILE_IN_USE: "この声プロファイルは使用中のため削除できません。",
   FACE_SET_IN_USE: "この表情セットは使用中のため削除できません。",
+  FACE_SET_VERSION_CONFLICT: "他の更新と改訂版番号が競合しました。再試行してください。",
   TTS_INPUT_INVALID: "音声生成の入力を確認してください。",
   TTS_ENGINE_UNAVAILABLE: "音声エンジンに接続できません。起動を確認してください。",
   INVALID_STATE: "現在の状態では操作を実行できません。",

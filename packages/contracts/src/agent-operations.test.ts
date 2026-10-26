@@ -566,6 +566,7 @@ describe("script.save and script.validate with character locale names", () => {
         ],
         voices: [],
         appearances: [],
+        libraryCharacterId: null,
       },
     ];
     expect(
@@ -719,6 +720,19 @@ describe("character write operation contracts", () => {
       }).success,
     ).toBe(true);
     expect(
+      agentCharacterUpdateInputSchema.safeParse({
+        characterId: "char-1",
+        appearances: [
+          {
+            id: "appearance-1",
+            assetId: "asset-1",
+            expression: "smile",
+            pose: "front",
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
       agentCharacterUpdateInputSchema.safeParse({ characterId: "char-1", extra: true })
         .success,
     ).toBe(false);
@@ -768,6 +782,7 @@ describe("library read operations", () => {
   const faceSet = {
     id: "face-set-1",
     name: "基本",
+    version: 1,
     layers: [],
     expressions: [],
     createdAt: timestamp,
@@ -851,6 +866,12 @@ describe("library read operations", () => {
     expect(agentFaceSetGetInputSchema.safeParse({ faceSetId: faceSet.id }).success).toBe(
       true,
     );
+    expect(
+      agentFaceSetGetInputSchema.safeParse({ faceSetId: faceSet.id, version: 2 }).success,
+    ).toBe(true);
+    expect(
+      agentFaceSetGetInputSchema.safeParse({ faceSetId: faceSet.id, version: 0 }).success,
+    ).toBe(false);
     expect(agentFaceSetGetInputSchema.safeParse({}).success).toBe(false);
     expect(agentFaceSetListOutputSchema.safeParse({ faceSets: [faceSet] }).success).toBe(
       true,

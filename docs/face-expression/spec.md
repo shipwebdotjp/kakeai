@@ -1,6 +1,6 @@
 # キャラクター表情 仕様
 
-Status: Proposed（未実装）
+Status: Implemented
 
 ## 目的と境界
 
@@ -8,7 +8,7 @@ Status: Proposed（未実装）
 
 v1 は部位合成による表情切替を対象とし、瞬きと発話区間の簡易口パクを含む。いずれも `blinkLayerId` / `speakingLayerId` の任意対応で有効化し、素材形式の移行は不要とする。
 
-台本の正本JSON契約は [../mvp/content-schema.md](../mvp/content-schema.md)、HTTP契約は [../mvp/api-contract.md](../mvp/api-contract.md) を正とする。立ち絵の左右配置と発話中バウンドは [../multi-standing/spec.md](../multi-standing/spec.md) を正とする。決定は [ADR-0045](../adr/0045-face-set-global-reference.md)・[ADR-0046](../adr/0046-character-standing-v3-face-composite.md)・[ADR-0047](../adr/0047-per-line-expression-id.md)・[ADR-0048](../adr/0048-deterministic-blink-and-speaking-mouth.md) を参照する。
+台本の正本JSON契約は [../mvp/content-schema.md](../mvp/content-schema.md)、HTTP契約は [../mvp/api-contract.md](../mvp/api-contract.md) を正とする。立ち絵の左右配置と発話中バウンドは [../multi-standing/spec.md](../multi-standing/spec.md) を正とする。決定は [ADR-0102](../adr/0102-face-set-revisions-and-pinned-works.md)・[ADR-0103](../adr/0103-character-library-explicit-update.md)・[ADR-0046](../adr/0046-character-standing-v3-face-composite.md)・[ADR-0047](../adr/0047-per-line-expression-id.md)・[ADR-0048](../adr/0048-deterministic-blink-and-speaking-mouth.md) を参照する。
 
 ## 用語とモデル
 
@@ -37,13 +37,15 @@ NarrationSegment.expressionId ──> ExpressionPreset (話者キャラの外観
 - Sceneは構図・背景・登場状態の単位であり、表情変更では分割しない。立ち絵は `character.standing@1` の左右1体ずつ最大2体という既存の制約を変えない。
 - Character Appearance は任意で1つの Face Set を `faceSetId` で参照する。服装だけを変え、顔位置・向き・縮尺が同じなら同じ Face Set を共有できる。
 - 横顔、顔の向き、顔位置、頭身が異なる外観は別 Face Set を使う。見た目だけ似ていても、互換性を推測して自動共有しない。
-- Face Set はグローバルライブラリに置く。作品の ScriptVersion は Face Set を `faceSetId` で参照し、内容はコピーしない（[ADR-0045](../adr/0045-face-set-global-reference.md)）。ライブラリ側の変更は次回のプレビュー／レンダーへ反映され、保存済み作品の再レンダー結果が変わり得る。
-- Face Set には `normal` の Expression Preset を必須にする。これは中立の眉・目・口レイヤーで構成し、表情を焼き込んだ別の全身 `normal` 画像は要求しない。
+- Face Set はグローバルライブラリに置く。作品の ScriptVersion は Face Set の**不変の改訂版**を `faceSetId` と `faceSetVersion` で固定し、内容はコピーしない（[ADR-0102](../adr/0102-face-set-revisions-and-pinned-works.md)）。ライブラリの Character は常に最新版を参照する。
+- Face Set の編集は既存の改訂版を書き換えず、新しい改訂版を作る。名前だけの変更では版を増やさない。保存済み作品は固定した版を使い続けるため、ライブラリの編集で再レンダー結果は変わらない。
+- Face Set には各改訂版に `normal` の Expression Preset を必須にする。これは中立の眉・目・口レイヤーで構成し、表情を焼き込んだ別の全身 `normal` 画像は要求しない。
+- 固定版を最新版へ移すのは、作品の Character をライブラリと紐づけて「ライブラリから更新」を実行したときだけである（[ADR-0103](../adr/0103-character-library-explicit-update.md)）。
 
 ### 表情プリセット
 
 - v1 は固定の表情語彙を持たない。Face Set ごとに任意の Expression Preset を追加でき、`normal` だけが必須である。
-- `expressionId` は Face Set 内で一意かつ変更不能とする。表示名は後から変更できる。
+- `expressionId` は同じ Face Set の改訂版内で一意とする。改訂版をまたいで同じ ID を維持すれば、固定版を移したときに同じ意図を引き継げる。表示名は後から変更できる。
 - UI に出す候補は、話者の有効な Character Appearance が参照する Face Set の登録済み preset だけである。Face Set を参照しない外観では表情候補を出さない。
 - `normal` は常に利用可能である。既存台詞などで表情が未指定、または `expressionId` が `null` なら `normal` と解釈する。
 - `happy` / `angry` / `surprised` / `sad` などの共通語彙は、将来の AI 提案で使う表示上の慣習とし、v1 では素材登録も id の予約も強制しない。
@@ -76,7 +78,7 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 - 口パクでは発話区間内の現在の口レイヤーを、登録済みの開口レイヤーへ不規則に短時間だけ置換する。発話区間外では閉じたままにする。
 - 対応先がないレイヤーは静止のままとする。汎用の別表情、別キャラクター、または別 Face Set のレイヤーで代用しない。
 - 同じ目・口レイヤーを複数の Expression preset が共有してよい。表情 × 目の開閉 × 口の開閉の全組合せを強制しない。
-- 動作時刻は `cue.id` と `characterId` から導いた固定シードの疑似乱数で決定する。プレビュー・再レンダー・再試行で動きが変わらないことを必須とする。既存の発話中バウンドと同じ決定性の方針に従い、1回の Render Job 内ではスナップショットに固定した Face Set を使う（[ADR-0045](../adr/0045-face-set-global-reference.md)）。瞬き・口パクの間隔・長さなどの動作パラメータは内部定数とし、正本JSONに保存しない。
+- 動作時刻は `cue.id` と `characterId` から導いた固定シードの疑似乱数で決定する。プレビュー・再レンダー・再試行で動きが変わらないことを必須とする。既存の発話中バウンドと同じ決定性の方針に従い、1回の Render Job 内ではスナップショットに固定した Face Set を使う（[ADR-0102](../adr/0102-face-set-revisions-and-pinned-works.md)）。瞬き・口パクの間隔・長さなどの動作パラメータは内部定数とし、正本JSONに保存しない。
 - 決定は [ADR-0048](../adr/0048-deterministic-blink-and-speaking-mouth.md) を参照する。
 
 ## 台詞、AI、編集
@@ -86,7 +88,14 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 - 話者のないナレーション等には `expressionId` を持たせない。`speakerId` が `null` のラインは `expressionId` を `null` に限る。
 - AI に提案させる場合、AI は話者ごとの利用可能な `expressionId` と表示名の allowlist を入力として受け、構造化出力はその allowlist 内の ID または未指定だけを許す。AI が提案した表情は人が台詞一覧で変更できる。AI の台本・台詞生成 Job は v1 の対象外であり、この入力契約は将来接続する（[../mvp/roadmap.md](../mvp/roadmap.md) Phase 2/3）。
 - 話者（`Speaker.characterId`）に対応する立ち絵がSceneに無い場合、その台詞の `expressionId` は描画に影響しない。
-- 外観や Face Set の変更によって既存台詞の表情が無効になる場合、保存・レンダー時に暗黙の代替をしない。先に `normal` または有効な preset へ編集して解消する。
+- 外観や固定版の変更によって既存台詞の表情が無効になる場合、保存・レンダー時に暗黙の代替をしない。先に `normal` または有効な preset へ編集して解消する。唯一の例外は「ライブラリから更新」で、確認画面に影響台詞を列挙したうえで、新しい固定版に存在しない表情を `null`（normal）へ戻す。
+
+## 改訂版と作品への取り込み
+
+- Face Set の保存は `FaceSetRevision` を追加する。UI は変更内容を「v3 → v4」として示し、既存作品には自動反映されないことを明記する。
+- 作品の外観は Face Set をコピーせず、`faceSetId` と `faceSetVersion` の組で参照する。ライブラリの Character の外観は `faceSetId` だけを持ち、最新版を解決する。
+- 表情素材を作り直すときは、寸法の異なるベース画像へ差し替える前に、新しい Face Set を別 ID で作る。1つの Face Set の改訂版は、ライブラリでその Face Set を使う全外観と互換でなければならない。
+- 顔素材の変更を既存作品へ反映したい場合は、作品ごとに「ライブラリから更新」を実行する。リンクのない旧作品、および作品内で手動追加した外観は対象外である。
 
 ## schemaVersion と移行
 
@@ -97,8 +106,12 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 
 - Face Set に属する Face Layer の `assetId` は、グローバルな素材ライブラリの `Asset` を指す。アップロード後 `ready` な画像だけを登録できる。
 - ベース画像と Face Layer の寸法一致は、保存時に `Asset.widthPx` / `Asset.heightPx` で検証する。判定できない場合は保存を拒否する。
+- 改訂版の保存時は、その Face Set を参照している**ライブラリ**の全 Character Appearance のベース画像とも寸法が一致することを検証する。不一致の内容は最新版として確定できない（422）。Face Set 編集画面は保存前に、紐づくライブラリ外観のベース画像との合成プレビューと寸法診断を表示する。
+- ライブラリ Character の保存時も、外観が参照する Face Set の最新版との寸法一致を検証する。ライブラリ内に不整合な参照を作らせない。
 - `DELETE /assets/:assetId` は既存の参照ガードに従う。Face Layer から参照中の Asset も `ASSET_IN_USE` とする（[../mvp/api-contract.md](../mvp/api-contract.md)）。
-- Face Set が Character Appearance から参照されている間は、その Face Set の削除を拒否する。Face Layer が Expression Preset から参照されている間は、その Face Layer の削除を拒否する。参照を壊す置換は参照整合性を保つ transaction にする。
+- Face Set がライブラリの Character Appearance、または保存済み ScriptVersion の外観から参照されている間は、その Face Set の削除を拒否する。改訂版の削除 API は持たない。
+- Asset の削除ガードは、全改訂版の Face Layer を参照として扱う。
+- 保存・プレビュー・レンダーは `(faceSetId, faceSetVersion)` で改訂版を解決する。`faceSetVersion` を持たない旧JSONは v1 として解釈する。版が存在しない、または固定版に `expressionId` が存在しない場合は 422 で拒否する。
 
 ## v1 の対象外
 
@@ -127,7 +140,9 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 3. 素材がない表情は、その Character Appearance の UI 選択肢に表示されない。
 4. Face Set を共有する別衣装は同じ表情素材を使え、互換でない外観は別 Face Set にできる。
 5. Face Set を参照しない既存の外観・台詞は、現在と同じ見た目で安全に表示される。`expressionId` 未指定の台詞は `normal` として解釈される。
-6. Face Set を編集すると、次回のプレビュー／レンダーへ反映される（保存済み作品で再レンダー結果が変わり得ることは許容する）。
+6. Face Set を編集しても保存済み作品の再プレビュー／再レンダー結果は変わらず、固定した改訂版が使われる。ライブラリの Character と新規コピーは最新版を使う。
 7. 閉眼・開口レイヤーを追加しても、既存の Expression Preset と台詞データを移行せずに利用できる。
 8. 閉眼レイヤーを登録した目は立ち絵の表示区間全体で決定的に瞬き、開口レイヤーを登録した口は発話区間だけで決定的に開閉する。対応先のないレイヤーは静止する。
-9. 同じ台本・同じ Face Set のプレビューと再レンダーは、瞬き・口パクの動きまで同一になる。
+9. 同じ台本・同じ Face Set の固定版のプレビューと再レンダーは、瞬き・口パクの動きまで同一になる。
+10. 同じ作品内で、同じ Face Set の異なる改訂版を異なる外観が参照でき、それぞれの版の表情で描画される。
+11. 「ライブラリから更新」は、作品内の Character・話者・立ち絵の ID を維持し、ライブラリで削除された外観を未リンク化して残し、新しい版にない表情を使う台詞を確認画面に列挙してから normal に戻す。

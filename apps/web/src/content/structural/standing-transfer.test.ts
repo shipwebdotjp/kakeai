@@ -35,13 +35,14 @@ describe("structural operation adapter", () => {
         name: "一人目",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
           {
             id: "app-1",
             assetId: "asset-image",
             expression: "normal",
             pose: "default",
-            faceSetId: null,
+            faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
           },
         ],
       },
@@ -50,13 +51,14 @@ describe("structural operation adapter", () => {
         name: "二人目",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
           {
             id: "app-2",
             assetId: "asset-image",
             expression: "normal",
             pose: "default",
-            faceSetId: null,
+            faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
           },
         ],
       },
@@ -159,13 +161,14 @@ describe("structural operation adapter", () => {
         name: "一人目",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
           {
             id: "app-1",
             assetId: "asset-image",
             expression: "normal",
             pose: "default",
-            faceSetId: null,
+            faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
           },
         ],
       },

@@ -170,8 +170,9 @@ describe("visual theme", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
+          { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin", faceSetVersion: 1, libraryAppearanceId: null },
         ],
       });
       document.speakers.push(

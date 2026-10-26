@@ -1,9 +1,10 @@
 import {
   assertAssetsAvailable,
+  assertFaceSetReferences,
   assertTakeDurations,
+  collectFaceSetReferences,
   loadAllReferences,
 } from "./references";
-import { assertFaceSetReferences, collectFaceSetIds } from "./references";
 import { collectInsertWarnings } from "./validation";
 import { normalizeAgentId } from "../attribution.ts";
 import { assertInsertScenes, assertVideoPlayback } from "./validation";
@@ -138,12 +139,12 @@ async function validateAssetReferences(
   if (
     content.audioTakes.length === 0 &&
     collectAssetReferences(content).length === 0 &&
-    collectFaceSetIds(content).length === 0 &&
+    collectFaceSetReferences(content).length === 0 &&
     !hasExpressions
   ) {
     return;
   }
-  const { references, assetById, faceSetById } = await loadAllReferences(
+  const { references, assetById, faceSetByKey } = await loadAllReferences(
     client,
     content,
   );
@@ -151,7 +152,7 @@ async function validateAssetReferences(
   assertTakeDurations(content, assetById);
   assertInsertScenes(content, assetById);
   assertVideoPlayback(content, assetById);
-  assertFaceSetReferences(content, faceSetById, assetById);
+  assertFaceSetReferences(content, faceSetByKey, assetById);
 }
 
 function storedVisualTheme(

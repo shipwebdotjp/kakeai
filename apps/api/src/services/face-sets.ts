@@ -1,10 +1,12 @@
 import {
   type CreateFaceSetRequest,
   type FaceSet,
+  type FaceSetRevision,
+  type FaceSetUsages,
   type UpdateFaceSetRequest,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
-import { toFaceSet } from "../dto/mappers.ts";
+import { toFaceSet, toFaceSetRevision } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 
@@ -23,6 +25,68 @@ type PresetInput = {
   eyeLayerId: string | null;
   mouthLayerId: string | null;
 };
+
+type LayerRow = {
+  id: string;
+  part: string;
+  assetId: string;
+  blinkLayerId: string | null;
+  speakingLayerId: string | null;
+};
+
+type PresetRow = {
+  id: string;
+  name: string;
+  browLayerId: string | null;
+  eyeLayerId: string | null;
+  mouthLayerId: string | null;
+};
+
+const revisionInclude = {
+  layers: { orderBy: { position: "asc" as const } },
+  expressions: { orderBy: { position: "asc" as const } },
+};
+
+const latestRevisionInclude = {
+  revisions: {
+    orderBy: { versionNumber: "desc" as const },
+    take: 1,
+    include: revisionInclude,
+  },
+};
+
+interface FaceSetWithRevisions {
+  id: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+  revisions: Array<{
+    versionNumber: number;
+    layers: LayerRow[];
+    expressions: PresetRow[];
+  }>;
+}
+
+function latestRevisionOf(row: FaceSetWithRevisions) {
+  const revision = row.revisions[0];
+  if (revision === undefined) {
+    throw resourceNotFound("face_set_revision", row.id);
+  }
+  return revision;
+}
+
+function toLatestFaceSet(row: FaceSetWithRevisions): FaceSet {
+  const revision = latestRevisionOf(row);
+  return toFaceSet({
+    id: row.id,
+    name: row.name,
+    version: revision.versionNumber,
+    layers: revision.layers,
+    expressions: revision.expressions,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  });
+}
 
 function checkDuplicateIds(ids: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -208,6 +272,83 @@ function assertPresetsUsable(
   }
 }
 
+async function assertCompatibleWithLibraryAppearances(
+  prisma: PrismaClient,
+  faceSetId: string,
+  layers: readonly LayerInput[],
+): Promise<void> {
+  if (layers.length === 0) {
+    return;
+  }
+  const appearances = await prisma.characterAppearance.findMany({
+    where: { faceSetId },
+    select: {
+      id: true,
+      assetId: true,
+      label: true,
+      character: { select: { name: true } },
+    },
+  });
+  if (appearances.length === 0) {
+    return;
+  }
+  const assetIds = [
+    ...new Set([
+      ...layers.map((layer) => layer.assetId),
+      ...appearances.map((appearance) => appearance.assetId),
+    ]),
+  ];
+  const assets = await prisma.asset.findMany({
+    where: { id: { in: assetIds } },
+    select: { id: true, widthPx: true, heightPx: true },
+  });
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  const layerSizes = layers.map((layer) => byId.get(layer.assetId));
+  const layerSize = layerSizes[0];
+  if (
+    layerSize === undefined ||
+    layerSize.widthPx === null ||
+    layerSize.heightPx === null
+  ) {
+    // The layer assets are validated by assertLayersUsable; this guard only
+    // keeps the comparison meaningful if that validation changes.
+    return;
+  }
+  const issues: ValidationIssue[] = [];
+  for (const appearance of appearances) {
+    const base = byId.get(appearance.assetId);
+    if (
+      base === undefined ||
+      base.widthPx === null ||
+      base.heightPx === null
+    ) {
+      issues.push({
+        path: ["layers"],
+        code: "invalid_value",
+        message: `「${appearance.character.name}」のベース画像の寸法を確認できません。`,
+      });
+      continue;
+    }
+    if (
+      base.widthPx !== layerSize.widthPx ||
+      base.heightPx !== layerSize.heightPx
+    ) {
+      const label =
+        appearance.label === null || appearance.label.length === 0
+          ? appearance.id
+          : appearance.label;
+      issues.push({
+        path: ["layers"],
+        code: "invalid_value",
+        message: `「${appearance.character.name}」の外観「${label}」のベース画像（${base.widthPx}×${base.heightPx}）と顔レイヤーの寸法（${layerSize.widthPx}×${layerSize.heightPx}）が一致しません。`,
+      });
+    }
+  }
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
 function toLayerData(layer: LayerInput, position: number) {
   return {
     id: layer.id,
@@ -230,28 +371,135 @@ function toPresetData(preset: PresetInput, position: number) {
   };
 }
 
-const faceSetInclude = {
-  layers: { orderBy: { position: "asc" as const } },
-  expressions: { orderBy: { position: "asc" as const } },
-};
+function normalizeLayers(layers: readonly LayerRow[]): string {
+  return JSON.stringify(
+    layers.map((layer) => ({
+      id: layer.id,
+      part: layer.part,
+      assetId: layer.assetId,
+      blinkLayerId: layer.blinkLayerId,
+      speakingLayerId: layer.speakingLayerId,
+    })),
+  );
+}
+
+function normalizePresets(presets: readonly PresetRow[]): string {
+  return JSON.stringify(
+    presets.map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      browLayerId: preset.browLayerId,
+      eyeLayerId: preset.eyeLayerId,
+      mouthLayerId: preset.mouthLayerId,
+    })),
+  );
+}
 
 export async function listFaceSets(prisma: PrismaClient): Promise<FaceSet[]> {
   const rows = await prisma.faceSet.findMany({
-    include: faceSetInclude,
+    include: latestRevisionInclude,
     orderBy: { createdAt: "asc" },
   });
-  return rows.map(toFaceSet);
+  return rows
+    .filter((row) => row.revisions.length > 0)
+    .map((row) => toLatestFaceSet(row));
 }
 
-export async function getFaceSet(prisma: PrismaClient, faceSetId: string): Promise<FaceSet> {
+export async function getFaceSet(
+  prisma: PrismaClient,
+  faceSetId: string,
+  version?: number,
+): Promise<FaceSet> {
   const row = await prisma.faceSet.findUnique({
     where: { id: faceSetId },
-    include: faceSetInclude,
+    include: {
+      revisions: {
+        where: version === undefined ? undefined : { versionNumber: version },
+        orderBy: { versionNumber: "desc" },
+        take: 1,
+        include: revisionInclude,
+      },
+    },
   });
   if (row === null) {
     throw resourceNotFound("face_set", faceSetId);
   }
-  return toFaceSet(row);
+  if (row.revisions.length === 0) {
+    throw resourceNotFound(
+      "face_set_revision",
+      version === undefined ? faceSetId : `${faceSetId}@${version}`,
+    );
+  }
+  return toLatestFaceSet(row);
+}
+
+export async function getFaceSetRevisions(
+  prisma: PrismaClient,
+  faceSetId: string,
+): Promise<FaceSetRevision[]> {
+  const row = await prisma.faceSet.findUnique({
+    where: { id: faceSetId },
+    include: {
+      revisions: {
+        orderBy: { versionNumber: "asc" },
+        include: revisionInclude,
+      },
+    },
+  });
+  if (row === null) {
+    throw resourceNotFound("face_set", faceSetId);
+  }
+  return row.revisions.map((revision) =>
+    toFaceSetRevision({
+      id: revision.id,
+      faceSetId,
+      version: revision.versionNumber,
+      layers: revision.layers,
+      expressions: revision.expressions,
+      createdAt: revision.createdAt,
+    }),
+  );
+}
+
+export async function getFaceSetUsages(
+  prisma: PrismaClient,
+  faceSetId: string,
+): Promise<FaceSetUsages> {
+  const existing = await prisma.faceSet.findUnique({
+    where: { id: faceSetId },
+    select: { id: true },
+  });
+  if (existing === null) {
+    throw resourceNotFound("face_set", faceSetId);
+  }
+  const appearances = await prisma.characterAppearance.findMany({
+    where: { faceSetId },
+    include: { character: { select: { id: true, name: true } } },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+  });
+  const assetIds = [...new Set(appearances.map((appearance) => appearance.assetId))];
+  const assets =
+    assetIds.length === 0
+      ? []
+      : await prisma.asset.findMany({
+          where: { id: { in: assetIds } },
+          select: { id: true, widthPx: true, heightPx: true },
+        });
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  return {
+    libraryAppearances: appearances.map((appearance) => {
+      const asset = byId.get(appearance.assetId);
+      return {
+        characterId: appearance.character.id,
+        characterName: appearance.character.name,
+        appearanceId: appearance.id,
+        label: appearance.label,
+        assetId: appearance.assetId,
+        widthPx: asset?.widthPx ?? null,
+        heightPx: asset?.heightPx ?? null,
+      };
+    }),
+  };
 }
 
 export async function createFaceSet(
@@ -264,14 +512,21 @@ export async function createFaceSet(
     const row = await prisma.faceSet.create({
       data: {
         name: input.name,
-        layers: { create: input.layers.map((layer, index) => toLayerData(layer, index)) },
-        expressions: {
-          create: input.expressions.map((preset, index) => toPresetData(preset, index)),
+        revisions: {
+          create: {
+            versionNumber: 1,
+            layers: {
+              create: input.layers.map((layer, index) => toLayerData(layer, index)),
+            },
+            expressions: {
+              create: input.expressions.map((preset, index) => toPresetData(preset, index)),
+            },
+          },
         },
       },
-      include: faceSetInclude,
+      include: latestRevisionInclude,
     });
-    return toFaceSet(row);
+    return toLatestFaceSet(row);
   } catch (error) {
     if (isPrismaCode(error, "P2002")) {
       throw validationError([
@@ -293,42 +548,60 @@ export async function updateFaceSet(
 ): Promise<FaceSet> {
   await assertLayersUsable(prisma, input.layers);
   assertPresetsUsable(input.layers, input.expressions);
+
   const existing = await prisma.faceSet.findUnique({
     where: { id: faceSetId },
-    select: { id: true },
+    include: latestRevisionInclude,
   });
   if (existing === null) {
     throw resourceNotFound("face_set", faceSetId);
   }
+  const latest = latestRevisionOf(existing);
+  const unchanged =
+    normalizeLayers(latest.layers) === normalizeLayers(input.layers) &&
+    normalizePresets(latest.expressions) === normalizePresets(input.expressions);
+  if (unchanged) {
+    const row = await prisma.faceSet.update({
+      where: { id: faceSetId },
+      data: { name: input.name },
+      include: latestRevisionInclude,
+    });
+    return toLatestFaceSet(row);
+  }
+
+  // Identical layers cannot break a library appearance. Skipping the check
+  // here lets a rename through even when legacy data already has a mismatch.
+  await assertCompatibleWithLibraryAppearances(prisma, faceSetId, input.layers);
+
   try {
-    const row = await prisma.$transaction(async (transaction) => {
-      await transaction.faceLayer.deleteMany({ where: { faceSetId } });
-      await transaction.expressionPreset.deleteMany({ where: { faceSetId } });
-      return transaction.faceSet.update({
-        where: { id: faceSetId },
-        data: {
-          name: input.name,
-          layers: { create: input.layers.map((layer, index) => toLayerData(layer, index)) },
-          expressions: {
-            create: input.expressions.map((preset, index) => toPresetData(preset, index)),
+    const row = await prisma.faceSet.update({
+      where: { id: faceSetId },
+      data: {
+        name: input.name,
+        revisions: {
+          create: {
+            versionNumber: latest.versionNumber + 1,
+            layers: {
+              create: input.layers.map((layer, index) => toLayerData(layer, index)),
+            },
+            expressions: {
+              create: input.expressions.map((preset, index) => toPresetData(preset, index)),
+            },
           },
         },
-        include: faceSetInclude,
-      });
+      },
+      include: latestRevisionInclude,
     });
-    return toFaceSet(row);
+    return toLatestFaceSet(row);
   } catch (error) {
     if (isPrismaCode(error, "P2025")) {
       throw resourceNotFound("face_set", faceSetId);
     }
     if (isPrismaCode(error, "P2002")) {
-      throw validationError([
-        {
-          path: ["layers"],
-          code: "custom",
-          message: "レイヤーまたは表情のIDが既に使われています。",
-        },
-      ]);
+      // Layer and preset IDs were validated above, so the only remaining
+      // unique constraint is (faceSetId, versionNumber): a concurrent update
+      // won the race. Surface it as retryable rather than an input error.
+      throw new ApiError(409, "FACE_SET_VERSION_CONFLICT", undefined, { faceSetId });
     }
     throw error;
   }

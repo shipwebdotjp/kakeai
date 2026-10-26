@@ -35,7 +35,7 @@ import {
 
 export interface ScriptValidationReferences {
   assetById: Map<string, AssetWithRenditions>;
-  faceSetById: Map<string, FaceSetDetails>;
+  faceSetByKey: Map<string, FaceSetDetails>;
   compositionDurations: Map<string, number>;
   compositionProfiles: Map<string, "landscape" | "portrait">;
   themeExists?: (id: string, version: number) => boolean;
@@ -194,7 +194,7 @@ export function validateEditedScriptContent(
   assertTakeDurations(document, references.assetById);
   assertInsertScenes(document, references.assetById);
   assertVideoPlayback(document, references.assetById);
-  assertFaceSetReferences(document, references.faceSetById, references.assetById);
+  assertFaceSetReferences(document, references.faceSetByKey, references.assetById);
 
   let offsetWarnings: Warning[] = [];
   try {

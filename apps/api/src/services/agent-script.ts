@@ -46,9 +46,11 @@ import {
   getCurrentScriptVersion,
   getScriptVersion,
   getScriptVersionHistory,
+  faceSetKey,
   renderSourceDurationMs,
   saveScriptVersion,
   throwIfFatalTimelineError,
+  collectFaceSetReferences,
   type AssetWithRenditions,
   type FaceSetDetails,
   type SaveScriptVersionGuard,
@@ -113,10 +115,97 @@ function assetInfo(asset: AssetWithRenditions): ScriptAssetInfo {
   };
 }
 
-async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResources> {
+async function loadFaceSetResources(
+  prisma: PrismaClient,
+  content: ContentDocument,
+): Promise<{
+  faceSetByKey: Map<string, FaceSetDetails>;
+  latestFaceSetById: Map<
+    string,
+    { id: string; version: number; expressions: FaceSetDetails["expressions"] }
+  >;
+}> {
+  const references = collectFaceSetReferences(content);
+  const [latestSets, referencedRevisions] = await Promise.all([
+    prisma.faceSet.findMany({
+      include: {
+        revisions: {
+          orderBy: { versionNumber: "desc" },
+          take: 1,
+          include: {
+            layers: { orderBy: { position: "asc" } },
+            expressions: { orderBy: { position: "asc" } },
+          },
+        },
+      },
+    }),
+    references.length === 0
+      ? Promise.resolve([])
+      : prisma.faceSetRevision.findMany({
+          where: {
+            OR: references.map((reference) => ({
+              faceSetId: reference.faceSetId,
+              versionNumber: reference.version,
+            })),
+          },
+          include: {
+            faceSet: true,
+            layers: { orderBy: { position: "asc" } },
+            expressions: { orderBy: { position: "asc" } },
+          },
+        }),
+  ]);
+
+  const faceSetByKey = new Map<string, FaceSetDetails>();
+  for (const faceSet of latestSets) {
+    const revision = faceSet.revisions[0];
+    if (revision === undefined) {
+      continue;
+    }
+    faceSetByKey.set(faceSetKey(faceSet.id, revision.versionNumber), {
+      faceSetId: faceSet.id,
+      name: faceSet.name,
+      version: revision.versionNumber,
+      layers: revision.layers,
+      expressions: revision.expressions,
+      createdAt: faceSet.createdAt,
+      updatedAt: faceSet.updatedAt,
+    });
+  }
+  for (const revision of referencedRevisions) {
+    faceSetByKey.set(faceSetKey(revision.faceSetId, revision.versionNumber), {
+      faceSetId: revision.faceSetId,
+      name: revision.faceSet.name,
+      version: revision.versionNumber,
+      layers: revision.layers,
+      expressions: revision.expressions,
+      createdAt: revision.faceSet.createdAt,
+      updatedAt: revision.faceSet.updatedAt,
+    });
+  }
+  const latestFaceSetById = new Map<
+    string,
+    { id: string; version: number; expressions: FaceSetDetails["expressions"] }
+  >();
+  for (const faceSet of latestSets) {
+    const revision = faceSet.revisions[0];
+    if (revision !== undefined) {
+      latestFaceSetById.set(faceSet.id, {
+        id: faceSet.id,
+        version: revision.versionNumber,
+        expressions: revision.expressions,
+      });
+    }
+  }
+  return { faceSetByKey, latestFaceSetById };
+}
+
+async function loadScriptResources(
+  prisma: PrismaClient,
+  content: ContentDocument,
+): Promise<ScriptResources> {
   const [
     assets,
-    faceSets,
     compositionIds,
     themeRevisions,
     characterEntries,
@@ -124,12 +213,6 @@ async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResource
     selectableThemeKeySet,
   ] = await Promise.all([
     prisma.asset.findMany({ include: { renditions: true } }),
-    prisma.faceSet.findMany({
-      include: {
-        layers: { orderBy: { position: "asc" } },
-        expressions: { orderBy: { position: "asc" } },
-      },
-    }),
     prisma.compositionVersion.findMany({ select: { id: true } }),
     prisma.themeRevision.findMany({ select: { themeId: true, versionNumber: true } }),
     listCharacters(prisma),
@@ -140,8 +223,9 @@ async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResource
   const assetById = new Map<string, AssetWithRenditions>(
     assets.map((asset) => [asset.id, asset]),
   );
-  const faceSetById = new Map<string, FaceSetDetails>(
-    faceSets.map((faceSet) => [faceSet.id, faceSet]),
+  const { faceSetByKey, latestFaceSetById } = await loadFaceSetResources(
+    prisma,
+    content,
   );
   const libraryCharacterById = new Map<string, ScriptLibraryCharacter>(
     characterEntries.map((entry) => [entry.id, toScriptLibraryCharacter(entry)]),
@@ -190,10 +274,13 @@ async function loadScriptResources(prisma: PrismaClient): Promise<ScriptResource
         isSelectable: (id, version) =>
           selectableThemeKeySet.has(`${id}@${version}`),
       },
+      faceSets: {
+        latest: (faceSetId) => latestFaceSetById.get(faceSetId) ?? null,
+      },
     },
     references: {
       assetById,
-      faceSetById,
+      faceSetByKey,
       compositionDurations,
       compositionProfiles,
       themeExists: (id, version) =>
@@ -219,6 +306,7 @@ function toScriptLibraryCharacter(entry: CharacterLibraryEntry): ScriptLibraryCh
       voiceProfileId: voice.voiceProfileId,
     })),
     appearances: entry.appearances.map((appearance) => ({
+      id: appearance.id,
       assetId: appearance.assetId,
       expression: appearance.expression,
       pose: appearance.pose,
@@ -422,7 +510,7 @@ export async function editAgentScript(
   }
 
   const content = deserializeContent(base.contentJson);
-  const resources = await loadScriptResources(prisma);
+  const resources = await loadScriptResources(prisma, content);
   const edited = applyAndValidateScriptOperations(
     content,
     request.operations,
@@ -476,7 +564,7 @@ export async function validateAgentScript(
   let warnings: Warning[];
   if ("content" in request) {
     content = request.content;
-    const resources = await loadScriptResources(prisma);
+    const resources = await loadScriptResources(prisma, content);
     warnings = validateEditedScriptContent(content, resources.references);
     warnings = mergeWarnings(warnings, await collectInsertWarnings(prisma, content));
   } else {
@@ -488,9 +576,10 @@ export async function validateAgentScript(
         agentIssue(["baseScriptVersionId"], "not_found", "基準の台本版が見つかりません。"),
       ]);
     }
-    const resources = await loadScriptResources(prisma);
+    const baseContent = deserializeContent(base.contentJson);
+    const resources = await loadScriptResources(prisma, baseContent);
     const edited = applyAndValidateScriptOperations(
-      deserializeContent(base.contentJson),
+      baseContent,
       request.operations,
       resources.context,
       resources.references,

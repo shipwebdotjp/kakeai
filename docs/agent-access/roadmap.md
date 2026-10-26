@@ -22,7 +22,7 @@
 | R2-1 素材検索のスケール | 索引化せず、検索の停下来よさを拡張 | 個人ライブラリの規模ではタグ検索の走査コストは支配的でない。索引化（タグのリレーション化）は将来に回す |
 | R3-3 スキル配布と版管理 | Gitタグ＋GitHub Releaseを正本とし、`npx skills` にロック・配置・復元を委譲する | 独自 installer は CLI の機能を複製する。不変タグでスキルとアプリの版を対応づけ、`main` 追従を避ける |
 | B13 サムネイル操作の公開 | 読み取り・作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開し、削除・共通 Appearance の保存・プリセットは人専用に残す | 候補は版履歴のない可変文書で、削除は取り消せない。PNG はオンデマンド生成で Job を増やさず、素材は利用者が取り込んだ画像だけを使う（ADR 0098） |
-| B14 Character ライブラリ作成・更新の公開 | 作成と部分更新を公開し、削除は人専用に残す。外観 ID はサーバー生成、外観画像は取り込み済みの ready 画像だけを使う | 台本の外側の共有ライブラリで、既存台本はコピーを持つため可逆。全項目必須の更新は空配列で意図せず消す事故があるため部分更新にする（ADR 0099） |
+| B14 Character ライブラリ作成・更新の公開 | 作成と部分更新を公開し、削除は人専用に残す。外観 ID は作成時にサーバー生成、外観画像は取り込み済みの ready 画像だけを使う。更新は既存 ID を維持できる | 台本の外側の共有ライブラリで、既存台本はコピーを持つため可逆。全項目必須の更新は空配列で意図せず消す事故があるため部分更新にする（ADR 0099） |
 
 ## 実施順序
 
@@ -92,7 +92,7 @@ C1〜C5 は B15 / B16 として実装済みである。C6〜C16（[次期候補]
 
 ### B8 ライブラリ読み取り（R2-3）
 
-- 状態: 完了。`theme.list` / `theme.get`、`faceSet.list` / `faceSet.get`、`voiceProfile.list` / `voiceProfile.get` を追加した。一覧はページングせず、既存の DTO（`FaceSet` / `VoiceProfile`）をそのまま返す。未知の ID は `RESOURCE_NOT_FOUND`。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
+- 状態: 完了。`theme.list` / `theme.get`、`faceSet.list` / `faceSet.get`、`voiceProfile.list` / `voiceProfile.get` を追加した。一覧はページングせず、既存の DTO（`FaceSet` / `VoiceProfile`）をそのまま返す。`faceSet.get` は任意の `version` で固定版を読める。未知の ID・版は `RESOURCE_NOT_FOUND`。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
 - Theme は、アーカイブされていない利用者 Theme の最新公開 Revision と組み込み Theme だけを返す。Theme Draft、アーカイブ済み Theme、最新でない Revision、Font 診断は返さない。`theme.get` は `theme` として `{ id, name, isBuiltIn, version, definition }` を返す。
 - Face Set は `id`・`name`・`layers`・`expressions`・作成日時を、Voice Profile は `id`・`name`・`adapterId`・`voiceId`・`locale`・`settings`・作成日時を返す。Theme・Face Set の書き込み（作成・更新・削除・アーカイブ）は公開しない。Voice Profile の書き込みは B11 で作成・更新だけを公開し、削除は人専用のまま残す。
 - 完了条件: ソケット・MCP・CLI から同じ 6 操作を呼べ、Theme が最新公開 Revision だけを返し、未知の ID が `RESOURCE_NOT_FOUND` になる。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
@@ -134,8 +134,8 @@ C1〜C5 は B15 / B16 として実装済みである。C6〜C16（[次期候補]
 
 ### B14 Character ライブラリ作成・更新の公開
 
-- 状態: 完了。`character.create` / `character.update`（mutation）を追加した。`character.create` は `{ name, names?, voices?, appearances? }`、`character.update` は `{ characterId, name?, names?, voices?, appearances? }` を受け、どちらも `{ character }` を返す。既存の `createCharacter` / `updateCharacter` をそのまま呼び、外観の画像・Face Set・Voice Profile の検証を複製しない。外観 ID はサーバーが生成する。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0099](../adr/0099-agent-character-library-writes.md) を参照。
-- `update` は省略した項目を変更せず、指定した配列だけを置き換える。現在値の読み取りとマージは書き込みと同じトランザクション内で行う。1 項目も指定しない呼び出しは `VALIDATION_ERROR`。未知の Character は `RESOURCE_NOT_FOUND`、Asset・Face Set・Profile の参照欠落や locale 不一致は `VALIDATION_ERROR`。`requestId` は持たず、タイムアウト後は `character.list` / `character.get` で確認してから再実行する。
+- 状態: 完了。`character.create` / `character.update`（mutation）を追加した。`character.create` は `{ name, names?, voices?, appearances? }`、`character.update` は `{ characterId, name?, names?, voices?, appearances? }` を受け、どちらも `{ character }` を返す。既存の `createCharacter` / `updateCharacter` をそのまま呼び、外観の画像・Face Set・Voice Profile の検証を複製しない。外観 ID は作成時にサーバーが生成し、更新では既存の外観に `id` を付けると維持される。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0099](../adr/0099-agent-character-library-writes.md) を参照。
+- `update` は省略した項目を変更せず、指定した配列だけを置き換える。既存の外観は `id` を付けて送ることで ID を維持できる。現在値の読み取りとマージは書き込みと同じトランザクション内で行う。1 項目も指定しない呼び出しは `VALIDATION_ERROR`。未知の Character は `RESOURCE_NOT_FOUND`、Asset・Face Set・Profile の参照欠落や locale 不一致は `VALIDATION_ERROR`。`requestId` は持たず、タイムアウト後は `character.list` / `character.get` で確認してから再実行する。
 - `character.delete` は人専用のまま残す。ライブラリの編集は既存台本のコピーへ波及しない。外観の画像は取り込み済みの ready な画像 Asset に限る。
 - 完了条件: ソケット・MCP・CLI から作成 → 取得 → 名前/別名/声/外観の更新 → `character.addFromLibrary` → TTS → 確定 → レンダーが通り、外観ゼロの声だけ Character もコピーでき、削除が `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
@@ -174,8 +174,8 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C5 は
 | C7 | SRT 字幕の取得 | read | `script.subtitles`（保存版から SRT） | HTTP の `GET /script-versions/:id/subtitles` を包む。Artifact を作らずオンデマンド生成。タイミングは `resolveTimeline` と同一 |
 | C8 | MP4 Artifact の取得 | read | `artifact.get` / `artifact.content` | 現状は人間が取得する境界。media session Cookie の制約があり、ローカルパス返却かバイト返却かを設計する |
 | C9 | Face Set の作成 | mutation | `faceSet.create` | 顔レイヤーは同寸・透過の ready 画像で `normal` が必須。寸法は既存サービスが検証するが透過は検証しない。品質確認は C11 |
-| C10 | Face Set の差分編集 | mutation | レイヤー・表情プリセットの追加、表示名変更など | 現行 `PATCH` は layers / expressions の全置換で、既存の Expression ID を消すと保存済み台詞の `expressionId` が宙に浮く。全置換 update を人専用に残す案を含めて着手時に決める |
-| C11 | Face Set の合成プレビュー | read | `preview.faceSet`（ベース外観＋表情の PNG） | Web UI にも表情セット単体のプレビューがない。C9 / C10 の品質確認手段 |
+| C10 | Face Set の差分編集 | mutation | レイヤー・表情プリセットの追加、表示名変更など | `PATCH` は改訂版を作る方式になったため、作品は固定版を使い続け、Expression ID の消失で保存済み台詞が壊れない。エージェントに改訂版の作成を公開するかは、ライブラリ Character が最新版へ即時追従する点も含めて着手時に決める |
+| C11 | Face Set の合成プレビュー | read | `preview.faceSet`（ベース外観＋表情の PNG） | Web UI には Face Set 編集画面の合成プレビューと寸法診断がある。エージェント向けの PNG プレビューは未提供で、C9 / C10 の品質確認手段になる |
 | C12 | Asset 検索の寸法条件 | read | `asset.list` に `widthPx` / `heightPx`（必要なら向き）を追加 | 表情レイヤー・背景の「同寸画像」を探す。C9 の実用上の前提 |
 | C13 | Asset の可逆な整理 | mutation | `asset.update` の `favorited` / `archived` | 削除は人専用のまま。生成物の整理に使う |
 | C14 | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.setAppearance` など | 現行 `character.update` は appearances の全置換で read-modify-write になる。作品内の外観はコピーなので `script.save` のまま |
@@ -186,7 +186,7 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C5 は
 
 C6〜C16 の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
 
-- Face Set の更新を全置換のまま公開するか、追加・改名の差分操作に限るか。参照崩れ（保存済み `expressionId`）の検出と回復をどうするか。
+- Face Set の更新（改訂版の作成）をエージェントへ公開するか、人専用に残すか。ライブラリ Character は最新版へ即時追従するため、公開するなら改訂版作成後の寸法診断と影響確認をどう契約に含めるかを決める。作品側は `faceSetVersion` を固定しているため、保存済み `expressionId` の参照崩れは起きない。
 - C8 の MP4 取得をローカルパスの返却にするか、バイト返却にするか。media session Cookie と同一 origin の制約をどう越えるか。
 - C9 / C10 / C11 を 1 フェーズにまとめるか、作成だけ先に開くか。
 - C6〜C16 の優先順位と実施順。

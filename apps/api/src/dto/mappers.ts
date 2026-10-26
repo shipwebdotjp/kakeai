@@ -22,6 +22,7 @@ import {
   type Asset,
   type CharacterLibraryEntry,
   type FaceSet,
+  type FaceSetRevision,
   type Job,
   type LanguageEditionSummary,
   type ScriptVersion,
@@ -41,7 +42,6 @@ import type {
   CharacterAppearance as CharacterAppearanceRow,
   ExpressionPreset as ExpressionPresetRow,
   FaceLayer as FaceLayerRow,
-  FaceSet as FaceSetRow,
   Job as JobRow,
   LanguageEdition,
   ScriptVersion as ScriptVersionRow,
@@ -352,31 +352,81 @@ export function toCharacterLibraryEntry(row: CharacterWithAppearances): Characte
   };
 }
 
-export type FaceSetWithDetails = FaceSetRow & {
-  layers: FaceLayerRow[];
-  expressions: ExpressionPresetRow[];
+export type FaceLayerShape = {
+  id: string;
+  part: string;
+  assetId: string;
+  blinkLayerId: string | null;
+  speakingLayerId: string | null;
 };
+
+export type ExpressionPresetShape = {
+  id: string;
+  name: string;
+  browLayerId: string | null;
+  eyeLayerId: string | null;
+  mouthLayerId: string | null;
+};
+
+export type FaceSetWithDetails = {
+  id: string;
+  name: string;
+  version: number;
+  layers: FaceLayerShape[];
+  expressions: ExpressionPresetShape[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function toFaceLayers(layers: readonly FaceLayerShape[]): FaceSet["layers"] {
+  return layers.map((layer) => ({
+    id: layer.id,
+    part: parseEnum(faceLayerPartSchema, layer.part, "FaceLayer.part"),
+    assetId: layer.assetId,
+    blinkLayerId: layer.blinkLayerId,
+    speakingLayerId: layer.speakingLayerId,
+  }));
+}
+
+function toExpressionPresets(
+  presets: readonly ExpressionPresetShape[],
+): FaceSet["expressions"] {
+  return presets.map((preset) => ({
+    id: preset.id,
+    name: preset.name,
+    browLayerId: preset.browLayerId,
+    eyeLayerId: preset.eyeLayerId,
+    mouthLayerId: preset.mouthLayerId,
+  }));
+}
 
 export function toFaceSet(row: FaceSetWithDetails): FaceSet {
   return {
     id: row.id,
     name: row.name,
-    layers: row.layers.map((layer) => ({
-      id: layer.id,
-      part: parseEnum(faceLayerPartSchema, layer.part, "FaceLayer.part"),
-      assetId: layer.assetId,
-      blinkLayerId: layer.blinkLayerId,
-      speakingLayerId: layer.speakingLayerId,
-    })),
-    expressions: row.expressions.map((preset) => ({
-      id: preset.id,
-      name: preset.name,
-      browLayerId: preset.browLayerId,
-      eyeLayerId: preset.eyeLayerId,
-      mouthLayerId: preset.mouthLayerId,
-    })),
+    version: row.version,
+    layers: toFaceLayers(row.layers),
+    expressions: toExpressionPresets(row.expressions),
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
+  };
+}
+
+export function toFaceSetRevision(row: {
+  id: string;
+  faceSetId: string;
+  version: number;
+  layers: FaceLayerShape[];
+  expressions: ExpressionPresetShape[];
+  createdAt: Date;
+}): FaceSetRevision {
+  return {
+    id: row.id,
+    faceSetId: row.faceSetId,
+    version: row.version,
+    layers: toFaceLayers(row.layers),
+    expressions: toExpressionPresets(row.expressions),
+    createdAt: toIso(row.createdAt),
   };
 }
 

@@ -265,8 +265,13 @@ beforeAll(async () => {
   const faceSet = await prisma.faceSet.create({
     data: {
       name: "キャラクター表情",
-      expressions: {
-        create: [{ id: "smile", name: "smile", position: 0 }],
+      revisions: {
+        create: {
+          versionNumber: 1,
+          expressions: {
+            create: [{ id: "smile", name: "smile", position: 0 }],
+          },
+        },
       },
     },
   });
@@ -773,11 +778,19 @@ describe("agent character operations over the socket", () => {
       expect(renamed.character.voices).toEqual(created.character.voices);
       expect(renamed.character.appearances).toEqual(created.character.appearances);
 
-      // Replacing appearances leaves names and voices alone.
+      // Replacing appearances leaves names and voices alone. Existing IDs are
+      // preserved so work copies keep their library-appearance link.
+      const firstAppearanceId = created.character.appearances[0]!.id;
       const appearanceUpdated = await client.request("character.update", {
         characterId: created.character.id,
         appearances: [
-          { assetId: imageAssetId, expression: "normal", pose: "side", label: "私服" },
+          {
+            id: firstAppearanceId,
+            assetId: imageAssetId,
+            expression: "normal",
+            pose: "side",
+            label: "私服",
+          },
           { assetId: imageAssetId, expression: "smile", pose: "front", faceSetId },
         ],
       });
@@ -785,6 +798,7 @@ describe("agent character operations over the socket", () => {
       expect(appearanceUpdated.character.voices).toEqual(created.character.voices);
       expect(appearanceUpdated.character.appearances).toHaveLength(2);
       expect(appearanceUpdated.character.appearances[0]).toMatchObject({
+        id: firstAppearanceId,
         expression: "normal",
         pose: "side",
         label: "私服",

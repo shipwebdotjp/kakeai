@@ -1,3 +1,4 @@
+import { LEGACY_FACE_SET_VERSION } from "@kakeai/contracts";
 import type {
   CharacterFormValue,
   DocumentFormValues,
@@ -133,6 +134,7 @@ function readCharacters(content: ContentDocument): CharacterFormValue[] {
       voiceProfileId:
         localeVoice?.voiceProfileId ?? speaker?.voiceProfileId ?? null,
       voices: character.voices.map((entry) => ({ ...entry })),
+      libraryCharacterId: character.libraryCharacterId,
       appearances: character.appearances.map((appearance) => ({
         id: appearance.id,
         assetId: appearance.assetId,
@@ -140,6 +142,11 @@ function readCharacters(content: ContentDocument): CharacterFormValue[] {
         pose: appearance.pose,
         label: appearance.label ?? "",
         faceSetId: appearance.faceSetId,
+        faceSetVersion:
+          appearance.faceSetId === null
+            ? null
+            : (appearance.faceSetVersion ?? LEGACY_FACE_SET_VERSION),
+        libraryAppearanceId: appearance.libraryAppearanceId,
       })),
     };
   });

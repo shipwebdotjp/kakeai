@@ -50,6 +50,7 @@ const characters: CharacterFormValue[] = [
     names: [],
     voiceProfileId: null,
     voices: [],
+    libraryCharacterId: null,
     appearances: [
       {
         id: "app-1",
@@ -57,7 +58,7 @@ const characters: CharacterFormValue[] = [
         expression: "normal",
         pose: "front",
         label: "",
-        faceSetId: null,
+        faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
       },
     ],
   },

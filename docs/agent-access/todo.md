@@ -129,7 +129,7 @@
 ### [x] B8 ライブラリ読み取り（R2-3）
 
 - [x] 契約に `theme.list` / `theme.get`（`{ themes: [{ id, name, isBuiltIn, version }] }` / `{ theme: { id, name, isBuiltIn, version, definition } }`）を追加する。アーカイブされていない利用者 Theme の最新公開 Revision と組み込み Theme だけを返し、Theme Draft・アーカイブ済み Theme・最新でない Revision・Font 診断は返さない。
-- [x] 契約に `faceSet.list` / `faceSet.get`（`{ faceSets }` / `{ faceSet }`）と `voiceProfile.list` / `voiceProfile.get`（`{ voiceProfiles }` / `{ voiceProfile }`）を追加する。既存 DTO をそのまま返し、一覧はページングしない。
+- [x] 契約に `faceSet.list` / `faceSet.get`（`{ faceSets }` / `{ faceSet }`、`faceSet.get` は任意の `version`）と `voiceProfile.list` / `voiceProfile.get`（`{ voiceProfiles }` / `{ voiceProfile }`）を追加する。既存 DTO をそのまま返し、一覧はページングしない。
 - [x] 未知の `themeId` / `faceSetId` / `voiceProfileId` を `RESOURCE_NOT_FOUND` とする。Theme・Face Set・Voice Profile の作成・更新・削除・アーカイブは公開しない。
 - [x] 6 操作を `schema.get` の Agent 操作カタログと契約ダイジェストへ反映し、MCP・CLI がカタログから自動公開することを保つ。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上げない。
 - [x] ソケット・MCP・CLI のテストで、6 操作の取得、Theme の最新 Revision 限定、未知 ID の `RESOURCE_NOT_FOUND` を固定する。

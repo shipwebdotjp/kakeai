@@ -31,6 +31,7 @@ function documentWithCharacter(voices: ContentDocument["characters"][number]["vo
       names: [],
       voices,
       appearances: [],
+      libraryCharacterId: null,
     },
   ];
   document.speakers = [

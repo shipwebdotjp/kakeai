@@ -721,6 +721,7 @@ describe("work and script version flow", () => {
         ],
         voices: [],
         appearances: [],
+        libraryCharacterId: null,
       },
       {
         id: "character-narrator",
@@ -728,6 +729,7 @@ describe("work and script version flow", () => {
         names: [],
         voices: [],
         appearances: [],
+        libraryCharacterId: null,
       },
     ];
     source.speakers = [

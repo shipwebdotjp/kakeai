@@ -5,6 +5,7 @@ import {
   useAssets,
   useCreateFaceSet,
   useDeleteFaceSet,
+  useFaceSetUsages,
   useFaceSets,
   useUpdateFaceSet,
 } from "../api/hooks";
@@ -16,6 +17,11 @@ import {
   type FoldStorage,
 } from "../lib/collapseState";
 import { MediaPicker } from "../components/MediaPicker";
+import {
+  FaceSetUsagePreview,
+  faceSetDimensionIssue,
+} from "../components/face-set/FaceSetUsagePreview";
+import { faceSetContentChanged } from "../components/face-set/faceSetDraft";
 import {
   CollapsibleStateProvider,
   useStoredCollapsible,
@@ -159,6 +165,7 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
   const update = useUpdateFaceSet();
   const remove = useDeleteFaceSet();
   const assets = useAssets();
+  const usages = useFaceSetUsages(entry?.id);
   const [draft, setDraft] = useState<FaceSetDraft>(
     entry === undefined ? emptyDraft() : toDraft(entry),
   );
@@ -170,6 +177,8 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
   );
   const bodyId = useId();
   const headerSummary = `レイヤー${draft.layers.length}件・表情${draft.expressions.length}件`;
+  const hasContentChanges =
+    entry !== undefined && faceSetContentChanged(entry, draft);
 
   useEffect(() => {
     if (entry !== undefined) {
@@ -201,6 +210,18 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
   const save = () => {
     // 保存ボタンは折りたたみ時も表示されるため、検証エラーの対象が見えるよう本文を開く。
     setOpen(true);
+    if (entry !== undefined && usages.isLoading) {
+      setIssue(
+        "使用中キャラクターのベース画像との寸法を確認中です。読み込み完了後に保存してください。",
+      );
+      return;
+    }
+    if (entry !== undefined && usages.isError) {
+      setIssue(
+        "使用中キャラクターの情報を読み込めないため、寸法を確認できません。再読み込みしてから保存してください。",
+      );
+      return;
+    }
     const name = draft.name.trim();
     if (name.length === 0) {
       setIssue("名前を入力してください。");
@@ -250,6 +271,13 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
       ) {
         setIssue("顔レイヤーは同じ寸法の画像にしてください。");
         return;
+      }
+      for (const usage of usages.data?.libraryAppearances ?? []) {
+        const problem = faceSetDimensionIssue(usage, draft.layers, byId);
+        if (problem !== null) {
+          setIssue(`${usage.characterName}: ${problem}`);
+          return;
+        }
       }
     }
     setIssue(null);
@@ -393,6 +421,16 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
       </div>
 
       <div id={bodyId} hidden={!open}>
+        {entry !== undefined && (
+          <FaceSetUsagePreview
+            usages={usages.data?.libraryAppearances}
+            usagesLoading={usages.isLoading}
+            usagesError={usages.isError}
+            layers={draft.layers}
+            expressions={draft.expressions}
+            assetsById={byId}
+          />
+        )}
         <div className={editAreaClass}>
           <p className="mb-1 text-sm font-medium">
             顔レイヤー（立ち絵と同じ寸法の透過画像）
@@ -643,12 +681,23 @@ function FaceSetForm({ entry }: { entry?: FaceSet }) {
           disabled={mutation.isPending}
           onClick={save}
         >
-          {entry === undefined ? "追加" : "保存"}
+          {entry === undefined
+            ? "追加"
+            : hasContentChanges
+              ? "新しい改訂版として保存"
+              : "名前を保存"}
         </button>
         {entry !== undefined && (
-          <span className={metaTextClass}>{entry.id}</span>
+          <span className={metaTextClass}>
+            {entry.id} / v{entry.version}
+          </span>
         )}
       </div>
+      {entry !== undefined && (
+        <p className={metaTextClass}>
+          レイヤー・表情の変更は新しい改訂版として保存され、作品は固定した版を使い続けます。名前だけの変更では版は増えません。
+        </p>
+      )}
       {issue !== null && <p className={errorTextClass}>{issue}</p>}
       {mutation.isError && (
         <p className={errorTextClass}>{errorMessage(mutation.error)}</p>

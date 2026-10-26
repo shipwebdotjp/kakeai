@@ -14,7 +14,7 @@ import {
   type CharacterFormValue,
   type DocumentFormValues,
 } from "../content/form";
-import { buttonDangerClass, formLabelClass, textFieldClass } from "../ui";
+import { buttonDangerClass, buttonNeutralClass, formLabelClass, textFieldClass } from "../ui";
 import { AppearanceFields } from "./AppearanceFields";
 
 interface CharacterFieldsProps {
@@ -24,7 +24,8 @@ interface CharacterFieldsProps {
   setValue: UseFormSetValue<DocumentFormValues>;
   characterIndex: number;
   voiceProfiles: VoiceProfile[];
-  faceSets: Pick<FaceSet, "id" | "name">[];
+  faceSets: Pick<FaceSet, "id" | "name" | "version">[];
+  onUpdateFromLibrary?: (characterId: string) => void;
   onDelete: (index: number, character: CharacterFormValue) => void;
 }
 
@@ -36,6 +37,7 @@ export function CharacterFields({
   characterIndex,
   voiceProfiles,
   faceSets,
+  onUpdateFromLibrary,
   onDelete,
 }: CharacterFieldsProps) {
   const { append, remove } = useFieldArray({
@@ -91,6 +93,17 @@ export function CharacterFields({
           className={`min-w-[160px] flex-1 ${textFieldClass}`}
           {...register(`characters.${characterIndex}.name`)}
         />
+        {character?.libraryCharacterId !== null &&
+          character?.libraryCharacterId !== undefined &&
+          onUpdateFromLibrary !== undefined && (
+            <button
+              type="button"
+              className={buttonNeutralClass}
+              onClick={() => onUpdateFromLibrary(character.id)}
+            >
+              ライブラリから更新
+            </button>
+          )}
         <button
           type="button"
           className={buttonDangerClass}
