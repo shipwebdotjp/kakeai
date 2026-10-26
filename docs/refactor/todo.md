@@ -11,25 +11,25 @@
 
 完了条件: 対象ファイル、優先度、実行順、完了判定が共有されている。
 
-## Phase 1: 成長ホットスポット
+## [x] Phase 1: 成長ホットスポット
 
-### [ ] T1 `packages/contracts/src/templates/index.ts`
+### [x] T1 `packages/contracts/src/templates/index.ts`
 
-- [ ] テンプレート定義を `text-block.ts` / `media.ts` / `character-standing.ts` / `device-frame.ts` / `site-mockup.ts` / `composition-full-bleed.ts` / `table.ts` / `chart.ts` / `list-callout.ts` / `flow.ts` / `stat.ts` / `quote.ts` / `chat.ts` に分ける
-- [ ] `shared.ts` に `TemplateDisplay` / `TemplateFieldSpec` / `VisualTemplateDefinition` を移す
-- [ ] `common.ts` / `figure.ts` / `line-refs.ts` / `lookup.ts` / `nested-refs.ts` に共通処理を分ける
-- [ ] `index.ts` をbarrelにし、`registry.ts` を再エクスポートする
-- [ ] `visualTemplateDefinitions` の配列順を変えない
-- [ ] `templates.test.ts` を通す
+- [x] テンプレート定義を `text-block.ts` / `media.ts` / `character-standing.ts` / `device-frame.ts` / `site-mockup.ts` / `composition-full-bleed.ts` / `table.ts` / `chart.ts` / `list-callout.ts` / `flow.ts` / `stat.ts` / `quote.ts` / `chat.ts` に分ける
+- [x] `shared.ts` に `TemplateDisplay` / `TemplateFieldSpec` / `VisualTemplateDefinition` を移す
+- [x] `common.ts` / `figure.ts` / `line-refs.ts` / `lookup.ts` / `nested-refs.ts` に共通処理を分ける
+- [x] `index.ts` をbarrelにし、`registry.ts` を再エクスポートする
+- [x] `visualTemplateDefinitions` の配列順を変えない
+- [x] `templates.test.ts` を通す
 
 完了条件: `index.ts` が200行以下になり、新テンプレート追加が「定義ファイル + registryの1行」で済む。
 
-### [ ] T2 `apps/web/src/api/hooks.ts`
+### [x] T2 `apps/web/src/api/hooks.ts`
 
-- [ ] 作品・素材・台本版・Job・声・TTS・キャラクター・FaceSet・Theme・Font・Composition・Thumbnailに分ける
-- [ ] `hooks/index.ts` をbarrelとして残す
-- [ ] query keyの文字列とinvalidationを変えない
-- [ ] 既存のimportパス（`../api/hooks`）を変えない
+- [x] 作品・素材・台本版・Job・声・TTS・キャラクター・FaceSet・Theme・Font・Composition・Thumbnailに分ける
+- [x] `hooks/index.ts` をbarrelとして残す
+- [x] query keyの文字列とinvalidationを変えない
+- [x] 既存のimportパス（`../api/hooks`）を変えない
 
 完了条件: 各ファイル300行以下、既存画面の型検査が通り、クエリの挙動が変わらない。
 
