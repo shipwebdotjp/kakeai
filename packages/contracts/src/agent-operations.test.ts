@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_DIAGNOSE_READ_TIMEOUT_MS,
   AGENT_PREVIEW_READ_TIMEOUT_MS,
   AGENT_READ_TIMEOUT_MS,
   agentCharacterCreateInputSchema,
@@ -14,6 +15,10 @@ import {
   agentFaceSetGetOutputSchema,
   agentFaceSetListInputSchema,
   agentFaceSetListOutputSchema,
+  agentFontListInputSchema,
+  agentFontListOutputSchema,
+  agentThemeDiagnoseInputSchema,
+  agentThemeDiagnoseOutputSchema,
   agentThemeGetInputSchema,
   agentThemeGetOutputSchema,
   agentThemeListInputSchema,
@@ -331,7 +336,7 @@ describe("preview.frame operation contract", () => {
 });
 
 describe("preview read timeouts", () => {
-  it("extends the read timeout only for image previews", () => {
+  it("extends the read timeout for image previews and slow library reads", () => {
     expect(agentOperationReadTimeoutMs("preview.frame")).toBe(
       AGENT_PREVIEW_READ_TIMEOUT_MS,
     );
@@ -341,6 +346,12 @@ describe("preview read timeouts", () => {
     expect(agentOperationReadTimeoutMs("preview.assetFrame")).toBe(
       AGENT_PREVIEW_READ_TIMEOUT_MS,
     );
+    expect(agentOperationReadTimeoutMs("font.list")).toBe(
+      AGENT_PREVIEW_READ_TIMEOUT_MS,
+    );
+    expect(agentOperationReadTimeoutMs("theme.diagnose")).toBe(
+      AGENT_DIAGNOSE_READ_TIMEOUT_MS,
+    );
     expect(agentOperationReadTimeoutMs("schema.get")).toBeUndefined();
     expect(agentOperationReadTimeoutMs("script.get")).toBeUndefined();
     expect(resolveAgentReadTimeoutMs("schema.get", undefined)).toBe(AGENT_READ_TIMEOUT_MS);
@@ -348,6 +359,9 @@ describe("preview read timeouts", () => {
       AGENT_PREVIEW_READ_TIMEOUT_MS,
     );
     expect(resolveAgentReadTimeoutMs("preview.scriptFrame", 5_000)).toBe(5_000);
+    expect(resolveAgentReadTimeoutMs("theme.diagnose", undefined)).toBe(
+      AGENT_DIAGNOSE_READ_TIMEOUT_MS,
+    );
   });
 });
 
@@ -852,5 +866,106 @@ describe("library read operations", () => {
     expect(
       agentVoiceProfileGetOutputSchema.safeParse({ voiceProfile }).success,
     ).toBe(true);
+  });
+});
+
+describe("font.list and theme.diagnose contracts", () => {
+  const face = {
+    platformId: "HiraginoSans-W3",
+    family: "Hiragino Sans",
+    displayName: "Hiragino Sans W3",
+    postScriptName: "HiraginoSans-W3",
+    weight: 300,
+    style: "normal" as const,
+    stretch: "normal",
+    available: true,
+  };
+
+  it("pages and filters the font catalog with bounded inputs", () => {
+    expect(agentFontListInputSchema.parse({})).toEqual({ limit: 50, offset: 0 });
+    expect(agentFontListInputSchema.safeParse({ limit: 201 }).success).toBe(false);
+    expect(agentFontListInputSchema.safeParse({ offset: -1 }).success).toBe(false);
+    expect(
+      agentFontListInputSchema.safeParse({ minWeight: 700, maxWeight: 400 }).success,
+    ).toBe(false);
+
+    const page = {
+      fonts: [face],
+      total: 1,
+      nextOffset: null,
+      catalog: {
+        supported: true,
+        reason: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+    expect(agentFontListOutputSchema.parse(page)).toEqual(page);
+  });
+
+  it("accepts an explicit Theme revision and defaults diagnosis to ja-JP with verification", () => {
+    expect(agentThemeGetInputSchema.parse({ themeId: "theme-1" })).toEqual({
+      themeId: "theme-1",
+    });
+    expect(
+      agentThemeGetInputSchema.parse({ themeId: "theme-1", version: 2 }),
+    ).toEqual({ themeId: "theme-1", version: 2 });
+
+    expect(agentThemeDiagnoseInputSchema.parse({ themeId: "theme-1" })).toEqual({
+      themeId: "theme-1",
+      locale: "ja-JP",
+      verify: true,
+    });
+    expect(
+      agentThemeDiagnoseInputSchema.safeParse({ themeId: "theme-1", extra: true }).success,
+    ).toBe(false);
+
+    const diagnosis = {
+      themeId: "theme-1",
+      version: 2,
+      locale: "ja-JP" as const,
+      catalogSupported: true,
+      verificationSupported: true,
+      verificationReason: null,
+      roles: [
+        {
+          role: "body" as const,
+          category: "sans" as const,
+          localFaceName: "HiraginoSans-W3",
+          localFaceWeight: 300,
+          localFaceStyle: "normal" as const,
+          usesFallback: false,
+        },
+      ],
+      missingFonts: [],
+      diagnostics: ["body: local face HiraginoSans-W3 を使用"],
+    };
+    expect(agentThemeDiagnoseOutputSchema.parse({ diagnosis })).toEqual({ diagnosis });
+    expect(
+      agentThemeDiagnoseOutputSchema.safeParse({
+        diagnosis: {
+          ...diagnosis,
+          roles: [
+            {
+              ...diagnosis.roles[0],
+              usesFallback: true,
+            },
+          ],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("registers both reads in the agent catalog", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of ["font.list", "theme.diagnose"] as const) {
+      expect(agentOperationNames).toContain(name);
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "read",
+        longRunning: false,
+      });
+      expect(Object.keys(agentOperationInputSchemas)).toContain(name);
+      expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
+    }
   });
 });

@@ -135,7 +135,11 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "theme.list":
     "選択できる Visual Theme の一覧を返す。組み込み Theme と、アーカイブされていないユーザー Theme の最新 Revision だけを含む。Theme Draft・アーカイブ済み Theme・古い Revision は含まない。",
   "theme.get":
-    "選択できる Visual Theme 1件の最新 Revision 定義を返す。`theme.list` の `id` を `themeId` に渡す。Theme Draft・アーカイブ済み Theme・古い Revision・存在しない ID は RESOURCE_NOT_FOUND。",
+    "Visual Theme 1件の定義を返す。`version` を省略すると、`theme.list` に載る最新公開 Revision を返す。`version` を指定すると、その公開 Revision を返し、アーカイブ済み Theme の Revision も読める（既存作品が参照している場合がある）。Theme Draft や存在しない Revision は RESOURCE_NOT_FOUND。",
+  "theme.diagnose":
+    "Theme Revision のフォント診断を返す。`themeId` と任意の `version`（省略時は最新公開 Revision で、アーカイブ済み Theme は RESOURCE_NOT_FOUND。`version` 指定時のみアーカイブ済み Theme の Revision も読める）・`locale`（既定 ja-JP）・`verify`（既定 true）を受ける。`roles` に文字 role ごとの解決済み local face とフォールバック有無、`missingFonts` に解決できなかった family、`diagnostics` に人が読める説明を返す。`verify: true` はレンダーと同じく Chromium で local face の解決可否を確認するため、初回は時間がかかる。`verify: false` はカタログ照合だけの速い診断になる。",
+  "font.list":
+    "インストール済みフォントの一覧を、検索とページング付きで返す。`query` は family・表示名・PostScript 名の部分一致、`style`・`minWeight`・`maxWeight`・`available` で絞れる。`limit` は既定50・最大200、`offset` で次ページを取得する。応答の `total` は絞り込み後の件数、`nextOffset` は次ページの offset（無ければ null）、`catalog` はカタログの対応状況と更新時刻。Theme の `fontFace` を組み立てるときに使う。",
   "faceSet.list":
     "Face Set の一覧を、Face Layer と Expression Preset 付きで返す。台詞の表情は `faceSet.get` か `character.get` の外観が参照する Face Set の `expressions[].id` を使う。Face Set の作成・更新・削除は公開しない。",
   "faceSet.get":

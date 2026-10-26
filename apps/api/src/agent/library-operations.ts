@@ -18,6 +18,10 @@ import {
   agentFaceSetGetOutputSchema,
   agentFaceSetListInputSchema,
   agentFaceSetListOutputSchema,
+  agentFontListInputSchema,
+  agentFontListOutputSchema,
+  agentThemeDiagnoseInputSchema,
+  agentThemeDiagnoseOutputSchema,
   agentThemeGetInputSchema,
   agentThemeGetOutputSchema,
   agentThemeListInputSchema,
@@ -45,7 +49,8 @@ import {
   updateCharacterPartial,
 } from "../services/character-library.ts";
 import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
-import { getSelectableTheme, listSelectableThemes } from "../services/theme-library.ts";
+import { searchFonts } from "../services/font-library.ts";
+import { getThemeDetail, listSelectableThemes } from "../services/theme-library.ts";
 import {
   createVoiceProfile,
   getVoiceProfile,
@@ -58,7 +63,8 @@ import { AgentOperationError, agentIssue } from "./errors.ts";
 import type { AgentOperationFragment } from "./operations.ts";
 
 /**
- * The shared libraries (Character, Face Set, Voice Profile, Theme).
+ * The shared libraries (Character, Face Set, Voice Profile, Theme) and the
+ * installed Font Catalog.
  *
  * Reads are open. Writes are limited to the reversible ones: Voice Profile
  * creation/update and Character creation/update (ADR 0088 / 0089 / 0099).
@@ -173,8 +179,40 @@ export const libraryOperationDefinitions = {
     input: agentThemeGetInputSchema,
     output: agentThemeGetOutputSchema,
     run: async (input, context) => ({
-      theme: await getSelectableTheme(context.prisma, input.themeId),
+      theme: await getThemeDetail(context.prisma, input.themeId, input.version),
     }),
+  },
+  "theme.diagnose": {
+    input: agentThemeDiagnoseInputSchema,
+    output: agentThemeDiagnoseOutputSchema,
+    run: async (input, context) => {
+      const theme = await getThemeDetail(context.prisma, input.themeId, input.version);
+      const resolution = await context.fontCatalogService.resolveThemeFonts(
+        theme.definition,
+        { verify: input.verify, locale: input.locale },
+      );
+      return {
+        diagnosis: {
+          themeId: theme.id,
+          version: theme.version,
+          locale: input.locale,
+          catalogSupported: resolution.catalogSupported,
+          verificationSupported: resolution.verificationSupported,
+          verificationReason: resolution.verificationReason,
+          roles: resolution.roles,
+          missingFonts: resolution.missingFonts,
+          diagnostics: resolution.diagnostics,
+        },
+      };
+    },
+  },
+  // The catalog is large (thousands of faces), so this read filters and pages
+  // instead of returning every installed face.
+  "font.list": {
+    input: agentFontListInputSchema,
+    output: agentFontListOutputSchema,
+    run: async (input, context) =>
+      searchFonts(await context.fontCatalogService.getCatalog(), input),
   },
   "faceSet.list": {
     input: agentFaceSetListInputSchema,

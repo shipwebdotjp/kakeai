@@ -1,4 +1,5 @@
 import {
+  getVisualTheme,
   latestVisualThemeDefinitions,
   visualThemeDefinitionSchema,
   type AgentThemeDetail,
@@ -110,6 +111,20 @@ export async function listSelectableThemes(
   return (await listSelectableThemeRecords(db)).map(toSummary);
 }
 
+function toUserThemeDetail(
+  row: { id: string; name: string },
+  revision: { versionNumber: number },
+  definition: VisualThemeDefinition,
+): AgentThemeDetail {
+  return {
+    id: row.id,
+    name: row.name,
+    isBuiltIn: false,
+    version: revision.versionNumber,
+    definition,
+  };
+}
+
 /**
  * Resolves one selectable Theme by id. Archived, draft-only, non-latest and
  * corrupt revisions return null. Shared by `theme.get` and the save-time
@@ -139,13 +154,7 @@ export async function findSelectableTheme(
   if (row === null || revision === undefined || definition === null) {
     return null;
   }
-  return {
-    id: row.id,
-    name: row.name,
-    isBuiltIn: false,
-    version: revision.versionNumber,
-    definition,
-  };
+  return toUserThemeDetail(row, revision, definition);
 }
 
 /** Used by `theme.get`. Archived, draft-only and non-latest revisions are absent. */
@@ -158,6 +167,60 @@ export async function getSelectableTheme(
     throw resourceNotFound("theme", themeId);
   }
   return theme;
+}
+
+/**
+ * Used when the caller names a Revision. Any stored Revision with a valid
+ * definition is readable, including one whose Theme is archived: existing
+ * Script Versions may still reference it and the renderer resolves it.
+ * Draft-only Themes and unknown Revisions are RESOURCE_NOT_FOUND.
+ */
+export async function getThemeRevision(
+  db: ThemeDb,
+  themeId: string,
+  version: number,
+): Promise<AgentThemeDetail> {
+  const builtIn = getVisualTheme(themeId, version);
+  if (builtIn !== undefined) {
+    return {
+      id: builtIn.id,
+      name: builtIn.name ?? builtIn.id,
+      isBuiltIn: true,
+      version: builtIn.version,
+      definition: builtIn,
+    };
+  }
+
+  const row = await db.theme.findUnique({
+    where: { id: themeId },
+    include: {
+      revisions: { where: { versionNumber: version }, take: 1 },
+    },
+  });
+  const revision = row?.revisions[0];
+  const definition =
+    revision === undefined
+      ? null
+      : parseRevision(revision.definitionJson, themeId, revision.versionNumber);
+  if (row === null || revision === undefined || definition === null) {
+    throw resourceNotFound("theme", `${themeId}@${version}`);
+  }
+  return toUserThemeDetail(row, revision, definition);
+}
+
+/**
+ * Resolves the Theme a read should use. Without a version this keeps the
+ * selectable (latest, unarchived) rule; an explicit version reads that stored
+ * Revision, including one of an archived Theme.
+ */
+export async function getThemeDetail(
+  db: ThemeDb,
+  themeId: string,
+  version?: number,
+): Promise<AgentThemeDetail> {
+  return version === undefined
+    ? getSelectableTheme(db, themeId)
+    : getThemeRevision(db, themeId, version);
 }
 
 /**

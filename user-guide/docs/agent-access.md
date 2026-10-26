@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set・Theme の管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set・Theme の管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
@@ -174,7 +174,11 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 ### Theme
 
-`kakeai_theme_list` は選択できる Theme と最新公開 Revision の `version` を返し、`kakeai_theme_get` はその定義を返します。選べる・取得できるのは一覧に載っている最新 Revision だけです。Theme Draft、アーカイブ済み Theme、最新でない Revision、フォント診断は返らず、取得すると `RESOURCE_NOT_FOUND` になります。
+`kakeai_theme_list` は選択できる Theme と最新公開 Revision の `version` を返します。`kakeai_theme_get` は `version` を省略すると最新公開 Revision、指定するとその公開 Revision の定義を返します。`version` を指定したときは、アーカイブ済み Theme の Revision も読めます（既存の台本が参照している場合があるため）。Theme Draft と存在しない Revision は `RESOURCE_NOT_FOUND` になります。
+
+`kakeai_theme_diagnose` は Theme Revision のフォント診断を返します。`themeId` に加えて `version`（省略時は最新公開 Revision。アーカイブ済み Theme は `version` を指定したときだけ読めます）、`locale`（既定 `ja-JP`）、`verify`（既定 `true`）を指定できます。`roles` に文字 role ごとの解決済みフォントとフォールバックの有無、`missingFonts` に解決できなかった family、`diagnostics` に理由が入ります。`verify: true` はレンダーと同じく Chromium で local face を解決できるかまで確認するため、初回は時間がかかります。速い確認だけなら `verify: false` にしてください。
+
+Theme の `fontFace` を決めるときは `kakeai_font_list` を使います。`query` で family・表示名・PostScript 名を部分一致検索し、`style`・`minWeight`・`maxWeight`・`available` で絞れます。`limit` は既定50・最大200で、応答の `total` と `nextOffset` を使って必要なページだけを読みます。
 
 `document.setVisualTheme` で組み込み Theme の最新 Revision、またはアーカイブされていない利用者 Theme の最新 Revision を選びます。`kakeai_script_save` は、Theme の**変更**がアーカイブ済み・最新でない Revision を指す場合だけ拒否します。Theme を変えない保存は、その Theme がアーカイブ済みでも通ります。Theme の作成・更新・アーカイブ・削除は UI で人間が行います。
 
@@ -238,6 +242,9 @@ kakeai-agent --help
 | `kakeai_voice_profile_create` | `kakeai-agent voiceProfile.create --input ...` |
 | `kakeai_voice_profile_update` | `kakeai-agent voiceProfile.update --input ...` |
 | `kakeai_theme_list` | `kakeai-agent theme.list` |
+| `kakeai_theme_get` | `kakeai-agent theme.get --input '{"themeId":"...","version":1}'` |
+| `kakeai_theme_diagnose` | `kakeai-agent theme.diagnose --input '{"themeId":"..."}'` |
+| `kakeai_font_list` | `kakeai-agent font.list --input '{"query":"Hiragino"}'` |
 | `kakeai_face_set_list` | `kakeai-agent faceSet.list` |
 | `kakeai_tts_create` | `kakeai-agent tts.create --input ...` |
 | `kakeai_tts_create_bulk` | `kakeai-agent tts.createBulk --input ...` |

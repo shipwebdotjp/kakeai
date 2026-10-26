@@ -39,7 +39,6 @@ import {
   voiceProfileExtrasSchema,
   voiceProfileSchema,
 } from "../voice-profile";
-import { visualThemeDefinitionSchema } from "../content/theme";
 import {
   compositionAuthoringContextSchema,
   compositionDraftFilesSchema,
@@ -134,7 +133,7 @@ export const agentWorkListOutputSchema = z.strictObject({
 export const agentWorkGetInputSchema = z.strictObject({ workId: idSchema });
 export const agentWorkGetOutputSchema = z.strictObject({ work: workSchema });
 
-export const DEFAULT_AGENT_LOCALE = "ja-JP" as const;
+export { DEFAULT_AGENT_LOCALE } from "./defaults";
 export const agentWorkCreateInputSchema = z.strictObject({
   title: z.string().trim().min(1),
   locale: localeSchema.optional(),
@@ -636,40 +635,6 @@ export type AgentCharacterUpdateInput = z.infer<
   typeof agentCharacterUpdateInputSchema
 >;
 
-/**
- * A selectable Visual Theme. Only the latest published Revision of an
- * unarchived user Theme (or a built-in) is listed. The definition is returned
- * by `theme.get`, not by `theme.list`, so a list read stays small.
- */
-export const agentThemeSummarySchema = z.strictObject({
-  id: idSchema,
-  name: z.string().min(1),
-  isBuiltIn: z.boolean(),
-  version: positiveInt,
-});
-export type AgentThemeSummary = z.infer<typeof agentThemeSummarySchema>;
-
-export const agentThemeDetailSchema = z.strictObject({
-  id: idSchema,
-  name: z.string().min(1),
-  isBuiltIn: z.boolean(),
-  version: positiveInt,
-  definition: visualThemeDefinitionSchema,
-});
-export type AgentThemeDetail = z.infer<typeof agentThemeDetailSchema>;
-
-export const agentThemeListInputSchema = agentEmptyInputSchema;
-export const agentThemeListOutputSchema = z.strictObject({
-  themes: z.array(agentThemeSummarySchema),
-});
-
-export const agentThemeGetInputSchema = z.strictObject({
-  themeId: idSchema,
-});
-export const agentThemeGetOutputSchema = z.strictObject({
-  theme: agentThemeDetailSchema,
-});
-
 export const agentFaceSetListInputSchema = agentEmptyInputSchema;
 export const agentFaceSetListOutputSchema = z.strictObject({
   faceSets: z.array(faceSetSchema),
@@ -721,3 +686,5 @@ export const agentVoiceProfileUpdateInputSchema = z.strictObject({
 export const agentVoiceProfileUpdateOutputSchema = z.strictObject({
   voiceProfile: voiceProfileSchema,
 });
+
+export * from "./theme-schemas";

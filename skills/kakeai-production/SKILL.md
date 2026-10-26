@@ -292,17 +292,25 @@ lines.
 `expressions[].id` → `line.setExpression` with `expressionId`. Use it only for
 lines whose speaker has a Character; a voice-only speaker has no face to switch.
 
-### Themes
+### Themes and fonts
 
 `theme.list` returns the selectable Themes with their latest published
-`version`; `theme.get` returns that revision and its `definition`. Only the
-listed version is selectable, and any other id/version is `RESOURCE_NOT_FOUND`.
-Theme Drafts, archived Themes, non-latest revisions and font diagnostics are not
-exposed. `document.setVisualTheme`
-accepts a built-in revision or the latest revision of an unarchived user Theme.
-`script.save` rejects a **change** to an archived or non-latest revision but
-allows saving a document that keeps its existing Theme, even if that Theme is
-archived.
+`version`; `theme.get` returns that revision, or the exact revision when you pass
+`version`. A version-specific read also returns an archived Theme's published
+revision, because existing scripts may still reference it; drafts and unknown
+revisions are `RESOURCE_NOT_FOUND`. `document.setVisualTheme` accepts a built-in
+revision or the latest revision of an unarchived user Theme. `script.save`
+rejects a **change** to an archived or non-latest revision but allows saving a
+document that keeps its existing Theme, even if that Theme is archived.
+
+`font.list` searches installed faces: `query` matches family, display name and
+PostScript name; filter with `style` / `minWeight` / `maxWeight` / `available`,
+and page with `limit` (default 50, max 200) and `offset`, using `total` and
+`nextOffset`. `theme.diagnose` reports how a Theme revision resolves fonts:
+`roles` (local face and fallback per role), `missingFonts`, and `diagnostics`.
+It verifies faces in Chromium by default (`verify: true`), which is slow on the
+first call; pass `verify: false` for a catalog-only check. Pass the target
+script's `locale` (default `ja-JP`).
 
 Never delete a library character or a Voice Profile, and never create, update,
 archive or delete a face set or theme. Character and Voice Profile writes are

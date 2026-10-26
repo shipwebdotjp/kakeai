@@ -206,3 +206,15 @@
 - [x] ソケット統合テストで、作成 → 名前/別名/声/外観の部分更新、外観ゼロの Character のコピー、未知 Character、Asset / Face Set / Profile の参照欠落、更新項目ゼロ、削除が `AGENT_OPERATION_UNKNOWN` のままであることを固定する
 - [x] Agent Access 仕様・roadmap・キャラクターライブラリ仕様・MP4 制作仕様・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `character.create` → `character.get` → `character.update` → `character.addFromLibrary` → TTS → 確定 → レンダーが通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B15 フォントカタログ・過去 Theme Revision・フォント診断（ADR 0100）
+
+- [x] [ADR 0100](../adr/0100-agent-font-and-theme-revision-reads.md) を追加し、`font.list` の検索・ページング、`theme.get` の `version`、`theme.diagnose` の対象と Chromium 検証の既定を決定する
+- [x] 契約に `font.list` / `theme.diagnose`（read）を追加し、`theme.get` に任意の `version` を加える。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] `font.list` は `query`・`style`・`minWeight` / `maxWeight`・`available` で絞り、`limit`（既定 50・最大 200）/ `offset` でページングする。並び順は family → weight → style → PostScript 名で固定し、`total` と `nextOffset` を返す。絞り込みは `services/font-library.ts` に置く
+- [x] `theme.get` は `version` 指定時に `getThemeRevision` を使い、公開済み Revision を返す。アーカイブ済み Theme の Revision も読み、Theme Draft と未知 Revision は `RESOURCE_NOT_FOUND` とする。`theme.list` は最新限定のまま
+- [x] `theme.diagnose` は `theme.get` と同じ解決で Revision を選び、`locale`（既定 ja-JP）と `verify`（既定 true）で `resolveThemeFonts` を呼ぶ。`roles`・`missingFonts`・`diagnostics`・カタログ対応状況を返し、カタログ非対応はエラーにしない
+- [x] `font.list` を 30 秒、`theme.diagnose` を 60 秒の読み取りタイムアウトにする。MCP の説明文を 3 操作分更新し、CLI はカタログ導出のため変更しない
+- [x] サービス・契約・ソケット統合テストで、検索・ページング・絞り込み、最新／過去 Revision の取得、アーカイブ済み Revision の取得、未知 Revision、role 解決、欠落フォント、入力不正を固定する
+- [x] Agent Access 仕様・roadmap・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `font.list` の検索・ページング、`theme.get` の最新／過去 Revision、`theme.diagnose` の role 解決と欠落フォントが取れる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

@@ -20,6 +20,7 @@ import { ThemeService } from "./themes.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
 import {
   getSelectableTheme,
+  getThemeRevision,
   isSelectableUserTheme,
   listSelectableThemes,
   selectableThemeKeys,
@@ -365,6 +366,53 @@ describe("selectable Theme reads", () => {
     expect(builtIn.version).toBe(SOFT_EDITORIAL_THEME_VERSION);
 
     await expect(getSelectableTheme(prisma, "missing")).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
+    });
+  });
+
+  it("reads any published revision, including archived Themes", async () => {
+    const theme = await createThemeWithRevisions("版指定", [1, 2]);
+    const first = await getThemeRevision(prisma, theme.id, 1);
+    expect(first).toMatchObject({ id: theme.id, version: 1, isBuiltIn: false });
+    expect(first.definition.version).toBe(1);
+    const second = await getThemeRevision(prisma, theme.id, 2);
+    expect(second.definition.version).toBe(2);
+
+    await expect(getThemeRevision(prisma, theme.id, 3)).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
+    });
+
+    const builtIn = await getThemeRevision(
+      prisma,
+      SOFT_EDITORIAL_THEME_ID,
+      SOFT_EDITORIAL_THEME_VERSION,
+    );
+    expect(builtIn).toMatchObject({
+      id: SOFT_EDITORIAL_THEME_ID,
+      version: SOFT_EDITORIAL_THEME_VERSION,
+      isBuiltIn: true,
+    });
+
+    await prisma.theme.update({
+      where: { id: theme.id },
+      data: { archivedAt: new Date() },
+    });
+    expect((await getThemeRevision(prisma, theme.id, 1)).version).toBe(1);
+    await expect(getSelectableTheme(prisma, theme.id)).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
+    });
+  });
+
+  it("returns RESOURCE_NOT_FOUND for a corrupt revision", async () => {
+    const corrupt = await prisma.theme.create({ data: { name: "壊れた版" } });
+    await prisma.themeRevision.create({
+      data: {
+        themeId: corrupt.id,
+        versionNumber: 1,
+        definitionJson: "{not json",
+      },
+    });
+    await expect(getThemeRevision(prisma, corrupt.id, 1)).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
     });
   });

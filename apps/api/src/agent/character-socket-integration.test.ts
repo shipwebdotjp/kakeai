@@ -15,6 +15,7 @@ import {
   toVisualThemeDefinitionV2,
   type AgentResponse,
   type ContentDocument,
+  type FontFace,
   type Work,
 } from "@kakeai/contracts";
 import {
@@ -39,6 +40,49 @@ const PNG_1X1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=",
   "base64",
 );
+
+const FONT_FACES: FontFace[] = [
+  {
+    platformId: "HiraginoSans-W3",
+    family: "Hiragino Sans",
+    displayName: "Hiragino Sans W3",
+    postScriptName: "HiraginoSans-W3",
+    weight: 300,
+    style: "normal",
+    stretch: "normal",
+    available: true,
+  },
+  {
+    platformId: "HiraginoSans-W6",
+    family: "Hiragino Sans",
+    displayName: "Hiragino Sans W6",
+    postScriptName: "HiraginoSans-W6",
+    weight: 600,
+    style: "normal",
+    stretch: "normal",
+    available: true,
+  },
+  {
+    platformId: "HiraginoMinchoProN-W3",
+    family: "Hiragino Mincho ProN",
+    displayName: "Hiragino Mincho ProN W3",
+    postScriptName: "HiraginoMinchoProN-W3",
+    weight: 300,
+    style: "normal",
+    stretch: "normal",
+    available: true,
+  },
+  {
+    platformId: "TimesNewRomanPS-ItalicMT",
+    family: "Times New Roman",
+    displayName: "Times New Roman Italic",
+    postScriptName: "TimesNewRomanPS-ItalicMT",
+    weight: 400,
+    style: "italic",
+    stretch: "normal",
+    available: true,
+  },
+];
 
 function ffprobeAvailable(): boolean {
   try {
@@ -184,7 +228,9 @@ beforeAll(async () => {
   agentServer = await startAgentSocketServer({
     config,
     prisma,
-    fontCatalogService: new FontCatalogService(new FakeFontCatalogAdapter()),
+    fontCatalogService: new FontCatalogService(
+      new FakeFontCatalogAdapter(true, FONT_FACES),
+    ),
   });
   client = createAgentClient({ dataRoot: config.dataRoot, agentId: "character-e2e-agent" });
 
@@ -1082,4 +1128,137 @@ describe("agent character operations over the socket", () => {
       expect(current.scriptVersion.id).toBe(edition.currentScriptVersion.id);
     },
   );
+});
+
+describe("agent font and theme revision reads over the socket", () => {
+  async function addThemeRevision(themeId: string, version: number): Promise<void> {
+    const base = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION);
+    if (base === undefined) {
+      throw new Error("built-in theme missing");
+    }
+    await prisma.themeRevision.create({
+      data: {
+        themeId,
+        versionNumber: version,
+        definitionJson: JSON.stringify({
+          ...toVisualThemeDefinitionV2(base),
+          id: themeId,
+          name: "版付きテーマ",
+          version,
+        }),
+      },
+    });
+  }
+
+  it("pages the installed font catalog with filters", async () => {
+    const first = await client.request("font.list", {
+      query: "hiragino",
+      limit: 1,
+    });
+    expect(first.total).toBe(3);
+    expect(first.fonts).toHaveLength(1);
+    expect(first.fonts[0]?.family).toBe("Hiragino Mincho ProN");
+    expect(first.nextOffset).toBe(1);
+    expect(first.catalog).toMatchObject({ supported: true, reason: null });
+
+    const rest = await client.request("font.list", {
+      query: "hiragino",
+      limit: 10,
+      offset: 1,
+    });
+    expect(rest.fonts.map((entry) => entry.family)).toEqual([
+      "Hiragino Sans",
+      "Hiragino Sans",
+    ]);
+    expect(rest.nextOffset).toBeNull();
+
+    const italic = await client.request("font.list", { style: "italic" });
+    expect(italic.total).toBe(1);
+    expect(italic.fonts[0]?.postScriptName).toBe("TimesNewRomanPS-ItalicMT");
+
+    await expectAgentError(
+      client.request("font.list", { minWeight: 700, maxWeight: 400 }),
+      "VALIDATION_ERROR",
+    );
+  });
+
+  it("reads an older Theme Revision, including an archived Theme, and diagnoses its fonts", async () => {
+    const versionedThemeId = await seedTheme("版付きテーマ");
+    await addThemeRevision(versionedThemeId, 2);
+
+    const latest = await client.request("theme.get", { themeId: versionedThemeId });
+    expect(latest.theme.version).toBe(2);
+    const first = await client.request("theme.get", {
+      themeId: versionedThemeId,
+      version: 1,
+    });
+    expect(first.theme.version).toBe(1);
+    expect(first.theme.definition.version).toBe(1);
+
+    await prisma.theme.update({
+      where: { id: versionedThemeId },
+      data: { archivedAt: new Date() },
+    });
+    const archived = await client.request("theme.get", {
+      themeId: versionedThemeId,
+      version: 1,
+    });
+    expect(archived.theme.version).toBe(1);
+    await expectAgentError(
+      client.request("theme.get", { themeId: versionedThemeId }),
+      "RESOURCE_NOT_FOUND",
+    );
+    await expectAgentError(
+      client.request("theme.get", { themeId: versionedThemeId, version: 9 }),
+      "RESOURCE_NOT_FOUND",
+    );
+
+    const diagnosis = await client.request("theme.diagnose", {
+      themeId: versionedThemeId,
+      version: 1,
+    });
+    expect(diagnosis.diagnosis.themeId).toBe(versionedThemeId);
+    expect(diagnosis.diagnosis.version).toBe(1);
+    expect(diagnosis.diagnosis.locale).toBe("ja-JP");
+    expect(diagnosis.diagnosis.roles).toHaveLength(8);
+    expect(diagnosis.diagnosis.catalogSupported).toBe(true);
+    expect(diagnosis.diagnosis.missingFonts).toEqual([]);
+  });
+
+  it("reports a missing font family for a Theme Revision", async () => {
+    const base = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION);
+    if (base === undefined) {
+      throw new Error("built-in theme missing");
+    }
+    const theme = await prisma.theme.create({ data: { name: "診断用" } });
+    const definition = structuredClone(toVisualThemeDefinitionV2(base));
+    definition.id = theme.id;
+    definition.name = "診断用";
+    definition.version = 1;
+    definition.textRoles.body.fontFace = {
+      family: "Kakeai Missing Font",
+      style: "normal",
+      weight: 400,
+      fallbacks: [],
+    };
+    await prisma.themeRevision.create({
+      data: {
+        themeId: theme.id,
+        versionNumber: 1,
+        definitionJson: JSON.stringify(definition),
+      },
+    });
+
+    const diagnosis = await client.request("theme.diagnose", {
+      themeId: theme.id,
+      verify: false,
+    });
+    expect(diagnosis.diagnosis.missingFonts).toContain("Kakeai Missing Font");
+    expect(diagnosis.diagnosis.roles.find((role) => role.role === "body")).toMatchObject({
+      usesFallback: true,
+    });
+    expect(diagnosis.diagnosis.diagnostics.some((line) => line.startsWith("body:"))).toBe(
+      true,
+    );
+  });
 });

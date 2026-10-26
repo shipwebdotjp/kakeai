@@ -44,10 +44,17 @@ export const AGENT_READ_TIMEOUT_MS = 10_000;
 /**
  * Image previews compile a composition, wait for assets/fonts and rasterize a
  * frame. Typical calls finish in about a second, but a long script with many
- * video stills may take longer than the standard read budget. The extension is
- * limited to image-returning operations.
+ * video stills may take longer than the standard read budget. The font catalog
+ * uses the same budget for its first `system_profiler` scan, so this applies to
+ * image-returning operations and `font.list`.
  */
 export const AGENT_PREVIEW_READ_TIMEOUT_MS = 30_000;
+/**
+ * Font diagnosis optionally verifies faces in Chromium. The verifier itself
+ * caps one probe at 20 seconds, and a cold browser launch adds to it, so the
+ * read budget is wider than an image preview.
+ */
+export const AGENT_DIAGNOSE_READ_TIMEOUT_MS = 60_000;
 /** Byte budget for an asset image before base64 expansion. */
 export const AGENT_PREVIEW_IMAGE_MAX_BYTES = 12 * 1024 * 1024;
 /** Base64 length budget (4/3 expansion plus padding). */

@@ -1,4 +1,5 @@
 import {
+  AGENT_DIAGNOSE_READ_TIMEOUT_MS,
   AGENT_PREVIEW_READ_TIMEOUT_MS,
   AGENT_READ_TIMEOUT_MS,
 } from "./protocol";
@@ -68,6 +69,8 @@ export const agentOperationNames = [
   "character.update",
   "theme.list",
   "theme.get",
+  "theme.diagnose",
+  "font.list",
   "faceSet.list",
   "faceSet.get",
   "voiceProfile.list",
@@ -111,6 +114,8 @@ export const agentReadOperationNames = [
   "character.get",
   "theme.list",
   "theme.get",
+  "theme.diagnose",
+  "font.list",
   "faceSet.list",
   "faceSet.get",
   "voiceProfile.list",
@@ -224,12 +229,25 @@ export function isAgentImagePreviewOperation(
   );
 }
 
-/** The image read timeout for an operation, or undefined for the default. */
+/**
+ * Non-image reads that exceed the standard budget for a known reason. The font
+ * catalog may wait for the first `system_profiler` scan, and diagnosis may
+ * launch Chromium to verify faces.
+ */
+const AGENT_SLOW_READ_TIMEOUT_MS: Partial<Record<AgentOperationName, number>> = {
+  "font.list": AGENT_PREVIEW_READ_TIMEOUT_MS,
+  "theme.diagnose": AGENT_DIAGNOSE_READ_TIMEOUT_MS,
+};
+
+/** The extended read timeout for an operation, or undefined for the default. */
 export function agentOperationReadTimeoutMs(
   operation: string,
 ): number | undefined {
-  return isAgentImagePreviewOperation(operation)
-    ? AGENT_PREVIEW_READ_TIMEOUT_MS
+  if (isAgentImagePreviewOperation(operation)) {
+    return AGENT_PREVIEW_READ_TIMEOUT_MS;
+  }
+  return isAgentOperationName(operation)
+    ? AGENT_SLOW_READ_TIMEOUT_MS[operation]
     : undefined;
 }
 
