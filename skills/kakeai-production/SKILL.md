@@ -73,6 +73,7 @@ files.
 | 7 | Validate | `script.validate` | No errors, warnings understood |
 | 8 | Optional pre-render visual check | `preview.scriptFrame`, `preview.assetFrame` | Layout, text overflow, overlap, missing media |
 | 9 | Render and optional visual check | `render.start`, `job.get` / `job.wait`, `preview.frame` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`); the user judges final quality |
+| 10 | Optional thumbnail (after render) | `thumbnail.listTemplates`, `thumbnail.create`, `preview.thumbnail`, `thumbnail.update`, `thumbnail.setPrimary`, `thumbnail.image` | A candidate exists, its draft preview looks right, and one is chosen; the user judges the final look |
 
 Do not interleave a later phase into an earlier one unless the earlier phase is
 saved. Every `script.edit` reads `baseScriptVersionId`, so a stale base fails.
@@ -440,6 +441,34 @@ tools and bring in through `asset.import`.
    thumbnail, the SRT and the YouTube settings. Do not claim the video is
    correct on their behalf.
 
+### 8.1 Thumbnails (optional, after a successful render)
+
+A thumbnail is a separate 1280x720 document per Language Edition. It is not an
+AI generation and not part of the MP4 artifact. Framework: template + text +
+two images.
+
+1. `thumbnail.listTemplates` and take the template's `inputSchema` and
+   `example`. Replace every `<...>` placeholder with a real ID. Do not guess
+   the input shape. `backgroundAssetId` and `foregroundAssetId` must be `ready`
+   image Assets (`asset.list` / `asset.get`). The foreground is expected to be a
+   transparent PNG/WebP; the app does not check transparency, so look at the
+   preview.
+2. `thumbnail.list` the edition first, then `thumbnail.create` with a short
+   `label`, the `template`, the `input` and an optional `appearanceOverride`
+   (for example `{ "headline": { "color": "#FFE066" } }`). The first candidate
+   becomes primary automatically.
+3. `preview.thumbnail` with the same draft input (add
+   `appearance` only when testing an unsaved edition-wide patch). It returns a
+   PNG and writes nothing. Check the headline wrapping, clipping and the
+   foreground transparency. Fix the input and preview again, then
+   `thumbnail.update` the saved candidate.
+4. `thumbnail.setPrimary` chooses the candidate used for publication.
+5. `thumbnail.image` returns the saved candidate's PNG. In MCP it is an image
+   block; in the CLI use `--out thumbnail.png` to write the file.
+6. The user judges the final thumbnail. Do not claim it is good on their
+   behalf. Candidate deletion, the edition-wide common Appearance and
+   appearance presets are human-only.
+
 ## 9. Idempotency, stale bases and timeouts
 
 | Situation | What to do |
@@ -452,6 +481,7 @@ tools and bring in through `asset.import`.
 | `voiceProfile.create` timeout | It has no `requestId` either. After `AGENT_REQUEST_TIMEOUT`, call `voiceProfile.list` and look for the created Profile (same `name` and `createdAt` at or after your request). Retry only when you are sure nothing was created. |
 | `script.save` timeout | It has no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `script.get` / `script.listVersions` to check whether the new version landed, then retry only if it did not. |
 | `speaker.add`-only edit timeout | Replaying `script.edit` with the same `requestId` returns the version but an empty `created`. Call `script.get` on that version to find the new Speaker before using it. |
+| `thumbnail.create` / `thumbnail.update` timeout | They have no `requestId`. After `AGENT_REQUEST_TIMEOUT`, call `thumbnail.list` and look for the candidate (`label`, `createdAt` / `updatedAt`). Do not create a duplicate. |
 | `AGENT_REQUEST_TIMEOUT` on a mutation | The server may still have applied it. Check state first (`script.get`, `work.list`, `job.list` — pass `{ kind: "tts" }` for TTS Jobs — `asset.list`, `composition.get`) and only then retry. The exceptions are `script.edit` and `script.restore`, which may be replayed immediately with the same `requestId`. |
 | `replay: true` | The edit or restore was already applied. Do not apply the operations or restore again. |
 | Digest changed mid-session | Re-read `schema.get` and the current script; cached templates and IDs may be stale. A changed `operationDigest` means an operation's input or output shape changed, so re-read that operation's published schema before calling it again. `schemaDigest` also covers each template's input contract, so re-fetch any `template.get` result you cached. |
@@ -515,7 +545,8 @@ to the user when the fix is on their side.
 | `COMPOSITION_UNAVAILABLE` | Referenced CompositionVersion is not published or its bundle is missing. Publish it first. |
 | `TTS_INPUT_INVALID` | Empty text, missing speaker/voice, voice outside the configured adapter, or bad speed. Fix the line or ask the user. |
 | `TTS_ENGINE_UNAVAILABLE` | The configured TTS adapter is unreachable. Ask the user to start the engine. |
-| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | The referenced script version, line, asset or work no longer exists, or a `template.get` id/version is not in `schema.get.templates`. Includes a `tts.attachBulk` whose bulk was started by another `agentId` or without a `requestId`. Re-read and re-plan. |
+| `THUMBNAIL_INPUT_INVALID` | The thumbnail template is unsupported, the input does not match `inputSchema`, or an image is not an image / is too large. Fix the input or pick another ready image. |
+| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | The referenced script version, line, asset, work or thumbnail candidate no longer exists, or a `template.get` id/version is not in `schema.get.templates`. Includes a `tts.attachBulk` whose bulk was started by another `agentId` or without a `requestId`. Re-read and re-plan. |
 | `AGENT_PAYLOAD_TOO_LARGE` | One request exceeded 32 MiB. Split the work; never inline large media in a script. |
 | `JOB_NOT_CANCELLABLE` | Only queued Jobs can be cancelled. A running or terminal Job must be waited for, not cancelled. |
 | `RENDER_FAILED` / `RENDER_INPUT_INVALID` | The render Job failed. Report `job.error`; check assets, duration and template inputs. Do not retry identical input indefinitely. |
@@ -523,21 +554,24 @@ to the user when the fix is on their side.
 
 ## 11. Non-goals
 
-- Deleting Works, Assets, Composition Versions, Artifacts or library entries.
+- Deleting Works, Assets, Composition Versions, Artifacts, thumbnail candidates or
+  library entries.
 - Publishing anything to an external service (Composition publish inside Kakeai
   is an immutable version, not an external publish).
 - Creating, updating, archiving or deleting character library entries, voice
   profiles, face sets, themes, TTS adapters, endpoints or credentials. Existing
   Voice Profiles may be assigned to speakers; libraries themselves stay
-  read-only.
+  read-only. The edition-wide thumbnail Appearance and appearance presets are
+  human-only too.
 - Paid generation other than Jobs on the user's configured TTS adapter.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.
 - Making the final quality judgment (picture, sound, delivery) for the user.
-  `preview.scriptFrame` / `preview.assetFrame` / `preview.frame` are optional:
-  not checking stills is not a failure, and checking them does not replace the
-  human's final review. The human also downloads the MP4 and handles the
-  thumbnail, SRT and YouTube settings.
+  `preview.scriptFrame` / `preview.assetFrame` / `preview.frame` /
+  `preview.thumbnail` are optional: not checking stills is not a failure, and
+  checking them does not replace the human's final review. The human also
+  downloads the MP4, judges the thumbnail, and handles the SRT and YouTube
+  settings.
 
 ## 12. Related skills
 

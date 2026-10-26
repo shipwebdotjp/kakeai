@@ -194,6 +194,8 @@ describe("CLI argument parsing", () => {
       "preview.frame",
       "preview.scriptFrame",
       "preview.assetFrame",
+      "preview.thumbnail",
+      "thumbnail.image",
     ]) {
       expect(parseCliArgs([operation, "--out", "frame.png"], {})).toMatchObject({
         options: { out: "frame.png" },
@@ -301,6 +303,39 @@ describe("CLI invocation", () => {
     expect(stdout.path).toBe(outPath);
     expect(stdout.artifactId).toBe("art-1");
     expect(stdout.resolvedTimeMs).toBe(1500);
+  });
+
+  it("writes thumbnail.image PNG bytes with --out and prints metadata", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kakeai-cli-out-"));
+    dirs.push(dir);
+    const image = {
+      thumbnailId: "thm-1",
+      filename: "thumbnail.png",
+      width: 1280,
+      height: 720,
+      mimeType: "image/png",
+      pngBase64: "aVBORw0KGgo=",
+    };
+    const handler: Handler = (operation, input) => {
+      expect(operation).toBe("thumbnail.image");
+      expect(input).toEqual({ thumbnailId: "thm-1" });
+      return image;
+    };
+    const outPath = join(dir, "thumbnail.png");
+    const captured = capture(handler);
+    expect(
+      await runCli(
+        ["thumbnail.image", "--input", '{"thumbnailId":"thm-1"}', "--out", outPath],
+        captured.io,
+      ),
+    ).toBe(0);
+    expect(captured.stderr()).toBe("");
+    expect(await readFile(outPath)).toEqual(Buffer.from(image.pngBase64, "base64"));
+    const stdout = JSON.parse(captured.stdout()) as Record<string, unknown>;
+    expect(stdout.pngBase64).toBeUndefined();
+    expect(stdout.path).toBe(outPath);
+    expect(stdout.thumbnailId).toBe("thm-1");
+    expect(stdout.width).toBe(1280);
   });
 
   it("writes preview.scriptFrame image bytes with --out and prints metadata", async () => {

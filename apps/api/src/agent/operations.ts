@@ -58,12 +58,6 @@ import {
   agentJobGetOutputSchema,
   agentJobListInputSchema,
   agentJobListOutputSchema,
-  agentPreviewAssetFrameInputSchema,
-  agentPreviewAssetFrameOutputSchema,
-  agentPreviewFrameInputSchema,
-  agentPreviewFrameOutputSchema,
-  agentPreviewScriptFrameInputSchema,
-  agentPreviewScriptFrameOutputSchema,
   agentRenderStartInputSchema,
   agentRenderStartOutputSchema,
   agentSchemaGetInputSchema,
@@ -149,9 +143,7 @@ import {
 import type { FontCatalogService } from "../services/font-catalog.ts";
 import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
 import type { PreviewRasterizer } from "../media/preview-rasterize.ts";
-import { getAssetFrame } from "../services/preview-asset-frames.ts";
-import { getPreviewFrame } from "../services/preview-frames.ts";
-import { getScriptVersionFrame } from "../services/preview-script-frames.ts";
+import type { Rasterizer } from "../media/rasterize.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
 import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
 import { attachBulkTts, bulkTtsResultRefOf } from "../services/tts-attach-bulk.ts";
@@ -160,8 +152,10 @@ import {
   parseResultReference,
 } from "../services/agent-result-references.ts";
 import { createWork, createLanguageEdition, getWork, listWorks, updateWork, cloneWork } from "../services/works.ts";
-import { AgentOperationError, agentIssue } from "./errors.ts";
+import { AgentOperationError, agentIssue, asWorkResource } from "./errors.ts";
 import { runWithAgentRequest } from "./idempotency.ts";
+import { imageOperationDefinitions } from "./image-operations.ts";
+import { thumbnailOperationDefinitions } from "./thumbnail-operations.ts";
 
 export type AgentOperationKind = "read" | "mutation";
 
@@ -174,21 +168,10 @@ export interface AgentOperationContext {
   compositionAuthoring: CompositionAuthoringService;
   /** Headless rasterizer used by the pre-render preview operations. */
   previewRasterizer: PreviewRasterizer;
+  /** Headless screenshot rasterizer used by the thumbnail PNG operations. */
+  rasterizer: Rasterizer;
   /** `agentId` from the connection handshake, if the client sent one. */
   agentId?: string;
-}
-
-/**
- * The app's own loopback origin. The preview rasterizer navigates here once to
- * receive the same-origin media session cookie before loading compiled HTML.
- * Kakeai serves plain HTTP on loopback only; TLS and non-loopback origins are
- * outside the security policy.
- */
-export function previewOrigin(config: AppConfig): string {
-  const host =
-    config.host === "0.0.0.0" || config.host === "::" ? "127.0.0.1" : config.host;
-  const formatted = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
-  return `http://${formatted}:${config.port}`;
 }
 
 /**
@@ -196,7 +179,7 @@ export function previewOrigin(config: AppConfig): string {
  * result reference (resource ids), never a response snapshot, so a replay
  * rebuilds the answer from the current resource state.
  */
-interface AgentOperationIdempotency<Input, Output> {
+export interface AgentOperationIdempotency<Input, Output> {
   /** Whether this input is recorded at all (a dry run has no side effect). */
   applies: (input: Input) => boolean;
   /**
@@ -211,7 +194,7 @@ interface AgentOperationIdempotency<Input, Output> {
   replay: (resultRef: string, context: AgentOperationContext) => Promise<Output>;
 }
 
-interface AgentOperationDefinition<RawInput, Input, Output> {
+export interface AgentOperationDefinition<RawInput, Input, Output> {
   input: z.ZodType<Input, RawInput>;
   output: z.ZodType<Output>;
   invalidInputCode?: AgentErrorCode;
@@ -235,6 +218,13 @@ type AgentOperationDefinitions = {
     AgentOperationOutputMap[K]
   >;
 };
+
+/**
+ * A partial set of definitions that a domain module contributes to the single
+ * dispatcher. Keeping the domains in separate files stops the dispatcher from
+ * growing every time a domain is added.
+ */
+export type AgentOperationFragment = Partial<AgentOperationDefinitions>;
 
 const definitions: AgentOperationDefinitions = {
   "schema.get": {
@@ -411,30 +401,8 @@ const definitions: AgentOperationDefinitions = {
       job: await cancelJob(context.prisma, input.jobId),
     }),
   },
-  "preview.frame": {
-    input: agentPreviewFrameInputSchema,
-    output: agentPreviewFrameOutputSchema,
-    run: async (input, context) =>
-      getPreviewFrame(context.prisma, context.directories, input),
-  },
-  "preview.scriptFrame": {
-    input: agentPreviewScriptFrameInputSchema,
-    output: agentPreviewScriptFrameOutputSchema,
-    run: async (input, context) =>
-      getScriptVersionFrame(
-        context.prisma,
-        context.directories,
-        context.previewRasterizer,
-        previewOrigin(context.config),
-        input,
-      ),
-  },
-  "preview.assetFrame": {
-    input: agentPreviewAssetFrameInputSchema,
-    output: agentPreviewAssetFrameOutputSchema,
-    run: async (input, context) =>
-      getAssetFrame(context.prisma, context.directories, input),
-  },
+  ...imageOperationDefinitions,
+  ...thumbnailOperationDefinitions,
   "composition.list": {
     input: agentCompositionListInputSchema,
     output: agentCompositionListOutputSchema,
@@ -757,18 +725,6 @@ function requestIdOf(input: unknown): string | undefined {
   }
   const value = (input as { requestId?: unknown }).requestId;
   return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-/** Work/edition/version lookups use the Agent Access code, not generic 404. */
-async function asWorkResource<T>(operation: Promise<T>): Promise<T> {
-  try {
-    return await operation;
-  } catch (error) {
-    if (error instanceof ApiError && error.code === "RESOURCE_NOT_FOUND") {
-      throw new AgentOperationError(AGENT_ERROR_CODES.WORK_NOT_FOUND);
-    }
-    throw error;
-  }
 }
 
 function toAgentIssues(error: z.ZodError): AgentErrorIssue[] {

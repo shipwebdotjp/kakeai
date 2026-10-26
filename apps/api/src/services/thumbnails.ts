@@ -399,6 +399,8 @@ export async function createThumbnailPreview(
 
 export interface ThumbnailImage {
   filename: string;
+  width: number;
+  height: number;
   png: Buffer;
 }
 
@@ -417,26 +419,20 @@ function pngFilename(title: string): string {
   return `${base}.png`;
 }
 
-export async function generateThumbnailImage(
+/**
+ * Rasterizes a compiled thumbnail. The source assets are inlined as data URLs
+ * because the headless screenshot browser never receives the app's media
+ * session; this is the same path the HTTP PNG route uses.
+ */
+async function renderDocumentPng(
   prisma: PrismaClient,
   directories: DataDirectories,
   rasterizer: Rasterizer,
-  thumbnailId: string,
-): Promise<ThumbnailImage> {
-  const row = await prisma.thumbnail.findUnique({
-    where: { id: thumbnailId },
-    include: { languageEdition: { include: { work: true } } },
-  });
-  if (row === null) {
-    throw resourceNotFound("thumbnail", thumbnailId);
-  }
-  const document = parseThumbnailDocument(row.inputJson);
-  await validateDocument(prisma, document);
-  const { theme } = await requireEditionWithTheme(prisma, row.languageEditionId);
-  const commonAppearance = parseThumbnailAppearanceJson(
-    row.languageEdition.thumbnailAppearanceJson,
-  );
-
+  document: ThumbnailDocument,
+  theme: Parameters<typeof compileThumbnail>[0]["theme"],
+  locale: string,
+  commonAppearance: ThumbnailAppearance | null,
+): Promise<{ width: number; height: number; png: Buffer }> {
   const assetIds = [
     ...new Set(collectThumbnailAssetRefs(document).map((reference) => reference.assetId)),
   ];
@@ -460,9 +456,11 @@ export async function generateThumbnailImage(
     ),
   );
 
-  const compiled = compile(document, theme, row.languageEdition.locale, (assetId) => {
+  const compiled = compile(document, theme, locale, (assetId) => {
     const url = dataUrls.get(assetId);
     if (url === undefined) {
+      // The `compile` wrapper turns this into THUMBNAIL_INPUT_INVALID with the
+      // structured issue path, the same as every other invalid-input case.
       throw new CompositionCompileError([
         { path: ["input", "assetId"], code: "unresolvable_asset", message: "素材を解決できません。" },
       ]);
@@ -470,7 +468,69 @@ export async function generateThumbnailImage(
     return { url, kind: "image" };
   }, commonAppearance);
   const png = await rasterizer.renderPng(compiled.html, compiled.width, compiled.height);
-  return { filename: pngFilename(row.languageEdition.work.title), png };
+  return { width: compiled.width, height: compiled.height, png };
+}
+
+/** PNG of an unsaved draft; nothing is written to the database. */
+export async function renderThumbnailPreviewImage(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  rasterizer: Rasterizer,
+  editionId: string,
+  input: ThumbnailPreviewRequest,
+): Promise<{ width: number; height: number; png: Buffer }> {
+  const document = buildDocument(input);
+  await validateDocument(prisma, document);
+  const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
+  const commonAppearance =
+    input.appearance === undefined
+      ? parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson)
+      : normalizeThumbnailAppearance(input.appearance);
+  return renderDocumentPng(
+    prisma,
+    directories,
+    rasterizer,
+    document,
+    theme,
+    edition.locale,
+    commonAppearance,
+  );
+}
+
+export async function generateThumbnailImage(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  rasterizer: Rasterizer,
+  thumbnailId: string,
+): Promise<ThumbnailImage> {
+  const row = await prisma.thumbnail.findUnique({
+    where: { id: thumbnailId },
+    include: { languageEdition: { include: { work: true } } },
+  });
+  if (row === null) {
+    throw resourceNotFound("thumbnail", thumbnailId);
+  }
+  const document = parseThumbnailDocument(row.inputJson);
+  await validateDocument(prisma, document);
+  const { edition, theme } = await requireEditionWithTheme(prisma, row.languageEditionId);
+  const commonAppearance = parseThumbnailAppearanceJson(
+    row.languageEdition.thumbnailAppearanceJson,
+  );
+  const rendered = await renderDocumentPng(
+    prisma,
+    directories,
+    rasterizer,
+    document,
+    theme,
+    edition.locale,
+    commonAppearance,
+  );
+  return {
+    filename: pngFilename(row.languageEdition.work.title),
+    width: rendered.width,
+    height: rendered.height,
+    png: rendered.png,
+  };
 }
 
 export type { ThumbnailRow };

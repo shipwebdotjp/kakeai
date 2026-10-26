@@ -77,6 +77,15 @@ export const agentOperationNames = [
   "preview.frame",
   "preview.scriptFrame",
   "preview.assetFrame",
+  "preview.thumbnail",
+  "thumbnail.listTemplates",
+  "thumbnail.list",
+  "thumbnail.get",
+  "thumbnail.appearance",
+  "thumbnail.create",
+  "thumbnail.update",
+  "thumbnail.setPrimary",
+  "thumbnail.image",
 ] as const;
 export type AgentOperationName = (typeof agentOperationNames)[number];
 
@@ -109,7 +118,13 @@ export const agentReadOperationNames = [
   "preview.frame",
   "preview.scriptFrame",
   "preview.assetFrame",
-] as const;
+  "preview.thumbnail",
+  "thumbnail.listTemplates",
+  "thumbnail.list",
+  "thumbnail.get",
+  "thumbnail.appearance",
+  "thumbnail.image",
+] as const satisfies readonly AgentOperationName[];
 
 export const agentMutationOperationNames = [
   "work.create",
@@ -132,6 +147,9 @@ export const agentMutationOperationNames = [
   "voiceProfile.create",
   "voiceProfile.update",
   "character.setVoices",
+  "thumbnail.create",
+  "thumbnail.update",
+  "thumbnail.setPrimary",
 ] as const satisfies readonly AgentOperationName[];
 
 /**
@@ -188,6 +206,8 @@ export const agentImagePreviewOperationNames = [
   "preview.frame",
   "preview.scriptFrame",
   "preview.assetFrame",
+  "preview.thumbnail",
+  "thumbnail.image",
 ] as const satisfies readonly AgentOperationName[];
 export type AgentImagePreviewOperationName =
   (typeof agentImagePreviewOperationNames)[number];

@@ -58,7 +58,8 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_tts_attach_bulk` |
 | Composition | `kakeai_composition_list` / `kakeai_composition_get` / `kakeai_composition_draft_get` / `kakeai_composition_authoring_context` / `kakeai_composition_create` / `kakeai_composition_draft_save` / `kakeai_composition_publish` |
 | レンダー | `kakeai_render_start` |
-| プレビュー | `kakeai_preview_script_frame`（保存版の指定時刻）/ `kakeai_preview_asset_frame`（素材）/ `kakeai_preview_frame`（render 成果物）。いずれも絵は image ブロックでも返る |
+| プレビュー | `kakeai_preview_script_frame`（保存版の指定時刻）/ `kakeai_preview_asset_frame`（素材）/ `kakeai_preview_frame`（render 成果物）/ `kakeai_preview_thumbnail`（未保存のサムネイル）。いずれも絵は image ブロックでも返る |
+| サムネイル | `kakeai_thumbnail_list_templates` / `kakeai_thumbnail_list` / `kakeai_thumbnail_get` / `kakeai_thumbnail_appearance` / `kakeai_thumbnail_create` / `kakeai_thumbnail_update` / `kakeai_thumbnail_set_primary` / `kakeai_thumbnail_image` |
 | Job | `kakeai_job_get` / `kakeai_job_list` / `kakeai_job_cancel` / `kakeai_job_wait` |
 
 `kakeai_schema_get` の `agentOperations` が、公開されている全操作（読み取り／変更、Job を返すか）の正です。`kakeai_job_wait` は Job を待つための束縛の便宜ツールで、Agent 操作ではありません。
@@ -186,7 +187,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 1. `render` Job が `succeeded` になる。
 2. `kakeai_job_get` の `artifacts` に `role: "render"` / `format: "mp4"` の Artifact が存在する。
 
-エージェントは Artifact の ID・尺（`durationMs`）・寸法（`widthPx` / `heightPx`）を報告します。最終的な絵・音の確認、MP4 の取得、サムネイル、SRT 字幕、YouTube の投稿設定は人間が行います。`kakeai_preview_script_frame` / `kakeai_preview_asset_frame` / `kakeai_preview_frame` による静止画確認は任意の補助で、合格ラインには含みません。詳しい手順は [スキル](#スキル) の `kakeai-production` を参照してください。
+エージェントは Artifact の ID・尺（`durationMs`）・寸法（`widthPx` / `heightPx`）を報告します。最終的な絵・音の確認、MP4 の取得、サムネイルの最終判断、SRT 字幕、YouTube の投稿設定は人間が行います。サムネイル候補の作成・プレビュー・PNG 取得はエージェントも行えますが、完成した見た目の判断は人間に残します。`kakeai_preview_script_frame` / `kakeai_preview_asset_frame` / `kakeai_preview_frame` / `kakeai_preview_thumbnail` による静止画確認は任意の補助で、合格ラインには含みません。詳しい手順は [スキル](#スキル) の `kakeai-production` を参照してください。
 
 ## 長尺操作
 
@@ -241,6 +242,13 @@ kakeai-agent --help
 | `kakeai_preview_script_frame` | `kakeai-agent preview.scriptFrame --input ... [--out ...]` |
 | `kakeai_preview_asset_frame` | `kakeai-agent preview.assetFrame --input ... [--out ...]` |
 | `kakeai_preview_frame` | `kakeai-agent preview.frame --input ... [--out ...]` |
+| `kakeai_preview_thumbnail` | `kakeai-agent preview.thumbnail --input ... [--out ...]` |
+| `kakeai_thumbnail_list_templates` | `kakeai-agent thumbnail.listTemplates` |
+| `kakeai_thumbnail_list` | `kakeai-agent thumbnail.list --input '{"languageEditionId":"led-123"}'` |
+| `kakeai_thumbnail_create` | `kakeai-agent thumbnail.create --input ...` |
+| `kakeai_thumbnail_update` | `kakeai-agent thumbnail.update --input ...` |
+| `kakeai_thumbnail_set_primary` | `kakeai-agent thumbnail.setPrimary --input ...` |
+| `kakeai_thumbnail_image` | `kakeai-agent thumbnail.image --input ... [--out ...]` |
 | `kakeai_job_wait` | `kakeai-agent job.wait <jobId>` |
 
 MCP ツール名は `kakeai_<domain>_<verb>` の snake_case、CLI のサブコマンドは正規の `domain.verb` です。`createBulk` や `authoringContext` のように語が複数ある操作では機械的な読み替えが一致しないため、`kakeai-agent operations` か `schema.get` の `agentOperations` で正規名を確認してください。同じ操作・同じ入力なら、CLI の stdout JSON は MCP の `structuredContent` と一致します（画像を返す操作の `--out` 指定時を除く。`--out` 指定時は画像がファイルに書かれ、stdout JSON は `pngBase64` / `imageBase64` の代わりに `path` を含みます）。
@@ -262,6 +270,31 @@ kakeai-agent preview.assetFrame --input '{"assetId":"ast-123","timeMs":1500}' --
 - `preview.assetFrame` の画像は保存されている画像そのもの（正規化された画像があればそれ）で、`mimeType` が実際の形式です。動画は指定時刻の PNG、音声は `VALIDATION_ERROR` になります。画像に `timeMs` は指定できません。MCP の image ブロックは PNG / JPEG の素材だけに付き、WebP / GIF / BMP / AVIF は `structuredContent` または CLI の `--out` で取得します。
 - `preview.scriptFrame` は台本版・Job・Artifact を作りません。読み取り操作です。
 - 画像プレビューの読み取りタイムアウトは最大 30 秒です。タイムアウトした場合は同じ入力で 1 回だけ再送し、それでもだめならレンダーに進んで人間に確認を返します。プレビューは構図確認用で、色・動き・音の最終判断には代わりません。
+
+### サムネイル（`thumbnail.*` / `preview.thumbnail`）
+
+言語版ごとのサムネイル候補を作り、未保存のプレビューを PNG で確認し、投稿用の1枚を選んで PNG を取得できます。テンプレート方式で、AI 生成ではありません。最終的な見た目の判断は人間が行います。
+
+```sh
+# 同梱テンプレートの inputSchema と example を取得する
+kakeai-agent thumbnail.listTemplates
+
+# 候補を作る（最初の候補は自動で primary になる）
+kakeai-agent thumbnail.create --input '{"languageEditionId":"led-123","label":"候補1","template":{"id":"thumbnail.cutout-hero","version":1},"input":{"headline":"**AI**で作る動画","backgroundAssetId":"ast-bg","foregroundAssetId":"ast-fg"}}'
+
+# 保存前に下書きを PNG で確認する（DB へは書かない）
+kakeai-agent preview.thumbnail --input '{"languageEditionId":"led-123","template":{"id":"thumbnail.cutout-hero","version":1},"input":{"headline":"**AI**で作る動画","backgroundAssetId":"ast-bg","foregroundAssetId":"ast-fg"}}' --out thumbnail-draft.png
+
+# 投稿用の1枚を選び、PNG を書き出す
+kakeai-agent thumbnail.setPrimary --input '{"languageEditionId":"led-123","thumbnailId":"thm-123"}'
+kakeai-agent thumbnail.image --input '{"thumbnailId":"thm-123"}' --out thumbnail.png
+```
+
+- `thumbnail.listTemplates` の `example` にある `<...>` は実在する画像 Asset の ID に置き換えます。背景・前景は `ready` な画像が必要です。前景は透過 PNG / WebP を想定していますが、アプリは透過性を検査しません。`preview.thumbnail` の PNG で確認してください。
+- 候補の `appearanceOverride` で見出しの色・書体・サイズなどを候補単位で上書きできます。言語版共通の Appearance の保存と外観プリセットは UI 専用です。
+- 候補の削除は公開していません。不要な候補は UI で整理してください。
+- `thumbnail.create` / `thumbnail.update` は `requestId` を持ちません。タイムアウト後は `thumbnail.list` で `label` と `createdAt` / `updatedAt` を確認してから再実行します。
+- サムネイルの PNG 生成も画像系の読み取りで、タイムアウトは 30 秒です。Job や Artifact は作りません。
 
 ### 静止画の取得（`preview.frame`）
 

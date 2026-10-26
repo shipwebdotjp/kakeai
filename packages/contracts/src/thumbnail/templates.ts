@@ -14,6 +14,8 @@ export interface ThumbnailTemplateDefinition {
   inputFields?: readonly TemplateFieldSpec[];
   /** UI defaults for optional inputs, merged into new and existing candidates. */
   uiDefaults?: Readonly<Record<string, unknown>>;
+  /** A complete input that passes `inputSchema`; published to agents. */
+  exampleInput: unknown;
   collectAssetRefs: (input: unknown, path: (string | number)[]) => AssetReference[];
 }
 
@@ -97,6 +99,15 @@ const cutoutHeroV1: ThumbnailTemplateDefinition = {
     category: "thumbnail",
   },
   uiDefaults: THUMBNAIL_CUTOUT_HERO_DEFAULTS,
+  exampleInput: {
+    headline: "**AI**で変わる動画制作",
+    subline: "台本から完成まで",
+    // Placeholders: agents must replace these with ready image Asset ids.
+    backgroundAssetId: "<backgroundAssetId>",
+    foregroundAssetId: "<foregroundAssetId>",
+    subjectSide: "right",
+    textWidth: 55,
+  } satisfies z.input<typeof thumbnailCutoutHeroInputSchema>,
   inputFields: [
     { kind: "richText", key: "headline", label: "見出し", marks: HEADLINE_MARKS },
     { kind: "richText", key: "subline", label: "補足文", marks: HEADLINE_MARKS, optional: true },

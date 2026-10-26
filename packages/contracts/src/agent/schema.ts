@@ -14,6 +14,7 @@ import {
   agentVisualTemplateSchema,
   type AgentTemplateField,
   type AgentTemplateInputContract,
+  type AgentThumbnailTemplateContract,
   type AgentVisualTemplate,
 } from "./template";
 import { z } from "zod";
@@ -303,6 +304,13 @@ export interface AgentSchemaDigestSource {
    */
   templateInputContracts: readonly AgentTemplateInputContract[];
   /**
+   * The input contract (JSON Schema and example) of every thumbnail template.
+   * Thumbnail templates are not part of `schema.get`, so folding them into the
+   * digest is what makes a change visible to an agent that cached a
+   * `thumbnail.listTemplates` result.
+   */
+  thumbnailTemplateContracts: readonly AgentThumbnailTemplateContract[];
+  /**
    * The normalised input/output schema of every agent operation. Folding it
    * into the schema digest is what makes an operation contract change visible
    * to an agent that cached the previous digest.
@@ -318,5 +326,6 @@ export interface AgentSchemaDigestInput {
   warningCodes: AgentWarningCode[];
   assetKinds: Array<z.infer<typeof assetKindSchema>>;
   templateInputContracts: readonly AgentTemplateInputContract[];
+  thumbnailTemplateContracts: readonly AgentThumbnailTemplateContract[];
   operationContracts: readonly AgentOperationContract[];
 }

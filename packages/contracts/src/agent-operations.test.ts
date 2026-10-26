@@ -37,6 +37,7 @@ import {
   agentScriptSaveInputSchema,
   agentScriptValidateInputSchema,
   agentTemplateInputContracts,
+  agentThumbnailTemplateContracts,
   agentTtsAttachBulkInputSchema,
   agentTtsAttachBulkOutputSchema,
   agentTtsCreateBulkInputSchema,
@@ -164,6 +165,7 @@ describe("tts.create operation contract", () => {
     const digestInput = agentSchemaDigestInputOf({
       ...schema,
       templateInputContracts: agentTemplateInputContracts(),
+      thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
       operationContracts: agentOperationContracts(),
     });
     expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);
@@ -634,6 +636,7 @@ describe("character read operation contracts", () => {
     const digestInput = agentSchemaDigestInputOf({
       ...schema,
       templateInputContracts: agentTemplateInputContracts(),
+      thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
       operationContracts: agentOperationContracts(),
     });
     expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);
@@ -702,6 +705,7 @@ describe("library read operations", () => {
     const digestInput = agentSchemaDigestInputOf({
       ...schema,
       templateInputContracts: agentTemplateInputContracts(),
+      thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
       operationContracts: agentOperationContracts(),
     });
     expect(computeAgentSchemaDigest(digestInput)).toBe(schema.schemaDigest);

@@ -211,6 +211,15 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
   - `X-Content-Type-Options: nosniff`、`Cache-Control: private, max-age=0, must-revalidate`
 - 検証不正は `VALIDATION_ERROR`、存在しない候補・言語版・外観プリセットは `RESOURCE_NOT_FOUND`、素材欠損は既存の `ASSET_UNAVAILABLE` 系で返す。
 
+## Agent Access
+
+エージェント向けには、既存の HTTP API と同じサービスを呼ぶ 9 操作を公開する（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)、[Agent Access 仕様](../agent-access/spec.md)）。
+
+- 読み取り: `thumbnail.listTemplates`（同梱テンプレートの `inputSchema` と `example`）、`thumbnail.list` / `thumbnail.get`（`Thumbnail` DTO）、`thumbnail.appearance`（言語版共通 Appearance と Theme 既定・解決値）。
+- 変更: `thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary`。作成・明示保存の入力は HTTP と同じで、素材検証も同じ規則を使う。`thumbnail.setPrimary` の `thumbnailId: null` は primary の解除である。
+- 画像: `preview.thumbnail` は未保存のドラフトを PNG（1280x720）にし、DB へ書かない。`thumbnail.image` は保存済み候補の PNG をオンデマンド生成して返す。どちらも Job・Artifact を作らず、MCP の image ブロックと CLI の `--out` に対応する。
+- 候補の削除、言語版共通 Appearance の保存、外観プリセットの読み書きは公開しない。`requestId` は持たず、タイムアウト後は `thumbnail.list` で確認してから再実行する。
+
 ## UI
 
 - 作品編集画面から、各 Language Edition のサムネイル編集を開く。
@@ -240,5 +249,5 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 
 - 契約テスト: サムネイル文書v1/v2の検証、テンプレート参照、未知テンプレート拒否、素材種別の検証、Appearanceのプロパティ単位マージと正規化、縁取り色・太さの範囲。部分装飾記法の解析（入れ子・エスケープ・対になっていない記号・未許可装飾）とフィールド宣言との一致。
 - コンパイラテスト: Theme トークンの適用、Appearance の継承順、背景クロップ、前景の左右・反転・倍率（0.5–1.8）・拡大基準点、文字ブロック幅・折り返しON/OFF、1280x720 の確定性、文字量による自動サイズ、アクセント色のコントラスト解決と明示色の保持、縁取り色・太さ（全体と `%%`）、HTMLエスケープ、改行保持。
-- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、共通 Appearance の取得・保存・解除、未保存 Appearance のプレビュー、背景・前景両 Asset の検証、PNGのオンデマンド生成、Work削除での連鎖削除、v1文書の読み取り。外観プリセットの CRUD、空パッチの拒否、プリセット更新・削除が適用済み言語版へ波及しないこと。
+- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、共通 Appearance の取得・保存・解除、未保存 Appearance のプレビュー、背景・前景両 Asset の検証、PNGのオンデマンド生成、Work削除での連鎖削除、v1文書の読み取り。外観プリセットの CRUD、空パッチの拒否、プリセット更新・削除が適用済み言語版へ波及しないこと。Agent Access の 9 操作（テンプレート取得、作成・更新・選択、未保存 PNG、保存済み PNG、削除・共通 Appearance 保存・プリセットが未公開であること）。
 - Webテスト: テンプレ選択・入力の往復、候補の追加・選択・削除、選択範囲への装飾適用、Appearance の set/clear と継承シード。

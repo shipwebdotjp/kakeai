@@ -1,4 +1,5 @@
 import {
+  AGENT_ERROR_CODES,
   agentErrorCodeSchema,
   agentErrorIssueSchema,
   type AgentError,
@@ -27,6 +28,18 @@ export function agentIssue(
   message: string,
 ): AgentErrorIssue {
   return { path, code, message };
+}
+
+/** Work/edition/version lookups use the Agent Access code, not generic 404. */
+export async function asWorkResource<T>(operation: Promise<T>): Promise<T> {
+  try {
+    return await operation;
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "RESOURCE_NOT_FOUND") {
+      throw new AgentOperationError(AGENT_ERROR_CODES.WORK_NOT_FOUND);
+    }
+    throw error;
+  }
 }
 
 function asIssues(value: unknown): AgentErrorIssue[] | undefined {

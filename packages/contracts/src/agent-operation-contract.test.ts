@@ -11,6 +11,7 @@ import {
   agentSchemaDigestInputOf,
   agentSchemaGetResultSchema,
   agentTemplateInputContracts,
+  agentThumbnailTemplateContracts,
   buildAgentOperationContracts,
   buildAgentSchemaGetResult,
   computeAgentOperationDigest,
@@ -124,6 +125,7 @@ describe("schema.get digests", () => {
     const descriptor = agentSchemaDigestInputOf({
       ...result,
       templateInputContracts: agentTemplateInputContracts(),
+      thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
       operationContracts: agentOperationContracts(),
     });
     expect(descriptor.operationContracts).toHaveLength(agentOperationNames.length);
@@ -159,6 +161,7 @@ describe("schema.get digests", () => {
           agentSchemaDigestInputOf({
             ...result,
             templateInputContracts: agentTemplateInputContracts(),
+            thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
             operationContracts: changedInput,
           }),
         ),
@@ -173,6 +176,7 @@ describe("schema.get digests", () => {
           agentSchemaDigestInputOf({
             ...result,
             templateInputContracts: agentTemplateInputContracts(),
+            thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
             operationContracts: changedOutput,
           }),
         ),
@@ -210,6 +214,7 @@ describe("schema.get digests", () => {
         agentSchemaDigestInputOf({
           ...result,
           templateInputContracts: agentTemplateInputContracts(),
+          thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
           operationContracts: changed,
         }),
       ),

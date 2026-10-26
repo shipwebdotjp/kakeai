@@ -18,6 +18,7 @@ import {
   agentSchemaDigestInputOf,
   agentSchemaGetResultSchema,
   agentTemplateInputContracts,
+  agentThumbnailTemplateContracts,
   buildAgentSchemaGetResult,
   computeAgentSchemaDigest,
   isAgentLongRunningOperation,
@@ -159,6 +160,7 @@ describe("schema.get", () => {
     const descriptor = agentSchemaDigestInputOf({
       ...result,
       templateInputContracts: agentTemplateInputContracts(),
+      thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
       operationContracts: agentOperationContracts(),
     });
     expect(computeAgentSchemaDigest(descriptor)).toBe(result.schemaDigest);
@@ -170,6 +172,7 @@ describe("schema.get", () => {
       operations: descriptor.operations,
       operationContracts: descriptor.operationContracts,
       templateInputContracts: descriptor.templateInputContracts,
+      thumbnailTemplateContracts: descriptor.thumbnailTemplateContracts,
       templates: descriptor.templates.map((template) =>
         Object.fromEntries(Object.entries(template).reverse()),
       ),

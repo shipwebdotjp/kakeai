@@ -65,6 +65,15 @@
 | `preview.frame` | read | no | `kakeai_preview_frame` |
 | `preview.scriptFrame` | read | no | `kakeai_preview_script_frame` |
 | `preview.assetFrame` | read | no | `kakeai_preview_asset_frame` |
+| `preview.thumbnail` | read | no | `kakeai_preview_thumbnail` |
+| `thumbnail.listTemplates` | read | no | `kakeai_thumbnail_list_templates` |
+| `thumbnail.list` | read | no | `kakeai_thumbnail_list` |
+| `thumbnail.get` | read | no | `kakeai_thumbnail_get` |
+| `thumbnail.appearance` | read | no | `kakeai_thumbnail_appearance` |
+| `thumbnail.create` | mutation | no | `kakeai_thumbnail_create` |
+| `thumbnail.update` | mutation | no | `kakeai_thumbnail_update` |
+| `thumbnail.setPrimary` | mutation | no | `kakeai_thumbnail_set_primary` |
+| `thumbnail.image` | read | no | `kakeai_thumbnail_image` |
 | `composition.list` | read | no | `kakeai_composition_list` |
 | `composition.get` | read | no | `kakeai_composition_get` |
 | `composition.draft.get` | read | no | `kakeai_composition_draft_get` |
@@ -101,7 +110,7 @@
 - サブコマンドは正規の `domain.verb` をそのまま使う（`kakeai-agent work.create --input input.json`、`kakeai-agent schema.get`）。`job.wait <jobId>` は MCP の `kakeai_job_wait` と同じ便利コマンド、`operations` は `agentOperationCatalog` を返す。サブコマンド一覧は操作カタログから導出し、束縛側に第二の一覧を持たない。
 - `--input` はインライン JSON・ファイルパス・`-`（標準入力）を受け付ける。省略時は `{}` として扱う。送信前に `packages/contracts` の入力スキーマで検証し、受信後も出力スキーマで検証してから stdout に 1 つの JSON を書く。`--pretty` は出力をインデントする。
 - グローバルオプションは `--agent-id`（既定 `cli`）、`--data-dir`、`--socket`、`--timeout`（1 要求のタイムアウト。読み取り・変更の両方に適用）。解決順は MCP と同じく、引数、環境変数（`KAKEAI_AGENT_ID` / `KAKEAI_DATA_DIR` / `KAKEAI_SOCKET`）、プラットフォーム既定の順である。`--help` は種別ごとの操作一覧、`--version` はバージョンを返す。
-- `--out <path>` は画像を返す操作（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame`）だけで使える。指定時は画像バイトをそのファイルに書き、stdout JSON は `pngBase64` / `imageBase64` を除いて `path` を付す。書込み失敗は `CLI_OUTPUT_ERROR`（終了コード1）で、入力・出力の契約検証後にだけ書く。
+- `--out <path>` は画像を返す操作（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame` / `preview.thumbnail` / `thumbnail.image`）だけで使える。指定時は画像バイトをそのファイルに書き、stdout JSON は `pngBase64` / `imageBase64` を除いて `path` を付す。書込み失敗は `CLI_OUTPUT_ERROR`（終了コード1）で、入力・出力の契約検証後にだけ書く。
 - 長尺操作は `job.wait <jobId>` または `asset.import` / `render.start` / `tts.create` / `tts.createBulk` の `--wait` で待てる。どちらも MCP と同じ `jobWaitInputSchema` と `waitForJob` を使い、`--timeout-ms`（既定 60000、最大 600000）と `--interval-ms`（既定 500、10〜30000）を受ける。`job.wait` は `{ job, timedOut, polls }` を返し、予算超過は成功（終了コード 0）で `timedOut: true` とする。`--wait` は操作結果を `{ result, wait }` に包み、Job を投入しなかった場合（`asset.import` の重複）と複数 Job を投入した場合（`tts.createBulk`）は `wait: null` とする。後者は Job ID ごとに `job.wait` するか `job.get` で確認する。
 - 失敗は stderr に `{ code, issues? }` の 1 行 JSON だけを書き、スタックトレースや自由文を出さない。stdout は常にコマンド出力専用である。終了コードは、`0` が成功（help・version・`operations` を含む）、`1` が操作または契約検証の失敗と応答の出力失敗（`--out` の書込み失敗など。code は `CLI_OUTPUT_ERROR`）、`2` が使い方または `--input` の誤り（`CLI_USAGE_ERROR` / `CLI_INPUT_ERROR`）である。CLI 自身の想定外の失敗は `CLI_INTERNAL_ERROR`（終了コード 1）とし、詳細を返さない。
 - MCP と同じく、実体削除と外部サービスへの公開は CLI にも公開しない。生成操作は利用者が設定した接続先だけを使い、接続先・認証情報・Adapter 設定の読み書きは公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部公開ではない。
@@ -130,7 +139,7 @@
 - 起動時、ソケットファイルが既にある場合はアプリプロセスだけが後始末する。接続できるソケットは稼働中として残し、接続できないソケットだけを削除してから listen する。ソケットでないファイルは削除しない。終了時は自分が作ったソケットを unlink する。
 - 接続時に `{ "protocolVersion": 1, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
 - フレームは 1 行 1 JSON（NDJSON）とし、要求は `{ "requestId": "<呼び出し内で一意>", "operation": "<name>", "input": <object> }`、応答は `{ "requestId": "...", "ok": true, "data": ... }` または `{ "requestId": "...", "ok": false, "error": { "code": "...", "issues": [...] } }` とする。`issues` は `{ path, code, message }` の配列で、スタックトレースや自由文の詳細は返さない。
-- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは原則 10 秒、画像を返すプレビュー（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame`）だけ 30 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
+- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは原則 10 秒、画像を返すプレビューとサムネイル（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame` / `preview.thumbnail` / `thumbnail.image`）だけ 30 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
 - サーバーは応答を返した後も同じ接続で次の要求を受け付けるが、5 分間何も受信しない接続は閉じる。
 - ソケットファイルが残っていて接続できない場合、クライアントは削除せず `AGENT_APP_UNAVAILABLE` を返す。所有者はアプリプロセスだけとする。
 
@@ -155,7 +164,7 @@
 
 参照:
 
-- `schema.get` — 現在の `contentSchemaVersion`、各 VisualTemplate の `inputFields`・layer・transition・animation の制約、操作カタログ、Asset 種別と用途の制約、警告コードを返す。`schemaDigest` を含め、アプリ更新による変化を検知できるようにする。エージェントが値を推測しないための必須操作。`schemaDigest` はスキーマ関連データを正規化した非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。`operations` は台本編集の `ScriptOperation` カタログ（名前とカテゴリ）を従来どおり返し、`agentOperations` は束縛が公開してよい全 Agent 操作のカタログ（`name`、`kind` の `read` / `mutation`、Job を返す `longRunning`）を返す。`agentOperations` は読み取り・変更の分類リストから導出し、束縛ごとに第二の操作一覧を持たない。`operationDigest` は全 Agent 操作の入出力スキーマを正規化した契約のダイジェストで、操作の入力・出力が変わると必ず変化する。`minProtocolVersion` は対応するプロトコル版の下限、`protocolVersion` は上限（対応版）である。テンプレートごとの入力 JSON Schema と入力例は応答に含めず、`template.get` で必要な1件だけを取得する。`schemaDigest` はそれらも含むため、テンプレート入力の変更でも変化する。
+- `schema.get` — 現在の `contentSchemaVersion`、各 VisualTemplate の `inputFields`・layer・transition・animation の制約、操作カタログ、Asset 種別と用途の制約、警告コードを返す。`schemaDigest` を含め、アプリ更新による変化を検知できるようにする。エージェントが値を推測しないための必須操作。`schemaDigest` はスキーマ関連データを正規化した非暗号の安定フィンガープリント（`fnv1a64:` 接頭辞）であり、意味が変わらなければ同一値を返す。`operations` は台本編集の `ScriptOperation` カタログ（名前とカテゴリ）を従来どおり返し、`agentOperations` は束縛が公開してよい全 Agent 操作のカタログ（`name`、`kind` の `read` / `mutation`、Job を返す `longRunning`）を返す。`agentOperations` は読み取り・変更の分類リストから導出し、束縛ごとに第二の操作一覧を持たない。`operationDigest` は全 Agent 操作の入出力スキーマを正規化した契約のダイジェストで、操作の入力・出力が変わると必ず変化する。`minProtocolVersion` は対応するプロトコル版の下限、`protocolVersion` は上限（対応版）である。テンプレートごとの入力 JSON Schema と入力例は応答に含めず、`template.get` で必要な1件だけを取得する。サムネイルテンプレートの入力契約も応答には含めず、`thumbnail.listTemplates` で取得する。`schemaDigest` はそれらも含むため、テンプレート入力の変更でも変化する。
 - `template.get` — VisualTemplate 1件の入力契約を `{ id, version }` で取得する。`inputSchema` はそのテンプレート定義の `inputSchema`（保存時検証と同じ Zod スキーマ）を `toAgentJsonSchema` で変換した JSON Schema（draft 2020-12。`$schema` は付けない）で、`example` は同じスキーマを通ることがテストで固定された入力例である。入力の正はテンプレート定義の `inputSchema` ひとつで、Agent 向けの第二のスキーマは持たない。`id` / `version` は `schema.get` の `templates` から取り、存在しなければ `RESOURCE_NOT_FOUND` とする。`inputFields` を持たないテンプレートでも取得できる。`example` の ID は `<assetId>` のようなプレースホルダなので、実在する ID に置き換えて使う。
 - `work.list` / `work.get` — `work.list` は更新日時の降順で Work を返す。`createdAt` と `parentWorkId` を含むため、タイムアウト後に作成済みかを確認できる（後述）。
 - `script.get` — `scriptVersionId` を指定するとその版、`languageEditionId` を指定するとその Edition の current の `ContentDocument` と帰属を返す。どちらか一方を必須とする。
@@ -180,6 +189,19 @@
 - `preview.scriptFrame` — 保存済み ScriptVersion を、Web UI と同じコンパイラの HTML から headless でシークし、指定時刻（`timeMs`）の原寸 PNG（base64）で返す。版・Job・Artifact は作らない。`timeMs` は解決済み尺以下。コンパイル不能は `PREVIEW_INPUT_INVALID`、描画失敗は `INTERNAL_ERROR`。render 前の構図確認用で、最終的な品質判断は人に残す。
 - `preview.assetFrame` — Asset 1件の絵を返す。画像は原本（正規化 rendition があればそれ）のバイトと MIME、動画は指定時刻（`timeMs`、既定0）の PNG 静止画、音声は `VALIDATION_ERROR`。画像は `timeMs` を指定できない。巨大な画像は `VALIDATION_ERROR`。
 
+サムネイルは、候補の作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開する（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）。
+
+- `thumbnail.listTemplates` — 同梱サムネイルテンプレートの一覧を返す。サムネイルテンプレートは VisualTemplate とは別レジストリのため `schema.get` には含めず、この操作だけがカタログになる。各要素は `id`・`version`・`display`（`label` / `description`）・`inputSchema`（保存時検証と同じ Zod スキーマを `toAgentJsonSchema` で変換した JSON Schema）・`example`（そのまま保存検証を通る入力）を持つ。`example` の `<...>` は実在する画像 Asset の ID に置き換える。サムネイルテンプレートの入力契約は `schemaDigest` に含まれる。
+- `thumbnail.list` — `{ languageEditionId }` を受け、`{ thumbnails }` を返す。各候補は HTTP と同じ `Thumbnail` DTO で、`isPrimary` と `appearanceOverride` を含む。存在しない言語版は `WORK_NOT_FOUND`。
+- `thumbnail.get` — `{ thumbnailId }` を受け、`{ thumbnail }` を返す。存在しない ID は `RESOURCE_NOT_FOUND`。
+- `thumbnail.appearance` — `{ languageEditionId }` を受け、言語版共通 Appearance を `{ appearance, defaults, resolved }` で返す。`appearance` は保存済みの疎な上書き（無ければ null）、`defaults` は Theme と locale から解決した既定値、`resolved` は両者をマージした解決済みの値である。共通 Appearance の保存は公開せず、人専用のまま残す。
+- `thumbnail.create` — `{ languageEditionId, label, template, input }` と任意の `appearanceOverride` を受け、`{ thumbnail }` を返す。HTTP の作成と同じ入力で、`input` はテンプレートの `inputSchema` で検証し、背景・前景は ready な画像 Asset でなければならない。最初の候補は自動で primary になる。
+- `thumbnail.update` — `{ thumbnailId, label, template, input }` と任意の `appearanceOverride` を受け、`{ thumbnail }` を返す。HTTP の明示保存と同じ last-write-wins で、候補に版履歴はない。存在しない ID は `RESOURCE_NOT_FOUND`。
+- `thumbnail.setPrimary` — `{ languageEditionId, thumbnailId }` を受け、選んだ候補を `{ thumbnail }` で返す。`thumbnailId: null` で解除し、そのとき `thumbnail` は null になる。同じ言語版に属さない候補と存在しない候補は `RESOURCE_NOT_FOUND`。
+- `preview.thumbnail` — 未保存のドラフト（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の `appearance`）を 1280x720 の PNG にする。`appearance` を省略すると保存済みの言語版共通 Appearance を使い、null なら使わない（HTTP のプレビューと同じ規則）。DB へは書かず、版・Job・Artifact も作らない。
+- `thumbnail.image` — 保存済み候補の PNG（1280x720）をオンデマンドで生成し、`{ thumbnailId, filename, width, height, mimeType, pngBase64 }` を返す。Job・Artifact は作らず、ファイルも永続化しない。存在しない ID は `RESOURCE_NOT_FOUND`。
+- サムネイル候補の削除、言語版共通 Appearance の保存、外観プリセットの読み書きは公開しない。不要な候補の整理は人が UI で行う。`requestId` は持たず、冪等台帳に載せない。タイムアウト後は `thumbnail.list` の `label` と `createdAt` で結果を確認してから再実行する。
+
 可逆な変更:
 
 - `work.create` — Work、指定 locale（既定は `ja-JP`）の LanguageEdition、その locale の初期 ContentDocument を持つ初期 ScriptVersion を [../mvp/spec.md](../mvp/spec.md) の作成規則で作る。初期 ContentDocument の `locale` は Edition の `originalLocale` と一致する。
@@ -197,6 +219,7 @@
 - `tts.createBulk` — 保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する（後述）。
 - `tts.attachBulk` — `requestId` 付きで開始した一括生成の結果を確定し、成功 Job だけを一つの Script Version へ添付する（後述）。短時間の操作で Job 待機の対象にしない。
 - `job.cancel` — queued の Job をキャンセルする。
+- `thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary` — サムネイル候補の作成・明示保存・primary 選択（前述）。
 
 ### `script.edit` の契約
 
@@ -298,6 +321,7 @@
 - Theme・Face Set・Voice Profile の読み取り6操作と `speaker` カテゴリの追加は加算的変更であり、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。DB migration と HTTP API の変更はない。ただし `operationDigest` と `schemaDigest` は変わり、`schema.get` の操作カタログとカテゴリ enum も変わるため、束縛（MCP / CLI）とアプリは同じビルドで揃える。古い束縛は新しい応答を厳格な検証で拒否し得る。
 - `voiceProfile.listVoices` / `voiceProfile.listModels` / `voiceProfile.create` / `voiceProfile.update` の追加も加算的変更であり、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く（[ADR 0088](../adr/0088-agent-voice-profile-writes.md)）。DB migration と HTTP API の変更はない。ただし `operationDigest` と `schemaDigest` は変わるため、束縛とアプリは同じビルドで揃える。
 - `character.setVoices` の追加も加算的変更であり、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く（[ADR 0089](../adr/0089-agent-character-set-voices.md)）。DB migration と HTTP API の変更はない。ただし `operationDigest` と `schemaDigest` は変わるため、束縛とアプリは同じビルドで揃える。
+- サムネイル操作の追加も加算的変更であり、`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）。DB migration と HTTP API の変更はない。`schemaDigest` に `thumbnailTemplateContracts` を加えたため、サムネイルテンプレートの入力変更も検知できる。`operationDigest` と `schemaDigest` は変わるため、束縛とアプリは同じビルドで揃える。
 - 古い束縛は厳格な応答検証で未知のキーを弾くため、`schema.get` の応答にフィールドを増やす変更は、束縛とアプリが同じバージョンで同居することを前提とする。ずれが起きたら束縛も同じ版へ更新する。
 - 版の機構は、破壊的変更が実際に起きたときに使う。`AGENT_PROTOCOL_VERSION` を上げると、古い束縛は handshake で `AGENT_PROTOCOL_MISMATCH` になって接続时被弾する（応答検証の失敗ではなく、原因が明確な失敗になる）。
 
@@ -398,8 +422,9 @@
 | `COMPOSITION_UNAVAILABLE` | 参照する Composition Version が publish 済みでない、または bundle が欠損している |
 | `TTS_INPUT_INVALID` | TTS 生成要求の入力が不正（空の読み上げテキスト、話者・声の未設定、Adapter 外の声） |
 | `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した（`tts.create` / `tts.createBulk` / `voiceProfile.listVoices` / `voiceProfile.listModels`） |
-| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.setVoices` / `theme.get` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` の対象など、参照先の資源が存在しない |
-| `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない（`work.get` / `work.clone` / `script.listVersions` / `script.restore` を含む） |
+| `THUMBNAIL_INPUT_INVALID` | サムネイルのテンプレートが未対応、入力が `inputSchema` に適合しない、素材が画像でない、または大きすぎる（`preview.thumbnail` / `thumbnail.image`。作成・更新の入力検証は `VALIDATION_ERROR` / `ASSET_*`） |
+| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.setVoices` / `theme.get` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` / `thumbnail.get` / `thumbnail.update` / `thumbnail.image` / `thumbnail.setPrimary` の対象など、参照先の資源が存在しない |
+| `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない（`work.get` / `work.clone` / `script.listVersions` / `script.restore` / `thumbnail.list` / `thumbnail.appearance` / `thumbnail.create` を含む） |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。
 

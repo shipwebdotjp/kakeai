@@ -8,7 +8,10 @@ import {
   agentOperationNames,
   agentWarningCodes,
 } from "./catalog";
-import type { AgentTemplateInputContract } from "./template";
+import type {
+  AgentTemplateInputContract,
+  AgentThumbnailTemplateContract,
+} from "./template";
 import {
   agentOperationInputSchemas,
   agentOperationOutputSchemas,
@@ -31,6 +34,10 @@ import {
   visualTemplateDefinitions,
   type VisualTemplateDefinition,
 } from "../templates";
+import {
+  thumbnailTemplateDefinitions,
+  type ThumbnailTemplateDefinition,
+} from "../thumbnail/templates";
 
 export const agentHandshakeSchema = z.strictObject({
   protocolVersion: z.number().int(),
@@ -135,6 +142,40 @@ export function buildAgentTemplateInputContract(
 }
 
 /**
+ * The thumbnail templates of this build, with the JSON Schema of the same Zod
+ * schema that validates saves. Thumbnail templates have their own registry,
+ * so this list is the catalogue an agent discovers through
+ * `thumbnail.listTemplates`.
+ */
+function toAgentThumbnailTemplateContract(
+  definition: ThumbnailTemplateDefinition,
+): AgentThumbnailTemplateContract {
+  return deepFreeze({
+    id: definition.id,
+    version: definition.version,
+    display: {
+      label: definition.display.label,
+      description: definition.display.description,
+    },
+    inputSchema: toAgentJsonSchema(definition.inputSchema, "input"),
+    example: definition.exampleInput,
+  });
+}
+
+const thumbnailTemplateContractsCache: {
+  value?: readonly AgentThumbnailTemplateContract[];
+} = {};
+
+export function agentThumbnailTemplateContracts(): readonly AgentThumbnailTemplateContract[] {
+  if (thumbnailTemplateContractsCache.value === undefined) {
+    thumbnailTemplateContractsCache.value = Object.freeze(
+      thumbnailTemplateDefinitions.map(toAgentThumbnailTemplateContract),
+    );
+  }
+  return thumbnailTemplateContractsCache.value;
+}
+
+/**
  * Builds the contract of every agent operation, in the fixed operation order.
  * The order is part of the digest input, so it must not change.
  */
@@ -195,6 +236,7 @@ export function agentSchemaDigestInputOf(
     warningCodes: source.warningCodes,
     assetKinds: source.assetKinds,
     templateInputContracts: source.templateInputContracts,
+    thumbnailTemplateContracts: source.thumbnailTemplateContracts,
     operationContracts: source.operationContracts,
   };
 }
@@ -211,6 +253,7 @@ export function buildAgentSchemaGetResult(): AgentSchemaGetResult {
   const assetKinds = [...assetKindSchema.options];
   const operationContracts = agentOperationContracts();
   const templateInputContracts = agentTemplateInputContracts();
+  const thumbnailTemplateContracts = agentThumbnailTemplateContracts();
   const schema = {
     contentSchemaVersion,
     templates,
@@ -228,6 +271,7 @@ export function buildAgentSchemaGetResult(): AgentSchemaGetResult {
       agentSchemaDigestInputOf({
         ...schema,
         templateInputContracts,
+        thumbnailTemplateContracts,
         operationContracts,
       }),
     ),

@@ -21,10 +21,11 @@
 | R1-3 ソケット流量制御・取消・ピア確認 | 上限だけ導入し、ピア確認は文書化 | 信頼境界は `0700` ディレクトリ＋`0600` ソケットのファイル権限で担保できる。ネイティブ UID 検証と実行中操作の取消は費用に見合わない |
 | R2-1 素材検索のスケール | 索引化せず、検索の停下来よさを拡張 | 個人ライブラリの規模ではタグ検索の走査コストは支配的でない。索引化（タグのリレーション化）は将来に回す |
 | R3-3 スキル配布と版管理 | Gitタグ＋GitHub Releaseを正本とし、`npx skills` にロック・配置・復元を委譲する | 独自 installer は CLI の機能を複製する。不変タグでスキルとアプリの版を対応づけ、`main` 追従を避ける |
+| B13 サムネイル操作の公開 | 読み取り・作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開し、削除・共通 Appearance の保存・プリセットは人専用に残す | 候補は版履歴のない可変文書で、削除は取り消せない。PNG はオンデマンド生成で Job を増やさず、素材は利用者が取り込んだ画像だけを使う（ADR 0098） |
 
 ## 実施順序
 
-B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9 は B4 の後に実装する。B7 は B2 の後に実装中である。B10 は独立して実施済みである。
+B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13 は B4 の後に実装する。B7 は B2 の後に実装中である。B10 は独立して実施済みである。
 
 | フェーズ | 対象 | 依存 | 順序の理由 |
 | --- | --- | --- | --- |
@@ -40,6 +41,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9 は B4 の後に�
 | B10 | R3-3 スキル配布と版管理 | なし | 配布経路だけの変更で、操作契約を変えない。リリース後に互換性履歴を更新できるよう B1 のダイジェスト機構と併用する |
 | B11 | Voice Profile の作成・更新公開 | B1 | 既存サービスを呼ぶだけの追加操作。声候補の取得と合わせて公開し、人間への作成依頼を不要にする |
 | B12 | Character Voice 付け替えの公開 | B1 | 既存の声検証を呼ぶだけの追加操作。外観に触れず声だけを置換し、人間への声付け依頼を不要にする |
+| B13 | サムネイル操作の公開 | B1 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を公開する。MP4 後の投稿用成果物をエージェントが作れるようにする |
 
 ## フェーズ詳細
 
@@ -119,6 +121,13 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9 は B4 の後に�
 - `requestId` は持たず冪等台帳に載せない（`work.create`・`voiceProfile.create` と同じ扱い）。タイムアウト後は `character.get` で確認してから再実行する。未知の Character は `RESOURCE_NOT_FOUND`、声の参照欠落・不一致は `VALIDATION_ERROR` とする。Character の作成・外観変更・削除は人専用のまま残す。
 - 完了条件: 既存 Character へ声を付けて `character.addFromLibrary` → TTS → 確定 → レンダーが通り、作成・外観変更・削除は `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
+### B13 サムネイル操作の公開
+
+- 状態: 完了。`thumbnail.listTemplates` / `thumbnail.list` / `thumbnail.get` / `thumbnail.appearance`（read）、`thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary`（mutation）、`preview.thumbnail` / `thumbnail.image`（画像 read）を追加した。既存の `services/thumbnails.ts` をそのまま呼び、素材検証・Appearance 解決・PNG ラスタライズを複製しない。`preview.thumbnail` と `thumbnail.image` は画像系操作として MCP の image ブロックと CLI の `--out` に対応する。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0098](../adr/0098-agent-thumbnail-operations.md) を参照。
+- サムネイルテンプレートは VisualTemplate と別レジストリのため、`schema.get` を増やさず `thumbnail.listTemplates` で `inputSchema` と `example` を返す。入力契約は `schemaDigest` に含め、テンプレート入力の変更でも検知できるようにする。
+- 候補の削除、言語版共通 Appearance の保存、外観プリセットの読み書きは公開しない。`requestId` は持たず、タイムアウト後は `thumbnail.list` で確認してから再実行する。PNG はオンデマンド生成で、Job・Artifact・版を作らない。
+- 完了条件: ソケット・MCP・CLI からテンプレート取得 → 候補作成 → 未保存プレビュー → 更新 → primary 選択 → PNG 取得が通り、削除・共通 Appearance 保存・プリセットが `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
 ## 保留する拡張
 
 今回の拡張フェーズでは扱わない。必要になった時点で改めて計画する。
@@ -153,6 +162,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | `work.create` / `work.clone` は operation の `requestId` を持たない | タイムアウト後の再送で Work が増え得る | 解消しない。`work.list` の `createdAt` / `parentWorkId` で確認するガイド路線を維持（台帳適用は保留） |
 | `asset.import` は同一ユーザーが読める任意のローカルパスを受け付ける | プロンプト注入時に意図しないファイルを複製し得る | 保留 |
 | スキルの配布はリポジトリからのコピー／symlink | 導入と更新が手作業で、版の対応関係が分からない | B10 で解消。不変タグと GitHub Release から `npx skills` で導入し、`skills-lock.json` で版を固定する |
+| サムネイルの作成・選択・PNG 取得は Web UI だけ | MP4 を完成させても、投稿用サムネイルは人が作り直す必要がある | B13 で解消。候補の作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開した（削除・共通 Appearance の保存・プリセットは人専用） |
 | プレビュー・レンダー品質の視覚確認は未提供 | エージェントは構文・保存検証までしか自律確認できない | B6 で render 成果物の `preview.frame` を追加。V2 で render 前の `preview.scriptFrame` / `preview.assetFrame` も追加 |
 
 ## 優先順位
@@ -165,6 +175,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 高 | B4 素材検索の拡張 | 制作スキルの検索品質を上げる |
 | 中 | R2-2 TTS 冪等化・`tts.attach` | 音声制作の反復コストを下げる。B7 で `tts.attachBulk` として実装中 |
 | 中 | R2-3 Voice／Face Set／Theme 読み取り・`key` 対応 | B8 / B9 で実装済み。Theme・Face Set・Voice Profile の読み取りと、既存 Profile の話者への割り当てに限定し、ライブラリ管理は人専用を維持する |
+| 中 | B13 サムネイル操作の公開 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を追加する。削除・共通 Appearance の保存・プリセットは人専用に残す |
 | 中 | R2-4 言語版・履歴・復元 | 多言語・反復制作の入口。履歴一覧・復元・Work 複製は P4（`script.listVersions` / `script.restore` / `work.clone`）で実装済み |
 | 低 | R2-5 Job 一般化 | 運用が複雑になった段階で必要 |
 | 低 | R3-2 監査ログ／UI | 複数エージェント運用時に必要 |

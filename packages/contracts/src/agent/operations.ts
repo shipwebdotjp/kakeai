@@ -1,4 +1,7 @@
-import { AGENT_PREVIEW_IMAGE_BASE64_MAX } from "./protocol";
+import {
+  AGENT_PREVIEW_IMAGE_BASE64_MAX,
+  agentEmptyInputSchema,
+} from "./protocol";
 import { agentSchemaGetResultSchema } from "./schema";
 import { agentTemplateInputContractSchema } from "./template";
 import { z } from "zod";
@@ -110,7 +113,7 @@ export const scriptValidateResultSchema = z.strictObject({
 });
 export type ScriptValidateResult = z.infer<typeof scriptValidateResultSchema>;
 
-const agentEmptyInputSchema = z.strictObject({});
+export * from "./thumbnail-schemas";
 
 export const agentSchemaGetInputSchema = agentEmptyInputSchema;
 export const agentSchemaGetOutputSchema = agentSchemaGetResultSchema;

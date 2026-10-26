@@ -148,3 +148,23 @@ export const agentTemplateInputContractSchema = z.strictObject({
 export type AgentTemplateInputContract = z.infer<
   typeof agentTemplateInputContractSchema
 >;
+
+/**
+ * The input contract of one thumbnail template. Thumbnail templates live in a
+ * registry separate from the VisualTemplate registry, so agents discover them
+ * through `thumbnail.listTemplates` rather than `schema.get`. `display` is
+ * included because the list is the only catalogue an agent sees.
+ */
+export const agentThumbnailTemplateContractSchema = z.strictObject({
+  id: z.string().min(1),
+  version: positiveInt,
+  display: z.strictObject({
+    label: z.string().min(1),
+    description: z.string(),
+  }),
+  inputSchema: z.record(z.string(), z.unknown()),
+  example: z.unknown(),
+});
+export type AgentThumbnailTemplateContract = z.infer<
+  typeof agentThumbnailTemplateContractSchema
+>;

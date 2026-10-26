@@ -9,6 +9,7 @@ import {
   getSharedPreviewRasterizer,
   type PreviewRasterizer,
 } from "../media/preview-rasterize.ts";
+import { getSharedRasterizer, type Rasterizer } from "../media/rasterize.ts";
 import { agentSocketFilePath, ensureAgentDirectory } from "../storage/paths.ts";
 import { CompositionService } from "../services/compositions.ts";
 import { CompositionAuthoringService } from "../services/authoring-context.ts";
@@ -55,6 +56,8 @@ export interface StartAgentSocketServerOptions {
   fontCatalogService?: FontCatalogService;
   /** Tests inject a fake; production uses the shared headless rasterizer. */
   previewRasterizer?: PreviewRasterizer;
+  /** Screenshot rasterizer for thumbnail PNGs; tests inject a fake. */
+  rasterizer?: Rasterizer;
 }
 
 async function lstatOrNull(path: string) {
@@ -222,12 +225,14 @@ export async function startAgentSocketServer(
     options.fontCatalogService ?? getSharedFontCatalogService();
   const previewRasterizer =
     options.previewRasterizer ?? getSharedPreviewRasterizer();
+  const rasterizer = options.rasterizer ?? getSharedRasterizer();
   const baseContext: Omit<AgentOperationContext, "agentId"> = {
     prisma,
     config,
     directories: config.directories,
     fontCatalogService,
     previewRasterizer,
+    rasterizer,
     // The agent bindings call the same services as the HTTP routes; no
     // authoring logic lives in the dispatcher.
     compositions: new CompositionService({

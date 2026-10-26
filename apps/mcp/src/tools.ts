@@ -90,6 +90,23 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "保存済みの台本版（`scriptVersionId`）を、指定時刻（`timeMs` ミリ秒）のプレビュー PNG にする。レンダー Job・台本版・Artifact は作らない。render 前に表・グラフ・フロー・立ち絵・字幕の配置を確認したいときに使う。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。プレビューは構図確認用で、最終的な色・動き・音の判断は render 後に人が行う。",
   "preview.assetFrame":
     "素材 1 件の絵を返す。画像は保存されている画像そのもの（MIME は `mimeType`）、動画は指定時刻（`timeMs`、既定 0）の PNG 静止画を返す。音声素材は指定できない。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。素材の見た目を確認したいときに使う。",
+  "preview.thumbnail":
+    "未保存のサムネイル下書き（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の Edition 共通 `appearance`）を 1280x720 の PNG にする。DB へは書かない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。保存前に見出しの折り返しと前景の透過を確認するときに使う。`appearance` を省略すると保存済みの Edition 共通 Appearance を使い、null なら使わない。",
+  "thumbnail.listTemplates":
+    "同梱サムネイルテンプレートの一覧を、入力契約付きで返す。`inputSchema`（保存時検証と同じスキーマから導出した JSON Schema）と、そのまま使える `example` を含む。`example` の `<...>` は実在する画像 Asset の ID に置き換える。契約を推測しない。",
+  "thumbnail.list":
+    "言語版のサムネイル候補を一覧で返す。各候補に `isPrimary` と `appearanceOverride` を含む。存在しない言語版は WORK_NOT_FOUND。",
+  "thumbnail.get": "サムネイル候補 1 件を返す。存在しない ID は RESOURCE_NOT_FOUND。",
+  "thumbnail.appearance":
+    "言語版の共通サムネイル Appearance を、Theme 由来の既定値と解決済みの値付きで返す。共通 Appearance の保存はアプリ UI に限る。",
+  "thumbnail.create":
+    "言語版にサムネイル候補を作成して返す。`label`・`template`・`input` と任意の `appearanceOverride` を指定する。`input` は thumbnail.listTemplates の `inputSchema` に従い、背景と前景は ready な画像 Asset の ID にする。最初の候補は自動で primary になる。`requestId` は持たないため、タイムアウト後は thumbnail.list で `label` と `createdAt` を確認してから再実行する。",
+  "thumbnail.update":
+    "サムネイル候補を明示保存して返す。`label`・`template`・`input`・任意の `appearanceOverride` で上書きする（last-write-wins、版履歴なし）。`input` は thumbnail.listTemplates の `inputSchema` に従う。存在しない ID は RESOURCE_NOT_FOUND。",
+  "thumbnail.setPrimary":
+    "言語版の投稿用サムネイル（primary）を選ぶ。`thumbnailId` は同じ言語版の候補で、null で解除する。存在しない候補は RESOURCE_NOT_FOUND。",
+  "thumbnail.image":
+    "保存済みサムネイル候補の PNG（1280x720）をオンデマンドで生成して返す。Job・Artifact は作らない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。CLI では `--out` に PNG を書き出せる。存在しない ID は RESOURCE_NOT_FOUND。",
   "composition.list": "Composition の一覧を返す。",
   "composition.get": "Composition 1 件を返す。",
   "composition.draft.get": "Composition の draft ファイルと manifest を返す。",

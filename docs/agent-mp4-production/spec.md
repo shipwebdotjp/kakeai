@@ -65,7 +65,7 @@
 ### 今回やらないこと
 
 - 最終的な絵・音の品質判断（人間）
-- サムネイルの作成・選択・PNG取得（人間 / 将来）
+- サムネイルの作成・選択・PNG取得（P1 時点では対象外。B13 で公開済み）
 - SRT 字幕のエクスポート（人間 / 将来）
 - YouTube 投稿設定・チャプター（人間 / 将来）
 - MP4 Artifact のダウンロード（人間 / 将来）
@@ -211,7 +211,8 @@ R6 は P1 時点の非ゴールである。P4 で版履歴一覧・復元・Work
 P5 でライブラリの読み取りと既存 Voice Profile の割り当てを追加した。
 引き続き、サムネイル・SRT・YouTube・Artifact ダウンロード・下書きプレビュー・
 Theme / FaceSet / Voice の管理（作成・更新・削除）は P5 の対象にしない。必要になった時点で
-[roadmap.md](./roadmap.md) から個別に立ち上げる。
+[roadmap.md](./roadmap.md) から個別に立ち上げる。サムネイルは後続の
+[Agent Access B13](../agent-access/roadmap.md) として公開した（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）。
 
 ### R7. 回帰を固定する
 
@@ -358,3 +359,10 @@ Theme / FaceSet / Voice の管理（作成・更新・削除）は P5 の対象�
   声だけの話者でも TTS できる。立ち絵が必要な場合だけ
   `character.addFromLibrary` を使う。Theme は最新公開 Revision だけを選択でき、
   ライブラリと Profile の削除は人専用のままである（Voice Profile の作成・更新は B11 で公開した）。
+- **P6 サムネイル: 完了（任意の後工程）。** `thumbnail.listTemplates` /
+  `thumbnail.list` / `thumbnail.get` / `thumbnail.appearance`、
+  `thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary`、
+  `preview.thumbnail` / `thumbnail.image` を公開した。MP4 の合格ラインは変えず、
+  レンダー成功後に投稿用サムネイルを作り、PNG を取得できる。候補の削除、
+  言語版共通 Appearance の保存、外観プリセットは人専用のままである
+  （[Agent Access B13](../agent-access/roadmap.md)、[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）。

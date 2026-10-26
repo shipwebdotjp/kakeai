@@ -7,6 +7,12 @@ import { SCRIPT_EDIT_ERROR_CODES } from "../script-operation";
 export const AGENT_PROTOCOL_VERSION = 1 as const;
 
 /**
+ * The shared empty input of read/list operations. It lives in this leaf module
+ * so schema modules can share one definition without importing each other.
+ */
+export const agentEmptyInputSchema = z.strictObject({});
+
+/**
  * Oldest protocol version this build still accepts. A handshake is accepted
  * when its version is inside `[AGENT_PROTOCOL_MIN_VERSION,
  * AGENT_PROTOCOL_VERSION]`. The range exists so a future breaking change can
