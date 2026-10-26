@@ -158,7 +158,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | DELETE | /face-sets/:faceSetId | 204 | 未参照の Face Set を削除 |
 | GET | /themes | 200 | Theme 一覧（組み込み＋利用者テーマ）を取得（[../theme-customization/spec.md](../theme-customization/spec.md)） |
 | POST | /themes | 201 | Theme の作成・複製 |
-| POST | /themes/preview | 200 | 代表サンプルによる Theme Draft 非永続プレビューを合成（`fontDiagnostics` 付き） |
+| POST | /themes/preview | 200 | 代表サンプルによる Theme Draft 非永続プレビューを合成（`fontDiagnostics` 付き）。`locale`（既定 `ja-JP`）で代表サンプルの言語・字形を選ぶ |
 | GET | /themes/:themeId | 200 | Theme 詳細と全 Revision / Draft を取得 |
 | PUT | /themes/:themeId/draft | 200 | Theme Draft を保存・更新 |
 | DELETE | /themes/:themeId/draft | 200 | Theme Draft を破棄 |

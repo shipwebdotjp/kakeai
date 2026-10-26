@@ -214,10 +214,15 @@ describe("FontCatalogService", () => {
     const service = new FontCatalogService(
       new FakeFontCatalogAdapter(false, [], "unsupported_platform"),
     );
-    const resolution = await service.resolveThemeFonts(themeWithFonts(), { verify: true });
+    const resolution = await service.resolveThemeFonts(themeWithFonts(), {
+      verify: true,
+      locale: "zh-Hant",
+    });
     expect(resolution.catalogSupported).toBe(false);
     expect(resolution.missingFonts).toEqual([]);
     expect(resolution.roles.every((role) => role.usesFallback)).toBe(true);
+    // Definition-derived locale warnings do not depend on the catalog.
+    expect(resolution.diagnostics.join("\n")).toContain("zh-Hant 用のフォント指定がない");
   });
 
   it("annotates catalog faces that Chromium verification has checked", async () => {
@@ -232,5 +237,72 @@ describe("FontCatalogService", () => {
     const after = await service.getCatalog();
     expect(after.faces.find((face) => face.postScriptName === "HiraginoSans-W6")?.verifiedLocalFace).toBe(true);
     expect(after.faces.find((face) => face.postScriptName === "HiraginoSans-W3")?.verifiedLocalFace).toBeUndefined();
+  });
+
+  it("warns when a zh document falls back to the shared font face", async () => {
+    const service = new FontCatalogService(new FakeFontCatalogAdapter(true, faces));
+    const zh = await service.resolveThemeFonts(themeWithFonts(), {
+      verify: false,
+      locale: "zh-Hant",
+    });
+    expect(zh.diagnostics.join("\n")).toContain("title: zh-Hant 用のフォント指定がない");
+    const ja = await service.resolveThemeFonts(themeWithFonts(), {
+      verify: false,
+      locale: "ja-JP",
+    });
+    expect(ja.diagnostics.join("\n")).not.toContain("用のフォント指定がない");
+  });
+
+  it("uses the locale-specific face and also diagnoses the speaker style", async () => {
+    const base = themeWithFonts();
+    const localized = visualThemeDefinitionSchema.parse({
+      ...base,
+      textRoles: {
+        ...base.textRoles,
+        title: {
+          ...base.textRoles.title,
+          fontFace: { family: "No Such Font", style: "normal", weight: 400, fallbacks: [] },
+          fontFaceByLocale: {
+            "zh-Hant": {
+              platformId: "HiraginoSans-W6",
+              family: "Hiragino Sans",
+              style: "normal",
+              weight: 700,
+              fallbacks: [],
+            },
+          },
+        },
+      },
+      caption: {
+        layout: "frame",
+        speaker: {
+          text: {
+            font: "sans",
+            fontFace: { family: "No Such Font", style: "normal", weight: 400, fallbacks: [] },
+            fontSize: 20,
+            color: "#FFFFFF",
+            lineHeight: 1.2,
+            decoration: { bold: true, italic: false, outline: false, shadow: true },
+          },
+          surface: {
+            enabled: true,
+            backgroundColor: "#1B2740",
+            backgroundOpacity: 0.85,
+            paddingHorizontal: 16,
+            paddingVertical: 4,
+            borderRadius: 8,
+          },
+        },
+      },
+    });
+    const service = new FontCatalogService(new FakeFontCatalogAdapter(true, faces));
+    const resolution = await service.resolveThemeFonts(localized, {
+      verify: false,
+      locale: "zh-Hant",
+    });
+    const title = resolution.roles.find((role) => role.role === "title")!;
+    expect(title.localFaceName).toBe("HiraginoSans-W6");
+    expect(resolution.diagnostics.join("\n")).toContain("caption.speaker: zh-Hant 用のフォント指定がない");
+    expect(resolution.diagnostics.join("\n")).not.toContain("title: zh-Hant 用のフォント指定がない");
   });
 });

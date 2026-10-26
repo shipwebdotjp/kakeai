@@ -161,6 +161,7 @@ describe("Theme Services & Routes", () => {
     const preview = compileThemeRepresentativePreview(defaultTheme);
 
     expect(preview.compositionHtml).toContain("kakeai-root");
+    expect(preview.compositionHtml).toContain('<html lang="ja-JP">');
     expect(preview.compositionHtml).toContain("テーマプレビュー");
     expect(preview.compositionHtml).toContain("kakeai-cardmedia");
     expect(preview.compositionHtml).toContain("kakeai-calloutitem");
@@ -170,6 +171,23 @@ describe("Theme Services & Routes", () => {
 
     const count = await prisma.theme.count();
     expect(count).toBe(0);
+  });
+
+  it("uses the requested locale copy and font stack in the representative preview", () => {
+    const defaultTheme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const simplified = compileThemeRepresentativePreview(defaultTheme, [], "zh-Hans");
+    expect(simplified.compositionHtml).toContain('<html lang="zh-Hans">');
+    expect(simplified.compositionHtml).toContain("主题预览");
+    expect(simplified.compositionHtml).toContain("'PingFang SC'");
+
+    const traditional = compileThemeRepresentativePreview(defaultTheme, [], "zh-Hant");
+    expect(traditional.compositionHtml).toContain('<html lang="zh-Hant">');
+    expect(traditional.compositionHtml).toContain("主題預覽");
+    expect(traditional.compositionHtml).toContain("'PingFang TC'");
+
+    const english = compileThemeRepresentativePreview(defaultTheme, [], "en-US");
+    expect(english.compositionHtml).toContain('<html lang="en-US">');
+    expect(english.compositionHtml).toContain("Theme preview");
   });
 
   it("shows handmade-paper expressions with a neutral fallback in the preview", () => {
@@ -210,8 +228,42 @@ describe("Theme Services & Routes", () => {
     expect(preview.fontDiagnostics).toEqual(diagnostics);
   });
 
-  it("handles non-macOS font catalog adapter returning unsupported state", async () => {
-    const nonMacAdapter = new FakeFontCatalogAdapter(false, [], "unsupported_platform");
+  it("round-trips locale font faces and drops an empty dictionary", async () => {
+    const created = await themeService.createTheme({ name: "Locale fonts" });
+    const base = created.draft!.definition;
+    const withLocale = {
+      ...base,
+      textRoles: {
+        ...base.textRoles,
+        title: {
+          ...base.textRoles.title,
+          fontFaceByLocale: {
+            "zh-Hans": {
+              family: "PingFang SC",
+              style: "normal" as const,
+              weight: 400,
+              fallbacks: [],
+            },
+          },
+        },
+      },
+    };
+    const saved = await themeService.updateThemeDraft(created.id, withLocale);
+    expect(saved.draft?.definition.textRoles.title.fontFaceByLocale?.["zh-Hans"]?.family).toBe(
+      "PingFang SC",
+    );
+
+    const cleared = await themeService.updateThemeDraft(created.id, {
+      ...withLocale,
+      textRoles: {
+        ...withLocale.textRoles,
+        title: { ...withLocale.textRoles.title, fontFaceByLocale: {} },
+      },
+    });
+    expect("fontFaceByLocale" in cleared.draft!.definition.textRoles.title).toBe(false);
+  });
+
+  it("handles non-macOS font catalog adapter returning unsupported state", async () => {    const nonMacAdapter = new FakeFontCatalogAdapter(false, [], "unsupported_platform");
     const catalog = await nonMacAdapter.getCatalog();
     expect(catalog.supported).toBe(false);
     expect(catalog.reason).toBe("unsupported_platform");

@@ -91,7 +91,7 @@ family名はCSSのfont familyとして解決できる名前でなければなら
 
 V1のmacOS Font CatalogはmacOSのフォント基盤から列挙し、起動時キャッシュと手動更新を持つ。将来のWindows DirectWrite、Linux Fontconfig実装も同一DTOを返す。レンダーに使うChromiumでfaceが解決できるかはカタログ列挙と別に確認する。
 
-指定faceが選択・プレビュー・Render Job作成時に見つからない場合、保存や公開は拒否しない。Theme編集画面、Work編集画面、プレビュー、レンダー投入前に欠落Font Faceと使用するfallbackを警告し、コンパイルはfallbackで継続する。Theme Revision自体は同じFont Face参照を保持し、環境依存の解決結果を正本へ書き戻さない。
+指定faceが選択・プレビュー・Render Job作成時に見つからない場合、保存や公開は拒否しない。Theme編集画面、Work編集画面、プレビュー、レンダー投入前に欠落Font Faceと使用するfallbackを警告し、コンパイルはfallbackで継続する。Theme Revision自体は同じFont Face参照を保持し、環境依存の解決結果を正本へ書き戻さない。レンダー投入時はdocument localeを診断入力に取り、zh-Hans／zh-Hantで言語別のフォント指定がなく共通 `fontFace` のみを使うロール（8ロールと `caption.speaker.text`）には、字形が中国語と一致しない可能性を警告する。これはFont Catalogが字形カバレッジや日中字形差を実測できないことによるリスク指摘であり、レンダーは継続する。
 
 ## 解決、プレビュー、レンダー
 
@@ -99,7 +99,7 @@ V1のmacOS Font CatalogはmacOSのフォント基盤から列挙し、起動時�
 
 Render Jobを作るときは、ContentDocumentのTheme Refだけでなく、解決済みのTheme Revision定義とFont Resolverの診断をJob snapshotへ固定する。ワーカーはDB上の最新ThemeやTheme Draftを読み直さず、snapshotの定義でコンパイルする。Theme Revisionがアーカイブ済みでも、過去のJobは実行できる。
 
-テーマ編集画面のプレビューは固定の代表ContentDocumentを使う。代表サンプルにはbackground、surface、accent、title、subtitle、heading、body、closing、label、captionを含める。編集フォームの未保存値を`themeDefinition` overrideとしてプレビューAPIへ送り、通常のコンパイラでHTMLと診断を返す。この呼び出しはDB、Script Version、Theme Revision、Job、Artifactを作成しない。実WorkをDraftでプレビューするAPIはV1に含めない。
+テーマ編集画面のプレビューは固定の代表ContentDocumentを使う。代表サンプルにはbackground、surface、accent、title、subtitle、heading、body、closing、label、captionを含める。代表ドキュメントのlocaleはプレビューリクエストの`locale`（既定`ja-JP`）に従い、zh-Hans／zh-Hantでは簡体字・繁体字の判別用サンプル文を使う。編集フォームの未保存値を`themeDefinition` overrideとしてプレビューAPIへ送り、通常のコンパイラでHTMLと診断を返す。この呼び出しはDB、Script Version、Theme Revision、Job、Artifactを作成しない。実WorkをDraftでプレビューするAPIはV1に含めない。
 
 返したHTMLは完成したCompositionそのものなので、Web UIはHyperFramesプレイヤー（`<hyperframes-player>`）で再生する。プレイヤーは枠に合わせてCompositionをスケールし、Sceneの`data-start`/`data-duration`に従って再生・シークする。通常の`<iframe>`へ直接描画してはならない（スケールされず、全Sceneが重なって表示される）。
 

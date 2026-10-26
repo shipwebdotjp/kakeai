@@ -4,9 +4,16 @@ import type {
   FontCatalog,
   FontFace,
   FontFaceSpec,
+  SupportedLocale,
+  TextStyle,
   ThemeFontCategory,
   VisualThemeDefinition,
   VisualThemeTextRole,
+} from "@kakeai/contracts";
+import {
+  asSupportedLocale,
+  resolveCaptionSpeakerStyle,
+  resolveTextStyleFontFace,
 } from "@kakeai/contracts";
 import {
   ChromiumFontVerifier,
@@ -288,6 +295,58 @@ export interface ThemeFontResolution {
   diagnostics: string[];
 }
 
+/**
+ * The Font Catalog can see faces and whether Chromium resolves them, but not
+ * glyph coverage or Japanese-vs-Chinese glyph shapes. When a zh document has a
+ * shared fontFace and no zh-specific entry, the Theme will draw Chinese text
+ * with that shared face, so the diagnostics only flag the risk.
+ */
+function localeFontMismatchWarning(
+  label: string,
+  style: TextStyle,
+  locale: SupportedLocale | undefined,
+): string | undefined {
+  if (locale !== "zh-Hans" && locale !== "zh-Hant") {
+    return undefined;
+  }
+  if (style.fontFace === undefined || style.fontFaceByLocale?.[locale] !== undefined) {
+    return undefined;
+  }
+  return `${label}: ${locale} 用のフォント指定がないため共通のFont Faceで描画され、字形が中国語と一致しない可能性があります`;
+}
+
+interface FontCandidate {
+  label: string;
+  role?: VisualThemeTextRole;
+  style: TextStyle;
+  category: ThemeFontCategory;
+  fontFace: FontFaceSpec | undefined;
+}
+
+function themeFontCandidates(
+  definition: VisualThemeDefinition,
+  locale: string | undefined,
+): FontCandidate[] {
+  const candidates: FontCandidate[] = THEME_TEXT_ROLES.map((role) => {
+    const style = definition.textRoles[role];
+    return {
+      label: role,
+      role,
+      style,
+      category: style.font,
+      fontFace: resolveTextStyleFontFace(style, locale),
+    };
+  });
+  const speaker = resolveCaptionSpeakerStyle(definition).text;
+  candidates.push({
+    label: "caption.speaker",
+    style: speaker,
+    category: speaker.font,
+    fontFace: resolveTextStyleFontFace(speaker, locale),
+  });
+  return candidates;
+}
+
 export class FontCatalogService {
   private cachedCatalog: FontCatalog | null = null;
   private inFlightCatalog: Promise<FontCatalog> | null = null;
@@ -346,8 +405,17 @@ export class FontCatalogService {
 
   async resolveThemeFonts(
     definition: VisualThemeDefinition,
-    options: { verify: boolean },
+    options: { verify: boolean; locale?: string },
   ): Promise<ThemeFontResolution> {
+    const locale = asSupportedLocale(options.locale);
+    const baseCandidates = themeFontCandidates(definition, locale);
+    // Definition-derived warnings need no catalog, so they also survive the
+    // unsupported-catalog early return below.
+    const localeWarnings = baseCandidates.flatMap((candidate) => {
+      const mismatch = localeFontMismatchWarning(candidate.label, candidate.style, locale);
+      return mismatch === undefined ? [] : [mismatch];
+    });
+
     const catalog = await this.loadCatalog(false);
     if (!catalog.supported) {
       return {
@@ -365,19 +433,16 @@ export class FontCatalogService {
         missingFonts: [],
         diagnostics: [
           "フォントカタログが利用できないため、すべての文字はgeneric stackで描画されます",
+          ...localeWarnings,
         ],
       };
     }
 
-    const candidates = THEME_TEXT_ROLES.map((role) => {
-      const token = definition.textRoles[role];
-      return {
-        role,
-        category: token.font,
-        fontFace: token.fontFace,
-        localFace: token.fontFace === undefined ? undefined : findLocalFace(token.fontFace, catalog),
-      };
-    });
+    const candidates = baseCandidates.map((candidate) => ({
+      ...candidate,
+      localFace:
+        candidate.fontFace === undefined ? undefined : findLocalFace(candidate.fontFace, catalog),
+    }));
 
     let verification: LocalFaceVerification | undefined;
     if (options.verify) {
@@ -402,35 +467,48 @@ export class FontCatalogService {
       }
     }
 
-    const diagnostics: string[] = [];
+    const diagnostics: string[] = [...localeWarnings];
     const missing = new Set<string>();
-    const roles = candidates.map((candidate) => {
+    const roles: ResolvedThemeFontRole[] = [];
+    for (const candidate of candidates) {
       const generic = GENERIC_FONT_STACKS[candidate.category];
-      const emptyRole: ResolvedThemeFontRole = {
-        role: candidate.role,
-        category: candidate.category,
-        localFaceName: undefined,
-        localFaceWeight: undefined,
-        localFaceStyle: undefined,
-        usesFallback: true,
-      };
+      const emptyRole: ResolvedThemeFontRole | undefined =
+        candidate.role === undefined
+          ? undefined
+          : {
+              role: candidate.role,
+              category: candidate.category,
+              localFaceName: undefined,
+              localFaceWeight: undefined,
+              localFaceStyle: undefined,
+              usesFallback: true,
+            };
       if (candidate.fontFace === undefined) {
-        return { ...emptyRole, usesFallback: false };
+        if (emptyRole !== undefined) {
+          roles.push({ ...emptyRole, usesFallback: false });
+        }
+        continue;
       }
       if (candidate.localFace === undefined) {
         missing.add(candidate.fontFace.family);
         diagnostics.push(
-          `${candidate.role}: ${describeFaceName(candidate.fontFace.family)} に一致するlocal faceを解決できないため ${generic} を使用`,
+          `${candidate.label}: ${describeFaceName(candidate.fontFace.family)} に一致するlocal faceを解決できないため ${generic} を使用`,
         );
-        return emptyRole;
+        if (emptyRole !== undefined) {
+          roles.push(emptyRole);
+        }
+        continue;
       }
       const faceName = candidate.localFace.postScriptName;
       if (verification !== undefined && verification.supported && !verification.verified.has(faceName)) {
         missing.add(candidate.fontFace.family);
         diagnostics.push(
-          `${candidate.role}: local face ${describeFaceName(faceName)} はChromiumで解決できないため ${generic} を使用`,
+          `${candidate.label}: local face ${describeFaceName(faceName)} はChromiumで解決できないため ${generic} を使用`,
         );
-        return emptyRole;
+        if (emptyRole !== undefined) {
+          roles.push(emptyRole);
+        }
+        continue;
       }
       let suffix = "（Chromium未検証）";
       if (verification === undefined) {
@@ -439,17 +517,19 @@ export class FontCatalogService {
         suffix = "";
       }
       diagnostics.push(
-        `${candidate.role}: local face ${describeFaceName(faceName)} を使用${suffix}`,
+        `${candidate.label}: local face ${describeFaceName(faceName)} を使用${suffix}`,
       );
-      return {
-        role: candidate.role,
-        category: candidate.category,
-        localFaceName: faceName,
-        localFaceWeight: candidate.localFace.weight,
-        localFaceStyle: candidate.localFace.style,
-        usesFallback: false,
-      };
-    });
+      if (emptyRole !== undefined) {
+        roles.push({
+          role: emptyRole.role,
+          category: candidate.category,
+          localFaceName: faceName,
+          localFaceWeight: candidate.localFace.weight,
+          localFaceStyle: candidate.localFace.style,
+          usesFallback: false,
+        });
+      }
+    }
 
     return {
       catalogSupported: true,
@@ -463,10 +543,11 @@ export class FontCatalogService {
 
   async diagnoseTheme(
     definition: VisualThemeDefinition,
-    options: { verify?: boolean } = {},
+    options: { verify?: boolean; locale?: string } = {},
   ): Promise<{ missingFonts: string[]; diagnostics: string[] }> {
     const resolution = await this.resolveThemeFonts(definition, {
       verify: options.verify === true,
+      locale: options.locale,
     });
     return {
       missingFonts: resolution.missingFonts,

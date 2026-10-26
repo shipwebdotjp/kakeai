@@ -210,10 +210,14 @@ export class ThemeService {
     };
   }
 
-  async resolveFontDiagnostics(definition: VisualThemeDefinition): Promise<string[]> {
+  async resolveFontDiagnostics(
+    definition: VisualThemeDefinition,
+    locale?: string,
+  ): Promise<string[]> {
     try {
       const { diagnostics } = await this.fontCatalogService.diagnoseTheme(definition, {
         verify: true,
+        locale,
       });
       return diagnostics;
     } catch (error) {

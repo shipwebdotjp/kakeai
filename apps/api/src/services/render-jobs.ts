@@ -92,6 +92,7 @@ export async function createRenderJob(
   try {
     fontResolution = await fontCatalogService.resolveThemeFonts(resolvedThemeDefinition, {
       verify: true,
+      locale: content.locale,
     });
   } catch (error) {
     fontResolution = {

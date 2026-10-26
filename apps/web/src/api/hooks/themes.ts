@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateThemeRequest,
   DraftPreview,
+  SupportedLocale,
   ThemeDetail,
   ThemeSummary,
   VisualThemeDefinition,
@@ -118,11 +119,11 @@ export function useArchiveTheme() {
 
 export function usePreviewThemeDraft() {
   return useMutation({
-    mutationFn: async (definition: VisualThemeDefinition) =>
+    mutationFn: async (input: { definition: VisualThemeDefinition; locale: SupportedLocale }) =>
       (
         await apiRequest<DraftPreview>("/themes/preview", {
           method: "POST",
-          body: { definition },
+          body: input,
         })
       ).data,
   });

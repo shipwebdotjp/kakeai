@@ -12,6 +12,8 @@ import {
 } from "@kakeai/video";
 import {
   CONTENT_SCHEMA_VERSION,
+  DEFAULT_PREVIEW_LOCALE,
+  asSupportedLocale,
   draftPreviewSchema,
   type ContentDocument,
   type DraftPreview,
@@ -21,6 +23,105 @@ import {
 import { ApiError } from "../http/errors.ts";
 
 export const THEME_PREVIEW_MEDIA_ASSET_ID = "theme-preview-media";
+
+/**
+ * Simplified/Traditional Chinese sample copy. The glyph pairs are chosen so
+ * the script difference is visible at a glance (门/門, 确/確, 图/圖). English
+ * uses its own copy so the preview locale and the rendered strings agree.
+ */
+const ZH_SAMPLE_TEXT = {
+  "zh-Hans": {
+    speakerName: "示例说话者",
+    title: "主题预览",
+    subtitle: "代表示例的配色与字体样式确认",
+    heading: "主要标题样式",
+    body: "确认正文文本的行距与颜色显示。\n字体与装饰会即时反映。",
+    label: "标签",
+    mediaHeading: "图片卡片的标题",
+    mediaCaption: "确认皮肤对照片的展示方式。",
+    listTitle: "三个要点",
+    listItems: ["第一个要点", "第二个要点", "第三个要点"],
+    quote: "确认引用卡片的显示效果。",
+    quoteAuthor: "出处名称",
+    quoteSource: "文献名",
+    closing: "感谢观看",
+    captionText: "字幕样式的显示示例。",
+    tableCaption: "外观主题未对应的模板以标准方式呈现",
+    tableItems: ["示例1", "示例2"],
+    tableColumns: ["项目", "数值"],
+  },
+  "zh-Hant": {
+    speakerName: "範例說話者",
+    title: "主題預覽",
+    subtitle: "代表範例的配色與字體樣式確認",
+    heading: "主要標題樣式",
+    body: "確認本文文字的行距與顏色顯示。\n字體與裝飾會即時反映。",
+    label: "標籤",
+    mediaHeading: "圖片卡片的標題",
+    mediaCaption: "確認外觀主題對照片的呈現方式。",
+    listTitle: "三個要點",
+    listItems: ["第一個要點", "第二個要點", "第三個要點"],
+    quote: "確認引用卡片的顯示效果。",
+    quoteAuthor: "出處名稱",
+    quoteSource: "文獻名",
+    closing: "感謝觀看",
+    captionText: "字幕樣式的顯示範例。",
+    tableCaption: "外觀主題未對應的範本以標準方式呈現",
+    tableItems: ["範例1", "範例2"],
+    tableColumns: ["項目", "數值"],
+  },
+} as const;
+
+const EN_SAMPLE_TEXT = {
+  speakerName: "Sample speaker",
+  title: "Theme preview",
+  subtitle: "Checking palette and font styles on the sample",
+  heading: "Primary heading style",
+  body: "Check the line height and color of body text.\nFonts and decorations update instantly.",
+  label: "LABEL",
+  mediaHeading: "Image card heading",
+  mediaCaption: "Check how the skin presents photos.",
+  listTitle: "Three key points",
+  listItems: ["First key point", "Second key point", "Third key point"],
+  quote: "Check how the quote card looks.",
+  quoteAuthor: "Source name",
+  quoteSource: "Document title",
+  closing: "Thank you for watching",
+  captionText: "Caption style sample.",
+  tableCaption: "Templates without a skin fall back to the standard rendering",
+  tableItems: ["Sample 1", "Sample 2"],
+  tableColumns: ["Item", "Value"],
+} as const;
+
+const JA_SAMPLE_TEXT = {
+  speakerName: "サンプル話者",
+  title: "テーマプレビュー",
+  subtitle: "代表サンプルの配色とフォントスタイル確認",
+  heading: "主要な見出しスタイル",
+  body: "本文テキストの行間や色の見え方を確認します。\nフォントや装飾が即座に反映されます。",
+  label: "LABEL",
+  mediaHeading: "画像カードの見出し",
+  mediaCaption: "スキンによる写真の見せ方を確認します。",
+  listTitle: "3つの要点",
+  listItems: ["ひとつめの要点", "ふたつめの要点", "みっつめの要点"],
+  quote: "引用カードの見え方を確認します。",
+  quoteAuthor: "出典元の名前",
+  quoteSource: "文献名",
+  closing: "ご視聴ありがとうございました",
+  captionText: "字幕スタイルの表示サンプルです。",
+  tableCaption: "Skin未対応テンプレートは標準描画",
+  tableItems: ["サンプル1", "サンプル2"],
+  tableColumns: ["項目", "値"],
+} as const;
+
+const SAMPLE_TEXT_BY_LOCALE = {
+  ...ZH_SAMPLE_TEXT,
+  "en-US": EN_SAMPLE_TEXT,
+} as const;
+
+function sampleText(locale: string) {
+  return SAMPLE_TEXT_BY_LOCALE[locale as keyof typeof SAMPLE_TEXT_BY_LOCALE] ?? JA_SAMPLE_TEXT;
+}
 
 function previewMediaDataUrl(themeDefinition: VisualThemeDefinition): string {
   const base = themeDefinition.canvas.base;
@@ -32,16 +133,21 @@ function previewMediaDataUrl(themeDefinition: VisualThemeDefinition): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-export function createRepresentativeSampleDocument(themeDefinition: VisualThemeDefinition): ContentDocument {
+export function createRepresentativeSampleDocument(
+  themeDefinition: VisualThemeDefinition,
+  locale: string = DEFAULT_PREVIEW_LOCALE,
+): ContentDocument {
   const themeRef = { id: themeDefinition.id, version: themeDefinition.version };
+  const normalizedLocale = asSupportedLocale(locale) ?? DEFAULT_PREVIEW_LOCALE;
+  const text = sampleText(normalizedLocale);
 
   return {
     schemaVersion: CONTENT_SCHEMA_VERSION,
-    locale: "ja-JP",
+    locale: normalizedLocale,
     visualTheme: themeRef,
     template: { id: "explanation-scenes", version: 1 },
     caption: { showSpeakerName: true },
-    speakers: [{ id: "speaker-sample", name: "サンプル話者", characterId: null, voiceProfileId: null }],
+    speakers: [{ id: "speaker-sample", name: text.speakerName, characterId: null, voiceProfileId: null }],
     characters: [],
     audioTakes: [],
     audioCues: [],
@@ -65,7 +171,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              text: "テーマプレビュー",
+              text: text.title,
               role: "title",
               verticalAlign: "top",
             },
@@ -81,7 +187,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              text: "代表サンプルの配色とフォントスタイル確認",
+              text: text.subtitle,
               role: "subtitle",
               verticalAlign: "middle",
             },
@@ -98,8 +204,8 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
           {
             id: "line-sample-1",
             speakerId: "speaker-sample",
-            captionText: "字幕スタイルの表示サンプルです。",
-            speechText: "じまくすたいるのひょうじさんぷるです。",
+            captionText: text.captionText,
+            speechText: text.captionText,
             selectedAudioTakeId: null,
             expressionId: null,
           },
@@ -116,7 +222,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              text: "主要な見出しスタイル",
+              text: text.heading,
               role: "heading",
               verticalAlign: "top",
             },
@@ -132,7 +238,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              text: "本文テキストの行間や色の見え方を確認します。\nフォントや装飾が即座に反映されます。",
+              text: text.body,
               role: "body",
               verticalAlign: "middle",
             },
@@ -148,7 +254,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              text: "LABEL",
+              text: text.label,
               role: "label",
               verticalAlign: "bottom",
               anchor: "left",
@@ -176,8 +282,8 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
             },
             input: {
               assetId: THEME_PREVIEW_MEDIA_ASSET_ID,
-              heading: "画像カードの見出し",
-              caption: "スキンによる写真の見せ方を確認します。",
+              heading: text.mediaHeading,
+              caption: text.mediaCaption,
             },
           },
         ],
@@ -201,12 +307,8 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              title: "3つの要点",
-              items: [
-                { text: "ひとつめの要点" },
-                { text: "ふたつめの要点" },
-                { text: "みっつめの要点" },
-              ],
+              title: text.listTitle,
+              items: text.listItems.map((item) => ({ text: item })),
             },
           },
         ],
@@ -230,9 +332,9 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              quote: "引用カードの見え方を確認します。",
-              author: "出典元の名前",
-              source: "文献名",
+              quote: text.quote,
+              author: text.quoteAuthor,
+              source: text.quoteSource,
             },
           },
         ],
@@ -256,15 +358,15 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              caption: "Skin未対応テンプレートは標準描画",
+              caption: text.tableCaption,
               data: {
                 columns: [
-                  { key: "item", label: "項目", type: "text" },
-                  { key: "value", label: "値", type: "number" },
+                  { key: "item", label: text.tableColumns[0], type: "text" },
+                  { key: "value", label: text.tableColumns[1], type: "number" },
                 ],
                 rows: [
-                  { item: "サンプル1", value: 120 },
-                  { item: "サンプル2", value: 80 },
+                  { item: text.tableItems[0], value: 120 },
+                  { item: text.tableItems[1], value: 80 },
                 ],
               },
             },
@@ -290,7 +392,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
               exit: { preset: "none", durationMs: 0 },
             },
             input: {
-              text: "ご視聴ありがとうございました",
+              text: text.closing,
               role: "closing",
               verticalAlign: "middle",
             },
@@ -304,8 +406,9 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
 export function compileThemeRepresentativePreview(
   definition: VisualThemeDefinition,
   fontDiagnostics: readonly string[] = [],
+  locale: string = DEFAULT_PREVIEW_LOCALE,
 ): DraftPreview {
-  const sampleDoc = createRepresentativeSampleDocument(definition);
+  const sampleDoc = createRepresentativeSampleDocument(definition, locale);
   let compiled: CompiledComposition;
   let timeline;
 

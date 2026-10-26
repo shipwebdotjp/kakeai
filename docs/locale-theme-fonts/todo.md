@@ -15,8 +15,8 @@
 
 ## R2: プレビュー・診断＋UI
 
-- [ ] テーマ代表サンプルプレビューに locale 選択と簡体字／繁体字の判別用サンプル文を追加する（`apps/api/src/services/theme-preview.ts` の ja-JP 固定を解消）。
-- [ ] レンダー投入時のテーマ診断（`FontCatalogService.diagnoseTheme`）に、zh 系 document で zh 用指定がなく共通 fontFace のみが使われるロールの字形不一致リスク警告を追加する（warning、コンパイル継続）。診断対象は8ロール＋`caption.speaker.text`、locale 適用後の fontFace を見る。テストでは `FakeFontCatalogAdapter` を注入する。
-- [ ] テーマ編集画面の全ロール＋話者名スタイルに locale タブを足す。locale 未指定への操作はエントリ削除（最後の1つを消したら `fontFaceByLocale` 自体を省略）。
-- [ ] テーマ Draft の保存・復元・公開・複製で locale 別指定（正規化を含む）が失われないことをテストする。
-- [ ] `npm run typecheck` と `npm test` を通す。
+- [x] テーマ代表サンプルプレビューに locale 選択と簡体字／繁体字の判別用サンプル文を追加する（`apps/api/src/services/theme-preview.ts` の ja-JP 固定を解消）。
+- [x] レンダー投入時のテーマ診断（`FontCatalogService.diagnoseTheme`）に、zh 系 document で zh 用指定がなく共通 fontFace のみが使われるロールの字形不一致リスク警告を追加する（warning、コンパイル継続）。診断対象は8ロール＋`caption.speaker.text`、locale 適用後の fontFace を見る。テストでは `FakeFontCatalogAdapter` を注入する。
+- [x] テーマ編集画面の全ロール＋話者名スタイルに locale タブを足す。locale 未指定への操作はエントリ削除（最後の1つを消したら `fontFaceByLocale` 自体を省略）。
+- [x] テーマ Draft の保存・復元・公開・複製で locale 別指定（正規化を含む）が失われないことをテストする。
+- [x] `npm run typecheck` と `npm test` を通す。

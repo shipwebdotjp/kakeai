@@ -4,9 +4,11 @@ import {
   createLanguageEditionRequestSchema,
   createWorkRequestSchema,
   draftPreviewRequestSchema,
+  previewThemeDraftRequestSchema,
   saveScriptVersionRequestSchema,
   updateAssetRequestSchema,
 } from "./requests";
+import { getVisualTheme } from "./content/theme";
 import { draftPreviewSchema } from "./dto";
 import { assetTagsSchema, MAX_ASSET_TAG_LENGTH, MAX_ASSET_TAGS } from "./asset";
 import { validContentDocument } from "./testing/fixtures";
@@ -79,6 +81,27 @@ describe("createLanguageEditionRequestSchema", () => {
         sourceEditionId: "edition-1",
         extra: 1,
       }).success,
+    ).toBe(false);
+  });
+});
+
+describe("previewThemeDraftRequestSchema", () => {
+  const definition = getVisualTheme("soft-editorial", 1)!;
+
+  it("defaults the preview locale to ja-JP", () => {
+    const parsed = previewThemeDraftRequestSchema.parse({ definition });
+    expect(parsed.locale).toBe("ja-JP");
+  });
+
+  it("accepts supported locales and rejects unsupported ones", () => {
+    expect(
+      previewThemeDraftRequestSchema.safeParse({ definition, locale: "zh-Hant" }).success,
+    ).toBe(true);
+    expect(
+      previewThemeDraftRequestSchema.safeParse({ definition, locale: "fr-FR" }).success,
+    ).toBe(false);
+    expect(
+      previewThemeDraftRequestSchema.safeParse({ definition, extra: true }).success,
     ).toBe(false);
   });
 });

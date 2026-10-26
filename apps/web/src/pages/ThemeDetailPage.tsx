@@ -15,6 +15,8 @@ import {
   NEUTRAL_VISUAL_SKIN_REF,
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
+  SUPPORTED_LOCALES,
+  DEFAULT_PREVIEW_LOCALE,
   getVisualTheme,
   listVisualSkinDefinitions,
   DEFAULT_CAPTION_SPEAKER_SURFACE,
@@ -23,8 +25,7 @@ import {
   resolveVisualThemeSkin,
   toVisualThemeDefinitionV2,
   visualThemeTextRoleSchema,
-  type FontFace,
-  type FontFaceSpec,
+  type SupportedLocale,
   type TextSurface,
   type TextStyle,
   type VisualSkinRef,
@@ -43,8 +44,8 @@ import {
   useUpdateThemeDraft,
 } from "../api/hooks";
 import { ColorField } from "../components/ColorField";
+import { ThemeFontFaceField, LOCALE_LABELS } from "../components/ThemeFontFaceField";
 import { errorMessage } from "../lib/errorMessage";
-import { includeFontFace, selectableFontFaces } from "../lib/fontFaceOptions";
 import { asSeekablePlayer, safePlay } from "../lib/player";
 import { capturePlayback, isPlayerReady, playbackRestoreSeconds, type PlaybackSnapshot } from "../lib/previewPlayback";
 import { THEMES_ROUTE_PATH, themeDetailRoute } from "../lib/routes";
@@ -88,6 +89,7 @@ export function ThemeDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [activeTab, setActiveTab] = useState<"colors" | "typography" | "surfaces" | "skin" | "caption">("colors");
   const [fontSearch, setFontSearch] = useState("");
+  const [previewLocale, setPreviewLocale] = useState<SupportedLocale>(DEFAULT_PREVIEW_LOCALE);
 
   const [playerElement, setPlayerElement] = useState<HTMLElement | null>(null);
   const playbackRef = useRef<PlaybackSnapshot | null>(null);
@@ -106,23 +108,32 @@ export function ThemeDetailPage() {
     }
   }, [theme]);
 
-  // Live preview effect
+  // Live preview effect. Requests can resolve out of order, so the latest
+  // request id decides which composition is allowed on screen.
+  const [previewHtmlState, setPreviewHtmlState] = useState<string | undefined>(undefined);
+  const previewRequestRef = useRef(0);
   useEffect(() => {
     if (!formDef) return;
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
     const timer = setTimeout(() => {
-      previewDraft.mutate(formDef);
+      previewDraft.mutate(
+        { definition: formDef, locale: previewLocale },
+        {
+          onSuccess: (data) => {
+            if (previewRequestRef.current !== requestId) return;
+            if (data.compositionHtml.length === 0) return;
+            setPreviewHtmlState(data.compositionHtml);
+          },
+        },
+      );
     }, 400);
     return () => clearTimeout(timer);
-  }, [formDef]);
+  }, [formDef, previewLocale]);
 
-  const latestPreviewHtml = previewDraft.data?.compositionHtml;
-  const lastPreviewHtmlRef = useRef<string | undefined>(undefined);
-  if (latestPreviewHtml !== undefined && latestPreviewHtml.length > 0) {
-    lastPreviewHtmlRef.current = latestPreviewHtml;
-  }
-  // Keep the last preview on screen while the next one compiles, so the player is
-  // not torn down (and does not restart) between updates.
-  const previewHtml = latestPreviewHtml ?? lastPreviewHtmlRef.current;
+  // Keep the last accepted preview on screen while the next one compiles, so
+  // the player is not torn down (and does not restart) between updates.
+  const previewHtml = previewHtmlState;
   const hasPreview = previewHtml !== undefined && previewHtml.length > 0;
 
   // Another theme's preview is a fresh start: play it from the beginning.
@@ -188,10 +199,6 @@ export function ThemeDetailPage() {
 
   const skinDefinitions = useMemo(() => listVisualSkinDefinitions(), []);
   const currentSkin = formDef ? resolveVisualThemeSkin(formDef) : NEUTRAL_VISUAL_SKIN_REF;
-  const matchedFontFaces = useMemo(
-    () => selectableFontFaces(fontFaces, fontSearch, undefined),
-    [fontFaces, fontSearch],
-  );
 
   const updateColor = (key: keyof VisualThemeDefinition["canvas"] | "surface" | "surfaceMuted" | "text" | "muted" | "border" | "onMedia", value: string) => {
     if (!formDef || isBuiltIn) return;
@@ -600,15 +607,6 @@ export function ThemeDetailPage() {
               <fieldset disabled={isBuiltIn} className="space-y-6">
                 {ALL_ROLES.map((role) => {
                   const style = formDef.textRoles[role];
-                  const faceOptions = includeFontFace(
-                    matchedFontFaces,
-                    fontFaces,
-                    style.fontFace?.platformId,
-                  );
-                  const selectedFaceUnknown =
-                    style.fontFace?.platformId !== undefined &&
-                    style.fontFace.platformId.length > 0 &&
-                    !faceOptions.some((face) => face.postScriptName === style.fontFace?.platformId);
 
                   return (
                     <div key={role} className="rounded border border-border p-3 space-y-2">
@@ -662,50 +660,14 @@ export function ThemeDetailPage() {
                         </div>
                       </div>
 
-                      {/* Font Face Spec Selector */}
+                      {/* Font Face Spec Selector (shared / locale tabs) */}
                       {fontCatalogSupported && (
-                        <div>
-                          <label className="block text-xs mb-1">指定 Font Face</label>
-                          <select
-                            className={`w-full text-xs ${textFieldClass}`}
-                            value={style.fontFace?.platformId ?? ""}
-                            onChange={(e) => {
-                              const selectedPostScriptName = e.target.value;
-                              if (!selectedPostScriptName) {
-                                updateTextStyle(role, (s) => ({ ...s, fontFace: undefined }));
-                                return;
-                              }
-                              const found = fontFaces.find(
-                                (f) => f.postScriptName === selectedPostScriptName,
-                              );
-                              if (found === undefined) {
-                                return;
-                              }
-                              updateTextStyle(role, (s) => ({
-                                ...s,
-                                fontFace: {
-                                  family: found.family,
-                                  platformId: found.postScriptName,
-                                  weight: found.weight,
-                                  style: found.style,
-                                  fallbacks: [],
-                                },
-                              }));
-                            }}
-                          >
-                            <option value="">（カテゴリ既定の標準フォント）</option>
-                            {selectedFaceUnknown && (
-                              <option value={style.fontFace?.platformId ?? ""}>
-                                （この端末にないフォント: {style.fontFace?.family}）
-                              </option>
-                            )}
-                            {faceOptions.map((face) => (
-                              <option key={face.postScriptName} value={face.postScriptName}>
-                                {face.displayName} ({face.family})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <ThemeFontFaceField
+                          style={style}
+                          fontFaces={fontFaces}
+                          fontSearch={fontSearch}
+                          onChange={(updater) => updateTextStyle(role, updater)}
+                        />
                       )}
 
                       {/* Decorations */}
@@ -916,6 +878,14 @@ export function ThemeDetailPage() {
                 </div>
                 <div className="rounded border border-border p-3 space-y-3">
                   <h4 className="font-bold text-sm text-brand-700">話者名タブ（18〜20px推奨）</h4>
+                  {fontCatalogSupported && (
+                    <ThemeFontFaceField
+                      style={formDef.caption?.speaker?.text ?? DEFAULT_CAPTION_SPEAKER_TEXT}
+                      fontFaces={fontFaces}
+                      fontSearch={fontSearch}
+                      onChange={(updater) => updateCaptionSpeakerText(updater)}
+                    />
+                  )}
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
                       <label className="block mb-1">サイズ (px)</label>
@@ -996,11 +966,27 @@ export function ThemeDetailPage() {
 
         {/* Right Live Preview (6 cols) */}
         <div className="space-y-3 lg:col-span-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-semibold text-sm">代表サンプル リアルタイムプレビュー</h3>
-            {previewDraft.isPending && (
-              <span className="text-xs text-muted-foreground animate-pulse">更新中…</span>
-            )}
+            <div className="flex items-center gap-3 text-xs">
+              <label className="flex items-center gap-1">
+                プレビュー言語
+                <select
+                  className={textFieldClass}
+                  value={previewLocale}
+                  onChange={(event) => setPreviewLocale(event.target.value as SupportedLocale)}
+                >
+                  {SUPPORTED_LOCALES.map((locale) => (
+                    <option key={locale} value={locale}>
+                      {LOCALE_LABELS[locale]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {previewDraft.isPending && (
+                <span className="text-xs text-muted-foreground animate-pulse">更新中…</span>
+              )}
+            </div>
           </div>
 
           <div className="relative aspect-video w-full overflow-hidden rounded border border-border bg-black shadow">

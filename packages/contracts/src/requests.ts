@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idSchema, localeSchema } from "./content/primitives";
+import { SUPPORTED_LOCALES, idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { templateRefSchema } from "./content/nested";
 import { canvasProfileSchema } from "./composition";
@@ -151,8 +151,13 @@ export const updateThemeDraftRequestSchema = z.strictObject({
 });
 export type UpdateThemeDraftRequest = z.infer<typeof updateThemeDraftRequestSchema>;
 
+/** Default locale of the non-persistent Theme Draft representative preview. */
+export const DEFAULT_PREVIEW_LOCALE = SUPPORTED_LOCALES[0];
+
 export const previewThemeDraftRequestSchema = z.strictObject({
   definition: visualThemeDefinitionSchema,
+  /** Representative-sample locale. The preview audio is silent, so no TTS is involved. */
+  locale: localeSchema.default(DEFAULT_PREVIEW_LOCALE),
 });
 export type PreviewThemeDraftRequest = z.infer<typeof previewThemeDraftRequestSchema>;
 
