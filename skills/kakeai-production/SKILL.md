@@ -312,12 +312,23 @@ It verifies faces in Chromium by default (`verify: true`), which is slow on the
 first call; pass `verify: false` for a catalog-only check. Pass the target
 script's `locale` (default `ja-JP`).
 
-Never delete a library character or a Voice Profile, and never create, update,
-archive or delete a face set or theme. Character and Voice Profile writes are
-limited to `character.create` / `character.update` / `character.setVoices` and
-`voiceProfile.create` / `voiceProfile.update`; agents otherwise only read
-libraries, copy a Character into the script, or assign a Voice Profile to a
-speaker.
+To author a Theme: `theme.create` (optionally from `sourceThemeRef`) →
+`theme.draft.get` → edit the definition → `theme.draft.save` → `theme.diagnose`
+→ `preview.theme` → `theme.publish`. `theme.draft.save` does not consume a
+revision; `theme.publish` creates the new immutable revision and discards the
+draft. To keep editing after publishing, save a new draft from the published
+definition. `preview.theme` rasterizes an unsaved definition with the
+representative sample and returns a PNG (default `timeMs` 4500, which shows the
+heading, body, label and caption). Use `preview.scriptFrame` for a saved script.
+The final visual judgement stays with the user.
+
+Never delete a library character or a Voice Profile, and never create, update
+or delete a Face Set, or archive/delete a Theme. Theme writes are limited to
+`theme.create` / `theme.draft.save` / `theme.publish`; Character and Voice
+Profile writes are limited to `character.create` / `character.update` /
+`character.setVoices` and `voiceProfile.create` / `voiceProfile.update`. Agents
+otherwise only read libraries, copy a Character into the script, or assign a
+Voice Profile to a speaker.
 
 ## 5. Assets
 

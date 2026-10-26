@@ -6,7 +6,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Asset, ScriptOperation, Work } from "@kakeai/contracts";
+import {
+  SOFT_EDITORIAL_THEME_ID,
+  SOFT_EDITORIAL_THEME_VERSION,
+  getVisualTheme,
+  type Asset,
+  type ScriptOperation,
+  type Work,
+} from "@kakeai/contracts";
 import { createAgentClient, AgentClientError, type AgentClient } from "@kakeai/agent-client";
 import type { AppConfig } from "../config.ts";
 import { loadConfig } from "../config.ts";
@@ -308,6 +315,47 @@ describe("agent socket integration", () => {
     );
 
     expect({
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    }).toEqual(before);
+  });
+
+  it("rasterizes an unsaved Theme definition without creating a draft or render", async () => {
+    const definition = getVisualTheme(
+      SOFT_EDITORIAL_THEME_ID,
+      SOFT_EDITORIAL_THEME_VERSION,
+    )!;
+    const before = {
+      themes: await prisma.theme.count(),
+      drafts: await prisma.themeDraft.count(),
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    };
+
+    const frame = await client.request("preview.theme", { definition });
+    expect(frame.themeId).toBe(definition.id);
+    expect(frame.version).toBe(definition.version);
+    expect(frame.locale).toBe("ja-JP");
+    expect(frame.requestedTimeMs).toBe(4500);
+    expect(frame.durationMs).toBeGreaterThan(4500);
+    expect(frame.width).toBe(1);
+    expect(frame.height).toBe(1);
+    expect(frame.mimeType).toBe("image/png");
+    expect(Buffer.from(frame.imageBase64, "base64")).toEqual(PNG_1X1);
+
+    await expectAgentError(
+      client.request("preview.theme", {
+        definition,
+        timeMs: 24 * 60 * 60 * 1000,
+      }),
+      "VALIDATION_ERROR",
+    );
+
+    expect({
+      themes: await prisma.theme.count(),
+      drafts: await prisma.themeDraft.count(),
       versions: await prisma.scriptVersion.count(),
       jobs: await prisma.job.count(),
       artifacts: await prisma.artifact.count(),

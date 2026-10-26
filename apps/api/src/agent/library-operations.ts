@@ -20,12 +20,20 @@ import {
   agentFaceSetListOutputSchema,
   agentFontListInputSchema,
   agentFontListOutputSchema,
+  agentThemeCreateInputSchema,
+  agentThemeCreateOutputSchema,
   agentThemeDiagnoseInputSchema,
   agentThemeDiagnoseOutputSchema,
+  agentThemeDraftGetInputSchema,
+  agentThemeDraftGetOutputSchema,
+  agentThemeDraftSaveInputSchema,
+  agentThemeDraftSaveOutputSchema,
   agentThemeGetInputSchema,
   agentThemeGetOutputSchema,
   agentThemeListInputSchema,
   agentThemeListOutputSchema,
+  agentThemePublishInputSchema,
+  agentThemePublishOutputSchema,
   agentVoiceProfileCreateInputSchema,
   agentVoiceProfileCreateOutputSchema,
   agentVoiceProfileGetInputSchema,
@@ -50,7 +58,11 @@ import {
 } from "../services/character-library.ts";
 import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
 import { searchFonts } from "../services/font-library.ts";
-import { getThemeDetail, listSelectableThemes } from "../services/theme-library.ts";
+import {
+  getThemeDetail,
+  getThemeDraft,
+  listSelectableThemes,
+} from "../services/theme-library.ts";
 import {
   createVoiceProfile,
   getVoiceProfile,
@@ -202,6 +214,62 @@ export const libraryOperationDefinitions = {
           roles: resolution.roles,
           missingFonts: resolution.missingFonts,
           diagnostics: resolution.diagnostics,
+        },
+      };
+    },
+  },
+  // Theme writes are additive: a new Theme, its mutable draft, and a new
+  // immutable Revision. Archive and delete stay human-only.
+  "theme.create": {
+    input: agentThemeCreateInputSchema,
+    output: agentThemeCreateOutputSchema,
+    run: async (input, context) => {
+      const detail = await context.themes.createTheme(input);
+      const draft = detail.draft;
+      if (draft === null) {
+        throw new AgentOperationError("INTERNAL_ERROR");
+      }
+      return { themeId: detail.id, draft };
+    },
+  },
+  "theme.draft.get": {
+    input: agentThemeDraftGetInputSchema,
+    output: agentThemeDraftGetOutputSchema,
+    run: async (input, context) => ({
+      draft: await getThemeDraft(context.prisma, input.themeId),
+    }),
+  },
+  "theme.draft.save": {
+    input: agentThemeDraftSaveInputSchema,
+    output: agentThemeDraftSaveOutputSchema,
+    run: async (input, context) => {
+      const detail = await context.themes.updateThemeDraft(
+        input.themeId,
+        input.definition,
+      );
+      const draft = detail.draft;
+      if (draft === null) {
+        throw new AgentOperationError("INTERNAL_ERROR");
+      }
+      return { draft };
+    },
+  },
+  "theme.publish": {
+    input: agentThemePublishInputSchema,
+    output: agentThemePublishOutputSchema,
+    run: async (input, context) => {
+      const detail = await context.themes.publishThemeDraft(input.themeId);
+      const revision = detail.latestRevision;
+      if (revision === null) {
+        throw new AgentOperationError("INTERNAL_ERROR");
+      }
+      return {
+        theme: {
+          id: detail.id,
+          name: detail.name,
+          isBuiltIn: detail.isBuiltIn,
+          version: revision.version,
+          definition: revision.definition,
         },
       };
     },

@@ -17,12 +17,16 @@ import {
   agentFaceSetListOutputSchema,
   agentFontListInputSchema,
   agentFontListOutputSchema,
+  agentThemeCreateInputSchema,
   agentThemeDiagnoseInputSchema,
   agentThemeDiagnoseOutputSchema,
+  agentThemeDraftGetInputSchema,
+  agentThemeDraftSaveInputSchema,
   agentThemeGetInputSchema,
   agentThemeGetOutputSchema,
   agentThemeListInputSchema,
   agentThemeListOutputSchema,
+  agentThemePublishInputSchema,
   agentVoiceProfileGetInputSchema,
   agentVoiceProfileGetOutputSchema,
   agentVoiceProfileListInputSchema,
@@ -38,6 +42,8 @@ import {
   agentPreviewFrameOutputSchema,
   agentPreviewScriptFrameInputSchema,
   agentPreviewScriptFrameOutputSchema,
+  agentPreviewThemeInputSchema,
+  agentPreviewThemeOutputSchema,
   agentSchemaDigestInputOf,
   agentScriptListVersionsInputSchema,
   agentScriptListVersionsOutputSchema,
@@ -967,5 +973,81 @@ describe("font.list and theme.diagnose contracts", () => {
       expect(Object.keys(agentOperationInputSchemas)).toContain(name);
       expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
     }
+  });
+});
+
+describe("theme lifecycle and preview.theme contracts", () => {
+  const definition = visualThemeDefinitions[0]!;
+
+  it("reuses the HTTP create contract and requires a full definition for a draft save", () => {
+    expect(agentThemeCreateInputSchema.parse({ name: "新しいテーマ" })).toEqual({
+      name: "新しいテーマ",
+    });
+    expect(
+      agentThemeCreateInputSchema.parse({
+        name: "複製",
+        sourceThemeRef: { id: definition.id, version: definition.version },
+      }),
+    ).toEqual({
+      name: "複製",
+      sourceThemeRef: { id: definition.id, version: definition.version },
+    });
+    expect(agentThemeDraftGetInputSchema.parse({ themeId: "theme-1" })).toEqual({
+      themeId: "theme-1",
+    });
+    expect(
+      agentThemeDraftSaveInputSchema.parse({ themeId: "theme-1", definition }).themeId,
+    ).toBe("theme-1");
+    expect(agentThemePublishInputSchema.parse({ themeId: "theme-1" })).toEqual({
+      themeId: "theme-1",
+    });
+  });
+
+  it("defaults the representative preview to the body scene", () => {
+    expect(agentPreviewThemeInputSchema.parse({ definition })).toMatchObject({
+      locale: "ja-JP",
+      timeMs: 4500,
+    });
+    expect(
+      agentPreviewThemeInputSchema.parse({
+        definition,
+        locale: "en-US",
+        timeMs: 1000,
+      }),
+    ).toMatchObject({ locale: "en-US", timeMs: 1000 });
+
+    const frame = {
+      themeId: definition.id,
+      version: definition.version,
+      locale: "ja-JP" as const,
+      requestedTimeMs: 4500,
+      durationMs: 20000,
+      width: 1,
+      height: 1,
+      mimeType: "image/png" as const,
+      imageBase64: "aVBORw0KGgo=",
+    };
+    expect(agentPreviewThemeOutputSchema.parse(frame)).toEqual(frame);
+  });
+
+  it("registers the theme writes, draft read and image preview", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of ["theme.create", "theme.draft.save", "theme.publish"] as const) {
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "mutation",
+        longRunning: false,
+      });
+    }
+    for (const name of ["theme.draft.get", "preview.theme"] as const) {
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "read",
+        longRunning: false,
+      });
+    }
+    expect(agentOperationReadTimeoutMs("preview.theme")).toBe(
+      AGENT_PREVIEW_READ_TIMEOUT_MS,
+    );
   });
 });

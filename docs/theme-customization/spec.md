@@ -120,6 +120,8 @@ APIは少なくとも次の責務を持つ。
 
 Web UIはグローバルナビゲーションに「テーマ」を追加し、Theme一覧とTheme編集画面を提供する。Theme編集画面は、編集フォームとライブプレビューを常に並べて表示する。公開・アーカイブ・破棄は確認操作を要求する。Work編集画面は公開済みTheme Revisionだけを選択でき、Draftを候補に表示しない。
 
+Agent Accessは同じThemeServiceを呼び、`theme.create`・`theme.draft.get`・`theme.draft.save`・`theme.publish`と、代表サンプルのPNGプレビュー（`preview.theme`）を公開する。Themeのアーカイブ・削除とDraftの破棄は人専用のままとする（[Agent Access仕様](../agent-access/spec.md)、[ADR 0101](../adr/0101-agent-theme-authoring-and-preview.md)）。
+
 ## 移行
 
 `soft-editorial@1`と既存Script Versionはそのまま有効である。組み込みThemeをDBへ移す必要はない。現行の`visualThemeRefSchema`が組み込みThemeだけを静的に拒否している検証を、形状検証とResolver検証へ分離する。ContentDocumentの既存JSON形状、既存Theme Ref、Cueの明示値、Render Jobの旧snapshotは保持する。

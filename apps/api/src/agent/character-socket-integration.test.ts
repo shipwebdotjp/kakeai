@@ -362,7 +362,7 @@ describe("agent character operations over the socket", () => {
     }
   });
 
-  it("catalogs library reads and keeps Theme / Face Set writes and Voice Profile deletion unregistered", async () => {
+  it("catalogs library reads and keeps Theme archive/delete and Face Set writes and Voice Profile deletion unregistered", async () => {
     const schema = await client.request("schema.get", {});
     for (const name of [
       "theme.list",
@@ -397,9 +397,9 @@ describe("agent character operations over the socket", () => {
     });
 
     for (const operation of [
-      "theme.create",
       "theme.update",
       "theme.archive",
+      "theme.delete",
       "faceSet.create",
       "faceSet.update",
       "voiceProfile.delete",
@@ -1260,5 +1260,66 @@ describe("agent font and theme revision reads over the socket", () => {
     expect(diagnosis.diagnosis.diagnostics.some((line) => line.startsWith("body:"))).toBe(
       true,
     );
+  });
+});
+
+describe("agent theme lifecycle over the socket", () => {
+  it("creates a Theme, edits its draft, publishes a Revision and refuses a second publish", async () => {
+    const created = await client.request("theme.create", {
+      name: "エージェント作成テーマ",
+      sourceThemeRef: {
+        id: SOFT_EDITORIAL_THEME_ID,
+        version: SOFT_EDITORIAL_THEME_VERSION,
+      },
+    });
+    expect(created.draft.definition.id).toBe(created.themeId);
+    expect(created.draft.definition.name).toBe("エージェント作成テーマ");
+
+    const fetched = await client.request("theme.draft.get", {
+      themeId: created.themeId,
+    });
+    expect(fetched.draft?.definition.id).toBe(created.themeId);
+
+    const definition = structuredClone(fetched.draft!.definition);
+    definition.textRoles.body.fontSize = 44;
+    const saved = await client.request("theme.draft.save", {
+      themeId: created.themeId,
+      definition,
+    });
+    expect(saved.draft.definition.textRoles.body.fontSize).toBe(44);
+
+    const published = await client.request("theme.publish", {
+      themeId: created.themeId,
+    });
+    expect(published.theme.version).toBe(1);
+    expect(published.theme.definition.textRoles.body.fontSize).toBe(44);
+
+    expect(
+      (await client.request("theme.draft.get", { themeId: created.themeId })).draft,
+    ).toBeNull();
+    const read = await client.request("theme.get", {
+      themeId: created.themeId,
+      version: 1,
+    });
+    expect(read.theme.version).toBe(1);
+    const list = await client.request("theme.list", {});
+    expect(list.themes).toContainEqual({
+      id: created.themeId,
+      name: "エージェント作成テーマ",
+      isBuiltIn: false,
+      version: 1,
+    });
+
+    await expectAgentError(
+      client.request("theme.publish", { themeId: created.themeId }),
+      "INVALID_STATE",
+    );
+    await expectAgentError(
+      client.request("theme.draft.get", { themeId: "missing-theme" }),
+      "RESOURCE_NOT_FOUND",
+    );
+    expect(
+      (await client.request("theme.draft.get", { themeId: SOFT_EDITORIAL_THEME_ID })).draft,
+    ).toBeNull();
   });
 });

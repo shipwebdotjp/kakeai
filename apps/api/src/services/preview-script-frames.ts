@@ -1,7 +1,3 @@
-import {
-  OUTPUT_HEIGHT,
-  OUTPUT_WIDTH,
-} from "@kakeai/video";
 import type {
   AgentPreviewScriptFrameInput,
   AgentPreviewScriptFrameOutput,
@@ -9,9 +5,9 @@ import type {
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { validationError } from "../http/validation.ts";
 import type { PreviewRasterizer } from "../media/preview-rasterize.ts";
-import { parsePngDimensions } from "../media/png.ts";
 import { getScriptVersionPreview } from "./script-versions.ts";
 import type { DataDirectories } from "../storage/paths.ts";
+import { rasterizePreviewFrame } from "./preview-frame-raster.ts";
 
 /**
  * Rasterizes a saved ScriptVersion at `timeMs` without creating a render Job,
@@ -41,14 +37,12 @@ export async function getScriptVersionFrame(
     ]);
   }
 
-  const png = await rasterizer.renderFrame({
-    html: preview.compositionHtml,
-    width: OUTPUT_WIDTH,
-    height: OUTPUT_HEIGHT,
-    timeMs: input.timeMs,
+  const { png, width, height } = await rasterizePreviewFrame(
+    rasterizer,
+    preview.compositionHtml,
+    input.timeMs,
     origin,
-  });
-  const { width, height } = parsePngDimensions(png);
+  );
   return {
     scriptVersionId: preview.scriptVersionId,
     requestedTimeMs: input.timeMs,

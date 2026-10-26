@@ -2,8 +2,10 @@ import {
   getVisualTheme,
   latestVisualThemeDefinitions,
   visualThemeDefinitionSchema,
+  visualThemeDefinitions,
   type AgentThemeDetail,
   type AgentThemeSummary,
+  type ThemeDraft,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
@@ -47,23 +49,36 @@ function toSummary(record: SelectableThemeRecord): AgentThemeSummary {
   };
 }
 
+/**
+ * Parses a stored Theme definition and logs the reason when it is corrupt. A
+ * corrupt Revision is not selectable and a corrupt Draft is treated as absent,
+ * so the disappearance stays diagnosable rather than silent.
+ */
+function parseThemeDefinitionJson(
+  definitionJson: string,
+  logEvent: string,
+  context: Record<string, unknown>,
+): VisualThemeDefinition | null {
+  try {
+    return visualThemeDefinitionSchema.parse(JSON.parse(definitionJson));
+  } catch (error) {
+    logger.warn(logEvent, {
+      ...context,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
 function parseRevision(
   definitionJson: string,
   themeId: string,
   version: number,
 ): VisualThemeDefinition | null {
-  try {
-    return visualThemeDefinitionSchema.parse(JSON.parse(definitionJson));
-  } catch (error) {
-    // A corrupt revision is not selectable. Log it so the disappearance from
-    // theme.list / theme.get is diagnosable rather than silent.
-    logger.warn("theme_definition_invalid", {
-      themeId,
-      version,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
+  return parseThemeDefinitionJson(definitionJson, "theme_definition_invalid", {
+    themeId,
+    version,
+  });
 }
 
 async function listUserThemes(db: ThemeDb): Promise<SelectableThemeRecord[]> {
@@ -206,6 +221,44 @@ export async function getThemeRevision(
     throw resourceNotFound("theme", `${themeId}@${version}`);
   }
   return toUserThemeDetail(row, revision, definition);
+}
+
+/**
+ * Used by `theme.draft.get`. Built-in Themes and user Themes without a draft
+ * return null; unknown Themes are RESOURCE_NOT_FOUND. A corrupt draft is
+ * treated like an absent one, matching the HTTP read path.
+ */
+export async function getThemeDraft(
+  db: ThemeDb,
+  themeId: string,
+): Promise<ThemeDraft | null> {
+  if (visualThemeDefinitions.some((definition) => definition.id === themeId)) {
+    return null;
+  }
+  const row = await db.theme.findUnique({
+    where: { id: themeId },
+    include: { draft: true },
+  });
+  if (row === null) {
+    throw resourceNotFound("theme", themeId);
+  }
+  if (row.draft === null) {
+    return null;
+  }
+  const definition = parseThemeDefinitionJson(
+    row.draft.definitionJson,
+    "theme_draft_definition_invalid",
+    { themeId },
+  );
+  if (definition === null) {
+    return null;
+  }
+  return {
+    id: row.draft.id,
+    themeId: row.draft.themeId,
+    definition,
+    updatedAt: row.draft.updatedAt.toISOString(),
+  };
 }
 
 /**

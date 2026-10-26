@@ -16,8 +16,8 @@
 
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
-| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新 | 可 |
-| 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、外部サービスへの公開 | 人のみ |
+| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Theme の作成・Draft 編集・公開 | 可 |
+| 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、Theme のアーカイブ、外部サービスへの公開 | 人のみ |
 
 「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
 
@@ -65,6 +65,7 @@
 | `preview.frame` | read | no | `kakeai_preview_frame` |
 | `preview.scriptFrame` | read | no | `kakeai_preview_script_frame` |
 | `preview.assetFrame` | read | no | `kakeai_preview_asset_frame` |
+| `preview.theme` | read | no | `kakeai_preview_theme` |
 | `preview.thumbnail` | read | no | `kakeai_preview_thumbnail` |
 | `thumbnail.listTemplates` | read | no | `kakeai_thumbnail_list_templates` |
 | `thumbnail.list` | read | no | `kakeai_thumbnail_list` |
@@ -92,6 +93,10 @@
 | `theme.list` | read | no | `kakeai_theme_list` |
 | `theme.get` | read | no | `kakeai_theme_get` |
 | `theme.diagnose` | read | no | `kakeai_theme_diagnose` |
+| `theme.create` | mutation | no | `kakeai_theme_create` |
+| `theme.draft.get` | read | no | `kakeai_theme_draft_get` |
+| `theme.draft.save` | mutation | no | `kakeai_theme_draft_save` |
+| `theme.publish` | mutation | no | `kakeai_theme_publish` |
 | `font.list` | read | no | `kakeai_font_list` |
 | `faceSet.list` | read | no | `kakeai_face_set_list` |
 | `faceSet.get` | read | no | `kakeai_face_set_get` |
@@ -143,7 +148,7 @@
 - 起動時、ソケットファイルが既にある場合はアプリプロセスだけが後始末する。接続できるソケットは稼働中として残し、接続できないソケットだけを削除してから listen する。ソケットでないファイルは削除しない。終了時は自分が作ったソケットを unlink する。
 - 接続時に `{ "protocolVersion": 1, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
 - フレームは 1 行 1 JSON（NDJSON）とし、要求は `{ "requestId": "<呼び出し内で一意>", "operation": "<name>", "input": <object> }`、応答は `{ "requestId": "...", "ok": true, "data": ... }` または `{ "requestId": "...", "ok": false, "error": { "code": "...", "issues": [...] } }` とする。`issues` は `{ path, code, message }` の配列で、スタックトレースや自由文の詳細は返さない。
-- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは原則 10 秒、画像を返すプレビューとサムネイル（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame` / `preview.thumbnail` / `thumbnail.image`）と `font.list` は 30 秒、`theme.diagnose` は 60 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。`theme.diagnose` が長いのは、既定の `verify: true` が Chromium で local face の解決可否を確認するためである。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
+- 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは原則 10 秒、画像を返すプレビューとサムネイル（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame` / `preview.theme` / `preview.thumbnail` / `thumbnail.image`）と `font.list` は 30 秒、`theme.diagnose` は 60 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。`theme.diagnose` が長いのは、既定の `verify: true` が Chromium で local face の解決可否を確認するためである。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
 - サーバーは応答を返した後も同じ接続で次の要求を受け付けるが、5 分間何も受信しない接続は閉じる。
 - ソケットファイルが残っていて接続できない場合、クライアントは削除せず `AGENT_APP_UNAVAILABLE` を返す。所有者はアプリプロセスだけとする。
 
@@ -185,6 +190,7 @@
 - `character.list` / `character.get` — キャラクターライブラリの読み取り（後述）。
 - `theme.list` / `theme.get` — Visual Theme の読み取り。`theme.list` は `{}` を受け、`{ themes: [{ id, name, isBuiltIn, version }] }` を返す。利用者 Theme はアーカイブされておらず公開済み Revision を持つものだけを対象とし、各 Theme の最新公開 Revision だけを返す。組み込み Theme も含む。`theme.get` は `{ themeId, version? }` を受け、`{ theme: { id, name, isBuiltIn, version, definition } }` を返す。`version` を省略すると `theme.list` に載る最新公開 Revision を返す。`version` を指定すると、その公開 Revision を返す。このときはアーカイブ済み Theme の Revision も読める（既存の Script Version が参照している場合があり、レンダーでも解決されるため）。Theme Draft と存在しない Revision は `RESOURCE_NOT_FOUND` とする。一覧はページングしない。
 - `theme.diagnose` — Theme Revision のフォント診断を返す。`{ themeId, version?, locale?, verify? }` を受け、`{ diagnosis: { themeId, version, locale, catalogSupported, verificationSupported, verificationReason, roles, missingFonts, diagnostics } }` を返す。`version` の解決規則は `theme.get` と同じ。`locale` は既定 `ja-JP` で、`fontFaceByLocale` の解決に使う。`verify` は既定 `true` で、レンダー投入時と同じく Chromium が local face を解決できるかまで確認する。`false` なら Font Catalog との照合だけを行う。`roles` は文字 role ごとの解決済み local face と `usesFallback`、`missingFonts` は解決できなかった family、`diagnostics` は人が読める説明である。カタログが使えない platform でもエラーにせず `catalogSupported: false` と理由を返す。存在しない Theme Revision は `RESOURCE_NOT_FOUND`。
+- `theme.create` / `theme.draft.get` / `theme.draft.save` / `theme.publish` — Theme の作成と Draft 編集、公開（[ADR 0101](../adr/0101-agent-theme-authoring-and-preview.md)）。`theme.create` は HTTP と同じ `{ name, sourceThemeRef? }` を受け、`{ themeId, draft }` を返す。`sourceThemeRef` を省略すると組み込み Soft Editorial を複製元にする。`theme.draft.get` は `{ themeId }` を受け、`{ draft }` を返す。Draft が無い場合と組み込み Theme は `draft: null`、未知の Theme は `RESOURCE_NOT_FOUND`。`theme.draft.save` は `{ themeId, definition }` を受け、`{ draft }` を返す。Draft は upsert で、公開 Revision を変えず版も消費しない。`theme.publish` は `{ themeId }` を受け、公開した Revision を `{ theme }` で返す。公開時に Draft は破棄され、Draft が無い場合は `INVALID_STATE`。Theme のアーカイブと削除は公開しない。`create` と `publish` は `requestId` を持たないため、タイムアウト後は `theme.list` / `theme.draft.get` / `theme.get` で状態を確認してから再実行する。
 - `font.list` — インストール済みフォントの一覧を、検索とページング付きで返す。`{ query?, style?, minWeight?, maxWeight?, available?, limit?, offset? }` を受け、`{ fonts: FontFace[], total, nextOffset, catalog: { supported, reason, updatedAt } }` を返す。`query` は family・表示名・PostScript 名の部分一致（ASCII の大小文字を区別しない）、`style` は `normal` / `italic` / `oblique`、`minWeight` / `maxWeight` は 0〜1000 の整数である。`minWeight` が `maxWeight` より大きい場合は `VALIDATION_ERROR`。並び順は family → weight → style → PostScript 名で固定する。`limit` は既定 50・最大 200、`offset` は 0 以上で、`total` は絞り込み後の件数、`nextOffset` は次ページの offset（無ければ null）である。`fontFace` を組み立てるときに使い、フォントカタログ全体を一度に返さない。
 - `faceSet.list` / `faceSet.get` — Face Set ライブラリの読み取り。`faceSet.list` は `{}` を受け、`{ faceSets: FaceSet[] }` を返す。`faceSet.get` は `{ faceSetId }` を受け、`{ faceSet: FaceSet }` を返す。`FaceSet` は `id`・`name`・`layers`・`expressions`・`createdAt` / `updatedAt` を持つ既存 DTO である。一覧はページングしない。存在しない `faceSetId` は `RESOURCE_NOT_FOUND` とする。
 - `voiceProfile.list` / `voiceProfile.get` — Voice Profile の読み取り。`voiceProfile.list` は `{}` を受け、`{ voiceProfiles: VoiceProfile[] }` を返す。`voiceProfile.get` は `{ voiceProfileId }` を受け、`{ voiceProfile: VoiceProfile }` を返す。`VoiceProfile` は `id`・`name`・`adapterId`・`voiceId`・`locale`・`settings`・`createdAt` / `updatedAt` を持つ既存 DTO である。一覧はページングしない。存在しない `voiceProfileId` は `RESOURCE_NOT_FOUND` とする。
@@ -194,6 +200,7 @@
 - `preview.frame` — render 成果物（`role: "render"`・`format: "mp4"` の Artifact）の指定時刻（`timeMs`）の静止画を原寸 PNG（base64）で返す。時刻解決とキャッシュは既存の静止画抽出の規則を再利用する。詳細は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) を正とする。
 - `preview.scriptFrame` — 保存済み ScriptVersion を、Web UI と同じコンパイラの HTML から headless でシークし、指定時刻（`timeMs`）の原寸 PNG（base64）で返す。版・Job・Artifact は作らない。`timeMs` は解決済み尺以下。コンパイル不能は `PREVIEW_INPUT_INVALID`、描画失敗は `INTERNAL_ERROR`。render 前の構図確認用で、最終的な品質判断は人に残す。
 - `preview.assetFrame` — Asset 1件の絵を返す。画像は原本（正規化 rendition があればそれ）のバイトと MIME、動画は指定時刻（`timeMs`、既定0）の PNG 静止画、音声は `VALIDATION_ERROR`。画像は `timeMs` を指定できない。巨大な画像は `VALIDATION_ERROR`。
+- `preview.theme` — 未保存の Theme 定義を代表サンプルでレンダーし、PNG（base64）を返す。`{ definition, locale?, timeMs? }` を受け、`{ themeId, version, locale, requestedTimeMs, durationMs, width, height, mimeType, imageBase64 }` を返す。`locale` は既定 `ja-JP`、`timeMs` は既定 4500（4秒の導入に続く要点シーンで、見出し・本文・ラベル・字幕が同時に見える時刻）。`timeMs` が代表サンプルの解決済み尺を超える場合は `VALIDATION_ERROR`。DB・Theme Draft・Revision・Job・Artifact は作らない。色・余白・フォントの見え方の確認用で、フォントの解決可否は `theme.diagnose` を使う。
 
 サムネイルは、候補の作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開する（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）。
 
@@ -432,7 +439,8 @@
 | `TTS_INPUT_INVALID` | TTS 生成要求の入力が不正（空の読み上げテキスト、話者・声の未設定、Adapter 外の声） |
 | `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した（`tts.create` / `tts.createBulk` / `voiceProfile.listVoices` / `voiceProfile.listModels`） |
 | `THUMBNAIL_INPUT_INVALID` | サムネイルのテンプレートが未対応、入力が `inputSchema` に適合しない、素材が画像でない、または大きすぎる（`preview.thumbnail` / `thumbnail.image`。作成・更新の入力検証は `VALIDATION_ERROR` / `ASSET_*`） |
-| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.update` / `character.setVoices` / `theme.get` / `theme.diagnose` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` / `thumbnail.get` / `thumbnail.update` / `thumbnail.image` / `thumbnail.setPrimary` の対象など、参照先の資源が存在しない |
+| `INVALID_STATE` | `theme.publish` の対象に Theme Draft が無い、など操作の現在状態が前提を満たさない |
+| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.update` / `character.setVoices` / `theme.get` / `theme.diagnose` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` / `thumbnail.get` / `thumbnail.update` / `thumbnail.image` / `thumbnail.setPrimary` の対象など、参照先の資源が存在しない |
 | `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない（`work.get` / `work.clone` / `script.listVersions` / `script.restore` / `thumbnail.list` / `thumbnail.appearance` / `thumbnail.create` を含む） |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。

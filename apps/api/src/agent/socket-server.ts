@@ -13,6 +13,7 @@ import { getSharedRasterizer, type Rasterizer } from "../media/rasterize.ts";
 import { agentSocketFilePath, ensureAgentDirectory } from "../storage/paths.ts";
 import { CompositionService } from "../services/compositions.ts";
 import { CompositionAuthoringService } from "../services/authoring-context.ts";
+import { ThemeService } from "../services/themes.ts";
 import {
   getSharedFontCatalogService,
   type FontCatalogService,
@@ -233,6 +234,7 @@ export async function startAgentSocketServer(
     fontCatalogService,
     previewRasterizer,
     rasterizer,
+    themes: new ThemeService(prisma, fontCatalogService),
     // The agent bindings call the same services as the HTTP routes; no
     // authoring logic lives in the dispatcher.
     compositions: new CompositionService({

@@ -104,6 +104,7 @@ import { cancelJob, getJob, listWorkJobs } from "../services/jobs.ts";
 import type { PreviewRasterizer } from "../media/preview-rasterize.ts";
 import type { Rasterizer } from "../media/rasterize.ts";
 import { createRenderJob } from "../services/render-jobs.ts";
+import type { ThemeService } from "../services/themes.ts";
 import { createBulkTtsJobs, createTtsJob } from "../services/tts-jobs.ts";
 import { attachBulkTts, bulkTtsResultRefOf } from "../services/tts-attach-bulk.ts";
 import {
@@ -130,6 +131,8 @@ export interface AgentOperationContext {
   previewRasterizer: PreviewRasterizer;
   /** Headless screenshot rasterizer used by the thumbnail PNG operations. */
   rasterizer: Rasterizer;
+  /** Theme lifecycle (create, draft save, publish) shared with the HTTP API. */
+  themes: ThemeService;
   /** `agentId` from the connection handshake, if the client sent one. */
   agentId?: string;
 }

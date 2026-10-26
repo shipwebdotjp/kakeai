@@ -5,6 +5,8 @@ import {
   agentPreviewFrameOutputSchema,
   agentPreviewScriptFrameInputSchema,
   agentPreviewScriptFrameOutputSchema,
+  agentPreviewThemeInputSchema,
+  agentPreviewThemeOutputSchema,
   agentPreviewThumbnailInputSchema,
   agentPreviewThumbnailOutputSchema,
   agentThumbnailImageInputSchema,
@@ -14,6 +16,7 @@ import type { AppConfig } from "../config.ts";
 import { getAssetFrame } from "../services/preview-asset-frames.ts";
 import { getPreviewFrame } from "../services/preview-frames.ts";
 import { getScriptVersionFrame } from "../services/preview-script-frames.ts";
+import { getThemePreviewFrame } from "../services/preview-theme-frames.ts";
 import {
   generateThumbnailImage,
   renderThumbnailPreviewImage,
@@ -77,6 +80,18 @@ export const imageOperationDefinitions = {
     output: agentPreviewAssetFrameOutputSchema,
     run: async (input, context) =>
       getAssetFrame(context.prisma, context.directories, input),
+  },
+  // Unsaved Theme Draft preview: the definition is supplied by the caller, so
+  // no DB row is read or written.
+  "preview.theme": {
+    input: agentPreviewThemeInputSchema,
+    output: agentPreviewThemeOutputSchema,
+    run: async (input, context) =>
+      getThemePreviewFrame(
+        context.previewRasterizer,
+        previewOrigin(context.config),
+        input,
+      ),
   },
   "preview.thumbnail": {
     input: agentPreviewThumbnailInputSchema,

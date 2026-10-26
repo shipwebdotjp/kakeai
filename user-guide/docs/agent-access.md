@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set・Theme の管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、Theme の作成・Draft 編集・公開と PNG プレビュー、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set の管理（作成・更新・削除）、Theme のアーカイブ・削除は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
@@ -180,7 +180,9 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 Theme の `fontFace` を決めるときは `kakeai_font_list` を使います。`query` で family・表示名・PostScript 名を部分一致検索し、`style`・`minWeight`・`maxWeight`・`available` で絞れます。`limit` は既定50・最大200で、応答の `total` と `nextOffset` を使って必要なページだけを読みます。
 
-`document.setVisualTheme` で組み込み Theme の最新 Revision、またはアーカイブされていない利用者 Theme の最新 Revision を選びます。`kakeai_script_save` は、Theme の**変更**がアーカイブ済み・最新でない Revision を指す場合だけ拒否します。Theme を変えない保存は、その Theme がアーカイブ済みでも通ります。Theme の作成・更新・アーカイブ・削除は UI で人間が行います。
+Theme を新しく作る場合は `kakeai_theme_create`（`name` と任意の `sourceThemeRef`）→ `kakeai_theme_draft_get` → 定義を編集 → `kakeai_theme_draft_save` → `kakeai_preview_theme`（PNG）→ `kakeai_theme_publish` の順に進めます。`kakeai_theme_draft_save` は公開 Revision を変えず、`kakeai_theme_publish` が新しい Revision を作って Draft を破棄します。公開後に続けて編集するときは、公開 Revision の定義を元に `kakeai_theme_draft_save` で新しい Draft を作ります。`kakeai_preview_theme` は未保存の定義を代表サンプルで描画し、既定では 4500ms（見出し・本文・ラベル・字幕が見える位置）の PNG を返します。フォントの解決可否は `kakeai_theme_diagnose` で確認します。Theme のアーカイブと削除は UI で人間が行います。
+
+`document.setVisualTheme` で組み込み Theme の最新 Revision、またはアーカイブされていない利用者 Theme の最新 Revision を選びます。`kakeai_script_save` は、Theme の**変更**がアーカイブ済み・最新でない Revision を指す場合だけ拒否します。Theme を変えない保存は、その Theme がアーカイブ済みでも通ります。
 
 #### Web UI での表示
 
@@ -244,6 +246,11 @@ kakeai-agent --help
 | `kakeai_theme_list` | `kakeai-agent theme.list` |
 | `kakeai_theme_get` | `kakeai-agent theme.get --input '{"themeId":"...","version":1}'` |
 | `kakeai_theme_diagnose` | `kakeai-agent theme.diagnose --input '{"themeId":"..."}'` |
+| `kakeai_theme_create` | `kakeai-agent theme.create --input '{"name":"..."}'` |
+| `kakeai_theme_draft_get` | `kakeai-agent theme.draft.get --input '{"themeId":"..."}'` |
+| `kakeai_theme_draft_save` | `kakeai-agent theme.draft.save --input ...` |
+| `kakeai_theme_publish` | `kakeai-agent theme.publish --input '{"themeId":"..."}'` |
+| `kakeai_preview_theme` | `kakeai-agent preview.theme --input ... [--out ...]` |
 | `kakeai_font_list` | `kakeai-agent font.list --input '{"query":"Hiragino"}'` |
 | `kakeai_face_set_list` | `kakeai-agent faceSet.list` |
 | `kakeai_tts_create` | `kakeai-agent tts.create --input ...` |
@@ -429,6 +436,7 @@ npx skills@1.7.4 experimental_install
 | `AGENT_IDEMPOTENCY_IN_PROGRESS` | 同じ `requestId` の処理が実行中で、待機時間内に完了しなかった。実行中の Job を `kakeai_job_get` / `kakeai_job_wait` で確認する |
 | `AGENT_BACKPRESSURE` | 短時間に多すぎる要求を送り、接続内の未処理要求が上限を超えた。接続は閉じられない。しばらく待ってから再送する |
 | `VALIDATION_ERROR` | 入力または保存内容がスキーマに適合しない。`issues` を確認する |
+| `INVALID_STATE` | Theme Draft が無いのに `kakeai_theme_publish` を呼んだ、など操作の現在状態が前提を満たさない |
 | `EDIT_TARGET_NOT_FOUND` など `EDIT_*` | 台本操作の対象や前提が成立しない。Speaker・Voice Profile の参照欠落、声の locale 不一致、Character Voice との不一致、選択できない Theme Revision もここに含む |
 | `ASSET_UNAVAILABLE` | 参照する素材が `ready` でない、または欠損している |
 | `COMPOSITION_UNAVAILABLE` | 参照する CompositionVersion が未 publish、または bundle が欠損している |

@@ -218,3 +218,14 @@
 - [x] サービス・契約・ソケット統合テストで、検索・ページング・絞り込み、最新／過去 Revision の取得、アーカイブ済み Revision の取得、未知 Revision、role 解決、欠落フォント、入力不正を固定する
 - [x] Agent Access 仕様・roadmap・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `font.list` の検索・ページング、`theme.get` の最新／過去 Revision、`theme.diagnose` の role 解決と欠落フォントが取れる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B16 Theme の作成・Draft 編集・公開と PNG プレビュー（ADR 0101）
+
+- [x] [ADR 0101](../adr/0101-agent-theme-authoring-and-preview.md) を追加し、Theme の作成・Draft 編集・公開の公開範囲、アーカイブ・削除の人専用維持、`preview.theme` の入力と既定時刻を決定する
+- [x] 契約に `theme.create` / `theme.draft.save` / `theme.publish`（mutation）、`theme.draft.get`（read）、`preview.theme`（画像 read）を追加する。`theme.create` は HTTP の作成契約を再利用する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスに Theme の書き込みを追加し、既存の `ThemeService`（作成・Draft upsert・公開）をそのまま呼ぶ。Draft の読み取りは `theme-library` に追加し、組み込み Theme と Draft なしは `null`、未知 Theme は `RESOURCE_NOT_FOUND` とする
+- [x] `preview.theme` は未保存の `definition` を `compileThemeRepresentativePreview` でコンパイルし、既存の `PreviewRasterizer` で PNG 化する。`timeMs` 既定 4500、`timeMs` 超過は `VALIDATION_ERROR`。DB・Draft・Revision・Job・Artifact を作らない
+- [x] `preview.theme` を `agentImagePreviewOperationNames` に追加し、MCP の image ブロック・CLI の `--out`・画像系 30 秒タイムアウトを使えるようにする。MCP の説明文を 5 操作分更新し、CLI はカタログ導出のため変更しない
+- [x] サービス・契約・ソケット統合テストで、作成 → draft.get → draft.save → publish、公開後の Draft 破棄、再 publish の `INVALID_STATE`、未知 Theme、組み込み Theme の Draft null、preview.theme の既定時刻・PNG・timeMs 超過・DB 非更新を固定する
+- [x] Agent Access 仕様・roadmap・テーマカスタマイズ仕様・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `theme.create` → `theme.draft.get` → `theme.draft.save` → `preview.theme` → `theme.publish` が通り、Theme のアーカイブ・削除が `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

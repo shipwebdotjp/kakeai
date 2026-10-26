@@ -45,7 +45,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 | B13 | サムネイル操作の公開 | B1 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を公開する。MP4 後の投稿用成果物をエージェントが作れるようにする |
 | B14 | Character ライブラリ作成・更新の公開 | B1 | 既存サービスの作成・更新を呼ぶ追加操作。立ち絵付き作品で人間への作成依頼を不要にする |
 
-C1〜C3 は B15 として実装済みである。C4〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
+C1〜C5 は B15 / B16 として実装済みである。C6〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
 
 ## フェーズ詳細
 
@@ -147,22 +147,29 @@ C1〜C3 は B15 として実装済みである。C4〜C16（[次期候補](#次�
 - 読み取りタイムアウトは `font.list` 30 秒、`theme.diagnose` 60 秒。カタログが使えない platform はエラーにせず `catalogSupported: false` と理由を返す。
 - 完了条件: ソケット・MCP・CLI から `font.list` の検索・ページング、`theme.get` の最新／過去 Revision、`theme.diagnose` の role 解決と欠落フォントが取れ、`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
+### B16 Theme の作成・Draft 編集・公開と PNG プレビュー（C4 / C5）
+
+- 状態: 完了。`theme.create` / `theme.draft.get` / `theme.draft.save` / `theme.publish` と `preview.theme` を追加した。書き込みは既存の `ThemeService`、プレビューは `compileThemeRepresentativePreview` と既存の `PreviewRasterizer` を呼ぶ。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0101](../adr/0101-agent-theme-authoring-and-preview.md) を参照。
+- `theme.create` は HTTP と同じ `{ name, sourceThemeRef? }`。`theme.draft.save` は Draft の upsert で、公開 Revision を変えず版を消費しない。`theme.publish` は Draft を新しい公開 Revision にし、Draft を破棄する。アーカイブ・削除は人専用のまま。
+- `preview.theme` は未保存の定義を代表サンプルでラスタライズし、`timeMs` 既定 4500 の PNG を返す。DB・Draft・Revision・Job・Artifact を作らない。フォントの解決可否は `theme.diagnose` が担う。
+- 完了条件: ソケット・MCP・CLI から create → draft.get → draft.save → preview.theme → publish が通り、未知 Theme・Draft なし publish・timeMs 超過の安定コードが固定されている。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
 ## 次期候補（C1〜C16）
 
-B1〜B14 の後、または並行して検討する候補である。C1〜C3 は B15 として実装済みで、C4〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
+B1〜B14 の後、または並行して検討する候補である。C1〜C5 は B15 / B16 として実装済みで、C6〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
 
 - 台本の中身は `script.save` で全文書を書けるため、「公開されていない編集操作」は実質的な穴ではない。C の中心は台本の外側（ライブラリ・成果物・診断）である。
 - 可逆性の基準（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)）と人専用の境界（削除・外部公開・Adapter 設定）は C でも変えない。
 - C7 / C8 は [エージェントMP4制作ロードマップ](../agent-mp4-production/roadmap.md) の「納品物」と同じ候補である。こちらは Agent Access 側の受け皿として扱う。
-- 設計上の判断は先送りする。特に C9〜C11 の Face Set の更新方法、C4 / C5 のテーマの視覚確認方法、C8 の受け渡し方法は、着手時に決める（[着手時に決める論点](#着手時に決める論点)）。
+- 設計上の判断は先送りする。特に C9〜C11 の Face Set の更新方法と C8 の受け渡し方法は、着手時に決める（[着手時に決める論点](#着手時に決める論点)）。
 
 | ID | 候補 | 種別 | 何を開くか | 価値・注意 |
 | --- | --- | --- | --- | --- |
 | C1（実装済み） | フォントカタログの読み取り | read | `font.list`（family / PostScript 名 / weight / style / 利用可否） | B15 で実装。検索・ページング付きで返す |
 | C2（実装済み） | 過去 Revision の Theme 読み取り | read | `theme.get` の `version` 任意化 | B15 で実装。アーカイブ済み Theme の Revision も読める。`theme.list` の latest 限定は維持する |
 | C3（実装済み） | フォント診断の読み取り | read | `theme.diagnose` | B15 で実装。Theme Revision を対象に role 解決と欠落フォントを返す |
-| C4 | Theme の作成・編集・公開 | mutation | `theme.create` / `theme.draft.save` / `theme.draft.get` / `theme.publish` | Draft は可変で既存 Revision を壊さない。公開時に Draft は破棄され Revision が増える。Theme の削除・アーカイブは人専用のまま |
-| C5 | Theme Draft の PNG プレビュー | read | `preview.theme`（代表サンプルを PNG 化） | 現行のテーマプレビューは HTML のみでエージェントは描画できない。代替は「公開してから `preview.scriptFrame`」 |
+| C4（実装済み） | Theme の作成・編集・公開 | mutation | `theme.create` / `theme.draft.save` / `theme.draft.get` / `theme.publish` | B16 で実装。Draft は可変で既存 Revision を壊さない。公開時に Draft は破棄され Revision が増える。アーカイブ・削除は人専用のまま |
+| C5（実装済み） | Theme Draft の PNG プレビュー | read | `preview.theme`（代表サンプルを PNG 化） | B16 で実装。未保存の定義を渡して PNG を得る。DB・Draft・Revision を作らない |
 | C6 | Voice Adapter の一覧 | read | `voiceAdapter.list` | HTTP `/voice-adapters` をそのまま包む。`voiceProfile.listVoices` / `voiceProfile.create` の `adapterId` 推測をなくす |
 | C7 | SRT 字幕の取得 | read | `script.subtitles`（保存版から SRT） | HTTP の `GET /script-versions/:id/subtitles` を包む。Artifact を作らずオンデマンド生成。タイミングは `resolveTimeline` と同一 |
 | C8 | MP4 Artifact の取得 | read | `artifact.get` / `artifact.content` | 現状は人間が取得する境界。media session Cookie の制約があり、ローカルパス返却かバイト返却かを設計する |
@@ -177,13 +184,12 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C3 は
 
 ### 着手時に決める論点
 
-C4〜C16 の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
+C6〜C16 の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
 
 - Face Set の更新を全置換のまま公開するか、追加・改名の差分操作に限るか。参照崩れ（保存済み `expressionId`）の検出と回復をどうするか。
-- テーマの視覚確認を `preview.theme`（PNG）で用意するか、「公開してから `preview.scriptFrame`」で済ませるか。後者は反復ごとに Revision が増える。
 - C8 の MP4 取得をローカルパスの返却にするか、バイト返却にするか。media session Cookie と同一 origin の制約をどう越えるか。
 - C9 / C10 / C11 を 1 フェーズにまとめるか、作成だけ先に開くか。
-- C4〜C16 の優先順位と実施順。
+- C6〜C16 の優先順位と実施順。
 
 ## 保留する拡張
 
@@ -223,6 +229,8 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | Character の作成・名前/別名・外観の編集は Web UI だけ | 立ち絵付きの新規作品は、使える Character が無いと人間の作成待ちで止まる | B14 で解消。`character.create` / `character.update` を公開した（削除は人専用、外観画像は取り込み済みの ready 画像のみ） |
 | Theme は最新公開 Revision しか読めない | 既存作品が参照する古い Revision を確認できず、それを複製元にもできない | B15 で解消。`theme.get` の `version` 指定で、アーカイブ済み Theme の公開 Revision も読める |
 | フォントカタログとフォント診断はエージェントに無い | Theme の `fontFace` を選べず、欠落フォントもレンダー失敗でしか分からない | B15 で解消。`font.list` と `theme.diagnose` を追加した |
+| Theme の作成・編集・公開は Web UI だけ | 作品の見た目をエージェントが作れず、テーマは人間の作成待ちになる | B16 で解消。`theme.create` / `theme.draft.get` / `theme.draft.save` / `theme.publish` を公開した（アーカイブ・削除は人専用） |
+| テーマの見た目は HTML プレビューしかなく、エージェントが確認できない | 公開するまで色・余白・フォントの崩れに気づけない | B16 で解消。`preview.theme` が代表サンプルの PNG を返す |
 | プレビュー・レンダー品質の視覚確認は未提供 | エージェントは構文・保存検証までしか自律確認できない | B6 で render 成果物の `preview.frame` を追加。V2 で render 前の `preview.scriptFrame` / `preview.assetFrame` も追加 |
 
 ## 優先順位
@@ -244,7 +252,8 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 低 | R3-4 視覚確認 | B6 + V2 で完了。下書き・複数フレームは将来拡張 |
 | 低 | R3-5 外部接続 | 現行の非ゴールを維持 |
 | 完了 | C1〜C3 フォントと Theme Revision の読み取り | B15 で実装。`font.list`・`theme.get` の version・`theme.diagnose` |
-| 未定 | C4〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
+| 完了 | C4 / C5 Theme の作成・編集・公開と PNG プレビュー | B16 で実装。`theme.create` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `preview.theme` |
+| 未定 | C6〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
 
 ## 変わらない原則
 

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { agentEmptyInputSchema } from "./protocol";
+import {
+  AGENT_PREVIEW_IMAGE_BASE64_MAX,
+  agentEmptyInputSchema,
+} from "./protocol";
 import {
   idSchema,
   localeSchema,
@@ -7,7 +10,8 @@ import {
   positiveInt,
   timestampSchema,
 } from "../content/primitives";
-import { fontFaceSchema } from "../dto";
+import { fontFaceSchema, themeDraftSchema } from "../dto";
+import { createThemeRequestSchema } from "../requests";
 import {
   themeFontCategorySchema,
   visualThemeDefinitionSchema,
@@ -56,6 +60,35 @@ export const agentThemeRevisionSelectorSchema = z.strictObject({
  */
 export const agentThemeGetInputSchema = agentThemeRevisionSelectorSchema;
 export const agentThemeGetOutputSchema = z.strictObject({
+  theme: agentThemeDetailSchema,
+});
+
+/** Reuses the HTTP creation contract: `{ name, sourceThemeRef? }`. */
+export const agentThemeCreateInputSchema = createThemeRequestSchema;
+export const agentThemeCreateOutputSchema = z.strictObject({
+  themeId: idSchema,
+  draft: themeDraftSchema,
+});
+
+export const agentThemeDraftGetInputSchema = z.strictObject({
+  themeId: idSchema,
+});
+export const agentThemeDraftGetOutputSchema = z.strictObject({
+  draft: themeDraftSchema.nullable(),
+});
+
+export const agentThemeDraftSaveInputSchema = z.strictObject({
+  themeId: idSchema,
+  definition: visualThemeDefinitionSchema,
+});
+export const agentThemeDraftSaveOutputSchema = z.strictObject({
+  draft: themeDraftSchema,
+});
+
+export const agentThemePublishInputSchema = z.strictObject({
+  themeId: idSchema,
+});
+export const agentThemePublishOutputSchema = z.strictObject({
   theme: agentThemeDetailSchema,
 });
 
@@ -160,3 +193,29 @@ export const agentThemeDiagnoseOutputSchema = z.strictObject({
     diagnostics: z.array(z.string()),
   }),
 });
+
+/**
+ * The representative sample starts with a 4-second intro, then the point scene
+ * that shows the heading, body, label and caption roles. Half a second into it
+ * shows the most text styles in one frame.
+ */
+export const AGENT_THEME_PREVIEW_DEFAULT_TIME_MS = 4500;
+
+export const agentPreviewThemeInputSchema = z.strictObject({
+  definition: visualThemeDefinitionSchema,
+  locale: localeSchema.default(DEFAULT_AGENT_LOCALE),
+  timeMs: nonNegativeInt.default(AGENT_THEME_PREVIEW_DEFAULT_TIME_MS),
+});
+export const agentPreviewThemeOutputSchema = z.strictObject({
+  themeId: idSchema,
+  version: positiveInt,
+  locale: localeSchema,
+  requestedTimeMs: nonNegativeInt,
+  durationMs: nonNegativeInt,
+  width: positiveInt,
+  height: positiveInt,
+  mimeType: z.literal("image/png"),
+  imageBase64: z.string().min(1).max(AGENT_PREVIEW_IMAGE_BASE64_MAX),
+});
+export type AgentPreviewThemeInput = z.infer<typeof agentPreviewThemeInputSchema>;
+export type AgentPreviewThemeOutput = z.infer<typeof agentPreviewThemeOutputSchema>;

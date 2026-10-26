@@ -138,6 +138,16 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "Visual Theme 1件の定義を返す。`version` を省略すると、`theme.list` に載る最新公開 Revision を返す。`version` を指定すると、その公開 Revision を返し、アーカイブ済み Theme の Revision も読める（既存作品が参照している場合がある）。Theme Draft や存在しない Revision は RESOURCE_NOT_FOUND。",
   "theme.diagnose":
     "Theme Revision のフォント診断を返す。`themeId` と任意の `version`（省略時は最新公開 Revision で、アーカイブ済み Theme は RESOURCE_NOT_FOUND。`version` 指定時のみアーカイブ済み Theme の Revision も読める）・`locale`（既定 ja-JP）・`verify`（既定 true）を受ける。`roles` に文字 role ごとの解決済み local face とフォールバック有無、`missingFonts` に解決できなかった family、`diagnostics` に人が読める説明を返す。`verify: true` はレンダーと同じく Chromium で local face の解決可否を確認するため、初回は時間がかかる。`verify: false` はカタログ照合だけの速い診断になる。",
+  "theme.create":
+    "Visual Theme を作成し、初期 Draft を返す。`name` と任意の `sourceThemeRef`（複製元。省略時は組み込み Soft Editorial）を指定する。新しい Theme は公開 Revision を持たないため、`draft` を編集して `theme.draft.save` → `preview.theme` → `theme.publish` の順に進める。Theme の削除・アーカイブは公開しない。タイムアウト後は theme.list で名前を確認してから再実行する。",
+  "theme.draft.get":
+    "Theme の編集 Draft を返す。Draft が無ければ `draft: null`。組み込み Theme も `draft: null`。未知の Theme は RESOURCE_NOT_FOUND。",
+  "theme.draft.save":
+    "Theme Draft を保存する（無ければ作る）。`definition` は `theme.draft.get` で読んだ定義を元にし、変更したい項目だけを変えた完全な定義を送る。公開 Revision は変えず、版も消費しない。組み込み・未知・アーカイブ済み Theme は RESOURCE_NOT_FOUND。",
+  "theme.publish":
+    "Theme Draft を新しい公開 Revision として公開し、その Revision を返す。公開後 Draft は破棄される。Draft が無い場合は INVALID_STATE。タイムアウト後は theme.get で最新 Revision を確認し、二重に公開しない。",
+  "preview.theme":
+    "未保存の Theme 定義を代表サンプルでレンダーし、PNG を返す。`definition`・任意の `locale`（既定 ja-JP）・`timeMs`（既定 4500ms）を指定する。DB・Theme Draft・Revision・Job・Artifact は作らない。既定時刻は見出し・本文・ラベル・字幕が同時に見える要点シーン。色・余白・フォントの見え方を確認し、フォントの解決可否は theme.diagnose で確認する。",
   "font.list":
     "インストール済みフォントの一覧を、検索とページング付きで返す。`query` は family・表示名・PostScript 名の部分一致、`style`・`minWeight`・`maxWeight`・`available` で絞れる。`limit` は既定50・最大200、`offset` で次ページを取得する。応答の `total` は絞り込み後の件数、`nextOffset` は次ページの offset（無ければ null）、`catalog` はカタログの対応状況と更新時刻。Theme の `fontFace` を組み立てるときに使う。",
   "faceSet.list":

@@ -20,6 +20,7 @@ import { ThemeService } from "./themes.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
 import {
   getSelectableTheme,
+  getThemeDraft,
   getThemeRevision,
   isSelectableUserTheme,
   listSelectableThemes,
@@ -401,6 +402,39 @@ describe("selectable Theme reads", () => {
     await expect(getSelectableTheme(prisma, theme.id)).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
     });
+  });
+
+  it("returns the mutable draft, or null when there is none", async () => {
+    const theme = await prisma.theme.create({ data: { name: "ドラフト" } });
+    expect(await getThemeDraft(prisma, theme.id)).toBeNull();
+
+    await prisma.themeDraft.create({
+      data: {
+        themeId: theme.id,
+        definitionJson: JSON.stringify({
+          ...toVisualThemeDefinitionV2(baseDefinition),
+          id: theme.id,
+          name: "ドラフト",
+          version: 1,
+        }),
+      },
+    });
+    const draft = await getThemeDraft(prisma, theme.id);
+    expect(draft?.themeId).toBe(theme.id);
+    expect(draft?.definition.id).toBe(theme.id);
+
+    expect(await getThemeDraft(prisma, SOFT_EDITORIAL_THEME_ID)).toBeNull();
+    await expect(getThemeDraft(prisma, "missing")).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
+    });
+  });
+
+  it("treats a corrupt draft as absent", async () => {
+    const theme = await prisma.theme.create({ data: { name: "壊れたドラフト" } });
+    await prisma.themeDraft.create({
+      data: { themeId: theme.id, definitionJson: "{not json" },
+    });
+    expect(await getThemeDraft(prisma, theme.id)).toBeNull();
   });
 
   it("returns RESOURCE_NOT_FOUND for a corrupt revision", async () => {
