@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useBeforeUnload, useBlocker, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { ScriptVersion } from "@kakeai/contracts";
+import { SUPPORTED_LOCALES, type SupportedLocale, type ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useCreateLanguageEdition, useUpdateWork, useWork } from "../api/hooks";
 import { CueMap } from "../components/CueMap";
 import { PreviewSection } from "../components/PreviewSection";
@@ -298,9 +298,9 @@ function EditionSelector({
   onCreated: (id: string) => void;
   createEdition: ReturnType<typeof useCreateLanguageEdition>;
 }) {
-  const [localeDraft, setLocaleDraft] = useState("en-US");
+  const [localeDraft, setLocaleDraft] = useState<SupportedLocale>("en-US");
   const existingLocales = new Set(editions.map((edition) => edition.locale));
-  const creatableLocales = ["ja-JP", "en-US"].filter((locale) => !existingLocales.has(locale));
+  const creatableLocales = SUPPORTED_LOCALES.filter((locale) => !existingLocales.has(locale));
   useEffect(() => {
     if (!creatableLocales.includes(localeDraft) && creatableLocales[0] !== undefined) {
       setLocaleDraft(creatableLocales[0]);
@@ -345,7 +345,7 @@ function EditionSelector({
         >
           <select
             value={localeDraft}
-            onChange={(event) => setLocaleDraft(event.target.value)}
+            onChange={(event) => setLocaleDraft(event.target.value as SupportedLocale)}
             className={textFieldClass}
             aria-label="追加する言語"
           >

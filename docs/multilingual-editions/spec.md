@@ -13,7 +13,7 @@
 
 `POST /works/:workId/language-editions` を追加する。
 
-- リクエストは `locale` と、シード元を指す `sourceEditionId` を持つ。`locale` は `localeSchema`（`ja-JP` / `en-US`）で検証し、当該 Work に既に存在する locale は 409 `LANGUAGE_EDITION_EXISTS` で拒否する。シード元が他 Work の Edition の場合は 404 `RESOURCE_NOT_FOUND` とする。
+- リクエストは `locale` と、シード元を指す `sourceEditionId` を持つ。`locale` は `localeSchema`（`ja-JP` / `en-US` / `zh-Hans` / `zh-Hant`）で検証し、当該 Work に既に存在する locale は 409 `LANGUAGE_EDITION_EXISTS` で拒否する。シード元が他 Work の Edition の場合は 404 `RESOURCE_NOT_FOUND` とする。
 - 同一トランザクションで Edition を作り、初期 `ScriptVersion` v1 を作成して `currentScriptVersionId` を設定する（[../mvp/spec.md](../mvp/spec.md) の作成規則に従う）。
 - 初期版の contentJson は、シード元 current 版を深いコピーして初期化する。ただし次を置き換える：
   - `document.locale` を作成先の locale に変える。
@@ -39,7 +39,7 @@
 
 ## レンダーの locale 対応
 
-- Composition コンパイラは、数値・通貨のフォーマットを document の locale に従わせる。現在 `ja-JP` 固定の `Intl.NumberFormat` と JPY 固定を外し、locale から導出する（`ja-JP` → `ja-JP`/JPY、`en-US` → `en-US`/USD）。
+- Composition コンパイラは、数値・通貨のフォーマットを document の locale に従わせる。現在 `ja-JP` 固定の `Intl.NumberFormat` と JPY 固定を外し、locale から導出する（`ja-JP` → JPY、`en-US` → USD、`zh-Hans` → CNY、`zh-Hant` → TWD）。
 - フォントは現在同じテーマフォントを扱う。`en-US` で日本語フォントに含まれる英字で描画できる前提とし、言語別フォント診断・テーマ別フォントは対象外とする（課題が残るようなら将来フォルダを切る）。
 
 ## 対象外
@@ -48,7 +48,7 @@
 - Edition 間の同期表示・未同期検知・再翻訳リスト
 - locale 別のテキスト上限・読速チェック（[ADR-0090](../adr/0090-text-overflow-estimate-by-character-width.md) の文字幅推定で対応済み。locale による基準の切り替えは行わない）
 - 素材の言語自動差し替え（`Asset.language`）。素材は当面素材タグで扱う。
-- `en-US` 以外の locale 追加（`localeSchema` に足すだけで追加可能な実装にしておく）
+- `en-US` 以外の locale 追加（`localeSchema` に足すだけで追加可能な実装にしておく。2026-10 に `zh-Hans` / `zh-Hant` を追加済み。通貨は `currencyForLocale` が locale から導出する）
 
 ## 完了条件
 

@@ -44,7 +44,7 @@ JSONエラーは次の形式にする。codeはUIの分岐・テストに使う�
         {
           "path": ["content", "locale"],
           "code": "invalid_value",
-          "message": "利用できる言語は ja-JP または en-US です。"
+          "message": "利用できる言語は ja-JP・en-US・zh-Hans・zh-Hant です。"
         }
       ]
     }
@@ -60,7 +60,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | --- | --- | --- |
 | WorkSummary | id, title, originalLocale, createdAt, parentWorkId, updatedAt, languageEditions | 作品一覧用。各Editionには現在の台本版と最新Render Jobの要約を含める。`createdAt` と `parentWorkId` は複製元との関係と作成時刻を示す。 |
 | Work | WorkSummaryと同じ | 一覧と管理に使う作品名 `title` を持つ。動画内に表示するタイトルはContentDocument側のSceneスロットであり、こちらとは別である。 |
-| LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。`locale` は `ja-JP` または `en-US`。 |
+| LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。`locale` は有効な `localeSchema` の値（`ja-JP`・`en-US`・`zh-Hans`・`zh-Hant`）。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt, author, authorAgentId, agentRequestId, agentRequestHash, sourceScriptVersionId | contentはContentDocumentそのもの。保存後に更新しない。`author` は `human` / `agent` で作成時に確定し、以後変更しない。`authorAgentId`・`agentRequestId`・`agentRequestHash`・`sourceScriptVersionId` は該当しない場合null。履歴一覧では `content` を除いた要約を返す。詳細は [Agent Access 仕様](../agent-access/spec.md) の帰属を正とする。 |
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, hasAudio, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。hasAudioは音声ストリームの有無（imageは常にfalse）。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
 | Composition | id, runtimeCompositionId, name, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`, `styleProvenance`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
@@ -181,7 +181,7 @@ GET /health は起動確認とUIの初期診断に使う。レンダーワーカ
       "status": "ready"
     },
     "capabilities": {
-      "locales": ["ja-JP", "en-US"],
+      "locales": ["ja-JP", "en-US", "zh-Hans", "zh-Hant"],
       "jobKinds": ["asset_ingest", "render"],
       "assetKinds": ["image", "video", "audio"]
     },
@@ -248,7 +248,7 @@ Content-Type: application/json
 }
 ~~~
 
-originalLocaleは必須とし、受け付ける値は `ja-JP` または `en-US` である。成功時は201 Createdと、作成した完全なWork DTOを返す。
+originalLocaleは必須とし、受け付ける値は `ja-JP`・`en-US`・`zh-Hans`・`zh-Hant` である。成功時は201 Createdと、作成した完全なWork DTOを返す。
 
 ~~~json
 {

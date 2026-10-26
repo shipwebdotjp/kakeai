@@ -1,7 +1,15 @@
-import type { TableNumberFormat } from "@kakeai/contracts";
+import { SUPPORTED_LOCALES, type SupportedLocale, type TableNumberFormat } from "@kakeai/contracts";
+
+// 新しい locale を SUPPORTED_LOCALES に足したら通貨もここに足す。
+const CURRENCY_BY_LOCALE: Record<SupportedLocale, string> = {
+  "ja-JP": "JPY",
+  "en-US": "USD",
+  "zh-Hans": "CNY",
+  "zh-Hant": "TWD",
+};
 
 export function currencyForLocale(locale: string): string {
-  return locale.startsWith("ja") ? "JPY" : "USD";
+  return CURRENCY_BY_LOCALE[locale as SupportedLocale] ?? "USD";
 }
 
 export function formatNumber(

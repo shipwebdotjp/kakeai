@@ -60,7 +60,7 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 | 用語 | 意味 |
 | --- | --- |
 | `Work` | 作品の親単位。原本言語、作品名、任意の親作品を持つ。 |
-| `LanguageEdition` | ある言語での制作版。作成可能な `locale` は `ja-JP` と `en-US`。 |
+| `LanguageEdition` | ある言語での制作版。作成可能な `locale` は `ja-JP`・`en-US`・`zh-Hans`・`zh-Hant`。 |
 | `ScriptVersion` | シーンとセリフを持つ台本の不変版。編集保存時に新しい版を作る。 |
 | `NarrationSegment` | 読み上げる最小単位。字幕用文章、読み上げ用文章、話者、選択音声（または音声なし）を持つ。 |
 | `Speaker` | 音声上の話者。画面に出ないナレーターも表せる。 |
@@ -110,7 +110,7 @@ Prismaモデル名は以下のとおりとする。IDはアプリ生成の文字
 | モデル | 主な列 | 制約・用途 |
 | --- | --- | --- |
 | `Work` | `id`, `title`, `originalLocale`, `parentWorkId?`, `createdAt`, `updatedAt` | 親作品。`parentWorkId` は複製元の Work を示す。子Workを持つWorkは削除できない。 |
-| `LanguageEdition` | `id`, `workId`, `locale`, `currentScriptVersionId?`, `primaryThumbnailId?`, `thumbnailAppearanceJson?`, `createdAt`, `updatedAt` | 作品の言語別制作版。`@@unique([workId, locale])`。循環参照を避けるため作成途中だけNULLを許し、同一トランザクション内で初期ScriptVersionを作成後に必ず設定する。`currentScriptVersionId` が編集画面の現在版を明示し、最大版番号から推測しない。参照先は同じEditionでなければならない。`thumbnailAppearanceJson` は言語版共通のサムネイル外観（疎な上書きJSON）で、候補単位の上書きはThumbnail文書v2に持つ。作成可能なlocaleは `ja-JP` と `en-US`。 |
+| `LanguageEdition` | `id`, `workId`, `locale`, `currentScriptVersionId?`, `primaryThumbnailId?`, `thumbnailAppearanceJson?`, `createdAt`, `updatedAt` | 作品の言語別制作版。`@@unique([workId, locale])`。循環参照を避けるため作成途中だけNULLを許し、同一トランザクション内で初期ScriptVersionを作成後に必ず設定する。`currentScriptVersionId` が編集画面の現在版を明示し、最大版番号から推測しない。参照先は同じEditionでなければならない。`thumbnailAppearanceJson` は言語版共通のサムネイル外観（疎な上書きJSON）で、候補単位の上書きはThumbnail文書v2に持つ。作成可能なlocaleは `ja-JP`・`en-US`・`zh-Hans`・`zh-Hant`。 |
 | `ThumbnailAppearancePreset` | `id`, `name`, `appearanceJson`, `createdAt`, `updatedAt` | アプリ全体で再利用する名前付きサムネイル外観プリセット。`appearanceJson` は疎な上書きJSONで、適用は言語版の `thumbnailAppearanceJson` へのスナップショットコピー。プリセットへの参照は保存しない。`@@index([updatedAt])`。 |
 | `ScriptVersion` | `id`, `languageEditionId`, `versionNumber`, `contentSchemaVersion`, `contentJson`, `sourceScriptVersionId?`, `author`, `authorAgentId?`, `agentRequestId?`, `agentRequestHash?`, `createdAt` | 不変の編集データ。`@@unique([languageEditionId, versionNumber])` と `@@unique([languageEditionId, agentRequestId])`。版番号は表示・並び替えのため単調増加させる。`sourceScriptVersionId` は手動復元、翻訳、Work 複製、下書きなどの派生元を示す。`author` は作成者が利用者（`human`）かエージェント（`agent`）かを示し、`authorAgentId` はエージェントを識別する任意値である。`agentRequestId` はエージェント操作の再送識別子でEdition内に一意、`agentRequestHash` は要求内容のハッシュである（[Agent Access](../agent-access/spec.md)）。 |
 | `Asset` | `id`, `kind`, `origin`, `status`, `storageKey`, `originalFilename`, `mediaType`, `byteSize`, `sha256`, `durationMs?`, `widthPx?`, `heightPx?`, `tagsJson?`, `favoritedAt?`, `archivedAt?`, `provenanceJson?`, `generatedByJobId?`, `createdAt` | 再利用可能な原本ファイル。`status` は `processing` / `ready` / `failed`。`kind` は `image` / `video` / `audio`、`origin` は `uploaded` / `generated`。`storageKey` と `sha256` はそれぞれ一意にし、同一バイト列の重複保存を避ける。`tagsJson` は利用者編集の分類タグ、`favoritedAt` はお気に入り、`archivedAt` は一覧・ピッカーから既定で隠すアーカイブで、取り込み後も更新されうるユーザー編集メタデータ。 |
