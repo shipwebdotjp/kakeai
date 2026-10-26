@@ -190,3 +190,16 @@
 - [ ] `AGENTS.md` と [spec.md](./spec.md) を最終状態に合わせる
 
 完了条件: 受け入れ条件を満たし、再発防止のチェックがCIで動いている。
+
+## 進捗メモ（2026-10-26）
+
+- Phase 1（T1・T2）は完了。
+- T3 は `form.ts` の本体分割まで完了。`form.test.ts` の分割は T16 で行う。
+- T4 は `compiler.ts` の本体分割まで完了。`compiler.test.ts` の分割は T16 で行う。
+- T5 は `TimingFields` / `InsertSceneFields` / `SceneBlock` の抽出まで完了。`SceneEditor` 本体のフック抽出は T12 で行う。
+- T6（CueList）は未着手。
+- T7（LinesEditor）は完了。
+- T8 は `packages/contracts/src/agent.ts` の分割まで完了。`apps/api/src/agent/operations.ts` は未着手。
+- T9（script-versions）・T10（assets）は完了。
+- T11（compositions）は分割完了。`service.ts` が620行のため、追加分割をフォローする。
+- T17（ファイルサイズチェック）は完了。`npm run check:file-size` をCIに追加した。

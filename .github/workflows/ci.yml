@@ -40,3 +40,6 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Check file sizes
+        run: npm run check:file-size

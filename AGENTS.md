@@ -77,6 +77,7 @@ npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
 - `npm test` は vitest を全体並列で実行する。既定の5秒では `packages/contracts/src/agent-operation-contract.test.ts` の digest テストが稀にタイムアウトするため、`vitest.config.ts` の `testTimeout` を20秒にしている。個別実行も同じ設定で動く。
 - `packages/video/src/compiler.ts` の `STYLES` 配列へ行を挿入するとき、直前要素の末尾カンマを落としやすい。`npm run typecheck` では構文エラーとして出るが、`tail` で見ると見落とすため、挿入は配列要素ごと置換し、`rg -n` で前後の行のカンマを確認する。
 - FFmpeg 6.x（Ubuntu 24.04）では裸の `-autorotate` が次の `-i` を値として消費し、入力が出力扱いになって失敗する。FFmpeg 9 では `-autorotate 1` も拒否する。`apps/api/src/media/normalize.ts` では `-autorotate` を渡さず、既定の自動回転に任せる。
+- 新規のプロダクションコードは1ファイル1責務を目安にし、600行以下に保つ。`npm run check:file-size` が600行超を警告、800行超を失敗にする。既存の800行超ファイルは `scripts/check-file-size.mjs` の `BASELINE` に記録されており、分割したらエントリを削除する。baseline を超えて成長させない。
 
 ## ユーザーガイド
 
