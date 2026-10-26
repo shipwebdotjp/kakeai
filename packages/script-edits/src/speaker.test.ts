@@ -28,6 +28,7 @@ function documentWithCharacter(voices: ContentDocument["characters"][number]["vo
     {
       id: "char-1",
       name: "リン",
+      names: [],
       voices,
       appearances: [],
     },

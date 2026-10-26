@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { SUPPORTED_LOCALES } from "@kakeai/contracts";
-import type { CharacterLibraryEntry, CharacterVoice, VoiceProfile } from "@kakeai/contracts";
+import type {
+  CharacterLibraryEntry,
+  CharacterName,
+  CharacterVoice,
+  VoiceProfile,
+} from "@kakeai/contracts";
 import {
   useCharacters,
   useCreateCharacter,
@@ -24,6 +29,7 @@ type AppearanceDraft = AppearanceFormValue;
 
 interface CharacterDraft {
   name: string;
+  names: CharacterName[];
   voices: CharacterVoice[];
   appearances: AppearanceDraft[];
 }
@@ -31,6 +37,7 @@ interface CharacterDraft {
 function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
   return {
     name: entry.name,
+    names: entry.names.map((name) => ({ ...name })),
     voices: entry.voices.map((voice) => ({ ...voice })),
     appearances: entry.appearances.map((appearance) => ({
       id: appearance.id,
@@ -43,8 +50,19 @@ function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
   };
 }
 
+function hasDuplicateLocale(entries: readonly { locale: string }[]): boolean {
+  const seen = new Set<string>();
+  return entries.some((entry) => {
+    if (seen.has(entry.locale)) {
+      return true;
+    }
+    seen.add(entry.locale);
+    return false;
+  });
+}
+
 function emptyDraft(): CharacterDraft {
-  return { name: "", voices: [], appearances: [] };
+  return { name: "", names: [], voices: [], appearances: [] };
 }
 
 interface CharacterFormProps {
@@ -108,6 +126,39 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
     }));
   };
 
+  const addName = () => {
+    setDraft((current) => {
+      if (current.names.length >= SUPPORTED_LOCALES.length) {
+        return current;
+      }
+      const used = new Set(current.names.map((entry) => entry.locale));
+      const next = SUPPORTED_LOCALES.find((locale) => !used.has(locale));
+      if (next === undefined) {
+        return current;
+      }
+      return {
+        ...current,
+        names: [...current.names, { locale: next, name: "" }],
+      };
+    });
+  };
+
+  const updateName = (index: number, patch: Partial<CharacterName>) => {
+    setDraft((current) => ({
+      ...current,
+      names: current.names.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, ...patch } : entry,
+      ),
+    }));
+  };
+
+  const removeName = (index: number) => {
+    setDraft((current) => ({
+      ...current,
+      names: current.names.filter((_, entryIndex) => entryIndex !== index),
+    }));
+  };
+
   const updateAppearance = (id: string, patch: Partial<AppearanceDraft>) => {
     setDraft((current) => ({
       ...current,
@@ -130,6 +181,11 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
       setIssue("名前を入力してください。");
       return;
     }
+    const blankName = draft.names.findIndex((entry) => entry.name.trim().length === 0);
+    if (blankName !== -1) {
+      setIssue(`言語別の名前 ${blankName + 1} を入力してください。`);
+      return;
+    }
     const missing = draft.appearances.findIndex(
       (appearance) => appearance.assetId === null || appearance.assetId.length === 0,
     );
@@ -144,19 +200,19 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
       setIssue(`声 ${incompleteVoice + 1} の声プロファイルを選んでください。`);
       return;
     }
-    const seenLocales = new Set<string>();
-    const duplicateVoice = draft.voices.some((voice) => {
-      if (seenLocales.has(voice.locale)) {
-        return true;
-      }
-      seenLocales.add(voice.locale);
-      return false;
-    });
-    if (duplicateVoice) {
+    if (hasDuplicateLocale(draft.voices)) {
       setIssue("同じ言語の声が重複しています。");
       return;
     }
+    if (hasDuplicateLocale(draft.names)) {
+      setIssue("同じ言語の名前が重複しています。");
+      return;
+    }
     setIssue(null);
+    const names = draft.names.map((entry) => ({
+      locale: entry.locale,
+      name: entry.name.trim(),
+    }));
     const voices = draft.voices.map((voice) => ({
       locale: voice.locale,
       voiceProfileId: voice.voiceProfileId,
@@ -171,6 +227,7 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
     }));
     const payload = {
       name,
+      names,
       voices,
       appearances,
     };
@@ -252,6 +309,44 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
         ))}
         <button type="button" className={buttonPrimaryClass} onClick={addVoice}>
           声を追加
+        </button>
+      </div>
+
+      <div className="mt-2">
+        <p className={metaTextClass}>言語別の名前</p>
+        <p className={metaTextClass}>台本への取り込みと言語版の作成では、対象の言語に一致する名前を使います。一致がなければ上の名前を使います。</p>
+        {draft.names.map((entry, index) => (
+          <div key={`name-${index}`} className="mt-1 flex flex-wrap items-center gap-1.5">
+            <select
+              className={textFieldClass}
+              value={entry.locale}
+              onChange={(event) => {
+                updateName(index, { locale: event.target.value as CharacterName["locale"] });
+              }}
+            >
+              {SUPPORTED_LOCALES.map((locale) => (
+                <option key={locale} value={locale}>
+                  {locale}
+                </option>
+              ))}
+            </select>
+            <input
+              value={entry.name}
+              placeholder="言語別の名前（例: Hinata）"
+              className={`min-w-[160px] flex-1 ${textFieldClass}`}
+              onChange={(event) => updateName(index, { name: event.target.value })}
+            />
+            <button
+              type="button"
+              className={buttonDangerClass}
+              onClick={() => removeName(index)}
+            >
+              削除
+            </button>
+          </div>
+        ))}
+        <button type="button" className={buttonPrimaryClass} onClick={addName}>
+          名前を追加
         </button>
       </div>
 

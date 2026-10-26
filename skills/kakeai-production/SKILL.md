@@ -98,7 +98,11 @@ a second copy of that contract.
 - To translate, `script.get` the source edition's current version, translate
   the text fields, then `script.save` the translated `ContentDocument` to the
   target `languageEditionId`. The document `locale` must equal the target
-  edition's locale or the save is `VALIDATION_ERROR`. Then continue the
+  edition's locale or the save is `VALIDATION_ERROR`. If the new edition keeps
+  the source-language character names, rename the local `Character.name` and
+  the matching `Speaker.name` to the target language (the `names` alias only
+  resolves at `character.addFromLibrary` and `edition.create` time, not for
+  already-copied scripts). Then continue the
   normal flow on the new edition: pick voices for its locale, run TTS,
   validate, render. The translation source is a different Edition, so it
   cannot be recorded with `sourceScriptVersionId` (that field only accepts a

@@ -21,6 +21,37 @@ type VoiceInput = {
   voiceProfileId: string;
 };
 
+type NameInput = {
+  locale: string;
+  name: string;
+};
+
+function assertNamesUsable(names: readonly NameInput[]): void {
+  const seen = new Set<string>();
+  const issues: ValidationIssue[] = [];
+  names.forEach((entry, index) => {
+    if (seen.has(entry.locale)) {
+      issues.push({
+        path: ["names", index, "locale"],
+        code: "invalid_value",
+        message: "言語が重複しています。",
+      });
+      return;
+    }
+    seen.add(entry.locale);
+    if (entry.name.trim().length === 0) {
+      issues.push({
+        path: ["names", index, "name"],
+        code: "invalid_value",
+        message: "名前を入力してください。",
+      });
+    }
+  });
+  if (issues.length > 0) {
+    throw validationError(issues);
+  }
+}
+
 async function assertAppearancesUsable(
   prisma: PrismaClient,
   appearances: readonly AppearanceInput[],
@@ -209,9 +240,18 @@ function toVoiceCreate(voices: readonly VoiceInput[]) {
   }));
 }
 
+function toNameCreate(names: readonly NameInput[]) {
+  return names.map((entry, index) => ({
+    locale: entry.locale,
+    name: entry.name.trim(),
+    position: index,
+  }));
+}
+
 const characterInclude = {
   appearances: { orderBy: { position: "asc" } },
   voices: { orderBy: { position: "asc" } },
+  names: { orderBy: { position: "asc" } },
 } as const;
 
 export async function listCharacters(prisma: PrismaClient): Promise<CharacterLibraryEntry[]> {
@@ -240,6 +280,7 @@ export async function createCharacter(
   prisma: PrismaClient,
   input: CreateCharacterRequest,
 ): Promise<CharacterLibraryEntry> {
+  assertNamesUsable(input.names);
   await assertAppearancesUsable(prisma, input.appearances);
   await assertAppearanceIdsUsable(prisma, null, input.appearances);
   await assertFaceSetsExist(prisma, input.appearances);
@@ -248,6 +289,7 @@ export async function createCharacter(
     const row = await prisma.character.create({
       data: {
         name: input.name,
+        names: { create: toNameCreate(input.names) },
         voices: { create: toVoiceCreate(input.voices) },
         appearances: { create: toAppearanceCreate(input.appearances) },
       },
@@ -273,6 +315,7 @@ export async function updateCharacter(
   characterId: string,
   input: UpdateCharacterRequest,
 ): Promise<CharacterLibraryEntry> {
+  assertNamesUsable(input.names);
   await assertAppearancesUsable(prisma, input.appearances);
   await assertAppearanceIdsUsable(prisma, characterId, input.appearances);
   await assertFaceSetsExist(prisma, input.appearances);
@@ -288,10 +331,12 @@ export async function updateCharacter(
     const row = await prisma.$transaction(async (transaction) => {
       await transaction.characterAppearance.deleteMany({ where: { characterId } });
       await transaction.characterVoice.deleteMany({ where: { characterId } });
+      await transaction.characterName.deleteMany({ where: { characterId } });
       return transaction.character.update({
         where: { id: characterId },
         data: {
           name: input.name,
+          names: { create: toNameCreate(input.names) },
           voices: { create: toVoiceCreate(input.voices) },
           appearances: { create: toAppearanceCreate(input.appearances) },
         },

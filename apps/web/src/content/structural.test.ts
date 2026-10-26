@@ -285,6 +285,7 @@ describe("structural operation adapter", () => {
       {
         id: "char-1",
         name: "キャラクター",
+        names: [],
         voices: [],
         appearances: [
           {
@@ -666,6 +667,7 @@ describe("structural operation adapter", () => {
       {
         id: "char-1",
         name: "一人目",
+        names: [],
         voices: [],
         appearances: [
           {
@@ -680,6 +682,7 @@ describe("structural operation adapter", () => {
       {
         id: "char-2",
         name: "二人目",
+        names: [],
         voices: [],
         appearances: [
           {
@@ -788,6 +791,7 @@ describe("structural operation adapter", () => {
       {
         id: "char-1",
         name: "一人目",
+        names: [],
         voices: [],
         appearances: [
           {

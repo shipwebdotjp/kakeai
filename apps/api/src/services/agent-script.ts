@@ -210,6 +210,10 @@ function toScriptLibraryCharacter(entry: CharacterLibraryEntry): ScriptLibraryCh
   return {
     id: entry.id,
     name: entry.name,
+    names: entry.names.map((name) => ({
+      locale: name.locale,
+      name: name.name,
+    })),
     voices: entry.voices.map((voice) => ({
       locale: voice.locale,
       voiceProfileId: voice.voiceProfileId,

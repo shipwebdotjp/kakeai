@@ -15,27 +15,43 @@ export const characterVoiceSchema = z.strictObject({
   voiceProfileId: idSchema,
 });
 
+function rejectDuplicateLocales(
+  entries: readonly { locale: string }[],
+  ctx: z.RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  for (const [index, entry] of entries.entries()) {
+    if (seen.has(entry.locale)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `locale が重複しています: ${entry.locale}`,
+        path: [index, "locale"],
+      });
+    } else {
+      seen.add(entry.locale);
+    }
+  }
+}
+
 export const characterVoicesSchema = z
   .array(characterVoiceSchema)
   .max(SUPPORTED_LOCALES.length)
-  .superRefine((voices, ctx) => {
-    const seen = new Set<string>();
-    for (const [index, voice] of voices.entries()) {
-      if (seen.has(voice.locale)) {
-        ctx.addIssue({
-          code: "custom",
-          message: `locale が重複しています: ${voice.locale}`,
-          path: [index, "locale"],
-        });
-      } else {
-        seen.add(voice.locale);
-      }
-    }
-  });
+  .superRefine(rejectDuplicateLocales);
+
+export const characterNameSchema = z.strictObject({
+  locale: localeSchema,
+  name: z.string().trim().min(1),
+});
+
+export const characterNamesSchema = z
+  .array(characterNameSchema)
+  .max(SUPPORTED_LOCALES.length)
+  .superRefine(rejectDuplicateLocales);
 
 export const characterSchema = z.strictObject({
   id: idSchema,
   name: z.string(),
+  names: characterNamesSchema.default([]),
   voices: characterVoicesSchema,
   appearances: z.array(characterAppearanceSchema),
 });
@@ -43,3 +59,11 @@ export const characterSchema = z.strictObject({
 export type Character = z.infer<typeof characterSchema>;
 export type CharacterAppearance = z.infer<typeof characterAppearanceSchema>;
 export type CharacterVoice = z.infer<typeof characterVoiceSchema>;
+export type CharacterName = z.infer<typeof characterNameSchema>;
+
+export function resolveCharacterName(
+  character: Pick<Character, "name" | "names">,
+  locale: (typeof SUPPORTED_LOCALES)[number],
+): string {
+  return character.names.find((entry) => entry.locale === locale)?.name ?? character.name;
+}

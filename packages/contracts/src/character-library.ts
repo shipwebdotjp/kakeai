@@ -1,10 +1,15 @@
 import { z } from "zod";
 import { idSchema, timestampSchema } from "./content/primitives";
-import { characterAppearanceSchema, characterVoicesSchema } from "./content/character";
+import {
+  characterAppearanceSchema,
+  characterNamesSchema,
+  characterVoicesSchema,
+} from "./content/character";
 
 export const characterLibraryEntrySchema = z.object({
   id: idSchema,
   name: z.string(),
+  names: characterNamesSchema.default([]),
   voices: characterVoicesSchema,
   appearances: z.array(characterAppearanceSchema),
   createdAt: timestampSchema,
@@ -13,6 +18,7 @@ export const characterLibraryEntrySchema = z.object({
 
 export const createCharacterRequestSchema = z.strictObject({
   name: z.string().trim().min(1),
+  names: characterNamesSchema.default([]),
   voices: characterVoicesSchema.default([]),
   appearances: z.array(characterAppearanceSchema).max(50),
 });

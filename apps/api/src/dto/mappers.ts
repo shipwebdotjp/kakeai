@@ -309,9 +309,16 @@ export type CharacterVoiceRow = {
   position: number;
 };
 
+export type CharacterNameRow = {
+  locale: string;
+  name: string;
+  position: number;
+};
+
 export type CharacterWithAppearances = CharacterRow & {
   appearances: CharacterAppearanceRow[];
   voices: CharacterVoiceRow[];
+  names: CharacterNameRow[];
 };
 
 export function toCharacterLibraryEntry(row: CharacterWithAppearances): CharacterLibraryEntry {
@@ -321,9 +328,16 @@ export function toCharacterLibraryEntry(row: CharacterWithAppearances): Characte
       locale: parseEnum(localeSchema, voice.locale, "CharacterVoice.locale"),
       voiceProfileId: voice.voiceProfileId,
     }));
+  const names = [...row.names]
+    .sort((left, right) => left.position - right.position)
+    .map((entry) => ({
+      locale: parseEnum(localeSchema, entry.locale, "CharacterName.locale"),
+      name: entry.name,
+    }));
   return {
     id: row.id,
     name: row.name,
+    names,
     voices,
     appearances: row.appearances.map((appearance) => ({
       id: appearance.id,

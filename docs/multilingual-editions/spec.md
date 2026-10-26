@@ -18,6 +18,7 @@
 - 初期版の contentJson は、シード元 current 版を深いコピーして初期化する。ただし次を置き換える：
   - `document.locale` を作成先の locale に変える。
   - 話者の `voiceProfileId` は全て null にする。シード元の声は原語の声であり、target locale では TTS 未設定として扱う（[../multilingual-voice/spec.md](../multilingual-voice/spec.md) の解決規則）。話者自身とキャラクターの `voices`（対応表）はコピーして維持する。
+  - 各 Character の `names`（対応表）はコピーして維持し、`Character.name` と対応する `Speaker.name`（`characterId` が一致する話者）は作成先 locale の別名に置き換える。一致する別名がなければ既定の `name` のまま残す。`characterId` を持たない話者の名前は変えない（[ADR 0091](../adr/0091-character-locale-names.md)）。
   - `selectedAudioTakeId` は全て null にし、`audioTakes` は空配列にする。原語の音声は翻訳版へ引き継がない（字幕のみで開始する）。
   - `sourceScriptVersionId` にシード元 ScriptVersion を記録する（復元・翻訳・下書きの系統を示す既存フィールド）。
   - 初期版の `author` は `human` とする（システムによるコピー操作）。

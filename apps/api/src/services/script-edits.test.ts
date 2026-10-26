@@ -102,6 +102,7 @@ function documentWithCast(): ContentDocument {
     {
       id: "char-1",
       name: "キャラクター",
+      names: [],
       voices: [],
       appearances: [
         {

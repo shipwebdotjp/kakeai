@@ -47,6 +47,7 @@ const characters: CharacterFormValue[] = [
   {
     id: "char-1",
     name: "リン",
+    names: [],
     voiceProfileId: null,
     voices: [],
     appearances: [

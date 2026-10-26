@@ -74,6 +74,7 @@ const job = {
 const libraryEntry = {
   id: "char-1",
   name: "四国めたん",
+  names: [],
   voices: [{ locale: "ja-JP", voiceProfileId: "vp-1" }],
   appearances: [
     {

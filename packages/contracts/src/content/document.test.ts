@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { contentDocumentSchema } from "./document";
+import { resolveCharacterName } from "./character";
 import { createInsertScene } from "./defaults";
 import { validContentDocument } from "../testing/fixtures";
 
@@ -67,6 +68,7 @@ describe("contentDocumentSchema", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [
           { locale: "ja-JP", voiceProfileId: "vp_1" },
           { locale: "ja-JP", voiceProfileId: "vp_2" },
@@ -77,12 +79,61 @@ describe("contentDocumentSchema", () => {
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 
+  it("rejects duplicate name locales on a character", () => {
+    const doc = validContentDocument();
+    doc.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        names: [
+          { locale: "ja-JP", name: "リン" },
+          { locale: "ja-JP", name: "りん" },
+        ],
+        voices: [],
+        appearances: [],
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("accepts a character without names for backward compatibility", () => {
+    const doc = validContentDocument() as unknown as Record<string, unknown>;
+    const characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        voices: [],
+        appearances: [],
+      },
+    ];
+    (doc as { characters: unknown }).characters = characters;
+    const parsed = contentDocumentSchema.safeParse(doc);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.characters[0]!.names).toEqual([]);
+    }
+  });
+
+  it("resolves the locale name with fallback to the default name", () => {
+    const character = {
+      name: "ひなた",
+      names: [
+        { locale: "ja-JP" as const, name: "ひなた" },
+        { locale: "en-US" as const, name: "Hinata" },
+      ],
+    };
+    expect(resolveCharacterName(character, "en-US")).toBe("Hinata");
+    expect(resolveCharacterName(character, "ja-JP")).toBe("ひなた");
+    expect(resolveCharacterName({ name: "ひなた", names: [] }, "en-US")).toBe("ひなた");
+  });
+
   it("rejects a speaker voice that differs from the character locale voice", () => {
     const doc = validContentDocument();
     doc.characters = [
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [{ locale: "ja-JP", voiceProfileId: "vp_1" }],
         appearances: [],
       },
@@ -167,6 +218,7 @@ describe("contentDocumentSchema", () => {
     doc.characters.push({
       id: "character-rin",
       name: "リン",
+      names: [],
       voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -196,6 +248,7 @@ describe("contentDocumentSchema", () => {
     doc.characters.push({
       id: "character-rin",
       name: "リン",
+      names: [],
       voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },

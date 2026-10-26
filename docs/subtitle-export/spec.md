@@ -11,7 +11,7 @@
 ## 生成規則
 
 - タイミング解決はレンダーと同じ `resolveTimeline`（`@kakeai/video`）を使う。Scene の `auto` / `fixed`、`SCENE_PADDING_MS`、無音ラインの `SILENT_CAPTION_DURATION_MS` を含め、映像の焼き込み字幕と同一の開始・終了時刻とする。
-- 1ラインを1キューとし、`NarrationSegment.captionText`（読み上げ用の `speechText` ではない）を本文にする。登録順に `1` から連番を振る。
+- 1ラインを1キューとし、`NarrationSegment.captionText`（読み上げ用の `speechText` ではない）を本文にする。登録順に `1` から連番を振る。話者名は含めない。話者名の表示は今回は見送りとし、見せ方（バッジ／2行目／なし）は将来 Visual Skin の責務として検討する（[ADR 0092](../adr/0092-subtitle-speaker-display-deferred.md)）。
 - 時刻形式は `HH:MM:SS,mmm --> HH:MM:SS,mmm` とする。ミリ秒未満は切り捨てる。
 - 本文の CRLF / CR は LF に正規化し、各行の前後空白を除去したうえで空行を落として結合する（キューの区切り `\n\n` や空白のみの行との衝突を避けるため）。本文が空のラインと、割当尺が0のラインはキューを作らず、連番を詰める。焼き込み字幕と同じく `trim` 後の空本文は表示しない。
 - 解決不能な入力（固定尺の選択音声合計超過など）はレンダー投入時と同じ検証とし、422 `RENDER_INPUT_INVALID` で issues を返す。

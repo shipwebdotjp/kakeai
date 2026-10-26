@@ -173,6 +173,7 @@ describe("face set library", () => {
     const base = await createImage();
     const character = await characters.createCharacter(prisma, {
       name: "リン",
+      names: [],
       voices: [],
       appearances: [
         { id: "appearance-face", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
@@ -195,6 +196,7 @@ describe("face set library", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
@@ -223,6 +225,7 @@ describe("face set library", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
@@ -297,6 +300,7 @@ describe("face set library", () => {
     await expect(
       characters.createCharacter(prisma, {
         name: "だめ",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-x", assetId: base.id, expression: "", pose: "", faceSetId: "faceset-missing" },

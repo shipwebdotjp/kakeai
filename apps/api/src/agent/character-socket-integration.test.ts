@@ -248,6 +248,7 @@ beforeAll(async () => {
 
   const entry = await createCharacter(prisma, {
     name: "四国めたん",
+    names: [],
     voices: [
       { locale: "ja-JP", voiceProfileId: jaVoiceProfileId },
       { locale: "en-US", voiceProfileId: enVoiceProfileId },
@@ -636,6 +637,7 @@ describe("agent character operations over the socket", () => {
   it("replaces a library character's voices without touching appearances", async () => {
     const entry = await createCharacter(prisma, {
       name: `声付け替え-${randomUUID()}`,
+      names: [],
       voices: [],
       appearances: [],
     });
@@ -709,6 +711,7 @@ describe("agent character operations over the socket", () => {
     async () => {
       const entry = await createCharacter(prisma, {
         name: `声コピー-${randomUUID()}`,
+        names: [],
         voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfile2Id }],
         appearances: [
           {

@@ -65,6 +65,7 @@ describe("character library", () => {
 
     const created = await characters.createCharacter(prisma, {
       name: "リン",
+      names: [],
       voices: [{ locale: "ja-JP", voiceProfileId: profile.id }],
       appearances: [
         { id: "appearance-1", assetId: image.id, expression: "smile", pose: "front", label: "夏服", faceSetId: null },
@@ -79,6 +80,7 @@ describe("character library", () => {
 
     const updated = await characters.updateCharacter(prisma, created.id, {
       name: "リン（冬）",
+      names: [],
       voices: [],
       appearances: [
         { id: "appearance-2", assetId: image.id, expression: "normal", pose: "front", faceSetId: null },
@@ -100,6 +102,7 @@ describe("character library", () => {
     await expect(
       characters.createCharacter(prisma, {
         name: "だめ",
+        names: [],
         voices: [],
         appearances: [{ id: "a", assetId: audio.id, expression: "", pose: "", faceSetId: null }],
       }),
@@ -108,6 +111,7 @@ describe("character library", () => {
     await expect(
       characters.createCharacter(prisma, {
         name: "だめ",
+        names: [],
         voices: [],
         appearances: [{ id: "a", assetId: "asset-missing", expression: "", pose: "", faceSetId: null }],
       }),
@@ -118,6 +122,7 @@ describe("character library", () => {
     await expect(
       characters.createCharacter(prisma, {
         name: "だめ",
+        names: [],
         voices: [{ locale: "ja-JP", voiceProfileId: "vp-missing" }],
         appearances: [],
       }),
@@ -129,7 +134,40 @@ describe("character library", () => {
     await expect(
       characters.createCharacter(prisma, {
         name: "だめ",
+        names: [],
         voices: [{ locale: "en-US", voiceProfileId: profile.id }],
+        appearances: [],
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("saves and returns locale names", async () => {
+    const created = await characters.createCharacter(prisma, {
+      name: "ひなた",
+      names: [
+        { locale: "ja-JP", name: "ひなた" },
+        { locale: "en-US", name: "Hinata" },
+      ],
+      voices: [],
+      appearances: [],
+    });
+    expect(created.names).toEqual([
+      { locale: "ja-JP", name: "ひなた" },
+      { locale: "en-US", name: "Hinata" },
+    ]);
+    const fetched = await characters.getCharacter(prisma, created.id);
+    expect(fetched.names).toEqual(created.names);
+  });
+
+  it("rejects duplicate locale names", async () => {
+    await expect(
+      characters.createCharacter(prisma, {
+        name: "だめ",
+        names: [
+          { locale: "ja-JP", name: "ひなた" },
+          { locale: "ja-JP", name: "ヒナタ" },
+        ],
+        voices: [],
         appearances: [],
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
@@ -139,6 +177,7 @@ describe("character library", () => {
     const profile = await createProfile();
     await characters.createCharacter(prisma, {
       name: "リン",
+      names: [],
       voices: [{ locale: "ja-JP", voiceProfileId: profile.id }],
       appearances: [],
     });

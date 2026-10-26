@@ -25,6 +25,7 @@ function documentWithCharacter(): { document: ContentDocument; point: PointScene
     {
       id: "char-1",
       name: "A",
+      names: [],
       voices: [],
       appearances: [
         {

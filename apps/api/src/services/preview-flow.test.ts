@@ -185,6 +185,7 @@ describe("script version preview", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-rin", assetId: base.id, expression: "smile", pose: "front", faceSetId: faceSet.id },
@@ -251,6 +252,7 @@ describe("script version preview", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: image.id, expression: "smile", pose: "front", faceSetId: null },

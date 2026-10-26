@@ -23,6 +23,7 @@ import {
   contentDocumentSchema,
   DEFAULT_VISUAL_THEME_REF,
   getVisualTheme,
+  resolveCharacterName,
   type Asset,
   type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
@@ -1758,9 +1759,11 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
     const characterId = newCharacterId();
     const voiceProfileId =
       entry.voices.find((voice) => voice.locale === base.locale)?.voiceProfileId ?? null;
+    const resolvedName = resolveCharacterName(entry, base.locale);
     const character: CharacterFormValue = {
       id: characterId,
-      name: entry.name,
+      name: resolvedName,
+      names: entry.names.map((name) => ({ ...name })),
       voiceProfileId,
       voices: entry.voices.map((voice) => ({ ...voice })),
       appearances: entry.appearances.map((appearance) => ({
@@ -1773,12 +1776,12 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
       })),
     };
     appendCharacter(character);
-    addSpeakerFor(characterId, entry.name, voiceProfileId);
+    addSpeakerFor(characterId, resolvedName, voiceProfileId);
   };
 
   const addVoiceOnlySpeaker = () => {
     const characterId = newCharacterId();
-    appendCharacter({ id: characterId, name: "ナレーター", voiceProfileId: null, voices: [], appearances: [] });
+    appendCharacter({ id: characterId, name: "ナレーター", names: [], voiceProfileId: null, voices: [], appearances: [] });
     addSpeakerFor(characterId, "ナレーター", null);
   };
 

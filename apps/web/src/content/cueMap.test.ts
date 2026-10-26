@@ -646,6 +646,7 @@ describe("buildCueMap standings and representative media", () => {
         {
           id: "char-1",
           name: "リン",
+          names: [],
           voiceProfileId: null,
           voices: [],
           appearances: [

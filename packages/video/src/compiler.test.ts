@@ -852,6 +852,7 @@ describe("compileDocument", () => {
     document.characters.push({
       id: "character-rin",
       name: "リン",
+      names: [],
       voices: [],
       appearances: [{ id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null }],
     });
@@ -933,6 +934,7 @@ describe("compileDocument", () => {
     document.characters.push({
       id: "character-rin",
       name: "リン",
+      names: [],
       voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -964,6 +966,7 @@ describe("compileDocument", () => {
     document.characters.push({
       id: "character-rin",
       name: "リン",
+      names: [],
       voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1005,6 +1008,7 @@ describe("compileDocument", () => {
     document.characters.push({
       id: "character-rin",
       name: "リン",
+      names: [],
       voices: [],
       appearances: [
         { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1051,6 +1055,7 @@ describe("compileDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-rin", assetId: "asset-rin", expression: "normal", pose: "front", faceSetId: null },
@@ -1059,6 +1064,7 @@ describe("compileDocument", () => {
       {
         id: "character-mika",
         name: "ミカ",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-mika", assetId: "asset-mika", expression: "normal", pose: "front", faceSetId: null },
@@ -1787,6 +1793,7 @@ describe("visual theme", () => {
       document.characters.push({
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },

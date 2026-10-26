@@ -470,6 +470,7 @@ describe("production flow through the MCP binding", () => {
       });
       const libraryCharacter = await createCharacter(prisma, {
         name: "四国めたん",
+        names: [],
         voices: [{ locale: "ja-JP", voiceProfileId: voiceProfile.id }],
         appearances: [
           {

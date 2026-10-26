@@ -861,6 +861,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -874,6 +875,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voiceProfileId: null,
         voices: [],
         appearances: [
@@ -956,6 +958,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1006,6 +1009,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1059,6 +1063,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1097,6 +1102,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1119,6 +1125,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1150,6 +1157,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1220,6 +1228,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1246,6 +1255,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voiceProfileId: null,
         voices: [],
         appearances: [
@@ -1273,6 +1283,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
@@ -1328,6 +1339,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
@@ -1370,6 +1382,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voiceProfileId: null,
         voices: [],
         appearances: [
@@ -1383,7 +1396,7 @@ describe("buildContentDocument", () => {
 
   it("round-trips a character voice profile through its speaker", () => {
     const base = createInitialContentDocument();
-    base.characters = [{ id: "character-rin", name: "リン", voices: [], appearances: [] }];
+    base.characters = [{ id: "character-rin", name: "リン", names: [], voices: [], appearances: [] }];
     base.speakers = [
       { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: "vp-1" },
     ];
@@ -1405,6 +1418,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [
           { locale: "ja-JP", voiceProfileId: "vp-1" },
           { locale: "en-US", voiceProfileId: "vp-2" },
@@ -1436,6 +1450,7 @@ describe("buildContentDocument", () => {
     values.characters.push({
       id: "character-narrator",
       name: "ナレーター",
+      names: [],
       voiceProfileId: null,
       voices: [],
       appearances: [],
@@ -1480,6 +1495,7 @@ describe("buildContentDocument", () => {
       {
         id: "character-rin",
         name: "リン",
+        names: [],
         voices: [],
         appearances: [
           { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },

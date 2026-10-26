@@ -1,6 +1,7 @@
 import {
   CONTENT_SCHEMA_VERSION,
   createInitialContentDocument,
+  resolveCharacterName,
   type ContentDocument,
   type ScriptVersionAuthor,
   type Work,
@@ -178,10 +179,22 @@ export function buildLanguageEditionSeedDocument(
   source: ContentDocument,
   targetLocale: ContentDocument["locale"],
 ): ContentDocument {
+  const characters = source.characters.map((character) => ({
+    ...character,
+    name: resolveCharacterName(character, targetLocale),
+  }));
+  const nameByCharacterId = new Map(characters.map((character) => [character.id, character.name]));
   return {
     ...source,
     locale: targetLocale,
-    speakers: source.speakers.map((speaker) => ({ ...speaker, voiceProfileId: null })),
+    characters,
+    speakers: source.speakers.map((speaker) => {
+      const resolved =
+        speaker.characterId === null
+          ? speaker.name
+          : (nameByCharacterId.get(speaker.characterId) ?? speaker.name);
+      return { ...speaker, name: resolved, voiceProfileId: null };
+    }),
     audioTakes: [],
     scenes: source.scenes.map((scene) => ({
       ...scene,

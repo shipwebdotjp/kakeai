@@ -15,6 +15,10 @@ import { ScriptEditError } from "./errors.ts";
 const libraryCharacter: ScriptLibraryCharacter = {
   id: "lib-1",
   name: "四国めたん",
+  names: [
+    { locale: "ja-JP", name: "四国めたん" },
+    { locale: "en-US", name: "Shikoku Metan" },
+  ],
   voices: [
     { locale: "ja-JP", voiceProfileId: "vp-ja" },
     { locale: "en-US", voiceProfileId: "vp-en" },
@@ -106,6 +110,10 @@ describe("character.addFromLibrary", () => {
     const character = copiedCharacter(result.document);
     expect(character.id).toBe("character-1");
     expect(character.name).toBe("四国めたん");
+    expect(character.names).toEqual([
+      { locale: "ja-JP", name: "四国めたん" },
+      { locale: "en-US", name: "Shikoku Metan" },
+    ]);
     expect(character.voices).toEqual([
       { locale: "ja-JP", voiceProfileId: "vp-ja" },
       { locale: "en-US", voiceProfileId: "vp-en" },
@@ -163,6 +171,7 @@ describe("character.addFromLibrary", () => {
         {
           id: "lib-2",
           name: "ナレーター",
+          names: [],
           voices: [{ locale: "en-US", voiceProfileId: "vp-en" }],
           appearances: [],
         },
@@ -173,6 +182,43 @@ describe("character.addFromLibrary", () => {
     expect(character.appearances).toEqual([]);
     expect(result.created.appearanceIds).toEqual([]);
     expect(speakerOf(result.document, character.id).voiceProfileId).toBeNull();
+    expect(contentDocumentSchema.safeParse(result.document).success).toBe(true);
+  });
+
+  it("resolves the locale name when copying into a non-default locale", () => {
+    const document = { ...createInitialContentDocument(), locale: "en-US" as const };
+    const result = applyScriptOperation(
+      document,
+      { op: "character.addFromLibrary", libraryCharacterId: "lib-1" },
+      contextWith([libraryCharacter]),
+    );
+    const character = copiedCharacter(result.document);
+    expect(character.name).toBe("Shikoku Metan");
+    expect(character.names).toEqual(libraryCharacter.names);
+    expect(speakerOf(result.document, character.id).name).toBe("Shikoku Metan");
+    expect(speakerOf(result.document, character.id).voiceProfileId).toBe("vp-en");
+    expect(contentDocumentSchema.safeParse(result.document).success).toBe(true);
+  });
+
+  it("falls back to the default name when the locale has no alias", () => {
+    const document = { ...createInitialContentDocument(), locale: "en-US" as const };
+    const result = applyScriptOperation(
+      document,
+      { op: "character.addFromLibrary", libraryCharacterId: "lib-2" },
+      contextWith([
+        {
+          id: "lib-2",
+          name: "ナレーター",
+          names: [],
+          voices: [{ locale: "en-US", voiceProfileId: "vp-en" }],
+          appearances: [],
+        },
+      ]),
+    );
+    const character = copiedCharacter(result.document);
+    expect(character.name).toBe("ナレーター");
+    expect(character.names).toEqual([]);
+    expect(speakerOf(result.document, character.id).name).toBe("ナレーター");
     expect(contentDocumentSchema.safeParse(result.document).success).toBe(true);
   });
 

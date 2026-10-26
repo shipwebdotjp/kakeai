@@ -4,6 +4,7 @@ import type {
   ContentDocument,
   Speaker,
 } from "@kakeai/contracts";
+import { resolveCharacterName } from "@kakeai/contracts";
 import type { ScriptContext } from "./context.ts";
 import { preconditionFailed, targetNotFound } from "./errors.ts";
 import type { SceneEditResult } from "./scene.ts";
@@ -19,9 +20,11 @@ export interface CharacterEditResult extends SceneEditResult {
  *
  * This mirrors the Web UI's "add from library" rule and never mutates the
  * library: the Character, every Appearance and the Speaker get fresh IDs, while
- * voices, appearance fields (including the Face Set reference) and the name are
- * copied. The Speaker's voice is the entry voice whose locale matches the
- * document locale, or `null` when there is no match.
+ * voices, names, appearance fields (including the Face Set reference) and the
+ * resolved locale name are copied. The Speaker's voice is the entry voice whose
+ * locale matches the document locale, or `null` when there is no match. The
+ * Character and Speaker names are the entry name whose locale matches the
+ * document locale, or the default `name` when there is no match.
  *
  * A missing lookup capability is a precondition failure (the caller did not
  * provide the catalog); an unknown entry is a missing target.
@@ -72,7 +75,11 @@ export function addCharacterFromLibrary(
 
   const character: Character = {
     id: characterId,
-    name: entry.name,
+    name: resolveCharacterName(entry, document.locale),
+    names: entry.names.map((name) => ({
+      locale: name.locale,
+      name: name.name,
+    })),
     voices: entry.voices.map((voice) => ({
       locale: voice.locale,
       voiceProfileId: voice.voiceProfileId,
@@ -85,7 +92,7 @@ export function addCharacterFromLibrary(
   const speakerId = context.ids.speaker(speakerIds);
   const speaker: Speaker = {
     id: speakerId,
-    name: entry.name,
+    name: character.name,
     characterId,
     voiceProfileId,
   };

@@ -709,6 +709,40 @@ describe("work and script version flow", () => {
     expect(source.speakers[0]?.voiceProfileId).toBe("voice-ja");
   });
 
+  it("resolves locale names when seeding a language edition", () => {
+    const source = createInitialContentDocument();
+    source.characters = [
+      {
+        id: "character-hinata",
+        name: "ひなた",
+        names: [
+          { locale: "ja-JP", name: "ひなた" },
+          { locale: "en-US", name: "Hinata" },
+        ],
+        voices: [],
+        appearances: [],
+      },
+      {
+        id: "character-narrator",
+        name: "ナレーター",
+        names: [],
+        voices: [],
+        appearances: [],
+      },
+    ];
+    source.speakers = [
+      { id: "speaker-hinata", name: "ひなた", characterId: "character-hinata", voiceProfileId: null },
+      { id: "speaker-narrator", name: "ナレーター", characterId: "character-narrator", voiceProfileId: null },
+      { id: "speaker-free", name: "自由な話者", characterId: null, voiceProfileId: null },
+    ];
+    const seeded = works.buildLanguageEditionSeedDocument(source, "en-US");
+    expect(seeded.characters.find((entry) => entry.id === "character-hinata")?.name).toBe("Hinata");
+    expect(seeded.characters.find((entry) => entry.id === "character-narrator")?.name).toBe("ナレーター");
+    expect(seeded.speakers.find((entry) => entry.id === "speaker-hinata")?.name).toBe("Hinata");
+    expect(seeded.speakers.find((entry) => entry.id === "speaker-free")?.name).toBe("自由な話者");
+    expect(source.characters[0]?.name).toBe("ひなた");
+  });
+
   it("deletes a work and removes its artifact files", async () => {
     const work = await works.createWork(prisma, "削除テスト", "ja-JP");
     const edition = work.languageEditions[0]!;

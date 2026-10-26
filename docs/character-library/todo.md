@@ -39,3 +39,13 @@
 - [x] 作品編集の「キャラクター」欄で外観を追加・編集・削除（コピー方針は維持し、`schemaVersion: 1` の基準契約に従う）
 - [x] 文書とユーザーガイドを更新
 - 完了条件: 作品内で外観を編集→立ち絵で選択→保存→プレビュー・レンダーが成立し、ライブラリ側が波及しないことを確認できる。
+
+### [x] C6 ロケール別名
+
+- [x] `Character.names`（`{ locale, name }[]`、locale重複・空名を拒否）を `packages/contracts`・ライブラリDB（`CharacterName`）・台本の両方に追加
+- [x] ライブラリ画面で言語別の名前を編集（追加・削除・重複拒否）
+- [x] `character.addFromLibrary`（操作コアとWeb UI）で対象localeの別名を解決してコピー
+- [x] `edition.create` のシードで `Character.name` と対応 `Speaker.name` を対象localeの別名に置き換え
+- [x] エージェントは読み取りのみ（`character.list` / `character.get` に `names` を含む）
+- 完了条件: 別名つきライブラリから取り込み→言語版作成で名前が解決されることがテストで確認できる。既存の保存済みJSONは `names: []` として読める。
+

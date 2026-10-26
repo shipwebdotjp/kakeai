@@ -141,10 +141,24 @@ model VoiceProfile {
 model Character {
   id          String                @id @default(cuid())
   name        String
+  names       CharacterName[]
   appearances CharacterAppearance[]
   voices      CharacterVoice[]
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
+}
+
+model CharacterName {
+  id          String    @id @default(cuid())
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  locale      String
+  name        String
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@unique([characterId, locale])
+  @@index([characterId])
 }
 
 model CharacterVoice {

@@ -1,8 +1,12 @@
 import type {
   CharacterAppearance,
+  CharacterName,
   CharacterVoice,
   ContentDocument,
 } from "@kakeai/contracts";
+
+/** A locale-specific display name copied from the character library. */
+export type ScriptLibraryName = CharacterName;
 
 export type ScriptAssetKind = "image" | "video" | "audio";
 export type ScriptAssetStatus = "processing" | "ready" | "failed";
@@ -35,6 +39,7 @@ export type ScriptLibraryAppearance = Omit<CharacterAppearance, "id">;
 export interface ScriptLibraryCharacter {
   id: string;
   name: string;
+  names: ScriptLibraryName[];
   voices: ScriptLibraryVoice[];
   appearances: ScriptLibraryAppearance[];
 }

@@ -37,6 +37,7 @@ import {
   type AnimationPreset,
   type AudioCueRole,
   type Character,
+  type CharacterName,
   type CharacterVoice,
   type ContentDocument,
   type CueLayer,
@@ -120,6 +121,7 @@ export interface AppearanceFormValue {
 export interface CharacterFormValue {
   id: string;
   name: string;
+  names: CharacterName[];
   voiceProfileId: string | null;
   voices: CharacterVoice[];
   appearances: AppearanceFormValue[];
@@ -436,6 +438,7 @@ function readCharacters(content: ContentDocument): CharacterFormValue[] {
     return {
       id: character.id,
       name: character.name,
+      names: character.names.map((entry) => ({ ...entry })),
       voiceProfileId: localeVoice?.voiceProfileId ?? speaker?.voiceProfileId ?? null,
       voices: character.voices.map((entry) => ({ ...entry })),
       appearances: character.appearances.map((appearance) => ({
@@ -909,6 +912,7 @@ function buildCharacters(values: CharacterFormValue[], locale: CharacterVoice["l
   return values.map((character) => ({
     id: character.id,
     name: character.name,
+    names: character.names.map((entry) => ({ ...entry })),
     voices: mergeLocaleVoice(character.voices, locale, character.voiceProfileId),
     appearances: character.appearances.map((appearance, appearanceIndex) => {
       if (appearance.assetId === null || appearance.assetId.length === 0) {
@@ -2107,7 +2111,7 @@ export function newAppearanceId(): string {
 }
 
 export function createEmptyCharacter(): CharacterFormValue {
-  return { id: newCharacterId(), name: "", voiceProfileId: null, voices: [], appearances: [] };
+  return { id: newCharacterId(), name: "", names: [], voiceProfileId: null, voices: [], appearances: [] };
 }
 
 export function createEmptyAppearance(): AppearanceFormValue {
