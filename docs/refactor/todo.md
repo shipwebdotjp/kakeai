@@ -75,7 +75,7 @@
 
 完了条件: `CueList.tsx` が200行以下、型検査が通り、Cueの追加・編集・削除が動く。
 
-### [ ] T7 `LinesEditor.tsx`
+### [x] T7 `LinesEditor.tsx`
 
 - [ ] `LineEditor` / `LineActionsMenu` / TTS生成ブロックを `components/lines-editor/` へ移す
 - [ ] `LinesEditor.tsx` はコンテナとして残す
@@ -97,7 +97,7 @@
 
 完了条件: `agent.ts` と `operations.ts` が300行以下、digestが不変、Agent操作のテストが通る。
 
-### [ ] T9 `apps/api/src/services/script-versions.ts`
+### [x] T9 `apps/api/src/services/script-versions.ts`
 
 - [ ] `save.ts` / `references.ts` / `assertions.ts` / `history.ts` / `preview.ts` に分割する
 - [ ] `script-versions.ts` をbarrelとして残す
@@ -106,7 +106,7 @@
 
 完了条件: 各ファイル400行以下、保存・プレビュー・字幕のテストが通る。
 
-### [ ] T10 `apps/api/src/services/assets.ts`
+### [x] T10 `apps/api/src/services/assets.ts`
 
 - [ ] `ingest.ts` / `list.ts` / `manage.ts` / `content.ts` に分割する
 - [ ] `assets.ts` をbarrelとして残す
@@ -171,7 +171,7 @@
 
 ## Phase 6: 再発防止
 
-### [ ] T17 ファイルサイズチェック
+### [x] T17 ファイルサイズチェック
 
 - [ ] `scripts/check-file-size.mjs` を追加する
 - [ ] 600行超は警告、800行超は失敗にする
@@ -199,7 +199,9 @@
 - T5 は `TimingFields` / `InsertSceneFields` / `SceneBlock` の抽出まで完了。`SceneEditor` 本体のフック抽出は T12 で行う。
 - T6（CueList）は未着手。
 - T7（LinesEditor）は完了。
+- T15 は `structural.ts` / `cueMap.ts` の本体分割まで完了。テスト分割は T16 で行う。
 - T8 は `packages/contracts/src/agent.ts` の分割まで完了。`apps/api/src/agent/operations.ts` は未着手。
 - T9（script-versions）・T10（assets）は完了。
 - T11（compositions）は分割完了。`service.ts` が620行のため、追加分割をフォローする。
 - T17（ファイルサイズチェック）は完了。`npm run check:file-size` をCIに追加した。
+- 現在の800行超ファイルは SceneEditor / CueList / ThemeDetailPage / ThumbnailsPage / LineEditor / api agent operations / WorkEditPage の7件。
