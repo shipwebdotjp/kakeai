@@ -38,6 +38,28 @@ export function createFaceSetsRouter(dependencies: FaceSetsRouterDependencies): 
     }),
   );
 
+  router.get(
+    "/face-sets/:faceSetId/revisions",
+    asyncHandler(async (req, res) => {
+      sendData(
+        res,
+        200,
+        await faceSets.getFaceSetRevisions(prisma, pathParam(req, "faceSetId")),
+      );
+    }),
+  );
+
+  router.get(
+    "/face-sets/:faceSetId/usages",
+    asyncHandler(async (req, res) => {
+      sendData(
+        res,
+        200,
+        await faceSets.getFaceSetUsages(prisma, pathParam(req, "faceSetId")),
+      );
+    }),
+  );
+
   router.patch(
     "/face-sets/:faceSetId",
     asyncHandler(async (req, res) => {

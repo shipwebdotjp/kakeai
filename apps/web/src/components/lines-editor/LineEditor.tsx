@@ -1,6 +1,7 @@
 import type { LinesEditorProps } from "../LinesEditor";
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, Play, Scissors, Trash2 } from "lucide-react";
+import { usePinnedFaceSetPresets } from "./usePinnedFaceSetPresets";
 import {
   MAX_TTS_SPEECH_TEXT_LENGTH,
   MAX_TTS_SPEED_SCALE,
@@ -182,8 +183,6 @@ export function LineEditor({
   speakers,
   characters,
   standings,
-  faceSets,
-  faceSetsReady,
   voiceProfiles,
   adapterVoices,
   savedVoiceByLineId,
@@ -206,17 +205,14 @@ export function LineEditor({
       .filter((standing) => standing?.characterId === characterId)
       .map((standing) => standing?.appearanceId),
   );
-  const faceSet = faceSets.find((entry) =>
-    character?.appearances.some(
-      (appearance) =>
-        appearance.faceSetId === entry.id &&
-        standingAppearanceIds.has(appearance.id),
-    ),
-  );
-  const presets = faceSet?.expressions ?? [];
+  const {
+    presets,
+    ready: pinnedFaceSetsReady,
+    isError: pinnedFaceSetsError,
+  } = usePinnedFaceSetPresets(character, standingAppearanceIds);
   const staleExpression =
     line.expressionId !== null &&
-    faceSetsReady &&
+    pinnedFaceSetsReady &&
     !presets.some((preset) => preset.id === line.expressionId);
   const profileId =
     character?.voiceProfileId ?? speaker?.voiceProfileId ?? null;
@@ -632,6 +628,8 @@ export function LineEditor({
               クリア
             </button>
           </p>
+        ) : pinnedFaceSetsError ? (
+          <p className={errorTextClass}>表情セットを読み込めませんでした。</p>
         ) : presets.length > 0 ? (
           <label className={formLabelClass}>
             表情

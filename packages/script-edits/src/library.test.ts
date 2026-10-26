@@ -27,6 +27,7 @@ function documentWithCharacter(): { document: ContentDocument; point: PointScene
       name: "A",
       names: [],
       voices: [],
+      libraryCharacterId: null,
       appearances: [
         {
           id: "app-1",
@@ -34,6 +35,8 @@ function documentWithCharacter(): { document: ContentDocument; point: PointScene
           expression: "normal",
           pose: "default",
           faceSetId: null,
+          faceSetVersion: null,
+          libraryAppearanceId: null,
         },
         {
           id: "app-2",
@@ -41,6 +44,8 @@ function documentWithCharacter(): { document: ContentDocument; point: PointScene
           expression: "smile",
           pose: "default",
           faceSetId: null,
+          faceSetVersion: null,
+          libraryAppearanceId: null,
         },
       ],
     },

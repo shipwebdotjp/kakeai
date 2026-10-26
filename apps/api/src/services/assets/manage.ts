@@ -92,9 +92,11 @@ async function findAssetReferences(
 
   const faceLayers = await client.faceLayer.findMany({
     where: { assetId },
-    select: { faceSetId: true },
+    select: { faceSetRevision: { select: { faceSetId: true } } },
   });
-  for (const faceSetId of new Set(faceLayers.map((layer) => layer.faceSetId))) {
+  for (const faceSetId of new Set(
+    faceLayers.map((layer) => layer.faceSetRevision.faceSetId),
+  )) {
     references.push({ type: "face_set", id: faceSetId });
   }
 

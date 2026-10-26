@@ -153,19 +153,96 @@ async function assertFaceSetsExist(
   if (ids.length === 0) {
     return;
   }
+  // Library appearances are checked against the Face Set's latest revision.
+  // Works pin their own faceSetVersion, but the library always tracks latest.
   const rows = await prisma.faceSet.findMany({
     where: { id: { in: ids } },
-    select: { id: true },
+    select: {
+      id: true,
+      revisions: {
+        orderBy: { versionNumber: "desc" },
+        take: 1,
+        select: { layers: { select: { assetId: true } } },
+      },
+    },
   });
-  const found = new Set(rows.map((row) => row.id));
+  const faceSetById = new Map(rows.map((row) => [row.id, row]));
+  const assetIds = [
+    ...new Set([
+      ...appearances.map((appearance) => appearance.assetId),
+      ...rows.flatMap((row) =>
+        (row.revisions[0]?.layers ?? []).map((layer) => layer.assetId),
+      ),
+    ]),
+  ];
+  const assets = await prisma.asset.findMany({
+    where: { id: { in: assetIds } },
+    select: { id: true, widthPx: true, heightPx: true },
+  });
+  const assetById = new Map(assets.map((asset) => [asset.id, asset]));
+
   const issues: ValidationIssue[] = [];
   appearances.forEach((appearance, index) => {
-    if (appearance.faceSetId !== null && !found.has(appearance.faceSetId)) {
+    if (appearance.faceSetId === null) {
+      return;
+    }
+    const row = faceSetById.get(appearance.faceSetId);
+    if (row === undefined) {
       issues.push({
         path: ["appearances", index, "faceSetId"],
         code: "invalid_value",
         message: "表情セットが見つかりません。",
       });
+      return;
+    }
+    const revision = row.revisions[0];
+    if (revision === undefined) {
+      issues.push({
+        path: ["appearances", index, "faceSetId"],
+        code: "invalid_value",
+        message: "表情セットに改訂版がありません。",
+      });
+      return;
+    }
+    const base = assetById.get(appearance.assetId);
+    if (
+      base === undefined ||
+      base.widthPx === null ||
+      base.heightPx === null
+    ) {
+      issues.push({
+        path: ["appearances", index, "assetId"],
+        code: "invalid_value",
+        message: "ベース画像の寸法を確認できません。",
+      });
+      return;
+    }
+    for (const layer of revision.layers) {
+      const layerAsset = assetById.get(layer.assetId);
+      if (
+        layerAsset === undefined ||
+        layerAsset.widthPx === null ||
+        layerAsset.heightPx === null
+      ) {
+        issues.push({
+          path: ["appearances", index, "faceSetId"],
+          code: "invalid_value",
+          message: "表情セットの顔レイヤーの寸法を確認できません。",
+        });
+        return;
+      }
+      if (
+        layerAsset.widthPx !== base.widthPx ||
+        layerAsset.heightPx !== base.heightPx
+      ) {
+        issues.push({
+          path: ["appearances", index, "faceSetId"],
+          code: "invalid_value",
+          message:
+            "表情セットの顔レイヤーとベース画像の寸法が一致しません。",
+        });
+        return;
+      }
     }
   });
   if (issues.length > 0) {

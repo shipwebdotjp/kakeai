@@ -124,6 +124,7 @@ function buildCharacters(
     id: character.id,
     name: character.name,
     names: character.names.map((entry) => ({ ...entry })),
+    libraryCharacterId: character.libraryCharacterId,
     voices: mergeLocaleVoice(
       character.voices,
       locale,
@@ -146,6 +147,9 @@ function buildCharacters(
           ? {}
           : { label: appearance.label.trim() }),
         faceSetId: appearance.faceSetId,
+        faceSetVersion:
+          appearance.faceSetId === null ? null : appearance.faceSetVersion,
+        libraryAppearanceId: appearance.libraryAppearanceId,
       };
     }),
   }));

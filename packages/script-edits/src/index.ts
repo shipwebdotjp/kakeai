@@ -5,6 +5,8 @@ export type {
   ScriptAssetStatus,
   ScriptContext,
   ScriptIdGenerator,
+  ScriptFaceSetLookup,
+  ScriptFaceSetRevisionInfo,
   ScriptLibraryAppearance,
   ScriptLibraryCharacter,
   ScriptLibraryCharacterLookup,
@@ -13,6 +15,16 @@ export type {
   ScriptVoiceProfileInfo,
   ScriptVoiceProfileLookup,
 } from "./context.ts";
+export {
+  addCharacterFromLibrary,
+  planCharacterLibraryUpdate,
+  updateCharacterFromLibrary,
+  type CharacterEditResult,
+  type CharacterLibraryUpdateInput,
+  type LibraryUpdateAppearance,
+  type LibraryUpdateExpressionReset,
+  type LibraryUpdatePlan,
+} from "./character.ts";
 export {
   SCRIPT_EDIT_ERROR_CODES,
   ScriptEditError,

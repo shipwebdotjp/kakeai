@@ -9,7 +9,6 @@ import {
 } from "react-hook-form";
 import {
   type ContentDocument,
-  type FaceSet,
   type ScriptOperation,
   type VoiceAdapterId,
   type Warning,
@@ -49,8 +48,6 @@ export interface LinesEditorProps {
   adapterVoices: Record<VoiceAdapterId, AdapterVoicesState>;
   savedVoiceByLineId: ReadonlyMap<string, string | null>;
   bulkRunning: boolean;
-  faceSets: FaceSet[];
-  faceSetsReady: boolean;
   onSplitScene: (sceneIndex: number, lineIndex: number) => void;
   onJumpToLine?: (lineId: string) => void;
   /** SceneEditor側の折りたたみ内に置くときは外枠と見出しを出さない */
@@ -74,8 +71,6 @@ export function LinesEditor({
   adapterVoices,
   savedVoiceByLineId,
   bulkRunning,
-  faceSets,
-  faceSetsReady,
   onSplitScene,
   onJumpToLine,
   bare = false,
@@ -213,8 +208,6 @@ export function LinesEditor({
             speakers={speakers}
             characters={characters}
             standings={watchedStandings}
-            faceSets={faceSets}
-            faceSetsReady={faceSetsReady}
             voiceProfiles={voiceProfiles}
             adapterVoices={adapterVoices}
             savedVoiceByLineId={savedVoiceByLineId}

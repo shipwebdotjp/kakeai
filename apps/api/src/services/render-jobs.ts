@@ -19,7 +19,7 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent } from "../domain/content-json.ts";
-import { bigIntToSafeNumber, toFaceSet, toJob } from "../dto/mappers.ts";
+import { bigIntToSafeNumber, toJob } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 import {
@@ -30,6 +30,7 @@ import {
   assertVideoPlayback,
   loadAllReferences,
   renderSourceDurationMs,
+  toSnapshotFaceSet,
 } from "./script-versions.ts";
 import { collectCompositionVersionIds, CompositionService } from "./compositions.ts";
 import { ThemeResolver } from "./theme-resolver.ts";
@@ -103,19 +104,19 @@ export async function createRenderJob(
     };
   }
 
-  const { references, assetById, faceSetById } = await loadAllReferences(prisma, content);
+  const { references, assetById, faceSetByKey } = await loadAllReferences(prisma, content);
   assertAssetsAvailable(references, assetById);
   assertTakeDurations(content, assetById);
   assertInsertScenes(content, assetById);
   assertVideoPlayback(content, assetById);
-  assertFaceSetReferences(content, faceSetById, assetById);
+  assertFaceSetReferences(content, faceSetByKey, assetById);
 
-  const snapshotFaceSets: RenderJobSnapshot["faceSets"] = [...faceSetById.values()]
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .map((faceSet) => {
-      const dto = toFaceSet(faceSet);
-      return { id: dto.id, name: dto.name, layers: dto.layers, expressions: dto.expressions };
-    });
+  const snapshotFaceSets: RenderJobSnapshot["faceSets"] = [...faceSetByKey.values()]
+    .sort(
+      (a, b) =>
+        a.faceSetId.localeCompare(b.faceSetId) || a.version - b.version,
+    )
+    .map(toSnapshotFaceSet);
 
   const compositionService = new CompositionService({ db: prisma, dataDir: "" });
   const snapshotCompositions: RenderJobSnapshot["compositionVersions"] = [];
@@ -189,8 +190,10 @@ export async function createRenderJob(
           manifest: found.manifest,
         };
       },
-      faceSetResolver: (faceSetId) => {
-        const found = snapshotFaceSets.find((faceSet) => faceSet.id === faceSetId);
+      faceSetResolver: (faceSetId, version) => {
+        const found = snapshotFaceSets.find(
+          (faceSet) => faceSet.id === faceSetId && faceSet.version === version,
+        );
         if (!found) {
           throw new CompositionCompileError([
             {

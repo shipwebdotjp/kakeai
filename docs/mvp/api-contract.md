@@ -79,7 +79,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | ThumbnailAppearancePreset | id, name, appearance, createdAt, updatedAt | 名前付きサムネイル外観プリセット。`appearance` は疎な上書き。適用は言語版の共通Appearanceへのスナップショットコピーで、プリセットへの参照は保存しない。 |
 | ThumbnailPreview | html, width, height | 未保存のサムネイル入力をコンパイルした静止画HTML（1280x720）。DBへ書かない。 |
 | CharacterLibraryEntry | id, name, names, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`names` は locale 別の名前の対応（`locale` 重複・空名を拒否、無ければ既定名）。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
-| FaceSet | id, name, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
+| FaceSet | id, name, version, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。
 
@@ -152,9 +152,11 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /characters | 201 | キャラクターを作成 |
 | PATCH | /characters/:characterId | 200 | キャラクターの名前・ロケール別名・声・外観を更新 |
 | DELETE | /characters/:characterId | 204 | キャラクターを削除 |
-| GET | /face-sets | 200 | Face Set ライブラリの一覧を取得（[../face-expression/spec.md](../face-expression/spec.md)） |
-| POST | /face-sets | 201 | Face Set（Face Layer と Expression Preset を含む）を作成 |
-| PATCH | /face-sets/:faceSetId | 200 | Face Set の名称・Face Layer・Expression Preset を更新 |
+| GET | /face-sets | 200 | Face Set ライブラリの一覧を最新改訂版付きで取得（[../face-expression/spec.md](../face-expression/spec.md)） |
+| POST | /face-sets | 201 | Face Set（v1 の Face Layer と Expression Preset を含む）を作成 |
+| GET | /face-sets/:faceSetId/revisions | 200 | 全改訂版を古い順に取得 |
+| GET | /face-sets/:faceSetId/usages | 200 | この Face Set を使うライブラリ外観のベース画像と寸法を取得 |
+| PATCH | /face-sets/:faceSetId | 200 | 内容が変わったときは新しい改訂版を作成し、名前だけなら最新版の名前を更新 |
 | DELETE | /face-sets/:faceSetId | 204 | 未参照の Face Set を削除 |
 | GET | /themes | 200 | Theme 一覧（組み込み＋利用者テーマ）を取得（[../theme-customization/spec.md](../theme-customization/spec.md)） |
 | POST | /themes | 201 | Theme の作成・複製 |
@@ -518,12 +520,15 @@ DELETE /assets/:assetId は、残っているScriptVersionまたはqueued/runnin
 
 ## Face Set ライブラリ
 
-Face Set は、眉・目・口・前景の Face Layer と Expression Preset を持つアプリ共通の顔素材である。作品の Character Appearance は `faceSetId` で参照し、内容をコピーしない。詳細は [../face-expression/spec.md](../face-expression/spec.md) を正とする。
+Face Set は、眉・目・口・前景の Face Layer と Expression Preset を持つアプリ共通の顔素材である。編集は不変の改訂版（`FaceSetRevision`）を追加し、作品の Character Appearance は `faceSetId` と `faceSetVersion` で改訂版を固定する。ライブラリの Character Appearance は最新版を解決する。詳細は [../face-expression/spec.md](../face-expression/spec.md) と [ADR-0102](../adr/0102-face-set-revisions-and-pinned-works.md) を正とする。
 
-- `POST /face-sets` は `{ name, layers, expressions }` を受け取る。`layers` は `{ id, part: "brow"|"eye"|"mouth"|"foreground", assetId, blinkLayerId?, speakingLayerId? }`、`expressions` は `{ id, name, browLayerId?, eyeLayerId?, mouthLayerId? }`。`normal` の preset を必ず1つ含む。`blinkLayerId` は `part: "eye"` にだけ、`speakingLayerId` は `part: "mouth"` にだけ許可する。
-- `PATCH /face-sets/:faceSetId` は `POST` と同じ形で全体を置き換える。`POST`／`PATCH` は、各 `assetId` が ready な画像 Asset であること、全 Face Layer の `widthPx`／`heightPx` が一致すること、preset が同一 Face Set 内の Face Layer だけを参照することを検証する。違反は422 `VALIDATION_ERROR` の `details.issues` で返す。
-- `DELETE /face-sets/:faceSetId` は、いずれかの Character Appearance（ライブラリまたは保存済み ScriptVersion の外観）から `faceSetId` で参照されている間は409 `FACE_SET_IN_USE` を返す。Face Layer を削除・置換しても、それを参照する Expression Preset が残る操作は拒否する。
-- 保存済み ScriptVersion の外観は Face Set をコピーしないため、Face Set の更新は次回のプレビュー／レンダーに反映される。Render Job は投入時に解決した Face Set を入力スナップショットへ固定する（[ADR-0045](../adr/0045-face-set-global-reference.md)）。
+- `POST /face-sets` は `{ name, layers, expressions }` を受け取り、v1 を作る。`layers` は `{ id, part: "brow"|"eye"|"mouth"|"foreground", assetId, blinkLayerId?, speakingLayerId? }`、`expressions` は `{ id, name, browLayerId?, eyeLayerId?, mouthLayerId? }`。`normal` の preset を必ず1つ含む。`blinkLayerId` は `part: "eye"` にだけ、`speakingLayerId` は `part: "mouth"` にだけ許可する。
+- `PATCH /face-sets/:faceSetId` は `POST` と同じ形を受け取る。`layers` / `expressions` が最新版と同一なら `name` だけを更新し、版を増やさない。内容が変わる場合は `version = 最新 + 1` の改訂版を作る。`POST`／`PATCH` は、各 `assetId` が ready な画像 Asset であること、全 Face Layer の `widthPx`／`heightPx` が一致すること、preset が同一 Face Set 内の Face Layer だけを参照することを検証する。`PATCH` はさらに、この Face Set を参照する**ライブラリ**の全 Character Appearance のベース画像と Face Layer の寸法が一致することを検証し、不一致なら422 `VALIDATION_ERROR` を返して改訂版を作らない。違反は `details.issues` で返す。
+- `GET /face-sets/:faceSetId/revisions` は `{ id, faceSetId, version, layers, expressions, createdAt }` の配列を古い順に返す。`GET /face-sets/:faceSetId` は最新版を返し、`version` を含む。
+- `GET /face-sets/:faceSetId/usages` は `{ libraryAppearances: [{ characterId, characterName, appearanceId, label, assetId, widthPx, heightPx }] }` を返す。Face Set 編集画面の合成プレビューと寸法診断に使う。
+- `DELETE /face-sets/:faceSetId` は、いずれかの Character Appearance（ライブラリまたは保存済み ScriptVersion の外観）から `faceSetId` で参照されている間は409 `FACE_SET_IN_USE` を返す。改訂版の削除 API は持たない。
+- 保存済み ScriptVersion の外観は Face Set をコピーせず、`(faceSetId, faceSetVersion)` で改訂版を参照する。`faceSetVersion` を持たない旧JSONは v1 として解決する。Render Job は投入時に解決した改訂版を入力スナップショットへ固定する（[ADR-0102](../adr/0102-face-set-revisions-and-pinned-works.md)）。
+- ライブラリ Character の作成・更新は、外観が参照する Face Set の最新版とベース画像の寸法が一致することを検証する。
 
 ## Composition Library
 
@@ -782,6 +787,9 @@ GET /api/v1/script-versions/scr_003/subtitles
 | 409 | ASSET_PROCESSING | 参照Assetの取り込みJobが完了していない | assetIds |
 | 409 | ASSET_IN_USE | Asset削除時に残存する版またはJobが参照している | assetId, references |
 | 409 | FACE_SET_IN_USE | Face Set削除時に外観（ライブラリまたは保存済み版）が参照している | faceSetId, references |
+| 409 | FACE_SET_VERSION_CONFLICT | 同じFace Setの改訂版番号が別の更新と競合した | faceSetId |
+
+Face Set の改訂版が存在しない場合や、固定版に `expressionId` が存在しない場合は、保存・プレビュー・レンダーで422 `VALIDATION_ERROR` または `*_INVALID` を返す。
 | 409 | WORK_HAS_CHILDREN | 子Workを持つWorkの削除 | workId, childWorkIds |
 | 409 | LANGUAGE_EDITION_EXISTS | 同一 Work に既にある locale の言語版を追加しようとした | workId, locale |
 | 409 | JOB_NOT_CANCELLABLE | queued以外のJobをキャンセルしようとした | jobId, status |

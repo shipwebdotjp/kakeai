@@ -248,8 +248,10 @@ version, then `script.get` the new version to find the Speaker.
    valid and copies into a voice-only speaker.
 3. `character.update` is partial: send only the members you change and leave the
    rest out. A member you do send replaces that whole list, so read
-   `character.get` first and send every entry you want to keep. Sending only
-   `characterId` is `VALIDATION_ERROR`.
+   `character.get` first and send every entry you want to keep. Re-send existing
+   appearances with their `id` to keep work-copy `libraryAppearanceId` links;
+   omit `id` only for a new appearance. Sending only `characterId` is
+   `VALIDATION_ERROR`.
 4. Validation: `assetId` must be a ready image Asset, `faceSetId` must exist,
    and each `voiceProfileId` must exist with the same `locale`. Unknown ids or
    a locale mismatch are `VALIDATION_ERROR`.
@@ -258,15 +260,17 @@ version, then `script.get` the new version to find the Speaker.
    mistake leaves a duplicate you must report, not silently ignore.
 
 Library edits do not propagate to existing scripts. To change how an existing
-Work looks, the human edits the script-local Character in the app UI, or you
-copy the updated library entry again into a new Character and reassign the
-lines.
+Work looks, the human edits the script-local Character in the app UI or uses
+"ライブラリから更新" (not exposed to agents). Copying the entry again creates new
+local IDs and requires reassigning the lines.
 
 ### Copying a character
 
 1. `character.list` returns all library entries; `character.get` returns one by
    `characterId`. Each entry carries `name`, locale-keyed `voices`, and
    appearances (`assetId`, `expression`, `pose`, optional `label`, `faceSetId`).
+   The copy pins each referenced Face Set's latest version; read the pinned
+   `faceSetVersion` from `script.get` when choosing expressions later.
 2. Choose an entry that has a voice for the edition's locale. If the entry you
    need has none, attach one with `character.setVoices` before copying (pick
    the `voiceProfileId` with `voiceProfile.list` / `voiceProfile.listVoices`
@@ -288,9 +292,12 @@ lines.
 
 ### Face sets
 
-`character.get` → an appearance's `faceSetId` → `faceSet.get` → an
-`expressions[].id` → `line.setExpression` with `expressionId`. Use it only for
-lines whose speaker has a Character; a voice-only speaker has no face to switch.
+Read the work's `appearances[].faceSetId` and `faceSetVersion` from `script.get`
+(the work pins the revision it copied), then call `faceSet.get` with both. Use
+only `expressions[].id` from that pinned revision for `line.setExpression`.
+`faceSet.list` and a version-less `faceSet.get` return the latest revision,
+which a pinned work may not have. Use an expression only for lines whose
+speaker has a Character; a voice-only speaker has no face to switch.
 
 ### Themes and fonts
 

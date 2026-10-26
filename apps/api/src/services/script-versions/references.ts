@@ -1,10 +1,12 @@
 import {
+  LEGACY_FACE_SET_VERSION,
   RENDITION_PURPOSE,
   characterStandingV1InputSchema,
   collectAssetReferences,
   type AssetKindName,
   type AssetReference,
   type ContentDocument,
+  type SnapshotFaceSet,
   type VisualCue,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../../generated/prisma/client.ts";
@@ -23,49 +25,138 @@ export interface LoadedAssetReferences {
   assetById: Map<string, AssetWithRenditions>;
 }
 
-export type FaceSetDetails = Prisma.FaceSetGetPayload<{
-  include: { layers: true; expressions: true };
-}>;
+export type FaceSetRevisionDetails = {
+  faceSetId: string;
+  name: string;
+  version: number;
+  layers: Array<{
+    id: string;
+    part: string;
+    assetId: string;
+    blinkLayerId: string | null;
+    speakingLayerId: string | null;
+  }>;
+  expressions: Array<{
+    id: string;
+    name: string;
+    browLayerId: string | null;
+    eyeLayerId: string | null;
+    mouthLayerId: string | null;
+  }>;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
-export interface LoadedReferences extends LoadedAssetReferences {
-  faceSetById: Map<string, FaceSetDetails>;
+export type FaceSetDetails = FaceSetRevisionDetails;
+
+export interface FaceSetReferenceKey {
+  faceSetId: string;
+  version: number;
 }
 
-export function collectFaceSetIds(content: ContentDocument): string[] {
-  return [
-    ...new Set(
-      content.characters.flatMap((character) =>
-        character.appearances.map((appearance) => appearance.faceSetId),
-      ),
-    ),
-  ].filter((id): id is string => id !== null);
+export interface LoadedReferences extends LoadedAssetReferences {
+  faceSetByKey: Map<string, FaceSetRevisionDetails>;
+}
+
+export function faceSetKey(faceSetId: string, version: number): string {
+  return `${faceSetId}@${version}`;
+}
+
+export function toSnapshotFaceSet(faceSet: FaceSetRevisionDetails): SnapshotFaceSet {
+  return {
+    id: faceSet.faceSetId,
+    version: faceSet.version,
+    name: faceSet.name,
+    layers: faceSet.layers.map((layer) => ({
+      id: layer.id,
+      part: layer.part as SnapshotFaceSet["layers"][number]["part"],
+      assetId: layer.assetId,
+      blinkLayerId: layer.blinkLayerId,
+      speakingLayerId: layer.speakingLayerId,
+    })),
+    expressions: faceSet.expressions.map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      browLayerId: preset.browLayerId,
+      eyeLayerId: preset.eyeLayerId,
+      mouthLayerId: preset.mouthLayerId,
+    })),
+  };
+}
+
+/** The pinned revision of an Appearance. `null` means the legacy v1. */
+export function faceSetReferenceOf(appearance: {
+  faceSetId: string | null;
+  faceSetVersion: number | null;
+}): FaceSetReferenceKey | null {
+  if (appearance.faceSetId === null) {
+    return null;
+  }
+  return {
+    faceSetId: appearance.faceSetId,
+    version: appearance.faceSetVersion ?? LEGACY_FACE_SET_VERSION,
+  };
+}
+
+export function collectFaceSetReferences(
+  content: ContentDocument,
+): FaceSetReferenceKey[] {
+  const byKey = new Map<string, FaceSetReferenceKey>();
+  for (const character of content.characters) {
+    for (const appearance of character.appearances) {
+      const reference = faceSetReferenceOf(appearance);
+      if (reference !== null) {
+        byKey.set(faceSetKey(reference.faceSetId, reference.version), reference);
+      }
+    }
+  }
+  return [...byKey.values()];
 }
 
 export async function loadFaceSets(
   client: PrismaClient | Prisma.TransactionClient,
   content: ContentDocument,
-): Promise<Map<string, FaceSetDetails>> {
-  const ids = collectFaceSetIds(content);
-  const rows =
-    ids.length === 0
-      ? []
-      : await client.faceSet.findMany({
-          where: { id: { in: ids } },
-          include: {
-            layers: { orderBy: { position: "asc" } },
-            expressions: { orderBy: { position: "asc" } },
-          },
-        });
-  return new Map(rows.map((row) => [row.id, row]));
+): Promise<Map<string, FaceSetRevisionDetails>> {
+  const references = collectFaceSetReferences(content);
+  if (references.length === 0) {
+    return new Map();
+  }
+  const rows = await client.faceSetRevision.findMany({
+    where: {
+      OR: references.map((reference) => ({
+        faceSetId: reference.faceSetId,
+        versionNumber: reference.version,
+      })),
+    },
+    include: {
+      faceSet: true,
+      layers: { orderBy: { position: "asc" } },
+      expressions: { orderBy: { position: "asc" } },
+    },
+  });
+  return new Map(
+    rows.map((row) => [
+      faceSetKey(row.faceSetId, row.versionNumber),
+      {
+        faceSetId: row.faceSetId,
+        name: row.faceSet.name,
+        version: row.versionNumber,
+        layers: row.layers,
+        expressions: row.expressions,
+        createdAt: row.faceSet.createdAt,
+        updatedAt: row.faceSet.updatedAt,
+      },
+    ]),
+  );
 }
 
 export async function loadLayerAssets(
   client: PrismaClient | Prisma.TransactionClient,
-  faceSetById: Map<string, FaceSetDetails>,
+  faceSetByKey: Map<string, FaceSetRevisionDetails>,
 ): Promise<Map<string, AssetWithRenditions>> {
   const ids = [
     ...new Set(
-      [...faceSetById.values()].flatMap((faceSet) =>
+      [...faceSetByKey.values()].flatMap((faceSet) =>
         faceSet.layers.map((layer) => layer.assetId),
       ),
     ),
@@ -82,16 +173,19 @@ export async function loadLayerAssets(
 
 export function collectFaceLayerReferences(
   content: ContentDocument,
-  faceSetById: Map<string, FaceSetDetails>,
+  faceSetByKey: Map<string, FaceSetRevisionDetails>,
 ): AssetReference[] {
   const references: AssetReference[] = [];
   const seen = new Set<string>();
   content.characters.forEach((character, characterIndex) => {
     character.appearances.forEach((appearance, appearanceIndex) => {
-      if (appearance.faceSetId === null) {
+      const reference = faceSetReferenceOf(appearance);
+      if (reference === null) {
         return;
       }
-      const faceSet = faceSetById.get(appearance.faceSetId);
+      const faceSet = faceSetByKey.get(
+        faceSetKey(reference.faceSetId, reference.version),
+      );
       if (faceSet === undefined) {
         return;
       }
@@ -122,8 +216,8 @@ export async function loadAllReferences(
   content: ContentDocument,
 ): Promise<LoadedReferences> {
   const { references, assetById } = await loadAssetReferences(client, content);
-  const faceSetById = await loadFaceSets(client, content);
-  const layerAssets = await loadLayerAssets(client, faceSetById);
+  const faceSetByKey = await loadFaceSets(client, content);
+  const layerAssets = await loadLayerAssets(client, faceSetByKey);
   for (const [id, asset] of layerAssets) {
     if (!assetById.has(id)) {
       assetById.set(id, asset);
@@ -132,10 +226,10 @@ export async function loadAllReferences(
   return {
     references: [
       ...references,
-      ...collectFaceLayerReferences(content, faceSetById),
+      ...collectFaceLayerReferences(content, faceSetByKey),
     ],
     assetById,
-    faceSetById,
+    faceSetByKey,
   };
 }
 
@@ -171,7 +265,7 @@ function readyDimensions(
 
 export function assertFaceSetReferences(
   content: ContentDocument,
-  faceSetById: Map<string, FaceSetDetails>,
+  faceSetByKey: Map<string, FaceSetRevisionDetails>,
   assetById: Map<string, AssetWithRenditions>,
 ): void {
   const issues: ValidationIssue[] = [];
@@ -180,21 +274,25 @@ export function assertFaceSetReferences(
   );
   content.characters.forEach((character, characterIndex) => {
     character.appearances.forEach((appearance, appearanceIndex) => {
-      if (appearance.faceSetId === null) {
+      const reference = faceSetReferenceOf(appearance);
+      if (reference === null) {
         return;
       }
-      const faceSet = faceSetById.get(appearance.faceSetId);
+      const path = [
+        "characters",
+        characterIndex,
+        "appearances",
+        appearanceIndex,
+        "faceSetId",
+      ];
+      const faceSet = faceSetByKey.get(
+        faceSetKey(reference.faceSetId, reference.version),
+      );
       if (faceSet === undefined) {
         issues.push({
-          path: [
-            "characters",
-            characterIndex,
-            "appearances",
-            appearanceIndex,
-            "faceSetId",
-          ],
+          path,
           code: "invalid_value",
-          message: "表情セットが見つかりません。",
+          message: `表情セットの版が見つかりません: ${reference.faceSetId} v${reference.version}`,
         });
         return;
       }
@@ -207,13 +305,7 @@ export function assertFaceSetReferences(
         (base === undefined || layerDims.some((dims) => dims === undefined))
       ) {
         issues.push({
-          path: [
-            "characters",
-            characterIndex,
-            "appearances",
-            appearanceIndex,
-            "faceSetId",
-          ],
+          path,
           code: "invalid_value",
           message: "顔レイヤーの寸法を確認できません。",
         });
@@ -228,13 +320,7 @@ export function assertFaceSetReferences(
         );
       if (mismatch) {
         issues.push({
-          path: [
-            "characters",
-            characterIndex,
-            "appearances",
-            appearanceIndex,
-            "faceSetId",
-          ],
+          path,
           code: "invalid_value",
           message: "顔レイヤーはベース画像と同じ寸法にしてください。",
         });
@@ -284,10 +370,12 @@ export function assertFaceSetReferences(
         const appearance = character.appearances.find(
           (entry) => entry.id === appearanceId,
         );
+        const reference =
+          appearance === undefined ? null : faceSetReferenceOf(appearance);
         const faceSet =
-          appearance?.faceSetId === null || appearance?.faceSetId === undefined
+          reference === null
             ? undefined
-            : faceSetById.get(appearance.faceSetId);
+            : faceSetByKey.get(faceSetKey(reference.faceSetId, reference.version));
         if (
           faceSet === undefined ||
           !faceSet.expressions.some((preset) => preset.id === line.expressionId)

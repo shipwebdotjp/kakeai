@@ -1,8 +1,9 @@
 import type {
-  CharacterAppearance,
+  CharacterAppearanceCore,
   CharacterName,
   CharacterVoice,
   ContentDocument,
+  ExpressionPreset,
 } from "@kakeai/contracts";
 
 /** A locale-specific display name copied from the character library. */
@@ -26,11 +27,11 @@ export interface ScriptAssetLookup {
 export type ScriptLibraryVoice = CharacterVoice;
 
 /**
- * An appearance copied from the character library, minus the library ID that
- * the operation replaces with a new local ID. `faceSetId` stays a reference:
- * the Face Set itself is never copied into the document.
+ * A library Appearance projection. The operation copies its fields into the
+ * work, replaces `id` with a new local ID, and records the library ID for a
+ * later explicit update. `faceSetId` stays a reference.
  */
-export type ScriptLibraryAppearance = Omit<CharacterAppearance, "id">;
+export type ScriptLibraryAppearance = CharacterAppearanceCore;
 
 /**
  * Read-only projection of a character library entry. Callers (HTTP API, Web UI)
@@ -46,6 +47,21 @@ export interface ScriptLibraryCharacter {
 
 export interface ScriptLibraryCharacterLookup {
   get(characterId: string): ScriptLibraryCharacter | null;
+}
+
+/**
+ * Read-only projection of the latest Face Set revision. `character
+ * .addFromLibrary` pins `version`; `character.updateFromLibrary` also needs the
+ * presets to detect expressions that the new revision no longer has.
+ */
+export interface ScriptFaceSetRevisionInfo {
+  id: string;
+  version: number;
+  expressions: readonly ExpressionPreset[];
+}
+
+export interface ScriptFaceSetLookup {
+  latest(faceSetId: string): ScriptFaceSetRevisionInfo | null;
 }
 
 /** A Voice Profile projection: the operation core needs its locale only. */
@@ -88,4 +104,6 @@ export interface ScriptContext {
   voiceProfiles?: ScriptVoiceProfileLookup;
   /** Optional: only `document.setVisualTheme` requires it. */
   themes?: ScriptThemeLookup;
+  /** Optional: only operations that copy or update from the library require it. */
+  faceSets?: ScriptFaceSetLookup;
 }

@@ -31,7 +31,8 @@ describe("compileDocument", () => {
       name: "リン",
       names: [],
       voices: [],
-      appearances: [{ id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null }],
+      libraryCharacterId: null,
+      appearances: [{ id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null }],
     });
     document.scenes[1]!.visualCues.push(
       cue({
@@ -113,8 +114,9 @@ describe("compileDocument", () => {
       name: "リン",
       names: [],
       voices: [],
+      libraryCharacterId: null,
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
       ],
     });
     document.scenes[1]!.visualCues.push(
@@ -145,8 +147,9 @@ describe("compileDocument", () => {
       name: "リン",
       names: [],
       voices: [],
+      libraryCharacterId: null,
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
       ],
     });
     document.scenes[1]!.visualCues.push(
@@ -187,8 +190,9 @@ describe("compileDocument", () => {
       name: "リン",
       names: [],
       voices: [],
+      libraryCharacterId: null,
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
       ],
     });
     document.scenes[1]!.visualCues.push(
@@ -234,8 +238,9 @@ describe("compileDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-rin", assetId: "asset-rin", expression: "normal", pose: "front", faceSetId: null },
+          { id: "appearance-rin", assetId: "asset-rin", expression: "normal", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
       {
@@ -243,8 +248,9 @@ describe("compileDocument", () => {
         name: "ミカ",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-mika", assetId: "asset-mika", expression: "normal", pose: "front", faceSetId: null },
+          { id: "appearance-mika", assetId: "asset-mika", expression: "normal", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     );
@@ -297,4 +303,67 @@ describe("compileDocument", () => {
     expect(compiled.html).not.toContain(`document.getElementById("${leftImg}")`);
   });
 
+});
+
+describe("face set version", () => {
+  it("passes the appearance's pinned version to the resolver", () => {
+    const document = validContentDocument();
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      names: [],
+      voices: [],
+      libraryCharacterId: null,
+      appearances: [
+        {
+          id: "appearance-smile",
+          assetId: "asset-rin",
+          expression: "smile",
+          pose: "front",
+          faceSetId: "face-set-rin",
+          faceSetVersion: 2,
+          libraryAppearanceId: null,
+        },
+      ],
+    });
+    document.scenes[1]!.visualCues.push(
+      cue({
+        id: "vc-standing-face",
+        template: { id: "character.standing", version: 1 },
+        layer: "standing",
+        input: {
+          characterId: "character-rin",
+          appearanceId: "appearance-smile",
+          side: "left",
+          scale: 1,
+        },
+      }),
+    );
+    const calls: Array<[string, number]> = [];
+    const faceSetResolver: FaceSetResolver = (faceSetId, version) => {
+      calls.push([faceSetId, version]);
+      return {
+        id: faceSetId,
+        version,
+        name: "リン正面",
+        layers: [],
+        expressions: [
+          {
+            id: "normal",
+            name: "通常",
+            browLayerId: null,
+            eyeLayerId: null,
+            mouthLayerId: null,
+          },
+        ],
+      };
+    };
+    const compiled = compileDocument({
+      document,
+      assetResolver: resolver,
+      faceSetResolver,
+    });
+    expect(calls).toEqual([["face-set-rin", 2]]);
+    expect(compiled.html).toContain('class="kakeai-standingv2"');
+  });
 });

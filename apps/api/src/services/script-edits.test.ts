@@ -38,7 +38,7 @@ function references(): ScriptValidationReferences {
       ["asset-audio", fakeAsset("asset-audio", "audio", 5000)],
       ["asset-image", fakeAsset("asset-image", "image", null)],
     ]),
-    faceSetById: new Map<string, FaceSetDetails>(),
+    faceSetByKey: new Map<string, FaceSetDetails>(),
     compositionDurations: new Map(),
     compositionProfiles: new Map(),
   };
@@ -104,6 +104,7 @@ function documentWithCast(): ContentDocument {
       name: "キャラクター",
       names: [],
       voices: [],
+      libraryCharacterId: null,
       appearances: [
         {
           id: "app-1",
@@ -111,6 +112,8 @@ function documentWithCast(): ContentDocument {
           expression: "normal",
           pose: "default",
           faceSetId: null,
+          faceSetVersion: null,
+          libraryAppearanceId: null,
         },
       ],
     },

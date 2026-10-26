@@ -6,6 +6,8 @@ import type {
 import {
   applyScriptOperations,
   createIdGenerator,
+  updateCharacterFromLibrary,
+  type CharacterLibraryUpdateInput,
   type ScriptAssetInfo,
   type ScriptContext,
   type ScriptOperationResult,
@@ -32,8 +34,14 @@ export interface StructuralEditResult {
   result: ScriptOperationResult;
 }
 
-function createScriptContext(
+export interface StructuralScriptContextExtras {
+  libraryCharacters?: ScriptContext["libraryCharacters"];
+  faceSets?: ScriptContext["faceSets"];
+}
+
+export function createStructuralScriptContext(
   assets: readonly StructuralAsset[],
+  extras: StructuralScriptContextExtras = {},
 ): ScriptContext {
   const assetById = new Map<string, ScriptAssetInfo>(
     assets.map((asset) => [
@@ -49,6 +57,7 @@ function createScriptContext(
   return {
     assets: { get: (assetId) => assetById.get(assetId) ?? null },
     ids: createIdGenerator(),
+    ...extras,
   };
 }
 
@@ -115,18 +124,10 @@ export function removeCueFromValues(
   };
 }
 
-export function applyToDocument(
-  document: ContentDocument,
-  values: DocumentFormValues,
-  operations: readonly ScriptOperation[],
-  assets: readonly StructuralAsset[],
+function mergeDraftCues(
+  drafts: Map<string, DraftCueEntry[]>,
+  result: ScriptOperationResult,
 ): StructuralEditResult {
-  const drafts = collectDraftCues(values, document);
-  const result = applyScriptOperations(
-    document,
-    operations,
-    createScriptContext(assets),
-  );
   const nextValues = toFormValues(result.document);
   const draftWarnings: Warning[] = [];
 
@@ -175,6 +176,55 @@ export function applyToDocument(
   };
 }
 
+export function applyToDocument(
+  document: ContentDocument,
+  values: DocumentFormValues,
+  operations: readonly ScriptOperation[],
+  assets: readonly StructuralAsset[],
+  extras: StructuralScriptContextExtras = {},
+): StructuralEditResult {
+  return mergeDraftCues(
+    collectDraftCues(values, document),
+    applyScriptOperations(
+      document,
+      operations,
+      createStructuralScriptContext(assets, extras),
+    ),
+  );
+}
+
+/**
+ * Applies the explicit "update from library" operation. It is deliberately not
+ * part of the public ScriptOperation union, so the agent surface cannot apply
+ * it; the Web UI calls the same script-edits core directly.
+ */
+export function applyCharacterLibraryUpdateStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  input: CharacterLibraryUpdateInput,
+  assets: readonly StructuralAsset[] = [],
+  extras: StructuralScriptContextExtras = {},
+): StructuralEditResult {
+  const document = buildStructuralDocument(base, values);
+  const update = updateCharacterFromLibrary(
+    document,
+    input,
+    createStructuralScriptContext(assets, extras),
+  );
+  const empty = emptyResult(update.document);
+  const result: ScriptOperationResult = {
+    ...empty,
+    created: {
+      ...empty.created,
+      characterIds: update.characterIds ?? [],
+      appearanceIds: update.appearanceIds ?? [],
+      speakerIds: update.speakerIds ?? [],
+    },
+    warnings: update.warnings ?? [],
+  };
+  return mergeDraftCues(collectDraftCues(values, document), result);
+}
+
 export function buildStructuralOrNull(
   base: ContentDocument,
   values: DocumentFormValues,
@@ -208,12 +258,14 @@ export function applyStructuralOperations(
   values: DocumentFormValues,
   operations: readonly ScriptOperation[],
   assets: readonly StructuralAsset[] = [],
+  extras: StructuralScriptContextExtras = {},
 ): StructuralEditResult {
   return applyToDocument(
     buildStructuralDocument(base, values),
     values,
     operations,
     assets,
+    extras,
   );
 }
 
@@ -222,6 +274,7 @@ export function applyStructuralOperation(
   values: DocumentFormValues,
   operation: ScriptOperation,
   assets: readonly StructuralAsset[] = [],
+  extras: StructuralScriptContextExtras = {},
 ): StructuralEditResult {
-  return applyStructuralOperations(base, values, [operation], assets);
+  return applyStructuralOperations(base, values, [operation], assets, extras);
 }

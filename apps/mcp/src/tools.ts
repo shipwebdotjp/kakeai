@@ -127,9 +127,9 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "character.get":
     "キャラクターライブラリの 1 件を、locale 別の声と外観（Face Set 参照を含む）付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
   "character.create":
-    "キャラクターライブラリに 1 件作成して返す。`name` と任意の `names`（locale 別の名前）・`voices`（locale 別の Voice Profile）・`appearances`（外観。`assetId` は取り込み済みの ready な画像 Asset、`faceSetId` は実在する Face Set）を指定する。外観の ID はサーバーが付ける。タイムアウト後は character.list で確認してから再実行する。",
+    "キャラクターライブラリに 1 件作成して返す。`name` と任意の `names`（locale 別の名前）・`voices`（locale 別の Voice Profile）・`appearances`（外観。`assetId` は取り込み済みの ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set）を指定する。外観の ID はサーバーが付ける。タイムアウト後は character.list で確認してから再実行する。",
   "character.update":
-    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は character.get で読んだ全件を送る。外観の `assetId` は ready な画像 Asset、`faceSetId` は実在する Face Set。存在しない ID は RESOURCE_NOT_FOUND、参照や locale の不整合は VALIDATION_ERROR。",
+    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は character.get で読んだ全件を送る。既存の外観には `id` を付けて送り、新規の外観だけ `id` を省略する（省略するとサーバーが新しい ID を付ける）。外観の `assetId` は ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set。存在しない ID は RESOURCE_NOT_FOUND、参照・寸法・locale の不整合は VALIDATION_ERROR。",
   "character.setVoices":
     "キャラクターの声（locale 別の Voice Profile 割り当て）を置き換えて返す。`voices` は `{ locale, voiceProfileId }` の配列で、Profile は実在し `locale` が一致すること。空配列で全解除もできる。外観は変更しない。存在しない ID は RESOURCE_NOT_FOUND。",
   "theme.list":
@@ -151,9 +151,9 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "font.list":
     "インストール済みフォントの一覧を、検索とページング付きで返す。`query` は family・表示名・PostScript 名の部分一致、`style`・`minWeight`・`maxWeight`・`available` で絞れる。`limit` は既定50・最大200、`offset` で次ページを取得する。応答の `total` は絞り込み後の件数、`nextOffset` は次ページの offset（無ければ null）、`catalog` はカタログの対応状況と更新時刻。Theme の `fontFace` を組み立てるときに使う。",
   "faceSet.list":
-    "Face Set の一覧を、Face Layer と Expression Preset 付きで返す。台詞の表情は `faceSet.get` か `character.get` の外観が参照する Face Set の `expressions[].id` を使う。Face Set の作成・更新・削除は公開しない。",
+    "Face Set の一覧を、最新の version と Face Layer・Expression Preset 付きで返す。作品の台詞の表情は、script.get の外観にある `faceSetId` と `faceSetVersion` を `faceSet.get` に渡して、その固定版の `expressions[].id` から選ぶ。Face Set の作成・更新・削除は公開しない。",
   "faceSet.get":
-    "Face Set 1件を、Face Layer と Expression Preset 付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
+    "Face Set 1件を、Face Layer と Expression Preset 付きで返す。`version` を指定するとその改訂版を返し、省略すると最新版を返す。作品の表情を編集するときは、script.get の外観にある `faceSetVersion` を指定する。存在しない ID や版は RESOURCE_NOT_FOUND。",
   "voiceProfile.list":
     "Voice Profile の一覧を、Adapter・voice ID・locale・設定付きで返す。声の割当て前に、台本の locale と一致する Profile を選ぶ。無ければ voiceProfile.listVoices で声候補を探して voiceProfile.create で作る。Profile の削除は公開しない。",
   "voiceProfile.get":

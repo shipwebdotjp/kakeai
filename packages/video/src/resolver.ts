@@ -16,4 +16,4 @@ export type AssetResolver = (assetId: string) => ResolvedAsset;
  */
 export type StillResolver = (assetId: string, sourceMs: number) => string;
 
-export type FaceSetResolver = (faceSetId: string) => SnapshotFaceSet;
+export type FaceSetResolver = (faceSetId: string, version: number) => SnapshotFaceSet;

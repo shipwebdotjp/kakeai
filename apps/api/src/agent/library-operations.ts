@@ -1,6 +1,7 @@
 import {
   type AgentCharacterAppearanceInput,
   type AgentCharacterCreateInput,
+  type AgentCharacterUpdateAppearanceInput,
   type AgentCharacterUpdateInput,
   type CharacterLibraryEntry,
   type CreateCharacterRequest,
@@ -110,6 +111,15 @@ async function createCharacterFromAgent(
   });
 }
 
+function toUpdatedLibraryAppearance(
+  appearance: AgentCharacterUpdateAppearanceInput,
+): CreateCharacterRequest["appearances"][number] {
+  return {
+    ...toLibraryAppearance(appearance),
+    ...(appearance.id === undefined ? {} : { id: appearance.id }),
+  };
+}
+
 async function updateCharacterFromAgent(
   prisma: PrismaClient,
   input: AgentCharacterUpdateInput,
@@ -134,7 +144,7 @@ async function updateCharacterFromAgent(
     appearances:
       input.appearances === undefined
         ? undefined
-        : input.appearances.map(toLibraryAppearance),
+        : input.appearances.map(toUpdatedLibraryAppearance),
   });
 }
 
@@ -293,7 +303,7 @@ export const libraryOperationDefinitions = {
     input: agentFaceSetGetInputSchema,
     output: agentFaceSetGetOutputSchema,
     run: async (input, context) => ({
-      faceSet: await getFaceSet(context.prisma, input.faceSetId),
+      faceSet: await getFaceSet(context.prisma, input.faceSetId, input.version),
     }),
   },
   "voiceProfile.listVoices": {

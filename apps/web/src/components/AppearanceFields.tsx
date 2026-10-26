@@ -20,7 +20,7 @@ interface AppearanceFieldsProps {
   onAdd: () => void;
   onPatch: (id: string, patch: Partial<AppearanceFormValue>) => void;
   onRemove: (id: string) => void;
-  faceSets?: Pick<FaceSet, "id" | "name">[];
+  faceSets?: Pick<FaceSet, "id" | "name" | "version">[];
 }
 
 export function AppearanceFields({
@@ -74,11 +74,16 @@ export function AppearanceFields({
               <select
                 className={textFieldClass}
                 value={appearance.faceSetId ?? ""}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const faceSetId =
+                    event.target.value === "" ? null : event.target.value;
+                  const selected = faceSets.find((entry) => entry.id === faceSetId);
                   onPatch(appearance.id, {
-                    faceSetId: event.target.value === "" ? null : event.target.value,
-                  })
-                }
+                    faceSetId,
+                    faceSetVersion:
+                      faceSetId === null ? null : (selected?.version ?? null),
+                  });
+                }}
               >
                 <option value="">なし</option>
                 {appearance.faceSetId !== null &&
@@ -93,6 +98,12 @@ export function AppearanceFields({
                   </option>
                 ))}
               </select>
+              {appearance.faceSetId !== null &&
+                appearance.faceSetVersion !== null && (
+                  <span className="text-xs text-muted-foreground">
+                    v{appearance.faceSetVersion} に固定
+                  </span>
+                )}
             </label>
             <button
               type="button"

@@ -25,8 +25,6 @@ import {
   cloneSceneFormValue,
   collectSceneIds,
   countCharacterFormUsage,
-  newAppearanceId,
-  newCharacterId,
   newSceneId,
   newSpeakerId,
   nextPointLabel,
@@ -69,10 +67,18 @@ import { sceneFoldKey } from "../lib/collapseState";
 import { ScriptSkinProvider } from "./CueList";
 import { MediaPicker } from "./MediaPicker";
 import { ScenePickerModal, type ScenePickerTarget } from "./ScenePickerModal";
+import { LibraryUpdateDialog } from "./LibraryUpdateModal";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { SceneBlock } from "./scene-editor/SceneBlock";
 import { useSceneEditorForm } from "./scene-editor/useSceneEditorForm";
 import { useSceneEditorBulkTts } from "./scene-editor/useSceneEditorBulkTts";
+import { useLibraryUpdate } from "./scene-editor/useLibraryUpdate";
+import {
+  buildLibraryCharacterCopy,
+  buildVoiceOnlyCharacter,
+  characterUsageText,
+  libraryCopyFailureMessage,
+} from "./scene-editor/character-copy";
 import { useSceneEditorSave } from "./scene-editor/useSceneEditorSave";
 import { hasConfiguredStanding, isMiddleScene } from "./scene-editor/shared";
 
@@ -276,6 +282,24 @@ export function SceneEditor({
     reset,
     clearBulkResult,
     onSaved,
+  });
+
+  const {
+    libraryUpdate,
+    openLibraryUpdate,
+    applyLibraryUpdate,
+    cancelLibraryUpdate,
+  } = useLibraryUpdate({
+    base,
+    getValues,
+    setValue,
+    replaceScenes,
+    assets: assetsQuery.data ?? [],
+    libraryEntries: characterLibrary.data,
+    faceSets: faceSets.data,
+    showMessage,
+    showError,
+    showWarnings,
   });
 
   const runStructural = (
@@ -741,56 +765,27 @@ export function SceneEditor({
   };
 
   const addCharacterFromLibrary = (entry: CharacterLibraryEntry) => {
-    const characterId = newCharacterId();
-    const voiceProfileId =
-      entry.voices.find((voice) => voice.locale === base.locale)
-        ?.voiceProfileId ?? null;
-    const resolvedName = resolveCharacterName(entry, base.locale);
-    const character: CharacterFormValue = {
-      id: characterId,
-      name: resolvedName,
-      names: entry.names.map((name) => ({ ...name })),
-      voiceProfileId,
-      voices: entry.voices.map((voice) => ({ ...voice })),
-      appearances: entry.appearances.map((appearance) => ({
-        id: newAppearanceId(),
-        assetId: appearance.assetId,
-        expression: appearance.expression,
-        pose: appearance.pose,
-        label: appearance.label ?? "",
-        faceSetId: appearance.faceSetId,
-      })),
-    };
-    appendCharacter(character);
-    addSpeakerFor(characterId, resolvedName, voiceProfileId);
+    const copy = buildLibraryCharacterCopy(entry, faceSets.data ?? [], base.locale);
+    if (copy === null) {
+      showMessage(
+        libraryCopyFailureMessage(faceSets.isLoading, faceSets.isError),
+      );
+      return;
+    }
+    appendCharacter(copy.character);
+    addSpeakerFor(copy.character.id, copy.resolvedName, copy.voiceProfileId);
   };
 
   const addVoiceOnlySpeaker = () => {
-    const characterId = newCharacterId();
-    appendCharacter({
-      id: characterId,
-      name: "ナレーター",
-      names: [],
-      voiceProfileId: null,
-      voices: [],
-      appearances: [],
-    });
-    addSpeakerFor(characterId, "ナレーター", null);
+    const character = buildVoiceOnlyCharacter();
+    appendCharacter(character);
+    addSpeakerFor(character.id, character.name, null);
   };
 
   const deleteCharacter = (index: number, character: CharacterFormValue) => {
-    const usage = countCharacterFormUsage(getValues(), character.id);
-    const details: string[] = [];
-    if (usage.lines > 0) {
-      details.push(`セリフ ${usage.lines} 件`);
-    }
-    if (usage.standing > 0) {
-      details.push(`立ち絵 ${usage.standing} 件（${usage.scenes} シーン）`);
-    }
-    const usageText =
-      details.length === 0
-        ? ""
-        : `\n使用中: ${details.join("、")}。保存するとこれらの参照を解除します。`;
+    const usageText = characterUsageText(
+      countCharacterFormUsage(getValues(), character.id),
+    );
     if (
       !window.confirm(
         `「${character.name || character.id}」を削除しますか？${usageText}`,
@@ -1319,6 +1314,7 @@ export function SceneEditor({
                 characterIndex={characterIndex}
                 voiceProfiles={voiceProfiles.data ?? []}
                 faceSets={faceSets.data ?? []}
+                onUpdateFromLibrary={openLibraryUpdate}
                 onDelete={deleteCharacter}
               />
             ))}
@@ -1399,8 +1395,6 @@ export function SceneEditor({
                   adapterVoices={adapterVoices}
                   savedVoiceByLineId={savedVoiceByLineId}
                   bulkRunning={bulkGenerate.isPending}
-                  faceSets={faceSets.data ?? []}
-                  faceSetsReady={faceSets.isSuccess}
                   scriptVersionId={scriptVersionId}
                   onMove={onMove}
                   onRemoveScene={onRemoveScene}
@@ -1483,6 +1477,12 @@ export function SceneEditor({
         }
         onClose={() => setPickerRequest(null)}
         onSelect={onPickerSelect}
+      />
+      <LibraryUpdateDialog
+        state={libraryUpdate}
+        voiceProfiles={voiceProfiles.data ?? []}
+        onCancel={cancelLibraryUpdate}
+        onApply={applyLibraryUpdate}
       />
       <ScriptImportModal
         open={importOpen}

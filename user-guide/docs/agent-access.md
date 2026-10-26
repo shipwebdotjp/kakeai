@@ -162,7 +162,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 `kakeai_character_list` / `kakeai_character_get` はキャラクターライブラリの読み取りを公開し、`kakeai_character_create` / `kakeai_character_update` で作成・部分更新、`kakeai_character_set_voices` で声（locale 別の Voice Profile 割り当て）の付け替えができます。削除は UI で人間が行います。
 
-作成・更新で指定する外観の画像は、`kakeai_asset_import` で取り込んで `ready` になった画像だけを使えます。外観の ID はサーバーが付けるため、指定する必要はありません。更新は変更する項目だけを送り、省略した項目は変わりません（指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は `kakeai_character_get` で読んだ全件を送ります）。ライブラリの編集は既存作品のコピーには反映されないため、既存作品の見た目を変えるには UI で作品内のキャラクターを編集するか、コピーし直してセリフを割り当て直します。
+作成・更新で指定する外観の画像は、`kakeai_asset_import` で取り込んで `ready` になった画像だけを使えます。外観の ID はサーバーが付けるため、指定する必要はありません。更新は変更する項目だけを送り、省略した項目は変わりません（指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は `kakeai_character_get` で読んだ全件を送ります）。ライブラリの編集は既存作品のコピーには反映されないため、既存作品の見た目を変えるには UI で作品内のキャラクターを編集するか、「ライブラリから更新」を使います。この更新はエージェントには公開していません。
 
 立ち絵が必要な場合は、対象 locale の声を持つ Entry を選びます。使いたい Entry に声が無い場合は、先に `kakeai_character_set_voices`（`characterId` と `voices: [{ locale, voiceProfileId }]`。Profile は実在し `locale` が一致すること）で声を付けてからコピーします。声が無い Entry をそのままコピーすると `voiceProfileId: null` になり、その話者の TTS は `TTS_INPUT_INVALID` で失敗します。既存作品の話者に有効な `voiceProfileId` があれば、ライブラリから追加せずそのまま使えます。
 
@@ -170,7 +170,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 ### Face Set
 
-立ち絵の表情を切り替えるときは、`kakeai_character_get` の外観（`appearances[]`）から `faceSetId` を読み、`kakeai_face_set_get` で `expressions[].id` を確認して、`line.setExpression` に渡します。表情を使うのは Character を持つ話者の行です。声だけの話者には顔がないため使いません。Face Set の作成・更新・削除は UI で人間が行います。
+立ち絵の表情を切り替えるときは、`kakeai_script_get` で作品の外観（`appearances[]`）から `faceSetId` と `faceSetVersion` を読み、`kakeai_face_set_get` にその `version` を渡して固定版の `expressions[].id` を確認し、`line.setExpression` に渡します。作品は追加した時点の Face Set 改訂版を固定しているため、最新版の ID をそのまま使うと保存に失敗することがあります。表情を使うのは Character を持つ話者の行です。声だけの話者には顔がないため使いません。Face Set の作成・更新・削除は UI で人間が行います。
 
 ### Theme
 

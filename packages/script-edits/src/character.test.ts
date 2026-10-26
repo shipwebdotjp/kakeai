@@ -11,6 +11,10 @@ import type {
   ScriptLibraryCharacter,
 } from "./context.ts";
 import { ScriptEditError } from "./errors.ts";
+import {
+  planCharacterLibraryUpdate,
+  updateCharacterFromLibrary,
+} from "./character.ts";
 
 const libraryCharacter: ScriptLibraryCharacter = {
   id: "lib-1",
@@ -25,6 +29,7 @@ const libraryCharacter: ScriptLibraryCharacter = {
   ],
   appearances: [
     {
+      id: "lib-appearance-1",
       assetId: "asset-image-1",
       expression: "smile",
       pose: "front",
@@ -32,6 +37,7 @@ const libraryCharacter: ScriptLibraryCharacter = {
       faceSetId: "face-set-1",
     },
     {
+      id: "lib-appearance-2",
       assetId: "asset-image-2",
       expression: "normal",
       pose: "side",
@@ -67,6 +73,31 @@ function contextWith(
     assets: { get: () => null },
     ids,
     libraryCharacters: { get: (characterId) => byId.get(characterId) ?? null },
+    faceSets: {
+      latest: (faceSetId) =>
+        faceSetId === "face-set-1"
+          ? {
+              id: faceSetId,
+              version: 2,
+              expressions: [
+                {
+                  id: "normal",
+                  name: "通常",
+                  browLayerId: null,
+                  eyeLayerId: null,
+                  mouthLayerId: null,
+                },
+                {
+                  id: "smile",
+                  name: "笑い",
+                  browLayerId: null,
+                  eyeLayerId: null,
+                  mouthLayerId: null,
+                },
+              ],
+            }
+          : null,
+    },
   };
 }
 
@@ -126,6 +157,8 @@ describe("character.addFromLibrary", () => {
         pose: "front",
         label: "夏服",
         faceSetId: "face-set-1",
+        faceSetVersion: 2,
+        libraryAppearanceId: "lib-appearance-1",
       },
       {
         id: "appearance-2",
@@ -133,8 +166,11 @@ describe("character.addFromLibrary", () => {
         expression: "normal",
         pose: "side",
         faceSetId: null,
+        faceSetVersion: null,
+        libraryAppearanceId: "lib-appearance-2",
       },
     ]);
+    expect(character.libraryCharacterId).toBe("lib-1");
 
     const speaker = speakerOf(result.document, character.id);
     expect(speaker).toEqual({
@@ -271,5 +307,178 @@ describe("character.addFromLibrary", () => {
         ),
       "EDIT_PRECONDITION_FAILED",
     );
+  });
+});
+
+describe("character.updateFromLibrary", () => {
+  function planContext(version: number, expressionIds: string[]): ScriptContext {
+    const entry: ScriptLibraryCharacter = {
+      ...libraryCharacter,
+      name: "四国めたん（新）",
+      names: [{ locale: "ja-JP", name: "四国めたん（新）" }],
+      voices: [{ locale: "ja-JP", voiceProfileId: "vp-ja-2" }],
+      appearances: [
+        {
+          id: "lib-appearance-1",
+          assetId: "asset-image-1",
+          expression: "smile",
+          pose: "front",
+          label: "夏服",
+          faceSetId: "face-set-1",
+        },
+        {
+          id: "lib-appearance-3",
+          assetId: "asset-image-3",
+          expression: "normal",
+          pose: "front",
+          faceSetId: null,
+        },
+      ],
+    };
+    const byId = new Map([[entry.id, entry]]);
+    return {
+      assets: { get: () => null },
+      ids,
+      libraryCharacters: { get: (characterId) => byId.get(characterId) ?? null },
+      faceSets: {
+        latest: (faceSetId) =>
+          faceSetId === "face-set-1"
+            ? {
+                id: faceSetId,
+                version,
+                expressions: expressionIds.map((id) => ({
+                  id,
+                  name: id,
+                  browLayerId: null,
+                  eyeLayerId: null,
+                  mouthLayerId: null,
+                })),
+              }
+            : null,
+      },
+    };
+  }
+
+  function documentWithCopiedCharacter(): ContentDocument {
+    const document = createInitialContentDocument();
+    const copied = applyScriptOperation(
+      document,
+      { op: "character.addFromLibrary", libraryCharacterId: "lib-1" },
+      contextWith([libraryCharacter]),
+    ).document;
+    const point = copied.scenes[1]!;
+    if (point.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    point.lines = [
+      {
+        id: "line-smile",
+        speakerId: "speaker-1",
+        captionText: "笑顔",
+        speechText: "えがお",
+        selectedAudioTakeId: null,
+        expressionId: "smile",
+      },
+    ];
+    point.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 1 },
+      range: { kind: "scene" },
+      layer: "standing",
+      order: 0,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        characterId: "character-1",
+        appearanceId: "appearance-1",
+        side: "left",
+        scale: 1,
+      },
+    });
+    return copied;
+  }
+
+  it("updates in place, keeps local IDs, detaches removed appearances and resets lost expressions", () => {
+    const document = documentWithCopiedCharacter();
+    const context = planContext(3, ["normal"]);
+    const plan = planCharacterLibraryUpdate(
+      document,
+      "character-1",
+      context.libraryCharacters!.get("lib-1")!,
+      context,
+    );
+    expect(plan.name).toEqual({ before: "四国めたん", after: "四国めたん（新）" });
+    expect(plan.appearances.updated).toHaveLength(1);
+    expect(plan.appearances.updated[0]).toMatchObject({
+      appearanceId: "appearance-1",
+      libraryAppearanceId: "lib-appearance-1",
+      after: { faceSetVersion: 3 },
+    });
+    expect(plan.appearances.removed).toEqual([
+      {
+        appearanceId: "appearance-2",
+        libraryAppearanceId: "lib-appearance-2",
+        label: "",
+      },
+    ]);
+    expect(plan.appearances.added).toHaveLength(1);
+    expect(plan.expressionResets).toMatchObject([
+      { lineId: "line-smile", expressionId: "smile" },
+    ]);
+
+    const result = updateCharacterFromLibrary(
+      document,
+      { characterId: "character-1", libraryCharacterId: "lib-1" },
+      context,
+    );
+    const character = result.document.characters[0]!;
+    expect(character.id).toBe("character-1");
+    expect(character.name).toBe("四国めたん（新）");
+    expect(character.libraryCharacterId).toBe("lib-1");
+    expect(character.appearances.map((appearance) => appearance.id)).toEqual([
+      "appearance-1",
+      "appearance-2",
+      "appearance-3",
+    ]);
+    expect(character.appearances[0]).toMatchObject({
+      libraryAppearanceId: "lib-appearance-1",
+      faceSetVersion: 3,
+    });
+    expect(character.appearances[1]).toMatchObject({
+      id: "appearance-2",
+      libraryAppearanceId: null,
+      faceSetId: null,
+    });
+    expect(character.appearances[2]).toMatchObject({
+      libraryAppearanceId: "lib-appearance-3",
+      assetId: "asset-image-3",
+    });
+    expect(result.document.speakers[0]).toMatchObject({
+      id: "speaker-1",
+      name: "四国めたん（新）",
+      voiceProfileId: "vp-ja-2",
+    });
+    expect(result.document.scenes[1]!.lines[0]!.expressionId).toBeNull();
+    expect(result.warnings).toMatchObject([
+      {
+        code: "expression_reset_to_normal",
+        path: ["scenes", 1, "lines", 0, "expressionId"],
+      },
+    ]);
+    expect(contentDocumentSchema.safeParse(result.document).success).toBe(true);
+  });
+
+  it("rejects a character that is not linked to the requested library entry", () => {
+    const document = documentWithCopiedCharacter();
+    const context = planContext(3, ["normal"]);
+    expect(() =>
+      updateCharacterFromLibrary(
+        document,
+        { characterId: "character-1", libraryCharacterId: "lib-2" },
+        context,
+      ),
+    ).toThrow(ScriptEditError);
   });
 });

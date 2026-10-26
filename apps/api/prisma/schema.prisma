@@ -196,39 +196,53 @@ model CharacterAppearance {
 model FaceSet {
   id          String             @id @default(cuid())
   name        String
-  layers      FaceLayer[]
-  expressions ExpressionPreset[]
+  revisions   FaceSetRevision[]
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }
 
-model FaceLayer {
-  faceSetId       String
-  id              String
-  faceSet         FaceSet  @relation(fields: [faceSetId], references: [id], onDelete: Cascade)
-  part            String
-  assetId         String
-  blinkLayerId    String?
-  speakingLayerId String?
-  position        Int      @default(0)
-  createdAt       DateTime @default(now())
+/// Immutable snapshot of a Face Set. A work-local Appearance pins the
+/// versionNumber it was copied or explicitly updated to; library Characters
+/// always resolve the latest revision.
+model FaceSetRevision {
+  id            String             @id @default(cuid())
+  faceSetId     String
+  faceSet       FaceSet            @relation(fields: [faceSetId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  layers        FaceLayer[]
+  expressions   ExpressionPreset[]
+  createdAt     DateTime           @default(now())
 
-  @@id([faceSetId, id])
+  @@unique([faceSetId, versionNumber])
+}
+
+model FaceLayer {
+  faceSetRevisionId String
+  faceSetRevision   FaceSetRevision @relation(fields: [faceSetRevisionId], references: [id], onDelete: Cascade)
+  id                String
+  part              String
+  assetId           String
+  blinkLayerId      String?
+  speakingLayerId   String?
+  position          Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  @@id([faceSetRevisionId, id])
   @@index([assetId])
 }
 
 model ExpressionPreset {
-  faceSetId    String
-  id           String
-  faceSet      FaceSet  @relation(fields: [faceSetId], references: [id], onDelete: Cascade)
-  name         String
-  browLayerId  String?
-  eyeLayerId   String?
-  mouthLayerId String?
-  position     Int      @default(0)
-  createdAt    DateTime @default(now())
+  faceSetRevisionId String
+  faceSetRevision   FaceSetRevision @relation(fields: [faceSetRevisionId], references: [id], onDelete: Cascade)
+  id                String
+  name              String
+  browLayerId       String?
+  eyeLayerId        String?
+  mouthLayerId      String?
+  position          Int      @default(0)
+  createdAt         DateTime @default(now())
 
-  @@id([faceSetId, id])
+  @@id([faceSetRevisionId, id])
 }
 
 model Job {

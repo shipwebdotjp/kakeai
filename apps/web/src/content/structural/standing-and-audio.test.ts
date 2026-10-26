@@ -35,13 +35,14 @@ describe("structural operation adapter", () => {
         name: "キャラクター",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
           {
             id: "app-1",
             assetId: "asset-image",
             expression: "normal",
             pose: "default",
-            faceSetId: null,
+            faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
           },
         ],
       },

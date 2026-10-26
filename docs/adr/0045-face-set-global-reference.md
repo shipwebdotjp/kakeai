@@ -1,5 +1,7 @@
 # Face Set はグローバル参照とし、顔素材の変更で再レンダー結果が変わることを許容する
 
+> superseded by [ADR-0102](./0102-face-set-revisions-and-pinned-works.md): Face Set は不変の改訂版を積み、作品は参照版を固定する。
+
 キャラクターの表情を構成する Face Set（眉・目・口・前景の Face Layer と Expression Preset）は、作品の `ScriptVersion.contentJson` にコピーせず、アプリ共通の**グローバルライブラリ**に置く。作品の `CharacterAppearance` は `faceSetId` で参照し、Face Layer は既存どおりグローバルな `Asset` を `assetId` で参照する。
 
 理由は、作品ごとに表情セットを作り直す負担を避け、複数作品・複数キャラクターで同じ顔素材を再利用するため。これは、既にグローバルな `Asset` を不変な `ScriptVersion` から `assetId` で参照している既存モデルと同じ参照の形である。異なるのは Face Set が**可変**である点だけである。

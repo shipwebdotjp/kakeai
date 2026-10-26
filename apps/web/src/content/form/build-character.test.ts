@@ -49,8 +49,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -64,6 +65,7 @@ describe("buildContentDocument", () => {
         names: [],
         voiceProfileId: null,
         voices: [],
+        libraryCharacterId: null,
         appearances: [
           {
             id: "appearance-smile",
@@ -71,7 +73,7 @@ describe("buildContentDocument", () => {
             expression: "smile",
             pose: "front",
             label: "",
-            faceSetId: null,
+            faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
           },
         ],
       },
@@ -146,8 +148,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -197,8 +200,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -251,8 +255,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -290,8 +295,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -313,8 +319,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -345,8 +352,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -416,8 +424,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -444,8 +453,9 @@ describe("buildContentDocument", () => {
         names: [],
         voiceProfileId: null,
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-1", assetId: "asset-rin", expression: "  ", pose: "", label: "", faceSetId: null },
+          { id: "appearance-1", assetId: "asset-rin", expression: "  ", pose: "", label: "", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -456,7 +466,7 @@ describe("buildContentDocument", () => {
       assetId: "asset-rin",
       expression: "normal",
       pose: "front",
-      faceSetId: null,
+      faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
     });
   });
 
@@ -471,8 +481,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin" },
+          { id: "appearance-rin", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: "faceset-rin", faceSetVersion: 1, libraryAppearanceId: null },
         ],
       },
     ];
@@ -496,6 +507,51 @@ describe("buildContentDocument", () => {
     expect(rebuilt.characters[0]!.appearances[0]!.faceSetId).toBe("faceset-rin");
     expect(rebuilt.scenes[1]!.lines[0]!.expressionId).toBe("happy");
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("round-trips library provenance and normalizes a legacy Face Set version to v1", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        names: [],
+        voices: [],
+        libraryCharacterId: "lib-rin",
+        appearances: [
+          {
+            id: "appearance-rin",
+            assetId: "asset-rin",
+            expression: "smile",
+            pose: "front",
+            faceSetId: "faceset-rin",
+            faceSetVersion: 3,
+            libraryAppearanceId: "lib-appearance-rin",
+          },
+        ],
+      },
+    ];
+
+    const values = toFormValues(base);
+    expect(values.characters[0]!.libraryCharacterId).toBe("lib-rin");
+    expect(values.characters[0]!.appearances[0]).toMatchObject({
+      faceSetVersion: 3,
+      libraryAppearanceId: "lib-appearance-rin",
+    });
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.characters[0]).toMatchObject({
+      libraryCharacterId: "lib-rin",
+      appearances: [
+        {
+          faceSetId: "faceset-rin",
+          faceSetVersion: 3,
+          libraryAppearanceId: "lib-appearance-rin",
+        },
+      ],
+    });
+
+    base.characters[0]!.appearances[0]!.faceSetVersion = null;
+    expect(toFormValues(base).characters[0]!.appearances[0]!.faceSetVersion).toBe(1);
   });
 
   it("clears expressionId when the speaker is dropped", () => {
@@ -527,8 +583,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -571,8 +628,9 @@ describe("buildContentDocument", () => {
         names: [],
         voiceProfileId: null,
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-1", assetId: null, expression: "", pose: "", label: "", faceSetId: null },
+          { id: "appearance-1", assetId: null, expression: "", pose: "", label: "", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];
@@ -582,7 +640,7 @@ describe("buildContentDocument", () => {
 
   it("round-trips a character voice profile through its speaker", () => {
     const base = createInitialContentDocument();
-    base.characters = [{ id: "character-rin", name: "リン", names: [], voices: [], appearances: [] }];
+    base.characters = [{ id: "character-rin", name: "リン", names: [], voices: [], appearances: [], libraryCharacterId: null }];
     base.speakers = [
       { id: "speaker-rin", name: "リン", characterId: "character-rin", voiceProfileId: "vp-1" },
     ];
@@ -609,6 +667,7 @@ describe("buildContentDocument", () => {
           { locale: "ja-JP", voiceProfileId: "vp-1" },
           { locale: "en-US", voiceProfileId: "vp-2" },
         ],
+        libraryCharacterId: null,
         appearances: [],
       },
     ];
@@ -639,6 +698,7 @@ describe("buildContentDocument", () => {
       names: [],
       voiceProfileId: null,
       voices: [],
+      libraryCharacterId: null,
       appearances: [],
     });
 
@@ -683,8 +743,9 @@ describe("buildContentDocument", () => {
         name: "リン",
         names: [],
         voices: [],
+        libraryCharacterId: null,
         appearances: [
-          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
         ],
       },
     ];

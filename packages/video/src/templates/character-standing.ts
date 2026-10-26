@@ -1,4 +1,5 @@
 import {
+  LEGACY_FACE_SET_VERSION,
   characterStandingV1InputSchema,
   DEFAULT_STANDING_EDGE,
   DEFAULT_STANDING_VERTICAL,
@@ -132,7 +133,7 @@ export function renderCharacterStanding(input: unknown, context: RenderContext):
   }
   let faceSet: SnapshotFaceSet;
   try {
-    faceSet = context.faceSetResolver(faceSetId);
+    faceSet = context.faceSetResolver(faceSetId, appearance?.faceSetVersion ?? LEGACY_FACE_SET_VERSION);
   } catch {
     throw new CompositionCompileError([
       { path: context.path, code: "unknown_face_set", message: "表情セットを解決できません。" },

@@ -60,3 +60,19 @@
 - [x] `blinkLayerId`（目）と `speakingLayerId`（口）の任意対応を Face Layer の描画に接続する。対応先のないレイヤーを別表情や別 Face Set のレイヤーで代用しない。
 - [x] 目は表示区間全体で閉眼レイヤーへ、口は発話区間だけで開口レイヤーへ決定的に置換する。音素同期は行わない。
 - [x] 動作時刻は `cue.id` と `characterId` から導いた固定シードの疑似乱数で決め、プレビュー・再レンダー・再試行で同じ動画になることを確認する（[ADR-0045](../adr/0045-face-set-global-reference.md) のジョブ内一貫性に従う）。
+
+## Face Set 改訂版と作品の固定（ADR-0102 / ADR-0103）
+
+- [x] `FaceSetRevision` を追加し、既存の Face Set を v1 としてバックフィルする migration を追加する。
+- [x] `PATCH /face-sets/:id` を改訂版の追加に変更する。名前だけの変更では版を増やさない。
+- [x] `FaceSet` DTO に `version` を追加し、`GET /face-sets/:id/revisions` と `GET /face-sets/:id/usages` を追加する。
+- [x] 改訂版の保存時に、ライブラリ外観のベース画像との寸法一致を必須にする。ライブラリ Character の保存時も最新版との寸法一致を検証する。
+- [x] `ContentDocument` の外観に `faceSetVersion`、Character に `libraryCharacterId`、外観に `libraryAppearanceId` を加える（加算的、`schemaVersion: 1`）。
+- [x] 作品の保存・プレビュー・レンダーで `(faceSetId, faceSetVersion)` を解決する。旧JSONは v1 として読む。
+- [x] コンパイラの `FaceSetResolver` を `(faceSetId, version)` に変更し、同一作品内の複数版を扱う。スナップショットに `version` を加える。
+- [x] ライブラリから追加するとき、リンク ID と最新版を固定する。Web のフォーム往復で消えないようにする。
+- [x] 台詞の表情候補を固定版の Expression Preset から作る。
+- [x] Face Set 編集画面に、使用中ライブラリ外観の合成プレビューと寸法診断を表示し、不一致時は保存を止める。
+- [x] 作品編集画面に「ライブラリから更新」を追加する。名前・言語別名・声・外観の差分と影響台詞を表示し、作品内 ID を維持して適用する。
+- [x] エージェントの `faceSet.get` に `version` を加え、作品の固定版から表情 ID を選ぶ手順を文書化する。
+- [x] 旧作品・手動追加の外観は更新対象外であることを仕様とユーザーガイドに明記する。

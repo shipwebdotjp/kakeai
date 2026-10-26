@@ -87,6 +87,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 {
   "id": "character-rin",
   "name": "リン",
+  "libraryCharacterId": "char_abc123",
   "names": [
     { "locale": "ja-JP", "name": "リン" },
     { "locale": "en-US", "name": "Rin" }
@@ -100,7 +101,9 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
       "assetId": "asset-rin-smile-front",
       "expression": "smile",
       "pose": "front",
-      "faceSetId": null
+      "faceSetId": "faceset-rin-front",
+      "faceSetVersion": 2,
+      "libraryAppearanceId": "appearance_summer"
     }
   ]
 }
@@ -108,9 +111,13 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 `voices` は locale 別の声の対応表である。同一キャラクター内の `locale` 重複は拒否する。`characterId` を持つ話者の `Speaker.voiceProfileId` は、document の `locale` に対応する `voices` の値と一致させなければならない。詳細は [../multilingual-voice/spec.md](../multilingual-voice/spec.md) を正とする。
 
+`libraryCharacterId` はライブラリからコピーした元の Character ID、`libraryAppearanceId` は外観のコピー元 ID である。どちらも既定は `null` で、レンダーには使わない。`libraryAppearanceId` は同一キャラクター内で重複を拒否し、`libraryCharacterId` が `null` の外観には指定できない。これらは加算的拡張であり、`schemaVersion` は `1` のまま据え置く。
+
 `names` は locale 別の名前の対応表である。同一キャラクター内の `locale` 重複は拒否し、空名は拒否する。`names` が無い locale では既定の `name` を使う。取り込みと言語版作成では対象 locale の名前で `Character.name` と対応 `Speaker.name` を解決する。詳細は [../character-library/spec.md](../character-library/spec.md) と [ADR 0091](../adr/0091-character-locale-names.md) を正とする。`names` は加算的拡張であり、`schemaVersion` は `1` のまま据え置く。`names` を持たない既存 JSON は `names: []` として読む。
 
-MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) で `faceSetId` と `NarrationSegment.expressionId` を追加し、`character.standing@1` で合成する。`faceSetId` が `null` の外観は表情を切り替えず、ベース画像をそのまま描く。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに `character.standing@1` を左右1体ずつ最大2体選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。ただし描画時は、立ち絵の `characterId` に対応する話者が話すセリフ区間だけ、その立ち絵がゆっくり上下にバウンドする。シーン内での立ち絵切替、口パクは後続フェーズで追加する。
+MVPでは立ち絵の表情・ポーズは文字列タグとして保存し、表示は選択した立ち絵Assetに依存する。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) で `faceSetId` と `NarrationSegment.expressionId` を追加し、`character.standing@1` で合成する。`faceSetId` が `null` の外観は表情を切り替えず、ベース画像をそのまま描く。
+
+`faceSetVersion` は、その外観が固定する Face Set の改訂版である。`faceSetId` が非nullなら正の整数、`faceSetId` がnullなら `null` とする。旧JSONは `faceSetId` があれば v1 として解釈する。Web UI の保存では明示値にし、API・レンダーは `null` を v1 を固定したものとして扱う。改訂版の解決と最新版への移行は [../face-expression/spec.md](../face-expression/spec.md) と [ADR-0102](../adr/0102-face-set-revisions-and-pinned-works.md) を正とする。編集画面でCharacterとCharacter Appearanceを手動登録し、各Sceneに `character.standing@1` を左右1体ずつ最大2体選択できる。立ち絵の選択はSpeakerやセリフ音声の選択に暗黙連動させない。ただし描画時は、立ち絵の `characterId` に対応する話者が話すセリフ区間だけ、その立ち絵がゆっくり上下にバウンドする。シーン内での立ち絵切替、口パクは後続フェーズで追加する。
 
 ## シーンとVisualCue
 

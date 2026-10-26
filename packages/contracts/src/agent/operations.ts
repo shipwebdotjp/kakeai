@@ -591,7 +591,17 @@ export const agentCharacterSetVoicesOutputSchema = z.strictObject({
  * internal key that neither scripts nor Face Sets reference, so the server
  * assigns it instead of asking the caller to invent a globally unique id.
  */
-export const agentCharacterAppearanceInputSchema = z.strictObject({
+export const agentCharacterCreateAppearanceInputSchema = z.strictObject({
+  assetId: idSchema,
+  expression: z.string(),
+  pose: z.string(),
+  label: z.string().trim().min(1).optional(),
+  faceSetId: idSchema.nullable().default(null),
+});
+
+export const agentCharacterUpdateAppearanceInputSchema = z.strictObject({
+  /** Omit only for a new appearance; existing IDs keep work links stable. */
+  id: idSchema.optional(),
   assetId: idSchema,
   expression: z.string(),
   pose: z.string(),
@@ -603,7 +613,7 @@ export const agentCharacterCreateInputSchema = z.strictObject({
   name: z.string().trim().min(1),
   names: characterNamesSchema.default([]),
   voices: characterVoicesSchema.default([]),
-  appearances: z.array(agentCharacterAppearanceInputSchema).max(50).default([]),
+  appearances: z.array(agentCharacterCreateAppearanceInputSchema).max(50).default([]),
 });
 export const agentCharacterCreateOutputSchema = z.strictObject({
   character: characterLibraryEntrySchema,
@@ -619,14 +629,17 @@ export const agentCharacterUpdateInputSchema = z.strictObject({
   name: z.string().trim().min(1).optional(),
   names: characterNamesSchema.optional(),
   voices: characterVoicesSchema.optional(),
-  appearances: z.array(agentCharacterAppearanceInputSchema).max(50).optional(),
+  appearances: z.array(agentCharacterUpdateAppearanceInputSchema).max(50).optional(),
 });
 export const agentCharacterUpdateOutputSchema = z.strictObject({
   character: characterLibraryEntrySchema,
 });
 
 export type AgentCharacterAppearanceInput = z.infer<
-  typeof agentCharacterAppearanceInputSchema
+  typeof agentCharacterCreateAppearanceInputSchema
+>;
+export type AgentCharacterUpdateAppearanceInput = z.infer<
+  typeof agentCharacterUpdateAppearanceInputSchema
 >;
 export type AgentCharacterCreateInput = z.infer<
   typeof agentCharacterCreateInputSchema
@@ -642,6 +655,8 @@ export const agentFaceSetListOutputSchema = z.strictObject({
 
 export const agentFaceSetGetInputSchema = z.strictObject({
   faceSetId: idSchema,
+  /** Omit to read the latest revision. Works pin a specific version. */
+  version: positiveInt.optional(),
 });
 export const agentFaceSetGetOutputSchema = z.strictObject({
   faceSet: faceSetSchema,

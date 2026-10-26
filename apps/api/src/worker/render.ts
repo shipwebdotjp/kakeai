@@ -290,10 +290,17 @@ export async function processRenderJob(
             manifest: found.manifest,
           };
         },
-        faceSetResolver: (faceSetId) => {
-          const found = (snapshot.faceSets ?? []).find((faceSet) => faceSet.id === faceSetId);
+        faceSetResolver: (faceSetId, version) => {
+          const found = (snapshot.faceSets ?? []).find(
+            (faceSet) =>
+              faceSet.id === faceSetId &&
+              (faceSet.version === undefined || faceSet.version === version),
+          );
           if (!found) {
-            throw new RenderJobError("RENDER_FAILED", `Face set missing from job snapshot: ${faceSetId}`);
+            throw new RenderJobError(
+              "RENDER_FAILED",
+              `Face set missing from job snapshot: ${faceSetId} v${version}`,
+            );
           }
           return found;
         },

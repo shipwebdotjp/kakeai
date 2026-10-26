@@ -100,6 +100,38 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
     ctx,
     ["characters"],
   );
+
+  for (const [characterIndex, character] of doc.characters.entries()) {
+    const libraryAppearanceIds = new Set<string>();
+    for (const [appearanceIndex, appearance] of character.appearances.entries()) {
+      const path = ["characters", characterIndex, "appearances", appearanceIndex];
+      if (appearance.faceSetId === null && appearance.faceSetVersion !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "表情セットを参照しない外観は faceSetVersion を指定できません",
+          path: [...path, "faceSetVersion"],
+        });
+      }
+      if (appearance.libraryAppearanceId === null) {
+        continue;
+      }
+      if (character.libraryCharacterId === null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "ライブラリ由来の外観には libraryCharacterId が必要です",
+          path: [...path, "libraryAppearanceId"],
+        });
+      }
+      if (libraryAppearanceIds.has(appearance.libraryAppearanceId)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `libraryAppearanceId が重複しています: ${appearance.libraryAppearanceId}`,
+          path: [...path, "libraryAppearanceId"],
+        });
+      }
+      libraryAppearanceIds.add(appearance.libraryAppearanceId);
+    }
+  }
   checkUnique(
     doc.scenes.flatMap((scene) => scene.visualCues.map((cue) => cue.id)),
     ctx,

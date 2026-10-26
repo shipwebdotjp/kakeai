@@ -67,6 +67,7 @@ export function createEmptyCharacter(): CharacterFormValue {
     voiceProfileId: null,
     voices: [],
     appearances: [],
+    libraryCharacterId: null,
   };
 }
 
@@ -78,6 +79,8 @@ export function createEmptyAppearance(): AppearanceFormValue {
     pose: DEFAULT_APPEARANCE_POSE,
     label: "",
     faceSetId: null,
+    faceSetVersion: null,
+    libraryAppearanceId: null,
   };
 }
 

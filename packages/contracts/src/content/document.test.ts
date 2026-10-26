@@ -74,6 +74,7 @@ describe("contentDocumentSchema", () => {
           { locale: "ja-JP", voiceProfileId: "vp_2" },
         ],
         appearances: [],
+        libraryCharacterId: null,
       },
     ];
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
@@ -91,6 +92,7 @@ describe("contentDocumentSchema", () => {
         ],
         voices: [],
         appearances: [],
+        libraryCharacterId: null,
       },
     ];
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
@@ -126,6 +128,7 @@ describe("contentDocumentSchema", () => {
         ],
         voices: [],
         appearances: [],
+        libraryCharacterId: null,
       },
     ];
     const parsed = contentDocumentSchema.safeParse(doc);
@@ -160,6 +163,7 @@ describe("contentDocumentSchema", () => {
         names: [],
         voices: [{ locale: "ja-JP", voiceProfileId: "vp_1" }],
         appearances: [],
+        libraryCharacterId: null,
       },
     ];
     const baseSpeakers = [...doc.speakers];
@@ -244,8 +248,9 @@ describe("contentDocumentSchema", () => {
       name: "リン",
       names: [],
       voices: [],
+      libraryCharacterId: null,
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
       ],
     });
     doc.scenes[1]!.visualCues = [
@@ -274,8 +279,9 @@ describe("contentDocumentSchema", () => {
       name: "リン",
       names: [],
       voices: [],
+      libraryCharacterId: null,
       appearances: [
-        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null },
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
       ],
     });
     doc.scenes[1]!.visualCues = [
@@ -776,5 +782,70 @@ describe("contentDocumentSchema", () => {
     if (parsed.success) {
       expect(parsed.data.caption).toEqual({ showSpeakerName: false });
     }
+  });
+});
+
+describe("library provenance and Face Set pins", () => {
+  function withAppearance() {
+    const doc = validContentDocument();
+    doc.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        names: [],
+        voices: [],
+        libraryCharacterId: "lib-rin",
+        appearances: [
+          {
+            id: "appearance-rin",
+            assetId: "asset-rin",
+            expression: "smile",
+            pose: "front",
+            faceSetId: "faceset-rin",
+            faceSetVersion: 2,
+            libraryAppearanceId: "lib-appearance-rin",
+          },
+        ],
+      },
+    ];
+    return doc;
+  }
+
+  it("accepts a pinned Face Set revision and library links", () => {
+    expect(contentDocumentSchema.safeParse(withAppearance()).success).toBe(true);
+  });
+
+  it("reads a missing faceSetVersion as legacy v1", () => {
+    const legacy = withAppearance() as unknown as Record<string, unknown>;
+    const characters = legacy.characters as Array<Record<string, unknown>>;
+    const appearances = characters[0]!.appearances as Array<Record<string, unknown>>;
+    delete appearances[0]!.faceSetVersion;
+    delete appearances[0]!.libraryAppearanceId;
+    delete characters[0]!.libraryCharacterId;
+    const parsed = contentDocumentSchema.safeParse(legacy);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.characters[0]!.appearances[0]!.faceSetVersion).toBeNull();
+      expect(parsed.data.characters[0]!.libraryCharacterId).toBeNull();
+    }
+  });
+
+  it("rejects a version without a Face Set and a library appearance without a character link", () => {
+    const noFaceSet = withAppearance();
+    noFaceSet.characters[0]!.appearances[0]!.faceSetId = null;
+    expect(contentDocumentSchema.safeParse(noFaceSet).success).toBe(false);
+
+    const noLink = withAppearance();
+    noLink.characters[0]!.libraryCharacterId = null;
+    expect(contentDocumentSchema.safeParse(noLink).success).toBe(false);
+  });
+
+  it("rejects duplicate library appearance ids within one character", () => {
+    const doc = withAppearance();
+    doc.characters[0]!.appearances.push({
+      ...doc.characters[0]!.appearances[0]!,
+      id: "appearance-rin-2",
+    });
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
 });
