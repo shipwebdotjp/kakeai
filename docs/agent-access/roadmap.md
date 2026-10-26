@@ -45,6 +45,8 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 | B13 | サムネイル操作の公開 | B1 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を公開する。MP4 後の投稿用成果物をエージェントが作れるようにする |
 | B14 | Character ライブラリ作成・更新の公開 | B1 | 既存サービスの作成・更新を呼ぶ追加操作。立ち絵付き作品で人間への作成依頼を不要にする |
 
+C1〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めない。着手するときに優先順位・実装範囲・設計を決める。
+
 ## フェーズ詳細
 
 ### B1 操作契約ダイジェストと版折衝の機構（R1-1）
@@ -137,6 +139,44 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 - `character.delete` は人専用のまま残す。ライブラリの編集は既存台本のコピーへ波及しない。外観の画像は取り込み済みの ready な画像 Asset に限る。
 - 完了条件: ソケット・MCP・CLI から作成 → 取得 → 名前/別名/声/外観の更新 → `character.addFromLibrary` → TTS → 確定 → レンダーが通り、外観ゼロの声だけ Character もコピーでき、削除が `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
+## 次期候補（C1〜C16）
+
+B1〜B14 の後、または並行して検討する候補である。B と違い、実装範囲・優先順位・設計はまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
+
+- 台本の中身は `script.save` で全文書を書けるため、「公開されていない編集操作」は実質的な穴ではない。C の中心は台本の外側（ライブラリ・成果物・診断）である。
+- 可逆性の基準（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)）と人専用の境界（削除・外部公開・Adapter 設定）は C でも変えない。
+- C7 / C8 は [エージェントMP4制作ロードマップ](../agent-mp4-production/roadmap.md) の「納品物」と同じ候補である。こちらは Agent Access 側の受け皿として扱う。
+- 設計上の判断は先送りする。特に C9〜C11 の Face Set の更新方法、C4 / C5 のテーマの視覚確認方法、C8 の受け渡し方法は、着手時に決める（[着手時に決める論点](#着手時に決める論点)）。
+
+| ID | 候補 | 種別 | 何を開くか | 価値・注意 |
+| --- | --- | --- | --- | --- |
+| C1 | フォントカタログの読み取り | read | `font.list`（family / PostScript 名 / weight / style / 利用可否） | テーマ作成の前提。macOS は数千 face になり得るため検索・ページング・上限が要る |
+| C2 | 過去 Revision の Theme 読み取り | read | `theme.get` の `version` 任意化、または `theme.revision.get` | 既存作品が参照する Revision を読む／複製元にする。非破壊。`theme.list` の latest 限定は維持する |
+| C3 | フォント診断の読み取り | read | `theme.diagnose` / `font.diagnostics` | `createRenderJob` は既に欠落フォントを計算しているが `Job` DTO に出ない。診断対象（Theme Revision か保存版か）を決める |
+| C4 | Theme の作成・編集・公開 | mutation | `theme.create` / `theme.draft.save` / `theme.draft.get` / `theme.publish` | Draft は可変で既存 Revision を壊さない。公開時に Draft は破棄され Revision が増える。Theme の削除・アーカイブは人専用のまま |
+| C5 | Theme Draft の PNG プレビュー | read | `preview.theme`（代表サンプルを PNG 化） | 現行のテーマプレビューは HTML のみでエージェントは描画できない。代替は「公開してから `preview.scriptFrame`」 |
+| C6 | Voice Adapter の一覧 | read | `voiceAdapter.list` | HTTP `/voice-adapters` をそのまま包む。`voiceProfile.listVoices` / `voiceProfile.create` の `adapterId` 推測をなくす |
+| C7 | SRT 字幕の取得 | read | `script.subtitles`（保存版から SRT） | HTTP の `GET /script-versions/:id/subtitles` を包む。Artifact を作らずオンデマンド生成。タイミングは `resolveTimeline` と同一 |
+| C8 | MP4 Artifact の取得 | read | `artifact.get` / `artifact.content` | 現状は人間が取得する境界。media session Cookie の制約があり、ローカルパス返却かバイト返却かを設計する |
+| C9 | Face Set の作成 | mutation | `faceSet.create` | 顔レイヤーは同寸・透過の ready 画像で `normal` が必須。寸法は既存サービスが検証するが透過は検証しない。品質確認は C11 |
+| C10 | Face Set の差分編集 | mutation | レイヤー・表情プリセットの追加、表示名変更など | 現行 `PATCH` は layers / expressions の全置換で、既存の Expression ID を消すと保存済み台詞の `expressionId` が宙に浮く。全置換 update を人専用に残す案を含めて着手時に決める |
+| C11 | Face Set の合成プレビュー | read | `preview.faceSet`（ベース外観＋表情の PNG） | Web UI にも表情セット単体のプレビューがない。C9 / C10 の品質確認手段 |
+| C12 | Asset 検索の寸法条件 | read | `asset.list` に `widthPx` / `heightPx`（必要なら向き）を追加 | 表情レイヤー・背景の「同寸画像」を探す。C9 の実用上の前提 |
+| C13 | Asset の可逆な整理 | mutation | `asset.update` の `favorited` / `archived` | 削除は人専用のまま。生成物の整理に使う |
+| C14 | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.setAppearance` など | 現行 `character.update` は appearances の全置換で read-modify-write になる。作品内の外観はコピーなので `script.save` のまま |
+| C15 | 未保存 ContentDocument のプレビュー | read | `preview.scriptFrame` の下書き対応 | 版を作らず構図を反復できる。保存済み版の既存契約は変えない |
+| C16 | 音声の自動検査 | read | `tts.inspect` / `preview.audio`（長さ・ラウドネス・無音） | エージェントは音を聴けないため、無音 TTS を検出できない。新しい解析能力の要否から決める |
+
+### 着手時に決める論点
+
+C の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
+
+- Face Set の更新を全置換のまま公開するか、追加・改名の差分操作に限るか。参照崩れ（保存済み `expressionId`）の検出と回復をどうするか。
+- テーマの視覚確認を `preview.theme`（PNG）で用意するか、「公開してから `preview.scriptFrame`」で済ませるか。後者は反復ごとに Revision が増える。
+- C8 の MP4 取得をローカルパスの返却にするか、バイト返却にするか。media session Cookie と同一 origin の制約をどう越えるか。
+- C9 / C10 / C11 を 1 フェーズにまとめるか、作成だけ先に開くか。
+- C1〜C16 の優先順位と実施順。
+
 ## 保留する拡張
 
 今回の拡張フェーズでは扱わない。必要になった時点で改めて計画する。
@@ -193,6 +233,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 低 | R3-3 スキル配布と版管理 | B10 で完了。公開タグと互換性履歴でスキルとアプリの版を対応づける |
 | 低 | R3-4 視覚確認 | B6 + V2 で完了。下書き・複数フレームは将来拡張 |
 | 低 | R3-5 外部接続 | 現行の非ゴールを維持 |
+| 未定 | C1〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
 
 ## 変わらない原則
 
