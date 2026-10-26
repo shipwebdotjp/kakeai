@@ -5,7 +5,7 @@
 ## 方針
 
 - 正本は `ContentDocument` と SQLite のままとする。Agent Access は操作コアを呼ぶ薄い束縛であり、束縛ごとに業務ロジックを持たない。
-- 可逆な操作だけをエージェントへ公開する。実体削除、外部サービスへの公開、Adapter 設定の変更は人に限る。Voice Profile の削除と Character の作成・外観変更・削除は人専用に残す。生成操作は、利用者が設定した接続先だけを使えることを条件に公開する（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)、[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)、[ADR 0088](../adr/0088-agent-voice-profile-writes.md)、[ADR 0089](../adr/0089-agent-character-set-voices.md)）。
+- 可逆な操作だけをエージェントへ公開する。実体削除、外部サービスへの公開、Adapter 設定の変更は人に限る。Voice Profile と Character の削除は人専用に残す。生成操作は、利用者が設定した接続先だけを使えることを条件に公開する（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)、[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)、[ADR 0086](../adr/0086-agent-generation-boundary-by-configured-endpoints.md)、[ADR 0088](../adr/0088-agent-voice-profile-writes.md)、[ADR 0089](../adr/0089-agent-character-set-voices.md)、[ADR 0099](../adr/0099-agent-character-library-writes.md)）。
 - 互換性は「追加は自由、破壊は版を上げる」で扱う。エージェントは古いスキーマをキャッシュし得るため、契約の変更は `schemaDigest` とプロトコル版で検知できなければならない。
 - スキルは `schema.get` を正とし、操作スキーマや Template 契約を複製しない。
 - 個人利用のローカルアプリを前提に、運用負荷より再現性と巻き戻しやすさを優先する。
@@ -22,10 +22,11 @@
 | R2-1 素材検索のスケール | 索引化せず、検索の停下来よさを拡張 | 個人ライブラリの規模ではタグ検索の走査コストは支配的でない。索引化（タグのリレーション化）は将来に回す |
 | R3-3 スキル配布と版管理 | Gitタグ＋GitHub Releaseを正本とし、`npx skills` にロック・配置・復元を委譲する | 独自 installer は CLI の機能を複製する。不変タグでスキルとアプリの版を対応づけ、`main` 追従を避ける |
 | B13 サムネイル操作の公開 | 読み取り・作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開し、削除・共通 Appearance の保存・プリセットは人専用に残す | 候補は版履歴のない可変文書で、削除は取り消せない。PNG はオンデマンド生成で Job を増やさず、素材は利用者が取り込んだ画像だけを使う（ADR 0098） |
+| B14 Character ライブラリ作成・更新の公開 | 作成と部分更新を公開し、削除は人専用に残す。外観 ID はサーバー生成、外観画像は取り込み済みの ready 画像だけを使う | 台本の外側の共有ライブラリで、既存台本はコピーを持つため可逆。全項目必須の更新は空配列で意図せず消す事故があるため部分更新にする（ADR 0099） |
 
 ## 実施順序
 
-B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13 は B4 の後に実装する。B7 は B2 の後に実装中である。B10 は独立して実施済みである。
+B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13・B14 は B4 の後に実装する。B7 は B2 の後に実装中である。B10 は独立して実施済みである。
 
 | フェーズ | 対象 | 依存 | 順序の理由 |
 | --- | --- | --- | --- |
@@ -42,6 +43,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 | B11 | Voice Profile の作成・更新公開 | B1 | 既存サービスを呼ぶだけの追加操作。声候補の取得と合わせて公開し、人間への作成依頼を不要にする |
 | B12 | Character Voice 付け替えの公開 | B1 | 既存の声検証を呼ぶだけの追加操作。外観に触れず声だけを置換し、人間への声付け依頼を不要にする |
 | B13 | サムネイル操作の公開 | B1 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を公開する。MP4 後の投稿用成果物をエージェントが作れるようにする |
+| B14 | Character ライブラリ作成・更新の公開 | B1 | 既存サービスの作成・更新を呼ぶ追加操作。立ち絵付き作品で人間への作成依頼を不要にする |
 
 ## フェーズ詳細
 
@@ -98,7 +100,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 - 状態: 完了。`speaker.add`（`key?`・`name`・`voiceProfileId`）と `speaker.setVoiceProfile`（`speakerId`・`voiceProfileId` / `null`）を追加し、`speaker` カテゴリを新設した。`line.add` / `line.setSpeaker` の `speakerId` は ID または `{ key }` を受け付ける。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md) を参照。
 - 割り当てる Profile は実在し、`ContentDocument.locale` と完全一致する。Character 付き Speaker は、その Character の文書 locale の Voice と一致する場合だけ設定でき、Character にその声が無い場合は `null` への解除だけを許す。参照欠落は `EDIT_TARGET_NOT_FOUND`、locale・Character Voice の不一致は `EDIT_PRECONDITION_FAILED`。
 - `line.setSpeaker` は声だけの話者へ変えると `expressionId` を自動で消す。`line.add` は声だけの話者への明示的な `expressionId` を拒否し、`line.setExpression` も拒否する。`document.setVisualTheme` は最新 Revision だけを選べる。`script.save` は Theme の変更がアーカイブ済み・最新でない Revision を指す場合だけ拒否し、Theme を変えない保存と `script.restore` は許可する。
-- 声の変更は以後の TTS にだけ影響し、既存の Audio Take は変えない。Character の作成・外観変更・削除と Face Set・Theme の管理は引き続き人専用である。Voice Profile 自体の作成・更新は B11、Character への声付けは B12 で公開する。
+- 声の変更は以後の TTS にだけ影響し、既存の Audio Take は変えない。Character の削除と Face Set・Theme の管理は引き続き人専用である。Voice Profile 自体の作成・更新は B11、Character への声付けは B12、Character の作成・更新は B14 で公開する。
 - 完了条件: 新規作品で `voiceProfile.list` → `speaker.add` → `line.add`（`speakerId: { key }`）→ TTS → 確定 → レンダーが通り、Character 付き話者・locale 不一致・Character Voice 不一致・`expressionId` の拒否がテストで固定されている。DB migration と HTTP API の変更はない。
 
 ### B10 スキル配布と版管理（R3-3）
@@ -118,8 +120,8 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 ### B12 Character Voice 付け替えの公開
 
 - 状態: 完了。`character.setVoices`（mutation）を追加した。`{ characterId, voices }` を受け、`{ character }` を返す。既存サービスの声検証（実在・locale 一致・重複不可）をそのまま使い、外観には触れない。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0089](../adr/0089-agent-character-set-voices.md) を参照。
-- `requestId` は持たず冪等台帳に載せない（`work.create`・`voiceProfile.create` と同じ扱い）。タイムアウト後は `character.get` で確認してから再実行する。未知の Character は `RESOURCE_NOT_FOUND`、声の参照欠落・不一致は `VALIDATION_ERROR` とする。Character の作成・外観変更・削除は人専用のまま残す。
-- 完了条件: 既存 Character へ声を付けて `character.addFromLibrary` → TTS → 確定 → レンダーが通り、作成・外観変更・削除は `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+- `requestId` は持たず冪等台帳に載せない（`work.create`・`voiceProfile.create` と同じ扱い）。タイムアウト後は `character.get` で確認してから再実行する。未知の Character は `RESOURCE_NOT_FOUND`、声の参照欠落・不一致は `VALIDATION_ERROR` とする。Character の削除は人専用のまま残す（作成・更新は B14 で公開）。
+- 完了条件: 既存 Character へ声を付けて `character.addFromLibrary` → TTS → 確定 → レンダーが通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
 ### B13 サムネイル操作の公開
 
@@ -127,6 +129,13 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 - サムネイルテンプレートは VisualTemplate と別レジストリのため、`schema.get` を増やさず `thumbnail.listTemplates` で `inputSchema` と `example` を返す。入力契約は `schemaDigest` に含め、テンプレート入力の変更でも検知できるようにする。
 - 候補の削除、言語版共通 Appearance の保存、外観プリセットの読み書きは公開しない。`requestId` は持たず、タイムアウト後は `thumbnail.list` で確認してから再実行する。PNG はオンデマンド生成で、Job・Artifact・版を作らない。
 - 完了条件: ソケット・MCP・CLI からテンプレート取得 → 候補作成 → 未保存プレビュー → 更新 → primary 選択 → PNG 取得が通り、削除・共通 Appearance 保存・プリセットが `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
+### B14 Character ライブラリ作成・更新の公開
+
+- 状態: 完了。`character.create` / `character.update`（mutation）を追加した。`character.create` は `{ name, names?, voices?, appearances? }`、`character.update` は `{ characterId, name?, names?, voices?, appearances? }` を受け、どちらも `{ character }` を返す。既存の `createCharacter` / `updateCharacter` をそのまま呼び、外観の画像・Face Set・Voice Profile の検証を複製しない。外観 ID はサーバーが生成する。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0099](../adr/0099-agent-character-library-writes.md) を参照。
+- `update` は省略した項目を変更せず、指定した配列だけを置き換える。現在値の読み取りとマージは書き込みと同じトランザクション内で行う。1 項目も指定しない呼び出しは `VALIDATION_ERROR`。未知の Character は `RESOURCE_NOT_FOUND`、Asset・Face Set・Profile の参照欠落や locale 不一致は `VALIDATION_ERROR`。`requestId` は持たず、タイムアウト後は `character.list` / `character.get` で確認してから再実行する。
+- `character.delete` は人専用のまま残す。ライブラリの編集は既存台本のコピーへ波及しない。外観の画像は取り込み済みの ready な画像 Asset に限る。
+- 完了条件: ソケット・MCP・CLI から作成 → 取得 → 名前/別名/声/外観の更新 → `character.addFromLibrary` → TTS → 確定 → レンダーが通り、外観ゼロの声だけ Character もコピーでき、削除が `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
 ## 保留する拡張
 
@@ -163,6 +172,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | `asset.import` は同一ユーザーが読める任意のローカルパスを受け付ける | プロンプト注入時に意図しないファイルを複製し得る | 保留 |
 | スキルの配布はリポジトリからのコピー／symlink | 導入と更新が手作業で、版の対応関係が分からない | B10 で解消。不変タグと GitHub Release から `npx skills` で導入し、`skills-lock.json` で版を固定する |
 | サムネイルの作成・選択・PNG 取得は Web UI だけ | MP4 を完成させても、投稿用サムネイルは人が作り直す必要がある | B13 で解消。候補の作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開した（削除・共通 Appearance の保存・プリセットは人専用） |
+| Character の作成・名前/別名・外観の編集は Web UI だけ | 立ち絵付きの新規作品は、使える Character が無いと人間の作成待ちで止まる | B14 で解消。`character.create` / `character.update` を公開した（削除は人専用、外観画像は取り込み済みの ready 画像のみ） |
 | プレビュー・レンダー品質の視覚確認は未提供 | エージェントは構文・保存検証までしか自律確認できない | B6 で render 成果物の `preview.frame` を追加。V2 で render 前の `preview.scriptFrame` / `preview.assetFrame` も追加 |
 
 ## 優先順位
@@ -174,8 +184,9 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 高 | B3 ソケットの流量制御 | ローカル操作面の安定性 |
 | 高 | B4 素材検索の拡張 | 制作スキルの検索品質を上げる |
 | 中 | R2-2 TTS 冪等化・`tts.attach` | 音声制作の反復コストを下げる。B7 で `tts.attachBulk` として実装中 |
-| 中 | R2-3 Voice／Face Set／Theme 読み取り・`key` 対応 | B8 / B9 で実装済み。Theme・Face Set・Voice Profile の読み取りと、既存 Profile の話者への割り当てに限定し、ライブラリ管理は人専用を維持する |
+| 中 | R2-3 Voice／Face Set／Theme 読み取り・`key` 対応 | B8 / B9 で実装済み。Theme・Face Set の読み取りと、Voice Profile・Character の可逆な書き込みに限定し、削除は人専用を維持する |
 | 中 | B13 サムネイル操作の公開 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を追加する。削除・共通 Appearance の保存・プリセットは人専用に残す |
+| 中 | B14 Character ライブラリ作成・更新の公開 | 既存サービスの作成・部分更新を追加する。削除は人専用に残し、外観画像は取り込み済みの ready 画像だけを使う |
 | 中 | R2-4 言語版・履歴・復元 | 多言語・反復制作の入口。履歴一覧・復元・Work 複製は P4（`script.listVersions` / `script.restore` / `work.clone`）で実装済み |
 | 低 | R2-5 Job 一般化 | 運用が複雑になった段階で必要 |
 | 低 | R3-2 監査ログ／UI | 複数エージェント運用時に必要 |

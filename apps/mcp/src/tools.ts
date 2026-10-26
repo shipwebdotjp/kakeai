@@ -123,11 +123,15 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "tts.attachBulk":
     "requestId付きで開始した tts.createBulk の結果を確定し、成功 Job だけを1つの台本版へ添付する。入力は元の台本版（`scriptVersionId`）、元の一括要求の `bulkRequestId`、添付自身の `requestId`（必須）。Jobが1件でも未完了なら台本を変更せず `pending` を返し、全Jobが終端状態になったら成功分だけを添付して `finalized` を返す。件数・対象外・失敗理由と、添付後の台本版（添付0件なら null）を返す。同じ `requestId` の再送は既存の版を返す。確定前に台本を書き換えると `SCRIPT_BASE_STALE` になる。",
   "character.list":
-    "キャラクターライブラリの一覧を返す。台本へ入れるときは script.edit の character.addFromLibrary でコピーする。ライブラリ自体の作成・更新・削除は公開しない。",
+    "キャラクターライブラリの一覧を返す。台本へ入れるときは script.edit の character.addFromLibrary でコピーする。ライブラリの削除は公開しない。",
   "character.get":
     "キャラクターライブラリの 1 件を、locale 別の声と外観（Face Set 参照を含む）付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
+  "character.create":
+    "キャラクターライブラリに 1 件作成して返す。`name` と任意の `names`（locale 別の名前）・`voices`（locale 別の Voice Profile）・`appearances`（外観。`assetId` は取り込み済みの ready な画像 Asset、`faceSetId` は実在する Face Set）を指定する。外観の ID はサーバーが付ける。タイムアウト後は character.list で確認してから再実行する。",
+  "character.update":
+    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は character.get で読んだ全件を送る。外観の `assetId` は ready な画像 Asset、`faceSetId` は実在する Face Set。存在しない ID は RESOURCE_NOT_FOUND、参照や locale の不整合は VALIDATION_ERROR。",
   "character.setVoices":
-    "キャラクターの声（locale 別の Voice Profile 割り当て）を置き換えて返す。`voices` は `{ locale, voiceProfileId }` の配列で、Profile は実在し `locale` が一致すること。空配列で全解除もできる。外観の変更・作成・削除は公開しない。存在しない ID は RESOURCE_NOT_FOUND。",
+    "キャラクターの声（locale 別の Voice Profile 割り当て）を置き換えて返す。`voices` は `{ locale, voiceProfileId }` の配列で、Profile は実在し `locale` が一致すること。空配列で全解除もできる。外観は変更しない。存在しない ID は RESOURCE_NOT_FOUND。",
   "theme.list":
     "選択できる Visual Theme の一覧を返す。組み込み Theme と、アーカイブされていないユーザー Theme の最新 Revision だけを含む。Theme Draft・アーカイブ済み Theme・古い Revision は含まない。",
   "theme.get":

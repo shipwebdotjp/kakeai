@@ -77,9 +77,9 @@
 
 - [x] `npm run typecheck`、`npm test`、最大3回のOCRレビューで妥当な指摘を修正し、コミットする。
 
-## 拡張フェーズ（B1〜B13）
+## 拡張フェーズ（B1〜B14）
 
-[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 → B6 → B8 → B9 → B11 → B12 → B13 の順に実装する。B7 は B2 の後に実装中である。B10 は独立して実装済みである。
+[ロードマップ](./roadmap.md) の「今回の決定」を正とする。B1 → B2 → B3 → B4 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → B14 の順に実装する。B7 は B2 の後に実装中である。B10 は独立して実装済みである。
 
 ### [x] B1 操作契約ダイジェストと版折衝の機構（R1-1）
 
@@ -195,3 +195,14 @@
 - [x] ソケット統合テストで、テンプレート取得、候補作成・取得・更新、未保存プレビューが DB を書かないこと、primary 選択と解除、PNG 生成（素材の data URL 化を含む）、未知言語版・未知候補・未対応テンプレート・素材欠落・入力不正の安定コード、削除・共通 Appearance 保存・プリセットが `AGENT_OPERATION_UNKNOWN` のままであることを固定する
 - [x] Agent Access 仕様・roadmap・サムネイル仕様・MP4 制作仕様とロードマップ・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `thumbnail.listTemplates` → `thumbnail.create` → `preview.thumbnail` → `thumbnail.update` → `thumbnail.setPrimary` → `thumbnail.image` が通り、CLI の `--out` で PNG を書き出せる。削除・共通 Appearance 保存・プリセットは `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B14 Character ライブラリ作成・更新の公開（ADR 0099）
+
+- [x] [ADR 0099](../adr/0099-agent-character-library-writes.md) を追加し、Character の作成・部分更新の公開と削除の人専用維持を決定する
+- [x] 契約に `character.create` / `character.update`（mutation）を追加する。`create` は `{ name, names?, voices?, appearances? }`、`update` は `{ characterId, name?, names?, voices?, appearances? }` を受け、どちらも `{ character }` を返す。外観は `id` を持たず、サーバーが生成する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスに 2 操作を追加し、既存の `services/character-library.ts`（作成・更新）をそのまま呼ぶ。`update` は現在値を読んで指定項目だけを重ね、1 項目も指定しない呼び出しを `VALIDATION_ERROR` とする。削除は公開しない
+- [x] MCP の説明文を 2 操作分追加し、`character.list` / `character.setVoices` の「作成・外観変更は公開しない」を改める。CLI はカタログ導出のため変更しない
+- [x] 操作ディスパッチャの肥大化を避けるため、Character / Face Set / Voice Profile / Theme の操作定義を `apps/api/src/agent/library-operations.ts` へ分割し、`scripts/check-file-size.mjs` の baseline から `operations.ts` を外す
+- [x] ソケット統合テストで、作成 → 名前/別名/声/外観の部分更新、外観ゼロの Character のコピー、未知 Character、Asset / Face Set / Profile の参照欠落、更新項目ゼロ、削除が `AGENT_OPERATION_UNKNOWN` のままであることを固定する
+- [x] Agent Access 仕様・roadmap・キャラクターライブラリ仕様・MP4 制作仕様・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `character.create` → `character.get` → `character.update` → `character.addFromLibrary` → TTS → 確定 → レンダーが通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

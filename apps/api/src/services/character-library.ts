@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
 import {
   type CharacterLibraryEntry,
   type CreateCharacterRequest,
   type UpdateCharacterRequest,
 } from "@kakeai/contracts";
-import type { PrismaClient } from "../generated/prisma/client.ts";
+import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { toCharacterLibraryEntry } from "../dto/mappers.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 
@@ -53,7 +54,7 @@ function assertNamesUsable(names: readonly NameInput[]): void {
 }
 
 async function assertAppearancesUsable(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   appearances: readonly AppearanceInput[],
 ): Promise<void> {
   const ids = [...new Set(appearances.map((appearance) => appearance.assetId))];
@@ -98,7 +99,7 @@ async function assertAppearancesUsable(
 }
 
 async function assertVoiceProfilesExist(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   voices: readonly VoiceInput[],
 ): Promise<void> {
   const ids = [...new Set(voices.map((voice) => voice.voiceProfileId))];
@@ -143,7 +144,7 @@ async function assertVoiceProfilesExist(
 }
 
 async function assertFaceSetsExist(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   appearances: readonly AppearanceInput[],
 ): Promise<void> {
   const ids = [...new Set(appearances.map((appearance) => appearance.faceSetId))].filter(
@@ -173,7 +174,7 @@ async function assertFaceSetsExist(
 }
 
 async function assertAppearanceIdsUsable(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   characterId: string | null,
   appearances: readonly AppearanceInput[],
 ): Promise<void> {
@@ -254,6 +255,16 @@ const characterInclude = {
   names: { orderBy: { position: "asc" } },
 } as const;
 
+/**
+ * Library appearance ids are internal keys: scripts copy appearances into
+ * their own ids and Face Sets are referenced by `faceSetId`, so nothing
+ * outside the Character row points at one. Callers that do not already track
+ * an id (the Agent surface) let the server mint it.
+ */
+export function newCharacterAppearanceId(): string {
+  return `appearance-${randomUUID()}`;
+}
+
 export async function listCharacters(prisma: PrismaClient): Promise<CharacterLibraryEntry[]> {
   const rows = await prisma.character.findMany({
     include: characterInclude,
@@ -274,6 +285,16 @@ export async function getCharacter(
     throw resourceNotFound("character", characterId);
   }
   return toCharacterLibraryEntry(row);
+}
+
+function appearanceIdConflictError() {
+  return validationError([
+    {
+      path: ["appearances"],
+      code: "custom",
+      message: "外観のIDが既に使われています。",
+    },
+  ]);
 }
 
 export async function createCharacter(
@@ -298,13 +319,7 @@ export async function createCharacter(
     return toCharacterLibraryEntry(row);
   } catch (error) {
     if (isPrismaCode(error, "P2002")) {
-      throw validationError([
-        {
-          path: ["appearances"],
-          code: "custom",
-          message: "外観のIDが既に使われています。",
-        },
-      ]);
+      throw appearanceIdConflictError();
     }
     throw error;
   }
@@ -349,13 +364,78 @@ export async function updateCharacter(
       throw resourceNotFound("character", characterId);
     }
     if (isPrismaCode(error, "P2002")) {
-      throw validationError([
-        {
-          path: ["appearances"],
-          code: "custom",
-          message: "外観のIDが既に使われています。",
+      throw appearanceIdConflictError();
+    }
+    throw error;
+  }
+}
+
+/** The members an agent partial update may change; omitted ones stay as-is. */
+export interface CharacterUpdatePatch {
+  name?: UpdateCharacterRequest["name"];
+  names?: UpdateCharacterRequest["names"];
+  voices?: UpdateCharacterRequest["voices"];
+  appearances?: UpdateCharacterRequest["appearances"];
+}
+
+/**
+ * Merges a partial update inside the write transaction. The current row is
+ * read there, not by the caller, so a concurrent `character.setVoices` or UI
+ * edit cannot be overwritten with a stale snapshot between a read and a write.
+ */
+export async function updateCharacterPartial(
+  prisma: PrismaClient,
+  characterId: string,
+  patch: CharacterUpdatePatch,
+): Promise<CharacterLibraryEntry> {
+  if (patch.names !== undefined) {
+    assertNamesUsable(patch.names);
+  }
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      // Validate the referenced Asset / Face Set / Voice Profile inside the
+      // write transaction. A Face Set has no foreign key, so a delete between
+      // an outside check and this write would otherwise persist a dangling
+      // reference; a Voice Profile delete would surface as a raw P2003.
+      if (patch.appearances !== undefined) {
+        await assertAppearancesUsable(transaction, patch.appearances);
+        await assertAppearanceIdsUsable(transaction, characterId, patch.appearances);
+        await assertFaceSetsExist(transaction, patch.appearances);
+      }
+      if (patch.voices !== undefined) {
+        await assertVoiceProfilesExist(transaction, patch.voices);
+      }
+      const current = await transaction.character.findUnique({
+        where: { id: characterId },
+        include: characterInclude,
+      });
+      if (current === null) {
+        throw resourceNotFound("character", characterId);
+      }
+      const entry = toCharacterLibraryEntry(current);
+      const row = await transaction.character.update({
+        where: { id: characterId },
+        data: {
+          name: patch.name ?? entry.name,
+          names: { deleteMany: {}, create: toNameCreate(patch.names ?? entry.names) },
+          voices: { deleteMany: {}, create: toVoiceCreate(patch.voices ?? entry.voices) },
+          appearances: {
+            deleteMany: {},
+            create: toAppearanceCreate(patch.appearances ?? entry.appearances),
+          },
         },
-      ]);
+        include: characterInclude,
+      });
+      return toCharacterLibraryEntry(row);
+    });
+  } catch (error) {
+    if (isPrismaCode(error, "P2025")) {
+      throw resourceNotFound("character", characterId);
+    }
+    // The Agent surface mints fresh appearance ids, so this is a safety net
+    // for callers that carry ids through (the app UI).
+    if (isPrismaCode(error, "P2002")) {
+      throw appearanceIdConflictError();
     }
     throw error;
   }

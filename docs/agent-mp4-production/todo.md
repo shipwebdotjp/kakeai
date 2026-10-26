@@ -37,7 +37,7 @@ P5 はライブラリ読み取りと声の割り当て（Theme / Face Set / Voic
 - [x] en-US の `work.create` → `script.edit` の回帰テストを追加する
 - [x] `skills/kakeai-production/SKILL.md` に MP4主線の前提を追加する
       - `character.list` で対象 locale の声を確認する
-      - 無ければ TTS を開始せず人間にキャラクター作成を依頼する
+      - 無ければ TTS を開始せず人間にキャラクター作成を依頼する（B14 以降は `character.create` で作成できる）
       - 標準は `character.addFromLibrary` によるコピー
       - MP4の合格ラインは「render Job 成功 + MP4 Artifact 存在」で、
         最終確認・サムネ・SRT・YouTube は人間
@@ -196,7 +196,8 @@ MCP の二重出力でコストが増えるため）。
 
 既存 Character に対象 locale の声が無い場合に、エージェントが
 `character.setVoices` で声を付けてから `character.addFromLibrary` でコピー
-できるようにする。Character 自体の新規作成・外観変更・削除は人専用のまま残す。
+できるようにする。Character 自体の新規作成・外観変更・削除はこの時点では人専用のまま残す
+（B14 で作成・更新を公開し、削除だけが人専用になった）。
 詳細は [Agent Access の B12](../agent-access/todo.md) と
 [ADR 0089](../adr/0089-agent-character-set-voices.md) を正とする。
 
@@ -208,6 +209,22 @@ MCP の二重出力でコストが増えるため）。
 完了条件: 声の無い既存 Character へ `character.setVoices` で声を付け、
 `character.addFromLibrary` → TTS → 確定 → レンダーまでエージェントだけで通る。
 
+## P8 Character ライブラリ作成・更新公開（完了）
+
+立ち絵に使える Character がライブラリに無い場合に、エージェントが
+`character.create` / `character.update` で用意できるようにする。削除は人専用のまま残す。
+詳細は [Agent Access の B14](../agent-access/todo.md) と
+[ADR 0099](../adr/0099-agent-character-library-writes.md) を正とする。
+
+- [x] MP4主線の声の確認（手順 4）と R2 を、`character.create` / `character.update` の手順へ更新する
+- [x] スキルとユーザーガイドの「キャラクターの新規作成を依頼する」を、作成・更新の手順へ置き換える
+- [x] spec の P7 完了記録と roadmap のライブラリ管理表を B14 に合わせて更新する
+- [x] `npm run typecheck` と `npm test` を通す
+
+完了条件: 使える Character が無いとき、`character.create` → `character.addFromLibrary`
+→ TTS → 確定 → レンダーまでエージェントだけで通り、削除は `AGENT_OPERATION_UNKNOWN`
+のままである。外観の画像は取り込み済みの ready な画像だけを使う。
+
 ## 将来（今回の非ゴール）
 
 - サムネイルの作成・選択・PNG取得
@@ -215,7 +232,7 @@ MCP の二重出力でコストが増えるため）。
 - YouTube 投稿設定・チャプター
 - MP4 Artifact のダウンロード
 - 版の削除・履歴圧縮、全 Edition の複製、Edition をまたぐ復元
-- Theme / Face Set / Voice Profile の作成・更新・削除（管理）
+- Theme / Face Set の管理（作成・更新・削除）、Voice Profile / Character の削除
 - 縦型（9:16）の完成動画
 - リモート/クラウド接続、アプリ自動起動
 

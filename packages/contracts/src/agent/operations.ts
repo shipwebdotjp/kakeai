@@ -27,7 +27,7 @@ import {
 import { assetTagsSchema } from "../asset";
 import { assetListInputSchema, assetListPageSchema } from "../asset-list";
 import { characterLibraryEntrySchema } from "../character-library";
-import { characterVoicesSchema } from "../content/character";
+import { characterNamesSchema, characterVoicesSchema } from "../content/character";
 import { faceSetSchema } from "../face-set";
 import {
   createVoiceProfileRequestSchema,
@@ -586,6 +586,55 @@ export const agentCharacterSetVoicesInputSchema = z.strictObject({
 export const agentCharacterSetVoicesOutputSchema = z.strictObject({
   character: characterLibraryEntrySchema,
 });
+
+/**
+ * A library appearance on the Agent surface. The appearance id is a library
+ * internal key that neither scripts nor Face Sets reference, so the server
+ * assigns it instead of asking the caller to invent a globally unique id.
+ */
+export const agentCharacterAppearanceInputSchema = z.strictObject({
+  assetId: idSchema,
+  expression: z.string(),
+  pose: z.string(),
+  label: z.string().trim().min(1).optional(),
+  faceSetId: idSchema.nullable().default(null),
+});
+
+export const agentCharacterCreateInputSchema = z.strictObject({
+  name: z.string().trim().min(1),
+  names: characterNamesSchema.default([]),
+  voices: characterVoicesSchema.default([]),
+  appearances: z.array(agentCharacterAppearanceInputSchema).max(50).default([]),
+});
+export const agentCharacterCreateOutputSchema = z.strictObject({
+  character: characterLibraryEntrySchema,
+});
+
+/**
+ * A partial update: an omitted member is left unchanged, and a provided list
+ * replaces that whole list. Callers read `character.get` first and send only
+ * the members they change, so an edit of one field cannot clear another.
+ */
+export const agentCharacterUpdateInputSchema = z.strictObject({
+  characterId: idSchema,
+  name: z.string().trim().min(1).optional(),
+  names: characterNamesSchema.optional(),
+  voices: characterVoicesSchema.optional(),
+  appearances: z.array(agentCharacterAppearanceInputSchema).max(50).optional(),
+});
+export const agentCharacterUpdateOutputSchema = z.strictObject({
+  character: characterLibraryEntrySchema,
+});
+
+export type AgentCharacterAppearanceInput = z.infer<
+  typeof agentCharacterAppearanceInputSchema
+>;
+export type AgentCharacterCreateInput = z.infer<
+  typeof agentCharacterCreateInputSchema
+>;
+export type AgentCharacterUpdateInput = z.infer<
+  typeof agentCharacterUpdateInputSchema
+>;
 
 /**
  * A selectable Visual Theme. Only the latest published Revision of an

@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Amended by [ADR 0099](./0099-agent-character-library-writes.md)（Character の作成・部分更新を公開する。削除は人専用のまま）。
+
 ## 背景
 
 キャラクターライブラリの管理は人専用とし、エージェントには `character.list` / `character.get` の読み取りと、操作コアの `character.addFromLibrary` による台本へのコピーだけを公開してきた（[Agent Access 仕様](../agent-access/spec.md)、B9）。立ち絵が必要な作品で対象 locale の声が無い場合、エージェントは声付きキャラクターの作成を人間に依頼するしかなかった（[MP4 制作仕様](../agent-mp4-production/spec.md)）。

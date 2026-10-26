@@ -42,7 +42,8 @@
 
 - 「ライブラリから追加」は、ライブラリのキャラクターを**新しいローカルIDでコピー**する。外観もコピーし、`voices` と `names` を引き継ぐ。話者の声には、当該 Edition の locale に一致する `voices` の声プロファイルを束ねる。一致する声がなければ声未設定とする。`Character.name` と自動生成する `Speaker.name` には、当該 Edition の locale に一致する `names` の名前を使い、一致がなければ既定の `name` を使う。
 - ライブラリ側の変更は既存台本のコピーへ波及しない。後から別名を追加しても、取り込み済みの台本には反映されない。既存の版は作品内の名前編集または `script.save` で直す。
-- 外部エージェントも同じコピー規則を操作コアの `character.addFromLibrary` で使う。Agent Access が公開するのはライブラリの読み取り（`character.list` / `character.get`）とこのコピーだけで、ライブラリ自体の作成・更新・削除は公開しない（[../agent-access/spec.md](../agent-access/spec.md)）。エージェントへの別名編集（`character.setNames` など）は公開しない。
+- 外部エージェントも同じコピー規則を操作コアの `character.addFromLibrary` で使う。Agent Access はライブラリの読み取り（`character.list` / `character.get`）、このコピー、声の付け替え（`character.setVoices`）、作成・部分更新（`character.create` / `character.update`）を公開する。削除と Face Set・Theme の管理は公開しない（[../agent-access/spec.md](../agent-access/spec.md)、[ADR 0099](../adr/0099-agent-character-library-writes.md)）。
+- エージェント向けの外観は `{ assetId, expression, pose, label?, faceSetId? }` で受け、外観 ID はサーバーが生成する。ライブラリの外観 ID は台本のコピーにも Face Set にも参照されない内部キーであるため、呼び出し側に発明させない。API の作成・更新契約は従来どおり外観 ID を要求する。
 - 「声だけの話者を追加」は、外観を持たない台本ローカルのキャラクターを作る。立ち絵とは無関係に声だけ出演するナレーターとして使える。
 - 台本内のキャラクターは、名前と声プロファイルを作品ごとに編集できる。外観も作品内で追加・編集・削除できる（コピーなのでライブラリや他作品へは波及しない）。ライブラリは再利用のためのテンプレートとして位置づける。
 - 外観の表示名 `label` は、立ち絵などの選択肢で `label`（表情 / ポーズ）として表示する（`label` が無ければ表情 / ポーズのみ）。

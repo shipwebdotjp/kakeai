@@ -23,7 +23,6 @@ const BASELINE = new Map([
   ["apps/web/src/pages/ThemeDetailPage.tsx", 1041],
   ["apps/web/src/pages/ThumbnailsPage.tsx", 880],
   ["apps/web/src/components/lines-editor/LineEditor.tsx", 860],
-  ["apps/api/src/agent/operations.ts", 812],
   ["apps/web/src/pages/WorkEditPage.tsx", 830],
 ]);
 

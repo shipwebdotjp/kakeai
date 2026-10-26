@@ -66,7 +66,7 @@ files.
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
-| 3 | Characters and voices | `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); use `character.addFromLibrary` when an on-screen Character is needed |
+| 3 | Characters and voices | `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
@@ -168,11 +168,14 @@ a second copy of that contract.
 
 The face set and theme libraries are **read-only** on the agent surface.
 Characters and voice profiles are the exceptions: besides reading them you may
-create and update voice profiles (`voiceProfile.create` / `voiceProfile.update`)
-and replace a Character's voices (`character.setVoices`); voice profile
-deletion and character creation, appearance edits and deletion stay with the
+create and update voice profiles (`voiceProfile.create` / `voiceProfile.update`),
+create and partially update Characters (`character.create` /
+`character.update`), and replace a Character's voices
+(`character.setVoices`). Voice profile and character deletion stay with the
 human. `speaker.add` and `speaker.setVoiceProfile` change the script's
-speakers, never a library entry.
+speakers, never a library entry. Editing a library entry never changes an
+existing script, because scripts hold copies; re-copy or edit the script-local
+Character to change an existing Work.
 
 ### Voice preflight
 
@@ -234,6 +237,31 @@ A replay of a `script.edit` (same `requestId`) does **not** return `created` IDs
 If a call containing only `speaker.add` times out, replay it to confirm the
 version, then `script.get` the new version to find the Speaker.
 
+### Creating and updating a character
+
+1. `character.list` first — reuse an entry instead of creating a duplicate.
+2. `character.create` with `name`, optional locale-keyed `names` and `voices`,
+   and optional `appearances`. Appearance images must already be ready image
+   Assets: search with `asset.list` (`kind: image`, ready) or import one with
+   `asset.import`. The server assigns appearance ids; read them from the
+   returned `character.appearances[].id`. A Character with no appearance is
+   valid and copies into a voice-only speaker.
+3. `character.update` is partial: send only the members you change and leave the
+   rest out. A member you do send replaces that whole list, so read
+   `character.get` first and send every entry you want to keep. Sending only
+   `characterId` is `VALIDATION_ERROR`.
+4. Validation: `assetId` must be a ready image Asset, `faceSetId` must exist,
+   and each `voiceProfileId` must exist with the same `locale`. Unknown ids or
+   a locale mismatch are `VALIDATION_ERROR`.
+5. There is no `requestId`. After a timeout, `character.list` / `character.get`
+   to see whether the change landed before retrying. A create retried by
+   mistake leaves a duplicate you must report, not silently ignore.
+
+Library edits do not propagate to existing scripts. To change how an existing
+Work looks, the human edits the script-local Character in the app UI, or you
+copy the updated library entry again into a new Character and reassign the
+lines.
+
 ### Copying a character
 
 1. `character.list` returns all library entries; `character.get` returns one by
@@ -276,10 +304,10 @@ accepts a built-in revision or the latest revision of an unarchived user Theme.
 allows saving a document that keeps its existing Theme, even if that Theme is
 archived.
 
-Never create a library character, edit its appearances, archive or delete
-library characters, face sets or themes, and never delete a Voice Profile.
-Library changes are otherwise the user's job, except creating or updating a
-Voice Profile and replacing a Character's voices; agents otherwise only read
+Never delete a library character or a Voice Profile, and never create, update,
+archive or delete a face set or theme. Character and Voice Profile writes are
+limited to `character.create` / `character.update` / `character.setVoices` and
+`voiceProfile.create` / `voiceProfile.update`; agents otherwise only read
 libraries, copy a Character into the script, or assign a Voice Profile to a
 speaker.
 
@@ -558,11 +586,11 @@ to the user when the fix is on their side.
   library entries.
 - Publishing anything to an external service (Composition publish inside Kakeai
   is an immutable version, not an external publish).
-- Creating, updating, archiving or deleting character library entries, voice
-  profiles, face sets, themes, TTS adapters, endpoints or credentials. Existing
-  Voice Profiles may be assigned to speakers; libraries themselves stay
-  read-only. The edition-wide thumbnail Appearance and appearance presets are
-  human-only too.
+- Deleting character library entries or voice profiles, and creating, updating,
+  archiving or deleting face sets, themes, TTS adapters, endpoints or
+  credentials. Character and Voice Profile creation and update are the only
+  library writes; the rest stays read-only. The edition-wide thumbnail
+  Appearance and appearance presets are human-only too.
 - Paid generation other than Jobs on the user's configured TTS adapter.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.

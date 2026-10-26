@@ -10,32 +10,6 @@ import {
   agentAssetListOutputSchema,
   agentAssetTagInputSchema,
   agentAssetTagOutputSchema,
-  agentCharacterGetInputSchema,
-  agentCharacterGetOutputSchema,
-  agentCharacterListInputSchema,
-  agentCharacterListOutputSchema,
-  agentCharacterSetVoicesInputSchema,
-  agentCharacterSetVoicesOutputSchema,
-  agentFaceSetGetInputSchema,
-  agentFaceSetGetOutputSchema,
-  agentFaceSetListInputSchema,
-  agentFaceSetListOutputSchema,
-  agentThemeGetInputSchema,
-  agentThemeGetOutputSchema,
-  agentThemeListInputSchema,
-  agentThemeListOutputSchema,
-  agentVoiceProfileCreateInputSchema,
-  agentVoiceProfileCreateOutputSchema,
-  agentVoiceProfileGetInputSchema,
-  agentVoiceProfileGetOutputSchema,
-  agentVoiceProfileListInputSchema,
-  agentVoiceProfileListModelsInputSchema,
-  agentVoiceProfileListModelsOutputSchema,
-  agentVoiceProfileListOutputSchema,
-  agentVoiceProfileListVoicesInputSchema,
-  agentVoiceProfileListVoicesOutputSchema,
-  agentVoiceProfileUpdateInputSchema,
-  agentVoiceProfileUpdateOutputSchema,
   agentCompositionAuthoringContextInputSchema,
   agentCompositionAuthoringContextOutputSchema,
   agentCompositionCreateInputSchema,
@@ -120,21 +94,6 @@ import {
 } from "../services/agent-script.ts";
 import { importAgentAsset } from "../services/agent-assets.ts";
 import type { CompositionAuthoringService } from "../services/authoring-context.ts";
-import {
-  getCharacter,
-  listCharacters,
-  setCharacterVoices,
-} from "../services/character-library.ts";
-import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
-import { getSelectableTheme, listSelectableThemes } from "../services/theme-library.ts";
-import {
-  createVoiceProfile,
-  getVoiceProfile,
-  listAdapterModels,
-  listAdapterVoices,
-  listVoiceProfiles,
-  updateVoiceProfile,
-} from "../services/voice-profiles.ts";
 import type { CompositionService } from "../services/compositions.ts";
 import {
   diagnoseCompositionFonts,
@@ -155,6 +114,7 @@ import { createWork, createLanguageEdition, getWork, listWorks, updateWork, clon
 import { AgentOperationError, agentIssue, asWorkResource } from "./errors.ts";
 import { runWithAgentRequest } from "./idempotency.ts";
 import { imageOperationDefinitions } from "./image-operations.ts";
+import { libraryOperationDefinitions } from "./library-operations.ts";
 import { thumbnailOperationDefinitions } from "./thumbnail-operations.ts";
 
 export type AgentOperationKind = "read" | "mutation";
@@ -566,108 +526,7 @@ const definitions: AgentOperationDefinitions = {
     // version instead of creating a second one.
     run: async (input, context) => attachBulkTts(context.prisma, input, context.agentId),
   },
-  // Character library reads only. Copying into a script goes through
-  // `script.edit` + `character.addFromLibrary`; library mutations are not
-  // exposed on the Agent surface.
-  "character.list": {
-    input: agentCharacterListInputSchema,
-    output: agentCharacterListOutputSchema,
-    run: async (_input, context) => ({
-      characters: await listCharacters(context.prisma),
-    }),
-  },
-  "character.get": {
-    input: agentCharacterGetInputSchema,
-    output: agentCharacterGetOutputSchema,
-    run: async (input, context) => ({
-      character: await getCharacter(context.prisma, input.characterId),
-    }),
-  },
-  // Voice assignment only. Character creation, appearance edits and deletion
-  // stay human-only; the script copy path is `character.addFromLibrary`.
-  "character.setVoices": {
-    input: agentCharacterSetVoicesInputSchema,
-    output: agentCharacterSetVoicesOutputSchema,
-    run: async (input, context) => ({
-      character: await setCharacterVoices(context.prisma, input.characterId, input.voices),
-    }),
-  },
-  // Library reads. Theme / Face Set writes stay in the app UI and are not
-  // exposed on the Agent surface. Voice Profile deletion stays human-only.
-  "voiceProfile.listVoices": {
-    input: agentVoiceProfileListVoicesInputSchema,
-    output: agentVoiceProfileListVoicesOutputSchema,
-    run: async (input, context) =>
-      listAdapterVoices(context.config, input.adapterId, input.model),
-  },
-  "voiceProfile.listModels": {
-    input: agentVoiceProfileListModelsInputSchema,
-    output: agentVoiceProfileListModelsOutputSchema,
-    run: async (input, context) => listAdapterModels(context.config, input.adapterId),
-  },
-  "voiceProfile.create": {
-    input: agentVoiceProfileCreateInputSchema,
-    output: agentVoiceProfileCreateOutputSchema,
-    // A new library resource, like work.create: no requestId, so callers
-    // confirm with voiceProfile.list before retrying after a timeout.
-    run: async (input, context) => ({
-      voiceProfile: await createVoiceProfile(context.prisma, input),
-    }),
-  },
-  "voiceProfile.update": {
-    input: agentVoiceProfileUpdateInputSchema,
-    output: agentVoiceProfileUpdateOutputSchema,
-    run: async (input, context) => ({
-      voiceProfile: await updateVoiceProfile(context.prisma, input.voiceProfileId, {
-        name: input.name,
-        voiceId: input.voiceId,
-        locale: input.locale,
-        settings: input.settings,
-      }),
-    }),
-  },
-  "theme.list": {
-    input: agentThemeListInputSchema,
-    output: agentThemeListOutputSchema,
-    run: async (_input, context) => ({
-      themes: await listSelectableThemes(context.prisma),
-    }),
-  },
-  "theme.get": {
-    input: agentThemeGetInputSchema,
-    output: agentThemeGetOutputSchema,
-    run: async (input, context) => ({
-      theme: await getSelectableTheme(context.prisma, input.themeId),
-    }),
-  },
-  "faceSet.list": {
-    input: agentFaceSetListInputSchema,
-    output: agentFaceSetListOutputSchema,
-    run: async (_input, context) => ({
-      faceSets: await listFaceSets(context.prisma),
-    }),
-  },
-  "faceSet.get": {
-    input: agentFaceSetGetInputSchema,
-    output: agentFaceSetGetOutputSchema,
-    run: async (input, context) => ({
-      faceSet: await getFaceSet(context.prisma, input.faceSetId),
-    }),
-  },
-  "voiceProfile.list": {
-    input: agentVoiceProfileListInputSchema,
-    output: agentVoiceProfileListOutputSchema,
-    run: async (_input, context) => ({
-      voiceProfiles: await listVoiceProfiles(context.prisma),
-    }),
-  },
-  "voiceProfile.get": {
-    input: agentVoiceProfileGetInputSchema,
-    output: agentVoiceProfileGetOutputSchema,
-    run: async (input, context) => ({
-      voiceProfile: await getVoiceProfile(context.prisma, input.voiceProfileId),
-    }),
-  },
+  ...libraryOperationDefinitions,
 };
 
 function unknownOperation(): AgentOperationError {

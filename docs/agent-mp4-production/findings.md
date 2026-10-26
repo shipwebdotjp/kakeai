@@ -13,7 +13,9 @@
 > 公開し、対象 locale の Profile が無い新規作品もエージェントだけで進める。
 > 削除は人専用のまま残す。P7（B12）で既存 Character への声付け
 > （`character.setVoices`）を公開し、声の無い Character もエージェントが使える。
-> Character 自体の新規作成・外観変更・削除は人専用のまま残す。
+> P8（B14）で Character の作成・部分更新（`character.create` /
+> `character.update`）を公開し、立ち絵付きの Character もエージェントが用意できる。
+> 削除は人専用のまま残す。
 
 ## 調査の前提
 

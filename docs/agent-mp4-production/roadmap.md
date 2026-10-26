@@ -97,7 +97,7 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
 | Theme の読み取り | `theme.list` / `theme.get`。利用可能な Theme と最新公開 Revision の定義 | 実装済み（P5）。Draft・アーカイブ済み・最新でない Revision・Font 診断は返さない |
 | Face Set の読み取り | `faceSet.list` / `faceSet.get`。Face Layer / Expression の一覧 | 実装済み（P5）。`line.setExpression` の ID 探索に使う |
 | Voice Profile の読み取り | `voiceProfile.list` / `voiceProfile.get`。声・locale・Adapter | 実装済み（P5）。声候補・モデル候補の取得と作成・更新は B11 で公開した |
-| Voice の割当て | `speaker.add` / `speaker.setVoiceProfile`。既存 Profile を声だけの話者へ | 実装済み（P5）。無い声は B11 の `voiceProfile.create` で作る。声の無い既存 Character への声付けは B12 の `character.setVoices` で行う。Profile の削除と Character の作成・外観変更・削除は人専用 |
+| Voice の割当て | `speaker.add` / `speaker.setVoiceProfile`。既存 Profile を声だけの話者へ | 実装済み（P5）。無い声は B11 の `voiceProfile.create` で作る。声の無い既存 Character への声付けは B12 の `character.setVoices`、Character の作成・更新は B14 の `character.create` / `character.update` で行う。Profile と Character の削除は人専用 |
 | Composition プレビュー | 新規 Composition の絵の確認 | 外部 HyperFrames CLI 依存を減らす |
 | 縦型動画 | 9:16 の完成動画 | 出力全体の設計変更。Composition の portrait とは別 |
 | リモート接続 | クラウドのエージェントから接続 | 現行のローカルソケット前提を崩す。認証・公開の再設計が必要 |
@@ -105,8 +105,9 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
 P5 の境界は「読み取り + 既存 Profile の割り当て」までであった。B11 で Voice Profile
 の声候補・モデル候補の取得と作成・更新を公開し、無い声はエージェントが作れる。
 B12 で既存 Character への声付けを公開し、声の無い Character もエージェントが
-使える。Theme・Face Set・Character の作成・外観変更・削除、Voice Profile の削除、
-アーカイブは人専用のまま残す。割り当ては新しい Script Version を作る可逆な変更であり、
+使える。B14 で Character の作成・部分更新を公開し、立ち絵付きの Character も
+エージェントが用意できる。Theme・Face Set の管理、Voice Profile と Character の
+削除、アーカイブは人専用のまま残す。割り当ては新しい Script Version を作る可逆な変更であり、
 既存の Audio Take を書き換えない。
 
 ## 今回の非ゴールを維持する理由

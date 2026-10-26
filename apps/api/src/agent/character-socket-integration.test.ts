@@ -14,7 +14,6 @@ import {
   getVisualTheme,
   toVisualThemeDefinitionV2,
   type AgentResponse,
-  type AgentOperationName,
   type ContentDocument,
   type Work,
 } from "@kakeai/contracts";
@@ -283,7 +282,7 @@ afterAll(async () => {
 });
 
 describe("agent character operations over the socket", () => {
-  it("catalogs character reads and keeps library mutations unregistered", async () => {
+  it("catalogs character reads and writes and keeps deletion unregistered", async () => {
     const schema = await client.request("schema.get", {});
     for (const name of ["character.list", "character.get"] as const) {
       expect(schema.agentOperations).toContainEqual({
@@ -292,32 +291,29 @@ describe("agent character operations over the socket", () => {
         longRunning: false,
       });
     }
+    for (const name of [
+      "character.setVoices",
+      "character.create",
+      "character.update",
+    ] as const) {
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "mutation",
+        longRunning: false,
+      });
+    }
     expect(schema.operations).toContainEqual({
       name: "character.addFromLibrary",
       category: "character",
     });
 
-    expect(schema.agentOperations).toContainEqual({
-      name: "character.setVoices",
-      kind: "mutation",
-      longRunning: false,
+    const response = await rawRequest(client.socketPath, "character.delete", {
+      characterId: libraryCharacterId,
     });
-
-    for (const operation of ["character.create", "character.update", "character.delete"]) {
-      const response = await rawRequest(client.socketPath, operation, {});
-      expect(response.ok).toBe(false);
-      if (!response.ok) {
-        expect(response.error.code).toBe("AGENT_OPERATION_UNKNOWN");
-      }
+    expect(response.ok).toBe(false);
+    if (!response.ok) {
+      expect(response.error.code).toBe("AGENT_OPERATION_UNKNOWN");
     }
-
-    await expectAgentError(
-      client.request(
-        "character.create" as AgentOperationName,
-        {} as never,
-      ),
-      "AGENT_OPERATION_UNKNOWN",
-    );
   });
 
   it("catalogs library reads and keeps Theme / Face Set writes and Voice Profile deletion unregistered", async () => {
@@ -704,6 +700,140 @@ describe("agent character operations over the socket", () => {
       }),
       "VALIDATION_ERROR",
     );
+  });
+
+  it.skipIf(!probeAvailable)(
+    "creates and partially updates a library character",
+    async () => {
+      const created = await client.request("character.create", {
+        name: "エージェント作成",
+        names: [{ locale: "ja-JP", name: "エージェント作成" }],
+        voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfileId }],
+        appearances: [
+          { assetId: imageAssetId, expression: "smile", pose: "front", faceSetId },
+        ],
+      });
+      expect(created.character.name).toBe("エージェント作成");
+      expect(created.character.appearances).toHaveLength(1);
+      // The appearance id is assigned by the server, not invented by the caller.
+      expect(created.character.appearances[0]!.id.length).toBeGreaterThan(0);
+
+      // A metadata-only update leaves voices and appearances alone.
+      const renamed = await client.request("character.update", {
+        characterId: created.character.id,
+        name: "エージェント改名",
+      });
+      expect(renamed.character.name).toBe("エージェント改名");
+      expect(renamed.character.voices).toEqual(created.character.voices);
+      expect(renamed.character.appearances).toEqual(created.character.appearances);
+
+      // Replacing appearances leaves names and voices alone.
+      const appearanceUpdated = await client.request("character.update", {
+        characterId: created.character.id,
+        appearances: [
+          { assetId: imageAssetId, expression: "normal", pose: "side", label: "私服" },
+          { assetId: imageAssetId, expression: "smile", pose: "front", faceSetId },
+        ],
+      });
+      expect(appearanceUpdated.character.names).toEqual(created.character.names);
+      expect(appearanceUpdated.character.voices).toEqual(created.character.voices);
+      expect(appearanceUpdated.character.appearances).toHaveLength(2);
+      expect(appearanceUpdated.character.appearances[0]).toMatchObject({
+        expression: "normal",
+        pose: "side",
+        label: "私服",
+        faceSetId: null,
+      });
+
+      // Replacing voices leaves appearances alone.
+      const voiceUpdated = await client.request("character.update", {
+        characterId: created.character.id,
+        voices: [],
+      });
+      expect(voiceUpdated.character.voices).toEqual([]);
+      expect(voiceUpdated.character.appearances).toEqual(
+        appearanceUpdated.character.appearances,
+      );
+
+      const fetched = await client.request("character.get", {
+        characterId: created.character.id,
+      });
+      expect(fetched.character).toEqual(voiceUpdated.character);
+
+      await expectAgentError(
+        client.request("character.update", {
+          characterId: "missing-character",
+          name: "x",
+        }),
+        "RESOURCE_NOT_FOUND",
+      );
+      await expectAgentError(
+        client.request("character.update", { characterId: created.character.id }),
+        "VALIDATION_ERROR",
+      );
+      await expectAgentError(
+        client.request("character.update", {
+          characterId: created.character.id,
+          appearances: [
+            { assetId: "missing-asset", expression: "smile", pose: "front" },
+          ],
+        }),
+        "VALIDATION_ERROR",
+      );
+      await expectAgentError(
+        client.request("character.update", {
+          characterId: created.character.id,
+          appearances: [
+            {
+              assetId: imageAssetId,
+              expression: "smile",
+              pose: "front",
+              faceSetId: "missing-face-set",
+            },
+          ],
+        }),
+        "VALIDATION_ERROR",
+      );
+      await expectAgentError(
+        client.request("character.update", {
+          characterId: created.character.id,
+          voices: [{ locale: "en-US", voiceProfileId: jaVoiceProfileId }],
+        }),
+        "VALIDATION_ERROR",
+      );
+    },
+  );
+
+  it("creates a voice-only library character and copies it into a script", async () => {
+    const created = await client.request("character.create", {
+      name: `声だけ-${randomUUID()}`,
+      voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfileId }],
+    });
+    expect(created.character.appearances).toEqual([]);
+
+    const work = await createWork(`声だけ-${randomUUID()}`);
+    const edition = firstEdition(work);
+    const initial = await client.request("script.get", {
+      languageEditionId: edition.id,
+    });
+    const copied = await client.request("script.edit", {
+      baseScriptVersionId: initial.scriptVersion.id,
+      requestId: `voice-only-copy-${randomUUID()}`,
+      operations: [
+        { op: "character.addFromLibrary", libraryCharacterId: created.character.id },
+      ],
+    });
+    const speakerId = copied.created.speakerIds[0]!;
+    expect(
+      copied.scriptVersion.content.speakers.find((speaker) => speaker.id === speakerId)
+        ?.voiceProfileId,
+    ).toBe(jaVoiceProfileId);
+    const characterId = copied.created.characterIds[0]!;
+    expect(
+      copied.scriptVersion.content.characters.find(
+        (character) => character.id === characterId,
+      )?.appearances,
+    ).toEqual([]);
   });
 
   it.skipIf(!probeAvailable)(

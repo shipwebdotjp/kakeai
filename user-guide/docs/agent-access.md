@@ -5,12 +5,12 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile の削除、Character の作成・外観変更・削除、Face Set・Theme の管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set・Theme の管理（作成・更新・削除）は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
 - Kakeai アプリが同じユーザーで起動していること。MCP サーバーはアプリのローカル制御ソケットへ接続するだけで、アプリを自動起動しません。
-- TTS を使う場合は、**対象 locale と完全一致する Voice Profile**（既存 Profile を声だけの話者へ割り当てる。無ければエージェントが声を選んで作成する）または**対象 locale の声を持つキャラクター**（声の無い既存キャラクターにはエージェントが声を付けられます）が必要です。どちらも無い場合、エージェントは TTS を開始せず停止します。立ち絵が必要で使えるキャラクターが無い場合は、キャラクターの新規作成を依頼します。
+- TTS を使う場合は、**対象 locale と完全一致する Voice Profile**（既存 Profile を声だけの話者へ割り当てる。無ければエージェントが声を選んで作成する）または**対象 locale の声を持つキャラクター**（声の無い既存キャラクターにはエージェントが声を付けられます）が必要です。どちらも無い場合、エージェントは TTS を開始せず停止します。立ち絵が必要で使えるキャラクターが無い場合は、エージェントがキャラクターを作成できます（外観の画像は取り込み済みの画像のみ）。
 - TTS を使う場合は、利用者が設定した TTS エンジン（VOICEVOX / AivisSpeech / OpenAI 互換）が起動していること。事前確認の操作は無く、`TTS_ENGINE_UNAVAILABLE` で判明します。
 - リポジトリで `npm install` が完了していること。
 - 既定のソケットは `<データディレクトリ>/agent/agent.sock` です。データディレクトリを変えている場合は `KAKEAI_DATA_DIR` を設定してください。
@@ -53,7 +53,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` / `kakeai_work_update` / `kakeai_work_clone` |
 | 台本 | `kakeai_script_get` / `kakeai_script_list_versions` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` / `kakeai_script_restore` |
 | 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` |
-| キャラクター | `kakeai_character_list` / `kakeai_character_get` |
+| キャラクター | `kakeai_character_list` / `kakeai_character_get` / `kakeai_character_create` / `kakeai_character_update` / `kakeai_character_set_voices` |
 | ライブラリ読み取り | `kakeai_theme_list` / `kakeai_theme_get` / `kakeai_face_set_list` / `kakeai_face_set_get` / `kakeai_voice_profile_list` / `kakeai_voice_profile_get` |
 | 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_tts_attach_bulk` |
 | Composition | `kakeai_composition_list` / `kakeai_composition_get` / `kakeai_composition_draft_get` / `kakeai_composition_authoring_context` / `kakeai_composition_create` / `kakeai_composition_draft_save` / `kakeai_composition_publish` |
@@ -118,7 +118,7 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 
 TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。接続先・認証情報・アダプター設定の変更と Voice Profile の削除はエージェントから行えませんが、Voice Profile の作成・更新と話者への割り当てはできます（[声だけの話者](#声だけの話者)）。TTS 以外の生成アダプターは現時点でありません。画像などの生成はエージェント側の道具で行い、`kakeai_asset_import` で素材として取り込みます。Kakeai は生成サービスの認証情報を保持しません。
 
-対象の話者に `voiceProfileId` が無い場合は TTS を開始しないでください。既存作品は `kakeai_script_get` の `speakers[]` と `kakeai_voice_profile_get` で有効な声を確認します。新規作品は `kakeai_voice_profile_list` で対象 locale と完全一致する Profile を探し、無ければ声候補から選んで作成します（[声だけの話者](#声だけの話者)）。立ち絵が必要な場合は、声を持つ既存キャラクターを選ぶか、声の無い既存キャラクターへ声を付けてからコピーします。使えるキャラクターが無い場合だけ、新規作成を依頼します（[キャラクター](#キャラクター)）。
+対象の話者に `voiceProfileId` が無い場合は TTS を開始しないでください。既存作品は `kakeai_script_get` の `speakers[]` と `kakeai_voice_profile_get` で有効な声を確認します。新規作品は `kakeai_voice_profile_list` で対象 locale と完全一致する Profile を探し、無ければ声候補から選んで作成します（[声だけの話者](#声だけの話者)）。立ち絵が必要な場合は、声を持つ既存キャラクターを選ぶか、声の無い既存キャラクターへ声を付けてからコピーします。使えるキャラクターが無い場合は `kakeai_character_create` で作成します（[キャラクター](#キャラクター)）。
 
 1. 対象の台本を保存し、`scriptVersionId` を用意します。**一括生成から確定までは台本を書き換えないでください。**確定前に保存し直すと元の版が最新でなくなり、確定は `SCRIPT_BASE_STALE` で停止します。
 2. 1 セリフなら `kakeai_tts_create`（`scriptVersionId` と `narrationSegmentId`、任意で `speechText` / `voiceId` / `speedScale`）を使います。`speedScale` の既定は 1.0、範囲は 0.5〜2.0 です。通常は `speechText` を省略し、保存済みの読み上げテキストを使います。上書きする場合は、添付前にセリフ側も同じテキストへ更新します。
@@ -160,7 +160,9 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 ### キャラクター
 
-`kakeai_character_list` / `kakeai_character_get` はキャラクターライブラリの読み取りを公開し、`kakeai_character_set_voices` で声（locale 別の Voice Profile 割り当て）の付け替えができます。キャラクターの作成・外観変更・削除はエージェントからは行えません。
+`kakeai_character_list` / `kakeai_character_get` はキャラクターライブラリの読み取りを公開し、`kakeai_character_create` / `kakeai_character_update` で作成・部分更新、`kakeai_character_set_voices` で声（locale 別の Voice Profile 割り当て）の付け替えができます。削除は UI で人間が行います。
+
+作成・更新で指定する外観の画像は、`kakeai_asset_import` で取り込んで `ready` になった画像だけを使えます。外観の ID はサーバーが付けるため、指定する必要はありません。更新は変更する項目だけを送り、省略した項目は変わりません（指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は `kakeai_character_get` で読んだ全件を送ります）。ライブラリの編集は既存作品のコピーには反映されないため、既存作品の見た目を変えるには UI で作品内のキャラクターを編集するか、コピーし直してセリフを割り当て直します。
 
 立ち絵が必要な場合は、対象 locale の声を持つ Entry を選びます。使いたい Entry に声が無い場合は、先に `kakeai_character_set_voices`（`characterId` と `voices: [{ locale, voiceProfileId }]`。Profile は実在し `locale` が一致すること）で声を付けてからコピーします。声が無い Entry をそのままコピーすると `voiceProfileId: null` になり、その話者の TTS は `TTS_INPUT_INVALID` で失敗します。既存作品の話者に有効な `voiceProfileId` があれば、ライブラリから追加せずそのまま使えます。
 
@@ -227,6 +229,8 @@ kakeai-agent --help
 | `kakeai_asset_list` | `kakeai-agent asset.list --input '{"tags":["bgm"],"status":"ready"}'` |
 | `kakeai_asset_import` | `kakeai-agent asset.import --input ...` |
 | `kakeai_character_list` | `kakeai-agent character.list` |
+| `kakeai_character_create` | `kakeai-agent character.create --input ...` |
+| `kakeai_character_update` | `kakeai-agent character.update --input ...` |
 | `kakeai_character_set_voices` | `kakeai-agent character.setVoices --input ...` |
 | `kakeai_voice_profile_list` | `kakeai-agent voiceProfile.list` |
 | `kakeai_voice_profile_list_voices` | `kakeai-agent voiceProfile.listVoices --input '{"adapterId":"voicevox"}'` |

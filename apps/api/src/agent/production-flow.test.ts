@@ -753,15 +753,17 @@ describe("production flow through the MCP binding", () => {
         edit4.scriptVersion.id,
       );
 
-      // Only voice assignment is writable on the agent surface.
+      // Character creation and voice assignment are writable; deletion is not.
       expect(agentOperationNames.filter((name) => name.startsWith("character."))).toEqual([
         "character.list",
         "character.get",
         "character.setVoices",
+        "character.create",
+        "character.update",
       ]);
       const unknownTool = await mcpClient.callTool({
-        name: "kakeai_character_create",
-        arguments: { name: "作らない" },
+        name: "kakeai_character_delete",
+        arguments: { characterId: libraryCharacter.id },
       });
       expect((unknownTool as { isError?: boolean }).isError).toBe(true);
       expect((JSON.parse(mcpText(unknownTool)) as { code: string }).code).toBe(

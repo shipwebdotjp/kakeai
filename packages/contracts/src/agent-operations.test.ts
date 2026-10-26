@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_PREVIEW_READ_TIMEOUT_MS,
   AGENT_READ_TIMEOUT_MS,
+  agentCharacterCreateInputSchema,
+  agentCharacterCreateOutputSchema,
   agentCharacterGetInputSchema,
   agentCharacterGetOutputSchema,
   agentCharacterListInputSchema,
   agentCharacterListOutputSchema,
+  agentCharacterUpdateInputSchema,
+  agentCharacterUpdateOutputSchema,
   agentFaceSetGetInputSchema,
   agentFaceSetGetOutputSchema,
   agentFaceSetListInputSchema,
@@ -645,6 +649,94 @@ describe("character read operation contracts", () => {
         ...digestInput,
         agentOperations: digestInput.agentOperations.filter(
           (entry) => entry.name !== "character.list",
+        ),
+      }),
+    ).not.toBe(schema.schemaDigest);
+  });
+});
+
+describe("character write operation contracts", () => {
+  it("defaults omitted lists and leaves appearance ids to the server", () => {
+    expect(agentCharacterCreateInputSchema.parse({ name: "リン" })).toEqual({
+      name: "リン",
+      names: [],
+      voices: [],
+      appearances: [],
+    });
+    expect(
+      agentCharacterCreateInputSchema.safeParse({
+        name: "リン",
+        names: [{ locale: "ja-JP", name: "リン" }],
+        voices: [{ locale: "ja-JP", voiceProfileId: "vp-1" }],
+        appearances: [
+          { assetId: "asset-1", expression: "smile", pose: "front", faceSetId: "fs-1" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(agentCharacterCreateInputSchema.safeParse({ name: "  " }).success).toBe(false);
+    // The library appearance id is an internal key, so callers cannot set it.
+    expect(
+      agentCharacterCreateInputSchema.safeParse({
+        name: "リン",
+        appearances: [
+          { id: "appearance-1", assetId: "asset-1", expression: "smile", pose: "front" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a partial update and rejects unknown fields", () => {
+    expect(agentCharacterUpdateInputSchema.parse({ characterId: "char-1" })).toEqual({
+      characterId: "char-1",
+    });
+    expect(
+      agentCharacterUpdateInputSchema.safeParse({
+        characterId: "char-1",
+        name: "リン",
+        names: [],
+        voices: [],
+        appearances: [],
+      }).success,
+    ).toBe(true);
+    expect(
+      agentCharacterUpdateInputSchema.safeParse({ characterId: "char-1", extra: true })
+        .success,
+    ).toBe(false);
+    expect(agentCharacterUpdateInputSchema.safeParse({ name: "リン" }).success).toBe(false);
+  });
+
+  it("registers both mutations in the catalog and the schema digest", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of ["character.create", "character.update"] as const) {
+      expect(agentOperationNames).toContain(name);
+      expect(isAgentMutationOperation(name)).toBe(true);
+      expect(isAgentLongRunningOperation(name)).toBe(false);
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "mutation",
+        longRunning: false,
+      });
+      expect(Object.keys(agentOperationInputSchemas)).toContain(name);
+      expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
+    }
+    expect(
+      agentCharacterCreateOutputSchema.safeParse({ character: libraryEntry }).success,
+    ).toBe(true);
+    expect(
+      agentCharacterUpdateOutputSchema.safeParse({ character: libraryEntry }).success,
+    ).toBe(true);
+
+    const digestInput = agentSchemaDigestInputOf({
+      ...schema,
+      templateInputContracts: agentTemplateInputContracts(),
+      thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
+      operationContracts: agentOperationContracts(),
+    });
+    expect(
+      computeAgentSchemaDigest({
+        ...digestInput,
+        agentOperations: digestInput.agentOperations.filter(
+          (entry) => entry.name !== "character.create",
         ),
       }),
     ).not.toBe(schema.schemaDigest);
