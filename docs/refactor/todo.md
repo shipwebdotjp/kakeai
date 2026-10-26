@@ -17,6 +17,7 @@
 
 - [ ] テンプレート定義を `text-block.ts` / `media.ts` / `character-standing.ts` / `device-frame.ts` / `site-mockup.ts` / `composition-full-bleed.ts` / `table.ts` / `chart.ts` / `list-callout.ts` / `flow.ts` / `stat.ts` / `quote.ts` / `chat.ts` に分ける
 - [ ] `shared.ts` に `TemplateDisplay` / `TemplateFieldSpec` / `VisualTemplateDefinition` を移す
+- [ ] `common.ts` / `figure.ts` / `line-refs.ts` / `lookup.ts` / `nested-refs.ts` に共通処理を分ける
 - [ ] `index.ts` をbarrelにし、`registry.ts` を再エクスポートする
 - [ ] `visualTemplateDefinitions` の配列順を変えない
 - [ ] `templates.test.ts` を通す
@@ -25,8 +26,8 @@
 
 ### [ ] T2 `apps/web/src/api/hooks.ts`
 
-- [ ] 作品・素材・台本版・Job・声・TTS・キャラクター・FaceSet・Theme・Composition・Thumbnailに分ける
-- [ ] `hooks.ts` をbarrelとして残す
+- [ ] 作品・素材・台本版・Job・声・TTS・キャラクター・FaceSet・Theme・Font・Composition・Thumbnailに分ける
+- [ ] `hooks/index.ts` をbarrelとして残す
 - [ ] query keyの文字列とinvalidationを変えない
 - [ ] 既存のimportパス（`../api/hooks`）を変えない
 

@@ -3,6 +3,7 @@ import {
   chartBarInputSchema,
   chatThreadInputSchema,
   chatThreadV1,
+  collectNestedCompositionVersionIds,
   deviceFrameInputSchema,
   flowDiagramInputSchema,
   getTemplateInputFields,
@@ -800,5 +801,42 @@ describe("chat.thread@1", () => {
       ["input"],
     );
     expect(refs.map((ref) => ref.assetId)).toEqual(["asset-1", "asset-2"]);
+  });
+});
+
+describe("nested reference collection", () => {
+  it("resolves a nested template through the registry", () => {
+    const definition = getVisualTemplate("scene.device-frame", 1);
+    expect(definition).toBeDefined();
+    const refs = definition?.collectAssetRefs(
+      {
+        screen: {
+          kind: "template",
+          template: { id: "media.card", version: 1 },
+          input: { assetId: "asset-nested", heading: "nested" },
+        },
+        frame: "laptop",
+      },
+      ["input"],
+    );
+    expect(refs).toEqual([
+      {
+        assetId: "asset-nested",
+        allowedKinds: ["image", "video"],
+        path: ["input", "screen", "input", "assetId"],
+      },
+    ]);
+  });
+
+  it("collects composition version ids from nested visuals", () => {
+    expect(
+      collectNestedCompositionVersionIds({
+        screen: {
+          kind: "composition",
+          compositionVersionId: "composition-1",
+          fit: "cover",
+        },
+      }),
+    ).toEqual(["composition-1"]);
   });
 });

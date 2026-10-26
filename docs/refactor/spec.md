@@ -45,6 +45,11 @@
 packages/contracts/src/templates/
 ├── index.ts              # 公開APIの再エクスポート
 ├── shared.ts             # TemplateDisplay / TemplateFieldSpec / VisualTemplateDefinition
+├── common.ts             # MEDIA_KINDS / 共通ラベル・example trigger
+├── figure.ts             # 表・グラフ共通のデータ検証
+├── line-refs.ts          # effectsの行参照収集
+├── lookup.ts             # レジストリの遅延参照
+├── nested-refs.ts        # ネストしたVisualのAsset/Composition参照
 ├── text-block.ts
 ├── media.ts              # media.fullBleed / media.card
 ├── character-standing.ts
@@ -64,6 +69,7 @@ packages/contracts/src/templates/
 - `index.ts` は公開APIの再エクスポートだけを持つ。レジストリは `registry.ts` に置く。
 - `visualTemplateDefinitions` の順序は変えない。Agent schema digestの入力である。
 - `site-mockup.ts` は `device-frame.ts` のスキーマをimportする。テンプレート定義同士の依存は一方向にする。
+- `lookup.ts` のレジストリは `registry.ts` の評価時に一度だけ設定する。未設定での参照は黙って空にせずエラーにする。
 
 ### `apps/web/src/content/form.ts`
 
@@ -86,6 +92,8 @@ apps/web/src/content/form/
 
 ```text
 apps/web/src/api/hooks/
+├── index.ts              # barrel
+├── queryKeys.ts          # モジュール横断のquery key
 ├── works.ts              # 作品・言語版
 ├── assets.ts             # 素材一覧・アップロード・更新・削除・クリーンアップ
 ├── scriptVersions.ts     # 現在版・履歴・保存・復元・プレビュー
@@ -94,13 +102,14 @@ apps/web/src/api/hooks/
 ├── tts.ts                # 単発・一括TTS
 ├── characters.ts
 ├── faceSets.ts
-├── themes.ts             # Theme / Font Catalog / Draft / Preview
+├── fonts.ts              # Font Catalog
+├── themes.ts             # Theme / Draft / Preview
 ├── compositions.ts
 ├── thumbnails.ts
 └── thumbnailAppearance.ts
 ```
 
-- `hooks.ts` はbarrelとして残す。
+- `hooks/index.ts` はbarrelとして残す。
 - query keyの文字列とinvalidationは移動だけ。挙動を変えない。
 
 ### `packages/video/src/compiler.ts`

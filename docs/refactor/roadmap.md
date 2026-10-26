@@ -48,7 +48,7 @@
    - テンプレートごとのファイルに分割し、`index.ts` は公開APIのbarrel、`registry.ts` はレジストリにする。
    - `visualTemplateDefinitions` の配列順を変えない。
 2. `apps/web/src/api/hooks.ts`
-   - ドメインごとに分割し、`hooks.ts` はbarrelとして残す。
+   - ドメインごとに分割し、`hooks/index.ts` をbarrelとして残す。
    - query keyとinvalidationは移動だけ。
 
 **狙い**: 新テンプレート・新APIの追加時に、同じ巨大ファイルへ追記する構造を先に壊す。純粋なスキーマと薄いフックが中心で、失敗コストが低い。
