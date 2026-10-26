@@ -171,12 +171,12 @@ async function findAssetReferences(
 export async function findReadyAudioAsset(
   prisma: PrismaClient,
   assetId: string,
-): Promise<{ id: string; storageKey: string } | null> {
+): Promise<{ id: string; storageKey: string; mediaType: string } | null> {
   const asset = await prisma.asset.findUnique({ where: { id: assetId } });
   if (asset === null || asset.kind !== "audio" || asset.status !== "ready") {
     return null;
   }
-  return { id: asset.id, storageKey: asset.storageKey };
+  return { id: asset.id, storageKey: asset.storageKey, mediaType: asset.mediaType };
 }
 
 export async function deleteAsset(

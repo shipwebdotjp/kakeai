@@ -13,6 +13,7 @@ import type { Job, PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
 import { probeMedia } from "../media/probe.ts";
 import { findReadyAudioAsset } from "../services/assets.ts";
+import { prepareRefAudioPath } from "../tts/ref-audio.ts";
 import {
   assetStorageKey,
   commitFile,
@@ -101,6 +102,7 @@ export async function processTtsJob(
   let committed = false;
   try {
     let audio: Uint8Array;
+    let refAudioCleanup: (() => Promise<void>) | undefined;
     try {
       let refAudioPath: string | undefined;
       if (snapshot.adapterId === "openai-compatible") {
@@ -122,7 +124,15 @@ export async function processTtsJob(
               "参照音声ファイルが見つかりません。声プロファイルを見直してください。",
             );
           }
-          refAudioPath = candidate;
+          // Asset ストアのパスに拡張子がなく、エンジン（miniaudio）が
+          // 拡張子で形式を判定するため、拡張子付きの実体を用意して渡す。
+          const prepared = await prepareRefAudioPath(
+            config.directories,
+            usable.storageKey,
+            usable.mediaType,
+          );
+          refAudioPath = prepared.path;
+          refAudioCleanup = prepared.cleanup;
         }
       }
       audio = (
@@ -145,6 +155,10 @@ export async function processTtsJob(
         throw new TtsJobError("TTS_INPUT_REJECTED", error.message);
       }
       throw new TtsJobError("TTS_SYNTHESIS_FAILED", "音声の合成に失敗しました。");
+    } finally {
+      if (refAudioCleanup !== undefined) {
+        await refAudioCleanup().catch(() => undefined);
+      }
     }
 
     await writeFile(tempPath, audio);

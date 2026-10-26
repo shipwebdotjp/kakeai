@@ -62,6 +62,7 @@ OpenAI 互換 API を話すローカル TTS サーバー（mlx-audio-server な�
 - 判別: Profile の settings に `refAudioAssetId` がある場合だけ ICL 方式とし、無い場合は従来のプリセット方式とする。同じアダプター内で両方式を共存させる。
 - 参照音声の管理: 利用者が WAV を素材として取り込み（Asset 化）、Profile の `refAudioAssetId` に指定する。`ref_audio` に渡す絶対パスは保存せず、Job 実行時に Asset の `storageKey` から解決する。参照中の Asset は `voice_profile` 参照として削除を拒否し（409 `ASSET_IN_USE`）、未参照素材の清掃でも残る。Profile の削除・差し替えで参照が外れた Asset は、次回の清掃で削除対象になる。
 - 合成: `POST /v1/audio/speech` に `{ model, input, ref_audio, ref_text, lang_code, max_tokens?, response_format: "wav" }` を送る。`voice` と `speed` は送らない（Qwen3-TTS の ICL 経路では無効であり、`voice` を送るとバッチ判定が変わるため）。`maxTokens` は省略時に 4096 を送る（サーバー既定の 1200 で長文が切れるのを避ける）。
+- `ref_audio` に渡すパスは拡張子付きでなければならない。エンジン側（miniaudio）は拡張子だけで形式を判定し、拡張子のない Asset ストアパスは内容が正常でも `unsupported file format` で失敗する。worker は tmp に拡張子付きのハードリンク（失敗時はコピー）を用意して渡し、利用後に削除する。miniaudio が直接読めない形式（m4a/aac/webm など）は WAV（PCM）へ変換した実体を渡す。
 - 言語コードは Qwen3-TTS の表記（`Japanese`・`English`・`Chinese`・`Korean`・`German`・`French`・`Russian`・`Portuguese`・`Spanish`・`Italian`）を使い、Profile では選択式とする。
 - 合成要求のタイムアウトは ICL 方式の初回ロード・参照エンコード・長文生成に合わせて 180 秒とし、一覧取得の 30 秒とは分ける。
 - `refAudioAssetId` の解決失敗（Asset なし・ファイルなし）はエンジンへ送らず、Job 実行中の `TTS_INPUT_REJECTED` とする。

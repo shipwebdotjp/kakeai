@@ -567,6 +567,7 @@ describe("tts job", () => {
       response_format: "wav",
     });
     expect(typeof body?.ref_audio).toBe("string");
+    expect(body?.ref_audio as string).toMatch(/\.wav$/);
     expect(body).not.toHaveProperty("voice");
     expect(body).not.toHaveProperty("speed");
   });
