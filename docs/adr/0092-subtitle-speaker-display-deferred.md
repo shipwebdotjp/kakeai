@@ -1,5 +1,7 @@
 # 字幕の話者名表示は今回は見送り、見せ方は Visual Skin の責務として将来検討する
 
+> amended by [0094-caption-speaker-label-responsibility.md](0094-caption-speaker-label-responsibility.md)
+
 焼き込み字幕と SRT の両方に話者名を出さない。`NarrationSegment.captionText` のみを従来どおり描画・出力する。
 
 理由は、発話者は立ち絵のバウンドで判別できること、SRT は「聞かなくても内容が分かる」ためのもので話者名は必須ではないこと、見せ方（バッジ／2行目／なし）の選択は台本の真偽値ではなく Visual Skin の描写規則として設計すべきことである。Skin は trusted・版固定のレジストリであり、`ResolvedVisualSkin` に caption 話者名の描画を足すなら新 Skin バージョンとして設計するのが筋である。

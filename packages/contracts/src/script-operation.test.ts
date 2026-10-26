@@ -45,8 +45,7 @@ describe("character.addFromLibrary operation schema", () => {
 });
 
 describe("speaker operations", () => {
-  it("registers speaker.add and speaker.setVoiceProfile", () => {
-    expect(scriptOperationNames).toContain("speaker.add");
+  it("registers speaker.add and speaker.setVoiceProfile", () => {    expect(scriptOperationNames).toContain("speaker.add");
     expect(scriptOperationNames).toContain("speaker.setVoiceProfile");
     expect(
       scriptOperationSchema.safeParse({
@@ -95,6 +94,18 @@ describe("speaker operations", () => {
         speakerId: { key: "narration" },
         voiceProfileId: "vp-ja",
       }).success,
+    ).toBe(true);
+  });
+
+  it("registers document.setCaption", () => {
+    expect(scriptOperationNames).toContain("document.setCaption");
+    expect(
+      scriptOperationSchema.safeParse({ op: "document.setCaption", showSpeakerName: true })
+        .success,
+    ).toBe(true);
+    expect(
+      scriptOperationSchema.safeParse({ op: "document.setCaption", showSpeakerName: false })
+        .success,
     ).toBe(true);
   });
 });

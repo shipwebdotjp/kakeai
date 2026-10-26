@@ -33,6 +33,14 @@ describe("captionSafeAreaPx", () => {
     );
   });
 
+  it("reserves three lines for the band layout", () => {
+    // 20 top + 3 * (40px * 1.5) lines + 24 bottom (no 72px offset, no surface padding)
+    expect(captionSafeAreaPx(theme, "band")).toBe(224);
+    expect(captionLayoutStyle(theme, "band")).toBe(
+      "--kakeai-caption-offset:72px;--kakeai-caption-safe:224px",
+    );
+  });
+
   it("keeps the fragment fallback in sync with the default theme", () => {
     expect(CAPTION_SAFE_AREA_FALLBACK_PX).toBe(captionSafeAreaPx(theme));
   });

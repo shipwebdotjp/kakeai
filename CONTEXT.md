@@ -185,6 +185,14 @@ _Avoid_: Narration, Speaker, site mockup
 The bottom band of the canvas reserved for the baked-in caption layer, derived from the caption text style and surface. Visual Templates that must stay readable beside a caption keep their content above it instead of relying on layer order.
 _Avoid_: caption margin, safe zone config, caption layer padding
 
+**Caption Layout** (字幕レイアウト):
+Whether the baked-in caption is drawn as a centered two-line frame or as a full-width three-line band. Selected by the Visual Theme, fixed per revision, and independent of whether the speaker label is shown.
+_Avoid_: caption template, subtitle style
+
+**Speaker Label** (話者名タブ):
+A small tab overlapped at the top-left of the baked-in caption showing the line Speaker name. Shown only when the Work enables it, never counted as a caption line, and never exported to SRT.
+_Avoid_: speaker badge, caption title, narration label
+
 **Chat Composer** (入力ドック):
 The decorative input bar and send icon at the bottom of a phone-framed Chat Template. It is a static part of the frame's appearance, holds no editable value, and is not a template input.
 _Avoid_: message input, form field, composer schema

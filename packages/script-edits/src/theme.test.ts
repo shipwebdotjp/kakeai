@@ -86,3 +86,21 @@ describe("document.setVisualTheme", () => {
     );
   });
 });
+
+describe("document.setCaption", () => {
+  it("toggles the speaker name display", () => {
+    const document = createInitialContentDocument();
+    const on = applyScriptOperation(
+      document,
+      { op: "document.setCaption", showSpeakerName: true },
+      createTestContext(),
+    );
+    expect(on.document.caption).toEqual({ showSpeakerName: true });
+    const off = applyScriptOperation(
+      on.document,
+      { op: "document.setCaption", showSpeakerName: false },
+      createTestContext(),
+    );
+    expect(off.document.caption).toEqual({ showSpeakerName: false });
+  });
+});

@@ -200,6 +200,7 @@ import type { VisualThemeRef } from "@kakeai/contracts";
 
 export interface DocumentFormValues {
   visualTheme: VisualThemeRef;
+  caption: { showSpeakerName: boolean };
   scenes: SceneFormValue[];
   bgm: BgmFormValue;
   characters: CharacterFormValue[];
@@ -758,6 +759,7 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
   );
   return {
     visualTheme: content.visualTheme,
+    caption: { showSpeakerName: content.caption?.showSpeakerName ?? false },
     scenes: content.scenes.map((scene) => {
       const cues = scene.visualCues
         .filter((cue) => cue.template.id !== STANDING_TEMPLATE_ID)
@@ -1677,6 +1679,7 @@ export function buildContentDocument(
   return {
     ...base,
     visualTheme: values.visualTheme ?? base.visualTheme,
+    caption: { showSpeakerName: values.caption?.showSpeakerName ?? false },
     template: { id: TEMPLATE_ID, version: TEMPLATE_VERSION },
     speakers,
     characters,

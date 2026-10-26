@@ -143,6 +143,23 @@ export const textSurfaceSchema = z.strictObject({
 });
 export type TextSurface = z.infer<typeof textSurfaceSchema>;
 
+export const captionLayoutSchema = z.enum(["frame", "band"]);
+export type CaptionLayout = z.infer<typeof captionLayoutSchema>;
+
+export const DEFAULT_CAPTION_LAYOUT: CaptionLayout = "frame";
+
+export const captionSpeakerSchema = z.strictObject({
+  text: textStyleSchema,
+  surface: textSurfaceSchema,
+});
+export type CaptionSpeaker = z.infer<typeof captionSpeakerSchema>;
+
+export const themeCaptionSettingsSchema = z.strictObject({
+  layout: captionLayoutSchema.default(DEFAULT_CAPTION_LAYOUT),
+  speaker: captionSpeakerSchema.optional(),
+});
+export type ThemeCaptionSettings = z.infer<typeof themeCaptionSettingsSchema>;
+
 export const visualThemeOverlaySchema = z.strictObject({
   color: themeHexSchema,
   opacity: z.number().min(0).max(1),
@@ -204,6 +221,7 @@ const visualThemeDefinitionV1Fields = {
       label: textSurfaceSchema.optional(),
     })
     .optional(),
+  caption: themeCaptionSettingsSchema.optional(),
   artDirection: z.strictObject({
     style: z.string().min(1),
     palette: z.array(themeHexSchema).min(1),
@@ -233,6 +251,34 @@ export function resolveVisualThemeSkin(definition: VisualThemeDefinition): Visua
   return definition.themeDefinitionSchemaVersion === 2
     ? definition.skin
     : NEUTRAL_VISUAL_SKIN_REF;
+}
+
+export function resolveThemeCaptionLayout(definition: VisualThemeDefinition): CaptionLayout {
+  return definition.caption?.layout ?? DEFAULT_CAPTION_LAYOUT;
+}
+
+export const DEFAULT_CAPTION_SPEAKER_TEXT: TextStyle = {
+  font: "sans",
+  fontSize: 20,
+  color: "#FFFFFF",
+  lineHeight: 1.2,
+  decoration: { bold: true, italic: false, outline: false, shadow: true },
+};
+
+export const DEFAULT_CAPTION_SPEAKER_SURFACE: TextSurface = {
+  enabled: true,
+  backgroundColor: "#1B2740",
+  backgroundOpacity: 0.85,
+  paddingHorizontal: 16,
+  paddingVertical: 4,
+  borderRadius: 8,
+};
+
+export function resolveCaptionSpeakerStyle(definition: VisualThemeDefinition): CaptionSpeaker {
+  return {
+    text: definition.caption?.speaker?.text ?? DEFAULT_CAPTION_SPEAKER_TEXT,
+    surface: definition.caption?.speaker?.surface ?? DEFAULT_CAPTION_SPEAKER_SURFACE,
+  };
 }
 
 export function toVisualThemeDefinitionV2(

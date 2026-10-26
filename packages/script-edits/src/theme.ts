@@ -29,3 +29,16 @@ export function setVisualTheme(
     primaryId: `${id}@${version}`,
   };
 }
+
+export function setCaption(
+  document: ContentDocument,
+  showSpeakerName: boolean,
+): SceneEditResult {
+  return {
+    document: { ...document, caption: { showSpeakerName } },
+    sceneIds: [],
+    lineIds: [],
+    cueIds: [],
+    primaryId: "caption",
+  };
+}

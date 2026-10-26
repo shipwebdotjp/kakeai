@@ -48,7 +48,7 @@ import { removeStanding, setStanding } from "./standing.ts";
 import { addAudio, removeAudio, setAudio } from "./audio.ts";
 import { addCharacterFromLibrary } from "./character.ts";
 import { addSpeaker, setSpeakerVoiceProfile } from "./speaker.ts";
-import { setVisualTheme } from "./theme.ts";
+import { setCaption, setVisualTheme } from "./theme.ts";
 
 export type { ScriptOperationCreated };
 
@@ -479,6 +479,9 @@ export function applyScriptOperation(
       return toResult(
         setVisualTheme(document, operation.id, operation.version, context),
       );
+    }
+    case "document.setCaption": {
+      return toResult(setCaption(document, operation.showSpeakerName));
     }
     default: {
       throw invalidOperation([], "未対応の操作です。");

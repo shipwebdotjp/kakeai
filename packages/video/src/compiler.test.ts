@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
-import { ONSET_PRESETS, createInsertScene, type SnapshotFaceSet, type VisualCue } from "@kakeai/contracts";
+import { ONSET_PRESETS, createInsertScene, getVisualTheme, type SnapshotFaceSet, type VisualCue } from "@kakeai/contracts";
 import type { AssetResolver, FaceSetResolver } from "./resolver";
 import type { CompositionVersionResolver } from "./composition-resolver";
 import { CompositionCompileError } from "./compile-error";
@@ -2101,6 +2101,60 @@ describe("visual theme", () => {
         });
         expect(second.html).toBe(first.html);
       });
+    });
+  });
+
+  describe("caption speaker label", () => {
+    it("omits the speaker label by default", () => {
+      const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+      expect(compiled.html).toContain('class="kakeai-captiontext"');
+      expect(compiled.html).not.toContain('class="kakeai-captionspeaker"');
+    });
+
+    it("renders the speaker name as a top-left tab when enabled", () => {
+      const document = validContentDocument();
+      document.caption = { showSpeakerName: true };
+      const compiled = compileDocument({ document, assetResolver: resolver });
+      expect(compiled.html).toContain('class="kakeai-captionspeaker"');
+      expect(compiled.html).toContain(">ナレーター</span>");
+      expect(compiled.html).toContain("font-size:20px");
+    });
+
+    it("omits the label for lines without a speaker or with a blank name", () => {
+      const document = validContentDocument();
+      document.caption = { showSpeakerName: true };
+      document.scenes[1]!.lines[0]!.speakerId = null;
+      const compiled = compileDocument({ document, assetResolver: resolver });
+      expect(compiled.html).not.toContain('class="kakeai-captionspeaker"');
+
+      const blank = validContentDocument();
+      blank.caption = { showSpeakerName: true };
+      blank.speakers[0]!.name = "   ";
+      const compiledBlank = compileDocument({ document: blank, assetResolver: resolver });
+      expect(compiledBlank.html).not.toContain('class="kakeai-captionspeaker"');
+    });
+
+    it("escapes the speaker name as HTML text", () => {
+      const document = validContentDocument();
+      document.caption = { showSpeakerName: true };
+      document.speakers[0]!.name = "<リン>";
+      const compiled = compileDocument({ document, assetResolver: resolver });
+      expect(compiled.html).toContain("&lt;リン&gt;</span>");
+      expect(compiled.html).not.toContain("<リン></span>");
+    });
+  });
+
+  describe("caption band layout", () => {
+    it("renders the band class and safe area when the theme selects band", () => {
+      const theme = getVisualTheme("soft-editorial", 1)!;
+      const document = validContentDocument();
+      const compiled = compileDocument({
+        document,
+        assetResolver: resolver,
+        resolvedTheme: { ...theme, caption: { layout: "band" } },
+      });
+      expect(compiled.html).toContain("kakeai-caption-band");
+      expect(compiled.html).toContain("--kakeai-caption-safe:224px");
     });
   });
 });

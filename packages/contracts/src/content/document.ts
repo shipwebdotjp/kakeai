@@ -64,10 +64,22 @@ const baseDocumentShape = {
   audioCues: z.array(audioCueSchema),
 };
 
+export const captionSettingsSchema = z.strictObject({
+  showSpeakerName: z.boolean().default(false),
+});
+export type CaptionSettings = z.infer<typeof captionSettingsSchema>;
+
+export function resolveCaptionSettings(document: {
+  caption?: { showSpeakerName?: boolean } | undefined;
+}): CaptionSettings {
+  return { showSpeakerName: document.caption?.showSpeakerName ?? false };
+}
+
 const contentDocumentObject = z.strictObject({
   schemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
   visualTheme: visualThemeRefSchema,
   speakers: z.array(speakerSchema),
+  caption: captionSettingsSchema.optional(),
   ...baseDocumentShape,
 });
 

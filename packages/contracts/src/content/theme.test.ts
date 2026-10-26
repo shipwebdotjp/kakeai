@@ -166,4 +166,52 @@ describe("visualSkinRegistry", () => {
     expect(isLatestVisualThemeDefinition(SOFT_EDITORIAL_THEME_ID, 999)).toBe(false);
     expect(isLatestVisualThemeDefinition("missing", 1)).toBe(false);
   });
+
+  it("accepts a theme without caption settings", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    expect("caption" in theme).toBe(false);
+    expect(visualThemeDefinitionSchema.safeParse(theme).success).toBe(true);
+  });
+
+  it("accepts frame and band caption layouts", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    for (const layout of ["frame", "band"] as const) {
+      const withLayout = { ...theme, caption: { layout } };
+      expect(visualThemeDefinitionSchema.safeParse(withLayout).success).toBe(true);
+    }
+  });
+
+  it("rejects an unknown caption layout", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const broken = { ...theme, caption: { layout: "popup" } };
+    expect(visualThemeDefinitionSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it("accepts a dedicated caption speaker style", () => {
+    const theme = getVisualTheme(SOFT_EDITORIAL_THEME_ID, SOFT_EDITORIAL_THEME_VERSION)!;
+    const withSpeaker = {
+      ...theme,
+      caption: {
+        layout: "frame",
+        speaker: {
+          text: {
+            font: "sans",
+            fontSize: 20,
+            color: "#FFFFFF",
+            lineHeight: 1.2,
+            decoration: { bold: true, italic: false, outline: false, shadow: true },
+          },
+          surface: {
+            enabled: true,
+            backgroundColor: "#1B2740",
+            backgroundOpacity: 0.85,
+            paddingHorizontal: 16,
+            paddingVertical: 4,
+            borderRadius: 8,
+          },
+        },
+      },
+    };
+    expect(visualThemeDefinitionSchema.safeParse(withSpeaker).success).toBe(true);
+  });
 });

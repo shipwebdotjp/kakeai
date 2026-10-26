@@ -40,7 +40,8 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
     locale: "ja-JP",
     visualTheme: themeRef,
     template: { id: "explanation-scenes", version: 1 },
-    speakers: [],
+    caption: { showSpeakerName: true },
+    speakers: [{ id: "speaker-sample", name: "サンプル話者", characterId: null, voiceProfileId: null }],
     characters: [],
     audioTakes: [],
     audioCues: [],
@@ -96,7 +97,7 @@ export function createRepresentativeSampleDocument(themeDefinition: VisualThemeD
         lines: [
           {
             id: "line-sample-1",
-            speakerId: null,
+            speakerId: "speaker-sample",
             captionText: "字幕スタイルの表示サンプルです。",
             speechText: "じまくすたいるのひょうじさんぷるです。",
             selectedAudioTakeId: null,

@@ -61,6 +61,8 @@ Theme RevisionとTheme Draftの定義JSONは`themeDefinitionSchemaVersion`を持
 
 すべてのtext roleはText Styleを持つ。Text Surfaceはroleごとの既定値として持て、V1では少なくともcaptionとlabelの設定を編集画面で公開する。他roleのText Surfaceは定義上サポートし、UI公開は将来追加できる。字幕は固定層だが`caption`のText StyleとText Surfaceを使う。`label`は`text.block@1`のCueが使い、Scene Labelとは一切連動しない。
 
+字幕レイアウトと話者名タブは Theme v2 の加算として `caption: { layout, speaker }` に持つ（`themeDefinitionSchemaVersion` は 2 のまま）。`layout` は `frame`（既存の2行枠・中央・最大1600px）か `band`（下端全幅の3行帯・セーフエリア半透明塗りつぶし）で、省略時は `frame` と解釈する。`speaker` は話者名タブ専用の小さめスタイル（Text Style + Text Surface、既定 20px・太字・白・`#1B2740` 85%・上下4左右16・角丸8）で、省略時は既定を使う。タブは枠・帯いずれの上端にも左寄せで重ね、表示ON/OFFで行数予算とセーフエリアを変えない。既存テーマは見た目を変えない。詳細は [ADR 0094](../adr/0094-caption-speaker-label-responsibility.md) を参照する。
+
 `text.block@1`は`label` roleを追加し、個別Cueの文字上書きが必要なときにFont Face参照とText Styleの上書きを受け取れるようにする（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `@2` から `@1` へ再基準化）。旧`font: sans | serif | mono`指定は描画互換のため残し、選択ThemeのFont Face既定より優先する。
 
 値の解決順はプロパティ単位で次のとおりとする。

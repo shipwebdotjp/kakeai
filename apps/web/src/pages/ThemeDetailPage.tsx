@@ -17,6 +17,9 @@ import {
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
   listVisualSkinDefinitions,
+  DEFAULT_CAPTION_SPEAKER_SURFACE,
+  DEFAULT_CAPTION_SPEAKER_TEXT,
+  resolveCaptionSpeakerStyle,
   resolveVisualThemeSkin,
   toVisualThemeDefinitionV2,
   visualThemeTextRoleSchema,
@@ -83,7 +86,7 @@ export function ThemeDetailPage() {
 
   const [formDef, setFormDef] = useState<VisualThemeDefinition | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState<"colors" | "typography" | "surfaces" | "skin">("colors");
+  const [activeTab, setActiveTab] = useState<"colors" | "typography" | "surfaces" | "skin" | "caption">("colors");
   const [fontSearch, setFontSearch] = useState("");
 
   const [playerElement, setPlayerElement] = useState<HTMLElement | null>(null);
@@ -249,6 +252,35 @@ export function ThemeDetailPage() {
   const updateSkin = (skin: VisualSkinRef) => {
     if (!formDef || isBuiltIn) return;
     setFormDef(toVisualThemeDefinitionV2(formDef, skin));
+    setDirty(true);
+  };
+
+  const updateCaptionLayout = (layout: 'frame' | 'band') => {
+    if (!formDef || isBuiltIn) return;
+    const current = formDef.caption ?? { layout: 'frame' as const };
+    setFormDef({ ...formDef, caption: { ...current, layout } });
+    setDirty(true);
+  };
+
+  const updateCaptionSpeakerText = (updater: (style: TextStyle) => TextStyle) => {
+    if (!formDef || isBuiltIn) return;
+    const resolved = resolveCaptionSpeakerStyle(formDef);
+    const current = formDef.caption?.speaker?.text ?? resolved.text;
+    const updated = updater(current);
+    const speakerSurface = formDef.caption?.speaker?.surface ?? resolved.surface;
+    const layout = formDef.caption?.layout ?? 'frame';
+    setFormDef({ ...formDef, caption: { layout, speaker: { text: updated, surface: speakerSurface } } });
+    setDirty(true);
+  };
+
+  const updateCaptionSpeakerSurface = (updater: (surf: TextSurface) => TextSurface) => {
+    if (!formDef || isBuiltIn) return;
+    const resolved = resolveCaptionSpeakerStyle(formDef);
+    const currentText = formDef.caption?.speaker?.text ?? resolved.text;
+    const current = formDef.caption?.speaker?.surface ?? resolved.surface;
+    const updated = updater(current);
+    const layout = formDef.caption?.layout ?? 'frame';
+    setFormDef({ ...formDef, caption: { layout, speaker: { text: currentText, surface: updated } } });
     setDirty(true);
   };
 
@@ -446,6 +478,17 @@ export function ThemeDetailPage() {
               onClick={() => setActiveTab("skin")}
             >
               世界観（スキン）
+            </button>
+            <button
+              type="button"
+              className={`whitespace-nowrap px-4 py-2 font-medium border-b-2 ${
+                activeTab === "caption"
+                  ? "border-brand-600 text-brand-600"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setActiveTab("caption")}
+            >
+              字幕
             </button>
           </div>
 
@@ -846,6 +889,106 @@ export function ThemeDetailPage() {
                     </div>
                   );
                 })}
+              </fieldset>
+            </div>
+          )}
+
+          {/* Tab 4: Caption layout and speaker label */}
+          {activeTab === 'caption' && (
+            <div className="space-y-4 text-sm">
+              <p className="text-xs text-muted-foreground">
+                字幕レイアウト（枠／帯）と話者名タブの見た目を決めます。話者名の表示可否は作品側の設定です。
+              </p>
+              <fieldset disabled={isBuiltIn} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-1">レイアウト</label>
+                  <select
+                    className={textFieldClass}
+                    value={formDef.caption?.layout ?? 'frame'}
+                    onChange={(e) => updateCaptionLayout(e.target.value as 'frame' | 'band')}
+                  >
+                    <option value="frame">枠（2行・中央・1600px幅）</option>
+                    <option value="band">帯（3行・下端全幅）</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    帯は下端を半透明で塗りつぶし、3行分の高さを確保します。タブは上端の左に重ねます。
+                  </p>
+                </div>
+                <div className="rounded border border-border p-3 space-y-3">
+                  <h4 className="font-bold text-sm text-brand-700">話者名タブ（18〜20px推奨）</h4>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block mb-1">サイズ (px)</label>
+                      <input
+                        type="number"
+                        min={8}
+                        max={40}
+                        className={textFieldClass}
+                        value={formDef.caption?.speaker?.text.fontSize ?? DEFAULT_CAPTION_SPEAKER_TEXT.fontSize}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === '') return;
+                          const parsed = Number(raw);
+                          if (!Number.isFinite(parsed)) return;
+                          const fontSize = Math.min(40, Math.max(8, Math.round(parsed)));
+                          updateCaptionSpeakerText((s) => ({ ...s, fontSize }));
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <span className="mb-1 block">文字色</span>
+                      <ColorField
+                        ariaLabel="話者名タブ 文字色"
+                        value={formDef.caption?.speaker?.text.color ?? DEFAULT_CAPTION_SPEAKER_TEXT.color}
+                        onChange={(color) => updateCaptionSpeakerText((s) => ({ ...s, color }))}
+                      />
+                    </div>
+                  </div>
+                  <label className="inline-flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={formDef.caption?.speaker?.text.decoration.bold ?? DEFAULT_CAPTION_SPEAKER_TEXT.decoration.bold}
+                      onChange={(e) =>
+                        updateCaptionSpeakerText((s) => ({
+                          ...s,
+                          decoration: { ...s.decoration, bold: e.target.checked },
+                        }))
+                      }
+                    />
+                    太字
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="mb-1 block">背景色</span>
+                      <ColorField
+                        ariaLabel="話者名タブ 背景色"
+                        value={formDef.caption?.speaker?.surface.backgroundColor ?? DEFAULT_CAPTION_SPEAKER_SURFACE.backgroundColor}
+                        onChange={(backgroundColor) =>
+                          updateCaptionSpeakerSurface((s) => ({ ...s, backgroundColor }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1">
+                        不透明度 ({Math.round(((formDef.caption?.speaker?.surface.backgroundOpacity ?? DEFAULT_CAPTION_SPEAKER_SURFACE.backgroundOpacity) * 100))}%)
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        className="w-full"
+                        value={formDef.caption?.speaker?.surface.backgroundOpacity ?? DEFAULT_CAPTION_SPEAKER_SURFACE.backgroundOpacity}
+                        onChange={(e) =>
+                          updateCaptionSpeakerSurface((s) => ({
+                            ...s,
+                            backgroundOpacity: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
               </fieldset>
             </div>
           )}

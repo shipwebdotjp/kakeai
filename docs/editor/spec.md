@@ -20,7 +20,7 @@
 
 `intro`/`point`/`outro` Scene は `slots` を持たない。タイトル・サブタイトル・見出し・本文・結びは、統合テキストテンプレートを既存の `overlay` 層の VisualCue として配置して表現する（既存 `text.title@1`/`text.body@1` も `overlay` を使うため、層のenumは変更しない）。コンパイラの固定「Scene本文」層（`kakeai-slotframe`）は廃止する。`kind` は残し、導入→要点→結びの並び順と新規作品の既定生成に使う。
 
-Scene の `accent`、`timing`、`lines`、`visualCues` は維持する。字幕は従来どおり `lines.captionText` をコンパイラ固定層で描画し、テキストCueとは独立に保つ。
+Scene の `accent`、`timing`、`lines`、`visualCues` は維持する。字幕は従来どおり `lines.captionText` をコンパイラ固定層で描画し、テキストCueとは独立に保つ。 作品共通の `caption.showSpeakerName` が `true` のとき話者名タブを左上へ重ねる（焼き込み専用・SRT変更なし）。詳細は [ADR 0094](../adr/0094-caption-speaker-label-responsibility.md) を参照する。
 
 ### 統合テキストテンプレート
 

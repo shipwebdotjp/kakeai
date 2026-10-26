@@ -1,13 +1,19 @@
 import {
   characterStandingV1,
   characterStandingV1InputSchema,
+  resolveCaptionSettings,
+  resolveCaptionSpeakerStyle,
+  resolveThemeCaptionLayout,
   resolveVisualThemeSkin,
   type AnimationPreset,
+  type CaptionLayout,
   type ContentDocument,
   type CueLayer,
   type FigureEase,
   type NarrationSegment,
   type NestedVisual,
+  type TextStyle,
+  type TextSurface,
   type VisualCue,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
@@ -77,6 +83,48 @@ export function toSecondsText(ms: number): string {
 
 function secondsText(seconds: number): string {
   return toSecondsText(seconds * 1000);
+}
+
+function surfaceBackgroundCss(
+  surface: TextSurface | undefined,
+  fallbackBackground: string,
+): string {
+  if (surface?.enabled !== true) {
+    return fallbackBackground;
+  }
+  const { r, g, b } = hexToRgb(surface.backgroundColor);
+  return `background:rgba(${r},${g},${b},${surface.backgroundOpacity})`;
+}
+
+function surfaceStyleCss(
+  surface: TextSurface | undefined,
+  fallbackBackground: string,
+): string {
+  const background = surfaceBackgroundCss(surface, fallbackBackground);
+  if (surface?.enabled !== true) {
+    return background;
+  }
+  const parts = [
+    background,
+    `padding:${surface.paddingVertical}px ${surface.paddingHorizontal}px`,
+    `border-radius:${surface.borderRadius}px`,
+  ];
+  if (surface.border) {
+    parts.push(`border:${surface.border.width}px solid ${surface.border.color}`);
+  }
+  return parts.join(';');
+}
+
+function textStyleCss(text: TextStyle, fontFamily: string, surfaceCss: string): string {
+  return [
+    `font-family:${fontFamily}`,
+    `font-size:${text.fontSize}px`,
+    `color:${text.color}`,
+    `line-height:${text.lineHeight}`,
+    `font-weight:${text.decoration.bold ? '700' : '400'}`,
+    `font-style:${text.decoration.italic ? 'italic' : 'normal'}`,
+    surfaceCss,
+  ].join(';');
 }
 
 function tweenVarsText(vars: Record<string, string | number>): string {
@@ -623,6 +671,12 @@ const STYLES = [
   ".kakeai-laptopnotch{position:absolute;left:46.5%;width:7%;bottom:0;height:2.2%;background:rgba(0,0,0,.42);border-radius:0 0 50% 50%/0 0 100% 100%;}",
   `.kakeai-caption{position:absolute;left:0;right:0;bottom:var(--kakeai-caption-offset,${CAPTION_BOTTOM_OFFSET_PX}px);display:flex;justify-content:center;padding:0 160px;box-sizing:border-box;}`,
   `.kakeai-captiontext{margin:0;max-width:1600px;font-size:40px;line-height:1.5;white-space:pre-line;text-align:center;background:var(--kakeai-scrim);border-radius:var(--kakeai-radius-sm);padding:${CAPTION_FALLBACK_PADDING_VERTICAL_PX}px ${CAPTION_FALLBACK_PADDING_HORIZONTAL_PX}px;color:var(--kakeai-onmedia);text-shadow:0 2px 12px rgba(0,0,0,.6);}`,
+  ".kakeai-captionwrap{position:relative;display:inline-block;max-width:1600px;}",
+  ".kakeai-captionwrap .kakeai-captiontext{max-width:none;}",
+  ".kakeai-captionspeaker{position:absolute;top:0;left:12px;transform:translateY(-50%);max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;z-index:1;}",
+  ".kakeai-caption-band{bottom:0;padding:20px 160px 24px;}",
+  ".kakeai-caption-band .kakeai-captionwrap{width:100%;max-width:none;}",
+  ".kakeai-caption-band .kakeai-captiontext{max-width:none;}",
   ".kakeai-mockup{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
   ".kakeai-mockup-chrome{position:relative;width:auto;max-width:90%;max-height:92%;border-radius:var(--kakeai-radius-md);overflow:hidden;box-shadow:0 24px 60px var(--kakeai-shadow);display:flex;flex-direction:column;background:var(--kakeai-mockup-surface,var(--kakeai-surface));color:var(--kakeai-mockup-fg,var(--kakeai-text));}",
   ".kakeai-mockup-chrome::before{content:'';display:block;height:8px;background:var(--kakeai-mockup-accent,#6b7280);}",
@@ -1256,6 +1310,24 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
   const characterIdBySpeakerId = new Map(
     document.speakers.map((speaker) => [speaker.id, speaker.characterId]),
   );
+  const speakerById = new Map(document.speakers.map((speaker) => [speaker.id, speaker]));
+  const captionLayout: CaptionLayout = resolveThemeCaptionLayout(theme);
+  const showSpeakerName = resolveCaptionSettings(document).showSpeakerName;
+  const captionSpeakerStyle = resolveCaptionSpeakerStyle(theme);
+  const captionSpeakerFontFamily = resolveFontFamilyCss(
+    captionSpeakerStyle.text.fontFace,
+    captionSpeakerStyle.text.font,
+  );
+  const captionSpeakerScrim = `background:${overlayToRgba(theme.scrim)}`;
+  const captionSpeakerSurfaceStyle = surfaceStyleCss(
+    captionSpeakerStyle.surface,
+    captionSpeakerScrim,
+  );
+  const captionSpeakerTextStyle = textStyleCss(
+    captionSpeakerStyle.text,
+    captionSpeakerFontFamily,
+    captionSpeakerSurfaceStyle,
+  );
   const bounces: BounceUnit[] = [];
 
   const resolveAudio = (
@@ -1548,32 +1620,27 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
         const fontFamily = resolveFontFamilyCss(captionToken.fontFace, captionToken.font);
 
         const captionSurface = theme.surfaces?.caption;
-        let surfaceBgStyle = `background:${overlayToRgba(theme.scrim)}`;
-        if (captionSurface?.enabled) {
-          const { r, g, b } = hexToRgb(captionSurface.backgroundColor);
-          const bg = `rgba(${r},${g},${b},${captionSurface.backgroundOpacity})`;
-          const surfaceParts = [
-            `background:${bg}`,
-            `padding:${captionSurface.paddingVertical}px ${captionSurface.paddingHorizontal}px`,
-            `border-radius:${captionSurface.borderRadius}px`,
-          ];
-          if (captionSurface.border) {
-            surfaceParts.push(`border:${captionSurface.border.width}px solid ${captionSurface.border.color}`);
+        const captionScrim = `background:${overlayToRgba(theme.scrim)}`;
+        const captionSurfaceBackground = surfaceBackgroundCss(captionSurface, captionScrim);
+        const surfaceBgStyle = surfaceStyleCss(captionSurface, captionScrim);
+        const captionStyle = textStyleCss(captionToken, fontFamily, surfaceBgStyle);
+        const isBand = captionLayout === "band";
+        const captionOuterClass = isBand ? "kakeai-caption kakeai-caption-band" : "kakeai-caption";
+        const captionOuterStyle = isBand ? captionSurfaceBackground : "";
+        const captionInnerStyle = isBand
+          ? textStyleCss(captionToken, fontFamily, "background:transparent")
+          : captionStyle;
+        let speakerLabelHtml = "";
+        if (showSpeakerName && line.speakerId !== null) {
+          const speaker = speakerById.get(line.speakerId);
+          const speakerName = speaker?.name.trim() ?? "";
+          if (speakerName.length > 0) {
+            const speakerStyleText = captionSpeakerTextStyle;
+            speakerLabelHtml = `<span class="kakeai-captionspeaker" style="${speakerStyleText}">${escapeHtmlText(speakerName)}</span>`;
           }
-          surfaceBgStyle = surfaceParts.join(";");
         }
-
-        const captionStyle = [
-          `font-family:${fontFamily}`,
-          `font-size:${captionToken.fontSize}px`,
-          `color:${captionToken.color}`,
-          `line-height:${captionToken.lineHeight}`,
-          `font-weight:${captionToken.decoration.bold ? "700" : "400"}`,
-          `font-style:${captionToken.decoration.italic ? "italic" : "normal"}`,
-          surfaceBgStyle,
-        ].join(";");
         sceneClips.push(
-          `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="kakeai-caption"><p class="kakeai-captiontext" style="${captionStyle}">${escapeHtmlText(captionText)}</p></div></div>`,
+          `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="${captionOuterClass}"${captionOuterStyle.length > 0 ? ` style="${captionOuterStyle}"` : ""}><div class="kakeai-captionwrap">${speakerLabelHtml}<p class="kakeai-captiontext" style="${captionInnerStyle}">${escapeHtmlText(captionText)}</p></div></div></div>`,
         );
       }
       if (line.selectedAudioTakeId === null) {
@@ -1681,7 +1748,7 @@ export function compileDocument(options: CompileDocumentOptions): CompiledCompos
     `<style>${STYLES}</style>`,
     "</head>",
     "<body>",
-    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme)};${captionLayoutStyle(theme)}">`,
+    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme)};${captionLayoutStyle(theme, captionLayout)}">`,
     ...clips,
     ...audios,
     "</div>",

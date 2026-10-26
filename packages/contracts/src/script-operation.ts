@@ -379,6 +379,11 @@ export const documentSetVisualThemeOperationSchema = z.strictObject({
   version: positiveInt,
 });
 
+export const documentSetCaptionOperationSchema = z.strictObject({
+  op: z.literal("document.setCaption"),
+  showSpeakerName: z.boolean(),
+});
+
 const scriptOperationSchemas = [
   sceneAddPointOperationSchema,
   sceneAddInsertOperationSchema,
@@ -417,6 +422,7 @@ const scriptOperationSchemas = [
   speakerAddOperationSchema,
   speakerSetVoiceProfileOperationSchema,
   documentSetVisualThemeOperationSchema,
+  documentSetCaptionOperationSchema,
 ] as const;
 
 export const scriptOperationSchema = z.union(scriptOperationSchemas);
@@ -473,5 +479,6 @@ export type SpeakerSetVoiceProfileOperation = z.infer<
 export type DocumentSetVisualThemeOperation = z.infer<
   typeof documentSetVisualThemeOperationSchema
 >;
+export type DocumentSetCaptionOperation = z.infer<typeof documentSetCaptionOperationSchema>;
 
 export const scriptOperationsSchema = z.array(scriptOperationSchema);

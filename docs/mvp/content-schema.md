@@ -30,6 +30,7 @@ JSONは `ScriptVersion` に保存し、すべてのIDは版をまたいで参照
 
 - `schemaVersion` は正本JSONの移行用バージョンである。テンプレートのバージョンとは別に管理する。新規作成・保存するDocumentは `1` とする。破壊変更の履歴は [content-schema-history.md](content-schema-history.md) を正とする。
 - `visualTheme` は作品の見た目の既定値を固定する参照で、必須とする。MVPでは `soft-editorial@1` のみ。未知の参照は拒否する。詳細は [../visual-themes/spec.md](../visual-themes/spec.md) を正とする。
+- `caption` は作品共通の字幕設定で、任意とする。省略時は `{ showSpeakerName: false }` と解釈する。`showSpeakerName: true` のとき焼き込み字幕に話者名タブを出す（SRTは名前なしのまま）。名前は `Speaker.name` を描画時に引き、`speakerId: null` と空名はタブなしとする。セリフごとの上書きは持たない。加算的拡張であり、`schemaVersion` は上げない。詳細は [ADR 0094](../adr/0094-caption-speaker-label-responsibility.md) を参照する。
 - `locale` はBCP 47形式で保存する。有効値は `ja-JP` と `en-US`。
 - `template` は構造と既定表現を決める。MVPでは `explanation-scenes@1` のみ。
 

@@ -728,4 +728,29 @@ describe("contentDocumentSchema", () => {
     doc.scenes.splice(2, 0, insert);
     expect(contentDocumentSchema.safeParse(doc).success).toBe(false);
   });
+
+  it("accepts a document without caption settings as showSpeakerName off", () => {
+    const doc = validContentDocument();
+    expect("caption" in doc).toBe(false);
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("accepts caption.showSpeakerName on and off", () => {
+    const doc = validContentDocument();
+    doc.caption = { showSpeakerName: true };
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+    const off = validContentDocument();
+    off.caption = { showSpeakerName: false };
+    expect(contentDocumentSchema.safeParse(off).success).toBe(true);
+  });
+
+  it("defaults a missing showSpeakerName to false", () => {
+    const doc = validContentDocument() as unknown as Record<string, unknown>;
+    doc["caption"] = {};
+    const parsed = contentDocumentSchema.safeParse(doc);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.caption).toEqual({ showSpeakerName: false });
+    }
+  });
 });

@@ -64,6 +64,8 @@ SkinはTheme tokenを置き換える固定の配色セットではない。た�
 
 Skin固有rendererもTemplateの入力Zodスキーマ、Cue range、layer、transition、AnimationPlanの所有境界を変更してはならない。Skinは任意CSS文字列・任意easing・任意JavaScriptをThemeやCueから受け取らない。
 
+焼き込み字幕の話者名タブは固定層であり、行数・セーフエリアを変えない。今回は全 Skin で Theme 駆動の neutral 描画に fallback し、紙・テープ等の Skin 固有装飾は将来の Skin 新版で足す。詳細は [ADR 0094](../adr/0094-caption-speaker-label-responsibility.md) を参照する。
+
 ## 初期Skin
 
 ### `neutral@1`

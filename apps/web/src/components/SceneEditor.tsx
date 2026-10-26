@@ -2123,6 +2123,12 @@ export function SceneEditor({ base, editionId, scriptVersionId, onSaved, onValue
             </select>
           </label>
         </div>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...register("caption.showSpeakerName")} />
+            字幕に話者名を表示（焼き込みのみ・SRTは名前なし）
+          </label>
+        </div>
       </Collapsible>
 
       <Collapsible

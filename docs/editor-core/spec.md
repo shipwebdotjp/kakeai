@@ -173,7 +173,8 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `document.setVisualTheme` | `id`、`version` | 組み込み Theme は最新 Revision、利用者 Theme は `ScriptContext.themes` が選択可能と答えた最新公開 Revision だけを選べる。Theme Draft・アーカイブ済み Theme・最新でない Revision は選べない。`themes` を用意できない場合、組み込み Theme 以外は選べない。既存の参照を変更しない保存は保存検証に委ねる |
+| `document.setVisualTheme` | `id`、`version` |
+| `document.setCaption` | `showSpeakerName` | 焼き込み字幕の話者名タブ表示可否。SRT・行数警告・セーフエリアに影響しない | 組み込み Theme は最新 Revision、利用者 Theme は `ScriptContext.themes` が選択可能と答えた最新公開 Revision だけを選べる。Theme Draft・アーカイブ済み Theme・最新でない Revision は選べない。`themes` を用意できない場合、組み込み Theme 以外は選べない。既存の参照を変更しない保存は保存検証に委ねる |
 
 ## 個別の意味論
 
