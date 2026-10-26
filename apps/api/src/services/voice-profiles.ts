@@ -1,5 +1,6 @@
 import {
   localeSchema,
+  openAiAdapterExtrasSchema,
   voiceAdapterDescriptorFor,
   voiceAdapterDescriptors,
   voiceAdapterIdSchema,
@@ -21,6 +22,7 @@ import { ApiError } from "../http/errors.ts";
 import { resourceNotFound, validationError } from "../http/validation.ts";
 import { getTtsAdapter, TtsEngineUnavailableError } from "../tts/index.ts";
 import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
+import { findReadyAudioAsset } from "./assets.ts";
 
 export function listVoiceAdapters(): VoiceAdapterList {
   return {
@@ -82,17 +84,42 @@ function parseVoiceProfileLocale(locale: unknown): string {
   return parsed.data;
 }
 
+async function validateRefAudioAsset(
+  prisma: PrismaClient,
+  settings: VoiceProfileExtras,
+): Promise<void> {
+  // openai-compatible の extras だけが refAudioAssetId を持つ。settings は
+  // parseVoiceProfileExtras で union 検証済みのため、ここでの parse 失敗は
+  // スキーマ乖離を示し、ユーザー入力不正ではない。その場合は検証を skip する。
+  const parsed = openAiAdapterExtrasSchema.safeParse(settings);
+  if (!parsed.success || parsed.data.refAudioAssetId === undefined) {
+    return;
+  }
+  const asset = await findReadyAudioAsset(prisma, parsed.data.refAudioAssetId);
+  if (asset === null) {
+    throw validationError([
+      {
+        path: ["settings", "refAudioAssetId"],
+        code: "invalid_value",
+        message: "参照音声には読み上げ可能な音声素材を指定してください。",
+      },
+    ]);
+  }
+}
+
 export async function createVoiceProfile(
   prisma: PrismaClient,
   input: CreateVoiceProfileRequest,
 ): Promise<VoiceProfile> {
+  const settings = parseVoiceProfileExtras(input.adapterId, input.settings);
+  await validateRefAudioAsset(prisma, settings);
   const row = await prisma.voiceProfile.create({
     data: {
       name: input.name,
       adapterId: input.adapterId,
       voiceId: input.voiceId,
       locale: parseVoiceProfileLocale(input.locale),
-      settingsJson: JSON.stringify(parseVoiceProfileExtras(input.adapterId, input.settings)),
+      settingsJson: JSON.stringify(settings),
     },
   });
   return toVoiceProfile(row);
@@ -112,6 +139,7 @@ export async function updateVoiceProfile(
     throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルのアダプターが不正です。");
   }
   const settings = parseVoiceProfileExtras(adapterId.data, input.settings);
+  await validateRefAudioAsset(prisma, settings);
   try {
     const row = await prisma.voiceProfile.update({
       where: { id: voiceProfileId },

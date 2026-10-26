@@ -1,7 +1,11 @@
 import { useEffect, useId, useState } from "react";
 import {
   DEFAULT_VOICE_ADAPTER_ID,
+  OPENAI_TTS_MAX_TOKENS_MAX,
+  OPENAI_TTS_REF_TEXT_MAX_LENGTH,
+  QWEN3_TTS_LANG_CODES,
   SUPPORTED_LOCALES,
+  defaultOpenAiMaxTokens,
   localeSchema,
   voiceAdapterDescriptors,
   voiceAdapterIdSchema,
@@ -20,6 +24,7 @@ import {
   useVoiceModels,
   useVoiceProfiles,
 } from "../api/hooks";
+import { useAssets, useUploadAssets } from "../api/hooks/assets";
 import { errorMessage } from "../lib/errorMessage";
 import { adapterLabel } from "../lib/voiceAdapters";
 import {
@@ -42,6 +47,25 @@ function profileModel(profile: VoiceProfile | undefined): string {
   return typeof settings.model === "string" ? settings.model : "";
 }
 
+function profileExtrasField(profile: VoiceProfile | undefined, key: string): string {
+  if (profile === undefined) {
+    return "";
+  }
+  const settings = profile.settings as Record<string, unknown>;
+  const value = settings[key];
+  return typeof value === "string" ? value : "";
+}
+
+function profileMaxTokens(profile: VoiceProfile | undefined): string {
+  if (profile === undefined) {
+    return String(defaultOpenAiMaxTokens());
+  }
+  const settings = profile.settings as { maxTokens?: unknown };
+  return typeof settings.maxTokens === "number" && Number.isSafeInteger(settings.maxTokens)
+    ? String(settings.maxTokens)
+    : String(defaultOpenAiMaxTokens());
+}
+
 interface ProfileFormProps {
   profile?: VoiceProfile;
   adapters: VoiceAdapterSummary[];
@@ -59,6 +83,14 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
   const [model, setModel] = useState(profileModel(profile));
   const [debouncedModel, setDebouncedModel] = useState(profileModel(profile));
   const [locale, setLocale] = useState<string>(profile?.locale ?? SUPPORTED_LOCALES[0]);
+  const [refAudioAssetId, setRefAudioAssetId] = useState(() =>
+    profileExtrasField(profile, "refAudioAssetId"),
+  );
+  const [refText, setRefText] = useState(() => profileExtrasField(profile, "refText"));
+  const [langCode, setLangCode] = useState(
+    () => profileExtrasField(profile, "langCode") || QWEN3_TTS_LANG_CODES[0],
+  );
+  const [maxTokens, setMaxTokens] = useState(() => profileMaxTokens(profile));
 
   const activeAdapterId = profile?.adapterId ?? adapterId;
   const descriptor = adapters.find((entry) => entry.id === activeAdapterId);
@@ -83,6 +115,10 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
     setVoiceId("");
     setModel("");
     setDebouncedModel("");
+    setRefAudioAssetId("");
+    setRefText("");
+    setLangCode(QWEN3_TTS_LANG_CODES[0]);
+    setMaxTokens(String(defaultOpenAiMaxTokens()));
   }, [adapterId, profile]);
 
   useEffect(() => {
@@ -101,7 +137,17 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
     setModel(profileModel(profile));
     setDebouncedModel(profileModel(profile));
     setLocale(profile.locale);
+    setRefAudioAssetId(profileExtrasField(profile, "refAudioAssetId"));
+    setRefText(profileExtrasField(profile, "refText"));
+    setLangCode(profileExtrasField(profile, "langCode") || QWEN3_TTS_LANG_CODES[0]);
+    setMaxTokens(profileMaxTokens(profile));
   }, [profile?.id, profile?.updatedAt]);
+
+  const assetsQuery = useAssets({ enabled: modelSelection });
+  const uploadAssets = useUploadAssets();
+  const readyAudioAssets = (assetsQuery.data ?? []).filter(
+    (asset) => asset.kind === "audio" && asset.status === "ready",
+  );
 
   const voice = findVoice(voices, voiceId);
   const voicesLoaded = voicesQuery.isSuccess;
@@ -115,11 +161,29 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
   const voiceUnchanged = profile !== undefined && voiceId === profile.voiceId;
   const modelMissing = modelSelection && model.trim().length === 0;
   const modelPending = modelSelection && model.trim() !== debouncedModel.trim();
+  const iclMode = modelSelection && refAudioAssetId.trim().length > 0;
+  const iclIncomplete =
+    iclMode && (refText.trim().length === 0 || langCode.trim().length === 0);
+  const maxTokensParsed = /^\d+$/.test(maxTokens.trim())
+    ? Number.parseInt(maxTokens.trim(), 10)
+    : Number.NaN;
+  const maxTokensInvalid =
+    iclMode &&
+    (!Number.isSafeInteger(maxTokensParsed) ||
+      maxTokensParsed < 1 ||
+      maxTokensParsed > OPENAI_TTS_MAX_TOKENS_MAX);
+  const refAudioPending =
+    iclMode &&
+    assetsQuery.isSuccess &&
+    !readyAudioAssets.some((asset) => asset.id === refAudioAssetId.trim());
   const saveBlocked =
     pending ||
     effectiveLocale === "" ||
     modelMissing ||
     modelPending ||
+    iclIncomplete ||
+    maxTokensInvalid ||
+    refAudioPending ||
     (voicesLoaded && staleVoice) ||
     (!manualVoice && !voicesLoaded && !voiceUnchanged);
 
@@ -128,7 +192,21 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
     if (trimmed.length === 0 || voiceId.trim().length === 0 || saveBlocked) {
       return;
     }
-    const settings: VoiceProfileExtras = modelSelection ? { model: model.trim() } : {};
+    let settings: VoiceProfileExtras = modelSelection ? { model: model.trim() } : {};
+    if (modelSelection) {
+      const refId = refAudioAssetId.trim();
+      if (refId.length > 0) {
+        settings = {
+          model: model.trim(),
+          refAudioAssetId: refId,
+          refText: refText.trim(),
+          langCode: langCode.trim(),
+          maxTokens: maxTokensParsed,
+        };
+      } else {
+        settings = { model: model.trim() };
+      }
+    }
     const trimmedVoiceId = voiceId.trim();
     if (profile === undefined) {
       create.mutate(
@@ -253,6 +331,114 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
             </select>
           )}
         </label>
+        {modelSelection && (
+          <fieldset className="mt-2 w-full rounded border border-border p-2">
+            <legend className={metaTextClass}>参照音声（ICLクローン・任意）</legend>
+            <p className={metaTextClass}>
+              音声素材を取り込んで指定すると、エンジンへ参照音声・参照テキスト・言語コード・最大トークンを送ります。このとき声IDは送信されません。
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-1.5">
+                参照音声
+                <select
+                  className={textFieldClass}
+                  value={refAudioAssetId}
+                  disabled={assetsQuery.isLoading}
+                  onChange={(event) => setRefAudioAssetId(event.target.value)}
+                >
+                  <option value="">使用しない</option>
+                  {readyAudioAssets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.originalFilename}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                取り込み
+                <input
+                  type="file"
+                  accept="audio/wav,audio/x-wav,.wav"
+                  disabled={uploadAssets.isPending}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file === undefined) {
+                      return;
+                    }
+                    uploadAssets.mutate([file], {
+                      onSuccess: (result) => {
+                        const first = result.uploaded[0];
+                        if (first !== undefined) {
+                          setRefAudioAssetId(first.id);
+                        }
+                      },
+                    });
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              {uploadAssets.isPending && <span className={metaTextClass}>取り込み中…</span>}
+              <label className="inline-flex items-center gap-1.5">
+                言語コード
+                <select
+                  className={textFieldClass}
+                  value={langCode}
+                  onChange={(event) => setLangCode(event.target.value)}
+                >
+                  {QWEN3_TTS_LANG_CODES.map((entry) => (
+                    <option key={entry} value={entry}>
+                      {entry}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                最大トークン
+                <input
+                  value={maxTokens}
+                  inputMode="numeric"
+                  placeholder={String(defaultOpenAiMaxTokens())}
+                  className={textFieldClass}
+                  onChange={(event) => setMaxTokens(event.target.value)}
+                />
+              </label>
+            </div>
+            <label className="mt-1 block">
+              <span className={metaTextClass}>参照テキスト（参照音声の書き起こし・必須）</span>
+              <textarea
+                value={refText}
+                rows={2}
+                maxLength={OPENAI_TTS_REF_TEXT_MAX_LENGTH}
+                className={`mt-1 w-full ${textFieldClass}`}
+                onChange={(event) => setRefText(event.target.value)}
+              />
+            </label>
+            {assetsQuery.isError && (
+              <p className={errorTextClass}>素材一覧を取得できません。</p>
+            )}
+            {uploadAssets.isError && (
+              <p className={errorTextClass}>{errorMessage(uploadAssets.error)}</p>
+            )}
+            {iclMode && (
+              <p className={metaTextClass}>
+                参照音声モード: 声IDは送信されません（表示名としてのみ使用）。
+              </p>
+            )}
+            {iclMode && iclIncomplete && (
+              <p className={errorTextClass}>参照テキストと言語コードを入力してください。</p>
+            )}
+            {iclMode && maxTokensInvalid && (
+              <p className={errorTextClass}>
+                最大トークンは1以上{OPENAI_TTS_MAX_TOKENS_MAX}以下の整数で入力してください。
+              </p>
+            )}
+            {iclMode && refAudioPending && (
+              <p className={errorTextClass}>
+                選択した参照音声はまだ利用できません。取り込みの完了を待つか、選び直してください。
+              </p>
+            )}
+          </fieldset>
+        )}
         {!localeLocked && (
           <label className="inline-flex items-center gap-1.5">
             言語

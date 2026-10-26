@@ -128,7 +128,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "voiceProfile.listModels":
     "TTS Adapter のモデル候補一覧を返す。`openai-compatible` の voiceProfile.create の `settings.model` 選びに使う。接続できない Adapter は TTS_ENGINE_UNAVAILABLE。",
   "voiceProfile.create":
-    "Voice Profile を新規作成して返す。`adapterId`・実在する `voiceId`（voiceProfile.listVoices で確認）・`locale`（台本の locale と一致させる）・`settings`（`openai-compatible` は `model` 必須）を指定する。タイムアウト後は voiceProfile.list で確認してから再実行する。",
+    "Voice Profile を新規作成して返す。`adapterId`・実在する `voiceId`（voiceProfile.listVoices で確認）・`locale`（台本の locale と一致させる）・`settings`（`openai-compatible` は `model` 必須、参照音声を使う場合は `refAudioAssetId`（取り込み済み音声 Asset の ID）・`refText`・`langCode`（Japanese / English / Chinese / Korean / German / French / Russian / Portuguese / Spanish / Italian のいずれか）も必須）を指定する。タイムアウト後は voiceProfile.list で確認してから再実行する。",
   "voiceProfile.update":
     "Voice Profile の `name`・`voiceId`・`locale`・`settings` を更新して返す。`adapterId` は変更できない。存在しない ID は RESOURCE_NOT_FOUND。反映は以後の TTS だけに影響し、既存の Audio Take は変えない。",
 };

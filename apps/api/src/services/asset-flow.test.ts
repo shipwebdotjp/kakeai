@@ -15,6 +15,7 @@ import { ensureDataDirectories } from "../storage/paths.ts";
 import { createWorker } from "../worker/index.ts";
 import * as assets from "./assets.ts";
 import * as scriptVersions from "./script-versions.ts";
+import * as voiceProfiles from "./voice-profiles.ts";
 import * as works from "./works.ts";
 
 const execFileAsync = promisify(execFile);
@@ -177,6 +178,40 @@ describe("asset ingest flow", () => {
 
     await expect(assets.deleteAsset(prisma, config.directories, ready.id)).rejects.toMatchObject({
       code: "ASSET_IN_USE",
+    });
+  });
+
+  it("protects a reference audio used by a voice profile from deletion", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const outcome = await upload("ref.wav", join(fixturesDir, "audio.wav"));
+    await drainWorker();
+    const ready = await assets.getAsset(prisma, outcome.asset.id);
+    expect(ready.kind).toBe("audio");
+
+    const profile = await voiceProfiles.createVoiceProfile(prisma, {
+      name: "参照音声テスト",
+      adapterId: "openai-compatible",
+      voiceId: "ageha",
+      locale: "ja-JP",
+      settings: {
+        model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+        refAudioAssetId: ready.id,
+        refText: "仕組みはそれほど難しくないよ。",
+        langCode: "Japanese",
+        maxTokens: 4096,
+      },
+    });
+
+    await expect(assets.deleteAsset(prisma, config.directories, ready.id)).rejects.toMatchObject({
+      code: "ASSET_IN_USE",
+    });
+
+    await voiceProfiles.deleteVoiceProfile(prisma, profile.id);
+    await assets.deleteAsset(prisma, config.directories, ready.id);
+    await expect(assets.getAsset(prisma, ready.id)).rejects.toMatchObject({
+      code: "RESOURCE_NOT_FOUND",
     });
   });
 

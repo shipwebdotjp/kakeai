@@ -142,6 +142,78 @@ describe("openai-compatible adapter", () => {
     speechMode = "ok";
   });
 
+  it("sends reference audio fields without voice in ICL mode", async () => {
+    speechMode = "ok";
+    lastSpeechBody = null;
+    const audio = await adapter.synthesize(
+      { baseUrl },
+      {
+        text: "こんにちは",
+        voiceId: "ageha",
+        speedScale: 1.25,
+        settings: {
+          model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+          refAudioAssetId: "asset-ref",
+          refText: "仕組みはそれほど難しくないよ。",
+          langCode: "Japanese",
+          maxTokens: 4096,
+        },
+        refAudioPath: "/data/assets/ref.wav",
+      },
+    );
+    expect(audio.mediaType).toBe("audio/wav");
+    expect(lastSpeechBody).toMatchObject({
+      model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+      input: "こんにちは",
+      ref_audio: "/data/assets/ref.wav",
+      ref_text: "仕組みはそれほど難しくないよ。",
+      lang_code: "Japanese",
+      max_tokens: 4096,
+      response_format: "wav",
+    });
+    expect(lastSpeechBody).not.toHaveProperty("voice");
+    expect(lastSpeechBody).not.toHaveProperty("speed");
+  });
+
+  it("sends the default max tokens when omitted in ICL mode", async () => {
+    speechMode = "ok";
+    lastSpeechBody = null;
+    await adapter.synthesize(
+      { baseUrl },
+      {
+        text: "こんにちは",
+        voiceId: "ageha",
+        speedScale: 1,
+        settings: {
+          model: "qwen3-tts",
+          refAudioAssetId: "asset-ref",
+          refText: "書き起こし",
+          langCode: "Japanese",
+        },
+        refAudioPath: "/data/assets/ref.wav",
+      },
+    );
+    expect(lastSpeechBody).toMatchObject({ max_tokens: 4096 });
+  });
+
+  it("rejects ICL synthesis without a resolved reference audio path", async () => {    await expect(
+      adapter.synthesize(
+        { baseUrl },
+        {
+          text: "x",
+          voiceId: "ageha",
+          speedScale: 1,
+          settings: {
+            model: "qwen3-tts",
+            refAudioAssetId: "asset-ref",
+            refText: "text",
+            langCode: "Japanese",
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(TtsInputRejectedError);
+  });
+
   it("rejects synthesis without model settings", async () => {
     await expect(
       adapter.synthesize(

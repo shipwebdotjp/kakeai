@@ -45,9 +45,11 @@ async function fetchAllAssets(signal?: AbortSignal): Promise<Asset[]> {
   return assets;
 }
 
-export function useAssets() {
+export function useAssets(options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
   return useQuery({
     queryKey: queryKeys.assets(),
+    enabled,
     queryFn: ({ signal }) => fetchAllAssets(signal),
     refetchInterval: (query) => {
       const data = query.state.data;

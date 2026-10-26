@@ -44,7 +44,6 @@
 - 完了条件: 契約・設定・モックエンジンのテストが通り、実 ENGINE で Profile 作成→生成→保存→プレビュー／レンダーを確認できる。
 
 ### [x] T6 一括生成と自動試聴
-
 - [x] 一括TTSの契約（空のリクエスト、投入Job一覧と除外セリフの応答DTO）を追加
 - [x] TTS Job作成を共通化し、`POST /script-versions/:scriptVersionId/tts-jobs` で要点シーン・未選択セリフを対象に投入する。除外はセリフ単位で返し、部分継続する
 - [x] 保存バーに一括生成（対象件数・進捗・除外／失敗の結果）を追加し、未保存変更・生成中は開始不可にする
@@ -53,3 +52,13 @@
 - [x] ユーザーガイドを一括生成と自動再生へ更新
 - [x] 一括生成の結果に成功・対象外・失敗の件数を示し、未音声が残った場合だけ成功分保存後の再実行案内を出す（再試行ボタンや履歴は持たない）
 - 完了条件: 契約・サービス・Web のテストが通り、実 ENGINE で一括生成→Take追加→保存→プレビューを確認できる。
+
+### [x] T7 参照音声（ICL方式）
+
+- [x] `openAiAdapterExtrasSchema` に `refAudioAssetId`・`refText`・`langCode`・`maxTokens`（任意）を追加し、参照音声ありでは `refText`・`langCode` を必須化
+- [x] Voice Profile 作成・更新時に参照 Asset の実在・音声・ready を検証し、TTS Job 作成時にも再検証
+- [x] 参照中の Asset を `voice_profile` 参照として削除拒否（未参照素材の清掃でも残る）
+- [x] worker が Asset から絶対パスを解決し、ICL 方式では `{ model, input, ref_audio, ref_text, lang_code, max_tokens, response_format }` を送信（`voice`・`speed` なし）。合成タイムアウトを 180 秒に分離
+- [x] Web UI に参照音声の選択・取り込み・参照テキスト・言語コード・最大トークンの入力を追加
+- [x] ユーザーガイドと API 契約文書、ADR を更新
+- 完了条件: 契約・サービス・Web のテストが通り、実 Qwen3-TTS で参照音声クローンの生成を確認できる。

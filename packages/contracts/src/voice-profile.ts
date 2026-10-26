@@ -67,9 +67,55 @@ export const voicevoxAdapterExtrasSchema = z.strictObject({});
 
 export const aivisspeechAdapterExtrasSchema = z.strictObject({});
 
-export const openAiAdapterExtrasSchema = z.strictObject({
-  model: z.string().trim().min(1).max(200),
-});
+export const QWEN3_TTS_LANG_CODES = [
+  "Japanese",
+  "English",
+  "Chinese",
+  "Korean",
+  "German",
+  "French",
+  "Russian",
+  "Portuguese",
+  "Spanish",
+  "Italian",
+] as const;
+
+export const OPENAI_TTS_REF_TEXT_MAX_LENGTH = 5000;
+
+export const OPENAI_TTS_MAX_TOKENS_MAX = 8192;
+
+const OPENAI_TTS_DEFAULT_MAX_TOKENS = 4096;
+
+export const openAiAdapterExtrasSchema = z
+  .strictObject({
+    model: z.string().trim().min(1).max(200),
+    refAudioAssetId: idSchema.optional(),
+    refText: z.string().trim().min(1).max(OPENAI_TTS_REF_TEXT_MAX_LENGTH).optional(),
+    langCode: z.string().trim().min(1).max(50).optional(),
+    maxTokens: z.number().int().min(1).max(OPENAI_TTS_MAX_TOKENS_MAX).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.refAudioAssetId !== undefined) {
+      if (value.refText === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["refText"],
+          message: "参照音声を使う場合は参照テキストが必要です。",
+        });
+      }
+      if (value.langCode === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["langCode"],
+          message: "参照音声を使う場合は言語コードが必要です。",
+        });
+      }
+    }
+  });
+
+export function defaultOpenAiMaxTokens(): number {
+  return OPENAI_TTS_DEFAULT_MAX_TOKENS;
+}
 
 export const voiceProfileExtrasSchema = z.union([
   voicevoxAdapterExtrasSchema,

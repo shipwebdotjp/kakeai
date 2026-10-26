@@ -9,6 +9,12 @@ export interface TtsSynthesisRequest {
   voiceId: string;
   speedScale: number;
   settings: VoiceProfileExtras;
+  /**
+   * ICL方式の参照音声の解決済み絶対パス。同一マシン上のTTSエンジンが
+   * 直接読めるファイルパスを、workerがAssetから解決して渡す。
+   * openai-compatibleの参照音声モードでのみ使う。
+   */
+  refAudioPath?: string;
 }
 
 export interface TtsVoiceQuery {

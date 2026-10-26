@@ -1,5 +1,6 @@
 import {
   openAiAdapterExtrasSchema,
+  defaultOpenAiMaxTokens,
   type TtsAdapter,
   type TtsAdapterContext,
   type TtsSynthesisAudio,
@@ -12,14 +13,15 @@ import {
 import { TtsEngineUnavailableError, TtsInputRejectedError } from "./errors.ts";
 
 const REQUEST_TIMEOUT_MS = 30_000;
+const SYNTHESIS_TIMEOUT_MS = 180_000;
 const MAX_TTS_AUDIO_BYTES = 50 * 1024 * 1024;
 
-async function request(url: string, init: RequestInit): Promise<Response> {
+async function request(url: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   try {
     return await fetch(url, {
       ...init,
       redirect: "error",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
     throw new TtsEngineUnavailableError();
@@ -131,17 +133,46 @@ export function createOpenAiCompatibleAdapter(id: VoiceAdapterId): TtsAdapter {
       if (!parsed.success) {
         throw new TtsInputRejectedError("音声モデルが設定されていません。");
       }
-      const response = await request(`${context.baseUrl}/v1/audio/speech`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const extras = parsed.data;
+      const iclMode = extras.refAudioAssetId !== undefined;
+      let body: Record<string, unknown>;
+      if (iclMode) {
+        // superRefine が ICL 時の refText/langCode を必須化済み。到達しないが、
+        // superRefine は出力型を narrow しないため TS 上の型ガードとして必要。
+        if (extras.refText === undefined || extras.langCode === undefined) {
+          throw new TtsInputRejectedError("参照音声を使う場合は参照テキストと言語コードが必要です。");
+        }
+        if (requestBody.refAudioPath === undefined || requestBody.refAudioPath.length === 0) {
+          throw new TtsInputRejectedError("参照音声ファイルを解決できませんでした。");
+        }
+        // maxTokens 省略時は既定値 4096 を送る（エンジン既定 1200 で長文が切れるのを防ぐ）。
+        body = {
+          model: extras.model,
+          input: requestBody.text,
+          ref_audio: requestBody.refAudioPath,
+          ref_text: extras.refText,
+          lang_code: extras.langCode,
+          max_tokens: extras.maxTokens ?? defaultOpenAiMaxTokens(),
+          response_format: "wav",
+        };
+      } else {
+        body = {
           model: parsed.data.model,
           input: requestBody.text,
           voice: requestBody.voiceId,
           response_format: "wav",
           speed: requestBody.speedScale,
-        }),
-      });
+        };
+      }
+      const response = await request(
+        `${context.baseUrl}/v1/audio/speech`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        SYNTHESIS_TIMEOUT_MS,
+      );
       if (response.status >= 400 && response.status < 500) {
         throw new TtsInputRejectedError();
       }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createVoiceProfileRequestSchema,
+  openAiAdapterExtrasSchema,
   ttsVoiceSchema,
   voiceAdapterDescriptorFor,
   voiceAdapterDescriptors,
@@ -56,6 +57,50 @@ describe("voiceProfileExtrasSchema", () => {
 
   it("rejects unknown keys", () => {
     expect(voiceProfileExtrasSchema.safeParse({ extra: true }).success).toBe(false);
+  });
+
+  it("accepts ICL reference-audio extras for the openai-compatible adapter", () => {
+    expect(
+      openAiAdapterExtrasSchema.safeParse({
+        model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+        refAudioAssetId: "asset-1",
+        refText: "仕組みはそれほど難しくないよ。",
+        langCode: "Japanese",
+        maxTokens: 4096,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires refText and langCode when a reference audio is set", () => {
+    expect(
+      openAiAdapterExtrasSchema.safeParse({
+        model: "qwen3-tts",
+        refAudioAssetId: "asset-1",
+      }).success,
+    ).toBe(false);
+    expect(
+      openAiAdapterExtrasSchema.safeParse({
+        model: "qwen3-tts",
+        refAudioAssetId: "asset-1",
+        refText: "text",
+      }).success,
+    ).toBe(false);
+    expect(
+      openAiAdapterExtrasSchema.safeParse({
+        model: "qwen3-tts",
+        refAudioAssetId: "asset-1",
+        langCode: "Japanese",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects out-of-range maxTokens", () => {
+    expect(
+      openAiAdapterExtrasSchema.safeParse({ model: "qwen3-tts", maxTokens: 0 }).success,
+    ).toBe(false);
+    expect(
+      openAiAdapterExtrasSchema.safeParse({ model: "qwen3-tts", maxTokens: 1.5 }).success,
+    ).toBe(false);
   });
 });
 

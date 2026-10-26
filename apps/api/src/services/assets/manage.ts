@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 import {
   assetTagsSchema,
   collectAssetReferences,
+  openAiAdapterExtrasSchema,
   renderJobSnapshotSchema,
   type Asset,
 } from "@kakeai/contracts";
@@ -71,7 +72,7 @@ export async function updateAsset(
 }
 
 interface AssetReference {
-  type: "script_version" | "render_job" | "character" | "face_set";
+  type: "script_version" | "render_job" | "character" | "face_set" | "voice_profile";
   id: string;
 }
 
@@ -137,7 +138,45 @@ async function findAssetReferences(
     }
   }
 
+  const voiceProfiles = await client.voiceProfile.findMany({
+    where: {
+      adapterId: "openai-compatible",
+      settingsJson: { contains: JSON.stringify(assetId) },
+    },
+    select: { id: true, settingsJson: true },
+  });
+  for (const profile of voiceProfiles) {
+    let rawSettings: unknown;
+    try {
+      rawSettings = JSON.parse(profile.settingsJson);
+    } catch {
+      continue;
+    }
+    const parsed = openAiAdapterExtrasSchema.safeParse(rawSettings);
+    if (!parsed.success) {
+      continue;
+    }
+    if (parsed.data.refAudioAssetId === assetId) {
+      references.push({ type: "voice_profile", id: profile.id });
+    }
+  }
+
   return references;
+}
+
+/**
+ * 参照音声として使える Asset を返す。存在しない・音声でない・ready でない場合は null。
+ * Voice Profile の検証・TTS Job 作成・worker のパス解決で共有する利用可否ルール。
+ */
+export async function findReadyAudioAsset(
+  prisma: PrismaClient,
+  assetId: string,
+): Promise<{ id: string; storageKey: string } | null> {
+  const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+  if (asset === null || asset.kind !== "audio" || asset.status !== "ready") {
+    return null;
+  }
+  return { id: asset.id, storageKey: asset.storageKey };
 }
 
 export async function deleteAsset(

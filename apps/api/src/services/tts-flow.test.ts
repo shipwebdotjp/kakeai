@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -42,6 +43,7 @@ let aivisWavBuffer: Buffer;
 let synthesisMode: "ok" | "fail" | "reject" = "ok";
 let recordedSynthesisBody: Record<string, unknown> | null = null;
 let recordedSpeakerParam: string | null = null;
+let recordedOpenAiBody: Record<string, unknown> | null = null;
 let aivisSynthesisMode: "ok" | "fail" | "reject" = "ok";
 let recordedAivisSynthesisBody: Record<string, unknown> | null = null;
 let recordedAivisSpeakerParam: string | null = null;
@@ -157,6 +159,23 @@ function handleMock(req: IncomingMessage, res: ServerResponse): void {
         res.statusCode = 422;
         res.end("invalid input");
         return;
+      }
+      res.setHeader("Content-Type", "audio/wav");
+      res.end(wavBuffer);
+    });
+    return;
+  }
+  if (req.method === "POST" && url.pathname === "/v1/audio/speech") {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      try {
+        recordedOpenAiBody = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<
+          string,
+          unknown
+        >;
+      } catch {
+        recordedOpenAiBody = null;
       }
       res.setHeader("Content-Type", "audio/wav");
       res.end(wavBuffer);
@@ -496,6 +515,103 @@ describe("tts job", () => {
     expect(snapshot.settings).toEqual({ model: "kokoro" });
     expect(snapshot.voice?.voiceId).toBe("af_heart");
     await jobs.cancelJob(prisma, job.id);
+  });
+
+  it("synthesizes ICL reference audio without sending voice", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const storageKey = `assets/test-ref-${randomUUID()}.wav`;
+    await writeFile(join(config.directories.root, storageKey), wavBuffer);
+    const refAsset = await prisma.asset.create({
+      data: {
+        kind: "audio",
+        origin: "uploaded",
+        status: "ready",
+        storageKey,
+        originalFilename: "ageha_ref.wav",
+        mediaType: "audio/wav",
+        byteSize: BigInt(wavBuffer.length),
+        sha256: createHash("sha256").update(wavBuffer).update(randomUUID()).digest("hex"),
+        durationMs: 2000,
+      },
+    });
+    const profile = await voiceProfiles.createVoiceProfile(prisma, {
+      name: "ageha",
+      adapterId: "openai-compatible",
+      voiceId: "ageha",
+      locale: "ja-JP",
+      settings: {
+        model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+        refAudioAssetId: refAsset.id,
+        refText: "仕組みはそれほど難しくないよ。",
+        langCode: "Japanese",
+        maxTokens: 4096,
+      },
+    });
+    const scriptVersionId = await createLineVersion(profile.id);
+    recordedOpenAiBody = null;
+    const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
+      speedScale: SPEED,
+    });
+    await drainWorker();
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    const body = recordedOpenAiBody as Record<string, unknown> | null;
+    expect(body).toMatchObject({
+      model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+      input: "こんにちは",
+      ref_text: "仕組みはそれほど難しくないよ。",
+      lang_code: "Japanese",
+      max_tokens: 4096,
+      response_format: "wav",
+    });
+    expect(typeof body?.ref_audio).toBe("string");
+    expect(body).not.toHaveProperty("voice");
+    expect(body).not.toHaveProperty("speed");
+  });
+
+  it("fails ICL synthesis as input rejected when the reference audio is gone", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const storageKey = `assets/test-ref-missing-${randomUUID()}.wav`;
+    await writeFile(join(config.directories.root, storageKey), wavBuffer);
+    const refAsset = await prisma.asset.create({
+      data: {
+        kind: "audio",
+        origin: "uploaded",
+        status: "ready",
+        storageKey,
+        originalFilename: "ageha_ref.wav",
+        mediaType: "audio/wav",
+        byteSize: BigInt(wavBuffer.length),
+        sha256: createHash("sha256").update(wavBuffer).update(randomUUID()).digest("hex"),
+        durationMs: 2000,
+      },
+    });
+    const profile = await voiceProfiles.createVoiceProfile(prisma, {
+      name: "ageha-missing",
+      adapterId: "openai-compatible",
+      voiceId: "ageha",
+      locale: "ja-JP",
+      settings: {
+        model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+        refAudioAssetId: refAsset.id,
+        refText: "仕組みはそれほど難しくないよ。",
+        langCode: "Japanese",
+      },
+    });
+    const scriptVersionId = await createLineVersion(profile.id);
+    const job = await ttsJobs.createTtsJob(prisma, config, scriptVersionId, "line-tts", {
+      speedScale: SPEED,
+    });
+    await prisma.asset.delete({ where: { id: refAsset.id } });
+    await rm(join(config.directories.root, storageKey), { force: true });
+    await drainWorker();
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("failed");
+    expect(finished.error?.code).toBe("TTS_INPUT_REJECTED");
   });
 
   it("reuses an existing asset for identical bytes", async () => {

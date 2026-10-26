@@ -130,7 +130,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 台本の Speaker は、Character を持たない「声だけの話者」として作れます。立ち絵が不要なナレーションは、この経路が最も少ない往復で済みます。利用者名は「ナレーター（声だけの話者）」でもかまいません。
 
-1. `kakeai_voice_profile_list` で、台本の `locale` と**完全一致**する `locale` を持つ Profile を選びます。`ja-JP` と `en-US` は別物で、`en` のような部分一致はしません。無ければ `kakeai_voice_profile_list_voices`（`adapterId`、OpenAI 互換の絞り込みには `kakeai_voice_profile_list_models` で選んだ `model`）で声候補を探し、`kakeai_voice_profile_create`（`name`・`adapterId`・`voiceId`・`locale`・`settings`。OpenAI 互換は `settings.model` が必須）で作成します。声を選び間違えたら `kakeai_voice_profile_update` で直せます（`adapterId` は変更できません）。
+1. `kakeai_voice_profile_list` で、台本の `locale` と**完全一致**する `locale` を持つ Profile を選びます。`ja-JP` と `en-US` は別物で、`en` のような部分一致はしません。無ければ `kakeai_voice_profile_list_voices`（`adapterId`、OpenAI 互換の絞り込みには `kakeai_voice_profile_list_models` で選んだ `model`）で声候補を探し、`kakeai_voice_profile_create`（`name`・`adapterId`・`voiceId`・`locale`・`settings`。OpenAI 互換は `settings.model` が必須、参照音声を使う場合は `settings.refAudioAssetId`・`settings.refText`・`settings.langCode` も必須）で作成します。声を選び間違えたら `kakeai_voice_profile_update` で直せます（`adapterId` は変更できません）。
 2. 1 回の `kakeai_script_edit` に `speaker.add` と `line.add` を入れます。`speaker.add` の `key` を `line.add` の `speakerId` で参照できます。
 
 ```json

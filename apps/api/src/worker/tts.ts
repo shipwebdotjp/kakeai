@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { rm, writeFile } from "node:fs/promises";
+import { rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ttsJobSnapshotSchema, type TtsJobResult, type TtsJobSnapshot } from "@kakeai/contracts";
+import {
+  openAiAdapterExtrasSchema,
+  ttsJobSnapshotSchema,
+  type TtsJobResult,
+  type TtsJobSnapshot,
+} from "@kakeai/contracts";
 import { resolveVoiceBaseUrl, type AppConfig } from "../config.ts";
 import { bigIntToSafeNumber } from "../dto/mappers.ts";
 import type { Job, PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
 import { probeMedia } from "../media/probe.ts";
+import { findReadyAudioAsset } from "../services/assets.ts";
 import {
   assetStorageKey,
   commitFile,
@@ -96,15 +102,42 @@ export async function processTtsJob(
   try {
     let audio: Uint8Array;
     try {
+      let refAudioPath: string | undefined;
+      if (snapshot.adapterId === "openai-compatible") {
+        const parsed = openAiAdapterExtrasSchema.safeParse(snapshot.settings);
+        if (parsed.success && parsed.data.refAudioAssetId !== undefined) {
+          const usable = await findReadyAudioAsset(prisma, parsed.data.refAudioAssetId);
+          if (usable === null) {
+            throw new TtsJobError(
+              "TTS_INPUT_REJECTED",
+              "参照音声が利用できません。声プロファイルを見直してください。",
+            );
+          }
+          const candidate = resolveStoragePath(config.directories, usable.storageKey);
+          try {
+            await stat(candidate);
+          } catch {
+            throw new TtsJobError(
+              "TTS_INPUT_REJECTED",
+              "参照音声ファイルが見つかりません。声プロファイルを見直してください。",
+            );
+          }
+          refAudioPath = candidate;
+        }
+      }
       audio = (
         await adapter.synthesize({ baseUrl: resolveVoiceBaseUrl(config, snapshot.adapterId) }, {
           text: snapshot.speechText,
           voiceId: snapshot.voice.voiceId,
           speedScale: snapshot.speedScale,
           settings: snapshot.settings,
+          refAudioPath,
         })
       ).data;
     } catch (error) {
+      if (error instanceof TtsJobError) {
+        throw error;
+      }
       if (error instanceof TtsEngineUnavailableError) {
         throw new TtsJobError("TTS_ENGINE_UNAVAILABLE", error.message);
       }

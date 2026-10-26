@@ -27,6 +27,7 @@ import type { PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 import { getTtsAdapter, TtsEngineUnavailableError } from "../tts/index.ts";
+import { findReadyAudioAsset } from "./assets.ts";
 
 interface LoadedScriptVersion {
   id: string;
@@ -207,6 +208,19 @@ async function prepareTtsJobSnapshot(
     throw ttsInputIssue(["voiceProfileId"], "声プロファイルの設定が不正です。設定を見直してください。");
   }
   const settings = parsedSettings.data;
+
+  if (adapterId.data === "openai-compatible") {
+    const openAiSettings = openAiAdapterExtrasSchema.safeParse(settings);
+    if (openAiSettings.success && openAiSettings.data.refAudioAssetId !== undefined) {
+      const usable = await findReadyAudioAsset(prisma, openAiSettings.data.refAudioAssetId);
+      if (usable === null) {
+        throw ttsInputIssue(
+          ["voiceProfileId"],
+          "参照音声の素材が利用できません。声プロファイルを見直してください。",
+        );
+      }
+    }
+  }
 
   const descriptor = voiceAdapterDescriptorFor(adapterId.data);
   const voiceId = (input.voiceId ?? profileRow.voiceId).trim();
