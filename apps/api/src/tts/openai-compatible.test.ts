@@ -196,6 +196,36 @@ describe("openai-compatible adapter", () => {
     expect(lastSpeechBody).toMatchObject({ max_tokens: 4096 });
   });
 
+  it("sends no ref_text in x-vector mode", async () => {
+    speechMode = "ok";
+    lastSpeechBody = null;
+    const audio = await adapter.synthesize(
+      { baseUrl },
+      {
+        text: "你好",
+        voiceId: "hinata",
+        speedScale: 1,
+        settings: {
+          model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+          refAudioAssetId: "asset-ref",
+          langCode: "Chinese",
+        },
+        refAudioPath: "/data/assets/ref.wav",
+      },
+    );
+    expect(audio.mediaType).toBe("audio/wav");
+    expect(lastSpeechBody).toMatchObject({
+      model: "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
+      input: "你好",
+      ref_audio: "/data/assets/ref.wav",
+      lang_code: "Chinese",
+      max_tokens: 4096,
+      response_format: "wav",
+    });
+    expect(lastSpeechBody).not.toHaveProperty("ref_text");
+    expect(lastSpeechBody).not.toHaveProperty("voice");
+  });
+
   it("rejects ICL synthesis without a resolved reference audio path", async () => {    await expect(
       adapter.synthesize(
         { baseUrl },

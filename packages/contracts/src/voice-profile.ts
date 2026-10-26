@@ -95,22 +95,18 @@ export const openAiAdapterExtrasSchema = z
     maxTokens: z.number().int().min(1).max(OPENAI_TTS_MAX_TOKENS_MAX).optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.refAudioAssetId !== undefined) {
-      if (value.refText === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["refText"],
-          message: "参照音声を使う場合は参照テキストが必要です。",
-        });
-      }
-      if (value.langCode === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["langCode"],
-          message: "参照音声を使う場合は言語コードが必要です。",
-        });
-      }
+    if (value.refAudioAssetId === undefined) {
+      return;
     }
+    if (value.langCode === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["langCode"],
+        message: "参照音声を使う場合は言語コードが必要です。",
+      });
+    }
+    // refText は任意。省略時は x-vector モード（話者埋め込みのみ）になり、
+    // 指定時は ICL モード（参照テキストも条件に使う）になる。
   });
 
 export function defaultOpenAiMaxTokens(): number {

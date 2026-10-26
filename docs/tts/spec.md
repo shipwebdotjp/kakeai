@@ -25,7 +25,7 @@ Voice Profile はアプリ共通の声の設定であり、作品台本（`Speak
 - `adapterId` は登録済みアダプター記述子の ID で、作成後は不変とする。アダプターを変えたい場合は新規 Profile を作成し、キャラクター／話者を付け替える。
 - `locale` は選択した声の申告 locale（アダプターの一覧の `locale` またはアダプター記述子の既定）から導出・検証する。キャラクターの言語別割り当て（[../multilingual-voice/spec.md](../multilingual-voice/spec.md)）に使う。
 - `voicevox` と `aivisspeech` の `voiceId` は `{speakerUuid}:{styleId}` の形で話者とスタイルを畳む。追加設定は持たない。
-- `openai-compatible` の追加設定は `{ model, refAudioAssetId?, refText?, langCode?, maxTokens? }` とする。参照音声を使う場合（ICL方式）は `refAudioAssetId`・`refText`・`langCode` が必須で、`maxTokens` は任意（省略時は 4096 を送る）。`refAudioAssetId` は音声 Asset の参照であり、作成・更新時に実在・音声・ready を検証する。参照中の Asset は未参照素材の清掃・個別削除から保護する（`ASSET_IN_USE`）。
+- `openai-compatible` の追加設定は `{ model, refAudioAssetId?, refText?, langCode?, maxTokens? }` とする。参照音声を使う場合（参照クローン）は `refAudioAssetId`・`langCode` が必須で、`maxTokens` は任意（省略時は 4096 を送る）。`refText` を付けると ICL 方式（参照テキストも条件に使う・高精度）、省略すると x-vector 方式（話者埋め込みのみ・参照言語に引っ張られにくい）になる。`refAudioAssetId` は音声 Asset の参照であり、作成・更新時に実在・音声・ready を検証する。参照中の Asset は未参照素材の清掃・個別削除から保護する（`ASSET_IN_USE`）。
 - 変更は将来の生成だけに効く。既に生成済みの Asset と Job スナップショットは変えない。
 - Agent Access では、Voice Profile の一覧・取得・声候補・モデル候補（`voiceProfile.list` / `voiceProfile.get` / `voiceProfile.listVoices` / `voiceProfile.listModels`）と作成・更新（`voiceProfile.create` / `voiceProfile.update`）を公開し、利用者が用意した既存 Profile またはエージェントが作った Profile を `speaker.add` / `speaker.setVoiceProfile` で Speaker に割り当てられる。割り当ては新しい Script Version を作る可逆な変更であり、以後の生成にだけ影響する。既存の Audio Take は変えない。Profile の削除は人専用のままである（[Agent Access 仕様](../agent-access/spec.md)、[ADR 0088](../adr/0088-agent-voice-profile-writes.md)）。
 - Voice Profile を参照する ScriptVersion が存在する間は削除を拒否する。
@@ -55,16 +55,16 @@ OpenAI 互換 API を話すローカル TTS サーバー（mlx-audio-server な�
 - 合成: `POST /v1/audio/speech` に `{ model, input, voice, response_format: "wav", speed }` を送り、WAV バイト列を得る。接続失敗は `TTS_ENGINE_UNAVAILABLE`、4xx は `TTS_INPUT_REJECTED`、その他は `TTS_SYNTHESIS_FAILED` に対応する。
 - `defaultLocale` を持たない（`null`）ため、Profile の `locale` は利用者が選ぶ。
 
-### 参照音声（ICL方式、Qwen3-TTS など）
+### 参照音声（Qwen3-TTS など）
 
-プリセット話者名ではなく、参照音声とその書き起こしを条件に毎回生成する方式に対応する。声の定義は参照音声 Asset・`refText`・`langCode` の組であり、ContentDocument や Job スナップショットにファイルを持ち込まず、Asset 参照で表す。
+プリセット話者名ではなく、参照音声を条件に毎回生成する方式に対応する。声の定義は参照音声 Asset・言語コードの組であり、参照テキストを付けると ICL 方式になる。ContentDocument や Job スナップショットにファイルを持ち込まず、Asset 参照で表す。
 
-- 判別: Profile の settings に `refAudioAssetId` がある場合だけ ICL 方式とし、無い場合は従来のプリセット方式とする。同じアダプター内で両方式を共存させる。
+- 判別: Profile の settings に `refAudioAssetId` がある場合だけ参照クローン方式とし、無い場合は従来のプリセット方式とする。同じアダプター内で両方式を共存させる。参照テキストの有無で ICL 方式と x-vector 方式を切り替える。クロスリンガル（参照と出力の言語が異なる場合）は参照テキストの言語に引っ張られるため、`ref_text` を省略した x-vector 方式（話者埋め込みのみ・精度は落ちる）を選べる。
 - 参照音声の管理: 利用者が WAV を素材として取り込み（Asset 化）、Profile の `refAudioAssetId` に指定する。`ref_audio` に渡す絶対パスは保存せず、Job 実行時に Asset の `storageKey` から解決する。参照中の Asset は `voice_profile` 参照として削除を拒否し（409 `ASSET_IN_USE`）、未参照素材の清掃でも残る。Profile の削除・差し替えで参照が外れた Asset は、次回の清掃で削除対象になる。
-- 合成: `POST /v1/audio/speech` に `{ model, input, ref_audio, ref_text, lang_code, max_tokens?, response_format: "wav" }` を送る。`voice` と `speed` は送らない（Qwen3-TTS の ICL 経路では無効であり、`voice` を送るとバッチ判定が変わるため）。`maxTokens` は省略時に 4096 を送る（サーバー既定の 1200 で長文が切れるのを避ける）。
+- 合成: `POST /v1/audio/speech` に `{ model, input, ref_audio, lang_code, max_tokens?, response_format: "wav" }` を送り、`refText` がある場合だけ `ref_text` を加える。`voice` と `speed` は送らない（Qwen3-TTS の参照クローン経路では無効であり、`voice` を送るとバッチ判定が変わるため）。`maxTokens` は省略時に 4096 を送る（サーバー既定の 1200 で長文が切れるのを避ける）。
 - `ref_audio` に渡すパスは拡張子付きでなければならない。エンジン側（miniaudio）は拡張子だけで形式を判定し、拡張子のない Asset ストアパスは内容が正常でも `unsupported file format` で失敗する。worker は tmp に拡張子付きのハードリンク（失敗時はコピー）を用意して渡し、利用後に削除する。miniaudio が直接読めない形式（m4a/aac/webm など）は WAV（PCM）へ変換した実体を渡す。
 - 言語コードは Qwen3-TTS の表記（`Japanese`・`English`・`Chinese`・`Korean`・`German`・`French`・`Russian`・`Portuguese`・`Spanish`・`Italian`）を使い、Profile では選択式とする。
-- 合成要求のタイムアウトは ICL 方式の初回ロード・参照エンコード・長文生成に合わせて 180 秒とし、一覧取得の 30 秒とは分ける。
+- 合成要求のタイムアウトは参照クローン方式の初回ロード・参照エンコード・長文生成に合わせて 180 秒とし、一覧取得の 30 秒とは分ける。
 - `refAudioAssetId` の解決失敗（Asset なし・ファイルなし）はエンジンへ送らず、Job 実行中の `TTS_INPUT_REJECTED` とする。
 
 ## TTS Job

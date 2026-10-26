@@ -20,3 +20,5 @@ ICL 方式の送信は `{ model, input, ref_audio, ref_text, lang_code, max_toke
 - `TtsSynthesisRequest` に `refAudioPath?` を追加し、worker が解決した絶対パスをアダプターへ渡す。アダプターは DB を見ない。
 - Profile 作成・更新時に参照 Asset（実在・音声・ready）を検証し、Job 作成時にも再検証する。解決失敗は Job 実行中の `TTS_INPUT_REJECTED` とする。
 - Agent の `voiceProfile.create` / `voiceProfile.update` は同じサービス層を通るため、新フィールドはそのまま使える。エージェント向けに参照音声の取り込み手順（Asset 化して `refAudioAssetId` に指定）をユーザーガイドへ追記する。
+
+Amended by [ADR 0096](./0096-ref-text-optional-xvector.md)（`refText` の必須化を撤回し、省略時は x-vector 方式とする）。

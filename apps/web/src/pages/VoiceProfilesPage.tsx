@@ -161,19 +161,19 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
   const voiceUnchanged = profile !== undefined && voiceId === profile.voiceId;
   const modelMissing = modelSelection && model.trim().length === 0;
   const modelPending = modelSelection && model.trim() !== debouncedModel.trim();
-  const iclMode = modelSelection && refAudioAssetId.trim().length > 0;
-  const iclIncomplete =
-    iclMode && (refText.trim().length === 0 || langCode.trim().length === 0);
+  const refAudioMode = modelSelection && refAudioAssetId.trim().length > 0;
+  const xvectorMode = refAudioMode && refText.trim().length === 0;
+  const refAudioIncomplete = refAudioMode && langCode.trim().length === 0;
   const maxTokensParsed = /^\d+$/.test(maxTokens.trim())
     ? Number.parseInt(maxTokens.trim(), 10)
     : Number.NaN;
   const maxTokensInvalid =
-    iclMode &&
+    refAudioMode &&
     (!Number.isSafeInteger(maxTokensParsed) ||
       maxTokensParsed < 1 ||
       maxTokensParsed > OPENAI_TTS_MAX_TOKENS_MAX);
   const refAudioPending =
-    iclMode &&
+    refAudioMode &&
     assetsQuery.isSuccess &&
     !readyAudioAssets.some((asset) => asset.id === refAudioAssetId.trim());
   const saveBlocked =
@@ -181,7 +181,7 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
     effectiveLocale === "" ||
     modelMissing ||
     modelPending ||
-    iclIncomplete ||
+    refAudioIncomplete ||
     maxTokensInvalid ||
     refAudioPending ||
     (voicesLoaded && staleVoice) ||
@@ -335,7 +335,7 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
           <fieldset className="mt-2 w-full rounded border border-border p-2">
             <legend className={metaTextClass}>参照音声（ICLクローン・任意）</legend>
             <p className={metaTextClass}>
-              音声素材を取り込んで指定すると、エンジンへ参照音声・参照テキスト・言語コード・最大トークンを送ります。このとき声IDは送信されません。
+              音声素材を取り込んで指定すると、エンジンへ参照音声・言語コード・最大トークンを送ります。このとき声IDは送信されません。参照テキストを入れるとICLモード（高精度）、省略するとx-vectorモード（他言語に引っ張られにくい）になります。
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-3">
               <label className="inline-flex items-center gap-1.5">
@@ -404,7 +404,7 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
               </label>
             </div>
             <label className="mt-1 block">
-              <span className={metaTextClass}>参照テキスト（参照音声の書き起こし・必須）</span>
+              <span className={metaTextClass}>参照テキスト（参照音声の書き起こし・任意。省略時はx-vectorモード）</span>
               <textarea
                 value={refText}
                 rows={2}
@@ -419,20 +419,25 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
             {uploadAssets.isError && (
               <p className={errorTextClass}>{errorMessage(uploadAssets.error)}</p>
             )}
-            {iclMode && (
+            {refAudioMode && !xvectorMode && (
               <p className={metaTextClass}>
-                参照音声モード: 声IDは送信されません（表示名としてのみ使用）。
+                ICLモード: 声IDは送信されません（表示名としてのみ使用）。
               </p>
             )}
-            {iclMode && iclIncomplete && (
-              <p className={errorTextClass}>参照テキストと言語コードを入力してください。</p>
+            {xvectorMode && (
+              <p className={metaTextClass}>
+                x-vectorモード: 参照テキストなしで声の特徴のみを使います。声IDは送信されません。
+              </p>
             )}
-            {iclMode && maxTokensInvalid && (
+            {refAudioMode && refAudioIncomplete && (
+              <p className={errorTextClass}>言語コードを入力してください。</p>
+            )}
+            {refAudioMode && maxTokensInvalid && (
               <p className={errorTextClass}>
                 最大トークンは1以上{OPENAI_TTS_MAX_TOKENS_MAX}以下の整数で入力してください。
               </p>
             )}
-            {iclMode && refAudioPending && (
+            {refAudioMode && refAudioPending && (
               <p className={errorTextClass}>
                 選択した参照音声はまだ利用できません。取り込みの完了を待つか、選び直してください。
               </p>

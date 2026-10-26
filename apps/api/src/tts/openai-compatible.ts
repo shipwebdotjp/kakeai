@@ -134,13 +134,14 @@ export function createOpenAiCompatibleAdapter(id: VoiceAdapterId): TtsAdapter {
         throw new TtsInputRejectedError("音声モデルが設定されていません。");
       }
       const extras = parsed.data;
-      const iclMode = extras.refAudioAssetId !== undefined;
+      // 参照音声モード。ref_text ありは ICL、なしは x-vector（話者埋め込みのみ）。
+      const refAudioMode = extras.refAudioAssetId !== undefined;
       let body: Record<string, unknown>;
-      if (iclMode) {
-        // superRefine が ICL 時の refText/langCode を必須化済み。到達しないが、
+      if (refAudioMode) {
+        // superRefine が参照音声時の langCode を必須化済み。到達しないが、
         // superRefine は出力型を narrow しないため TS 上の型ガードとして必要。
-        if (extras.refText === undefined || extras.langCode === undefined) {
-          throw new TtsInputRejectedError("参照音声を使う場合は参照テキストと言語コードが必要です。");
+        if (extras.langCode === undefined) {
+          throw new TtsInputRejectedError("参照音声を使う場合は言語コードが必要です。");
         }
         if (requestBody.refAudioPath === undefined || requestBody.refAudioPath.length === 0) {
           throw new TtsInputRejectedError("参照音声ファイルを解決できませんでした。");
@@ -150,11 +151,13 @@ export function createOpenAiCompatibleAdapter(id: VoiceAdapterId): TtsAdapter {
           model: extras.model,
           input: requestBody.text,
           ref_audio: requestBody.refAudioPath,
-          ref_text: extras.refText,
           lang_code: extras.langCode,
           max_tokens: extras.maxTokens ?? defaultOpenAiMaxTokens(),
           response_format: "wav",
         };
+        if (extras.refText !== undefined) {
+          body.ref_text = extras.refText;
+        }
       } else {
         body = {
           model: parsed.data.model,

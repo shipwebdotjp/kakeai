@@ -71,18 +71,11 @@ describe("voiceProfileExtrasSchema", () => {
     ).toBe(true);
   });
 
-  it("requires refText and langCode when a reference audio is set", () => {
+  it("requires langCode when a reference audio is set, with optional refText", () => {
     expect(
       openAiAdapterExtrasSchema.safeParse({
         model: "qwen3-tts",
         refAudioAssetId: "asset-1",
-      }).success,
-    ).toBe(false);
-    expect(
-      openAiAdapterExtrasSchema.safeParse({
-        model: "qwen3-tts",
-        refAudioAssetId: "asset-1",
-        refText: "text",
       }).success,
     ).toBe(false);
     expect(
@@ -90,6 +83,13 @@ describe("voiceProfileExtrasSchema", () => {
         model: "qwen3-tts",
         refAudioAssetId: "asset-1",
         langCode: "Japanese",
+      }).success,
+    ).toBe(true);
+    expect(
+      openAiAdapterExtrasSchema.safeParse({
+        model: "qwen3-tts",
+        refAudioAssetId: "asset-1",
+        refText: "text",
       }).success,
     ).toBe(false);
   });
