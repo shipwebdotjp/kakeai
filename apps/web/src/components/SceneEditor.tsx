@@ -1,60 +1,37 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
+import { useMemo, useState, type RefObject } from "react";
 import { OctagonAlert, Plus, Save, TriangleAlert, Video } from "lucide-react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import {
-  contentDocumentSchema,
   resolveCharacterName,
-  type BulkTtsJobExclusion,
   type CharacterLibraryEntry,
   type ContentDocument,
   type ScriptOperation,
   type ScriptVersion,
-  type Warning,
-  type TtsJobResult,
 } from "@kakeai/contracts";
-import { ApiError } from "../api/client";
 import {
   diagnosticTarget,
-  type Diagnostic,
   type DiagnosticTarget,
 } from "../content/diagnostics";
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
   useAdapterVoicesMap,
   useAssets,
-  useBulkGenerateTtsTakes,
   useCharacters,
   useFaceSets,
-  useSaveScriptVersion,
   useThemes,
   useVoiceProfiles,
-  type BulkTtsFailure,
 } from "../api/hooks";
 import {
   buildContentDocument,
-  bulkTtsCandidateLineIds,
   cloneSceneFormValue,
   collectSceneIds,
   countCharacterFormUsage,
-  generatedTakePolicy,
-  mergeTake,
   newAppearanceId,
   newCharacterId,
   newSceneId,
   newSpeakerId,
   nextPointLabel,
-  toFormValues,
   DEFAULT_BGM_GAIN_DB,
   type CharacterFormValue,
-  type DocumentFormValues,
   type SceneFormValue,
   type SpeakerFormValue,
 } from "../content/form";
@@ -73,13 +50,6 @@ import {
   type StructuralEditResult,
 } from "../content/structural";
 import { sceneDisplayName } from "../content/labels";
-import { sceneNavProjection } from "../content/navProjection";
-import {
-  captureEditorScrollAnchor,
-  restoreEditorScrollAnchor,
-  scrollEditorTargetIntoView,
-  type EditorScrollAnchor,
-} from "../lib/editorScroll";
 import { errorMessage } from "../lib/errorMessage";
 import type { UnsavedDocumentState } from "../lib/useDraftPreview";
 import {
@@ -94,24 +64,17 @@ import {
   textFieldClass,
 } from "../ui";
 import { CharacterFields } from "./CharacterFields";
-import {
-  Collapsible,
-  useCollapsibleStore,
-  useStoredCollapsible,
-} from "./Collapsible";
+import { Collapsible } from "./Collapsible";
 import { sceneFoldKey } from "../lib/collapseState";
 import { ScriptSkinProvider } from "./CueList";
 import { MediaPicker } from "./MediaPicker";
 import { ScenePickerModal, type ScenePickerTarget } from "./ScenePickerModal";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { SceneBlock } from "./scene-editor/SceneBlock";
+import { useSceneEditorForm } from "./scene-editor/useSceneEditorForm";
+import { useSceneEditorBulkTts } from "./scene-editor/useSceneEditorBulkTts";
+import { useSceneEditorSave } from "./scene-editor/useSceneEditorSave";
 import { hasConfiguredStanding, isMiddleScene } from "./scene-editor/shared";
-
-const DRAFT_PREVIEW_DEBOUNCE_MS = 800;
-
-type PendingEditorScroll =
-  | { kind: "anchor"; anchor: EditorScrollAnchor }
-  | { kind: "reveal"; targetId: string };
 
 function resolveInsertionTargetId(
   scenes: readonly Pick<SceneFormValue, "id" | "kind">[],
@@ -146,31 +109,6 @@ interface SceneEditorProps {
   onDocumentChange?: (state: UnsavedDocumentState) => void;
   onDirtyChange?: (dirty: boolean) => void;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
-}
-
-function extractServerErrors(error: unknown): Diagnostic[] {
-  if (
-    error instanceof ApiError &&
-    error.details &&
-    typeof error.details === "object" &&
-    "issues" in error.details &&
-    Array.isArray((error.details as { issues: unknown }).issues)
-  ) {
-    return (
-      error.details as {
-        issues: {
-          path?: (string | number)[];
-          code?: string;
-          message: string;
-        }[];
-      }
-    ).issues.map((issue) => ({
-      path: issue.path,
-      code: issue.code,
-      message: issue.message ?? "入力エラーが発生しました",
-    }));
-  }
-  return [{ message: errorMessage(error) }];
 }
 
 type ScenePickerRequest =
@@ -264,45 +202,17 @@ export function SceneEditor({
   onDirtyChange,
   scrollContainerRef,
 }: SceneEditorProps) {
-  const save = useSaveScriptVersion(editionId);
   const voiceProfiles = useVoiceProfiles();
   const characterLibrary = useCharacters();
   const faceSets = useFaceSets();
   const adapterVoices = useAdapterVoicesMap();
   const themesQuery = useThemes();
   const assetsQuery = useAssets();
-  const [diagnostics, setDiagnostics] = useState<{
-    errors: Diagnostic[];
-    warnings: Diagnostic[];
-  }>({
-    errors: [],
-    warnings: [],
-  });
-  const [openKind, setOpenKind] = useState<"error" | "warning" | null>(null);
-  const [savedAtMs, setSavedAtMs] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [pickerRequest, setPickerRequest] = useState<ScenePickerRequest | null>(
     null,
   );
   const [addBeforeSceneId, setAddBeforeSceneId] = useState<string | null>(null);
-  const [bulkProgress, setBulkProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
-  const [bulkResult, setBulkResult] = useState<{
-    succeeded: number;
-    excluded: BulkTtsJobExclusion[];
-    failed: BulkTtsFailure[];
-  } | null>(null);
-  const bulkGenerate = useBulkGenerateTtsTakes(scriptVersionId);
-
-  useEffect(() => {
-    if (savedAtMs === null) {
-      return;
-    }
-    const timer = setTimeout(() => setSavedAtMs(null), 4000);
-    return () => clearTimeout(timer);
-  }, [savedAtMs]);
 
   const {
     register,
@@ -312,263 +222,61 @@ export function SceneEditor({
     getValues,
     setValue,
     formState,
-  } = useForm<DocumentFormValues>({
-    defaultValues: toFormValues(base),
-  });
-
-  const isFormDirty = formState.isDirty;
-  const lastEmittedDirtyRef = useRef<boolean | null>(null);
-
-  useEffect(() => {
-    if (lastEmittedDirtyRef.current !== isFormDirty) {
-      lastEmittedDirtyRef.current = isFormDirty;
-      onDirtyChange?.(isFormDirty);
-    }
-  }, [isFormDirty, onDirtyChange]);
-  const {
     fields,
     insert,
-    replace: replaceScenes,
-  } = useFieldArray({
-    control,
-    name: "scenes",
-  });
-  const {
-    fields: characterFields,
-    append: appendCharacter,
-    remove: removeCharacter,
-  } = useFieldArray({ control, name: "characters" });
-  const [charactersOpen, setCharactersOpen] = useStoredCollapsible(
-    "characters",
-    characterFields.length === 0,
-  );
-
-  useEffect(() => {
-    if (characterFields.length === 0) {
-      setCharactersOpen(true);
-    }
-  }, [characterFields.length, setCharactersOpen]);
-  const watchedScenesValue = useWatch({ control, name: "scenes" });
-  const watchedScenes = useMemo(
-    () => watchedScenesValue ?? [],
-    [watchedScenesValue],
-  );
-  const watchedCharacters = useWatch({ control, name: "characters" }) ?? [];
-  const watchedSpeakers = useWatch({ control, name: "speakers" }) ?? [];
-
-  const foldStore = useCollapsibleStore();
-  const openScene = useCallback(
-    (sceneId: string) => {
-      foldStore?.set(sceneFoldKey(sceneId), true);
-    },
-    [foldStore],
-  );
-
-  const pendingScrollRef = useRef<PendingEditorScroll | null>(null);
-
-  useLayoutEffect(() => {
-    const container = scrollContainerRef?.current;
-    if (container === null || container === undefined) {
-      return;
-    }
-    const pending = pendingScrollRef.current;
-    if (pending === null) {
-      return;
-    }
-    const apply = (): boolean => {
-      if (pendingScrollRef.current !== pending) {
-        return true;
-      }
-      if (pending.kind === "reveal") {
-        if (!scrollEditorTargetIntoView(container, pending.targetId)) {
-          return false;
-        }
-      } else {
-        restoreEditorScrollAnchor(container, pending.anchor);
-      }
-      pendingScrollRef.current = null;
-      return true;
-    };
-    if (apply()) {
-      return;
-    }
-    const frame = requestAnimationFrame(() => {
-      if (!apply()) {
-        pendingScrollRef.current = null;
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [watchedScenes, scrollContainerRef]);
-
-  const keepScrollAnchor = (targetId: string): void => {
-    const container = scrollContainerRef?.current;
-    if (container === null || container === undefined) {
-      return;
-    }
-    const anchor = captureEditorScrollAnchor(container, targetId);
-    pendingScrollRef.current =
-      anchor === null ? null : { kind: "anchor", anchor };
-  };
-
-  const revealTarget = (targetId: string): void => {
-    const container = scrollContainerRef?.current;
-    if (container === null || container === undefined) {
-      return;
-    }
-    pendingScrollRef.current = { kind: "reveal", targetId };
-  };
-
-  const navProjection = useMemo(
-    () => sceneNavProjection(watchedScenes, watchedSpeakers, watchedCharacters),
-    [watchedScenes, watchedSpeakers, watchedCharacters],
-  );
-  const lastEmittedNavProjection = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (navProjection === lastEmittedNavProjection.current) {
-      return;
-    }
-    const snapshot = [...watchedScenes];
-    const speakerSnapshot = [...(watchedSpeakers ?? [])];
-    const characterSnapshot = [...(watchedCharacters ?? [])];
-    const timer = setTimeout(() => {
-      if (navProjection === lastEmittedNavProjection.current) {
-        return;
-      }
-      lastEmittedNavProjection.current = navProjection;
-      onValuesChange?.(snapshot, speakerSnapshot, characterSnapshot);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [
+    replaceScenes,
+    characterFields,
+    appendCharacter,
+    removeCharacter,
+    charactersOpen,
+    setCharactersOpen,
     watchedScenes,
-    watchedSpeakers,
     watchedCharacters,
-    navProjection,
+    watchedSpeakers,
+    foldStore,
+    openScene,
+    keepScrollAnchor,
+    revealTarget,
+    savedVoiceByLineId,
+    bgmSnapshotRef,
+    allValues,
+    pendingScrollRef,
+  } = useSceneEditorForm({
+    base,
+    scrollContainerRef,
     onValuesChange,
-  ]);
-  const savedVoiceByLineId = useMemo(() => {
-    const speakerById = new Map(
-      base.speakers.map((speaker) => [speaker.id, speaker]),
-    );
-    const map = new Map<string, string | null>();
-    for (const scene of base.scenes) {
-      for (const line of scene.lines) {
-        const speaker =
-          line.speakerId === null ? undefined : speakerById.get(line.speakerId);
-        map.set(line.id, speaker?.voiceProfileId ?? null);
-      }
-    }
-    return map;
-  }, [base]);
-
-  const lastBaseRef = useRef(base);
-  const bgmSnapshotRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (lastBaseRef.current !== base) {
-      lastBaseRef.current = base;
-      if (!formState.isDirty) {
-        reset(toFormValues(base));
-      }
-    }
-  }, [base, reset, formState.isDirty]);
-
-  const allValues = useWatch({ control }) as DocumentFormValues | undefined;
-  useEffect(() => {
-    if (onDocumentChange === undefined || allValues === undefined) {
-      return;
-    }
-    if (!formState.isDirty) {
-      onDocumentChange({ dirty: false, document: null });
-      return;
-    }
-    const timer = setTimeout(() => {
-      let document: ContentDocument | null = null;
-      try {
-        const built = buildContentDocument(base, allValues);
-        if (contentDocumentSchema.safeParse(built).success) {
-          document = built;
-        }
-      } catch {
-        document = null;
-      }
-      onDocumentChange({ dirty: true, document });
-    }, DRAFT_PREVIEW_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [allValues, base, formState.isDirty, onDocumentChange]);
-
-  const onSubmit = handleSubmit((values) => {
-    let document: ContentDocument;
-    try {
-      document = buildContentDocument(base, values);
-    } catch (error) {
-      setDiagnostics({
-        errors: [{ message: errorMessage(error) }],
-        warnings: [],
-      });
-      setOpenKind("error");
-      return;
-    }
-    const parsed = contentDocumentSchema.safeParse(document);
-    if (!parsed.success) {
-      setDiagnostics({
-        errors: parsed.error.issues.map((issue) => ({
-          path: issue.path as (string | number)[],
-          code: issue.code,
-          message: issue.message,
-        })),
-        warnings: [],
-      });
-      setOpenKind("error");
-      return;
-    }
-    save.mutate(parsed.data, {
-      onSuccess: (result) => {
-        reset(toFormValues(result.scriptVersion.content));
-        const warnings = result.warnings.map((warning) => ({
-          path: warning.path,
-          code: warning.code,
-          message: warning.message,
-        }));
-        setDiagnostics({ errors: [], warnings });
-        setOpenKind(warnings.length > 0 ? "warning" : null);
-        setSavedAtMs(Date.now());
-        setBulkResult(null);
-        onSaved?.(result.scriptVersion);
-      },
-      onError: (error) => {
-        setDiagnostics((prev) => ({
-          ...prev,
-          errors: extractServerErrors(error),
-        }));
-        setOpenKind("error");
-      },
-    });
+    onDocumentChange,
+    onDirtyChange,
   });
 
-  const showMessage = (message: string): void => {
-    setDiagnostics((prev) => ({ ...prev, errors: [{ message }] }));
-    setOpenKind("error");
-  };
+  const {
+    bulkGenerate,
+    bulkProgress,
+    bulkResult,
+    bulkCandidateCount,
+    onBulkGenerate,
+    clearBulkResult,
+  } = useSceneEditorBulkTts({ scriptVersionId, base, getValues, setValue });
 
-  const showError = (error: unknown): void => {
-    showMessage(errorMessage(error));
-  };
-
-  const showWarnings = (warnings: Warning[]): void => {
-    setDiagnostics((prev) => ({
-      ...prev,
-      warnings: warnings.map((warning) => ({
-        path: warning.path,
-        code: warning.code,
-        message: warning.message,
-      })),
-    }));
-    if (warnings.length > 0) {
-      setOpenKind("warning");
-      return;
-    }
-    setOpenKind((prev) => (prev === "warning" ? null : prev));
-  };
+  const {
+    save,
+    diagnostics,
+    setDiagnostics,
+    openKind,
+    setOpenKind,
+    savedAtMs,
+    onSubmit,
+    showMessage,
+    showError,
+    showWarnings,
+  } = useSceneEditorSave({
+    base,
+    editionId,
+    handleSubmit,
+    reset,
+    clearBulkResult,
+    onSaved,
+  });
 
   const runStructural = (
     operation: ScriptOperation,
@@ -1017,74 +725,6 @@ export function SceneEditor({
     if (created[0] !== undefined) {
       revealTarget(`scene-${created[0]}`);
     }
-  };
-
-  const bulkCandidateCount = useMemo(
-    () => bulkTtsCandidateLineIds(base).length,
-    [base],
-  );
-
-  const addBulkTake = (narrationSegmentId: string, result: TtsJobResult) => {
-    const scenes = getValues("scenes");
-    for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex += 1) {
-      const scene = scenes[sceneIndex];
-      if (scene === undefined) {
-        continue;
-      }
-      const lineIndex = scene.lines.findIndex(
-        (line) => line.id === narrationSegmentId,
-      );
-      if (lineIndex === -1) {
-        continue;
-      }
-      const line = scene.lines[lineIndex];
-      if (line === undefined) {
-        continue;
-      }
-      const next = mergeTake(
-        line,
-        {
-          assetId: result.assetId,
-          durationMs: result.durationMs,
-          source: "tts",
-        },
-        generatedTakePolicy("bulk").select,
-      );
-      setValue(`scenes.${sceneIndex}.lines.${lineIndex}.takes`, next.takes, {
-        shouldDirty: true,
-      });
-      setValue(
-        `scenes.${sceneIndex}.lines.${lineIndex}.selectedAudioTakeId`,
-        next.selectedAudioTakeId,
-        {
-          shouldDirty: true,
-        },
-      );
-      return;
-    }
-  };
-
-  const onBulkGenerate = () => {
-    setBulkResult(null);
-    setBulkProgress(null);
-    bulkGenerate.mutate(
-      {
-        onProgress: (done, total) => setBulkProgress({ done, total }),
-        onJobSucceeded: (result) =>
-          addBulkTake(result.narrationSegmentId, result),
-      },
-      {
-        onSuccess: (summary) => {
-          setBulkResult({
-            succeeded: summary.succeeded,
-            excluded: summary.excluded,
-            failed: summary.failed,
-          });
-          setBulkProgress(null);
-        },
-        onError: () => setBulkProgress(null),
-      },
-    );
   };
 
   const addSpeakerFor = (

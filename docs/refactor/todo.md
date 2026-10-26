@@ -126,7 +126,7 @@
 
 ## Phase 5: 状態を持つUIと残り
 
-### [ ] T12 `SceneEditor` のフック抽出
+### [ ] T12 `SceneEditor` のフック抽出（一部完了）
 
 - [ ] `useSceneEditorForm` に useForm・field array・dirty通知を移す
 - [ ] `useSceneStructure` に Scene/行/Cue/立ち絵/音声の構造操作を移す
@@ -161,7 +161,7 @@
 
 完了条件: 各ファイル400行以下、構造操作とCue Mapのテストが通る。
 
-### [ ] T16 残りのテスト分割
+### [x] T16 残りのテスト分割
 
 - [ ] `form.test.ts` / `compiler.test.ts` / `structural.test.ts` を本体の分割に合わせる
 - [ ] テストの共通fixtureを必要最小限に整理する
@@ -199,9 +199,11 @@
 - T5 は `TimingFields` / `InsertSceneFields` / `SceneBlock` の抽出まで完了。`SceneEditor` 本体のフック抽出は T12 で行う。
 - T6（CueList）は未着手。
 - T7（LinesEditor）は完了。
-- T15 は `structural.ts` / `cueMap.ts` の本体分割まで完了。テスト分割は T16 で行う。
+- T15 は `structural.ts` / `cueMap.ts` の本体分割まで完了。テスト分割は T16 で完了。
 - T8 は `packages/contracts/src/agent.ts` の分割まで完了。`apps/api/src/agent/operations.ts` は未着手。
 - T9（script-versions）・T10（assets）は完了。
 - T11（compositions）は分割完了。`service.ts` が620行のため、追加分割をフォローする。
+- T12 は `useSceneEditorForm` / `useSceneEditorBulkTts` / `useSceneEditorSave` を抽出。構造操作・BGM・タイムライン計算のフック抽出は残り。
+- T16 は `form.test.ts` / `compiler.test.ts` / `structural.test.ts` / `cueMap.test.ts` の分割まで完了。
 - T17（ファイルサイズチェック）は完了。`npm run check:file-size` をCIに追加した。
 - 現在の800行超ファイルは SceneEditor / CueList / ThemeDetailPage / ThumbnailsPage / LineEditor / api agent operations / WorkEditPage の7件。

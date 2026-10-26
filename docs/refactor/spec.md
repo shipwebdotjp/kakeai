@@ -163,11 +163,11 @@ apps/web/src/components/
     ├── SceneBlock.tsx
     ├── InsertSceneFields.tsx
     ├── TimingFields.tsx
-    ├── SceneToolbar.tsx          # Phase 5
-    ├── useSceneEditorForm.ts     # Phase 5
-    ├── useSceneStructure.ts      # Phase 5
-    ├── useDraftPreviewSync.ts    # Phase 5
-    └── useBulkTts.ts             # Phase 5
+    ├── useSceneEditorForm.ts     # フォーム状態・スクロール・ドラフト同期
+    ├── useSceneEditorBulkTts.ts  # 一括TTS
+    ├── useSceneEditorSave.ts     # 保存・diagnostics
+    ├── useSceneStructure.ts      # 未着手（構造操作）
+    └── SceneToolbar.tsx          # 未着手
 ```
 
 - Phase 3では `TimingFields` / `InsertSceneFields` / `SceneBlock` の移設だけを行う。
