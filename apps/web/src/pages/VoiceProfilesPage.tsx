@@ -162,7 +162,8 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
   const modelMissing = modelSelection && model.trim().length === 0;
   const modelPending = modelSelection && model.trim() !== debouncedModel.trim();
   const refAudioMode = modelSelection && refAudioAssetId.trim().length > 0;
-  const xvectorMode = refAudioMode && refText.trim().length === 0;
+  const trimmedRefText = refText.trim();
+  const xvectorMode = refAudioMode && trimmedRefText.length === 0;
   const refAudioIncomplete = refAudioMode && langCode.trim().length === 0;
   const maxTokensParsed = /^\d+$/.test(maxTokens.trim())
     ? Number.parseInt(maxTokens.trim(), 10)
@@ -196,10 +197,12 @@ function ProfileForm({ profile, adapters }: ProfileFormProps) {
     if (modelSelection) {
       const refId = refAudioAssetId.trim();
       if (refId.length > 0) {
+        // 空の参照テキストは送らない（x-vector モード）。"" を送ると
+        // スキーマの min(1) に引っかかり 422 になる。
         settings = {
           model: model.trim(),
           refAudioAssetId: refId,
-          refText: refText.trim(),
+          ...(trimmedRefText.length > 0 ? { refText: trimmedRefText } : {}),
           langCode: langCode.trim(),
           maxTokens: maxTokensParsed,
         };
