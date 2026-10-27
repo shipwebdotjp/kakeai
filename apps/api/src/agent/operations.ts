@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   AGENT_ERROR_CODES,
   DEFAULT_AGENT_LOCALE,
+  agentArtifactGetInputSchema,
+  agentArtifactGetOutputSchema,
   agentAssetGetInputSchema,
   agentAssetGetOutputSchema,
   agentAssetImportInputSchema,
@@ -46,6 +48,8 @@ import {
   agentScriptRestoreOutputSchema,
   agentScriptSaveInputSchema,
   agentScriptSaveOutputSchema,
+  agentScriptSubtitlesInputSchema,
+  agentScriptSubtitlesOutputSchema,
   agentScriptValidateInputSchema,
   agentScriptValidateOutputSchema,
   agentTemplateGetInputSchema,
@@ -83,7 +87,9 @@ import type { PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { logger } from "../logger.ts";
 import type { DataDirectories } from "../storage/paths.ts";
+import { getArtifact, resolveArtifactContent } from "../services/artifacts.ts";
 import { getAsset, searchAssets, updateAsset } from "../services/assets.ts";
+import { getScriptVersionSubtitles } from "../services/script-versions.ts";
 import {
   editAgentScript,
   getAgentScript,
@@ -283,6 +289,24 @@ const definitions: AgentOperationDefinitions = {
     invalidInputCode: AGENT_ERROR_CODES.INVALID_INPUT,
     run: async (input, context) => validateAgentScript(context.prisma, input),
   },
+  // SRT is derived on demand from the saved version; no Artifact or Job.
+  "script.subtitles": {
+    input: agentScriptSubtitlesInputSchema,
+    output: agentScriptSubtitlesOutputSchema,
+    run: async (input, context) => {
+      const result = await getScriptVersionSubtitles(
+        context.prisma,
+        input.scriptVersionId,
+      );
+      return {
+        scriptVersionId: input.scriptVersionId,
+        filename: result.filename,
+        mimeType: "application/x-subrip" as const,
+        byteSize: Buffer.byteLength(result.srt, "utf8"),
+        srt: result.srt,
+      };
+    },
+  },
   "script.save": {
     input: agentScriptSaveInputSchema,
     output: agentScriptSaveOutputSchema,
@@ -363,6 +387,22 @@ const definitions: AgentOperationDefinitions = {
     run: async (input, context) => ({
       job: await cancelJob(context.prisma, input.jobId),
     }),
+  },
+  // The file stays on disk; the absolute path is the agent-facing handle.
+  "artifact.get": {
+    input: agentArtifactGetInputSchema,
+    output: agentArtifactGetOutputSchema,
+    run: async (input, context) => {
+      const [artifact, location] = await Promise.all([
+        getArtifact(context.prisma, input.artifactId),
+        resolveArtifactContent(
+          context.prisma,
+          context.directories,
+          input.artifactId,
+        ),
+      ]);
+      return { artifact, filePath: location.path };
+    },
   },
   ...imageOperationDefinitions,
   ...thumbnailOperationDefinitions,

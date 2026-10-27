@@ -23,7 +23,7 @@
 | 中 | 入力契約の探索性（P3-1） | `template.get` の入力 JSON Schema / 例、表・グラフ・フローの試行錯誤削減 | 完了（2026-10-24） | 複雑なテンプレートを使う制作が増えたとき |
 | 中 | 視覚確認（P3） | 保存版プレビュー、素材画像、複数フレーム | 一部実装（保存版・素材） | レンダーやり直しコストが問題になったとき |
 | 中 | ライブラリ読み取りと声の割り当て（P5） | Voice Profile / Face Set / Theme の読み取り、声だけの話者 | 完了（2026-10-25） | 新規作品で声付きキャラクターが無いとき |
-| 低 | 納品物（将来） | サムネイル、SRT、YouTube 設定、MP4 取得 | サムネイルは実装済み（B13）。SRT・YouTube・MP4 取得は未着手 | 投稿までエージェントに任せたくなったとき |
+| 低 | 納品物（将来） | サムネイル、SRT、YouTube 設定、MP4 取得 | サムネイル（B13）・SRT（B18）・MP4 取得（B18）は実装済み。YouTube 設定は未着手 | 投稿までエージェントに任せたくなったとき |
 | 低 | 制作履歴（P4） | 版履歴・復元・Work 複製・タイムアウト回復 | 完了（2026-10-24） | 反復制作ややり直しが増えたとき |
 | 低 | 表現の拡張（将来） | 新規 Composition、縦型、リモート | 未着手 | 商品として必要になったとき |
 
@@ -75,9 +75,9 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
 | 項目 | 内容 | 依存・注意 |
 | --- | --- | --- |
 | サムネイル | 候補の作成・更新・primary 選択・未保存プレビュー・PNG取得 | 実装済み（B13）。[`docs/thumbnail/spec.md`](../thumbnail/spec.md)。削除・共通 Appearance の保存・プリセットは人専用 |
-| SRT字幕 | 保存済み ScriptVersion からの字幕ダウンロード | [`docs/subtitle-export/spec.md`](../subtitle-export/spec.md)。タイミングは `resolveTimeline` と一致させる |
+| SRT字幕 | 保存済み ScriptVersion からの字幕ダウンロード | 実装済み（B18 の `script.subtitles`）。[`docs/subtitle-export/spec.md`](../subtitle-export/spec.md)。タイミングは `resolveTimeline` と一致させる |
 | YouTube 投稿設定 | タイトル・説明・タグ・公開範囲・チャプター | [`docs/youtube-publication/plan.md`](../youtube-publication/plan.md) は未実装。まずアプリ側の実装が必要 |
-| MP4 Artifact の取得 | `role: "render"` の Artifact をエージェントへ渡す | メディアセッション Cookie と同一originの制約。ダウンロード操作の設計が必要 |
+| MP4 Artifact の取得 | `role: "render"` の Artifact をエージェントへ渡す | 実装済み（B18 の `artifact.get`）。データルート内の絶対パスを返し、バイトは転送しない（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)） |
 
 ### 2. 視覚確認
 

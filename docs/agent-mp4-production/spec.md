@@ -8,10 +8,10 @@
 
 - 主線は「新規または既存の Work から、台本・素材・キャラクター・TTS・検証・
   レンダーを経て、`role: "render"` / `format: "mp4"` の Artifact を作る」こと。
-- 最終的な絵・音の確認、サムネイル、SRT 字幕、YouTube 投稿設定は人間が行う。
-  これらは今回の非ゴールであり、[roadmap.md](./roadmap.md) に将来項目として置く。
+- 最終的な絵・音の確認、サムネイルの最終判断、YouTube 投稿設定は人間が行う。
+  SRT と MP4 の取得は後続の B18 でエージェントへ公開した（[`script.subtitles` / `artifact.get`](../agent-access/spec.md)）。
 - エージェントは、レンダー Job が `succeeded` になり、Artifact が存在するところまで
-  責任を持つ。MP4 の取得・視聴・品質判断は人間が行う。
+  責任を持つ。MP4 の視聴と品質判断は人間が行う。
 - 操作の意味は既存の正に従う。台本の構造は
   [`docs/mvp/content-schema.md`](../mvp/content-schema.md)、操作は
   [`docs/editor-core/spec.md`](../editor-core/spec.md)、Agent Access は
@@ -68,9 +68,9 @@
 
 - 最終的な絵・音の品質判断（人間）
 - サムネイルの作成・選択・PNG取得（P1 時点では対象外。B13 で公開済み）
-- SRT 字幕のエクスポート（人間 / 将来）
+- SRT 字幕のエクスポート（B18 で `script.subtitles` として公開済み）
 - YouTube 投稿設定・チャプター（人間 / 将来）
-- MP4 Artifact のダウンロード（人間 / 将来）
+- MP4 Artifact のダウンロード（B18 で `artifact.get` の絶対パスとして公開済み。視聴・品質判断は人間）
 - 下書きプレビュー（将来）
 - 版の削除・履歴圧縮、全 Edition の複製、Work 作成・複製の `requestId` 冪等化
 - Theme / Face Set / Voice Profile の作成・更新・削除（人専用。読み取りと既存 Voice Profile の話者への割り当ては P5 で対象）
@@ -111,7 +111,8 @@
 | 11 | `script.validate` | 添付後の版を再検証する |
 | 12 | `render.start`（`requestId` 付き） | `render` Job を取得 |
 | 13 | `job.wait` / `job.get` | `succeeded`。`artifacts` に `role: "render"` / `format: "mp4"` がある |
-| 14 | 報告 | Work / Edition / ScriptVersion / Job / Artifact ID、尺、寸法を報告。品質判断は人間に返す |
+| 14 | `artifact.get` / `script.subtitles` | MP4 の絶対パス `filePath` と、保存版の SRT を取得する |
+| 15 | 報告 | Work / Edition / ScriptVersion / Job / Artifact ID、尺、寸法、MP4 のパスを報告。品質判断は人間に返す |
 
 - 9〜10 の間は台本を保存しない。保存すると `SCRIPT_BASE_STALE` になる。
 - 9 で `excluded` が多い場合、または `TTS_INPUT_INVALID` が声由来なら、
@@ -211,10 +212,10 @@ ja-JP は従来どおり。en-US で作成した直後の `script.edit` が
 
 R6 は P1 時点の非ゴールである。P4 で版履歴一覧・復元・Work 複製を追加し、
 P5 でライブラリの読み取りと既存 Voice Profile の割り当てを追加した。
-引き続き、サムネイル・SRT・YouTube・Artifact ダウンロード・下書きプレビュー・
-Theme / FaceSet / Voice の管理（作成・更新・削除）は P5 の対象にしない。必要になった時点で
-[roadmap.md](./roadmap.md) から個別に立ち上げる。サムネイルは後続の
-[Agent Access B13](../agent-access/roadmap.md) として公開した（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）。
+引き続き、YouTube・下書きプレビュー・Face Set の管理（作成・更新・削除）・Theme のアーカイブ／削除は
+P5 の対象にしない。必要になった時点で [roadmap.md](./roadmap.md) から個別に立ち上げる。サムネイルは
+[Agent Access B13](../agent-access/roadmap.md) として公開し（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）、
+SRT と MP4 の取得は B18 として公開した（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。
 
 ### R7. 回帰を固定する
 

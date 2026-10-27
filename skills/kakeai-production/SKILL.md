@@ -72,7 +72,7 @@ files.
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
 | 8 | Optional pre-render visual check | `preview.scriptFrame`, `preview.assetFrame` | Layout, text overflow, overlap, missing media |
-| 9 | Render and optional visual check | `render.start`, `job.get` / `job.wait`, `preview.frame` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`); the user judges final quality |
+| 9 | Render, delivery and optional visual check | `render.start`, `job.get` / `job.wait`, `artifact.get`, `script.subtitles`, `preview.frame` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`); MP4 path and SRT are available; the user judges final quality |
 | 10 | Optional thumbnail (after render) | `thumbnail.listTemplates`, `thumbnail.create`, `preview.thumbnail`, `thumbnail.update`, `thumbnail.setPrimary`, `thumbnail.image` | A candidate exists, its draft preview looks right, and one is chosen; the user judges the final look |
 
 Do not interleave a later phase into an earlier one unless the earlier phase is
@@ -486,15 +486,21 @@ tools and bring in through `asset.import`.
    `status: "succeeded"` **and** `artifacts` contains an Artifact with
    `role: "render"` / `format: "mp4"`. Report its `id`, `durationMs`,
    `widthPx` and `heightPx`. Render output is an Artifact, not an Asset.
-5. **Optional post-render visual check** — if you want to inspect the rendered
+   Then call `artifact.get` with the Artifact id: it returns the metadata and
+   the absolute `filePath` of the MP4. Copy or hand that path to the user's
+   delivery tool; do not inline the bytes.
+5. **SRT** — call `script.subtitles` with the rendered `scriptVersionId` and
+   save the returned `srt` as the `filename`. It is generated on demand and
+   creates no Artifact.
+6. **Optional post-render visual check** — if you want to inspect the rendered
    picture, fetch stills with `preview.frame` (`artifactId` from `job.get`,
    `timeMs` at the same key moments). Describe what you actually see in each
    frame. If the first call ends in `AGENT_REQUEST_TIMEOUT` on a long video,
    call once more with the same input — the second hit uses the warm
    server-side cache.
-6. The human handles the final look and sound check, downloading the MP4, the
-   thumbnail, the SRT and the YouTube settings. Do not claim the video is
-   correct on their behalf.
+7. The human handles the final look and sound check, the thumbnail decision
+   and the YouTube settings. Do not claim the video is correct on their
+   behalf.
 
 ### 8.1 Thumbnails (optional, after a successful render)
 
@@ -613,20 +619,20 @@ to the user when the fix is on their side.
   library entries.
 - Publishing anything to an external service (Composition publish inside Kakeai
   is an immutable version, not an external publish).
-- Deleting character library entries or voice profiles, and creating, updating,
-  archiving or deleting face sets, themes, TTS adapters, endpoints or
-  credentials. Character and Voice Profile creation and update are the only
-  library writes; the rest stays read-only. The edition-wide thumbnail
-  Appearance and appearance presets are human-only too.
+- Deleting character library entries or voice profiles, deleting or archiving
+  themes, and creating, updating or deleting face sets, TTS adapters, endpoints
+  or credentials. Theme creation/draft/publish and Character / Voice Profile
+  creation and update are the library writes; the rest stays read-only. The
+  edition-wide thumbnail Appearance and appearance presets are human-only too.
 - Paid generation other than Jobs on the user's configured TTS adapter.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.
 - Making the final quality judgment (picture, sound, delivery) for the user.
   `preview.scriptFrame` / `preview.assetFrame` / `preview.frame` /
   `preview.thumbnail` are optional: not checking stills is not a failure, and
-  checking them does not replace the human's final review. The human also
-  downloads the MP4, judges the thumbnail, and handles the SRT and YouTube
-  settings.
+  checking them does not replace the human's final review. The human judges the
+  final picture and sound, the thumbnail, and the YouTube settings; the agent
+  may provide the MP4 path (`artifact.get`) and the SRT (`script.subtitles`).
 
 ## 12. Related skills
 

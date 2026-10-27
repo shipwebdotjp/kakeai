@@ -14,6 +14,7 @@ import {
   positiveInt,
 } from "../content/primitives";
 import {
+  artifactSchema,
   assetSchema,
   bulkTtsJobExclusionSchema,
   bulkTtsJobsResultSchema,
@@ -111,6 +112,21 @@ export const scriptValidateResultSchema = z.strictObject({
   timeline: previewTimelineSchema,
 });
 export type ScriptValidateResult = z.infer<typeof scriptValidateResultSchema>;
+
+/** SRT bytes are derived on demand from a saved Script Version. */
+export const agentScriptSubtitlesInputSchema = z.strictObject({
+  scriptVersionId: idSchema,
+});
+export const agentScriptSubtitlesOutputSchema = z.strictObject({
+  scriptVersionId: idSchema,
+  filename: z.string().min(1),
+  mimeType: z.literal("application/x-subrip"),
+  byteSize: nonNegativeInt,
+  srt: z.string(),
+});
+export type AgentScriptSubtitlesOutput = z.infer<
+  typeof agentScriptSubtitlesOutputSchema
+>;
 
 export * from "./thumbnail-schemas";
 
@@ -282,6 +298,19 @@ export const agentRenderStartOutputSchema = z.strictObject({ job: jobSchema });
 
 export const agentJobGetInputSchema = z.strictObject({ jobId: idSchema });
 export const agentJobGetOutputSchema = z.strictObject({ job: jobSchema });
+
+/**
+ * Artifact bytes stay on disk. `filePath` is an absolute path inside the app
+ * data root; `artifact.contentUrl` is the browser-facing URL and needs the
+ * media session cookie, so agents should use `filePath`.
+ */
+export const agentArtifactGetInputSchema = z.strictObject({
+  artifactId: idSchema,
+});
+export const agentArtifactGetOutputSchema = z.strictObject({
+  artifact: artifactSchema,
+  filePath: z.string().min(1),
+});
 
 /**
  * `job.list` reads the Jobs of one Work. `asset_ingest` is not Work-scoped, so

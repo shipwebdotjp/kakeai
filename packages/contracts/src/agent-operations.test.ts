@@ -49,7 +49,11 @@ import {
   agentScriptListVersionsOutputSchema,
   agentScriptRestoreInputSchema,
   agentScriptRestoreOutputSchema,
+  agentArtifactGetInputSchema,
+  agentArtifactGetOutputSchema,
   agentScriptSaveInputSchema,
+  agentScriptSubtitlesInputSchema,
+  agentScriptSubtitlesOutputSchema,
   agentScriptValidateInputSchema,
   agentTemplateInputContracts,
   agentThumbnailTemplateContracts,
@@ -1110,5 +1114,59 @@ describe("voiceAdapter.list contract", () => {
         ],
       }),
     ).toEqual(adapters);
+  });
+});
+
+describe("script.subtitles and artifact.get contracts", () => {
+  it("returns SRT as text with its derived size", () => {
+    expect(agentScriptSubtitlesInputSchema.parse({ scriptVersionId: "scr-1" })).toEqual({
+      scriptVersionId: "scr-1",
+    });
+    const subtitles = {
+      scriptVersionId: "scr-1",
+      filename: "subtitles.srt",
+      mimeType: "application/x-subrip" as const,
+      byteSize: 42,
+      srt: "1\n00:00:00,000 --> 00:00:02,000\nこんにちは\n",
+    };
+    expect(agentScriptSubtitlesOutputSchema.parse(subtitles)).toEqual(subtitles);
+  });
+
+  it("returns artifact metadata with an absolute file path", () => {
+    const artifact = {
+      id: "art-1",
+      jobId: "job-1",
+      role: "render" as const,
+      format: "mp4" as const,
+      byteSize: 1024,
+      durationMs: 2000,
+      widthPx: 1920,
+      heightPx: 1080,
+      fps: 30,
+      videoCodec: "h264",
+      audioCodec: "aac",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      contentUrl: "/api/v1/artifacts/art-1/content",
+    };
+    expect(agentArtifactGetInputSchema.parse({ artifactId: "art-1" })).toEqual({
+      artifactId: "art-1",
+    });
+    expect(
+      agentArtifactGetOutputSchema.parse({
+        artifact,
+        filePath: "/data/artifacts/render.mp4",
+      }),
+    ).toEqual({ artifact, filePath: "/data/artifacts/render.mp4" });
+  });
+
+  it("registers both reads in the agent catalog", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of ["script.subtitles", "artifact.get"] as const) {
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "read",
+        longRunning: false,
+      });
+    }
   });
 });

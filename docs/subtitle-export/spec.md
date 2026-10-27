@@ -24,6 +24,10 @@
   - `X-Content-Type-Options: nosniff`、`Cache-Control: private, max-age=0, must-revalidate`
 - 保護は既存の全リクエスト共通ガード（loopback・same-origin）で足り、メディアセッション Cookie は要求しない。失敗は JSON エラー契約で返す（存在しない版は 404 `RESOURCE_NOT_FOUND`）。
 
+## Agent Access
+
+- `script.subtitles` は同じ生成経路（`buildSrt` と `resolveTimeline`）を呼び、`{ scriptVersionId, filename, mimeType, byteSize, srt }` を返す。Artifact・Job・版を作らない（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。
+
 ## UI
 
 - 作品編集画面のレンダー欄に「字幕をダウンロード」リンクを置き、現在の保存済み版の字幕を即時ダウンロードする。MP4 レンダーの実行状態に連動しない。

@@ -51,6 +51,7 @@
 | `script.get` | read | no | `kakeai_script_get` |
 | `script.listVersions` | read | no | `kakeai_script_list_versions` |
 | `script.validate` | read | no | `kakeai_script_validate` |
+| `script.subtitles` | read | no | `kakeai_script_subtitles` |
 | `script.save` | mutation | no | `kakeai_script_save` |
 | `script.edit` | mutation | no | `kakeai_script_edit` |
 | `script.restore` | mutation | no | `kakeai_script_restore` |
@@ -62,6 +63,7 @@
 | `job.get` | read | no | `kakeai_job_get` |
 | `job.list` | read | no | `kakeai_job_list` |
 | `job.cancel` | mutation | no | `kakeai_job_cancel` |
+| `artifact.get` | read | no | `kakeai_artifact_get` |
 | `preview.frame` | read | no | `kakeai_preview_frame` |
 | `preview.scriptFrame` | read | no | `kakeai_preview_script_frame` |
 | `preview.assetFrame` | read | no | `kakeai_preview_asset_frame` |
@@ -180,6 +182,7 @@
 - `script.get` — `scriptVersionId` を指定するとその版、`languageEditionId` を指定するとその Edition の current の `ContentDocument` と帰属を返す。どちらか一方を必須とする。
 - `script.listVersions` — `{ languageEditionId }` を受け、Edition の Script Version 履歴を `versionNumber` の降順で返す。応答は `{ languageEditionId, currentScriptVersionId, scriptVersions }` で、各要素は版番号・作成者・要求 ID・復元元（`sourceScriptVersionId`）・作成日時を持つ要約であり、`ContentDocument` は含めない。Edition が存在しなければ `WORK_NOT_FOUND`。件数は全件で、ページングは履歴が大きくなった時点で追加する。
 - `script.validate` — 保存せずに検証する。`{ content }` または `{ baseScriptVersionId, operations }` を受け、`warnings` と解決済み `timeline` を返す。書込みを行わない。
+- `script.subtitles` — 保存済み Script Version の SRT 字幕を返す（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。`{ scriptVersionId }` を受け、`{ scriptVersionId, filename, mimeType, byteSize, srt }` を返す。生成は HTTP の `GET /script-versions/:id/subtitles` と同じ `buildSrt` で、タイミングは焼き込み字幕と同じ `resolveTimeline` を使う。Artifact・Job・版を作らない。タイムラインを解決できない場合は `RENDER_INPUT_INVALID`、版が存在しない場合は `RESOURCE_NOT_FOUND`。`byteSize` は `srt` の UTF-8 バイト長である。
 - `asset.list` — 素材を検索し、`{ assets, nextCursor, total }` の1ページを返す。`total` は同じ絞り込み条件に一致する素材の総数で、同一条件のどのページでも同じ値になる。
   - 絞り込みは `kind`・`status`・`filename`（大文字小文字を区別しない部分一致）・`tags`（`tagMode` で AND / OR を明示）・`favorite`・`archived`（既定は除外）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせる。`durationMinMs` / `durationMaxMs` は0以上のミリ秒で、長さを持たない素材（`durationMs` がnull）は範囲に一致しない。下限が上限より大きい場合は `VALIDATION_ERROR` とする。
   - タグの照合は `Asset.tagsJson` の要素として DB 側のクエリで行う。`tagMode: "and"` は指定したタグすべてを持つ素材、`"or"` はいずれか1つを持つ素材が一致する。タグは引用符で囲まれた要素として保存されるため `bgm` は `bgm_loop` に一致しない。照合は要素の完全一致で、ASCII の英字は大文字小文字を区別せず（`Summer` は `summer` に一致する）、非ASCII（日本語など）は区別する。`%` と `_` はタグ文字列のままではワイルドカードとして解釈されず通常の文字として扱われるため、これらの文字を含むタグの検索はそのタグを持つ素材にだけ一致する。
@@ -199,6 +202,7 @@
 - `voiceProfile.listVoices` / `voiceProfile.listModels` — 声・モデル候補の読み取り。`listVoices` は `{ adapterId, model? }` を受け、`{ adapterId, voices }` を返す。`model` は `modelSelection` を持つアダプター（`openai-compatible`）の絞り込みに使い、`list` 型アダプター（`voicevox` / `aivisspeech`）では無視される。`listModels` は `{ adapterId }` を受け、`{ adapterId, models }` を返す。いずれも HTTP の声・モデル一覧と同じサービスを使い、Adapter へ接続できない場合は `TTS_ENGINE_UNAVAILABLE` とする。
 - `voiceProfile.create` / `voiceProfile.update` — Voice Profile の作成・更新（[ADR 0088](../adr/0088-agent-voice-profile-writes.md)）。`create` は HTTP の作成契約と同じ `{ name, adapterId, voiceId, locale, settings }` を受け、`{ voiceProfile }` を返す。`voiceId` は `listVoices` で実在を確認して選び、`locale` は使う台本の locale と完全一致させる（導出は行わない）。`settings` はアダプター固有の追加分だけを持ち、`openai-compatible` では `model` が必須である。参照音声（参照クローン）を使う場合は `refAudioAssetId`（取り込み済み音声 Asset の ID）・`langCode` を加え、`refText`（付けると ICL 方式、省略すると x-vector 方式）・`maxTokens` は任意である。`update` は `{ voiceProfileId, name, voiceId, locale, settings }` を受け、`{ voiceProfile }` を返す。`adapterId` は変更できない。存在しない `voiceProfileId` は `RESOURCE_NOT_FOUND` とする。更新は以後の TTS にだけ影響し、既存の Audio Take は変えない。削除は公開せず、人専用のまま残す。`create` は `requestId` を持たないため、タイムアウト後は `voiceProfile.list` で `name` と `createdAt` を確認してから再実行する。
 - `job.get` / `job.list` — `job.list` は `{ workId, kind? }` を受け、`kind` は `render`（既定）または `tts` を選ぶ。`asset_ingest` は Work に紐づかないため指定できず、指定すると `VALIDATION_ERROR` になる。
+- `artifact.get` — `{ artifactId }` を受け、`{ artifact, filePath }` を返す（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。`filePath` はアプリのデータルート内にある実ファイルの絶対パスで、`resolveArtifactContent` が実在と記録済み `byteSize` の一致を検証する。MP4 は `role: "render"` / `format: "mp4"` の Artifact で、ID は `job.get` / `job.list` から取る。バイトは返さない。`artifact.contentUrl` はブラウザ用で media session Cookie が必要なため、エージェントは `filePath` を使う。Artifact 行が無い、ファイルが欠損している、またはサイズが記録と一致しない場合は `RESOURCE_NOT_FOUND`。
 - `preview.frame` — render 成果物（`role: "render"`・`format: "mp4"` の Artifact）の指定時刻（`timeMs`）の静止画を原寸 PNG（base64）で返す。時刻解決とキャッシュは既存の静止画抽出の規則を再利用する。詳細は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) を正とする。
 - `preview.scriptFrame` — 保存済み ScriptVersion を、Web UI と同じコンパイラの HTML から headless でシークし、指定時刻（`timeMs`）の原寸 PNG（base64）で返す。版・Job・Artifact は作らない。`timeMs` は解決済み尺以下。コンパイル不能は `PREVIEW_INPUT_INVALID`、描画失敗は `INTERNAL_ERROR`。render 前の構図確認用で、最終的な品質判断は人に残す。
 - `preview.assetFrame` — Asset 1件の絵を返す。画像は原本（正規化 rendition があればそれ）のバイトと MIME、動画は指定時刻（`timeMs`、既定0）の PNG 静止画、音声は `VALIDATION_ERROR`。画像は `timeMs` を指定できない。巨大な画像は `VALIDATION_ERROR`。
@@ -442,7 +446,7 @@
 | `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した（`tts.create` / `tts.createBulk` / `voiceProfile.listVoices` / `voiceProfile.listModels`） |
 | `THUMBNAIL_INPUT_INVALID` | サムネイルのテンプレートが未対応、入力が `inputSchema` に適合しない、素材が画像でない、または大きすぎる（`preview.thumbnail` / `thumbnail.image`。作成・更新の入力検証は `VALIDATION_ERROR` / `ASSET_*`） |
 | `INVALID_STATE` | `theme.publish` の対象に Theme Draft が無い、など操作の現在状態が前提を満たさない |
-| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.update` / `character.setVoices` / `theme.get` / `theme.diagnose` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` / `thumbnail.get` / `thumbnail.update` / `thumbnail.image` / `thumbnail.setPrimary` の対象など、参照先の資源が存在しない |
+| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.update` / `character.setVoices` / `theme.get` / `theme.diagnose` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` / `thumbnail.get` / `thumbnail.update` / `thumbnail.image` / `thumbnail.setPrimary` / `script.subtitles` / `artifact.get` の対象など、参照先の資源が存在しない |
 | `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない（`work.get` / `work.clone` / `script.listVersions` / `script.restore` / `thumbnail.list` / `thumbnail.appearance` / `thumbnail.create` を含む） |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。

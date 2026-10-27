@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import {
+  DEFAULT_SCENE_IDS,
   SOFT_EDITORIAL_THEME_ID,
   SOFT_EDITORIAL_THEME_VERSION,
   getVisualTheme,
@@ -237,6 +238,22 @@ describe("agent socket integration", () => {
       },
     });
 
+    const fetchedArtifact = await client.request("artifact.get", {
+      artifactId: artifact.id,
+    });
+    expect(fetchedArtifact.artifact).toMatchObject({
+      id: artifact.id,
+      jobId: job.id,
+      role: "render",
+      format: "mp4",
+      byteSize: bytes.length,
+      widthPx: 320,
+      heightPx: 240,
+    });
+    expect(fetchedArtifact.filePath).toBe(
+      join(config.directories.root, storageKey),
+    );
+
     const frame = await client.request("preview.frame", {
       artifactId: artifact.id,
       timeMs: 1500,
@@ -274,6 +291,48 @@ describe("agent socket integration", () => {
     await expectAgentError(
       client.request("preview.frame", { artifactId: caption.id, timeMs: 0 }),
       "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("artifact.get", { artifactId: caption.id }),
+      "RESOURCE_NOT_FOUND",
+    );
+    await expectAgentError(
+      client.request("artifact.get", { artifactId: "missing-artifact" }),
+      "RESOURCE_NOT_FOUND",
+    );
+  });
+
+  it("returns SRT for a saved script version without creating an artifact", async () => {
+    const work = await createWork("字幕テスト作品");
+    const edition = firstEdition(work);
+    const edited = await client.request("script.edit", {
+      baseScriptVersionId: edition.currentScriptVersion.id,
+      requestId: `subtitles-${randomUUID()}`,
+      operations: [
+        {
+          op: "line.add",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          captionText: "字幕のテストです。",
+          speechText: "字幕のテストです。",
+        },
+      ],
+    });
+    const artifactsBefore = await prisma.artifact.count();
+
+    const subtitles = await client.request("script.subtitles", {
+      scriptVersionId: edited.scriptVersion.id,
+    });
+    expect(subtitles.scriptVersionId).toBe(edited.scriptVersion.id);
+    expect(subtitles.filename).toMatch(/\.srt$/u);
+    expect(subtitles.mimeType).toBe("application/x-subrip");
+    expect(subtitles.byteSize).toBe(Buffer.byteLength(subtitles.srt, "utf8"));
+    expect(subtitles.srt).toContain("字幕のテストです。");
+    expect(subtitles.srt).toContain("-->");
+    expect(await prisma.artifact.count()).toBe(artifactsBefore);
+
+    await expectAgentError(
+      client.request("script.subtitles", { scriptVersionId: "scr_missing" }),
+      "RESOURCE_NOT_FOUND",
     );
   });
 

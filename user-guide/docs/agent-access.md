@@ -195,7 +195,13 @@ Theme を新しく作る場合は `kakeai_theme_create`（`name` と任意の `s
 1. `render` Job が `succeeded` になる。
 2. `kakeai_job_get` の `artifacts` に `role: "render"` / `format: "mp4"` の Artifact が存在する。
 
-エージェントは Artifact の ID・尺（`durationMs`）・寸法（`widthPx` / `heightPx`）を報告します。最終的な絵・音の確認、MP4 の取得、サムネイルの最終判断、SRT 字幕、YouTube の投稿設定は人間が行います。サムネイル候補の作成・プレビュー・PNG 取得はエージェントも行えますが、完成した見た目の判断は人間に残します。`kakeai_preview_script_frame` / `kakeai_preview_asset_frame` / `kakeai_preview_frame` / `kakeai_preview_thumbnail` による静止画確認は任意の補助で、合格ラインには含みません。詳しい手順は [スキル](#スキル) の `kakeai-production` を参照してください。
+エージェントは Artifact の ID・尺（`durationMs`）・寸法（`widthPx` / `heightPx`）を報告し、`kakeai_artifact_get` で実ファイルの絶対パス `filePath` を取得して MP4 を渡せます。`kakeai_script_subtitles` で保存済み版の SRT も取得できます。最終的な絵・音の視聴と品質判断、サムネイルの最終判断、YouTube の投稿設定は人間が行います。サムネイル候補の作成・プレビュー・PNG 取得はエージェントも行えますが、完成した見た目の判断は人間に残します。`kakeai_preview_script_frame` / `kakeai_preview_asset_frame` / `kakeai_preview_frame` / `kakeai_preview_thumbnail` による静止画確認は任意の補助で、合格ラインには含みません。詳しい手順は [スキル](#スキル) の `kakeai-production` を参照してください。
+
+### SRT 字幕と MP4 の取得
+
+`kakeai_script_subtitles` は保存済みの ScriptVersion から SRT をオンデマンドで生成し、`{ scriptVersionId, filename, mimeType, byteSize, srt }` を返します。レンダーは不要で、Artifact や Job は作りません。`srt` を投稿用のファイルとして保存してください。タイミングは焼き込み字幕と同じです。
+
+`kakeai_artifact_get` は Artifact のメタデータと、データルート内の実ファイルの絶対パス `filePath` を返します。MP4 は `kakeai_job_get` の `artifacts` にある `role: "render"` / `format: "mp4"` の ID を渡して取得します。バイトは返さないため、大きな動画でも安全です。`contentUrl` はブラウザ用で media session Cookie が必要なので、エージェントは `filePath` をコピーしたり投稿ツールへ渡してください。ファイルが欠損している、またはサイズが記録と一致しない場合は `RESOURCE_NOT_FOUND` です。
 
 ## 長尺操作
 
@@ -232,6 +238,7 @@ kakeai-agent --help
 | `kakeai_work_create` | `kakeai-agent work.create --input ...` |
 | `kakeai_work_update` | `kakeai-agent work.update --input ...` |
 | `kakeai_script_edit` | `kakeai-agent script.edit --input ...` |
+| `kakeai_script_subtitles` | `kakeai-agent script.subtitles --input '{"scriptVersionId":"..."}'` |
 | `kakeai_asset_list` | `kakeai-agent asset.list --input '{"tags":["bgm"],"status":"ready"}'` |
 | `kakeai_asset_import` | `kakeai-agent asset.import --input ...` |
 | `kakeai_character_list` | `kakeai-agent character.list` |
@@ -258,6 +265,7 @@ kakeai-agent --help
 | `kakeai_tts_create_bulk` | `kakeai-agent tts.createBulk --input ...` |
 | `kakeai_tts_attach_bulk` | `kakeai-agent tts.attachBulk --input ...` |
 | `kakeai_render_start` | `kakeai-agent render.start --input ...` |
+| `kakeai_artifact_get` | `kakeai-agent artifact.get --input '{"artifactId":"..."}'` |
 | `kakeai_preview_script_frame` | `kakeai-agent preview.scriptFrame --input ... [--out ...]` |
 | `kakeai_preview_asset_frame` | `kakeai-agent preview.assetFrame --input ... [--out ...]` |
 | `kakeai_preview_frame` | `kakeai-agent preview.frame --input ... [--out ...]` |
@@ -443,9 +451,9 @@ npx skills@1.7.4 experimental_install
 | `COMPOSITION_UNAVAILABLE` | 参照する CompositionVersion が未 publish、または bundle が欠損している |
 | `TTS_INPUT_INVALID` | 読み上げテキストが空、話者・声が未設定、設定済みアダプター外の声など |
 | `TTS_ENGINE_UNAVAILABLE` | 設定済みの TTS アダプターへ接続できない。利用者にエンジンの起動を依頼する |
-| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | 参照する台本版・セリフ・素材・作品が存在しない。別の `agentId` で呼んだ `kakeai_tts_attach_bulk` や、`requestId` なしで開始した一括生成の確定もここに含む |
+| `RESOURCE_NOT_FOUND` / `WORK_NOT_FOUND` | 参照する台本版・セリフ・素材・作品・Artifact が存在しない。別の `agentId` で呼んだ `kakeai_tts_attach_bulk` や、`requestId` なしで開始した一括生成の確定もここに含む |
 | `JOB_NOT_CANCELLABLE` | queued 以外の Job は取り消せない。実行中の Job は待つ |
-| `RENDER_FAILED` / `RENDER_INPUT_INVALID` | レンダーが失敗した。`job.error` を確認し、素材・尺・テンプレート入力を直す。同じ入力で無限に再試行しない |
+| `RENDER_FAILED` / `RENDER_INPUT_INVALID` | レンダーまたは字幕の生成が失敗した。`job.error` や `issues` を確認し、素材・尺・テンプレート入力を直す。同じ入力で無限に再試行しない |
 | `MCP_TOOL_UNKNOWN` | ツール名が存在しない |
 | `MCP_INTERNAL_ERROR` | MCP 側の想定外の失敗。詳細は返らない |
 

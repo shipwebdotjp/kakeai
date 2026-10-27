@@ -66,6 +66,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "Edition の台本版履歴を新しい順に全件返す（Edition の版数は通常小さい）。`languageEditionId` が必要で、`currentScriptVersionId` と各版の要約（版番号・作成者・要求ID・復元元・作成日時）を含む。ContentDocument は含まない。過去版を選んで script.restore するときに使う。",
   "script.validate":
     "保存せずに台本を検証し、警告と解決済み timeline を返す。`content` または `baseScriptVersionId` + `operations` を渡す。",
+  "script.subtitles":
+    "保存済み Script Version の SRT 字幕を返す。応答は `{ scriptVersionId, filename, mimeType, byteSize, srt }`。レンダー不要で、タイミングは焼き込み字幕と同じ `resolveTimeline` を使う。Artifact や Job は作らない。タイムラインを解決できない場合は RENDER_INPUT_INVALID。",
   "script.save":
     "ContentDocument 全体を検証して新しい台本版として保存する。取り込み向けで、通常の編集は script.edit を使う。任意の `baseScriptVersionId` を渡すと現在の版と一致する場合だけ保存し、`sourceScriptVersionId` には同じ Edition の復元元の版を指定できる。",
   "script.edit":
@@ -107,6 +109,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "言語版の投稿用サムネイル（primary）を選ぶ。`thumbnailId` は同じ言語版の候補で、null で解除する。存在しない候補は RESOURCE_NOT_FOUND。",
   "thumbnail.image":
     "保存済みサムネイル候補の PNG（1280x720）をオンデマンドで生成して返す。Job・Artifact は作らない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。CLI では `--out` に PNG を書き出せる。存在しない ID は RESOURCE_NOT_FOUND。",
+  "artifact.get":
+    "Artifact 1件のメタデータと、実ファイルの絶対パス `filePath` を返す。レンダー MP4 は `role: \"render\"` / `format: \"mp4\"`。バイトは返さないため、大きな動画でも安全。`artifact.contentUrl` はブラウザ用で media session Cookie が必要なので、エージェントは `filePath` を使ってコピー・投稿する。ファイルが欠損、またはサイズが記録と一致しない場合は RESOURCE_NOT_FOUND。",
   "composition.list": "Composition の一覧を返す。",
   "composition.get": "Composition 1 件を返す。",
   "composition.draft.get": "Composition の draft ファイルと manifest を返す。",

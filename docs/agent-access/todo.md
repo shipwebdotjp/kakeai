@@ -239,3 +239,14 @@
 - [x] 契約・ソケット統合テストで、Adapter の並び、説明子の形、接続設定が出力に含まれないこと、catalog の read 登録を固定する
 - [x] Agent Access 仕様・roadmap・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `voiceAdapter.list` が取れ、`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B18 SRT 字幕と MP4 Artifact パスの公開（ADR 0103）
+
+- [x] [ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md) を追加し、SRT はテキストで返し、MP4 はデータルート内の絶対パスで返すことを決定する
+- [x] 契約に `script.subtitles`（read）を追加する。`{ scriptVersionId }` を受け、`{ scriptVersionId, filename, mimeType, byteSize, srt }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] 契約に `artifact.get`（read）を追加する。`{ artifactId }` を受け、`{ artifact, filePath }` を返す。`filePath` は `resolveArtifactContent` が返すデータルート内の絶対パスとし、バイトは返さない
+- [x] Agent サービスで既存の `getScriptVersionSubtitles` と `getArtifact` / `resolveArtifactContent` をそのまま呼ぶ。`script.subtitles` は Artifact・Job・版を作らない
+- [x] MCP の説明文を 2 操作分追加する。CLI はカタログ導出のため変更しない
+- [x] 契約・ソケット統合テストで、SRT の内容・UTF-8 バイト長・Artifact 非作成、Artifact のメタデータ・絶対パス・欠損／サイズ不一致／未知 ID の `RESOURCE_NOT_FOUND` を固定する
+- [x] Agent Access 仕様・roadmap・MP4 制作仕様とロードマップ・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `script.subtitles` が取れ、`job.get` の Artifact ID から `artifact.get` で MP4 の絶対パスが取れる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
