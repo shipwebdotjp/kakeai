@@ -23,6 +23,7 @@
 | R3-3 スキル配布と版管理 | Gitタグ＋GitHub Releaseを正本とし、`npx skills` にロック・配置・復元を委譲する | 独自 installer は CLI の機能を複製する。不変タグでスキルとアプリの版を対応づけ、`main` 追従を避ける |
 | B13 サムネイル操作の公開 | 読み取り・作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開し、削除・共通 Appearance の保存・プリセットは人専用に残す | 候補は版履歴のない可変文書で、削除は取り消せない。PNG はオンデマンド生成で Job を増やさず、素材は利用者が取り込んだ画像だけを使う（ADR 0098） |
 | B14 Character ライブラリ作成・更新の公開 | 作成と部分更新を公開し、削除は人専用に残す。外観 ID は作成時にサーバー生成、外観画像は取り込み済みの ready 画像だけを使う。更新は既存 ID を維持できる | 台本の外側の共有ライブラリで、既存台本はコピーを持つため可逆。全項目必須の更新は空配列で意図せず消す事故があるため部分更新にする（ADR 0099） |
+| C12 Asset 検索の寸法条件 | `asset.list` に完全一致の `widthPx` / `heightPx` と両端を含む範囲を追加する。寸法を持たない素材は一致させない。向き・寸法順の並べ替え・索引は追加しない | Face Set の同寸レイヤー探索が主目的。向きは正方形の境界と比率の丸めの意味づけが必要で、寸法は DTO で返るため呼び出し側で判定できる（ADR 0105） |
 
 ## 実施順序
 
@@ -44,8 +45,9 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 | B12 | Character Voice 付け替えの公開 | B1 | 既存の声検証を呼ぶだけの追加操作。外観に触れず声だけを置換し、人間への声付け依頼を不要にする |
 | B13 | サムネイル操作の公開 | B1 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を公開する。MP4 後の投稿用成果物をエージェントが作れるようにする |
 | B14 | Character ライブラリ作成・更新の公開 | B1 | 既存サービスの作成・更新を呼ぶ追加操作。立ち絵付き作品で人間への作成依頼を不要にする |
+| B20 | C12 素材検索の寸法条件 | B1 | 既存の検索条件に寸法の完全一致と範囲を足すだけ。Face Set の同寸探索の前提になる |
 
-C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張した。C9〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
+C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張した。C12 は B20 として実装した。C9〜C11・C13〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
 
 ## フェーズ詳細
 
@@ -175,9 +177,16 @@ C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張�
 - `filename` は basename のみで、Artifact の拡張子に一致する必要がある。省略時は Work タイトルと Artifact ID から生成する。
 - 完了条件: ソケット・MCP・CLI から `artifact.export` で MP4 を任意の絶対ディレクトリへ書き出せ、既存ファイルは上書きされず `EXPORT_TARGET_EXISTS`、相対パス・不存在・不正名は `VALIDATION_ERROR`、コピー失敗は `EXPORT_FAILED` になる。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
+### B20 Asset 検索の寸法条件（C12）
+
+- 状態: 完了。`asset.list` に完全一致の `widthPx` / `heightPx` と、両端を含む範囲の `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx` を追加した。絞り込みは既存の検索と同じ DB クエリで行い、索引と migration は増やしていない。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0105](../adr/0105-agent-asset-dimension-filters.md) を参照。
+- 完全一致と範囲は併用でき、すべて AND で評価する。寸法を持たない素材（音声など）は完全一致にも範囲にも一致しない。範囲の逆転、または完全一致が指定範囲の外にある指定は `VALIDATION_ERROR` とする。
+- 向き（landscape / portrait / square）と寸法順の並べ替えは追加しない。寸法は Asset の DTO で返るため、エージェント側で必要なら判定できる。DB 索引と migration は追加しない。
+- 完了条件: ソケット・MCP・CLI から `asset.list` の完全一致・範囲・併用が効き、寸法を持たない素材が除外され、矛盾した指定が `VALIDATION_ERROR` になる。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
 ## 次期候補（C1〜C16）
 
-B1〜B14 の後、または並行して検討する候補である。C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張した。C9〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
+B1〜B14 の後、または並行して検討する候補である。C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張した。C12 は B20 として実装した。C9〜C11・C13〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
 
 - 台本の中身は `script.save` で全文書を書けるため、「公開されていない編集操作」は実質的な穴ではない。C の中心は台本の外側（ライブラリ・成果物・診断）である。
 - 可逆性の基準（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)）と人専用の境界（削除・外部公開・Adapter 設定）は C でも変えない。
@@ -197,7 +206,7 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C8 は
 | C9 | Face Set の作成 | mutation | `faceSet.create` | 顔レイヤーは同寸・透過の ready 画像で `normal` が必須。寸法は既存サービスが検証するが透過は検証しない。品質確認は C11 |
 | C10 | Face Set の差分編集 | mutation | レイヤー・表情プリセットの追加、表示名変更など | `PATCH` は改訂版を作る方式になったため、作品は固定版を使い続け、Expression ID の消失で保存済み台詞が壊れない。エージェントに改訂版の作成を公開するかは、ライブラリ Character が最新版へ即時追従する点も含めて着手時に決める |
 | C11 | Face Set の合成プレビュー | read | `preview.faceSet`（ベース外観＋表情の PNG） | Web UI には Face Set 編集画面の合成プレビューと寸法診断がある。エージェント向けの PNG プレビューは未提供で、C9 / C10 の品質確認手段になる |
-| C12 | Asset 検索の寸法条件 | read | `asset.list` に `widthPx` / `heightPx`（必要なら向き）を追加 | 表情レイヤー・背景の「同寸画像」を探す。C9 の実用上の前提 |
+| C12（実装済み） | Asset 検索の寸法条件 | read | `asset.list` の `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む範囲） | B20 で実装。表情レイヤー・背景の「同寸画像」を探す。向きは追加していない |
 | C13 | Asset の可逆な整理 | mutation | `asset.update` の `favorited` / `archived` | 削除は人専用のまま。生成物の整理に使う |
 | C14 | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.setAppearance` など | 現行 `character.update` は appearances の全置換で read-modify-write になる。作品内の外観はコピーなので `script.save` のまま |
 | C15 | 未保存 ContentDocument のプレビュー | read | `preview.scriptFrame` の下書き対応 | 版を作らず構図を反復できる。保存済み版の既存契約は変えない |
@@ -205,11 +214,11 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C8 は
 
 ### 着手時に決める論点
 
-C9〜C16 の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
+C9〜C11・C13〜C16 の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
 
 - Face Set の更新（改訂版の作成）をエージェントへ公開するか、人専用に残すか。ライブラリ Character は最新版へ即時追従するため、公開するなら改訂版作成後の寸法診断と影響確認をどう契約に含めるかを決める。作品側は `faceSetVersion` を固定しているため、保存済み `expressionId` の参照崩れは起きない。
 - C9 / C10 / C11 を 1 フェーズにまとめるか、作成だけ先に開くか。
-- C9〜C16 の優先順位と実施順。
+- C9〜C11・C13〜C16 の優先順位と実施順。
 
 ## 保留する拡張
 
@@ -240,6 +249,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | `tts.create` などはタイムアウト後の再送で Job が重複し得る | 二重生成・課金・待機の無駄 | B2 で解消。任意の `requestId` で冪等台帳に記録し、再送しても Job が増えない |
 | ソケットのフレームキューと接続数に上限がない | 大量要求時にメモリが膨らむ | B3 で解消。接続ごとの未処理フレーム数と同時接続数に上限を設け、超過は `AGENT_BACKPRESSURE` で返す |
 | `asset.list` のタグ検索は SQLite の JSON をメモリで後フィルタする | タグ条件が厳しいとページ取得で走査が増える | B4 で解消。DB 側のクエリで絞り込む（索引化は保留） |
+| 素材はファイル名・タグ・長さでしか絞り込めず、寸法では探せない | Face Set のレイヤーや背景に使う同寸画像を探すのに全件取得が必要 | B20 で解消。`asset.list` に寸法の完全一致と範囲を追加した |
 | `script.edit`/`validate` は毎回ライブラリ全体の Asset・Face Set・Character・Theme・Voice Profile を読み込む | 大規模ライブラリで編集のたびにコストがかかる | 保留 |
 | `job.list` はレンダー Job のみ | TTS Job の一覧を取得できない | 解消。`kind` で `render`（既定）と `tts` を選べる。`asset_ingest` は Work に紐づかないため対象外 |
 | `work.create` / `work.clone` は operation の `requestId` を持たない | タイムアウト後の再送で Work が増え得る | 解消しない。`work.list` の `createdAt` / `parentWorkId` で確認するガイド路線を維持（台帳適用は保留） |
@@ -279,7 +289,8 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 完了 | C6 Voice Adapter 一覧の公開 | B17 で実装。`voiceAdapter.list`。接続設定は返さない |
 | 完了 | C7 / C8 SRT 字幕と MP4 Artifact パス | B18 で実装。`script.subtitles` / `artifact.get` |
 | 完了 | C8 拡張 Artifact のワークスペース書き出し | B19 で実装。`artifact.export`。既存ファイルは上書きしない |
-| 未定 | C9〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
+| 完了 | C12 Asset 検索の寸法条件 | B20 で実装。`asset.list` の完全一致と範囲。向き・索引は追加しない |
+| 未定 | C9〜C11・C13〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
 
 ## 変わらない原則
 

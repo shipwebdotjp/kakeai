@@ -307,6 +307,45 @@ function assetFilters(query: AssetListQuery): AssetFilter[] {
       sql: Prisma.sql`a.durationMs <= ${query.durationMaxMs}`,
     });
   }
+  // Dimension filters. A row whose dimension is null never satisfies `=`,
+  // `>=` or `<=` on that column, so audio and unprobed assets drop out of
+  // every dimension condition without an extra null check.
+  if (query.widthPx !== undefined) {
+    filters.push({
+      prisma: { widthPx: query.widthPx },
+      sql: Prisma.sql`a.widthPx = ${query.widthPx}`,
+    });
+  }
+  if (query.widthMinPx !== undefined) {
+    filters.push({
+      prisma: { widthPx: { gte: query.widthMinPx } },
+      sql: Prisma.sql`a.widthPx >= ${query.widthMinPx}`,
+    });
+  }
+  if (query.widthMaxPx !== undefined) {
+    filters.push({
+      prisma: { widthPx: { lte: query.widthMaxPx } },
+      sql: Prisma.sql`a.widthPx <= ${query.widthMaxPx}`,
+    });
+  }
+  if (query.heightPx !== undefined) {
+    filters.push({
+      prisma: { heightPx: query.heightPx },
+      sql: Prisma.sql`a.heightPx = ${query.heightPx}`,
+    });
+  }
+  if (query.heightMinPx !== undefined) {
+    filters.push({
+      prisma: { heightPx: { gte: query.heightMinPx } },
+      sql: Prisma.sql`a.heightPx >= ${query.heightMinPx}`,
+    });
+  }
+  if (query.heightMaxPx !== undefined) {
+    filters.push({
+      prisma: { heightPx: { lte: query.heightMaxPx } },
+      sql: Prisma.sql`a.heightPx <= ${query.heightMaxPx}`,
+    });
+  }
   return filters;
 }
 

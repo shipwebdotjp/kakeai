@@ -115,6 +115,12 @@ describe("MCP tool catalog", () => {
     expect(assetList?.inputSchema.properties).toHaveProperty("hasAudio");
     expect(assetList?.inputSchema.properties).toHaveProperty("durationMinMs");
     expect(assetList?.inputSchema.properties).toHaveProperty("durationMaxMs");
+    expect(assetList?.inputSchema.properties).toHaveProperty("widthPx");
+    expect(assetList?.inputSchema.properties).toHaveProperty("widthMinPx");
+    expect(assetList?.inputSchema.properties).toHaveProperty("widthMaxPx");
+    expect(assetList?.inputSchema.properties).toHaveProperty("heightPx");
+    expect(assetList?.inputSchema.properties).toHaveProperty("heightMinPx");
+    expect(assetList?.inputSchema.properties).toHaveProperty("heightMaxPx");
     expect(assetList?.outputSchema.properties).toHaveProperty("nextCursor");
     expect(assetList?.outputSchema.properties).toHaveProperty("total");
     const validate = operationToolEntries.find(

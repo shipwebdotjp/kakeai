@@ -261,3 +261,15 @@
 - [x] 契約・ソケット統合テストで、指定名・既定名の書き出し、内容一致、既存名の `EXPORT_TARGET_EXISTS`、相対パス・不存在・パス区切り・拡張子不一致の `VALIDATION_ERROR`、未知 Artifact の `RESOURCE_NOT_FOUND`、DB非更新を固定する
 - [x] Agent Access 仕様・roadmap・MP4 制作仕様とロードマップ・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `artifact.export` で Artifact を任意の絶対ディレクトリへ書き出せ、既存ファイルは上書きされない。正本の `artifact.get` は従来どおり動く。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B20 Asset 検索の寸法条件（C12 / ADR 0105）
+
+- [x] [ADR 0105](../adr/0105-agent-asset-dimension-filters.md) を追加し、完全一致と両端を含む範囲、寸法なし素材の非一致、向き・索引を追加しないことを決定する
+- [x] 契約の `assetListQuerySchema` に `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（範囲）を追加する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] 範囲の逆転と、完全一致が指定範囲の外にある指定を `VALIDATION_ERROR` にする。寸法を持たない素材は完全一致にも範囲にも一致させない
+- [x] `searchAssets` の `assetFilters` に6条件を追加し、ページと `total` が同じ条件を使うようにする。索引と DB migration は追加しない
+- [x] HTTP の `parseAssetListQuery` に6つの整数クエリを追加する
+- [x] MCP の `asset.list` 説明文を更新する。CLI はカタログ導出のため変更しない
+- [x] 契約・サービス・HTTP・ソケット・MCP のテストで、完全一致、両端を含む範囲、併用、寸法なし素材の除外、矛盾した指定の `VALIDATION_ERROR`、タグ＋寸法＋ページングを固定する
+- [x] Agent Access 仕様・HTTP API 契約・roadmap・todo・制作スキル・ユーザーガイドを更新する
+- 完了条件: ソケット・MCP・CLI から `asset.list` の完全一致・範囲・併用が効き、寸法を持たない素材が除外され、矛盾した指定が `VALIDATION_ERROR` になる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

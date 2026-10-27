@@ -1077,6 +1077,81 @@ describe("agent socket integration", () => {
     expect(mismatched.issues?.[0]?.path).toEqual(["cursor"]);
   });
 
+  it("filters assets by exact dimensions and dimension ranges over the socket", async () => {
+    const createdAt = new Date("2026-05-20T00:00:00.000Z");
+    const rows = [
+      { id: "socket-size-a", kind: "image", widthPx: 480, heightPx: 960 },
+      { id: "socket-size-b", kind: "image", widthPx: 480, heightPx: 960 },
+      { id: "socket-size-c", kind: "image", widthPx: 1920, heightPx: 1080 },
+      { id: "socket-size-audio", kind: "audio", widthPx: null, heightPx: null },
+    ];
+    for (const row of rows) {
+      await prisma.asset.create({
+        data: {
+          id: row.id,
+          kind: row.kind,
+          origin: "uploaded",
+          status: "ready",
+          storageKey: `assets/${row.id}`,
+          originalFilename: `${row.id}.png`,
+          mediaType: row.kind === "audio" ? "audio/wav" : "image/png",
+          byteSize: BigInt(10),
+          sha256: `sha-${row.id}`,
+          widthPx: row.widthPx,
+          heightPx: row.heightPx,
+          createdAt,
+        },
+      });
+    }
+
+    const exact = await client.request("asset.list", {
+      filename: "socket-size-",
+      widthPx: 480,
+      heightPx: 960,
+    });
+    expect(exact.assets.map((asset) => asset.id)).toEqual([
+      "socket-size-b",
+      "socket-size-a",
+    ]);
+    expect(exact.total).toBe(2);
+
+    const ranged = await client.request("asset.list", {
+      filename: "socket-size-",
+      widthMinPx: 480,
+      widthMaxPx: 1920,
+    });
+    expect(ranged.assets.map((asset) => asset.id)).toEqual([
+      "socket-size-c",
+      "socket-size-b",
+      "socket-size-a",
+    ]);
+    expect(ranged.total).toBe(3);
+
+    // The audio asset has no dimensions, so it never matches a range.
+    const bounded = await client.request("asset.list", {
+      filename: "socket-size-",
+      widthMinPx: 1,
+      heightMinPx: 1,
+    });
+    expect(bounded.assets.map((asset) => asset.id)).not.toContain(
+      "socket-size-audio",
+    );
+
+    const inverted = await expectAgentError(
+      client.request("asset.list", {
+        widthMinPx: 2_000,
+        widthMaxPx: 1_000,
+      }),
+      "VALIDATION_ERROR",
+    );
+    expect(inverted.issues?.[0]?.path).toEqual(["widthMaxPx"]);
+
+    await expectAgentError(
+      client.request("asset.list", { heightPx: 100, heightMaxPx: 50 }),
+      "VALIDATION_ERROR",
+    );
+  });
+
   it("starts and cancels a render job without starting another worker", async () => {
     const work = await createWork("レンダーテスト作品");
     const edition = firstEdition(work);

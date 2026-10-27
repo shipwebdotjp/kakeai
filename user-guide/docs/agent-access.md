@@ -111,6 +111,7 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 - `kind`・`status`（`ready` など）・`filename`（大文字小文字を区別しない部分一致）・`tags`・`favorite` を組み合わせられます。
 - `tags` は `tagMode` で `and`（すべて含む、既定）と `or`（いずれかを含む）を明示します。タグは完全一致で、要素として照合します（`bgm` は `bgm_loop` に一致しません）。ASCII の英字は大文字小文字を区別しません（`Summer` は `summer` に一致します）。`%` と `_` は通常の文字で、タグ名に含めてもワイルドカードにはなりません。
 - `hasAudio`（音声トラックの有無）と `durationMinMs` / `durationMaxMs`（長さの範囲）で絞り込めます。長さを持たない素材は範囲に一致しません。
+- 寸法は `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む範囲）で絞り込めます。完全一致と範囲は併用できます。寸法を持たない素材（音声など）は寸法条件に一致しません。範囲が逆転している、または完全一致が指定範囲の外にある場合は `VALIDATION_ERROR` になります。同じ寸法の画像を探すとき（例: Face Set の顔レイヤー）に使います。
 - `archived` は既定で `exclude`（アーカイブ済みを除外）です。`include` / `only` は明示したときだけ使います。
 - 返却順は `sort` で選べます（`createdAt_desc` が既定、`createdAt_asc`、`filename_asc`、`duration_asc`）。`limit` は既定 50、最大 100 です。`cursor` には前ページの `nextCursor` をそのまま渡します。カーソルは絞り込み条件と並び順ごとに意味を持つため、別の条件や別の `sort` へ流用しません（別の `sort` で使うと `VALIDATION_ERROR` になります）。
 

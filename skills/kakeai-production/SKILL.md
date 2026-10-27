@@ -298,7 +298,10 @@ Read the work's `appearances[].faceSetId` and `faceSetVersion` from `script.get`
 only `expressions[].id` from that pinned revision for `line.setExpression`.
 `faceSet.list` and a version-less `faceSet.get` return the latest revision,
 which a pinned work may not have. Use an expression only for lines whose
-speaker has a Character; a voice-only speaker has no face to switch.
+speaker has a Character; a voice-only speaker has no face to switch. Face
+layers must share the base image's exact dimensions, so find candidate images
+with `asset.list` (`kind: "image"`, `status: "ready"`, plus `widthPx` /
+`heightPx`) instead of paging the whole library.
 
 ### Themes and fonts
 
@@ -345,6 +348,12 @@ Voice Profile to a speaker.
     `status` (use `ready`), `filename` (case-insensitive substring),
     `tags` + `tagMode` (`and` = all, `or` = any), `favorite`, `hasAudio`,
     `durationMinMs` / `durationMaxMs`.
+  - Dimensions: `widthPx` / `heightPx` match exactly, and `widthMinPx` /
+    `widthMaxPx` / `heightMinPx` / `heightMaxPx` bound the size inclusively
+    (both may be combined). Assets without dimensions (audio) never match a
+    dimension filter. Use an exact size to find face layers that must match a
+    base image; an inverted range or an exact value outside the range is
+    `VALIDATION_ERROR`.
   - Tags match whole elements: `bgm` does not match `bgm_loop`, and ASCII
     letters compare case-insensitively (`Summer` matches `summer`).
   - `archived` defaults to `exclude`. Pass `include` / `only` only when the user

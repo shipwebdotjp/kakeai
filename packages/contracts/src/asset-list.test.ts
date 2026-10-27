@@ -31,6 +31,9 @@ describe("assetListQuerySchema", () => {
         hasAudio: true,
         durationMinMs: 0,
         durationMaxMs: 120_000,
+        widthPx: 1920,
+        heightMinPx: 1080,
+        heightMaxPx: 2160,
         sort: "duration_asc",
         cursor: "cursor-1",
         limit: 10,
@@ -46,6 +49,9 @@ describe("assetListQuerySchema", () => {
       hasAudio: true,
       durationMinMs: 0,
       durationMaxMs: 120_000,
+      widthPx: 1920,
+      heightMinPx: 1080,
+      heightMaxPx: 2160,
       sort: "duration_asc",
       cursor: "cursor-1",
       limit: 10,
@@ -92,6 +98,55 @@ describe("assetListQuerySchema", () => {
     expect(assetListQuerySchema.safeParse({ durationMinMs: 1_000, durationMaxMs: 1_000 }).success).toBe(
       true,
     );
+  });
+
+  it("accepts exact dimension filters and inclusive dimension ranges", () => {
+    expect(assetListQuerySchema.safeParse({ widthPx: 1024, heightPx: 576 }).success).toBe(true);
+    expect(
+      assetListQuerySchema.safeParse({
+        widthMinPx: 512,
+        widthMaxPx: 2048,
+        heightMinPx: 512,
+        heightMaxPx: 2048,
+      }).success,
+    ).toBe(true);
+    expect(
+      assetListQuerySchema.safeParse({
+        widthPx: 1024,
+        widthMinPx: 1024,
+        widthMaxPx: 1024,
+      }).success,
+    ).toBe(true);
+    for (const value of [0, -1, 1.5]) {
+      expect(assetListQuerySchema.safeParse({ widthPx: value }).success).toBe(false);
+      expect(assetListQuerySchema.safeParse({ heightMaxPx: value }).success).toBe(false);
+    }
+  });
+
+  it("rejects contradictory dimension filters", () => {
+    const invertedWidth = assetListQuerySchema.safeParse({
+      widthMinPx: 2_000,
+      widthMaxPx: 1_000,
+    });
+    expect(invertedWidth.success).toBe(false);
+    expect(invertedWidth.error?.issues[0]?.path).toEqual(["widthMaxPx"]);
+
+    const invertedHeight = assetListQuerySchema.safeParse({
+      heightMinPx: 2_000,
+      heightMaxPx: 1_000,
+    });
+    expect(invertedHeight.success).toBe(false);
+    expect(invertedHeight.error?.issues[0]?.path).toEqual(["heightMaxPx"]);
+
+    expect(
+      assetListQuerySchema.safeParse({ widthPx: 100, widthMinPx: 200 }).success,
+    ).toBe(false);
+    expect(
+      assetListQuerySchema.safeParse({ heightPx: 100, heightMaxPx: 50 }).success,
+    ).toBe(false);
+    expect(
+      assetListQuerySchema.safeParse({ widthMinPx: 1_000, widthMaxPx: 1_000 }).success,
+    ).toBe(true);
   });
 });
 
