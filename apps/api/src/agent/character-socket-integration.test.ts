@@ -811,6 +811,9 @@ describe("agent character operations over the socket", () => {
         faceSetId,
       });
       expect(expressionUpdated.character.appearances[1]).toEqual(newAppearance);
+      expect(new Date(expressionUpdated.character.updatedAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(added.character.updatedAt).getTime(),
+      );
 
       // 3. character.updateAppearance: clear label and faceSetId with null
       const cleared = await client.request("character.updateAppearance", {
@@ -827,6 +830,9 @@ describe("agent character operations over the socket", () => {
         faceSetId: null,
       });
       expect(cleared.character.appearances[0]!.label).toBeUndefined();
+      expect(new Date(cleared.character.updatedAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(expressionUpdated.character.updatedAt).getTime(),
+      );
 
       // 4. Edge cases & Validation errors
       // - 0 fields specified -> VALIDATION_ERROR

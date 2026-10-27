@@ -56,15 +56,17 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import {
-  addCharacterAppearance,
   createCharacter,
   getCharacter,
   listCharacters,
   newCharacterAppearanceId,
   setCharacterVoices,
-  updateCharacterAppearance,
   updateCharacterPartial,
 } from "../services/character-library.ts";
+import {
+  addCharacterAppearance,
+  updateCharacterAppearance,
+} from "../services/character-appearances.ts";
 import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
 import { searchFonts } from "../services/font-library.ts";
 import {

@@ -339,7 +339,8 @@ Never delete a library character or a Voice Profile, and never create, update
 or delete a Face Set, or archive/delete a Theme. Theme writes are limited to
 `theme.create` / `theme.draft.save` / `theme.publish`; Character and Voice
 Profile writes are limited to `character.create` / `character.update` /
-`character.setVoices` and `voiceProfile.create` / `voiceProfile.update`. Agents
+`character.setVoices` / `character.addAppearance` / `character.updateAppearance`
+and `voiceProfile.create` / `voiceProfile.update`. Agents
 otherwise only read libraries, copy a Character into the script, or assign a
 Voice Profile to a speaker.
 

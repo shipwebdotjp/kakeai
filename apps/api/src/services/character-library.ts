@@ -332,13 +332,6 @@ export const characterInclude = {
   names: { orderBy: { position: "asc" } },
 } as const;
 
-export {
-  addCharacterAppearance,
-  updateCharacterAppearance,
-  type AddCharacterAppearanceInput,
-  type UpdateCharacterAppearancePatch,
-} from "./character-appearances.ts";
-
 /**
  * Library appearance ids are internal keys: scripts copy appearances into
  * their own ids and Face Sets are referenced by `faceSetId`, so nothing

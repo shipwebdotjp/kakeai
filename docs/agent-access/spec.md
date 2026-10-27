@@ -361,13 +361,13 @@
 
 利用者が事前に設定したループバックの TTS Adapter（`voicevox` / `aivisspeech` / `openai-compatible`）への合成 Job 投入は、生成 Asset と Script Version のいずれも履歴から戻せるため、可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
 
-- 対象は利用者が設定済みの Adapter と Voice Profile に限る。接続先・認証情報・Adapter 設定の変更、Voice Profile の削除、Character の削除、Face Set と Theme の作成・更新・アーカイブ・削除は公開しない。Character の声の付け替え（`character.setVoices`）、作成・部分更新（`character.create` / `character.update`）は公開する。
+- 対象は利用者が設定済みの Adapter と Voice Profile に限る。接続先・認証情報・Adapter 設定の変更、Voice Profile の削除、Character の削除、Face Set と Theme の作成・更新・アーカイブ・削除は公開しない。Character の声の付け替え（`character.setVoices`）、作成・部分更新（`character.create` / `character.update`）、外観の 1 件追加・部分更新（`character.addAppearance` / `character.updateAppearance`）は公開する。
 - Voice Profile は読み取り（一覧・取得・声候補・モデル候補）と作成・更新を公開し、Face Set・Theme は読み取り（一覧・取得）を公開する。利用者が用意した既存 Profile、またはエージェントが `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作った Profile は、`speaker.add` / `speaker.setVoiceProfile` で Speaker に割り当てられる。割り当ては新しい Script Version を作る可逆な変更であり、以後の TTS にだけ影響する。既存の Audio Take は変更しない。
 - 割り当てる Voice Profile は実在し、`locale` が `ContentDocument.locale` と完全一致しなければならない。Character を持つ Speaker は、その Character の文書 locale の Voice と一致する場合だけ設定できる。Character に文書 locale の Voice が無い場合は非 null の割り当てを拒否し、`null` への解除だけを許す。Character に Voice がある場合は `null` にできない。参照先が無い場合は `EDIT_TARGET_NOT_FOUND`、locale または Character Voice の不一致は `EDIT_PRECONDITION_FAILED` とする。
 - TTS の入力・出力は HTTP の TTS 契約（[../tts/spec.md](../tts/spec.md)）と同じスキーマ・Adapter 解決・エラーコードを共有し、束縛ごとに生成ロジックを複製しない。Job は既存の `job.get`（MCP / CLI では Job 待機）で状態を確認する。
 - 完了した Job の `ttsResult` を Take として台本へ入れる操作は公開しない。`script.edit` の `line.assignTake` で新しい Script Version を追加する。
 - 生成物は既存の `origin: generated` と `provenanceJson` で帰属し、TTS 専用の課金管理・プロバイダ管理・新しい帰属列は持たない。
-- Face Set・Theme のライブラリは読み取りだけを公開する。Voice Profile は読み取りに加えて作成・更新を公開し、削除だけを人専用に残す。Character は読み取りに加えて声の付け替え（`character.setVoices`）と作成・部分更新（`character.create` / `character.update`）を公開し、削除だけを人専用に残す。台本へ入れるときは操作コアの `character.addFromLibrary` で新しいローカル ID へコピーし、Face Set は参照のまま引き継ぐ（[../editor-core/spec.md](../editor-core/spec.md)）。立ち絵を必要としない声だけの話者は、`voiceProfile.list` で選んだ既存 Profile、または `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作った Profile を `speaker.add` で割り当てる。Face Set・Theme の作成・更新・削除と Voice Profile・Character の削除は公開しない。ライブラリの編集は既存台本のコピーへ波及しない。既存作品の見た目を変えるには、人間が UI で台本ローカルの Character を編集するか、明示的な「ライブラリから更新」を使う。この更新操作はエージェントには公開しない。
+- Face Set・Theme のライブラリは読み取りだけを公開する。Voice Profile は読み取りに加えて作成・更新を公開し、削除だけを人専用に残す。Character は読み取りに加えて声の付け替え（`character.setVoices`）と作成・部分更新（`character.create` / `character.update`）、外観の 1 件追加・部分更新（`character.addAppearance` / `character.updateAppearance`）を公開し、削除だけを人専用に残す。台本へ入れるときは操作コアの `character.addFromLibrary` で新しいローカル ID へコピーし、Face Set は参照のまま引き継ぐ（[../editor-core/spec.md](../editor-core/spec.md)）。立ち絵を必要としない声だけの話者は、`voiceProfile.list` で選んだ既存 Profile、または `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作った Profile を `speaker.add` で割り当てる。Face Set・Theme の作成・更新・削除と Voice Profile・Character の削除は公開しない。ライブラリの編集は既存台本のコピーへ波及しない。既存作品の見た目を変えるには、人間が UI で台本ローカルの Character を編集するか、明示的な「ライブラリから更新」を使う。この更新操作はエージェントには公開しない。
 
 ### TTS の契約
 

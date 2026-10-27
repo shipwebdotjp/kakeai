@@ -264,12 +264,12 @@
 
 ### [ ] B20 Character 外観の差分操作（ADR 0105）
 
-- [ ] [ADR 0105](../adr/0105-agent-character-appearance-diff-operations.md) を追加し、外観の 1 件追加 `addAppearance` と部分更新 `updateAppearance` の公開範囲、削除の非公開維持、既存 `character.update` の動作維持を決定する
-- [ ] 契約に `character.addAppearance` / `character.updateAppearance`（mutation）を追加する。`addAppearance` は `{ characterId, assetId, expression, pose, label?, faceSetId? }` を受け、`updateAppearance` は `{ characterId, appearanceId, assetId?, expression?, pose?, label?: string | null, faceSetId?: string | null }` を受け、どちらも `{ character }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] [ADR 0105](../adr/0105-agent-character-appearance-diff-operations.md) を追加し、外観の 1 件追加 `addAppearance` と部分更新 `updateAppearance` の公開範囲、削除の非公開維持、既存 `character.update` の動作維持を決定する
+- [x] 契約に `character.addAppearance` / `character.updateAppearance`（mutation）を追加する。`addAppearance` は `{ characterId, assetId, expression, pose, label?, faceSetId? }` を受け、`updateAppearance` は `{ characterId, appearanceId, assetId?, expression?, pose?, label?: string | null, faceSetId?: string | null }` を受け、どちらも `{ character }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
 - [ ] 既存 `agentCharacterUpdateAppearanceInputSchema` は配列要素用に維持し、新規契約は別名（`agentCharacterAddAppearanceInputSchema` / `agentCharacterUpdateOneAppearanceInputSchema`）にする
 - [ ] 外観操作ロジックを `services/character-appearances.ts` に実装/抽出してファイルサイズ上限（600 行）を維持し、`addCharacterAppearance`（50件上限・単一トランザクション）と `updateCharacterAppearance`（同一トランザクション内の現在値読み取り → マージ → 検証 → 親 Character の updatedAt 更新）を追加する
 - [ ] `apps/api/src/agent/library-operations.ts` に配線し、`updateAppearance` の 0 項目指定で `VALIDATION_ERROR` を返す
-- [ ] MCP の説明文を更新し、`character.update` に「配列置換であり、`faceSetId` を省略すると解除される。1 件のみ更新する場合は `character.updateAppearance` を使う」注意書きを追加する
+- [x] MCP の説明文を更新し、`character.update` に「配列置換であり、`faceSetId` を省略すると解除される。1 件のみ更新する場合は `character.updateAppearance` を使う」注意書きを追加する
 - [ ] 契約・ソケット統合テストで、1 項目変更・null による解除、addAppearance の自動採番と件数増加、未知 ID（`character` / `appearance`）、寸法不一致、51件目の拒否、0 項目拒否を固定する
 - [ ] Agent Access 仕様・roadmap・キャラクターライブラリ仕様・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `character.addAppearance` → `character.updateAppearance` で差分操作ができ、既存作品コピーの `libraryAppearanceId` 参照が維持され、削除は `AGENT_OPERATION_UNKNOWN` のままである。
