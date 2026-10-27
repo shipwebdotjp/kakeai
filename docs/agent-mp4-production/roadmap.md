@@ -77,7 +77,7 @@ MP4 の生成とは独立した価値。人間が行っている作業をエー�
 | サムネイル | 候補の作成・更新・primary 選択・未保存プレビュー・PNG取得 | 実装済み（B13）。[`docs/thumbnail/spec.md`](../thumbnail/spec.md)。削除・共通 Appearance の保存・プリセットは人専用 |
 | SRT字幕 | 保存済み ScriptVersion からの字幕ダウンロード | 実装済み（B18 の `script.subtitles`）。[`docs/subtitle-export/spec.md`](../subtitle-export/spec.md)。タイミングは `resolveTimeline` と一致させる |
 | YouTube 投稿設定 | タイトル・説明・タグ・公開範囲・チャプター | [`docs/youtube-publication/plan.md`](../youtube-publication/plan.md) は未実装。まずアプリ側の実装が必要 |
-| MP4 Artifact の取得 | `role: "render"` の Artifact をエージェントへ渡す | 実装済み（B18 の `artifact.get`）。データルート内の絶対パスを返し、バイトは転送しない（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)） |
+| MP4 Artifact の取得 | `role: "render"` の Artifact をエージェントへ渡す | 実装済み（B18 の `artifact.get`）。データルート内の絶対パスを返し、バイトは転送しない（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。B19 の `artifact.export` で任意の絶対ディレクトリへ書き出せる（[ADR 0104](../adr/0104-agent-artifact-export.md)） |
 
 ### 2. 視覚確認
 

@@ -182,7 +182,7 @@ describe("schema.get digests", () => {
         ),
       ).not.toBe(result.schemaDigest);
     }
-  }, 20_000);
+  });
 
   it("changes the operation digest when an operation disappears", () => {
     const result = buildAgentSchemaGetResult();

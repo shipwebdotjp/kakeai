@@ -72,7 +72,7 @@ files.
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
 | 8 | Optional pre-render visual check | `preview.scriptFrame`, `preview.assetFrame` | Layout, text overflow, overlap, missing media |
-| 9 | Render, delivery and optional visual check | `render.start`, `job.get` / `job.wait`, `artifact.get`, `script.subtitles`, `preview.frame` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`); MP4 path and SRT are available; the user judges final quality |
+| 9 | Render, delivery and optional visual check | `render.start`, `job.get` / `job.wait`, `artifact.get`, `artifact.export`, `script.subtitles`, `preview.frame` | `succeeded` + MP4 Artifact (`role: "render"`, `format: "mp4"`); MP4 path and SRT are available; the user judges final quality |
 | 10 | Optional thumbnail (after render) | `thumbnail.listTemplates`, `thumbnail.create`, `preview.thumbnail`, `thumbnail.update`, `thumbnail.setPrimary`, `thumbnail.image` | A candidate exists, its draft preview looks right, and one is chosen; the user judges the final look |
 
 Do not interleave a later phase into an earlier one unless the earlier phase is
@@ -488,7 +488,10 @@ tools and bring in through `asset.import`.
    `widthPx` and `heightPx`. Render output is an Artifact, not an Asset.
    Then call `artifact.get` with the Artifact id: it returns the metadata and
    the absolute `filePath` of the MP4. Copy or hand that path to the user's
-   delivery tool; do not inline the bytes.
+   delivery tool; do not inline the bytes. If the MP4 should land in the
+   workspace, call `artifact.export` with an existing absolute `outputDir` and
+   optional `filename`; it never overwrites an existing file
+   (`EXPORT_TARGET_EXISTS`). The canonical Artifact stays in the app data root.
 5. **SRT** — call `script.subtitles` with the rendered `scriptVersionId` and
    save the returned `srt` as the `filename`. It is generated on demand and
    creates no Artifact.
@@ -624,6 +627,8 @@ to the user when the fix is on their side.
   or credentials. Theme creation/draft/publish and Character / Voice Profile
   creation and update are the library writes; the rest stays read-only. The
   edition-wide thumbnail Appearance and appearance presets are human-only too.
+- Overwriting an existing file via `artifact.export`. The operation only creates
+  a new file; choose another filename instead.
 - Paid generation other than Jobs on the user's configured TTS adapter.
 - Image/video generation, external project import, or editing app-managed
   drafts/bundles on disk.

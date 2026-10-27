@@ -16,7 +16,7 @@
 
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
-| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Theme の作成・Draft 編集・公開 | 可 |
+| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Theme の作成・Draft 編集・公開、Artifact の書き出し（既存ファイルは上書きしない） | 可 |
 | 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、Theme のアーカイブ、外部サービスへの公開 | 人のみ |
 
 「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
@@ -64,6 +64,7 @@
 | `job.list` | read | no | `kakeai_job_list` |
 | `job.cancel` | mutation | no | `kakeai_job_cancel` |
 | `artifact.get` | read | no | `kakeai_artifact_get` |
+| `artifact.export` | mutation | no | `kakeai_artifact_export` |
 | `preview.frame` | read | no | `kakeai_preview_frame` |
 | `preview.scriptFrame` | read | no | `kakeai_preview_script_frame` |
 | `preview.assetFrame` | read | no | `kakeai_preview_asset_frame` |
@@ -203,6 +204,7 @@
 - `voiceProfile.create` / `voiceProfile.update` — Voice Profile の作成・更新（[ADR 0088](../adr/0088-agent-voice-profile-writes.md)）。`create` は HTTP の作成契約と同じ `{ name, adapterId, voiceId, locale, settings }` を受け、`{ voiceProfile }` を返す。`voiceId` は `listVoices` で実在を確認して選び、`locale` は使う台本の locale と完全一致させる（導出は行わない）。`settings` はアダプター固有の追加分だけを持ち、`openai-compatible` では `model` が必須である。参照音声（参照クローン）を使う場合は `refAudioAssetId`（取り込み済み音声 Asset の ID）・`langCode` を加え、`refText`（付けると ICL 方式、省略すると x-vector 方式）・`maxTokens` は任意である。`update` は `{ voiceProfileId, name, voiceId, locale, settings }` を受け、`{ voiceProfile }` を返す。`adapterId` は変更できない。存在しない `voiceProfileId` は `RESOURCE_NOT_FOUND` とする。更新は以後の TTS にだけ影響し、既存の Audio Take は変えない。削除は公開せず、人専用のまま残す。`create` は `requestId` を持たないため、タイムアウト後は `voiceProfile.list` で `name` と `createdAt` を確認してから再実行する。
 - `job.get` / `job.list` — `job.list` は `{ workId, kind? }` を受け、`kind` は `render`（既定）または `tts` を選ぶ。`asset_ingest` は Work に紐づかないため指定できず、指定すると `VALIDATION_ERROR` になる。
 - `artifact.get` — `{ artifactId }` を受け、`{ artifact, filePath }` を返す（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。`filePath` はアプリのデータルート内にある実ファイルの絶対パスで、`resolveArtifactContent` が実在と記録済み `byteSize` の一致を検証する。MP4 は `role: "render"` / `format: "mp4"` の Artifact で、ID は `job.get` / `job.list` から取る。バイトは返さない。`artifact.contentUrl` はブラウザ用で media session Cookie が必要なため、エージェントは `filePath` を使う。Artifact 行が無い、ファイルが欠損している、またはサイズが記録と一致しない場合は `RESOURCE_NOT_FOUND`。
+- `artifact.export` — `{ artifactId, outputDir, filename? }` を受け、`{ artifact, sourcePath, exportedPath }` を返す（[ADR 0104](../adr/0104-agent-artifact-export.md)）。正本はデータルートに残したまま、`outputDir`（存在する絶対ディレクトリ）へコピーする。`filename` はパス区切りを含まない basename で、Artifact の拡張子（mp4 / png / jpg / jpeg / vtt）に一致しなければならない。省略時は Work タイトルと Artifact ID から `<title>-<artifactId>.<ext>` を生成する。既存ファイルは上書きせず `EXPORT_TARGET_EXISTS` を返す。コピーは copy-on-write の複製を使い、同一ディレクトリ内の一時ファイルからハードリンクして原子的に公開する（ハードリンクを持たないファイルシステムでは排他的コピーにフォールバックする）。`outputDir` が相対パス・非ディレクトリ・不存在なら `VALIDATION_ERROR`、コピーに失敗したら `EXPORT_FAILED`。`outputDir` は同一ユーザー信頼モデルのもとで任意の絶対パスを許可し、アプリの許可リストは設けない。書き出したコピーはアプリの管理外で、Artifact の削除や保持期間の掃除では消えない。大きなファイルのコピーは変更操作の120秒を超えることがある。タイムアウトしても処理は中断されないため、`exportedPath` の有無を確認し、無ければ同じ入力で再実行する。
 - `preview.frame` — render 成果物（`role: "render"`・`format: "mp4"` の Artifact）の指定時刻（`timeMs`）の静止画を原寸 PNG（base64）で返す。時刻解決とキャッシュは既存の静止画抽出の規則を再利用する。詳細は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) を正とする。
 - `preview.scriptFrame` — 保存済み ScriptVersion を、Web UI と同じコンパイラの HTML から headless でシークし、指定時刻（`timeMs`）の原寸 PNG（base64）で返す。版・Job・Artifact は作らない。`timeMs` は解決済み尺以下。コンパイル不能は `PREVIEW_INPUT_INVALID`、描画失敗は `INTERNAL_ERROR`。render 前の構図確認用で、最終的な品質判断は人に残す。
 - `preview.assetFrame` — Asset 1件の絵を返す。画像は原本（正規化 rendition があればそれ）のバイトと MIME、動画は指定時刻（`timeMs`、既定0）の PNG 静止画、音声は `VALIDATION_ERROR`。画像は `timeMs` を指定できない。巨大な画像は `VALIDATION_ERROR`。
@@ -446,7 +448,9 @@
 | `TTS_ENGINE_UNAVAILABLE` | 利用者が設定した TTS Adapter へ接続できない、または不正な応答を返した（`tts.create` / `tts.createBulk` / `voiceProfile.listVoices` / `voiceProfile.listModels`） |
 | `THUMBNAIL_INPUT_INVALID` | サムネイルのテンプレートが未対応、入力が `inputSchema` に適合しない、素材が画像でない、または大きすぎる（`preview.thumbnail` / `thumbnail.image`。作成・更新の入力検証は `VALIDATION_ERROR` / `ASSET_*`） |
 | `INVALID_STATE` | `theme.publish` の対象に Theme Draft が無い、など操作の現在状態が前提を満たさない |
-| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.update` / `character.setVoices` / `theme.get` / `theme.diagnose` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` / `thumbnail.get` / `thumbnail.update` / `thumbnail.image` / `thumbnail.setPrimary` / `script.subtitles` / `artifact.get` の対象など、参照先の資源が存在しない |
+| `EXPORT_TARGET_EXISTS` | `artifact.export` の書き出し先に同名のファイルまたはディレクトリが存在する。既存ファイルは上書きしない |
+| `EXPORT_FAILED` | `artifact.export` のコピーに失敗した（書き込み権限、容量、ファイルシステムの制約など） |
+| `RESOURCE_NOT_FOUND` | `tts.create` の対象セリフ、`tts.attachBulk` の元一括要求（`requestId` なし開始・別エージェント・Job 欠損を含む）、`character.get` / `character.update` / `character.setVoices` / `theme.get` / `theme.diagnose` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `faceSet.get` / `voiceProfile.get` / `voiceProfile.update` / `thumbnail.get` / `thumbnail.update` / `thumbnail.image` / `thumbnail.setPrimary` / `script.subtitles` / `artifact.get` / `artifact.export` の対象など、参照先の資源が存在しない |
 | `WORK_NOT_FOUND` | 対象の作品・言語版・版が存在しない（`work.get` / `work.clone` / `script.listVersions` / `script.restore` / `thumbnail.list` / `thumbnail.appearance` / `thumbnail.create` を含む） |
 
 上記のほか、操作が既存サービスから受け取った HTTP API の安定コード（`VALIDATION_ERROR`、`FILE_TOO_LARGE`、`UNSUPPORTED_MEDIA_TYPE`、`JOB_NOT_CANCELLABLE` など）はそのまま返す。入出力の形は `packages/contracts` の Zod スキーマを正とする。

@@ -250,3 +250,14 @@
 - [x] 契約・ソケット統合テストで、SRT の内容・UTF-8 バイト長・Artifact 非作成、Artifact のメタデータ・絶対パス・欠損／サイズ不一致／未知 ID の `RESOURCE_NOT_FOUND` を固定する
 - [x] Agent Access 仕様・roadmap・MP4 制作仕様とロードマップ・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `script.subtitles` が取れ、`job.get` の Artifact ID から `artifact.get` で MP4 の絶対パスが取れる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B19 Artifact のワークスペース書き出し（ADR 0104）
+
+- [x] [ADR 0104](../adr/0104-agent-artifact-export.md) を追加し、正本はデータルートに残し、`artifact.export` で任意の絶対ディレクトリへコピーする決定と、既存ファイルを上書きしない方針を記録する
+- [x] 契約に `artifact.export`（mutation）を追加する。`{ artifactId, outputDir, filename? }` を受け、`{ artifact, sourcePath, exportedPath }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスに `exportArtifact` を追加する。`outputDir` は存在する絶対ディレクトリ、`filename` は basename かつ Artifact の拡張子に一致することを検証する。`COPYFILE_FICLONE` を試し、一時ファイルからハードリンクして原子的に公開する。既存名は上書きしない
+- [x] エラーコード `EXPORT_TARGET_EXISTS` / `EXPORT_FAILED` を追加し、相対パス・不存在・不正なファイル名は `VALIDATION_ERROR`、未知 Artifact は `RESOURCE_NOT_FOUND` とする
+- [x] MCP の説明文を追加する。CLI はカタログ導出のため変更しない
+- [x] 契約・ソケット統合テストで、指定名・既定名の書き出し、内容一致、既存名の `EXPORT_TARGET_EXISTS`、相対パス・不存在・パス区切り・拡張子不一致の `VALIDATION_ERROR`、未知 Artifact の `RESOURCE_NOT_FOUND`、DB非更新を固定する
+- [x] Agent Access 仕様・roadmap・MP4 制作仕様とロードマップ・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `artifact.export` で Artifact を任意の絶対ディレクトリへ書き出せ、既存ファイルは上書きされない。正本の `artifact.get` は従来どおり動く。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

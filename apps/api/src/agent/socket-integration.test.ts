@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import {
   DEFAULT_SCENE_IDS,
@@ -334,6 +334,166 @@ describe("agent socket integration", () => {
       client.request("script.subtitles", { scriptVersionId: "scr_missing" }),
       "RESOURCE_NOT_FOUND",
     );
+  });
+
+  it("exports an artifact to an absolute directory without replacing a file", async () => {
+    const work = await createWork("書き出しテスト作品");
+    const sourcePath = join(fixtureDir, `export-source-${randomUUID()}.mp4`);
+    const bytes = Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]);
+    await writeFile(sourcePath, bytes);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const storageKey = `artifacts/test-export-${randomUUID()}.mp4`;
+    await commitFile(sourcePath, storageKey, config.directories);
+    const job = await prisma.job.create({
+      data: {
+        kind: "render",
+        status: "succeeded",
+        snapshotSchemaVersion: 1,
+        inputSnapshotJson: "{}",
+        workId: work.id,
+      },
+    });
+    const artifact = await prisma.artifact.create({
+      data: {
+        jobId: job.id,
+        role: "render",
+        format: "mp4",
+        storageKey,
+        sha256,
+        byteSize: BigInt(bytes.length),
+      },
+    });
+    const outputDir = join(fixtureDir, "export-out");
+    await mkdir(outputDir, { recursive: true });
+    const artifactsBefore = await prisma.artifact.count();
+
+    const exported = await client.request("artifact.export", {
+      artifactId: artifact.id,
+      outputDir,
+      filename: "delivered.mp4",
+    });
+    expect(exported.artifact.id).toBe(artifact.id);
+    expect(exported.sourcePath).toBe(
+      join(config.directories.root, storageKey),
+    );
+    expect(exported.exportedPath.endsWith("/delivered.mp4")).toBe(true);
+    expect(await readFile(exported.exportedPath)).toEqual(bytes);
+    expect(exported.artifact).not.toHaveProperty("sha256");
+    expect(await prisma.artifact.count()).toBe(artifactsBefore);
+
+    await expectAgentError(
+      client.request("artifact.export", {
+        artifactId: artifact.id,
+        outputDir,
+        filename: "delivered.mp4",
+      }),
+      "EXPORT_TARGET_EXISTS",
+    );
+    await mkdir(join(outputDir, "directory.mp4"));
+    await expectAgentError(
+      client.request("artifact.export", {
+        artifactId: artifact.id,
+        outputDir,
+        filename: "directory.mp4",
+      }),
+      "EXPORT_TARGET_EXISTS",
+    );
+
+    const defaulted = await client.request("artifact.export", {
+      artifactId: artifact.id,
+      outputDir,
+    });
+    expect(defaulted.exportedPath).toContain("書き出しテスト作品");
+    expect(defaulted.exportedPath).toContain(artifact.id);
+    expect(defaulted.exportedPath.endsWith(".mp4")).toBe(true);
+
+    await expectAgentError(
+      client.request("artifact.export", {
+        artifactId: artifact.id,
+        outputDir: "relative",
+      }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("artifact.export", {
+        artifactId: artifact.id,
+        outputDir: join(fixtureDir, "missing"),
+      }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("artifact.export", {
+        artifactId: artifact.id,
+        outputDir,
+        filename: "../escape.mp4",
+      }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("artifact.export", {
+        artifactId: artifact.id,
+        outputDir,
+        filename: "wrong.txt",
+      }),
+      "VALIDATION_ERROR",
+    );
+    for (const filename of [".mp4", "CON.mp4", "a:b.mp4"]) {
+      await expectAgentError(
+        client.request("artifact.export", {
+          artifactId: artifact.id,
+          outputDir,
+          filename,
+        }),
+        "VALIDATION_ERROR",
+      );
+    }
+    await expectAgentError(
+      client.request("artifact.export", {
+        artifactId: "missing-artifact",
+        outputDir,
+      }),
+      "RESOURCE_NOT_FOUND",
+    );
+  });
+
+  it("keeps a generated default filename within the filesystem limit", async () => {
+    const work = await createWork("あ".repeat(120));
+    const sourcePath = join(fixtureDir, `long-title-${randomUUID()}.mp4`);
+    const bytes = Buffer.from([1, 2, 3]);
+    await writeFile(sourcePath, bytes);
+    const storageKey = `artifacts/test-long-title-${randomUUID()}.mp4`;
+    await commitFile(sourcePath, storageKey, config.directories);
+    const job = await prisma.job.create({
+      data: {
+        kind: "render",
+        status: "succeeded",
+        snapshotSchemaVersion: 1,
+        inputSnapshotJson: "{}",
+        workId: work.id,
+      },
+    });
+    const artifact = await prisma.artifact.create({
+      data: {
+        jobId: job.id,
+        role: "render",
+        format: "mp4",
+        storageKey,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        byteSize: BigInt(bytes.length),
+      },
+    });
+    const outputDir = join(fixtureDir, "export-long");
+    await mkdir(outputDir, { recursive: true });
+
+    const exported = await client.request("artifact.export", {
+      artifactId: artifact.id,
+      outputDir,
+    });
+    expect(Buffer.byteLength(basename(exported.exportedPath), "utf8")).toBeLessThanOrEqual(
+      255,
+    );
+    expect(exported.exportedPath.endsWith(".mp4")).toBe(true);
+    expect(await readFile(exported.exportedPath)).toEqual(bytes);
   });
 
   it("rasterizes a saved script version without creating a render", async () => {

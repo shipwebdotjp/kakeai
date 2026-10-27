@@ -31,6 +31,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   THEME_DEFINITION_INVALID: "テーマ定義が無効です。",
   STYLE_KIT_MODIFIED: "Style Kitが変更されています。",
   INVALID_OPERATION: "この操作は許可されていません。",
+  EXPORT_TARGET_EXISTS: "同名のファイルまたはディレクトリが既に存在します。別のファイル名を指定してください。",
+  EXPORT_FAILED: "ファイルを書き出せませんでした。再試行してください。",
   INTERNAL_ERROR: "予期しないエラーが発生しました。",
   DATABASE_BUSY: "データベースが混雑しています。少し待って再試行してください。",
 };
