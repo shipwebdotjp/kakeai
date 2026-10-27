@@ -760,6 +760,8 @@ describe("production flow through the MCP binding", () => {
         "character.setVoices",
         "character.create",
         "character.update",
+        "character.addAppearance",
+        "character.updateAppearance",
       ]);
       const unknownTool = await mcpClient.callTool({
         name: "kakeai_character_delete",

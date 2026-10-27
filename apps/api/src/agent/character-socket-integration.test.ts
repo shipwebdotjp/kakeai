@@ -824,9 +824,9 @@ describe("agent character operations over the socket", () => {
         assetId: imageAssetId,
         expression: "angry",
         pose: "front",
-        label: null,
         faceSetId: null,
       });
+      expect(cleared.character.appearances[0]!.label).toBeUndefined();
 
       // 4. Edge cases & Validation errors
       // - 0 fields specified -> VALIDATION_ERROR
