@@ -5,6 +5,8 @@ import {
   type AgentCharacterUpdateInput,
   type CharacterLibraryEntry,
   type CreateCharacterRequest,
+  agentCharacterAddAppearanceInputSchema,
+  agentCharacterAddAppearanceOutputSchema,
   agentCharacterCreateInputSchema,
   agentCharacterCreateOutputSchema,
   agentCharacterGetInputSchema,
@@ -14,6 +16,8 @@ import {
   agentCharacterSetVoicesInputSchema,
   agentCharacterSetVoicesOutputSchema,
   agentCharacterUpdateInputSchema,
+  agentCharacterUpdateOneAppearanceInputSchema,
+  agentCharacterUpdateOneAppearanceOutputSchema,
   agentCharacterUpdateOutputSchema,
   agentEmptyInputSchema,
   agentFaceSetGetInputSchema,
@@ -52,11 +56,13 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import {
+  addCharacterAppearance,
   createCharacter,
   getCharacter,
   listCharacters,
   newCharacterAppearanceId,
   setCharacterVoices,
+  updateCharacterAppearance,
   updateCharacterPartial,
 } from "../services/character-library.ts";
 import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
@@ -185,6 +191,62 @@ export const libraryOperationDefinitions = {
     run: async (input, context) => ({
       character: await updateCharacterFromAgent(context.prisma, input),
     }),
+  },
+  "character.addAppearance": {
+    input: agentCharacterAddAppearanceInputSchema,
+    output: agentCharacterAddAppearanceOutputSchema,
+    run: async (input, context) => ({
+      character: await addCharacterAppearance(
+        context.prisma,
+        input.characterId,
+        {
+          assetId: input.assetId,
+          expression: input.expression,
+          pose: input.pose,
+          ...(input.label === undefined ? {} : { label: input.label }),
+          faceSetId: input.faceSetId,
+        },
+      ),
+    }),
+  },
+  "character.updateAppearance": {
+    input: agentCharacterUpdateOneAppearanceInputSchema,
+    output: agentCharacterUpdateOneAppearanceOutputSchema,
+    run: async (input, context) => {
+      if (
+        input.assetId === undefined &&
+        input.expression === undefined &&
+        input.pose === undefined &&
+        input.label === undefined &&
+        input.faceSetId === undefined
+      ) {
+        throw new AgentOperationError("VALIDATION_ERROR", [
+          agentIssue(
+            [],
+            "invalid_value",
+            "更新する項目を1つ以上指定してください。",
+          ),
+        ]);
+      }
+      return {
+        character: await updateCharacterAppearance(
+          context.prisma,
+          input.characterId,
+          input.appearanceId,
+          {
+            ...(input.assetId === undefined ? {} : { assetId: input.assetId }),
+            ...(input.expression === undefined
+              ? {}
+              : { expression: input.expression }),
+            ...(input.pose === undefined ? {} : { pose: input.pose }),
+            ...(input.label === undefined ? {} : { label: input.label }),
+            ...(input.faceSetId === undefined
+              ? {}
+              : { faceSetId: input.faceSetId }),
+          },
+        ),
+      };
+    },
   },
   "character.setVoices": {
     input: agentCharacterSetVoicesInputSchema,

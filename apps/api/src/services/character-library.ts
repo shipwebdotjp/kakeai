@@ -8,7 +8,7 @@ import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { toCharacterLibraryEntry } from "../dto/mappers.ts";
 import { resourceNotFound, validationError, type ValidationIssue } from "../http/validation.ts";
 
-type AppearanceInput = {
+export type AppearanceInput = {
   id: string;
   assetId: string;
   expression: string;
@@ -53,7 +53,7 @@ function assertNamesUsable(names: readonly NameInput[]): void {
   }
 }
 
-async function assertAppearancesUsable(
+export async function assertAppearancesUsable(
   prisma: PrismaClient | Prisma.TransactionClient,
   appearances: readonly AppearanceInput[],
 ): Promise<void> {
@@ -143,7 +143,7 @@ async function assertVoiceProfilesExist(
   }
 }
 
-async function assertFaceSetsExist(
+export async function assertFaceSetsExist(
   prisma: PrismaClient | Prisma.TransactionClient,
   appearances: readonly AppearanceInput[],
 ): Promise<void> {
@@ -326,11 +326,18 @@ function toNameCreate(names: readonly NameInput[]) {
   }));
 }
 
-const characterInclude = {
+export const characterInclude = {
   appearances: { orderBy: { position: "asc" } },
   voices: { orderBy: { position: "asc" } },
   names: { orderBy: { position: "asc" } },
 } as const;
+
+export {
+  addCharacterAppearance,
+  updateCharacterAppearance,
+  type AddCharacterAppearanceInput,
+  type UpdateCharacterAppearancePatch,
+} from "./character-appearances.ts";
 
 /**
  * Library appearance ids are internal keys: scripts copy appearances into

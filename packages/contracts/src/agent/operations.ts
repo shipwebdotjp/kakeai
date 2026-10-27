@@ -646,6 +646,12 @@ export const agentCharacterCreateAppearanceInputSchema = z.strictObject({
   faceSetId: idSchema.nullable().default(null),
 });
 
+/**
+ * Element schema for `character.update`'s appearances array replacement.
+ * All fields except `id` are required, and omitting `faceSetId` defaults to null.
+ * For 1-by-1 diff operations, use `agentCharacterAddAppearanceInputSchema` /
+ * `agentCharacterUpdateOneAppearanceInputSchema`.
+ */
 export const agentCharacterUpdateAppearanceInputSchema = z.strictObject({
   /** Omit only for a new appearance; existing IDs keep work links stable. */
   id: idSchema.optional(),
@@ -654,6 +660,27 @@ export const agentCharacterUpdateAppearanceInputSchema = z.strictObject({
   pose: z.string(),
   label: z.string().trim().min(1).optional(),
   faceSetId: idSchema.nullable().default(null),
+});
+
+export const agentCharacterAddAppearanceInputSchema =
+  agentCharacterCreateAppearanceInputSchema.extend({
+    characterId: idSchema,
+  });
+export const agentCharacterAddAppearanceOutputSchema = z.strictObject({
+  character: characterLibraryEntrySchema,
+});
+
+export const agentCharacterUpdateOneAppearanceInputSchema = z.strictObject({
+  characterId: idSchema,
+  appearanceId: idSchema,
+  assetId: idSchema.optional(),
+  expression: z.string().optional(),
+  pose: z.string().optional(),
+  label: z.string().trim().min(1).nullable().optional(),
+  faceSetId: idSchema.nullable().optional(),
+});
+export const agentCharacterUpdateOneAppearanceOutputSchema = z.strictObject({
+  character: characterLibraryEntrySchema,
 });
 
 export const agentCharacterCreateInputSchema = z.strictObject({

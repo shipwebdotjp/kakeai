@@ -346,6 +346,8 @@ describe("agent character operations over the socket", () => {
       "character.setVoices",
       "character.create",
       "character.update",
+      "character.addAppearance",
+      "character.updateAppearance",
     ] as const) {
       expect(schema.agentOperations).toContainEqual({
         name,
@@ -752,6 +754,173 @@ describe("agent character operations over the socket", () => {
       "VALIDATION_ERROR",
     );
   });
+
+  it.skipIf(!probeAvailable)(
+    "adds and updates a single appearance on a library character and verifies edge cases",
+    async () => {
+      const created = await client.request("character.create", {
+        name: `外観差分テスト-${randomUUID()}`,
+        voices: [{ locale: "ja-JP", voiceProfileId: jaVoiceProfileId }],
+        appearances: [
+          { assetId: imageAssetId, expression: "smile", pose: "front", label: "初期服", faceSetId },
+        ],
+      });
+      const initialAppearanceId = created.character.appearances[0]!.id;
+      const initialUpdatedAt = created.character.updatedAt;
+
+      // 1. character.addAppearance: adds a new appearance at the end
+      const added = await client.request("character.addAppearance", {
+        characterId: created.character.id,
+        assetId: imageAssetId,
+        expression: "wink",
+        pose: "side",
+        label: "追加服",
+        faceSetId: null,
+      });
+      expect(added.character.appearances).toHaveLength(2);
+      expect(added.character.appearances[0]).toMatchObject({
+        id: initialAppearanceId,
+        expression: "smile",
+        label: "初期服",
+      });
+      const newAppearance = added.character.appearances[1]!;
+      expect(newAppearance.id).not.toBe(initialAppearanceId);
+      expect(newAppearance).toMatchObject({
+        assetId: imageAssetId,
+        expression: "wink",
+        pose: "side",
+        label: "追加服",
+        faceSetId: null,
+      });
+      expect(new Date(added.character.updatedAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(initialUpdatedAt).getTime(),
+      );
+
+      // 2. character.updateAppearance: update expression only (other fields preserved)
+      const expressionUpdated = await client.request("character.updateAppearance", {
+        characterId: created.character.id,
+        appearanceId: initialAppearanceId,
+        expression: "angry",
+      });
+      expect(expressionUpdated.character.appearances[0]).toMatchObject({
+        id: initialAppearanceId,
+        assetId: imageAssetId,
+        expression: "angry",
+        pose: "front",
+        label: "初期服",
+        faceSetId,
+      });
+      expect(expressionUpdated.character.appearances[1]).toEqual(newAppearance);
+
+      // 3. character.updateAppearance: clear label and faceSetId with null
+      const cleared = await client.request("character.updateAppearance", {
+        characterId: created.character.id,
+        appearanceId: initialAppearanceId,
+        label: null,
+        faceSetId: null,
+      });
+      expect(cleared.character.appearances[0]).toMatchObject({
+        id: initialAppearanceId,
+        assetId: imageAssetId,
+        expression: "angry",
+        pose: "front",
+        label: null,
+        faceSetId: null,
+      });
+
+      // 4. Edge cases & Validation errors
+      // - 0 fields specified -> VALIDATION_ERROR
+      await expectAgentError(
+        client.request("character.updateAppearance", {
+          characterId: created.character.id,
+          appearanceId: initialAppearanceId,
+        }),
+        "VALIDATION_ERROR",
+      );
+
+      // - Unknown characterId -> RESOURCE_NOT_FOUND
+      await expectAgentError(
+        client.request("character.addAppearance", {
+          characterId: "missing-character",
+          assetId: imageAssetId,
+          expression: "smile",
+          pose: "front",
+        }),
+        "RESOURCE_NOT_FOUND",
+      );
+      await expectAgentError(
+        client.request("character.updateAppearance", {
+          characterId: "missing-character",
+          appearanceId: initialAppearanceId,
+          expression: "smile",
+        }),
+        "RESOURCE_NOT_FOUND",
+      );
+
+      // - Unknown appearanceId -> RESOURCE_NOT_FOUND
+      await expectAgentError(
+        client.request("character.updateAppearance", {
+          characterId: created.character.id,
+          appearanceId: "missing-appearance",
+          expression: "smile",
+        }),
+        "RESOURCE_NOT_FOUND",
+      );
+
+      // - Asset and FaceSet reference validation error (e.g. invalid assetId)
+      await expectAgentError(
+        client.request("character.addAppearance", {
+          characterId: created.character.id,
+          assetId: "missing-asset",
+          expression: "smile",
+          pose: "front",
+        }),
+        "VALIDATION_ERROR",
+      );
+
+      // - 50 appearances limit -> VALIDATION_ERROR
+      const charWith50 = await createCharacter(prisma, {
+        name: `50件テスト-${randomUUID()}`,
+        names: [],
+        voices: [],
+        appearances: [],
+      });
+      await prisma.characterAppearance.createMany({
+        data: Array.from({ length: 50 }, (_, i) => ({
+          id: `app-limit-${i}`,
+          characterId: charWith50.id,
+          assetId: imageAssetId,
+          expression: "smile",
+          pose: "front",
+          position: i,
+        })),
+      });
+      await expectAgentError(
+        client.request("character.addAppearance", {
+          characterId: charWith50.id,
+          assetId: imageAssetId,
+          expression: "smile",
+          pose: "front",
+        }),
+        "VALIDATION_ERROR",
+      );
+
+      // 5. Existing character.update (array replace) still works
+      const arrayUpdated = await client.request("character.update", {
+        characterId: created.character.id,
+        appearances: [
+          {
+            id: initialAppearanceId,
+            assetId: imageAssetId,
+            expression: "smile",
+            pose: "front",
+          },
+        ],
+      });
+      expect(arrayUpdated.character.appearances).toHaveLength(1);
+      expect(arrayUpdated.character.appearances[0]!.id).toBe(initialAppearanceId);
+    },
+  );
 
   it.skipIf(!probeAvailable)(
     "creates and partially updates a library character",

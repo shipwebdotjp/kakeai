@@ -66,7 +66,7 @@ files.
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
-| 3 | Characters and voices | `voiceAdapter.list`, `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
+| 3 | Characters and voices | `voiceAdapter.list`, `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.addAppearance`, `character.updateAppearance`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
@@ -247,12 +247,17 @@ version, then `script.get` the new version to find the Speaker.
    `asset.import`. The server assigns appearance ids; read them from the
    returned `character.appearances[].id`. A Character with no appearance is
    valid and copies into a voice-only speaker.
-3. `character.update` is partial: send only the members you change and leave the
-   rest out. A member you do send replaces that whole list, so read
-   `character.get` first and send every entry you want to keep. Re-send existing
-   appearances with their `id` to keep work-copy `libraryAppearanceId` links;
-   omit `id` only for a new appearance. Sending only `characterId` is
-   `VALIDATION_ERROR`.
+3. `character.update` is partial for top-level fields: send only the members you change
+   and leave the rest out. If you send `appearances`, it replaces the whole array.
+   To add or update a single appearance without sending the full array, use
+   `character.addAppearance` (`characterId`, `assetId`, `expression`, `pose`, optional
+   `label`, `faceSetId`) or `character.updateAppearance` (`characterId`, `appearanceId`,
+   optional `assetId`, `expression`, `pose`, `label`, `faceSetId`). Omitted fields
+   in `character.updateAppearance` remain unchanged; `label: null` and
+   `faceSetId: null` clear those references. Re-sending or modifying single
+   appearances with `character.updateAppearance` preserves existing
+   `libraryAppearanceId` links on work copies. Sending only `characterId` in
+   `character.update` or `character.updateAppearance` with 0 fields is `VALIDATION_ERROR`.
 4. Validation: `assetId` must be a ready image Asset, `faceSetId` must exist,
    and each `voiceProfileId` must exist with the same `locale`. Unknown ids or
    a locale mismatch are `VALIDATION_ERROR`.

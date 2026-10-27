@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Amended by [ADR 0105](./0105-agent-character-appearance-diff-operations.md)（外観の 1 件追加 addAppearance と部分更新 updateAppearance を公開する。削除は人専用のまま）。
+
 ## 背景
 
 キャラクターライブラリの書き込みは人専用とし、エージェントには `character.list` / `character.get` の読み取りと、`character.setVoices` による声の付け替えだけを公開してきた（[ADR 0089](./0089-agent-character-set-voices.md)）。そのため立ち絵付きの作品を作るとき、使える Character がライブラリに無ければ、エージェントは制作を止めて人間に作成を依頼するしかなかった（[MP4 制作仕様](../agent-mp4-production/spec.md)）。

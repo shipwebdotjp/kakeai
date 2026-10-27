@@ -23,6 +23,7 @@
 | R3-3 スキル配布と版管理 | Gitタグ＋GitHub Releaseを正本とし、`npx skills` にロック・配置・復元を委譲する | 独自 installer は CLI の機能を複製する。不変タグでスキルとアプリの版を対応づけ、`main` 追従を避ける |
 | B13 サムネイル操作の公開 | 読み取り・作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開し、削除・共通 Appearance の保存・プリセットは人専用に残す | 候補は版履歴のない可変文書で、削除は取り消せない。PNG はオンデマンド生成で Job を増やさず、素材は利用者が取り込んだ画像だけを使う（ADR 0098） |
 | B14 Character ライブラリ作成・更新の公開 | 作成と部分更新を公開し、削除は人専用に残す。外観 ID は作成時にサーバー生成、外観画像は取り込み済みの ready 画像だけを使う。更新は既存 ID を維持できる | 台本の外側の共有ライブラリで、既存台本はコピーを持つため可逆。全項目必須の更新は空配列で意図せず消す事故があるため部分更新にする（ADR 0099） |
+| B20 Character 外観の差分操作 | 1件追加（addAppearance）と部分更新（updateAppearance）を公開し、削除は人専用に残す。既存 character.update の配列置換は維持する | 1件単位の操作で read-modify-write を解消し、作品コピーの libraryAppearanceId 参照を壊さずに維持できる（ADR 0105） |
 
 ## 実施順序
 
@@ -199,7 +200,7 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C8 は
 | C11 | Face Set の合成プレビュー | read | `preview.faceSet`（ベース外観＋表情の PNG） | Web UI には Face Set 編集画面の合成プレビューと寸法診断がある。エージェント向けの PNG プレビューは未提供で、C9 / C10 の品質確認手段になる |
 | C12 | Asset 検索の寸法条件 | read | `asset.list` に `widthPx` / `heightPx`（必要なら向き）を追加 | 表情レイヤー・背景の「同寸画像」を探す。C9 の実用上の前提 |
 | C13 | Asset の可逆な整理 | mutation | `asset.update` の `favorited` / `archived` | 削除は人専用のまま。生成物の整理に使う |
-| C14 | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.setAppearance` など | 現行 `character.update` は appearances の全置換で read-modify-write になる。作品内の外観はコピーなので `script.save` のまま |
+| C14（実装済み） | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.updateAppearance` | B20 で実装。1件追加（全項目）と部分更新（省略＝不変、null＝解除）を公開し、作品コピーの ID 参照を維持する |
 | C15 | 未保存 ContentDocument のプレビュー | read | `preview.scriptFrame` の下書き対応 | 版を作らず構図を反復できる。保存済み版の既存契約は変えない |
 | C16 | 音声の自動検査 | read | `tts.inspect` / `preview.audio`（長さ・ラウドネス・無音） | エージェントは音を聴けないため、無音 TTS を検出できない。新しい解析能力の要否から決める |
 
@@ -220,6 +221,7 @@ C9〜C16 の実装前に、少なくとも次を決める。決定は新しい A
 | タグの索引化（`AssetTag` リレーション＋インデックス） | 個人ライブラリの規模では走査コストが支配的でない。検索の留下来よさの拡張を優先した |
 | 実行中操作の取消（AbortSignal の伝播） | B3-b として保留。Job 投入済み操作では取り消しの意味が薄い。長期実行の Job は `job.cancel` を使う |
 | ネイティブによる接続元 UID 検証 | ファイル権限が既に同一ユーザー性を担保している |
+| 既存 `character.update` の `appearances` 配列における `faceSetId` 省略時 null 解除 | 既存契約の維持と互換性を優先。MCP 説明文で警告し、将来の修正候補とする |
 | `requestId` の必須化 | 必須化は破壊的変更。版上げの判断が必要な段階で行う |
 | `work.create` / `work.clone` / `asset.import` への台帳適用 | 高コスト操作に絞り、台帳の汎用性を先に検証する |
 | エラーカタログの公開（R1-4） | 契約の可読性提高であり、緊急度が低い |
