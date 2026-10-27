@@ -577,3 +577,59 @@ describe("pinned Face Set reference loading", () => {
     ).toBe(true);
   });
 });
+
+describe("updateFaceSetPartial", () => {
+  it("updates only the name without creating a revision", async () => {
+    const input = await createFaceSetInput();
+    const created = await faceSets.createFaceSet(prisma, input);
+    const updated = await faceSets.updateFaceSetPartial(prisma, created.id, {
+      name: "部分更新・名前だけ",
+    });
+    expect(updated.version).toBe(1);
+    expect(updated.name).toBe("部分更新・名前だけ");
+    expect(updated.layers).toEqual(created.layers);
+    expect(updated.expressions).toEqual(created.expressions);
+  });
+
+  it("keeps omitted members and creates a revision when expressions change", async () => {
+    const input = await createFaceSetInput();
+    const created = await faceSets.createFaceSet(prisma, input);
+    const updated = await faceSets.updateFaceSetPartial(prisma, created.id, {
+      expressions: input.expressions.filter((preset) => preset.id !== "happy"),
+    });
+    expect(updated.version).toBe(2);
+    expect(updated.name).toBe(created.name);
+    expect(updated.layers).toEqual(created.layers);
+    expect(updated.expressions.map((preset) => preset.id)).toEqual(["normal"]);
+  });
+
+  it("does not create a revision when the provided content is identical", async () => {
+    const input = await createFaceSetInput();
+    const created = await faceSets.createFaceSet(prisma, input);
+    const updated = await faceSets.updateFaceSetPartial(prisma, created.id, {
+      layers: input.layers,
+      expressions: input.expressions,
+    });
+    expect(updated.version).toBe(1);
+  });
+
+  it("rejects an empty patch and an unknown face set", async () => {
+    await expect(
+      faceSets.updateFaceSetPartial(prisma, "face-set-missing", {}),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      faceSets.updateFaceSetPartial(prisma, "face-set-missing", { name: "x" }),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("rejects a layer edit that orphans an existing preset", async () => {
+    const input = await createFaceSetInput();
+    const created = await faceSets.createFaceSet(prisma, input);
+    await expect(
+      faceSets.updateFaceSetPartial(prisma, created.id, {
+        layers: input.layers.filter((entry) => entry.id !== "brow-normal"),
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect((await faceSets.getFaceSet(prisma, created.id)).version).toBe(1);
+  });
+});

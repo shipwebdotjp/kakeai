@@ -300,6 +300,18 @@ only `expressions[].id` from that pinned revision for `line.setExpression`.
 which a pinned work may not have. Use an expression only for lines whose
 speaker has a Character; a voice-only speaker has no face to switch.
 
+When no usable Face Set exists, build one with `faceSet.create`: `layers` need
+same-size, ready image Assets and `expressions` must include `normal`. Check the
+composite with `preview.faceSet` (unsaved layers, expressions, optional
+`expressionId` defaulting to `normal`, and a ready `baseAssetId`) before relying
+on it. Add or change layers/expressions with `faceSet.update`, which is a
+partial update: omit a member to keep it, and a changed `layers`/`expressions`
+creates a new revision while a name-only change does not. Library Characters
+follow the latest revision immediately; the current work keeps its pinned
+`faceSetVersion`, so a revision never changes an existing render. Call
+`faceSet.usages` before a revision to see the library appearances and base-image
+sizes it affects. Never delete a Face Set.
+
 ### Themes and fonts
 
 `theme.list` returns the selectable Themes with their latest published
@@ -330,13 +342,14 @@ representative sample and returns a PNG (default `timeMs` 4500, which shows the
 heading, body, label and caption). Use `preview.scriptFrame` for a saved script.
 The final visual judgement stays with the user.
 
-Never delete a library character or a Voice Profile, and never create, update
-or delete a Face Set, or archive/delete a Theme. Theme writes are limited to
-`theme.create` / `theme.draft.save` / `theme.publish`; Character and Voice
-Profile writes are limited to `character.create` / `character.update` /
-`character.setVoices` and `voiceProfile.create` / `voiceProfile.update`. Agents
-otherwise only read libraries, copy a Character into the script, or assign a
-Voice Profile to a speaker.
+Never delete a library character, a Voice Profile or a Face Set, and never
+archive/delete a Theme. Theme writes are limited to `theme.create` /
+`theme.draft.save` / `theme.publish`; Face Set writes are limited to
+`faceSet.create` / `faceSet.update`; Character and Voice Profile writes are
+limited to `character.create` / `character.update` / `character.setVoices` and
+`voiceProfile.create` / `voiceProfile.update`. Agents otherwise only read
+libraries, copy a Character into the script, or assign a Voice Profile to a
+speaker.
 
 ## 5. Assets
 

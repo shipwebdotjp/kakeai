@@ -96,6 +96,7 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 - 作品の外観は Face Set をコピーせず、`faceSetId` と `faceSetVersion` の組で参照する。ライブラリの Character の外観は `faceSetId` だけを持ち、最新版を解決する。
 - 表情素材を作り直すときは、寸法の異なるベース画像へ差し替える前に、新しい Face Set を別 ID で作る。1つの Face Set の改訂版は、ライブラリでその Face Set を使う全外観と互換でなければならない。
 - 顔素材の変更を既存作品へ反映したい場合は、作品ごとに「ライブラリから更新」を実行する。リンクのない旧作品、および作品内で手動追加した外観は対象外である。
+- Agent Access では、Face Set の作成・部分更新と合成プレビューを公開する（[ADR 0105](../adr/0105-agent-face-set-writes-and-preview.md)）。`faceSet.create` / `faceSet.update` は既存サービスと同じ寸法・`normal` の検証を行い、内容が変わる場合だけ新しい改訂版を作る。`faceSet.usages` で影響するライブラリ外観を、`preview.faceSet` で未保存の下書きの合成を確認できる。Face Set の削除と改訂版の削除は人専用のままである。
 
 ## schemaVersion と移行
 

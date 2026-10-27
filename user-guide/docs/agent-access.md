@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、TTS Adapter の種別一覧、Theme / Face Set の読み取り、Theme の作成・Draft 編集・公開と PNG プレビュー、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set の管理（作成・更新・削除）、Theme のアーカイブ・削除は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、TTS Adapter の種別一覧、Theme / Face Set の読み取り、Theme の作成・Draft 編集・公開と PNG プレビュー、Face Set の作成・部分更新と合成 PNG プレビュー、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile・Character・Face Set の削除、Theme のアーカイブ・削除は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
@@ -170,7 +170,9 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 ### Face Set
 
-立ち絵の表情を切り替えるときは、`kakeai_script_get` で作品の外観（`appearances[]`）から `faceSetId` と `faceSetVersion` を読み、`kakeai_face_set_get` にその `version` を渡して固定版の `expressions[].id` を確認し、`line.setExpression` に渡します。作品は追加した時点の Face Set 改訂版を固定しているため、最新版の ID をそのまま使うと保存に失敗することがあります。表情を使うのは Character を持つ話者の行です。声だけの話者には顔がないため使いません。Face Set の作成・更新・削除は UI で人間が行います。
+立ち絵の表情を切り替えるときは、`kakeai_script_get` で作品の外観（`appearances[]`）から `faceSetId` と `faceSetVersion` を読み、`kakeai_face_set_get` にその `version` を渡して固定版の `expressions[].id` を確認し、`line.setExpression` に渡します。作品は追加した時点の Face Set 改訂版を固定しているため、最新版の ID をそのまま使うと保存に失敗することがあります。表情を使うのは Character を持つ話者の行です。声だけの話者には顔がないため使いません。
+
+使える Face Set が無いときは `kakeai_face_set_create` で作成できます。`layers` は同寸で `ready` な画像 Asset、`expressions` は `normal` が必須です。作成・更新の前に `kakeai_preview_face_set` で、ベース画像（`baseAssetId`）に表情レイヤーを重ねた PNG を確認できます。レイヤーや表情の追加・変更は `kakeai_face_set_update` の部分更新で行い、省略した項目は変わりません。内容を変えると新しい改訂版が作られ、ライブラリの Character は最新版に追従しますが、既存作品は固定した `faceSetVersion` を使い続けるため、レンダー済みの見た目は変わりません。改訂前の影響範囲は `kakeai_face_set_usages` で確認できます。Face Set の削除は UI で人間が行います。
 
 ### Theme
 
@@ -261,6 +263,11 @@ kakeai-agent --help
 | `kakeai_preview_theme` | `kakeai-agent preview.theme --input ... [--out ...]` |
 | `kakeai_font_list` | `kakeai-agent font.list --input '{"query":"Hiragino"}'` |
 | `kakeai_face_set_list` | `kakeai-agent faceSet.list` |
+| `kakeai_face_set_get` | `kakeai-agent faceSet.get --input '{"faceSetId":"..."}'` |
+| `kakeai_face_set_create` | `kakeai-agent faceSet.create --input ...` |
+| `kakeai_face_set_update` | `kakeai-agent faceSet.update --input ...` |
+| `kakeai_face_set_usages` | `kakeai-agent faceSet.usages --input '{"faceSetId":"..."}'` |
+| `kakeai_preview_face_set` | `kakeai-agent preview.faceSet --input ... [--out ...]` |
 | `kakeai_tts_create` | `kakeai-agent tts.create --input ...` |
 | `kakeai_tts_create_bulk` | `kakeai-agent tts.createBulk --input ...` |
 | `kakeai_tts_attach_bulk` | `kakeai-agent tts.attachBulk --input ...` |
@@ -385,7 +392,7 @@ Kakeai は、エージェントが制作手順をたどるためのスキル（�
 | [`skills/kakeai-production/`](https://github.com/shipwebdotjp/kakeai/tree/main/skills/kakeai-production) | 1 本の動画を作る横断手順。`schema.get` → 作品と台本 → キャラクター → 素材 → 映像演出・立ち絵・BGM → TTS → 検証 → レンダー、および再送・古い基準版の扱い |
 | [`skills/kakeai-composition/`](https://github.com/shipwebdotjp/kakeai/tree/main/skills/kakeai-composition) | 再利用する Composition の draft 作成・QA・publish と、台本からの参照 |
 
-`kakeai-production` には、声のプリフライト（`voiceProfile.list`、無ければ `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作成）、声だけの話者の作り方（`speaker.add` + `line.add`）、既存話者への声の割り当て（`speaker.setVoiceProfile`）、Face Set / Theme の読み取り、一括TTSの順序（`requestId`、同じ `agentId`、確定までの台本保存禁止）、MP4の合格ライン（render Job 成功 + MP4 Artifact）が含まれます。
+`kakeai-production` には、声のプリフライト（`voiceProfile.list`、無ければ `voiceProfile.listVoices` で声を選んで `voiceProfile.create` で作成）、声だけの話者の作り方（`speaker.add` + `line.add`）、既存話者への声の割り当て（`speaker.setVoiceProfile`）、Face Set の作成・更新と合成プレビュー、Theme の読み取り、一括TTSの順序（`requestId`、同じ `agentId`、確定までの台本保存禁止）、MP4の合格ライン（render Job 成功 + MP4 Artifact）が含まれます。
 
 スキルは、Kakeai リポジトリの GitHub Release と対になる不変タグ `vMAJOR.MINOR.PATCH` からのみ導入します。`main` からは導入しません。タグは Kakeai アプリとスキルの共通バージョンです。どのタグでどの操作が必要かは [スキル互換性履歴](https://github.com/shipwebdotjp/kakeai/blob/main/docs/agent-access/skill-compatibility.md) に記録しています。
 

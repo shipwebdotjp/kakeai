@@ -16,10 +16,16 @@ import {
   agentCharacterUpdateInputSchema,
   agentCharacterUpdateOutputSchema,
   agentEmptyInputSchema,
+  agentFaceSetCreateInputSchema,
+  agentFaceSetCreateOutputSchema,
   agentFaceSetGetInputSchema,
   agentFaceSetGetOutputSchema,
   agentFaceSetListInputSchema,
   agentFaceSetListOutputSchema,
+  agentFaceSetUpdateInputSchema,
+  agentFaceSetUpdateOutputSchema,
+  agentFaceSetUsagesInputSchema,
+  agentFaceSetUsagesOutputSchema,
   agentFontListInputSchema,
   agentFontListOutputSchema,
   agentThemeCreateInputSchema,
@@ -59,7 +65,13 @@ import {
   setCharacterVoices,
   updateCharacterPartial,
 } from "../services/character-library.ts";
-import { getFaceSet, listFaceSets } from "../services/face-sets.ts";
+import {
+  createFaceSet,
+  getFaceSet,
+  getFaceSetUsages,
+  listFaceSets,
+  updateFaceSetPartial,
+} from "../services/face-sets.ts";
 import { searchFonts } from "../services/font-library.ts";
 import {
   getThemeDetail,
@@ -307,6 +319,38 @@ export const libraryOperationDefinitions = {
     output: agentFaceSetGetOutputSchema,
     run: async (input, context) => ({
       faceSet: await getFaceSet(context.prisma, input.faceSetId, input.version),
+    }),
+  },
+  // A new library resource, like character.create / voiceProfile.create: no
+  // requestId, so a caller confirms with faceSet.list after a timeout.
+  "faceSet.create": {
+    input: agentFaceSetCreateInputSchema,
+    output: agentFaceSetCreateOutputSchema,
+    run: async (input, context) => ({
+      faceSet: await createFaceSet(context.prisma, input),
+    }),
+  },
+  // A partial edit. Only a changed layers/expressions list creates a new
+  // revision; a name-only change does not. Library Characters follow the
+  // latest revision, saved works keep their pinned faceSetVersion.
+  "faceSet.update": {
+    input: agentFaceSetUpdateInputSchema,
+    output: agentFaceSetUpdateOutputSchema,
+    run: async (input, context) => ({
+      faceSet: await updateFaceSetPartial(context.prisma, input.faceSetId, {
+        ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.layers === undefined ? {} : { layers: input.layers }),
+        ...(input.expressions === undefined
+          ? {}
+          : { expressions: input.expressions }),
+      }),
+    }),
+  },
+  "faceSet.usages": {
+    input: agentFaceSetUsagesInputSchema,
+    output: agentFaceSetUsagesOutputSchema,
+    run: async (input, context) => ({
+      usages: await getFaceSetUsages(context.prisma, input.faceSetId),
     }),
   },
   // Static descriptors only: connection URLs, env names and credentials are

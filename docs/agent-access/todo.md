@@ -250,3 +250,15 @@
 - [x] 契約・ソケット統合テストで、SRT の内容・UTF-8 バイト長・Artifact 非作成、Artifact のメタデータ・絶対パス・欠損／サイズ不一致／未知 ID の `RESOURCE_NOT_FOUND` を固定する
 - [x] Agent Access 仕様・roadmap・MP4 制作仕様とロードマップ・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `script.subtitles` が取れ、`job.get` の Artifact ID から `artifact.get` で MP4 の絶対パスが取れる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B20 Face Set の作成・部分更新・合成プレビュー（ADR 0105 / C9〜C11）
+
+- [x] [ADR 0105](../adr/0105-agent-face-set-writes-and-preview.md) を追加し、Face Set の作成・部分更新（改訂版作成）の公開と削除の人専用維持、`preview.faceSet` の対象と既定を決定する
+- [x] 契約に `faceSet.create` / `faceSet.update`（mutation）、`faceSet.usages`（read）、`preview.faceSet`（画像 read）を追加する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] `faceSet.create` は HTTP と同じ入力で既存の `createFaceSet` を呼ぶ。`faceSet.update` は `name` / `layers` / `expressions` の部分更新で、マージと改訂版作成を書き込みトランザクション内で行い、内容変更時だけ版を増やす。`faceSet.usages` は既存の `getFaceSetUsages` を返す
+- [x] `updateFaceSetPartial` を `services/face-sets.ts` に追加し、マージ後の内容を再検証する（レイヤー削除で preset が参照先を失う場合、ライブラリ外観と寸法が合わない場合は `VALIDATION_ERROR`）。1 項目も指定しない呼び出しと未知 ID のエラーを固定する
+- [x] `preview.faceSet` は未保存の下書きをベース画像の寸法で合成し、既存の `Rasterizer` で PNG 化する。DB・改訂版・Job・Artifact を作らない。`agentImagePreviewOperationNames` に追加し、MCP の image ブロック・CLI の `--out`・画像系 30 秒タイムアウトを使えるようにする
+- [x] MCP の説明文を 4 操作分追加し、`faceSet.list` の「作成・更新は公開しない」を改める。CLI はカタログ導出のため変更しない
+- [x] サービス・契約・ソケット統合テストで、作成、名前だけの更新、内容変更時の改訂版、同一内容で版を増やさないこと、空更新・未知 ID・寸法不一致・preset の参照欠落、usages、合成プレビューと未保存性を固定する。`faceSet.delete` が `AGENT_OPERATION_UNKNOWN` のままであることも確認する
+- [x] Agent Access 仕様・roadmap・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `faceSet.create` → `preview.faceSet` → `faceSet.update` → `faceSet.usages` が通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
