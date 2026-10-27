@@ -66,7 +66,7 @@ files.
 | --- | --- | --- | --- |
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
-| 3 | Characters and voices | `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
+| 3 | Characters and voices | `voiceAdapter.list`, `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
@@ -187,9 +187,10 @@ Character to change an existing Work.
    choose a Profile whose `locale` exactly equals the target locale (for example
    `ja-JP`; `en` does not match `en-US`). Use `character.list` only when an
    on-screen Character is also needed.
-3. If no matching Profile exists, create one: call `voiceProfile.listVoices`
-   with the adapter you will use (`voicevox` / `aivisspeech` /
-   `openai-compatible`) and pick a `voiceId` from the result. For
+3. If no matching Profile exists, create one: call `voiceAdapter.list` to see
+   the supported adapters, then `voiceProfile.listVoices` with the adapter you
+   will use (`voicevox` / `aivisspeech` / `openai-compatible`) and pick a
+   `voiceId` from the result. For
    `openai-compatible`, first call `voiceProfile.listModels` to choose the
    `settings.model`. Then call `voiceProfile.create` with `name`, `adapterId`,
    the picked `voiceId`, `locale` exactly equal to the script locale, and

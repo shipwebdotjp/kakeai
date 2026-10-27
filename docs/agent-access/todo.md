@@ -229,3 +229,13 @@
 - [x] サービス・契約・ソケット統合テストで、作成 → draft.get → draft.save → publish、公開後の Draft 破棄、再 publish の `INVALID_STATE`、未知 Theme、組み込み Theme の Draft null、preview.theme の既定時刻・PNG・timeMs 超過・DB 非更新を固定する
 - [x] Agent Access 仕様・roadmap・テーマカスタマイズ仕様・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `theme.create` → `theme.draft.get` → `theme.draft.save` → `preview.theme` → `theme.publish` が通り、Theme のアーカイブ・削除が `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B17 Voice Adapter 一覧の公開（ADR 0102）
+
+- [x] [ADR 0102](../adr/0102-agent-voice-adapter-descriptors.md) を追加し、公開するのは静的説明子だけとし、接続先 URL・環境変数名・認証情報を返さないことを決定する
+- [x] 契約に `voiceAdapter.list`（read）を追加する。入力は `{}`、出力は既存の `VoiceAdapterList`（`id`・`label`・`defaultLocale`・`voiceSelection`・`modelSelection`）。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスに `voiceAdapter.list` を追加し、既存の `listVoiceAdapters` をそのまま呼ぶ。接続設定の読み書きは公開しない
+- [x] MCP の説明文を追加する。CLI はカタログ導出のため変更しない
+- [x] 契約・ソケット統合テストで、Adapter の並び、説明子の形、接続設定が出力に含まれないこと、catalog の read 登録を固定する
+- [x] Agent Access 仕様・roadmap・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `voiceAdapter.list` が取れ、`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

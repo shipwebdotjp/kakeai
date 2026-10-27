@@ -134,6 +134,8 @@ import {
 } from "./operations";
 import type { AgentOperationName } from "./catalog";
 import { z } from "zod";
+import { agentEmptyInputSchema } from "./protocol";
+import { voiceAdapterListSchema } from "../voice-profile";
 
 export const agentOperationInputSchemas = {
   "schema.get": agentSchemaGetInputSchema,
@@ -196,6 +198,7 @@ export const agentOperationInputSchemas = {
   "font.list": agentFontListInputSchema,
   "faceSet.list": agentFaceSetListInputSchema,
   "faceSet.get": agentFaceSetGetInputSchema,
+  "voiceAdapter.list": agentEmptyInputSchema,
   "voiceProfile.list": agentVoiceProfileListInputSchema,
   "voiceProfile.get": agentVoiceProfileGetInputSchema,
   "voiceProfile.listVoices": agentVoiceProfileListVoicesInputSchema,
@@ -265,6 +268,7 @@ export const agentOperationOutputSchemas = {
   "font.list": agentFontListOutputSchema,
   "faceSet.list": agentFaceSetListOutputSchema,
   "faceSet.get": agentFaceSetGetOutputSchema,
+  "voiceAdapter.list": voiceAdapterListSchema,
   "voiceProfile.list": agentVoiceProfileListOutputSchema,
   "voiceProfile.get": agentVoiceProfileGetOutputSchema,
   "voiceProfile.listVoices": agentVoiceProfileListVoicesOutputSchema,

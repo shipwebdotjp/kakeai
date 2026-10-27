@@ -1072,3 +1072,43 @@ describe("theme lifecycle and preview.theme contracts", () => {
     );
   });
 });
+
+describe("voiceAdapter.list contract", () => {
+  it("registers a read with the descriptor-only output", () => {
+    expect(agentOperationNames).toContain("voiceAdapter.list");
+    expect(buildAgentSchemaGetResult().agentOperations).toContainEqual({
+      name: "voiceAdapter.list",
+      kind: "read",
+      longRunning: false,
+    });
+    expect(agentOperationInputSchemas["voiceAdapter.list"].safeParse({}).success).toBe(
+      true,
+    );
+
+    const adapters = {
+      adapters: [
+        {
+          id: "voicevox",
+          label: "VOICEVOX",
+          defaultLocale: "ja-JP",
+          voiceSelection: "list" as const,
+          modelSelection: false,
+        },
+      ],
+    };
+    expect(agentOperationOutputSchemas["voiceAdapter.list"].parse(adapters)).toEqual(
+      adapters,
+    );
+    expect(
+      agentOperationOutputSchemas["voiceAdapter.list"].parse({
+        adapters: [
+          {
+            ...adapters.adapters[0],
+            defaultBaseUrl: "http://127.0.0.1:50021",
+            envName: "KAKEAI_VOICEVOX_BASE_URL",
+          },
+        ],
+      }),
+    ).toEqual(adapters);
+  });
+});

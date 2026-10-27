@@ -154,6 +154,11 @@ describe("agent voiceProfile write operations over the socket", () => {
       longRunning: false,
     });
     expect(schema.agentOperations).toContainEqual({
+      name: "voiceAdapter.list",
+      kind: "read",
+      longRunning: false,
+    });
+    expect(schema.agentOperations).toContainEqual({
       name: "voiceProfile.create",
       kind: "mutation",
       longRunning: false,
@@ -163,6 +168,26 @@ describe("agent voiceProfile write operations over the socket", () => {
       kind: "mutation",
       longRunning: false,
     });
+  });
+
+  it("lists adapter descriptors without connection settings", async () => {
+    const adapters = await client.request("voiceAdapter.list", {});
+    expect(adapters.adapters.map((adapter) => adapter.id)).toEqual([
+      "voicevox",
+      "aivisspeech",
+      "openai-compatible",
+    ]);
+    expect(adapters.adapters[0]).toEqual({
+      id: "voicevox",
+      label: "VOICEVOX",
+      defaultLocale: "ja-JP",
+      voiceSelection: "list",
+      modelSelection: false,
+    });
+    for (const adapter of adapters.adapters) {
+      expect(adapter).not.toHaveProperty("defaultBaseUrl");
+      expect(adapter).not.toHaveProperty("envName");
+    }
   });
 
   it("lists engine voices and models", async () => {

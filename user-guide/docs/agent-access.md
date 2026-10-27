@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、Theme / Face Set の読み取り、Theme の作成・Draft 編集・公開と PNG プレビュー、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set の管理（作成・更新・削除）、Theme のアーカイブ・削除は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、TTS Adapter の種別一覧、Theme / Face Set の読み取り、Theme の作成・Draft 編集・公開と PNG プレビュー、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set の管理（作成・更新・削除）、Theme のアーカイブ・削除は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
@@ -116,7 +116,7 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 
 ### TTS（音声合成）
 
-TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。接続先・認証情報・アダプター設定の変更と Voice Profile の削除はエージェントから行えませんが、Voice Profile の作成・更新と話者への割り当てはできます（[声だけの話者](#声だけの話者)）。TTS 以外の生成アダプターは現時点でありません。画像などの生成はエージェント側の道具で行い、`kakeai_asset_import` で素材として取り込みます。Kakeai は生成サービスの認証情報を保持しません。
+TTS は、利用者が事前に設定したループバックの TTS アダプター（VOICEVOX / AivisSpeech / OpenAI 互換）へ合成 Job を投入する操作です。対応しているアダプターの種別は `kakeai_voice_adapter_list` で確認できます（`id`・表示名・既定 locale・声の選択方式・モデル選択の有無のみで、接続先 URL や認証情報は返りません）。接続先・認証情報・アダプター設定の変更と Voice Profile の削除はエージェントから行えませんが、Voice Profile の作成・更新と話者への割り当てはできます（[声だけの話者](#声だけの話者)）。TTS 以外の生成アダプターは現時点でありません。画像などの生成はエージェント側の道具で行い、`kakeai_asset_import` で素材として取り込みます。Kakeai は生成サービスの認証情報を保持しません。
 
 対象の話者に `voiceProfileId` が無い場合は TTS を開始しないでください。既存作品は `kakeai_script_get` の `speakers[]` と `kakeai_voice_profile_get` で有効な声を確認します。新規作品は `kakeai_voice_profile_list` で対象 locale と完全一致する Profile を探し、無ければ声候補から選んで作成します（[声だけの話者](#声だけの話者)）。立ち絵が必要な場合は、声を持つ既存キャラクターを選ぶか、声の無い既存キャラクターへ声を付けてからコピーします。使えるキャラクターが無い場合は `kakeai_character_create` で作成します（[キャラクター](#キャラクター)）。
 
@@ -238,6 +238,7 @@ kakeai-agent --help
 | `kakeai_character_create` | `kakeai-agent character.create --input ...` |
 | `kakeai_character_update` | `kakeai-agent character.update --input ...` |
 | `kakeai_character_set_voices` | `kakeai-agent character.setVoices --input ...` |
+| `kakeai_voice_adapter_list` | `kakeai-agent voiceAdapter.list` |
 | `kakeai_voice_profile_list` | `kakeai-agent voiceProfile.list` |
 | `kakeai_voice_profile_list_voices` | `kakeai-agent voiceProfile.listVoices --input '{"adapterId":"voicevox"}'` |
 | `kakeai_voice_profile_list_models` | `kakeai-agent voiceProfile.listModels --input '{"adapterId":"openai-compatible"}'` |

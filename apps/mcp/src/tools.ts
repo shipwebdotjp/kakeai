@@ -154,6 +154,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "Face Set の一覧を、最新の version と Face Layer・Expression Preset 付きで返す。作品の台詞の表情は、script.get の外観にある `faceSetId` と `faceSetVersion` を `faceSet.get` に渡して、その固定版の `expressions[].id` から選ぶ。Face Set の作成・更新・削除は公開しない。",
   "faceSet.get":
     "Face Set 1件を、Face Layer と Expression Preset 付きで返す。`version` を指定するとその改訂版を返し、省略すると最新版を返す。作品の表情を編集するときは、script.get の外観にある `faceSetVersion` を指定する。存在しない ID や版は RESOURCE_NOT_FOUND。",
+  "voiceAdapter.list":
+    "利用可能な TTS Adapter の種別を返す。各要素は `id`・`label`・`defaultLocale`・`voiceSelection`（`list` / `list-or-manual`）・`modelSelection` を持ち、`voiceProfile.listVoices` / `voiceProfile.listModels` / `voiceProfile.create` の `adapterId` 選びに使う。接続先 URL・環境変数・認証情報は返さない。",
   "voiceProfile.list":
     "Voice Profile の一覧を、Adapter・voice ID・locale・設定付きで返す。声の割当て前に、台本の locale と一致する Profile を選ぶ。無ければ voiceProfile.listVoices で声候補を探して voiceProfile.create で作る。Profile の削除は公開しない。",
   "voiceProfile.get":

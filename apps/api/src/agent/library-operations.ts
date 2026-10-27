@@ -15,6 +15,7 @@ import {
   agentCharacterSetVoicesOutputSchema,
   agentCharacterUpdateInputSchema,
   agentCharacterUpdateOutputSchema,
+  agentEmptyInputSchema,
   agentFaceSetGetInputSchema,
   agentFaceSetGetOutputSchema,
   agentFaceSetListInputSchema,
@@ -47,6 +48,7 @@ import {
   agentVoiceProfileListVoicesOutputSchema,
   agentVoiceProfileUpdateInputSchema,
   agentVoiceProfileUpdateOutputSchema,
+  voiceAdapterListSchema,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import {
@@ -69,6 +71,7 @@ import {
   getVoiceProfile,
   listAdapterModels,
   listAdapterVoices,
+  listVoiceAdapters,
   listVoiceProfiles,
   updateVoiceProfile,
 } from "../services/voice-profiles.ts";
@@ -76,8 +79,8 @@ import { AgentOperationError, agentIssue } from "./errors.ts";
 import type { AgentOperationFragment } from "./operations.ts";
 
 /**
- * The shared libraries (Character, Face Set, Voice Profile, Theme) and the
- * installed Font Catalog.
+ * The shared libraries (Character, Face Set, Voice Profile, Theme), the
+ * installed Font Catalog, and the static Voice Adapter descriptors.
  *
  * Reads are open. Writes are limited to the reversible ones: Voice Profile
  * creation/update and Character creation/update (ADR 0088 / 0089 / 0099).
@@ -305,6 +308,13 @@ export const libraryOperationDefinitions = {
     run: async (input, context) => ({
       faceSet: await getFaceSet(context.prisma, input.faceSetId, input.version),
     }),
+  },
+  // Static descriptors only: connection URLs, env names and credentials are
+  // adapter settings, which agents may not read or change.
+  "voiceAdapter.list": {
+    input: agentEmptyInputSchema,
+    output: voiceAdapterListSchema,
+    run: async () => listVoiceAdapters(),
   },
   "voiceProfile.listVoices": {
     input: agentVoiceProfileListVoicesInputSchema,

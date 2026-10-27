@@ -45,7 +45,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 | B13 | サムネイル操作の公開 | B1 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を公開する。MP4 後の投稿用成果物をエージェントが作れるようにする |
 | B14 | Character ライブラリ作成・更新の公開 | B1 | 既存サービスの作成・更新を呼ぶ追加操作。立ち絵付き作品で人間への作成依頼を不要にする |
 
-C1〜C5 は B15 / B16 として実装済みである。C6〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
+C1〜C6 は B15〜B17 として実装済みである。C7〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
 
 ## フェーズ詳細
 
@@ -154,9 +154,15 @@ C1〜C5 は B15 / B16 として実装済みである。C6〜C16（[次期候補]
 - `preview.theme` は未保存の定義を代表サンプルでラスタライズし、`timeMs` 既定 4500 の PNG を返す。DB・Draft・Revision・Job・Artifact を作らない。フォントの解決可否は `theme.diagnose` が担う。
 - 完了条件: ソケット・MCP・CLI から create → draft.get → draft.save → preview.theme → publish が通り、未知 Theme・Draft なし publish・timeMs 超過の安定コードが固定されている。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
+### B17 Voice Adapter 一覧の公開（C6）
+
+- 状態: 完了。`voiceAdapter.list` を追加した。既存の `listVoiceAdapters` が返す静的説明子（`id`・`label`・`defaultLocale`・`voiceSelection`・`modelSelection`）だけを返し、接続先 URL・環境変数名・認証情報は返さない。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0102](../adr/0102-agent-voice-adapter-descriptors.md) を参照。
+- `voiceProfile.listVoices` / `voiceProfile.listModels` / `voiceProfile.create` の `adapterId` を、ライブラリに既存 Profile が無い状態でも推測せずに選べる。一覧は「対応している Adapter」であり、接続済みかどうかは `listVoices` などの `TTS_ENGINE_UNAVAILABLE` で判明する。
+- 完了条件: ソケット・MCP・CLI から `voiceAdapter.list` が取れ、接続設定が出力に含まれず、`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
 ## 次期候補（C1〜C16）
 
-B1〜B14 の後、または並行して検討する候補である。C1〜C5 は B15 / B16 として実装済みで、C6〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
+B1〜B14 の後、または並行して検討する候補である。C1〜C6 は B15〜B17 として実装済みで、C7〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
 
 - 台本の中身は `script.save` で全文書を書けるため、「公開されていない編集操作」は実質的な穴ではない。C の中心は台本の外側（ライブラリ・成果物・診断）である。
 - 可逆性の基準（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)）と人専用の境界（削除・外部公開・Adapter 設定）は C でも変えない。
@@ -170,7 +176,7 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C5 は
 | C3（実装済み） | フォント診断の読み取り | read | `theme.diagnose` | B15 で実装。Theme Revision を対象に role 解決と欠落フォントを返す |
 | C4（実装済み） | Theme の作成・編集・公開 | mutation | `theme.create` / `theme.draft.save` / `theme.draft.get` / `theme.publish` | B16 で実装。Draft は可変で既存 Revision を壊さない。公開時に Draft は破棄され Revision が増える。アーカイブ・削除は人専用のまま |
 | C5（実装済み） | Theme Draft の PNG プレビュー | read | `preview.theme`（代表サンプルを PNG 化） | B16 で実装。未保存の定義を渡して PNG を得る。DB・Draft・Revision を作らない |
-| C6 | Voice Adapter の一覧 | read | `voiceAdapter.list` | HTTP `/voice-adapters` をそのまま包む。`voiceProfile.listVoices` / `voiceProfile.create` の `adapterId` 推測をなくす |
+| C6（実装済み） | Voice Adapter の一覧 | read | `voiceAdapter.list` | B17 で実装。HTTP `/voice-adapters` の静的説明子だけを返し、接続設定は返さない |
 | C7 | SRT 字幕の取得 | read | `script.subtitles`（保存版から SRT） | HTTP の `GET /script-versions/:id/subtitles` を包む。Artifact を作らずオンデマンド生成。タイミングは `resolveTimeline` と同一 |
 | C8 | MP4 Artifact の取得 | read | `artifact.get` / `artifact.content` | 現状は人間が取得する境界。media session Cookie の制約があり、ローカルパス返却かバイト返却かを設計する |
 | C9 | Face Set の作成 | mutation | `faceSet.create` | 顔レイヤーは同寸・透過の ready 画像で `normal` が必須。寸法は既存サービスが検証するが透過は検証しない。品質確認は C11 |
@@ -184,12 +190,12 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C5 は
 
 ### 着手時に決める論点
 
-C6〜C16 の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
+C7〜C16 の実装前に、少なくとも次を決める。決定は新しい ADR と spec.md / todo.md に記録する。
 
 - Face Set の更新（改訂版の作成）をエージェントへ公開するか、人専用に残すか。ライブラリ Character は最新版へ即時追従するため、公開するなら改訂版作成後の寸法診断と影響確認をどう契約に含めるかを決める。作品側は `faceSetVersion` を固定しているため、保存済み `expressionId` の参照崩れは起きない。
 - C8 の MP4 取得をローカルパスの返却にするか、バイト返却にするか。media session Cookie と同一 origin の制約をどう越えるか。
 - C9 / C10 / C11 を 1 フェーズにまとめるか、作成だけ先に開くか。
-- C6〜C16 の優先順位と実施順。
+- C7〜C16 の優先順位と実施順。
 
 ## 保留する拡張
 
@@ -231,6 +237,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | フォントカタログとフォント診断はエージェントに無い | Theme の `fontFace` を選べず、欠落フォントもレンダー失敗でしか分からない | B15 で解消。`font.list` と `theme.diagnose` を追加した |
 | Theme の作成・編集・公開は Web UI だけ | 作品の見た目をエージェントが作れず、テーマは人間の作成待ちになる | B16 で解消。`theme.create` / `theme.draft.get` / `theme.draft.save` / `theme.publish` を公開した（アーカイブ・削除は人専用） |
 | テーマの見た目は HTML プレビューしかなく、エージェントが確認できない | 公開するまで色・余白・フォントの崩れに気づけない | B16 で解消。`preview.theme` が代表サンプルの PNG を返す |
+| 利用できる TTS Adapter の種別をエージェントが知る手段がない | 既存 Profile が無い状態では `adapterId` を推測するしかない | B17 で解消。`voiceAdapter.list` が静的説明子を返す |
 | プレビュー・レンダー品質の視覚確認は未提供 | エージェントは構文・保存検証までしか自律確認できない | B6 で render 成果物の `preview.frame` を追加。V2 で render 前の `preview.scriptFrame` / `preview.assetFrame` も追加 |
 
 ## 優先順位
@@ -253,7 +260,8 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 低 | R3-5 外部接続 | 現行の非ゴールを維持 |
 | 完了 | C1〜C3 フォントと Theme Revision の読み取り | B15 で実装。`font.list`・`theme.get` の version・`theme.diagnose` |
 | 完了 | C4 / C5 Theme の作成・編集・公開と PNG プレビュー | B16 で実装。`theme.create` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `preview.theme` |
-| 未定 | C6〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
+| 完了 | C6 Voice Adapter 一覧の公開 | B17 で実装。`voiceAdapter.list`。接続設定は返さない |
+| 未定 | C7〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
 
 ## 変わらない原則
 
