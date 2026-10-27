@@ -16,7 +16,7 @@
 
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
-| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Theme の作成・Draft 編集・公開、Artifact の書き出し（既存ファイルは上書きしない） | 可 |
+| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、お気に入り・アーカイブの切り替え、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Face Set の作成・部分更新、Theme の作成・Draft 編集・公開、Artifact の書き出し（既存ファイルは上書きしない） | 可 |
 | 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、Theme のアーカイブ、外部サービスへの公開 | 人のみ |
 
 「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
@@ -59,6 +59,7 @@
 | `asset.get` | read | no | `kakeai_asset_get` |
 | `asset.import` | mutation | yes | `kakeai_asset_import` |
 | `asset.tag` | mutation | no | `kakeai_asset_tag` |
+| `asset.update` | mutation | no | `kakeai_asset_update` |
 | `render.start` | mutation | yes | `kakeai_render_start` |
 | `job.get` | read | no | `kakeai_job_get` |
 | `job.list` | read | no | `kakeai_job_list` |
@@ -190,6 +191,7 @@
 - `script.subtitles` — 保存済み Script Version の SRT 字幕を返す（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。`{ scriptVersionId }` を受け、`{ scriptVersionId, filename, mimeType, byteSize, srt }` を返す。生成は HTTP の `GET /script-versions/:id/subtitles` と同じ `buildSrt` で、タイミングは焼き込み字幕と同じ `resolveTimeline` を使う。Artifact・Job・版を作らない。タイムラインを解決できない場合は `RENDER_INPUT_INVALID`、版が存在しない場合は `RESOURCE_NOT_FOUND`。`byteSize` は `srt` の UTF-8 バイト長である。
 - `asset.list` — 素材を検索し、`{ assets, nextCursor, total }` の1ページを返す。`total` は同じ絞り込み条件に一致する素材の総数で、同一条件のどのページでも同じ値になる。
   - 絞り込みは `kind`・`status`・`filename`（大文字小文字を区別しない部分一致）・`tags`（`tagMode` で AND / OR を明示）・`favorite`・`archived`（既定は除外）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせる。`durationMinMs` / `durationMaxMs` は0以上のミリ秒で、長さを持たない素材（`durationMs` がnull）は範囲に一致しない。下限が上限より大きい場合は `VALIDATION_ERROR` とする。
+  - 寸法は `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む範囲）で絞り込む。完全一致と範囲は併用でき、すべて AND で評価する。寸法を持たない素材（音声など）は完全一致にも範囲にも一致しない。範囲の逆転、または完全一致が指定範囲の外にある指定は、一致0件ではなく `VALIDATION_ERROR` とする。Face Set の顔レイヤーと同じ寸法の画像を探す用途に使う（[ADR 0106](../adr/0106-agent-asset-dimension-filters.md)）。
   - タグの照合は `Asset.tagsJson` の要素として DB 側のクエリで行う。`tagMode: "and"` は指定したタグすべてを持つ素材、`"or"` はいずれか1つを持つ素材が一致する。タグは引用符で囲まれた要素として保存されるため `bgm` は `bgm_loop` に一致しない。照合は要素の完全一致で、ASCII の英字は大文字小文字を区別せず（`Summer` は `summer` に一致する）、非ASCII（日本語など）は区別する。`%` と `_` はタグ文字列のままではワイルドカードとして解釈されず通常の文字として扱われるため、これらの文字を含むタグの検索はそのタグを持つ素材にだけ一致する。
   - 並び順は `sort` で指定する。`createdAt_desc`（既定、`createdAt` 降順・`id` 降順）、`createdAt_asc`（昇順）、`filename_asc`（ファイル名のバイト順）、`duration_asc`（長さの昇順。長さを持たない素材是最後）。いずれも（ソート列, `id`）の2段で固定し、同じ値を持つ行がページをまたいでも重複も欠落も起こさない。
   - `cursor` は前ページの `nextCursor` をそのまま渡す不透明値で、ソート列と `id` を含む。別の `sort` で使うと `VALIDATION_ERROR`（issue path は `["cursor"]`）となり、黙って別の並び順として解釈することはない。壊れた cursor も同じ `VALIDATION_ERROR` とする。`limit` は既定50、最大100。
@@ -241,6 +243,7 @@
 - `script.restore` — 過去の Script Version を新しい版として復元する。`{ scriptVersionId, baseScriptVersionId?, requestId, authorAgentId? }` を受け、復元元の `ContentDocument` をサーバー側で読み、保存検証を通して新しい版を追加する。呼び出し側は ContentDocument を送らない。復元元の Edition にだけ保存し、新しい版の `sourceScriptVersionId` に復元元を記録する。復元元が current の場合は `VALIDATION_ERROR`。`requestId` は必須で、同じ ID・同じ復元元の再送は既存の版を返す（`replay: true`）。異なる復元元・基準版で同じ ID を使うと `IDEMPOTENCY_CONFLICT`。`baseScriptVersionId` は任意の基準版ガードで、省略時は last-write-wins（[ADR 0021](../adr/0021-script-save-last-write-wins.md)）。
 - `asset.import` — 後述の手順で Asset を取り込む。
 - `asset.tag` — Asset のタグを更新する。
+- `asset.update` — Asset のお気に入り・アーカイブを切り替える（[ADR 0107](../adr/0107-agent-asset-organization.md)）。`{ assetId, favorited?, archived? }` を受け、少なくとも1つを必須とし、`{ asset }` を返す。存在しない ID は `RESOURCE_NOT_FOUND`、項目を指定しない呼び出しは `VALIDATION_ERROR`。タグは `asset.tag` が担う。アーカイブは行を残して既定の `asset.list` とピッカーから隠すだけで、台本の参照・Job・レンダーを壊さない。解除は `archived: false` で行い、アーカイブ済みは `asset.list` の `archived: "only"` で見つけられる。`requestId` は持たず、タイムアウト後は `asset.get` で状態を確認してから再実行する。実体削除は公開しない。
 - `composition.create` / `composition.draft.save` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。publish は `dryRun` を受け付ける。
 - `render.start` — 対象版と ready な素材から render Job を投入する。
 - `tts.create` — 保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter へ合成 Job を投入する（後述）。

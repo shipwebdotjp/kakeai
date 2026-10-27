@@ -14,6 +14,8 @@ import {
   agentAssetListOutputSchema,
   agentAssetTagInputSchema,
   agentAssetTagOutputSchema,
+  agentAssetUpdateInputSchema,
+  agentAssetUpdateOutputSchema,
   agentCompositionAuthoringContextInputSchema,
   agentCompositionAuthoringContextOutputSchema,
   agentCompositionCreateInputSchema,
@@ -354,6 +356,16 @@ const definitions: AgentOperationDefinitions = {
     output: agentAssetTagOutputSchema,
     run: async (input, context) => ({
       asset: await updateAsset(context.prisma, input.assetId, { tags: input.tags }),
+    }),
+  },
+  "asset.update": {
+    input: agentAssetUpdateInputSchema,
+    output: agentAssetUpdateOutputSchema,
+    run: async (input, context) => ({
+      asset: await updateAsset(context.prisma, input.assetId, {
+        favorited: input.favorited,
+        archived: input.archived,
+      }),
     }),
   },
   "render.start": {

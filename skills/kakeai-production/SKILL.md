@@ -67,7 +67,7 @@ files.
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
 | 3 | Characters and voices | `voiceAdapter.list`, `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
-| 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag` | Reuse a ready asset or import one |
+| 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag`, `asset.update` | Reuse a ready asset or import one; tidy with favorite/archive |
 | 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
@@ -298,7 +298,10 @@ Read the work's `appearances[].faceSetId` and `faceSetVersion` from `script.get`
 only `expressions[].id` from that pinned revision for `line.setExpression`.
 `faceSet.list` and a version-less `faceSet.get` return the latest revision,
 which a pinned work may not have. Use an expression only for lines whose
-speaker has a Character; a voice-only speaker has no face to switch.
+speaker has a Character; a voice-only speaker has no face to switch. Face
+layers must share the base image's exact dimensions, so find candidate images
+with `asset.list` (`kind: "image"`, `status: "ready"`, plus `widthPx` /
+`heightPx`) instead of paging the whole library.
 
 When no usable Face Set exists, build one with `faceSet.create`: `layers` need
 same-size, ready image Assets and `expressions` must include `normal`. Check the
@@ -358,6 +361,12 @@ speaker.
     `status` (use `ready`), `filename` (case-insensitive substring),
     `tags` + `tagMode` (`and` = all, `or` = any), `favorite`, `hasAudio`,
     `durationMinMs` / `durationMaxMs`.
+  - Dimensions: `widthPx` / `heightPx` match exactly, and `widthMinPx` /
+    `widthMaxPx` / `heightMinPx` / `heightMaxPx` bound the size inclusively
+    (both may be combined). Assets without dimensions (audio) never match a
+    dimension filter. Use an exact size to find face layers that must match a
+    base image; an inverted range or an exact value outside the range is
+    `VALIDATION_ERROR`.
   - Tags match whole elements: `bgm` does not match `bgm_loop`, and ASCII
     letters compare case-insensitively (`Summer` matches `summer`).
   - `archived` defaults to `exclude`. Pass `include` / `only` only when the user
@@ -376,6 +385,11 @@ speaker.
 - Tag with `asset.tag` after ingest. Use a stable production tag plus a role tag
   (for example `production/<slug>`, `background`, `bgm`) so later searches are
   reproducible. Tags are user-facing metadata; do not repurpose them for IDs.
+- Tidy the library with `asset.update` (`favorited` / `archived`, at least one
+  flag). Archiving keeps the row and every existing script reference intact; it
+  only hides the asset from the default `asset.list` and pickers, so restore it
+  with `archived: false` or find it with `archived: "only"`. Deletion is not
+  exposed to agents.
 - Never inline media bytes into a script. Scripts reference `assetId` only.
 
 ## 6. Visuals and audio

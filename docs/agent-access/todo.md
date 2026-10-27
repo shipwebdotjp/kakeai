@@ -273,3 +273,25 @@
 - [x] サービス・契約・ソケット統合テストで、作成、名前だけの更新、内容変更時の改訂版、同一内容で版を増やさないこと、空更新・未知 ID・寸法不一致・preset の参照欠落、usages、合成プレビューと未保存性を固定する。`faceSet.delete` が `AGENT_OPERATION_UNKNOWN` のままであることも確認する
 - [x] Agent Access 仕様・roadmap・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `faceSet.create` → `preview.faceSet` → `faceSet.update` → `faceSet.usages` が通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B21 Asset 検索の寸法条件（C12 / ADR 0106）
+
+- [x] [ADR 0106](../adr/0106-agent-asset-dimension-filters.md) を追加し、完全一致と両端を含む範囲、寸法なし素材の非一致、向き・索引を追加しないことを決定する
+- [x] 契約の `assetListQuerySchema` に `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（範囲）を追加する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] 範囲の逆転と、完全一致が指定範囲の外にある指定を `VALIDATION_ERROR` にする。寸法を持たない素材は完全一致にも範囲にも一致させない
+- [x] `searchAssets` の `assetFilters` に6条件を追加し、ページと `total` が同じ条件を使うようにする。索引と DB migration は追加しない
+- [x] HTTP の `parseAssetListQuery` に6つの整数クエリを追加する
+- [x] MCP の `asset.list` 説明文を更新する。CLI はカタログ導出のため変更しない
+- [x] 契約・サービス・HTTP・ソケット・MCP のテストで、完全一致、両端を含む範囲、併用、寸法なし素材の除外、矛盾した指定の `VALIDATION_ERROR`、タグ＋寸法＋ページングを固定する
+- [x] Agent Access 仕様・HTTP API 契約・roadmap・todo・制作スキル・ユーザーガイドを更新する
+- 完了条件: ソケット・MCP・CLI から `asset.list` の完全一致・範囲・併用が効き、寸法を持たない素材が除外され、矛盾した指定が `VALIDATION_ERROR` になる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B22 Asset の可逆な整理（C13 / ADR 0107）
+
+- [x] [ADR 0107](../adr/0107-agent-asset-organization.md) を追加し、お気に入り・アーカイブだけを公開し、タグは `asset.tag` に残し、削除は人専用を維持することを決定する
+- [x] 契約に `asset.update`（mutation）を追加する。`{ assetId, favorited?, archived? }` を少なくとも1項目必須で受け、`{ asset }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスで既存の `updateAsset` をそのまま呼ぶ。`requestId` は持たず、冪等台帳に載せない。`asset.delete` は公開しない
+- [x] MCP の説明文を追加する。CLI はカタログ導出のため変更しない
+- [x] 契約・ソケット統合テストで、お気に入りとアーカイブの設定・解除、既定検索からの除外、`archived: "only"` での発見、項目なしの `VALIDATION_ERROR`、未知 ID の `RESOURCE_NOT_FOUND`、`asset.delete` の `AGENT_OPERATION_UNKNOWN` を固定する
+- [x] Agent Access 仕様・roadmap・todo・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `asset.update` で素材を整理でき、アーカイブしても台本参照とレンダーは壊れず、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

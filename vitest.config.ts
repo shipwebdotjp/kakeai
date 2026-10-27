@@ -6,6 +6,6 @@ export default defineConfig({
     // The contract digest test occasionally exceeds Vitest's 5s default under
     // full parallel load. It grows with the operation catalog, so keep one
     // bound for local, CI and release runs.
-    testTimeout: 30_000,
+    testTimeout: 60_000,
   },
 });

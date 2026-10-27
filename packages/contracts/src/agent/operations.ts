@@ -27,6 +27,7 @@ import {
 } from "../dto";
 import { assetTagsSchema } from "../asset";
 import { assetListInputSchema, assetListPageSchema } from "../asset-list";
+import { assetMetadataPatchSchema } from "../requests";
 import { characterLibraryEntrySchema } from "../character-library";
 import { characterNamesSchema, characterVoicesSchema } from "../content/character";
 import {
@@ -284,6 +285,24 @@ export const agentAssetTagInputSchema = z.strictObject({
   tags: assetTagsSchema,
 });
 export const agentAssetTagOutputSchema = z.strictObject({ asset: assetSchema });
+
+/**
+ * Reversible organization of one asset: the favorite and archive marks that
+ * hide it from the default search. Tags stay on `asset.tag`, so only those two
+ * fields are picked from the HTTP patch contract. At least one flag is
+ * required.
+ */
+export const agentAssetUpdateInputSchema = assetMetadataPatchSchema
+  .pick({ favorited: true, archived: true })
+  .extend({ assetId: idSchema })
+  .refine(
+    (value) =>
+      value.favorited !== undefined || value.archived !== undefined,
+    { message: "favorited / archived のいずれかを指定してください。" },
+  );
+export const agentAssetUpdateOutputSchema = z.strictObject({
+  asset: assetSchema,
+});
 
 /**
  * `render.start` accepts an optional `requestId`. When it is given, the

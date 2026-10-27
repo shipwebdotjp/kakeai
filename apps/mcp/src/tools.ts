@@ -75,11 +75,13 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "script.restore":
     "過去の台本版（`scriptVersionId`）を新しい版として復元する。ContentDocument は送らず、サーバーが復元元の内容を保存する。`requestId` は必須で、同じ ID の再送は既存の版を返す。任意の `baseScriptVersionId` を渡すと、その版が current のときだけ復元する。復元元が current の場合は VALIDATION_ERROR。",
   "asset.list":
-    "素材を検索して `{ assets, nextCursor, total }` の1ページを返す。`kind`・`status`・`filename`（部分一致）・`tags`（`tagMode` で AND / OR、既定 `and`）・`favorite`・`archived`（既定 `exclude`）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせ、`sort`（既定 `createdAt_desc`）で `limit`（最大100）件ずつページングする。`total` は絞り込み条件に一致する件数。続きを取得するときは受け取った `nextCursor` を `cursor` に渡す（`nextCursor` が null なら最終ページ）。`sort` を変えると `cursor` は無効になるので、並べ替えたら先頭から取得し直す。",
+    "素材を検索して `{ assets, nextCursor, total }` の1ページを返す。`kind`・`status`・`filename`（部分一致）・`tags`（`tagMode` で AND / OR、既定 `and`）・`favorite`・`archived`（既定 `exclude`）・`hasAudio`・`durationMinMs` / `durationMaxMs`・`widthPx` / `heightPx`（寸法の完全一致）・`widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む寸法範囲）を組み合わせ、`sort`（既定 `createdAt_desc`）で `limit`（最大100）件ずつページングする。寸法を持たない素材（音声など）は寸法条件に一致しない。範囲が逆転している、または完全一致が指定範囲の外にある場合は VALIDATION_ERROR。`total` は絞り込み条件に一致する件数。続きを取得するときは受け取った `nextCursor` を `cursor` に渡す（`nextCursor` が null なら最終ページ）。`sort` を変えると `cursor` は無効になるので、並べ替えたら先頭から取得し直す。",
   "asset.get": "素材 1 件を返す。",
   "asset.import":
     "ローカルパスの素材を取り込み、jobId を返す。完了状態は job_wait または job.get で確認する。",
   "asset.tag": "素材のタグを更新する。",
+  "asset.update":
+    "素材のお気に入りとアーカイブを切り替え、更新後の素材を返す。`assetId` に加えて `favorited` / `archived` の少なくとも1つを指定する（`tags` は `asset.tag` を使う）。`archived: true` は素材を削除せず、既定の `asset.list` とピッカーから隠すだけなので、台本の参照やレンダーは壊れない。`requestId` は持たないため、タイムアウト後は `asset.get` で状態を確認してから再実行する。存在しない ID は RESOURCE_NOT_FOUND、項目を指定しない呼び出しは VALIDATION_ERROR。",
   "render.start":
     "指定した台本版のレンダー Job を投入し、Job を返す。完了は job_wait または job.get で確認する。",
   "job.get": "Job 1 件の状態を返す。",

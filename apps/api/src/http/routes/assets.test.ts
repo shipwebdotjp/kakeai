@@ -33,6 +33,8 @@ async function seed(input: {
   archived?: boolean;
   hasAudio?: boolean;
   durationMs?: number | null;
+  widthPx?: number | null;
+  heightPx?: number | null;
   createdAt?: Date;
 }): Promise<void> {
   await prisma.asset.create({
@@ -47,6 +49,8 @@ async function seed(input: {
       byteSize: BigInt(10),
       sha256: `sha-route-${randomUUID()}`,
       durationMs: input.durationMs ?? null,
+      widthPx: input.widthPx ?? null,
+      heightPx: input.heightPx ?? null,
       hasAudio: input.hasAudio ?? false,
       tagsJson:
         input.tags === undefined || input.tags.length === 0
@@ -108,6 +112,8 @@ beforeAll(async () => {
     kind: "video",
     hasAudio: true,
     durationMs: 1_000,
+    widthPx: 640,
+    heightPx: 360,
     createdAt: new Date("2026-01-05T00:00:00.000Z"),
   });
   await seed({
@@ -116,6 +122,8 @@ beforeAll(async () => {
     kind: "video",
     hasAudio: true,
     durationMs: 9_000,
+    widthPx: 1920,
+    heightPx: 1080,
     createdAt: new Date("2026-01-06T00:00:00.000Z"),
   });
 
@@ -221,6 +229,11 @@ describe("assets route search", () => {
       "/assets?durationMinMs=1.5",
       "/assets?durationMinMs=9000&durationMaxMs=1000",
       "/assets?durationMaxMs=9223372036854775807",
+      "/assets?widthPx=0",
+      "/assets?widthPx=abc",
+      "/assets?heightMaxPx=1.5",
+      "/assets?widthMinPx=2000&widthMaxPx=1000",
+      "/assets?widthPx=100&widthMinPx=200",
       "/assets?sort=createdAt",
       "/assets?tag=",
       "/assets?cursor=not-a-cursor",
@@ -255,6 +268,18 @@ describe("assets route search", () => {
     ).json()) as { data: AssetListPage };
     expect(ranged.data.assets.map((asset) => asset.id)).toEqual(["route-f"]);
     expect(ranged.data.total).toBe(1);
+
+    const exactSize = (await (
+      await get("/assets?filename=media-&widthPx=1920&heightPx=1080")
+    ).json()) as { data: AssetListPage };
+    expect(exactSize.data.assets.map((asset) => asset.id)).toEqual(["route-f"]);
+    expect(exactSize.data.total).toBe(1);
+
+    const sizeRange = (await (
+      await get("/assets?filename=media-&widthMinPx=640&widthMaxPx=1000")
+    ).json()) as { data: AssetListPage };
+    expect(sizeRange.data.assets.map((asset) => asset.id)).toEqual(["route-e"]);
+    expect(sizeRange.data.total).toBe(1);
   });
 
   it("keeps the total count stable across pages of one filter set", async () => {

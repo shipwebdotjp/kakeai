@@ -40,17 +40,22 @@ export const draftPreviewRequestSchema = z.strictObject({
 
 export const createRenderJobRequestSchema = z.strictObject({});
 
-export const updateAssetRequestSchema = z
-  .strictObject({
-    tags: assetTagsSchema.optional(),
-    favorited: z.boolean().optional(),
-    archived: z.boolean().optional(),
-  })
-  .refine(
-    (value) =>
-      value.tags !== undefined || value.favorited !== undefined || value.archived !== undefined,
-    { message: "tags / favorited / archived のいずれかを指定してください。" },
-  );
+/**
+ * The metadata fields a `PATCH /assets/:assetId` may change. Kept as its own
+ * schema so the agent operation can pick the subset it exposes without
+ * duplicating the field definitions.
+ */
+export const assetMetadataPatchSchema = z.strictObject({
+  tags: assetTagsSchema.optional(),
+  favorited: z.boolean().optional(),
+  archived: z.boolean().optional(),
+});
+
+export const updateAssetRequestSchema = assetMetadataPatchSchema.refine(
+  (value) =>
+    value.tags !== undefined || value.favorited !== undefined || value.archived !== undefined,
+  { message: "tags / favorited / archived のいずれかを指定してください。" },
+);
 
 export const DEFAULT_TTS_SPEED_SCALE = 1;
 export const MIN_TTS_SPEED_SCALE = 0.5;

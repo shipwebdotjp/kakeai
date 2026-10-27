@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_ASSET_TAGS, assetTagSchema } from "./asset";
-import { nonNegativeInt } from "./content/primitives";
+import { nonNegativeInt, positiveInt } from "./content/primitives";
 import { assetKindSchema, assetSchema, assetStatusSchema } from "./dto";
 
 export const ASSET_LIST_DEFAULT_LIMIT = 50;
@@ -37,6 +37,53 @@ export const ASSET_LIST_DEFAULT_SORT: AssetListSort = "createdAt_desc";
 export const assetListCursorSchema = z.string().min(1);
 
 /**
+ * Dimension filters of one axis. An inverted range or an exact value outside
+ * its own range is a contradiction, not a filter that matches nothing, so it
+ * is reported like the inverted duration range.
+ */
+function checkDimensionRange(
+  axis: "width" | "height",
+  query: Pick<
+    AssetListQuery,
+    | "widthPx"
+    | "widthMinPx"
+    | "widthMaxPx"
+    | "heightPx"
+    | "heightMinPx"
+    | "heightMaxPx"
+  >,
+  ctx: z.RefinementCtx,
+): void {
+  const key = axis === "width" ? "widthPx" : "heightPx";
+  const minKey = axis === "width" ? "widthMinPx" : "heightMinPx";
+  const maxKey = axis === "width" ? "widthMaxPx" : "heightMaxPx";
+  const exact = axis === "width" ? query.widthPx : query.heightPx;
+  const min = axis === "width" ? query.widthMinPx : query.heightMinPx;
+  const max = axis === "width" ? query.widthMaxPx : query.heightMaxPx;
+  if (min !== undefined && max !== undefined && min > max) {
+    ctx.addIssue({
+      code: "custom",
+      path: [maxKey],
+      message: `${maxKey} は ${minKey} 以上にしてください。`,
+    });
+  }
+  if (exact !== undefined && min !== undefined && exact < min) {
+    ctx.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} は ${minKey} 以上にしてください。`,
+    });
+  }
+  if (exact !== undefined && max !== undefined && exact > max) {
+    ctx.addIssue({
+      code: "custom",
+      path: [key],
+      message: `${key} は ${maxKey} 以下にしてください。`,
+    });
+  }
+}
+
+/**
  * Search/filter input for the asset library. The same schema is shared by the
  * HTTP API, the local control socket, MCP and the CLI.
  *
@@ -54,6 +101,13 @@ export const assetListCursorSchema = z.string().min(1);
  * - `hasAudio` filters on the audio track flag, `durationMinMs` /
  *   `durationMaxMs` on `durationMs`. Assets without a known duration
  *   (`durationMs` is null) never satisfy a duration range.
+ * - `widthPx` / `heightPx` match a dimension exactly, and `widthMinPx` /
+ *   `widthMaxPx` / `heightMinPx` / `heightMaxPx` bound it inclusively. The
+ *   exact and range conditions combine (all must hold). Assets without known
+ *   dimensions (`widthPx` / `heightPx` is null, for example audio) never
+ *   satisfy any dimension condition. An inverted range, or an exact value
+ *   outside its own range, is a contradiction and is rejected instead of
+ *   matching nothing.
  *
  * Results are ordered by `sort` (default `createdAt desc, id desc`). A cursor
  * from a different filter set is not meaningful, and a malformed cursor or a
@@ -71,6 +125,12 @@ export const assetListQuerySchema = z
     hasAudio: z.boolean().optional(),
     durationMinMs: nonNegativeInt.optional(),
     durationMaxMs: nonNegativeInt.optional(),
+    widthPx: positiveInt.optional(),
+    widthMinPx: positiveInt.optional(),
+    widthMaxPx: positiveInt.optional(),
+    heightPx: positiveInt.optional(),
+    heightMinPx: positiveInt.optional(),
+    heightMaxPx: positiveInt.optional(),
     sort: assetListSortSchema.default(ASSET_LIST_DEFAULT_SORT),
     cursor: assetListCursorSchema.optional(),
     limit: z
@@ -93,6 +153,8 @@ export const assetListQuerySchema = z
         message: "durationMaxMs は durationMinMs 以上にしてください。",
       });
     }
+    checkDimensionRange("width", query, ctx);
+    checkDimensionRange("height", query, ctx);
   });
 export type AssetListQuery = z.infer<typeof assetListQuerySchema>;
 

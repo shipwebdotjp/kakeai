@@ -219,7 +219,17 @@ function parseAssetListQuery(req: Request) {
       raw[key] = booleanQueryValue(value);
     }
   }
-  for (const key of ["limit", "durationMinMs", "durationMaxMs"] as const) {
+  for (const key of [
+    "limit",
+    "durationMinMs",
+    "durationMaxMs",
+    "widthPx",
+    "widthMinPx",
+    "widthMaxPx",
+    "heightPx",
+    "heightMinPx",
+    "heightMaxPx",
+  ] as const) {
     const value = firstQueryValue(req.query[key]);
     if (value !== undefined) {
       raw[key] = integerQueryValue(value);

@@ -25,6 +25,8 @@ interface AssetSeed {
   archived?: boolean;
   hasAudio?: boolean;
   durationMs?: number | null;
+  widthPx?: number | null;
+  heightPx?: number | null;
   createdAt?: Date;
 }
 
@@ -41,6 +43,8 @@ function seed(overrides: AssetSeed) {
       byteSize: BigInt(10),
       sha256: `sha-${randomUUID()}`,
       durationMs: overrides.durationMs ?? null,
+      widthPx: overrides.widthPx ?? null,
+      heightPx: overrides.heightPx ?? null,
       hasAudio: overrides.hasAudio ?? false,
       tagsJson:
         overrides.tags === undefined || overrides.tags.length === 0
@@ -369,6 +373,123 @@ describe("searchAssets", () => {
     );
     expect(range.assets.map((asset) => asset.id)).toEqual(["meta-sound"]);
     expect(range.total).toBe(1);
+  });
+
+  it("filters on exact dimensions and inclusive dimension ranges", async () => {
+    await seed({
+      id: "size-small",
+      filename: "size-small.png",
+      widthPx: 480,
+      heightPx: 960,
+      tags: ["face-layer"],
+    });
+    await seed({
+      id: "size-base",
+      filename: "size-base.png",
+      widthPx: 480,
+      heightPx: 960,
+      tags: ["face-layer"],
+    });
+    await seed({
+      id: "size-wide",
+      filename: "size-wide.png",
+      widthPx: 1920,
+      heightPx: 1080,
+      tags: ["face-layer"],
+    });
+    await seed({
+      id: "size-audio",
+      filename: "size-audio.wav",
+      kind: "audio",
+      tags: ["face-layer"],
+    });
+
+    const exact = await searchAssets(
+      prisma,
+      query({ filename: "size-", widthPx: 480, heightPx: 960 }),
+    );
+    expect(exact.assets.map((asset) => asset.id)).toEqual(["size-small", "size-base"]);
+    expect(exact.total).toBe(2);
+
+    // Both bounds are inclusive, and an exact size can narrow the range.
+    const range = await searchAssets(
+      prisma,
+      query({ filename: "size-", widthMinPx: 480, widthMaxPx: 1920 }),
+    );
+    expect(range.assets.map((asset) => asset.id)).toEqual([
+      "size-wide",
+      "size-small",
+      "size-base",
+    ]);
+    expect(range.total).toBe(3);
+
+    const combined = await searchAssets(
+      prisma,
+      query({
+        filename: "size-",
+        tags: ["face-layer"],
+        widthPx: 480,
+        widthMinPx: 480,
+        heightMinPx: 900,
+      }),
+    );
+    expect(combined.assets.map((asset) => asset.id)).toEqual([
+      "size-small",
+      "size-base",
+    ]);
+    expect(combined.total).toBe(2);
+
+    // Audio has no dimensions, so it never satisfies a dimension filter, even
+    // a range that would otherwise match everything.
+    const bounded = await searchAssets(
+      prisma,
+      query({ filename: "size-", widthMinPx: 1, heightMinPx: 1 }),
+    );
+    expect(bounded.assets.map((asset) => asset.id)).not.toContain("size-audio");
+    expect(bounded.total).toBe(3);
+  });
+
+  it("keeps dimension filters together with a tag filter and paging", async () => {
+    const createdAt = new Date("2026-07-01T00:00:00.000Z");
+    for (let index = 0; index < 3; index += 1) {
+      await seed({
+        id: `paged-size-${index}`,
+        filename: `paged-size-${index}.png`,
+        widthPx: 640,
+        heightPx: 360,
+        tags: ["paged-size"],
+        createdAt,
+      });
+    }
+    await seed({
+      id: "paged-size-other",
+      filename: "paged-size-other.png",
+      widthPx: 1280,
+      heightPx: 720,
+      tags: ["paged-size"],
+      createdAt,
+    });
+
+    const first = await searchAssets(
+      prisma,
+      query({ tags: ["paged-size"], widthPx: 640, limit: 2 }),
+    );
+    expect(first.assets).toHaveLength(2);
+    expect(first.total).toBe(3);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await searchAssets(
+      prisma,
+      query({
+        tags: ["paged-size"],
+        widthPx: 640,
+        limit: 2,
+        cursor: first.nextCursor ?? "",
+      }),
+    );
+    expect(second.assets).toHaveLength(1);
+    expect(second.assets[0]?.id).not.toBe(first.assets[0]?.id);
+    expect(second.total).toBe(3);
   });
 
   it("keeps the page order of every sort for a tag filter", async () => {

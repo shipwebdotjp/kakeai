@@ -1077,6 +1077,152 @@ describe("agent socket integration", () => {
     expect(mismatched.issues?.[0]?.path).toEqual(["cursor"]);
   });
 
+  it("filters assets by exact dimensions and dimension ranges over the socket", async () => {
+    const createdAt = new Date("2026-05-20T00:00:00.000Z");
+    const rows = [
+      { id: "socket-size-a", kind: "image", widthPx: 480, heightPx: 960 },
+      { id: "socket-size-b", kind: "image", widthPx: 480, heightPx: 960 },
+      { id: "socket-size-c", kind: "image", widthPx: 1920, heightPx: 1080 },
+      { id: "socket-size-audio", kind: "audio", widthPx: null, heightPx: null },
+    ];
+    for (const row of rows) {
+      await prisma.asset.create({
+        data: {
+          id: row.id,
+          kind: row.kind,
+          origin: "uploaded",
+          status: "ready",
+          storageKey: `assets/${row.id}`,
+          originalFilename: `${row.id}.png`,
+          mediaType: row.kind === "audio" ? "audio/wav" : "image/png",
+          byteSize: BigInt(10),
+          sha256: `sha-${row.id}`,
+          widthPx: row.widthPx,
+          heightPx: row.heightPx,
+          createdAt,
+        },
+      });
+    }
+
+    const exact = await client.request("asset.list", {
+      filename: "socket-size-",
+      widthPx: 480,
+      heightPx: 960,
+    });
+    expect(exact.assets.map((asset) => asset.id)).toEqual([
+      "socket-size-b",
+      "socket-size-a",
+    ]);
+    expect(exact.total).toBe(2);
+
+    const ranged = await client.request("asset.list", {
+      filename: "socket-size-",
+      widthMinPx: 480,
+      widthMaxPx: 1920,
+    });
+    expect(ranged.assets.map((asset) => asset.id)).toEqual([
+      "socket-size-c",
+      "socket-size-b",
+      "socket-size-a",
+    ]);
+    expect(ranged.total).toBe(3);
+
+    // The audio asset has no dimensions, so it never matches a range.
+    const bounded = await client.request("asset.list", {
+      filename: "socket-size-",
+      widthMinPx: 1,
+      heightMinPx: 1,
+    });
+    expect(bounded.assets.map((asset) => asset.id)).not.toContain(
+      "socket-size-audio",
+    );
+
+    const inverted = await expectAgentError(
+      client.request("asset.list", {
+        widthMinPx: 2_000,
+        widthMaxPx: 1_000,
+      }),
+      "VALIDATION_ERROR",
+    );
+    expect(inverted.issues?.[0]?.path).toEqual(["widthMaxPx"]);
+
+    await expectAgentError(
+      client.request("asset.list", { heightPx: 100, heightMaxPx: 50 }),
+      "VALIDATION_ERROR",
+    );
+  });
+
+  it("organizes an asset with the reversible favorite and archive flags", async () => {
+    const assetId = "socket-org-a";
+    await prisma.asset.create({
+      data: {
+        id: assetId,
+        kind: "image",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/socket-org-a",
+        originalFilename: "socket-org-a.png",
+        mediaType: "image/png",
+        byteSize: BigInt(10),
+        sha256: "sha-socket-org-a",
+        createdAt: new Date("2026-05-25T00:00:00.000Z"),
+      },
+    });
+
+    const favorited = await client.request("asset.update", {
+      assetId,
+      favorited: true,
+    });
+    expect(favorited.asset.favoritedAt).not.toBeNull();
+    expect(favorited.asset.archivedAt).toBeNull();
+    const favorites = await client.request("asset.list", {
+      filename: "socket-org-",
+      favorite: true,
+    });
+    expect(favorites.assets.map((asset) => asset.id)).toEqual([assetId]);
+
+    const archived = await client.request("asset.update", {
+      assetId,
+      archived: true,
+    });
+    expect(archived.asset.archivedAt).not.toBeNull();
+    expect(archived.asset.favoritedAt).not.toBeNull();
+    const hidden = await client.request("asset.list", {
+      filename: "socket-org-",
+    });
+    expect(hidden.assets).toEqual([]);
+    const onlyArchived = await client.request("asset.list", {
+      filename: "socket-org-",
+      archived: "only",
+    });
+    expect(onlyArchived.assets.map((asset) => asset.id)).toEqual([assetId]);
+
+    const restored = await client.request("asset.update", {
+      assetId,
+      favorited: false,
+      archived: false,
+    });
+    expect(restored.asset.favoritedAt).toBeNull();
+    expect(restored.asset.archivedAt).toBeNull();
+    const visible = await client.request("asset.list", {
+      filename: "socket-org-",
+    });
+    expect(visible.assets.map((asset) => asset.id)).toEqual([assetId]);
+
+    await expectAgentError(
+      client.request("asset.update", { assetId: "socket-org-missing", favorited: true }),
+      "RESOURCE_NOT_FOUND",
+    );
+    await expectAgentError(
+      client.request("asset.update", { assetId } as never),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("asset.delete" as never, {} as never),
+      "AGENT_OPERATION_UNKNOWN",
+    );
+  });
+
   it("starts and cancels a render job without starting another worker", async () => {
     const work = await createWork("レンダーテスト作品");
     const edition = firstEdition(work);
