@@ -5,7 +5,7 @@ title: エージェント連携（MCP / CLI）
 
 # エージェント連携（MCP / CLI）
 
-Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込み、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、TTS Adapter の種別一覧、Theme / Face Set の読み取り、Theme の作成・Draft 編集・公開と PNG プレビュー、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set の管理（作成・更新・削除）、Theme のアーカイブ・削除は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
+Kakeai は、利用者自身のコーディングエージェントから作品を操作するための MCP（stdio）サーバーと CLI（`kakeai-agent`）を同梱しています。どちらも同じ操作コアへ接続する薄い束縛で、できることは同じです。エージェントは作品の作成・改名、台本の編集、素材の検索・取り込みとお気に入り・アーカイブの整理、キャラクターの台本へのコピーと声の付け替え、Voice Profile の読み取り・作成・更新と話者への割り当て、TTS Adapter の種別一覧、Theme / Face Set の読み取り、Theme の作成・Draft 編集・公開と PNG プレビュー、Theme のフォント診断とインストール済みフォントの検索、設定済み TTS アダプターへの音声合成、Composition の作成・publish、レンダー投入、render 成果物の指定時刻の静止画の取得を行えます。実体の削除、外部サービスへの公開、Voice Profile と Character の削除、Face Set の管理（作成・更新・削除）、Theme のアーカイブ・削除は公開していません。Kakeai が提供する生成は、利用者が設定した接続先だけを使います。
 
 ## 前提
 
@@ -52,7 +52,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | テンプレート入力の形 | `kakeai_template_get`（1件の JSON Schema と入力例） |
 | 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` / `kakeai_work_update` / `kakeai_work_clone` |
 | 台本 | `kakeai_script_get` / `kakeai_script_list_versions` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` / `kakeai_script_restore` |
-| 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` |
+| 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` / `kakeai_asset_update`（お気に入り・アーカイブ） |
 | キャラクター | `kakeai_character_list` / `kakeai_character_get` / `kakeai_character_create` / `kakeai_character_update` / `kakeai_character_set_voices` |
 | ライブラリ読み取り | `kakeai_theme_list` / `kakeai_theme_get` / `kakeai_face_set_list` / `kakeai_face_set_get` / `kakeai_voice_profile_list` / `kakeai_voice_profile_get` |
 | 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_tts_attach_bulk` |
@@ -114,6 +114,8 @@ CLI も同じ入力を使います（例: `kakeai-agent render.start --input '{"
 - 寸法は `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む範囲）で絞り込めます。完全一致と範囲は併用できます。寸法を持たない素材（音声など）は寸法条件に一致しません。範囲が逆転している、または完全一致が指定範囲の外にある場合は `VALIDATION_ERROR` になります。同じ寸法の画像を探すとき（例: Face Set の顔レイヤー）に使います。
 - `archived` は既定で `exclude`（アーカイブ済みを除外）です。`include` / `only` は明示したときだけ使います。
 - 返却順は `sort` で選べます（`createdAt_desc` が既定、`createdAt_asc`、`filename_asc`、`duration_asc`）。`limit` は既定 50、最大 100 です。`cursor` には前ページの `nextCursor` をそのまま渡します。カーソルは絞り込み条件と並び順ごとに意味を持つため、別の条件や別の `sort` へ流用しません（別の `sort` で使うと `VALIDATION_ERROR` になります）。
+
+素材の整理には `kakeai_asset_update` を使います。`favorited` / `archived` の少なくとも1つを指定し、`false` で解除します。アーカイブは素材を削除せず、既定の検索と素材ピッカーから隠すだけなので、台本の参照やレンダーは壊れません。アーカイブ済みの素材は `kakeai_asset_list` の `archived: "only"` で見つけられます。素材の実体削除はエージェントからは行えません。
 
 ### TTS（音声合成）
 
@@ -244,6 +246,7 @@ kakeai-agent --help
 | `kakeai_script_subtitles` | `kakeai-agent script.subtitles --input '{"scriptVersionId":"..."}'` |
 | `kakeai_asset_list` | `kakeai-agent asset.list --input '{"tags":["bgm"],"status":"ready"}'` |
 | `kakeai_asset_import` | `kakeai-agent asset.import --input ...` |
+| `kakeai_asset_update` | `kakeai-agent asset.update --input '{"assetId":"ast-123","archived":true}'` |
 | `kakeai_character_list` | `kakeai-agent character.list` |
 | `kakeai_character_create` | `kakeai-agent character.create --input ...` |
 | `kakeai_character_update` | `kakeai-agent character.update --input ...` |

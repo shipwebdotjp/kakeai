@@ -1152,6 +1152,77 @@ describe("agent socket integration", () => {
     );
   });
 
+  it("organizes an asset with the reversible favorite and archive flags", async () => {
+    const assetId = "socket-org-a";
+    await prisma.asset.create({
+      data: {
+        id: assetId,
+        kind: "image",
+        origin: "uploaded",
+        status: "ready",
+        storageKey: "assets/socket-org-a",
+        originalFilename: "socket-org-a.png",
+        mediaType: "image/png",
+        byteSize: BigInt(10),
+        sha256: "sha-socket-org-a",
+        createdAt: new Date("2026-05-25T00:00:00.000Z"),
+      },
+    });
+
+    const favorited = await client.request("asset.update", {
+      assetId,
+      favorited: true,
+    });
+    expect(favorited.asset.favoritedAt).not.toBeNull();
+    expect(favorited.asset.archivedAt).toBeNull();
+    const favorites = await client.request("asset.list", {
+      filename: "socket-org-",
+      favorite: true,
+    });
+    expect(favorites.assets.map((asset) => asset.id)).toEqual([assetId]);
+
+    const archived = await client.request("asset.update", {
+      assetId,
+      archived: true,
+    });
+    expect(archived.asset.archivedAt).not.toBeNull();
+    expect(archived.asset.favoritedAt).not.toBeNull();
+    const hidden = await client.request("asset.list", {
+      filename: "socket-org-",
+    });
+    expect(hidden.assets).toEqual([]);
+    const onlyArchived = await client.request("asset.list", {
+      filename: "socket-org-",
+      archived: "only",
+    });
+    expect(onlyArchived.assets.map((asset) => asset.id)).toEqual([assetId]);
+
+    const restored = await client.request("asset.update", {
+      assetId,
+      favorited: false,
+      archived: false,
+    });
+    expect(restored.asset.favoritedAt).toBeNull();
+    expect(restored.asset.archivedAt).toBeNull();
+    const visible = await client.request("asset.list", {
+      filename: "socket-org-",
+    });
+    expect(visible.assets.map((asset) => asset.id)).toEqual([assetId]);
+
+    await expectAgentError(
+      client.request("asset.update", { assetId: "socket-org-missing", favorited: true }),
+      "RESOURCE_NOT_FOUND",
+    );
+    await expectAgentError(
+      client.request("asset.update", { assetId } as never),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("asset.delete" as never, {} as never),
+      "AGENT_OPERATION_UNKNOWN",
+    );
+  });
+
   it("starts and cancels a render job without starting another worker", async () => {
     const work = await createWork("レンダーテスト作品");
     const edition = firstEdition(work);

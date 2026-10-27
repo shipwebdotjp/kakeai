@@ -16,7 +16,7 @@
 
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
-| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Theme の作成・Draft 編集・公開、Artifact の書き出し（既存ファイルは上書きしない） | 可 |
+| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、お気に入り・アーカイブの切り替え、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Theme の作成・Draft 編集・公開、Artifact の書き出し（既存ファイルは上書きしない） | 可 |
 | 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、Theme のアーカイブ、外部サービスへの公開 | 人のみ |
 
 「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
@@ -59,6 +59,7 @@
 | `asset.get` | read | no | `kakeai_asset_get` |
 | `asset.import` | mutation | yes | `kakeai_asset_import` |
 | `asset.tag` | mutation | no | `kakeai_asset_tag` |
+| `asset.update` | mutation | no | `kakeai_asset_update` |
 | `render.start` | mutation | yes | `kakeai_render_start` |
 | `job.get` | read | no | `kakeai_job_get` |
 | `job.list` | read | no | `kakeai_job_list` |
@@ -235,6 +236,7 @@
 - `script.restore` — 過去の Script Version を新しい版として復元する。`{ scriptVersionId, baseScriptVersionId?, requestId, authorAgentId? }` を受け、復元元の `ContentDocument` をサーバー側で読み、保存検証を通して新しい版を追加する。呼び出し側は ContentDocument を送らない。復元元の Edition にだけ保存し、新しい版の `sourceScriptVersionId` に復元元を記録する。復元元が current の場合は `VALIDATION_ERROR`。`requestId` は必須で、同じ ID・同じ復元元の再送は既存の版を返す（`replay: true`）。異なる復元元・基準版で同じ ID を使うと `IDEMPOTENCY_CONFLICT`。`baseScriptVersionId` は任意の基準版ガードで、省略時は last-write-wins（[ADR 0021](../adr/0021-script-save-last-write-wins.md)）。
 - `asset.import` — 後述の手順で Asset を取り込む。
 - `asset.tag` — Asset のタグを更新する。
+- `asset.update` — Asset のお気に入り・アーカイブを切り替える（[ADR 0106](../adr/0106-agent-asset-organization.md)）。`{ assetId, favorited?, archived? }` を受け、少なくとも1つを必須とし、`{ asset }` を返す。存在しない ID は `RESOURCE_NOT_FOUND`、項目を指定しない呼び出しは `VALIDATION_ERROR`。タグは `asset.tag` が担う。アーカイブは行を残して既定の `asset.list` とピッカーから隠すだけで、台本の参照・Job・レンダーを壊さない。解除は `archived: false` で行い、アーカイブ済みは `asset.list` の `archived: "only"` で見つけられる。`requestId` は持たず、タイムアウト後は `asset.get` で状態を確認してから再実行する。実体削除は公開しない。
 - `composition.create` / `composition.draft.save` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。publish は `dryRun` を受け付ける。
 - `render.start` — 対象版と ready な素材から render Job を投入する。
 - `tts.create` — 保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter へ合成 Job を投入する（後述）。

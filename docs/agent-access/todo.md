@@ -273,3 +273,13 @@
 - [x] 契約・サービス・HTTP・ソケット・MCP のテストで、完全一致、両端を含む範囲、併用、寸法なし素材の除外、矛盾した指定の `VALIDATION_ERROR`、タグ＋寸法＋ページングを固定する
 - [x] Agent Access 仕様・HTTP API 契約・roadmap・todo・制作スキル・ユーザーガイドを更新する
 - 完了条件: ソケット・MCP・CLI から `asset.list` の完全一致・範囲・併用が効き、寸法を持たない素材が除外され、矛盾した指定が `VALIDATION_ERROR` になる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B21 Asset の可逆な整理（C13 / ADR 0106）
+
+- [x] [ADR 0106](../adr/0106-agent-asset-organization.md) を追加し、お気に入り・アーカイブだけを公開し、タグは `asset.tag` に残し、削除は人専用を維持することを決定する
+- [x] 契約に `asset.update`（mutation）を追加する。`{ assetId, favorited?, archived? }` を少なくとも1項目必須で受け、`{ asset }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] Agent サービスで既存の `updateAsset` をそのまま呼ぶ。`requestId` は持たず、冪等台帳に載せない。`asset.delete` は公開しない
+- [x] MCP の説明文を追加する。CLI はカタログ導出のため変更しない
+- [x] 契約・ソケット統合テストで、お気に入りとアーカイブの設定・解除、既定検索からの除外、`archived: "only"` での発見、項目なしの `VALIDATION_ERROR`、未知 ID の `RESOURCE_NOT_FOUND`、`asset.delete` の `AGENT_OPERATION_UNKNOWN` を固定する
+- [x] Agent Access 仕様・roadmap・todo・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `asset.update` で素材を整理でき、アーカイブしても台本参照とレンダーは壊れず、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。

@@ -53,6 +53,8 @@ import {
   agentArtifactExportOutputSchema,
   agentArtifactGetInputSchema,
   agentArtifactGetOutputSchema,
+  agentAssetUpdateInputSchema,
+  agentAssetUpdateOutputSchema,
   agentScriptSaveInputSchema,
   agentScriptSubtitlesInputSchema,
   agentScriptSubtitlesOutputSchema,
@@ -1216,6 +1218,73 @@ describe("artifact.export contract", () => {
   it("registers artifact.export as a mutation", () => {
     expect(buildAgentSchemaGetResult().agentOperations).toContainEqual({
       name: "artifact.export",
+      kind: "mutation",
+      longRunning: false,
+    });
+  });
+});
+
+describe("asset.update operation contract", () => {
+  it("accepts favorite and archive flags, alone or together", () => {
+    expect(
+      agentAssetUpdateInputSchema.parse({ assetId: "asset-1", favorited: true }),
+    ).toEqual({ assetId: "asset-1", favorited: true });
+    expect(
+      agentAssetUpdateInputSchema.parse({
+        assetId: "asset-1",
+        favorited: false,
+        archived: true,
+      }),
+    ).toEqual({ assetId: "asset-1", favorited: false, archived: true });
+  });
+
+  it("requires at least one flag and rejects unknown fields", () => {
+    expect(agentAssetUpdateInputSchema.safeParse({ assetId: "asset-1" }).success).toBe(
+      false,
+    );
+    expect(
+      agentAssetUpdateInputSchema.safeParse({
+        assetId: "asset-1",
+        favorited: true,
+        tags: ["bgm"],
+      }).success,
+    ).toBe(false);
+    expect(
+      agentAssetUpdateInputSchema.safeParse({
+        assetId: "asset-1",
+        archived: "yes",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("returns the updated asset", () => {
+    const asset = {
+      id: "asset-1",
+      kind: "image",
+      origin: "uploaded",
+      status: "ready",
+      originalFilename: "background.png",
+      mediaType: "image/png",
+      byteSize: 10,
+      sha256: "sha-1",
+      durationMs: null,
+      widthPx: 1920,
+      heightPx: 1080,
+      hasAudio: false,
+      tags: ["background"],
+      favoritedAt: "2026-10-27T00:00:00.000Z",
+      archivedAt: null,
+      createdAt: "2026-10-20T00:00:00.000Z",
+      contentUrl: "/api/v1/assets/asset-1/content",
+    };
+    expect(agentAssetUpdateOutputSchema.parse({ asset })).toEqual({ asset });
+  });
+
+  it("registers asset.update as a mutation that is not long running", () => {
+    expect(isAgentMutationOperation("asset.update")).toBe(true);
+    expect(isAgentLongRunningOperation("asset.update")).toBe(false);
+    expect(buildAgentSchemaGetResult().agentOperations).toContainEqual({
+      name: "asset.update",
       kind: "mutation",
       longRunning: false,
     });

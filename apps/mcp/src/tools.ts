@@ -80,6 +80,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "asset.import":
     "ローカルパスの素材を取り込み、jobId を返す。完了状態は job_wait または job.get で確認する。",
   "asset.tag": "素材のタグを更新する。",
+  "asset.update":
+    "素材のお気に入りとアーカイブを切り替え、更新後の素材を返す。`assetId` に加えて `favorited` / `archived` の少なくとも1つを指定する（`tags` は `asset.tag` を使う）。`archived: true` は素材を削除せず、既定の `asset.list` とピッカーから隠すだけなので、台本の参照やレンダーは壊れない。`requestId` は持たないため、タイムアウト後は `asset.get` で状態を確認してから再実行する。存在しない ID は RESOURCE_NOT_FOUND、項目を指定しない呼び出しは VALIDATION_ERROR。",
   "render.start":
     "指定した台本版のレンダー Job を投入し、Job を返す。完了は job_wait または job.get で確認する。",
   "job.get": "Job 1 件の状態を返す。",
