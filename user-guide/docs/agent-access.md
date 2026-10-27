@@ -205,6 +205,8 @@ Theme を新しく作る場合は `kakeai_theme_create`（`name` と任意の `s
 
 `kakeai_artifact_get` は Artifact のメタデータと、データルート内の実ファイルの絶対パス `filePath` を返します。MP4 は `kakeai_job_get` の `artifacts` にある `role: "render"` / `format: "mp4"` の ID を渡して取得します。バイトは返さないため、大きな動画でも安全です。`contentUrl` はブラウザ用で media session Cookie が必要なので、エージェントは `filePath` をコピーしたり投稿ツールへ渡してください。ファイルが欠損している、またはサイズが記録と一致しない場合は `RESOURCE_NOT_FOUND` です。
 
+MP4 をエージェントのワークスペースへ直接置きたい場合は `kakeai_artifact_export` を使います。`outputDir` に存在する絶対ディレクトリ、任意で `filename` を指定すると、正本はデータルートに残したままコピーし、`{ artifact, sourcePath, exportedPath }` を返します。既存ファイルは上書きしません（同名なら `EXPORT_TARGET_EXISTS`）。`filename` を省略すると Work タイトルと Artifact ID から名前を作ります。大きなファイルはコピーに時間がかかることがあるため、タイムアウト後は `exportedPath` の有無を確認してから再実行してください。
+
 ## 長尺操作
 
 `kakeai_asset_import`、`kakeai_render_start`、`kakeai_tts_create`、`kakeai_tts_create_bulk` は Job を投入してすぐ返ります。
@@ -273,6 +275,7 @@ kakeai-agent --help
 | `kakeai_tts_attach_bulk` | `kakeai-agent tts.attachBulk --input ...` |
 | `kakeai_render_start` | `kakeai-agent render.start --input ...` |
 | `kakeai_artifact_get` | `kakeai-agent artifact.get --input '{"artifactId":"..."}'` |
+| `kakeai_artifact_export` | `kakeai-agent artifact.export --input '{"artifactId":"...","outputDir":"/workspace/out"}'` |
 | `kakeai_preview_script_frame` | `kakeai-agent preview.scriptFrame --input ... [--out ...]` |
 | `kakeai_preview_asset_frame` | `kakeai-agent preview.assetFrame --input ... [--out ...]` |
 | `kakeai_preview_frame` | `kakeai-agent preview.frame --input ... [--out ...]` |
@@ -453,6 +456,8 @@ npx skills@1.7.4 experimental_install
 | `AGENT_BACKPRESSURE` | 短時間に多すぎる要求を送り、接続内の未処理要求が上限を超えた。接続は閉じられない。しばらく待ってから再送する |
 | `VALIDATION_ERROR` | 入力または保存内容がスキーマに適合しない。`issues` を確認する |
 | `INVALID_STATE` | Theme Draft が無いのに `kakeai_theme_publish` を呼んだ、など操作の現在状態が前提を満たさない |
+| `EXPORT_TARGET_EXISTS` | `kakeai_artifact_export` の書き出し先に同名のファイルがある。既存ファイルは上書きされないので別名を指定する |
+| `EXPORT_FAILED` | `kakeai_artifact_export` のコピーに失敗した。書き込み権限・容量・書き出し先を確認する |
 | `EDIT_TARGET_NOT_FOUND` など `EDIT_*` | 台本操作の対象や前提が成立しない。Speaker・Voice Profile の参照欠落、声の locale 不一致、Character Voice との不一致、選択できない Theme Revision もここに含む |
 | `ASSET_UNAVAILABLE` | 参照する素材が `ready` でない、または欠損している |
 | `COMPOSITION_UNAVAILABLE` | 参照する CompositionVersion が未 publish、または bundle が欠損している |

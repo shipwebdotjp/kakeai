@@ -49,6 +49,8 @@ import {
   agentScriptListVersionsOutputSchema,
   agentScriptRestoreInputSchema,
   agentScriptRestoreOutputSchema,
+  agentArtifactExportInputSchema,
+  agentArtifactExportOutputSchema,
   agentArtifactGetInputSchema,
   agentArtifactGetOutputSchema,
   agentScriptSaveInputSchema,
@@ -1168,5 +1170,54 @@ describe("script.subtitles and artifact.get contracts", () => {
         longRunning: false,
       });
     }
+  });
+});
+
+describe("artifact.export contract", () => {
+  const artifact = {
+    id: "art-1",
+    jobId: "job-1",
+    role: "render" as const,
+    format: "mp4" as const,
+    byteSize: 1024,
+    durationMs: 2000,
+    widthPx: 1920,
+    heightPx: 1080,
+    fps: 30,
+    videoCodec: "h264",
+    audioCodec: "aac",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    contentUrl: "/api/v1/artifacts/art-1/content",
+  };
+
+  it("takes an artifact id, an absolute directory and an optional filename", () => {
+    expect(
+      agentArtifactExportInputSchema.parse({
+        artifactId: "art-1",
+        outputDir: "/workspace/out",
+      }),
+    ).toEqual({ artifactId: "art-1", outputDir: "/workspace/out" });
+    expect(
+      agentArtifactExportInputSchema.safeParse({
+        artifactId: "art-1",
+        outputDir: "/workspace/out",
+        extra: true,
+      }).success,
+    ).toBe(false);
+
+    const result = {
+      artifact,
+      sourcePath: "/data/artifacts/render.mp4",
+      exportedPath: "/workspace/out/render.mp4",
+    };
+    expect(agentArtifactExportOutputSchema.parse(result)).toEqual(result);
+  });
+
+  it("registers artifact.export as a mutation", () => {
+    expect(buildAgentSchemaGetResult().agentOperations).toContainEqual({
+      name: "artifact.export",
+      kind: "mutation",
+      longRunning: false,
+    });
   });
 });

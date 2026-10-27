@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   AGENT_ERROR_CODES,
   DEFAULT_AGENT_LOCALE,
+  agentArtifactExportInputSchema,
+  agentArtifactExportOutputSchema,
   agentArtifactGetInputSchema,
   agentArtifactGetOutputSchema,
   agentAssetGetInputSchema,
@@ -87,6 +89,7 @@ import type { PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
 import { logger } from "../logger.ts";
 import type { DataDirectories } from "../storage/paths.ts";
+import { exportArtifact } from "../services/artifact-export.ts";
 import { getArtifact, resolveArtifactContent } from "../services/artifacts.ts";
 import { getAsset, searchAssets, updateAsset } from "../services/assets.ts";
 import { getScriptVersionSubtitles } from "../services/script-versions.ts";
@@ -403,6 +406,14 @@ const definitions: AgentOperationDefinitions = {
       ]);
       return { artifact, filePath: location.path };
     },
+  },
+  // Export is a separate step so a copy failure never changes a succeeded
+  // render Job into a failed one.
+  "artifact.export": {
+    input: agentArtifactExportInputSchema,
+    output: agentArtifactExportOutputSchema,
+    run: async (input, context) =>
+      exportArtifact(context.prisma, context.directories, input),
   },
   ...imageOperationDefinitions,
   ...thumbnailOperationDefinitions,

@@ -313,6 +313,24 @@ export const agentArtifactGetOutputSchema = z.strictObject({
 });
 
 /**
+ * Copies an Artifact into a directory chosen by the caller. The canonical
+ * Artifact stays in the app data root. An existing file is never replaced, so
+ * the operation only adds a new file outside the app.
+ */
+export const agentArtifactExportInputSchema = z.strictObject({
+  artifactId: idSchema,
+  outputDir: z.string().trim().min(1),
+  // Loose upper bound only; the authoritative limit is the 255-byte rule
+  // enforced by the export service.
+  filename: z.string().trim().min(1).max(255).optional(),
+});
+export const agentArtifactExportOutputSchema = z.strictObject({
+  artifact: artifactSchema,
+  sourcePath: z.string().min(1),
+  exportedPath: z.string().min(1),
+});
+
+/**
  * `job.list` reads the Jobs of one Work. `asset_ingest` is not Work-scoped, so
  * it is not selectable; the default keeps the historical render-only listing.
  */

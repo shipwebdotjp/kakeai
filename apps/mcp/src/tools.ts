@@ -113,6 +113,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "保存済みサムネイル候補の PNG（1280x720）をオンデマンドで生成して返す。Job・Artifact は作らない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。CLI では `--out` に PNG を書き出せる。存在しない ID は RESOURCE_NOT_FOUND。",
   "artifact.get":
     "Artifact 1件のメタデータと、実ファイルの絶対パス `filePath` を返す。レンダー MP4 は `role: \"render\"` / `format: \"mp4\"`。バイトは返さないため、大きな動画でも安全。`artifact.contentUrl` はブラウザ用で media session Cookie が必要なので、エージェントは `filePath` を使ってコピー・投稿する。ファイルが欠損、またはサイズが記録と一致しない場合は RESOURCE_NOT_FOUND。",
+  "artifact.export":
+    "Artifact を指定ディレクトリへ書き出し、`{ artifact, sourcePath, exportedPath }` を返す。`outputDir` は存在する絶対ディレクトリ、`filename` は任意（パス区切りを含まない、Artifact の拡張子に一致する名前）。正本はアプリのデータルートに残り、既存ファイルは上書きしない（同名があれば EXPORT_TARGET_EXISTS）。大きなファイルは copy-on-write の複製を使い、失敗時は EXPORT_FAILED。タイムアウト後は `outputDir` 内に `-{artifactId}.{拡張子}` で終わる既定名ファイルがないか確認し、無ければ再実行する。EXPORT_FAILED 後の再実行は、同名の部分ファイルが残っていれば EXPORT_TARGET_EXISTS になる。",
   "composition.list": "Composition の一覧を返す。",
   "composition.get": "Composition 1 件を返す。",
   "composition.draft.get": "Composition の draft ファイルと manifest を返す。",

@@ -45,7 +45,7 @@ B1 → B2 → B3 → B4 の順で実装し、B5・B6・B8・B9・B11・B12・B13
 | B13 | サムネイル操作の公開 | B1 | 既存サムネイルサービスの読み取り・作成・更新・選択・PNG 取得を公開する。MP4 後の投稿用成果物をエージェントが作れるようにする |
 | B14 | Character ライブラリ作成・更新の公開 | B1 | 既存サービスの作成・更新を呼ぶ追加操作。立ち絵付き作品で人間への作成依頼を不要にする |
 
-C1〜C8 は B15〜B18 として実装済みである。C9〜C11 は B20 として実装した。C12〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
+C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張した。C9〜C11 は B20 として実装した。C12〜C16（[次期候補](#次期候補c1c16)）はこの順序に含めず、着手するときに優先順位・実装範囲・設計を決める。
 
 ## フェーズ詳細
 
@@ -167,9 +167,17 @@ C1〜C8 は B15〜B18 として実装済みである。C9〜C11 は B20 とし�
 - `artifact.get` は `{ artifact, filePath }` を返す。`filePath` はデータルート内の実ファイルの絶対パスで、`resolveArtifactContent` が実在と記録サイズを検証する。バイトは返さない。`contentUrl` はブラウザ用で media session Cookie が必要なため、エージェントは `filePath` を使う。
 - 完了条件: ソケット・MCP・CLI から `script.subtitles` が取れ、`job.get` の Artifact ID から `artifact.get` で MP4 の絶対パスが取れる。欠損・サイズ不一致・未知 ID は `RESOURCE_NOT_FOUND`。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
+### B19 Artifact のワークスペース書き出し（C8 拡張）
+
+- 状態: 完了。`artifact.export` を追加した。正本はデータルートに残したまま、`outputDir`（任意の絶対ディレクトリ）へコピーし、`{ artifact, sourcePath, exportedPath }` を返す。既存ファイルは上書きしない。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0104](../adr/0104-agent-artifact-export.md) を参照。
+- レンダー Job の成功と書き出しの失敗を分離するため、`render.start` には `outputDir` を載せず、レンダー後の独立した mutation にした。
+- コピーは `COPYFILE_FICLONE`（APFS の copy-on-write）を試し、未対応なら通常コピーにする。同一ディレクトリの一時ファイルからハードリンクして原子的に公開し（未対応なら排他的コピー）、既存名とは競合させる。
+- `filename` は basename のみで、Artifact の拡張子に一致する必要がある。省略時は Work タイトルと Artifact ID から生成する。
+- 完了条件: ソケット・MCP・CLI から `artifact.export` で MP4 を任意の絶対ディレクトリへ書き出せ、既存ファイルは上書きされず `EXPORT_TARGET_EXISTS`、相対パス・不存在・不正名は `VALIDATION_ERROR`、コピー失敗は `EXPORT_FAILED` になる。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
+
 ## 次期候補（C1〜C16）
 
-B1〜B14 の後、または並行して検討する候補である。C1〜C8 は B15〜B18 として、C9〜C11 は B20 として実装済みで、C12〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
+B1〜B14 の後、または並行して検討する候補である。C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張した。C9〜C11 は B20 として実装済みで、C12〜C16 は実装範囲・優先順位・設計をまだ決めていない。**着手するときに** [spec.md](./spec.md)・[todo.md](./todo.md) と必要な ADR を書き、この表を更新する。C 番号は議論用の識別子で、実施順を意味しない。
 
 - 台本の中身は `script.save` で全文書を書けるため、「公開されていない編集操作」は実質的な穴ではない。C の中心は台本の外側（ライブラリ・成果物・診断）である。
 - 可逆性の基準（[ADR 0074](../adr/0074-agent-direct-reversible-operations.md)）と人専用の境界（削除・外部公開・Adapter 設定）は C でも変えない。
@@ -185,7 +193,7 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C8 は
 | C5（実装済み） | Theme Draft の PNG プレビュー | read | `preview.theme`（代表サンプルを PNG 化） | B16 で実装。未保存の定義を渡して PNG を得る。DB・Draft・Revision を作らない |
 | C6（実装済み） | Voice Adapter の一覧 | read | `voiceAdapter.list` | B17 で実装。HTTP `/voice-adapters` の静的説明子だけを返し、接続設定は返さない |
 | C7（実装済み） | SRT 字幕の取得 | read | `script.subtitles`（保存版から SRT） | B18 で実装。Artifact を作らずオンデマンド生成。タイミングは `resolveTimeline` と同一 |
-| C8（実装済み） | MP4 Artifact の取得 | read | `artifact.get`（絶対パス） | B18 で実装。バイトは返さず、データルート内の `filePath` を返す。`contentUrl` は media session Cookie が必要なため使わない |
+| C8（実装済み） | MP4 Artifact の取得と書き出し | read / mutation | `artifact.get`（絶対パス）、`artifact.export`（任意の絶対ディレクトリへコピー） | B18 / B19 で実装。バイトは返さず、正本の `filePath` と書き出し先の `exportedPath` を返す。既存ファイルは上書きしない |
 | C9（実装済み） | Face Set の作成 | mutation | `faceSet.create` | B20 で実装。顔レイヤーは同寸・透過の ready 画像で `normal` が必須。寸法は既存サービスが検証するが透過は検証しない。品質確認は C11 |
 | C10（実装済み） | Face Set の差分編集 | mutation | `faceSet.update` / `faceSet.usages` | B20 で実装。省略項目は不変の部分更新で、内容変更時だけ改訂版を作る。作品は固定版を使い続けるため、Expression ID の消失で保存済み台詞は壊れない。ライブラリ Character は最新版へ即時追従する |
 | C11（実装済み） | Face Set の合成プレビュー | read | `preview.faceSet`（ベース外観＋表情の PNG） | B20 で実装。未保存の下書きをベース画像の寸法で合成する。DB・Job・Artifact を作らない |
@@ -245,7 +253,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | テーマの見た目は HTML プレビューしかなく、エージェントが確認できない | 公開するまで色・余白・フォントの崩れに気づけない | B16 で解消。`preview.theme` が代表サンプルの PNG を返す |
 | 利用できる TTS Adapter の種別をエージェントが知る手段がない | 既存 Profile が無い状態では `adapterId` を推測するしかない | B17 で解消。`voiceAdapter.list` が静的説明子を返す |
 | SRT 字幕は Web UI のダウンロードだけ | エージェントが字幕を納品物として出せない | B18 で解消。`script.subtitles` が保存版から SRT を返す |
-| MP4 は Web UI から人間が取得するだけ | エージェントが最終ファイルを渡せない | B18 で解消。`artifact.get` がデータルート内の絶対パス `filePath` を返す |
+| MP4 は Web UI から人間が取得するだけ | エージェントが最終ファイルを渡せない | B18 / B19 で解消。`artifact.get` が正本の絶対パスを返し、`artifact.export` が任意の絶対ディレクトリへコピーする |
 | プレビュー・レンダー品質の視覚確認は未提供 | エージェントは構文・保存検証までしか自律確認できない | B6 で render 成果物の `preview.frame` を追加。V2 で render 前の `preview.scriptFrame` / `preview.assetFrame` も追加 |
 
 ## 優先順位
@@ -270,6 +278,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 完了 | C4 / C5 Theme の作成・編集・公開と PNG プレビュー | B16 で実装。`theme.create` / `theme.draft.get` / `theme.draft.save` / `theme.publish` / `preview.theme` |
 | 完了 | C6 Voice Adapter 一覧の公開 | B17 で実装。`voiceAdapter.list`。接続設定は返さない |
 | 完了 | C7 / C8 SRT 字幕と MP4 Artifact パス | B18 で実装。`script.subtitles` / `artifact.get` |
+| 完了 | C8 拡張 Artifact のワークスペース書き出し | B19 で実装。`artifact.export`。既存ファイルは上書きしない |
 | 完了 | C9〜C11 Face Set 作成・部分更新・合成プレビュー | B20 で実装。`faceSet.create` / `faceSet.update` / `faceSet.usages` / `preview.faceSet`（[ADR 0105](../adr/0105-agent-face-set-writes-and-preview.md)） |
 | 未定 | C12〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
 

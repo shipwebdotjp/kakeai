@@ -111,7 +111,7 @@
 | 11 | `script.validate` | 添付後の版を再検証する |
 | 12 | `render.start`（`requestId` 付き） | `render` Job を取得 |
 | 13 | `job.wait` / `job.get` | `succeeded`。`artifacts` に `role: "render"` / `format: "mp4"` がある |
-| 14 | `artifact.get` / `script.subtitles` | MP4 の絶対パス `filePath` と、保存版の SRT を取得する |
+| 14 | `artifact.get` / `artifact.export` / `script.subtitles` | 正本の絶対パス `filePath`、必要ならワークスペースへの `exportedPath`、保存版の SRT を取得する |
 | 15 | 報告 | Work / Edition / ScriptVersion / Job / Artifact ID、尺、寸法、MP4 のパスを報告。品質判断は人間に返す |
 
 - 9〜10 の間は台本を保存しない。保存すると `SCRIPT_BASE_STALE` になる。
