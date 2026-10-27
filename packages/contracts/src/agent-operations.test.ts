@@ -3,6 +3,8 @@ import {
   AGENT_DIAGNOSE_READ_TIMEOUT_MS,
   AGENT_PREVIEW_READ_TIMEOUT_MS,
   AGENT_READ_TIMEOUT_MS,
+  agentCharacterAddAppearanceInputSchema,
+  agentCharacterAddAppearanceOutputSchema,
   agentCharacterCreateInputSchema,
   agentCharacterCreateOutputSchema,
   agentCharacterGetInputSchema,
@@ -10,6 +12,8 @@ import {
   agentCharacterListInputSchema,
   agentCharacterListOutputSchema,
   agentCharacterUpdateInputSchema,
+  agentCharacterUpdateOneAppearanceInputSchema,
+  agentCharacterUpdateOneAppearanceOutputSchema,
   agentCharacterUpdateOutputSchema,
   agentFaceSetGetInputSchema,
   agentFaceSetGetOutputSchema,
@@ -1171,6 +1175,122 @@ describe("script.subtitles and artifact.get contracts", () => {
         kind: "read",
         longRunning: false,
       });
+    }
+  });
+});
+
+describe("character.addAppearance and character.updateAppearance operation contracts", () => {
+  it("addAppearance requires characterId, assetId, expression, pose and accepts optional label/faceSetId while rejecting id", () => {
+    expect(
+      agentCharacterAddAppearanceInputSchema.parse({
+        characterId: "char-1",
+        assetId: "asset-1",
+        expression: "smile",
+        pose: "front",
+      }),
+    ).toEqual({
+      characterId: "char-1",
+      assetId: "asset-1",
+      expression: "smile",
+      pose: "front",
+      faceSetId: null,
+    });
+    expect(
+      agentCharacterAddAppearanceInputSchema.parse({
+        characterId: "char-1",
+        assetId: "asset-1",
+        expression: "smile",
+        pose: "front",
+        label: "夏服",
+        faceSetId: "fs-1",
+      }),
+    ).toEqual({
+      characterId: "char-1",
+      assetId: "asset-1",
+      expression: "smile",
+      pose: "front",
+      label: "夏服",
+      faceSetId: "fs-1",
+    });
+    expect(
+      agentCharacterAddAppearanceInputSchema.safeParse({
+        id: "appearance-1",
+        characterId: "char-1",
+        assetId: "asset-1",
+        expression: "smile",
+        pose: "front",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("updateAppearance accepts single field patches, label/faceSetId null, and rejects expression:null, pose:null or id in patch", () => {
+    expect(
+      agentCharacterUpdateOneAppearanceInputSchema.parse({
+        characterId: "char-1",
+        appearanceId: "app-1",
+        expression: "cry",
+      }),
+    ).toEqual({
+      characterId: "char-1",
+      appearanceId: "app-1",
+      expression: "cry",
+    });
+    expect(
+      agentCharacterUpdateOneAppearanceInputSchema.parse({
+        characterId: "char-1",
+        appearanceId: "app-1",
+        label: null,
+        faceSetId: null,
+      }),
+    ).toEqual({
+      characterId: "char-1",
+      appearanceId: "app-1",
+      label: null,
+      faceSetId: null,
+    });
+    expect(
+      agentCharacterUpdateOneAppearanceInputSchema.safeParse({
+        characterId: "char-1",
+        appearanceId: "app-1",
+        expression: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      agentCharacterUpdateOneAppearanceInputSchema.safeParse({
+        characterId: "char-1",
+        appearanceId: "app-1",
+        pose: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      agentCharacterUpdateOneAppearanceInputSchema.safeParse({
+        characterId: "char-1",
+        appearanceId: "app-1",
+        label: "   ",
+      }).success,
+    ).toBe(false);
+    expect(
+      agentCharacterUpdateOneAppearanceInputSchema.safeParse({
+        characterId: "char-1",
+        appearanceId: "app-1",
+        id: "app-1",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("registers both diff operations in the catalog and the schema digest", () => {
+    const schema = buildAgentSchemaGetResult();
+    for (const name of ["character.addAppearance", "character.updateAppearance"] as const) {
+      expect(agentOperationNames).toContain(name);
+      expect(isAgentMutationOperation(name)).toBe(true);
+      expect(isAgentLongRunningOperation(name)).toBe(false);
+      expect(schema.agentOperations).toContainEqual({
+        name,
+        kind: "mutation",
+        longRunning: false,
+      });
+      expect(Object.keys(agentOperationInputSchemas)).toContain(name);
+      expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
     }
   });
 });

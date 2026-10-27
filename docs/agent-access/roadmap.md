@@ -25,6 +25,7 @@
 | B14 Character ライブラリ作成・更新の公開 | 作成と部分更新を公開し、削除は人専用に残す。外観 ID は作成時にサーバー生成、外観画像は取り込み済みの ready 画像だけを使う。更新は既存 ID を維持できる | 台本の外側の共有ライブラリで、既存台本はコピーを持つため可逆。全項目必須の更新は空配列で意図せず消す事故があるため部分更新にする（ADR 0099） |
 | C12 Asset 検索の寸法条件 | `asset.list` に完全一致の `widthPx` / `heightPx` と両端を含む範囲を追加する。寸法を持たない素材は一致させない。向き・寸法順の並べ替え・索引は追加しない | Face Set の同寸レイヤー探索が主目的。向きは正方形の境界と比率の丸めの意味づけが必要で、寸法は DTO で返るため呼び出し側で判定できる（ADR 0106） |
 | C13 Asset の可逆な整理 | `asset.update` で `favorited` / `archived` を切り替える。タグは既存の `asset.tag` に残し、削除は人専用のままにする | どちらも真偽値の印で、`false` で元に戻り、行・参照・レンダーを壊さない。タグまで含めると `asset.tag` と意味が重複するため、整理の印だけに限定する（ADR 0107） |
+| B23 Character 外観の差分操作 | 1件追加（addAppearance）と部分更新（updateAppearance）を公開し、削除は人専用に残す。既存 character.update の配列置換は維持する | 1件単位の操作で read-modify-write を解消し、作品コピーの libraryAppearanceId 参照を壊さずに維持できる（ADR 0108） |
 
 ## 実施順序
 
@@ -224,7 +225,7 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C8 は
 | C11（実装済み） | Face Set の合成プレビュー | read | `preview.faceSet`（ベース外観＋表情の PNG） | B20 で実装。未保存の下書きをベース画像の寸法で合成する。DB・Job・Artifact を作らない |
 | C12（実装済み） | Asset 検索の寸法条件 | read | `asset.list` の `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む範囲） | B21 で実装。表情レイヤー・背景の「同寸画像」を探す。向きは追加していない |
 | C13（実装済み） | Asset の可逆な整理 | mutation | `asset.update` の `favorited` / `archived` | B22 で実装。削除は人専用のまま。アーカイブは既定の検索から隠すだけで参照は壊さない |
-| C14 | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.setAppearance` など | 現行 `character.update` は appearances の全置換で read-modify-write になる。作品内の外観はコピーなので `script.save` のまま |
+| C14（実装済み） | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.updateAppearance` | B23 で実装。1件追加（全項目）と部分更新（省略＝不変、null＝解除）を公開し、作品コピーの ID 参照を維持する |
 | C15 | 未保存 ContentDocument のプレビュー | read | `preview.scriptFrame` の下書き対応 | 版を作らず構図を反復できる。保存済み版の既存契約は変えない |
 | C16 | 音声の自動検査 | read | `tts.inspect` / `preview.audio`（長さ・ラウドネス・無音） | エージェントは音を聴けないため、無音 TTS を検出できない。新しい解析能力の要否から決める |
 
@@ -245,6 +246,7 @@ C9〜C11 は次のとおり決めた。決定は [ADR 0105](../adr/0105-agent-fa
 | タグの索引化（`AssetTag` リレーション＋インデックス） | 個人ライブラリの規模では走査コストが支配的でない。検索の留下来よさの拡張を優先した |
 | 実行中操作の取消（AbortSignal の伝播） | B3-b として保留。Job 投入済み操作では取り消しの意味が薄い。長期実行の Job は `job.cancel` を使う |
 | ネイティブによる接続元 UID 検証 | ファイル権限が既に同一ユーザー性を担保している |
+| 既存 `character.update` の `appearances` 配列における `faceSetId` 省略時 null 解除 | 既存契約の維持と互換性を優先。MCP 説明文で警告し、将来の修正候補とする |
 | `requestId` の必須化 | 必須化は破壊的変更。版上げの判断が必要な段階で行う |
 | `work.create` / `work.clone` / `asset.import` への台帳適用 | 高コスト操作に絞り、台帳の汎用性を先に検証する |
 | エラーカタログの公開（R1-4） | 契約の可読性提高であり、緊急度が低い |

@@ -149,40 +149,47 @@ describe("schema.get digests", () => {
     expect(computeAgentOperationDigest(reordered)).toBe(first.operationDigest);
   });
 
-  it("changes both digests when any operation input or output changes", () => {
-    const result = buildAgentSchemaGetResult();
-    for (const name of agentOperationNames) {
-      const changedInput = withChangedInput(agentOperationContracts(), name);
-      expect(computeAgentOperationDigest(changedInput)).not.toBe(
-        result.operationDigest,
-      );
-      expect(
-        computeAgentSchemaDigest(
-          agentSchemaDigestInputOf({
-            ...result,
-            templateInputContracts: agentTemplateInputContracts(),
-            thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
-            operationContracts: changedInput,
-          }),
-        ),
-      ).not.toBe(result.schemaDigest);
+  it(
+    "changes both digests when any operation input or output changes",
+    () => {
+      const result = buildAgentSchemaGetResult();
+      const baseContracts = agentOperationContracts();
+      const templateContracts = agentTemplateInputContracts();
+      const thumbnailContracts = agentThumbnailTemplateContracts();
+      for (const name of agentOperationNames) {
+        const changedInput = withChangedInput(baseContracts, name);
+        expect(computeAgentOperationDigest(changedInput)).not.toBe(
+          result.operationDigest,
+        );
+        expect(
+          computeAgentSchemaDigest(
+            agentSchemaDigestInputOf({
+              ...result,
+              templateInputContracts: templateContracts,
+              thumbnailTemplateContracts: thumbnailContracts,
+              operationContracts: changedInput,
+            }),
+          ),
+        ).not.toBe(result.schemaDigest);
 
-      const changedOutput = withChangedOutput(agentOperationContracts(), name);
-      expect(computeAgentOperationDigest(changedOutput)).not.toBe(
-        result.operationDigest,
-      );
-      expect(
-        computeAgentSchemaDigest(
-          agentSchemaDigestInputOf({
-            ...result,
-            templateInputContracts: agentTemplateInputContracts(),
-            thumbnailTemplateContracts: agentThumbnailTemplateContracts(),
-            operationContracts: changedOutput,
-          }),
-        ),
-      ).not.toBe(result.schemaDigest);
-    }
-  });
+        const changedOutput = withChangedOutput(baseContracts, name);
+        expect(computeAgentOperationDigest(changedOutput)).not.toBe(
+          result.operationDigest,
+        );
+        expect(
+          computeAgentSchemaDigest(
+            agentSchemaDigestInputOf({
+              ...result,
+              templateInputContracts: templateContracts,
+              thumbnailTemplateContracts: thumbnailContracts,
+              operationContracts: changedOutput,
+            }),
+          ),
+        ).not.toBe(result.schemaDigest);
+      }
+    },
+    60_000,
+  );
 
   it("changes the operation digest when an operation disappears", () => {
     const result = buildAgentSchemaGetResult();

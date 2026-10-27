@@ -139,7 +139,11 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "character.create":
     "キャラクターライブラリに 1 件作成して返す。`name` と任意の `names`（locale 別の名前）・`voices`（locale 別の Voice Profile）・`appearances`（外観。`assetId` は取り込み済みの ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set）を指定する。外観の ID はサーバーが付ける。タイムアウト後は character.list で確認してから再実行する。",
   "character.update":
-    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は character.get で読んだ全件を送る。既存の外観には `id` を付けて送り、新規の外観だけ `id` を省略する（省略するとサーバーが新しい ID を付ける）。外観の `assetId` は ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set。存在しない ID は RESOURCE_NOT_FOUND、参照・寸法・locale の不整合は VALIDATION_ERROR。",
+    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` / `appearances` は配列全体を置き換える（`appearances` で `faceSetId` を省略すると解除される）。1 件のみ外観を変更・追加する場合は `character.updateAppearance` または `character.addAppearance` を使う。既存の外観には `id` を付けて送り、新規の外観だけ `id` を省略する（省略するとサーバーが新しい ID を付ける）。外観の `assetId` は ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set。存在しない ID は RESOURCE_NOT_FOUND、参照・寸法・locale の不整合は VALIDATION_ERROR。",
+  "character.addAppearance":
+    "キャラクターライブラリに外観を 1 件追加して返す。`characterId`・`assetId`（ready な画像 Asset）・`expression`・`pose` と任意の `label`・`faceSetId`（実在しベース画像と寸法が一致する Face Set）を指定する。ID はサーバーが自動で付け、配列の末尾に追加する。登録上限は 50 件。存在しないキャラクターは RESOURCE_NOT_FOUND、参照・寸法不整合は VALIDATION_ERROR。",
+  "character.updateAppearance":
+    "キャラクターライブラリの外観 1 件を部分更新して返す。`characterId` と `appearanceId` に加えて変更する項目（`assetId`・`expression`・`pose`・`label`・`faceSetId`）だけを指定し、省略した項目は不変、`label: null` および `faceSetId: null` は明示的に解除する。`assetId` のみを更新して Face Set と寸法が不一致になる場合は先に `faceSetId: null` で解除するか両方を指定する。存在しないキャラクター・外観は RESOURCE_NOT_FOUND、参照・寸法不整合・更新項目ゼロは VALIDATION_ERROR。",
   "character.setVoices":
     "キャラクターの声（locale 別の Voice Profile 割り当て）を置き換えて返す。`voices` は `{ locale, voiceProfileId }` の配列で、Profile は実在し `locale` が一致すること。空配列で全解除もできる。外観は変更しない。存在しない ID は RESOURCE_NOT_FOUND。",
   "theme.list":

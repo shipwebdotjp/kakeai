@@ -53,7 +53,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 | 作品 | `kakeai_work_list` / `kakeai_work_get` / `kakeai_work_create` / `kakeai_work_update` / `kakeai_work_clone` |
 | 台本 | `kakeai_script_get` / `kakeai_script_list_versions` / `kakeai_script_validate` / `kakeai_script_save` / `kakeai_script_edit` / `kakeai_script_restore` |
 | 素材 | `kakeai_asset_list`（検索・ページング） / `kakeai_asset_get` / `kakeai_asset_import` / `kakeai_asset_tag` / `kakeai_asset_update`（お気に入り・アーカイブ） |
-| キャラクター | `kakeai_character_list` / `kakeai_character_get` / `kakeai_character_create` / `kakeai_character_update` / `kakeai_character_set_voices` |
+| キャラクター | `kakeai_character_list` / `kakeai_character_get` / `kakeai_character_create` / `kakeai_character_update` / `kakeai_character_add_appearance` / `kakeai_character_update_appearance` / `kakeai_character_set_voices` |
 | ライブラリ読み取り | `kakeai_theme_list` / `kakeai_theme_get` / `kakeai_face_set_list` / `kakeai_face_set_get` / `kakeai_voice_profile_list` / `kakeai_voice_profile_get` |
 | 音声合成 | `kakeai_tts_create` / `kakeai_tts_create_bulk` / `kakeai_tts_attach_bulk` |
 | Composition | `kakeai_composition_list` / `kakeai_composition_get` / `kakeai_composition_draft_get` / `kakeai_composition_authoring_context` / `kakeai_composition_create` / `kakeai_composition_draft_save` / `kakeai_composition_publish` |
@@ -163,9 +163,9 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 ### キャラクター
 
-`kakeai_character_list` / `kakeai_character_get` はキャラクターライブラリの読み取りを公開し、`kakeai_character_create` / `kakeai_character_update` で作成・部分更新、`kakeai_character_set_voices` で声（locale 別の Voice Profile 割り当て）の付け替えができます。削除は UI で人間が行います。
+`kakeai_character_list` / `kakeai_character_get` はキャラクターライブラリの読み取りを公開し、`kakeai_character_create` / `kakeai_character_update` で作成・部分更新、`kakeai_character_add_appearance` / `kakeai_character_update_appearance` で外観の差分追加・部分更新、`kakeai_character_set_voices` で声（locale 別の Voice Profile 割り当て）の付け替えができます。削除は UI で人間が行います。
 
-作成・更新で指定する外観の画像は、`kakeai_asset_import` で取り込んで `ready` になった画像だけを使えます。外観の ID はサーバーが付けるため、指定する必要はありません。更新は変更する項目だけを送り、省略した項目は変わりません（指定した `names` / `voices` / `appearances` は配列全体を置き換えるため、変更時は `kakeai_character_get` で読んだ全件を送ります）。ライブラリの編集は既存作品のコピーには反映されないため、既存作品の見た目を変えるには UI で作品内のキャラクターを編集するか、「ライブラリから更新」を使います。この更新はエージェントには公開していません。
+作成・更新で指定する外観の画像は、`kakeai_asset_import` で取り込んで `ready` になった画像だけを使えます。外観の ID はサーバーが付けるため、指定する必要はありません。更新は変更する項目だけを送り、省略した項目は変わりません（指定した `names` / `voices` / `appearances` は配列全体を置き換えます。1件だけ外観を追加・更新する場合は `kakeai_character_add_appearance` / `kakeai_character_update_appearance` を使うことで、作品コピーの ID リンクを保てます）。ライブラリの編集は既存作品のコピーには反映されないため、既存作品の見た目を変えるには UI で作品内のキャラクターを編集するか、「ライブラリから更新」を使います。この更新はエージェントには公開していません。
 
 立ち絵が必要な場合は、対象 locale の声を持つ Entry を選びます。使いたい Entry に声が無い場合は、先に `kakeai_character_set_voices`（`characterId` と `voices: [{ locale, voiceProfileId }]`。Profile は実在し `locale` が一致すること）で声を付けてからコピーします。声が無い Entry をそのままコピーすると `voiceProfileId: null` になり、その話者の TTS は `TTS_INPUT_INVALID` で失敗します。既存作品の話者に有効な `voiceProfileId` があれば、ライブラリから追加せずそのまま使えます。
 
@@ -252,6 +252,8 @@ kakeai-agent --help
 | `kakeai_character_list` | `kakeai-agent character.list` |
 | `kakeai_character_create` | `kakeai-agent character.create --input ...` |
 | `kakeai_character_update` | `kakeai-agent character.update --input ...` |
+| `kakeai_character_add_appearance` | `kakeai-agent character.addAppearance --input ...` |
+| `kakeai_character_update_appearance` | `kakeai-agent character.updateAppearance --input ...` |
 | `kakeai_character_set_voices` | `kakeai-agent character.setVoices --input ...` |
 | `kakeai_voice_adapter_list` | `kakeai-agent voiceAdapter.list` |
 | `kakeai_voice_profile_list` | `kakeai-agent voiceProfile.list` |
