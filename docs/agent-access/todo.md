@@ -262,9 +262,21 @@
 - [x] Agent Access 仕様・roadmap・MP4 制作仕様とロードマップ・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `artifact.export` で Artifact を任意の絶対ディレクトリへ書き出せ、既存ファイルは上書きされない。正本の `artifact.get` は従来どおり動く。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
 
-### [x] B20 Asset 検索の寸法条件（C12 / ADR 0105）
+### [x] B20 Face Set の作成・部分更新・合成プレビュー（ADR 0105 / C9〜C11）
 
-- [x] [ADR 0105](../adr/0105-agent-asset-dimension-filters.md) を追加し、完全一致と両端を含む範囲、寸法なし素材の非一致、向き・索引を追加しないことを決定する
+- [x] [ADR 0105](../adr/0105-agent-face-set-writes-and-preview.md) を追加し、Face Set の作成・部分更新（改訂版作成）の公開と削除の人専用維持、`preview.faceSet` の対象と既定を決定する
+- [x] 契約に `faceSet.create` / `faceSet.update`（mutation）、`faceSet.usages`（read）、`preview.faceSet`（画像 read）を追加する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] `faceSet.create` は HTTP と同じ入力で既存の `createFaceSet` を呼ぶ。`faceSet.update` は `name` / `layers` / `expressions` の部分更新で、マージと改訂版作成を書き込みトランザクション内で行い、内容変更時だけ版を増やす。`faceSet.usages` は既存の `getFaceSetUsages` を返す
+- [x] `updateFaceSetPartial` を `services/face-sets.ts` に追加し、マージ後の内容を再検証する（レイヤー削除で preset が参照先を失う場合、ライブラリ外観と寸法が合わない場合は `VALIDATION_ERROR`）。1 項目も指定しない呼び出しと未知 ID のエラーを固定する
+- [x] `preview.faceSet` は未保存の下書きをベース画像の寸法で合成し、既存の `Rasterizer` で PNG 化する。DB・改訂版・Job・Artifact を作らない。`agentImagePreviewOperationNames` に追加し、MCP の image ブロック・CLI の `--out`・画像系 30 秒タイムアウトを使えるようにする
+- [x] MCP の説明文を 4 操作分追加し、`faceSet.list` の「作成・更新は公開しない」を改める。CLI はカタログ導出のため変更しない
+- [x] サービス・契約・ソケット統合テストで、作成、名前だけの更新、内容変更時の改訂版、同一内容で版を増やさないこと、空更新・未知 ID・寸法不一致・preset の参照欠落、usages、合成プレビューと未保存性を固定する。`faceSet.delete` が `AGENT_OPERATION_UNKNOWN` のままであることも確認する
+- [x] Agent Access 仕様・roadmap・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
+- 完了条件: ソケット・MCP・CLI から `faceSet.create` → `preview.faceSet` → `faceSet.update` → `faceSet.usages` が通り、削除は `AGENT_OPERATION_UNKNOWN` のままである。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
+
+### [x] B21 Asset 検索の寸法条件（C12 / ADR 0106）
+
+- [x] [ADR 0106](../adr/0106-agent-asset-dimension-filters.md) を追加し、完全一致と両端を含む範囲、寸法なし素材の非一致、向き・索引を追加しないことを決定する
 - [x] 契約の `assetListQuerySchema` に `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（範囲）を追加する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
 - [x] 範囲の逆転と、完全一致が指定範囲の外にある指定を `VALIDATION_ERROR` にする。寸法を持たない素材は完全一致にも範囲にも一致させない
 - [x] `searchAssets` の `assetFilters` に6条件を追加し、ページと `total` が同じ条件を使うようにする。索引と DB migration は追加しない
@@ -274,9 +286,9 @@
 - [x] Agent Access 仕様・HTTP API 契約・roadmap・todo・制作スキル・ユーザーガイドを更新する
 - 完了条件: ソケット・MCP・CLI から `asset.list` の完全一致・範囲・併用が効き、寸法を持たない素材が除外され、矛盾した指定が `VALIDATION_ERROR` になる。`AGENT_PROTOCOL_VERSION` は `1` のまま、`operationDigest` と `schemaDigest` だけが変わる。
 
-### [x] B21 Asset の可逆な整理（C13 / ADR 0106）
+### [x] B22 Asset の可逆な整理（C13 / ADR 0107）
 
-- [x] [ADR 0106](../adr/0106-agent-asset-organization.md) を追加し、お気に入り・アーカイブだけを公開し、タグは `asset.tag` に残し、削除は人専用を維持することを決定する
+- [x] [ADR 0107](../adr/0107-agent-asset-organization.md) を追加し、お気に入り・アーカイブだけを公開し、タグは `asset.tag` に残し、削除は人専用を維持することを決定する
 - [x] 契約に `asset.update`（mutation）を追加する。`{ assetId, favorited?, archived? }` を少なくとも1項目必須で受け、`{ asset }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
 - [x] Agent サービスで既存の `updateAsset` をそのまま呼ぶ。`requestId` は持たず、冪等台帳に載せない。`asset.delete` は公開しない
 - [x] MCP の説明文を追加する。CLI はカタログ導出のため変更しない

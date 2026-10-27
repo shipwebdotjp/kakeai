@@ -8,6 +8,9 @@ import { idSchema, positiveInt, timestampSchema } from "./content/primitives";
  */
 export const LEGACY_FACE_SET_VERSION = 1;
 
+/** The required neutral Expression Preset of every Face Set revision. */
+export const NORMAL_EXPRESSION_ID = "normal";
+
 export const faceLayerPartSchema = z.enum(["brow", "eye", "mouth", "foreground"]);
 
 export const faceLayerSchema = z.strictObject({

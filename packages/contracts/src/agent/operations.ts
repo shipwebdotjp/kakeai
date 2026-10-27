@@ -30,7 +30,6 @@ import { assetListInputSchema, assetListPageSchema } from "../asset-list";
 import { assetMetadataPatchSchema } from "../requests";
 import { characterLibraryEntrySchema } from "../character-library";
 import { characterNamesSchema, characterVoicesSchema } from "../content/character";
-import { faceSetSchema } from "../face-set";
 import {
   createVoiceProfileRequestSchema,
   modelListSchema,
@@ -130,6 +129,7 @@ export type AgentScriptSubtitlesOutput = z.infer<
 >;
 
 export * from "./thumbnail-schemas";
+export * from "./face-set-schemas";
 
 export const agentSchemaGetInputSchema = agentEmptyInputSchema;
 export const agentSchemaGetOutputSchema = agentSchemaGetResultSchema;
@@ -713,20 +713,6 @@ export type AgentCharacterCreateInput = z.infer<
 export type AgentCharacterUpdateInput = z.infer<
   typeof agentCharacterUpdateInputSchema
 >;
-
-export const agentFaceSetListInputSchema = agentEmptyInputSchema;
-export const agentFaceSetListOutputSchema = z.strictObject({
-  faceSets: z.array(faceSetSchema),
-});
-
-export const agentFaceSetGetInputSchema = z.strictObject({
-  faceSetId: idSchema,
-  /** Omit to read the latest revision. Works pin a specific version. */
-  version: positiveInt.optional(),
-});
-export const agentFaceSetGetOutputSchema = z.strictObject({
-  faceSet: faceSetSchema,
-});
 
 export const agentVoiceProfileListInputSchema = agentEmptyInputSchema;
 export const agentVoiceProfileListOutputSchema = z.strictObject({

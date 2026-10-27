@@ -1,6 +1,8 @@
 import {
   agentPreviewAssetFrameInputSchema,
   agentPreviewAssetFrameOutputSchema,
+  agentPreviewFaceSetInputSchema,
+  agentPreviewFaceSetOutputSchema,
   agentPreviewFrameInputSchema,
   agentPreviewFrameOutputSchema,
   agentPreviewScriptFrameInputSchema,
@@ -14,6 +16,7 @@ import {
 } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import { getAssetFrame } from "../services/preview-asset-frames.ts";
+import { getFaceSetPreviewFrame } from "../services/preview-face-set-frames.ts";
 import { getPreviewFrame } from "../services/preview-frames.ts";
 import { getScriptVersionFrame } from "../services/preview-script-frames.ts";
 import { getThemePreviewFrame } from "../services/preview-theme-frames.ts";
@@ -112,6 +115,20 @@ export const imageOperationDefinitions = {
         ...pngPayload(image),
       };
     },
+  },
+  // Unsaved Face Set draft: the caller supplies the layers and expressions, so
+  // no Face Set row is read or written. The result is the agent's quality check
+  // for `faceSet.create` / `faceSet.update`.
+  "preview.faceSet": {
+    input: agentPreviewFaceSetInputSchema,
+    output: agentPreviewFaceSetOutputSchema,
+    run: async (input, context) =>
+      getFaceSetPreviewFrame(
+        context.prisma,
+        context.directories,
+        context.rasterizer,
+        input,
+      ),
   },
   "thumbnail.image": {
     input: agentThumbnailImageInputSchema,

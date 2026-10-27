@@ -96,6 +96,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "素材 1 件の絵を返す。画像は保存されている画像そのもの（MIME は `mimeType`）、動画は指定時刻（`timeMs`、既定 0）の PNG 静止画を返す。音声素材は指定できない。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。素材の見た目を確認したいときに使う。",
   "preview.thumbnail":
     "未保存のサムネイル下書き（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の Edition 共通 `appearance`）を 1280x720 の PNG にする。DB へは書かない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。保存前に見出しの折り返しと前景の透過を確認するときに使う。`appearance` を省略すると保存済みの Edition 共通 Appearance を使い、null なら使わない。",
+  "preview.faceSet":
+    "未保存の Face Set 下書き（`layers`・`expressions`・任意の `expressionId`（既定 `normal`）・ベースになる ready な画像 Asset の `baseAssetId`）を合成し、PNG を返す。ベース画像の寸法で、眉・目・口と foreground を重ねる。DB・Face Set・改訂版・Job・Artifact は作らない。Face Set を作成・更新する前に、表情の見た目と位置ずれを確認するときに使う。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。`--out` で PNG を書き出せる。",
   "thumbnail.listTemplates":
     "同梱サムネイルテンプレートの一覧を、入力契約付きで返す。`inputSchema`（保存時検証と同じスキーマから導出した JSON Schema）と、そのまま使える `example` を含む。`example` の `<...>` は実在する画像 Asset の ID に置き換える。契約を推測しない。",
   "thumbnail.list":
@@ -159,9 +161,15 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "font.list":
     "インストール済みフォントの一覧を、検索とページング付きで返す。`query` は family・表示名・PostScript 名の部分一致、`style`・`minWeight`・`maxWeight`・`available` で絞れる。`limit` は既定50・最大200、`offset` で次ページを取得する。応答の `total` は絞り込み後の件数、`nextOffset` は次ページの offset（無ければ null）、`catalog` はカタログの対応状況と更新時刻。Theme の `fontFace` を組み立てるときに使う。",
   "faceSet.list":
-    "Face Set の一覧を、最新の version と Face Layer・Expression Preset 付きで返す。作品の台詞の表情は、script.get の外観にある `faceSetId` と `faceSetVersion` を `faceSet.get` に渡して、その固定版の `expressions[].id` から選ぶ。Face Set の作成・更新・削除は公開しない。",
+    "Face Set の一覧を、最新の version と Face Layer・Expression Preset 付きで返す。作品の台詞の表情は、script.get の外観にある `faceSetId` と `faceSetVersion` を `faceSet.get` に渡して、その固定版の `expressions[].id` から選ぶ。Face Set の作成・更新は公開するが、削除は公開しない。",
   "faceSet.get":
     "Face Set 1件を、Face Layer と Expression Preset 付きで返す。`version` を指定するとその改訂版を返し、省略すると最新版を返す。作品の表情を編集するときは、script.get の外観にある `faceSetVersion` を指定する。存在しない ID や版は RESOURCE_NOT_FOUND。",
+  "faceSet.create":
+    "Face Set を新規作成して返す。`name`・`layers`（Face Layer。`part` は brow / eye / mouth / foreground、`assetId` は同寸で ready な画像 Asset）・`expressions`（Expression Preset。`normal` が必須）を指定する。作成前に preview.faceSet で合成を確認できる。`requestId` は持たないため、タイムアウト後は faceSet.list で名前と createdAt を確認してから再実行する。",
+  "faceSet.update":
+    "Face Set を部分更新して返す。`faceSetId` に加えて変更する項目（`name`・`layers`・`expressions`）だけを指定し、省略した項目は変更しない。指定した配列は全体を置き換える。内容が変わると新しい改訂版（version）を作り、ライブラリの Character は最新版に即時追従する。作品は固定した `faceSetVersion` を使い続ける。名前だけの変更や同一内容では版を増やさない。既存の `expressionId` を維持して改訂版を作ると、固定版をまたいで同じ意図を引き継げる。寸法がライブラリ外観と一致しない内容は VALIDATION_ERROR。未知 ID は RESOURCE_NOT_FOUND。タイムアウト後は faceSet.get で最新版を確認してから再実行する。",
+  "faceSet.usages":
+    "Face Set を参照しているライブラリ Character の外観一覧を返す。各要素は characterId・characterName・appearanceId・label・assetId・widthPx・heightPx。改訂版を作る前に、ベース画像の寸法と影響範囲を確認するのに使う。未知 ID は RESOURCE_NOT_FOUND。",
   "voiceAdapter.list":
     "利用可能な TTS Adapter の種別を返す。各要素は `id`・`label`・`defaultLocale`・`voiceSelection`（`list` / `list-or-manual`）・`modelSelection` を持ち、`voiceProfile.listVoices` / `voiceProfile.listModels` / `voiceProfile.create` の `adapterId` 選びに使う。接続先 URL・環境変数・認証情報は返さない。",
   "voiceProfile.list":
