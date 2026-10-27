@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Amended by [ADR 0109](./0109-agent-operation-set-update-semantics.md)（互換性維持のための配列置換を廃止）。
+
 ## 背景
 
 [ADR 0099](./0099-agent-character-library-writes.md) でエージェントに Character ライブラリの作成（`character.create`）と部分更新（`character.update`）を公開した。しかし、外観（`appearances`）の編集は配列全体を置換する契約しか提供していなかったため、エージェントが 1 件だけ外観を直したい・追加したい場合でも、`character.get` で現在値をすべて読み取り、配列を組み立て直して送る read-modify-write パターンが強制されていた。

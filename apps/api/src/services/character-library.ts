@@ -452,7 +452,6 @@ export interface CharacterUpdatePatch {
   name?: UpdateCharacterRequest["name"];
   names?: UpdateCharacterRequest["names"];
   voices?: UpdateCharacterRequest["voices"];
-  appearances?: UpdateCharacterRequest["appearances"];
 }
 
 /**
@@ -474,11 +473,6 @@ export async function updateCharacterPartial(
       // write transaction. A Face Set has no foreign key, so a delete between
       // an outside check and this write would otherwise persist a dangling
       // reference; a Voice Profile delete would surface as a raw P2003.
-      if (patch.appearances !== undefined) {
-        await assertAppearancesUsable(transaction, patch.appearances);
-        await assertAppearanceIdsUsable(transaction, characterId, patch.appearances);
-        await assertFaceSetsExist(transaction, patch.appearances);
-      }
       if (patch.voices !== undefined) {
         await assertVoiceProfilesExist(transaction, patch.voices);
       }
@@ -496,10 +490,6 @@ export async function updateCharacterPartial(
           name: patch.name ?? entry.name,
           names: { deleteMany: {}, create: toNameCreate(patch.names ?? entry.names) },
           voices: { deleteMany: {}, create: toVoiceCreate(patch.voices ?? entry.voices) },
-          appearances: {
-            deleteMany: {},
-            create: toAppearanceCreate(patch.appearances ?? entry.appearances),
-          },
         },
         include: characterInclude,
       });

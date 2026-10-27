@@ -259,7 +259,7 @@ describe("CLI against the real agent dispatcher", () => {
       .composition.id;
 
     const saved = await cli([
-      "composition.draft.save",
+      "composition.draft.update",
       "--input",
       JSON.stringify({
         compositionId,

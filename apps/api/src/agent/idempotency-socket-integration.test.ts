@@ -121,7 +121,7 @@ async function createPublishableComposition(): Promise<string> {
     },
   });
   const compositionId = created.composition.id;
-  await client.request("composition.draft.save", {
+  await client.request("composition.draft.update", {
     compositionId,
     files: {
       "index.html": [

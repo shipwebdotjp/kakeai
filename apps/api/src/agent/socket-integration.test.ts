@@ -713,7 +713,7 @@ describe("agent socket integration", () => {
         requestId: "edit-e2e-fail",
         operations: [
           {
-            op: "line.setText",
+            op: "line.updateText",
             sceneId: "missing-scene",
             lineId: "missing-line",
             captionText: "x",
@@ -869,7 +869,7 @@ describe("agent socket integration", () => {
     expect(second.asset.id).toBe(first.asset.id);
     expect(second.jobId).toBeNull();
 
-    const tagged = await client.request("asset.tag", {
+    const tagged = await client.request("asset.update", {
       assetId: first.asset.id,
       tags: ["ai-generated"],
     });

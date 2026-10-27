@@ -17,7 +17,7 @@ Kakeai のスキルは、本リポジトリの GitHub Release と対になる不
 
 - 基盤: `schema.get`、`template.get`
 - 作品と台本: `work.create`、`work.update`、`work.clone`、`work.list`、`edition.create`、`script.get`、`script.save`、`script.edit`、`script.validate`、`script.listVersions`、`script.restore`
-- 素材: `asset.list`、`asset.get`、`asset.import`、`asset.tag`
+- 素材: `asset.list`、`asset.get`、`asset.import`、`asset.update`
 - キャラクターとライブラリ: `character.list`、`character.get`、`voiceProfile.list`、`voiceProfile.get`、`theme.list`、`theme.get`、`faceSet.get`
 - 音声合成: `tts.create`、`tts.createBulk`、`tts.attachBulk`
 - レンダー: `render.start`、`job.get`、`job.list`
@@ -30,7 +30,7 @@ Kakeai のスキルは、本リポジトリの GitHub Release と対になる不
 `kakeai-composition`:
 
 - 基盤: `schema.get`、`template.get`
-- Composition: `composition.list`、`composition.get`、`composition.draft.get`、`composition.authoringContext`、`composition.create`、`composition.draft.save`、`composition.publish`
+- Composition: `composition.list`、`composition.get`、`composition.draft.get`、`composition.authoringContext`、`composition.create`、`composition.draft.update`、`composition.publish`
 - 台本からの参照: `script.edit`、`script.validate`
 - レンダー: `render.start`、`job.get`
 

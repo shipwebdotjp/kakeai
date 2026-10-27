@@ -298,6 +298,50 @@ export async function saveThumbnail(
   return toThumbnail(row, row.id === existing.languageEdition.primaryThumbnailId);
 }
 
+export async function updateThumbnailPartial(
+  prisma: PrismaClient,
+  thumbnailId: string,
+  input: {
+    label?: string;
+    template?: ThumbnailDocument["template"];
+    input?: unknown;
+    appearanceOverride?: ThumbnailAppearance | null;
+  },
+): Promise<ThumbnailDto> {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.thumbnail.findUnique({
+      where: { id: thumbnailId },
+      include: { languageEdition: { select: { primaryThumbnailId: true } } },
+    });
+    if (existing === null) {
+      throw resourceNotFound("thumbnail", thumbnailId);
+    }
+    const currentDocument = parseThumbnailDocument(existing.inputJson);
+    const label = input.label ?? existing.label;
+    const template = input.template ?? currentDocument.template;
+    const docInput = input.input ?? currentDocument.input;
+    let appearanceOverride: ThumbnailAppearance | null;
+    if (input.appearanceOverride === undefined) {
+      appearanceOverride = (currentDocument as { appearanceOverride?: ThumbnailAppearance | null }).appearanceOverride ?? null;
+    } else {
+      appearanceOverride = normalizeThumbnailAppearance(input.appearanceOverride);
+    }
+    const document = buildDocument({ template, input: docInput, appearanceOverride });
+    await validateDocument(tx as unknown as PrismaClient, document);
+    const row = await tx.thumbnail.update({
+      where: { id: thumbnailId },
+      data: {
+        label,
+        schemaVersion: document.schemaVersion,
+        templateId: document.template.id,
+        templateVersion: document.template.version,
+        inputJson: serializeThumbnailDocument(document),
+      },
+    });
+    return toThumbnail(row, row.id === existing.languageEdition.primaryThumbnailId);
+  });
+}
+
 export async function deleteThumbnail(prisma: PrismaClient, thumbnailId: string): Promise<void> {
   const row = await prisma.thumbnail.findUnique({ where: { id: thumbnailId } });
   if (row === null) {

@@ -177,7 +177,7 @@ describe("script edit validation service", () => {
         input: { text: "T", role: "body" },
       },
       {
-        op: "cue.setInput",
+        op: "cue.updateInput",
         sceneId: { key: "scene-a" },
         cueId: { key: "cue-a" },
         input: { text: "U" },
@@ -189,7 +189,7 @@ describe("script edit validation service", () => {
         range: { kind: "offset", startMs: 0, endMs: 500 },
       },
       {
-        op: "standing.set",
+        op: "standing.upsert",
         key: "standing-left",
         sceneId: { key: "scene-a" },
         side: "left",

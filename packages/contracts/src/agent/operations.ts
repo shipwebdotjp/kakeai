@@ -280,25 +280,20 @@ export const agentAssetImportOutputSchema = z.strictObject({
   deduplicated: z.boolean(),
 });
 
-export const agentAssetTagInputSchema = z.strictObject({
-  assetId: idSchema,
-  tags: assetTagsSchema,
-});
-export const agentAssetTagOutputSchema = z.strictObject({ asset: assetSchema });
-
 /**
  * Reversible organization of one asset: the favorite and archive marks that
- * hide it from the default search. Tags stay on `asset.tag`, so only those two
+ * hide it from the default search. Tags stay on `asset.update`, so only those two
  * fields are picked from the HTTP patch contract. At least one flag is
  * required.
  */
 export const agentAssetUpdateInputSchema = assetMetadataPatchSchema
-  .pick({ favorited: true, archived: true })
   .extend({ assetId: idSchema })
   .refine(
     (value) =>
-      value.favorited !== undefined || value.archived !== undefined,
-    { message: "favorited / archived のいずれかを指定してください。" },
+      value.tags !== undefined ||
+      value.favorited !== undefined ||
+      value.archived !== undefined,
+    { message: "tags / favorited / archived のいずれかを指定してください。" },
   );
 export const agentAssetUpdateOutputSchema = z.strictObject({
   asset: assetSchema,
@@ -488,11 +483,11 @@ export const agentCompositionCreateOutputSchema = z.strictObject({
   composition: compositionSchema,
 });
 
-export const agentCompositionDraftSaveInputSchema = z.strictObject({
+export const agentCompositionDraftUpdateInputSchema = z.strictObject({
   compositionId: idSchema,
   ...updateCompositionDraftRequestSchema.shape,
 });
-export const agentCompositionDraftSaveOutputSchema = z.strictObject({
+export const agentCompositionDraftUpdateOutputSchema = z.strictObject({
   draft: compositionDraftSchema,
 });
 
@@ -665,22 +660,6 @@ export const agentCharacterCreateAppearanceInputSchema = z.strictObject({
   faceSetId: idSchema.nullable().default(null),
 });
 
-/**
- * Element schema for `character.update`'s appearances array replacement.
- * All fields except `id` are required, and omitting `faceSetId` defaults to null.
- * For 1-by-1 diff operations, use `agentCharacterAddAppearanceInputSchema` /
- * `agentCharacterUpdateOneAppearanceInputSchema`.
- */
-export const agentCharacterUpdateAppearanceInputSchema = z.strictObject({
-  /** Omit only for a new appearance; existing IDs keep work links stable. */
-  id: idSchema.optional(),
-  assetId: idSchema,
-  expression: z.string(),
-  pose: z.string(),
-  label: z.string().trim().min(1).optional(),
-  faceSetId: idSchema.nullable().default(null),
-});
-
 export const agentCharacterAddAppearanceInputSchema =
   agentCharacterCreateAppearanceInputSchema.extend({
     characterId: idSchema,
@@ -722,17 +701,19 @@ export const agentCharacterUpdateInputSchema = z.strictObject({
   name: z.string().trim().min(1).optional(),
   names: characterNamesSchema.optional(),
   voices: characterVoicesSchema.optional(),
-  appearances: z.array(agentCharacterUpdateAppearanceInputSchema).max(50).optional(),
-});
+}).refine(
+  (value) =>
+    value.name !== undefined ||
+    value.names !== undefined ||
+    value.voices !== undefined,
+  { message: "name / names / voices のいずれかを指定してください。" },
+);
 export const agentCharacterUpdateOutputSchema = z.strictObject({
   character: characterLibraryEntrySchema,
 });
 
 export type AgentCharacterAppearanceInput = z.infer<
   typeof agentCharacterCreateAppearanceInputSchema
->;
-export type AgentCharacterUpdateAppearanceInput = z.infer<
-  typeof agentCharacterUpdateAppearanceInputSchema
 >;
 export type AgentCharacterCreateInput = z.infer<
   typeof agentCharacterCreateInputSchema
@@ -770,13 +751,22 @@ export const agentVoiceProfileCreateOutputSchema = z.strictObject({
   voiceProfile: voiceProfileSchema,
 });
 
-export const agentVoiceProfileUpdateInputSchema = z.strictObject({
-  voiceProfileId: idSchema,
-  name: updateVoiceProfileRequestSchema.shape.name,
-  voiceId: voiceIdSchema,
-  locale: localeSchema,
-  settings: voiceProfileExtrasSchema,
-});
+export const agentVoiceProfileUpdateInputSchema = z
+  .strictObject({
+    voiceProfileId: idSchema,
+    name: z.string().trim().min(1).optional(),
+    voiceId: voiceIdSchema.optional(),
+    locale: localeSchema.optional(),
+    settings: voiceProfileExtrasSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      value.name !== undefined ||
+      value.voiceId !== undefined ||
+      value.locale !== undefined ||
+      value.settings !== undefined,
+    { message: "name / voiceId / locale / settings のいずれかを指定してください。" },
+  );
 export const agentVoiceProfileUpdateOutputSchema = z.strictObject({
   voiceProfile: voiceProfileSchema,
 });

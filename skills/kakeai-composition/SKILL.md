@@ -32,7 +32,7 @@ change with `STYLE_KIT_MODIFIED`.
   `kakeai-agent` CLI. Do not call Kakeai's HTTP API, the local socket, Prisma, or
   the app data directories directly.
 - Read draft content and write it **only** through `composition.draft.get` and
-  `composition.draft.save`. `drafts/` and `bundles/` are app-managed mirrors;
+  `composition.draft.update`. `drafts/` and `bundles/` are app-managed mirrors;
   editing them on disk is invisible to Kakeai and can corrupt the bundle.
 
 Operation names are canonical; the MCP tool and CLI forms are just bindings.
@@ -44,7 +44,7 @@ Operation names are canonical; the MCP tool and CLI forms are just bindings.
 | `composition.draft.get` | `kakeai_composition_draft_get` | `kakeai-agent composition.draft.get --input '{"compositionId":"..."}'` |
 | `composition.authoringContext` | `kakeai_composition_authoring_context` | `kakeai-agent composition.authoringContext --input '...'` |
 | `composition.create` | `kakeai_composition_create` | `kakeai-agent composition.create --input '...'` |
-| `composition.draft.save` | `kakeai_composition_draft_save` | `kakeai-agent composition.draft.save --input '...'` |
+| `composition.draft.update` | `kakeai_composition_draft_save` | `kakeai-agent composition.draft.update --input '...'` |
 | `composition.publish` | `kakeai_composition_publish` | `kakeai-agent composition.publish --input '...'` |
 
 Example shape: `kakeai-agent composition.list` returns `{ compositions }`;
@@ -132,7 +132,7 @@ entry.
 
 ## 3. Edit the draft bundle
 
-`composition.draft.save` takes `compositionId` plus the draft update:
+`composition.draft.update` takes `compositionId` plus the draft update:
 `entrypoint` (optional), `files`, `filesBase64`, and `manifest`.
 
 ```json
@@ -211,7 +211,7 @@ impossible, and forces a build script. Send each image as its own bundle file.
 ### `manifest.json` rules
 
 The manifest is a strict object; publish validates it. You normally do not write
-it by hand — use the `manifest` field of `composition.draft.save` — but it is the
+it by hand — use the `manifest` field of `composition.draft.update` — but it is the
 same file in the bundle.
 
 - It carries bundle-relative `entrypoint`, `contentHash`, `runtimeCompositionId`,
@@ -435,13 +435,13 @@ Kakeai's data root (macOS: `~/Library/Application Support/Kakeai`) holds
 
 - `composition.create` **immediately** writes `drafts/<compositionId>/` with the
   seed `index.html` and `manifest.json`.
-- Each `composition.draft.save` overwrites only the files you send in that draft
+- Each `composition.draft.update` overwrites only the files you send in that draft
   directory.
 - `composition.publish` copies the draft to `bundles/<contentHash>/<versionId>/`.
 
 `drafts/` and `bundles/` are server-managed mirrors — never edit them directly
 and never read them as the source of truth. Edit your own source folder and push
-via `composition.draft.save`; read state via `composition.draft.get`. Past
+via `composition.draft.update`; read state via `composition.draft.get`. Past
 versions persist; the local "open canvas" is a single root `index.html`.
 
 ## HyperFrames relationship

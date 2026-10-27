@@ -196,7 +196,7 @@ describe("MCP against the real agent dispatcher", () => {
     const compositionId = structured<{ composition: { id: string } }>(composition).composition.id;
 
     const saved = await mcpClient.callTool({
-      name: "kakeai_composition_draft_save",
+      name: "kakeai_composition_draft_update",
       arguments: {
         compositionId,
         files: {

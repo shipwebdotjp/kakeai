@@ -30,7 +30,7 @@ import {
   setLineExpression,
   setLineGap,
   setLineSpeaker,
-  setLineText,
+  updateLineText,
   splitLine,
 } from "./line.ts";
 import { splitPointSceneAtLine } from "./split.ts";
@@ -40,12 +40,13 @@ import {
   moveCue,
   removeCue,
   setCueInput,
+  updateCueInput,
   setCuePlacement,
   setCueRange,
-  setCueTransition,
+  updateCueTransition,
 } from "./cue.ts";
-import { removeStanding, setStanding } from "./standing.ts";
-import { addAudio, removeAudio, setAudio } from "./audio.ts";
+import { removeStanding, upsertStanding } from "./standing.ts";
+import { addAudio, removeAudio, updateAudio } from "./audio.ts";
 import { addCharacterFromLibrary } from "./character.ts";
 import { addSpeaker, setSpeakerVoiceProfile } from "./speaker.ts";
 import { setCaption, setVisualTheme } from "./theme.ts";
@@ -241,11 +242,11 @@ export function applyScriptOperation(
       const lineId = resolveId(operation.lineId, keys, ["lineId"]);
       return toResult(moveLine(document, sceneId, lineId, operation.index));
     }
-    case "line.setText": {
+    case "line.updateText": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
       const lineId = resolveId(operation.lineId, keys, ["lineId"]);
       return toResult(
-        setLineText(
+        updateLineText(
           document,
           sceneId,
           lineId,
@@ -352,7 +353,18 @@ export function applyScriptOperation(
           sceneId,
           cueId,
           operation.input,
-          operation.replace ?? false,
+        ),
+      );
+    }
+    case "cue.updateInput": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const cueId = resolveId(operation.cueId, keys, ["cueId"]);
+      return toResult(
+        updateCueInput(
+          document,
+          sceneId,
+          cueId,
+          operation.input,
         ),
       );
     }
@@ -369,11 +381,11 @@ export function applyScriptOperation(
         ),
       );
     }
-    case "cue.setTransition": {
+    case "cue.updateTransition": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
       const cueId = resolveId(operation.cueId, keys, ["cueId"]);
       return toResult(
-        setCueTransition(
+        updateCueTransition(
           document,
           sceneId,
           cueId,
@@ -398,9 +410,9 @@ export function applyScriptOperation(
       registerKey(operation.key, keys, result.primaryId);
       return toResult(result);
     }
-    case "standing.set": {
+    case "standing.upsert": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
-      const result = setStanding(
+      const result = upsertStanding(
         document,
         sceneId,
         operation.side,
@@ -432,10 +444,10 @@ export function applyScriptOperation(
       registerKey(operation.key, keys, result.primaryId);
       return toResult(result);
     }
-    case "audio.set": {
+    case "audio.update": {
       const audioCueId = resolveId(operation.audioCueId, keys, ["audioCueId"]);
       return toResult(
-        setAudio(
+        updateAudio(
           document,
           audioCueId,
           {

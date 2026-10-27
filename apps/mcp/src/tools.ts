@@ -79,9 +79,8 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "asset.get": "素材 1 件を返す。",
   "asset.import":
     "ローカルパスの素材を取り込み、jobId を返す。完了状態は job_wait または job.get で確認する。",
-  "asset.tag": "素材のタグを更新する。",
   "asset.update":
-    "素材のお気に入りとアーカイブを切り替え、更新後の素材を返す。`assetId` に加えて `favorited` / `archived` の少なくとも1つを指定する（`tags` は `asset.tag` を使う）。`archived: true` は素材を削除せず、既定の `asset.list` とピッカーから隠すだけなので、台本の参照やレンダーは壊れない。`requestId` は持たないため、タイムアウト後は `asset.get` で状態を確認してから再実行する。存在しない ID は RESOURCE_NOT_FOUND、項目を指定しない呼び出しは VALIDATION_ERROR。",
+    "素材のタグ・お気に入り・アーカイブを更新し、更新後の素材を返す。`assetId` に加えて `tags` / `favorited` / `archived` の少なくとも1つを指定する。`tags` を指定した場合は配列全体を置き換える（空配列で全解除）。`archived: true` は素材を削除せず、既定の `asset.list` とピッカーから隠すだけなので、台本の参照やレンダーは壊れない。`requestId` は持たないため、タイムアウト後は `asset.get` で状態を確認してから再実行する。存在しない ID は RESOURCE_NOT_FOUND、項目を指定しない呼び出しは VALIDATION_ERROR。",
   "render.start":
     "指定した台本版のレンダー Job を投入し、Job を返す。完了は job_wait または job.get で確認する。",
   "job.get": "Job 1 件の状態を返す。",
@@ -108,7 +107,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "thumbnail.create":
     "言語版にサムネイル候補を作成して返す。`label`・`template`・`input` と任意の `appearanceOverride` を指定する。`input` は thumbnail.listTemplates の `inputSchema` に従い、背景と前景は ready な画像 Asset の ID にする。最初の候補は自動で primary になる。`requestId` は持たないため、タイムアウト後は thumbnail.list で `label` と `createdAt` を確認してから再実行する。",
   "thumbnail.update":
-    "サムネイル候補を明示保存して返す。`label`・`template`・`input`・任意の `appearanceOverride` で上書きする（last-write-wins、版履歴なし）。`input` は thumbnail.listTemplates の `inputSchema` に従う。存在しない ID は RESOURCE_NOT_FOUND。",
+    "サムネイル候補を部分更新して返す。`thumbnailId` に加えて変更する項目（`label`・`template`・`input`・`appearanceOverride`）だけを指定し、省略した項目は不変。`appearanceOverride: null` で解除。`template` だけを変える場合は現在の `input` を補って検証する。`input` は thumbnail.listTemplates の `inputSchema` に従う。存在しない ID は RESOURCE_NOT_FOUND。",
   "thumbnail.setPrimary":
     "言語版の投稿用サムネイル（primary）を選ぶ。`thumbnailId` は同じ言語版の候補で、null で解除する。存在しない候補は RESOURCE_NOT_FOUND。",
   "thumbnail.image":
@@ -123,7 +122,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "composition.authoringContext":
     "Composition 作成用の authoring context を返す。HTTP と同じ入力（`visualTheme` と任意の `canvasProfile`）を受け取る。",
   "composition.create": "Composition の draft を作成する。任意で authoring style を指定できる。",
-  "composition.draft.save": "Composition draft のファイルと manifest を部分更新する。",
+  "composition.draft.update": "Composition draft のファイルと manifest を部分更新する。",
   "composition.publish":
     "Composition を publish して不変 version を作る。`dryRun: true` なら検証だけを行い version を作らない。",
   "tts.create":
@@ -139,7 +138,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "character.create":
     "キャラクターライブラリに 1 件作成して返す。`name` と任意の `names`（locale 別の名前）・`voices`（locale 別の Voice Profile）・`appearances`（外観。`assetId` は取り込み済みの ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set）を指定する。外観の ID はサーバーが付ける。タイムアウト後は character.list で確認してから再実行する。",
   "character.update":
-    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` / `appearances` は配列全体を置き換える（`appearances` で `faceSetId` を省略すると解除される）。1 件のみ外観を変更・追加する場合は `character.updateAppearance` または `character.addAppearance` を使う。既存の外観には `id` を付けて送り、新規の外観だけ `id` を省略する（省略するとサーバーが新しい ID を付ける）。外観の `assetId` は ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set。存在しない ID は RESOURCE_NOT_FOUND、参照・寸法・locale の不整合は VALIDATION_ERROR。",
+    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて `name` / `names` / `voices` の変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` は配列全体を置き換える。外観の追加・変更は `character.addAppearance` / `character.updateAppearance` を使う。存在しない ID は RESOURCE_NOT_FOUND、参照・寸法・locale の不整合は VALIDATION_ERROR。",
   "character.addAppearance":
     "キャラクターライブラリに外観を 1 件追加して返す。`characterId`・`assetId`（ready な画像 Asset）・`expression`・`pose` と任意の `label`・`faceSetId`（実在しベース画像と寸法が一致する Face Set）を指定する。ID はサーバーが自動で付け、配列の末尾に追加する。登録上限は 50 件。存在しないキャラクターは RESOURCE_NOT_FOUND、参照・寸法不整合は VALIDATION_ERROR。",
   "character.updateAppearance":
@@ -187,7 +186,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "voiceProfile.create":
     "Voice Profile を新規作成して返す。`adapterId`・実在する `voiceId`（voiceProfile.listVoices で確認）・`locale`（台本の locale と一致させる）・`settings`（`openai-compatible` は `model` 必須、参照音声を使う場合は `refAudioAssetId`（取り込み済み音声 Asset の ID）・`langCode`（Japanese / English / Chinese / Korean / German / French / Russian / Portuguese / Spanish / Italian のいずれか）も必須、`refText`（付けると ICL 方式、省略すると x-vector 方式）・`maxTokens` は任意）を指定する。タイムアウト後は voiceProfile.list で確認してから再実行する。",
   "voiceProfile.update":
-    "Voice Profile の `name`・`voiceId`・`locale`・`settings` を更新して返す。`adapterId` は変更できない。存在しない ID は RESOURCE_NOT_FOUND。反映は以後の TTS だけに影響し、既存の Audio Take は変えない。",
+    "Voice Profile を部分更新して返す。`voiceProfileId` に加えて変更する項目（`name`・`voiceId`・`locale`・`settings`）だけを指定し、省略した項目は不変。`settings` を指定した場合はアダプター設定オブジェクト全体を置換する。`adapterId` は変更できない。存在しない ID は RESOURCE_NOT_FOUND。反映は以後の TTS だけに影響し、既存の Audio Take は変えない。",
 };
 
 function describeOperation(

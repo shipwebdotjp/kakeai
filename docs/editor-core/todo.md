@@ -20,16 +20,16 @@
 
 ### [x] E3 行操作
 
-- [x] `line.add`、`line.remove`、`line.move`、`line.setText`、`line.setSpeaker`、`line.setExpression`、`line.setGap`
+- [x] `line.add`、`line.remove`、`line.move`、`line.updateText`、`line.setSpeaker`、`line.setExpression`、`line.setGap`
 - [x] `line.assignTake`、`line.selectTake`、`line.removeTake`
 - [x] `line.split`（ID の維持、Audio Take の破棄、Cue 範囲とトリガーの付け替え）
 - 完了条件: 行の削除・移動・分割の後も、すべての `range: lines`、効果トリガー、`videoPlayback.gates` が実在行を指す。
 
 ### [x] E4 Cue・音声・文書操作
 
-- [x] `cue.add`、`cue.remove`、`cue.setRange`、`cue.setInput`、`cue.setPlacement`、`cue.setTransition`、`cue.move`、`cue.copy`
-- [x] `standing.set` / `standing.remove`（左右 1 体ずつの内部 Cue 生成）
-- [x] `audio.add`、`audio.set`、`audio.remove`
+- [x] `cue.add`、`cue.remove`、`cue.setRange`、`cue.setInput`、`cue.setPlacement`、`cue.updateTransition`、`cue.move`、`cue.copy`
+- [x] `standing.upsert` / `standing.remove`（左右 1 体ずつの内部 Cue 生成）
+- [x] `audio.add`、`audio.update`、`audio.remove`
 - [x] `document.setVisualTheme`
 - [x] 未知の VisualTemplate と UI が解釈しない Cue を保持する
 - 完了条件: 代表的なテンプレート（text / media / composition / device-frame / data 系）で、追加・範囲変更・入力更新が保存検証を通る。

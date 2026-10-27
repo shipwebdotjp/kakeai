@@ -308,11 +308,36 @@ export function setCueInput(
   sceneId: string,
   cueId: string,
   patch: unknown,
-  replace = false,
 ): CueEditResult {
   const { scene, sceneIndex } = findEditableScene(document, sceneId);
   const cue = findCue(scene, cueId);
-  const input = replace ? patch : mergeInput(cue.input, patch);
+  const input = patch;
+  const nextCue = parseCue({ ...cue, input });
+  const next = withScene(document, sceneIndex, {
+    ...scene,
+    visualCues: scene.visualCues.map((entry) =>
+      entry.id === cueId ? nextCue : entry,
+    ),
+  });
+  assertCueLineReferences(next, sceneId);
+  return {
+    document: next,
+    sceneIds: [],
+    lineIds: [],
+    cueIds: [],
+    primaryId: cueId,
+  };
+}
+
+export function updateCueInput(
+  document: ContentDocument,
+  sceneId: string,
+  cueId: string,
+  patch: unknown,
+): CueEditResult {
+  const { scene, sceneIndex } = findEditableScene(document, sceneId);
+  const cue = findCue(scene, cueId);
+  const input = mergeInput(cue.input, patch);
   const nextCue = parseCue({ ...cue, input });
   const next = withScene(document, sceneIndex, {
     ...scene,
@@ -371,7 +396,7 @@ export function setCuePlacement(
   };
 }
 
-export function setCueTransition(
+export function updateCueTransition(
   document: ContentDocument,
   sceneId: string,
   cueId: string,

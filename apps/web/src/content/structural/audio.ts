@@ -64,7 +64,7 @@ export function commitBgmStructural(
     values,
     [
       {
-        op: "audio.set",
+        op: "audio.update",
         audioCueId: existing.id,
         role: "bgm",
         assetId: values.bgm.assetId,
@@ -100,7 +100,6 @@ export function commitCueStructural(
         sceneId,
         cueId,
         input: cue.input,
-        replace: true,
       },
       {
         op: "cue.setPlacement",
@@ -110,7 +109,7 @@ export function commitCueStructural(
         order: cue.order,
       },
       {
-        op: "cue.setTransition",
+        op: "cue.updateTransition",
         sceneId,
         cueId,
         enter: cue.transition.enter,

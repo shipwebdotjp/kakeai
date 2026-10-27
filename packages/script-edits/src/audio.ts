@@ -89,7 +89,7 @@ export function addAudio(
   };
 }
 
-export function setAudio(
+export function updateAudio(
   document: ContentDocument,
   audioCueId: string,
   update: {

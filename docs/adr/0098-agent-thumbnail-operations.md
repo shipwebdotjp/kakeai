@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Amended by [ADR 0109](./0109-agent-operation-set-update-semantics.md)（`thumbnail.update` を部分更新化）。
+
 ## 背景
 
 サムネイルは Language Edition ごとの小さな可変文書（`Thumbnail`）で、テンプレートに入力と素材を差し込んで 1280x720 の PNG をオンデマンド生成する。HTTP API と Web UI は候補の CRUD・primary 選択・外観の上書き・未保存プレビュー・PNG ダウンロードを既に持つ（[サムネイル仕様](../thumbnail/spec.md)）。

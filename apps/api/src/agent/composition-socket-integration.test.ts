@@ -116,7 +116,7 @@ describe("agent composition authoring over the local socket", () => {
     expect(seeded.draft.files["index.html"]).toContain(RUNTIME_COMPOSITION_ID);
     expect(seeded.draft.files["kakeai-style/tokens.css"]).toBeDefined();
 
-    const saved = await client.request("composition.draft.save", {
+    const saved = await client.request("composition.draft.update", {
       compositionId,
       files: {
         "index.html": [

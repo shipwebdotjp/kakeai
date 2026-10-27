@@ -1,7 +1,6 @@
 import {
   type AgentCharacterAppearanceInput,
   type AgentCharacterCreateInput,
-  type AgentCharacterUpdateAppearanceInput,
   type AgentCharacterUpdateInput,
   type CharacterLibraryEntry,
   type CreateCharacterRequest,
@@ -93,7 +92,7 @@ import {
   listAdapterVoices,
   listVoiceAdapters,
   listVoiceProfiles,
-  updateVoiceProfile,
+  updateVoiceProfilePartial,
 } from "../services/voice-profiles.ts";
 import { AgentOperationError, agentIssue } from "./errors.ts";
 import type { AgentOperationFragment } from "./operations.ts";
@@ -134,15 +133,6 @@ async function createCharacterFromAgent(
   });
 }
 
-function toUpdatedLibraryAppearance(
-  appearance: AgentCharacterUpdateAppearanceInput,
-): CreateCharacterRequest["appearances"][number] {
-  return {
-    ...toLibraryAppearance(appearance),
-    ...(appearance.id === undefined ? {} : { id: appearance.id }),
-  };
-}
-
 async function updateCharacterFromAgent(
   prisma: PrismaClient,
   input: AgentCharacterUpdateInput,
@@ -150,24 +140,18 @@ async function updateCharacterFromAgent(
   if (
     input.name === undefined &&
     input.names === undefined &&
-    input.voices === undefined &&
-    input.appearances === undefined
+    input.voices === undefined
   ) {
     throw new AgentOperationError("VALIDATION_ERROR", [
       agentIssue([], "invalid_value", "更新する項目を1つ以上指定してください。"),
     ]);
   }
   // The merge read and the write share one transaction inside the service, so
-  // a concurrent voice or appearance edit is never overwritten with a stale
-  // snapshot.
+  // a concurrent voice edit is never overwritten with a stale snapshot.
   return updateCharacterPartial(prisma, input.characterId, {
     ...(input.name === undefined ? {} : { name: input.name }),
     ...(input.names === undefined ? {} : { names: input.names }),
     ...(input.voices === undefined ? {} : { voices: input.voices }),
-    appearances:
-      input.appearances === undefined
-        ? undefined
-        : input.appearances.map(toUpdatedLibraryAppearance),
   });
 }
 
@@ -448,7 +432,7 @@ export const libraryOperationDefinitions = {
     input: agentVoiceProfileUpdateInputSchema,
     output: agentVoiceProfileUpdateOutputSchema,
     run: async (input, context) => ({
-      voiceProfile: await updateVoiceProfile(context.prisma, input.voiceProfileId, {
+      voiceProfile: await updateVoiceProfilePartial(context.prisma, input.voiceProfileId, {
         name: input.name,
         voiceId: input.voiceId,
         locale: input.locale,

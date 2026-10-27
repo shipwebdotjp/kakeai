@@ -100,7 +100,7 @@ type ScriptOperation =
 | `line.remove` | `sceneId`、`lineId` | Cue 範囲の端点を詰め、単一行の Cue を削除し、効果トリガーと `videoPlayback.gates` から当該行への参照を外す。当該行の Audio Take を削除する |
 | `line.move` | `sceneId`、`lineId`、移動先 | 同一 Scene 内。`range: lines` の開始・終了が逆転したら入れ替える |
 | `line.split` | `sceneId`、`lineId`、前半と後半の `captionText`/`speechText` | 後述の解決規則に従う |
-| `line.setText` | `sceneId`、`lineId`、`captionText` / `speechText` | 選択済み Audio Take は変更しない。空文字を許す |
+| `line.updateText` | `sceneId`、`lineId`、`captionText` / `speechText` | 選択済み Audio Take は変更しない。空文字を許す |
 | `line.setSpeaker` | `sceneId`、`lineId`、`speakerId` | `speakerId` は ID / `{ key }` / `null`。存在しない Speaker は `EDIT_TARGET_NOT_FOUND`。`null` または `characterId: null` の Speaker へ変えると `expressionId` を `null` にする |
 | `line.setExpression` | `sceneId`、`lineId`、`expressionId` | `speakerId: null` の行と `characterId: null` の話者の行には `null` 以外を指定できない。Face Set 内の実在は保存時に検証する |
 | `line.setGap` | `sceneId`、`lineId`、`gapBeforeMs` | 非負整数。0 は省略できる |
@@ -117,18 +117,18 @@ type ScriptOperation =
 | `cue.setRange` | `sceneId`、`cueId`、`range` | 表示窓の解決は保存・プレビューと同じ規則。`offset` が Scene 尺を超える場合は警告を返す |
 | `cue.setInput` | `sceneId`、`cueId`、`input` の部分更新 | テンプレート入力スキーマに適合する。メディア参照は ready な Asset |
 | `cue.setPlacement` | `sceneId`、`cueId`、`layer`、`order` | テンプレートが許可する layer。描画順は layer と order で決まる |
-| `cue.setTransition` | `sceneId`、`cueId`、`enter` / `exit` | テンプレートの `transitionPolicy` に適合する。尺は実効表示窓内 |
+| `cue.updateTransition` | `sceneId`、`cueId`、`enter` / `exit` | テンプレートの `transitionPolicy` に適合する。尺は実効表示窓内 |
 | `cue.move` | `sceneId`、`cueId`、`toSceneId` | Sceneをまたぐ行参照は初期化する（下記）。Cue ID は維持し、`order` は移動先の同一 layer の末尾へ振り直す |
 | `cue.copy` | `sceneId`、`cueId`、`toSceneIds`（1件以上）、任意の `key` | `cue.move` と同じ初期化を各複製先へ適用する。宛先ごとに新しい Cue ID を採番し、結果の `created.cueIds` は `toSceneIds` と同じ順序で返す。途中で1件でも失敗したら全体を適用しない |
 
-`character.standing@1` は 1 Scene に左右 1 体ずつ最大 2 件である。操作コアは立ち絵を通常の Cue として扱わず、次の操作で編集し、内部で Cue を生成する。UI の「左」「右」固定行と一致させる。同じ `side` への `standing.set` は既存 Cue の ID と order を維持して入力を置き換える。
+`character.standing@1` は 1 Scene に左右 1 体ずつ最大 2 件である。操作コアは立ち絵を通常の Cue として扱わず、次の操作で編集し、内部で Cue を生成する。UI の「左」「右」固定行と一致させる。同じ `side` への `standing.upsert` は既存 Cue の ID と order を維持して入力を置き換える。
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `standing.set` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `edge`（端からの位置3段階）・`vertical`（高さ3段階）、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1。`edge` 省略時は既存値、なければ `margin`。`vertical` 省略時は既存値、なければ `standard`。`transition` は enter/exit をまとめて置き換える |
+| `standing.upsert` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `edge`（端からの位置3段階）・`vertical`（高さ3段階）、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1。`edge` 省略時は既存値、なければ `margin`。`vertical` 省略時は既存値、なければ `standard`。`transition` は enter/exit をまとめて置き換える |
 | `standing.remove` | `sceneId`、`side` | 対応する `character.standing@1` Cue を削除する |
 
-立ち絵の Scene 間転送は操作コアに新しい操作を足さず、`standing.set` と `standing.remove` の組み合わせで表す。単位は左右まとめて（1体ずつの転送はしない）。移動は転送先を転送元の設定で置き換えたうえで転送元を削除する。複製は転送先の置換だけを行い、複数の転送先へ一括適用できる。入れ替えは両方向の置換を行う。転送元に立ち絵がない場合の移動・複製は行わない。
+立ち絵の Scene 間転送は操作コアに新しい操作を足さず、`standing.upsert` と `standing.remove` の組み合わせで表す。単位は左右まとめて（1体ずつの転送はしない）。移動は転送先を転送元の設定で置き換えたうえで転送元を削除する。複製は転送先の置換だけを行い、複数の転送先へ一括適用できる。入れ替えは両方向の置換を行う。転送元に立ち絵がない場合の移動・複製は行わない。
 
 ### Cue操作の補足
 
@@ -138,9 +138,9 @@ type ScriptOperation =
 - `cue.add` と `cue.setRange` の範囲は、行範囲なら開始行が終了行以前、offset なら `startMs < endMs` でなければならない。逆転した範囲は自動補正しない。
 - `cue.setInput` は入力の部分更新である。plain object は深くマージし、配列・プリミティブ・`null` は置換する。`replace: true` のときは入力全体を置換する。マージ後の入力をテンプレートの入力スキーマで検証する。
 - `cue.setRange` の `offset` が Scene 尺を超える場合は、保存・プレビューと同じ警告コード（`offset_range_clamped` / `offset_range_out_of_scene`）を返す。
-- `cue.setTransition` はテンプレートの `transitionPolicy` に適合する範囲だけを許可する。
+- `cue.updateTransition` はテンプレートの `transitionPolicy` に適合する範囲だけを許可する。
 - `cue.move` と `cue.copy` は、Sceneをまたぐ行参照を次の規則で初期化する。`range: lines` は `range: scene` へ戻す。効果トリガーの `{ kind: "lines", ... }` は `{ kind: "cue" }` へ置換する。`videoPlayback.gates` は削除する。`range: offset` はミリ秒をそのまま維持する（移動先が短い場合は `cue.setRange` と同じ警告を返す）。参照を初期化した宛先ごとに `cue_line_refs_reset` 警告を返す。
-- `cue.move` と `cue.copy` の宛先に insert Scene は指定できない。移動元と同一 Scene の指定、`character.standing@1` の指定は拒否する。立ち絵の Scene 間移動・複製・入れ替えは `standing.set` / `standing.remove` の組み合わせで表す（下記）。
+- `cue.move` と `cue.copy` の宛先に insert Scene は指定できない。移動元と同一 Scene の指定、`character.standing@1` の指定は拒否する。立ち絵の Scene 間移動・複製・入れ替えは `standing.upsert` / `standing.remove` の組み合わせで表す（下記）。
 
 ### Character
 
@@ -166,7 +166,7 @@ type ScriptOperation =
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
 | `audio.add` | `role`、`assetId`、`range`、任意の `gainDb`・`loop` | ready な `audio` Asset。`range: work` の `bgm` は 1 件だけ。`range: work` は `bgm` のみ。`range: scene` は実在 Scene を指す |
-| `audio.set` | `audioCueId`、部分更新 | 同上。`gainDb: null` と `loop: null` は値を削除する |
+| `audio.update` | `audioCueId`、部分更新 | 同上。`gainDb: null` と `loop: null` は値を削除する |
 | `audio.remove` | `audioCueId` | 作品全体 BGM は削除できるが、UI では既定値へ戻す |
 
 ### 文書
@@ -248,7 +248,7 @@ type ScriptOperation =
 - 入力途中の不正値（空のラベル、未確定の数値、編集中の文字列）はコンポーネントのローカル状態に留める。妥当な値になった時点で型付きの操作へコミットする。不正なローカル値が構造操作を妨げない。
 - 行の `captionText`・`speechText`・`gapBeforeMs` は入力欄のblur時に、話者・表情は選択変更時に、それぞれ操作コアへコミットする。コミット結果は該当行のフィールドだけへ書き戻し、他の入力状態を保つ。
 - Cue は行内のフォーカスが外れたときに、入力・表示区間・レイヤー・順序・トランジションを1つの操作バッチとしてコミットする。未確定Cueはコミットせずフォームに留める。
-- 立ち絵・シーン音声・作品全体BGMは、それぞれの行のフォーカスが外れたときに、現在のフォーム値から `standing.set` / `standing.remove`、`audio.add` / `audio.set` / `audio.remove` を選んでコミットする。
+- 立ち絵・シーン音声・作品全体BGMは、それぞれの行のフォーカスが外れたときに、現在のフォーム値から `standing.upsert` / `standing.remove`、`audio.add` / `audio.update` / `audio.remove` を選んでコミットする。
 - 移行中はフォームモデルと文書が一時的に併存する。構造操作は、最後に妥当に構築できた文書へ適用し、結果をフォームへ戻す。
 - 素材未選択などの未確定Cueは、正本文書の構築時に除外してフォームに留める。構造操作の後で同じSceneへ戻し、入力の行参照を剪定する。行範囲が消えた場合はScene範囲へ戻し、`draft_cue_range_reset` 警告を返す。
 - キーストロークごとに文書全体を作り直さない。

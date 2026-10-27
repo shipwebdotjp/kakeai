@@ -407,11 +407,11 @@ describe("production flow through the MCP binding", () => {
       expect(audioAsset).toMatchObject({ kind: "audio", status: "ready" });
       expect(audioAsset.durationMs).toBeGreaterThan(0);
 
-      await call<{ asset: Asset }>("kakeai_asset_tag", {
+      await call<{ asset: Asset }>("kakeai_asset_update", {
         assetId: imageAsset.id,
         tags: ["production-flow", "背景"],
       });
-      await call<{ asset: Asset }>("kakeai_asset_tag", {
+      await call<{ asset: Asset }>("kakeai_asset_update", {
         assetId: audioAsset.id,
         tags: ["production-flow", "bgm"],
       });
@@ -560,7 +560,7 @@ describe("production flow through the MCP binding", () => {
             speakerId,
           },
           {
-            op: "standing.set",
+            op: "standing.upsert",
             sceneId: pointSceneId,
             side: "left",
             characterId,

@@ -35,7 +35,7 @@
 ### [x] A4 Composition authoring の束縛
 
 - [x] `composition.list` / `composition.get` / `composition.draft.get` / `composition.authoringContext` を既存サービスへ接続する
-- [x] `composition.create` / `composition.draft.save` / `composition.publish`（`dryRun` を含む）を接続する
+- [x] `composition.create` / `composition.draft.update` / `composition.publish`（`dryRun` を含む）を接続する
 - [x] 操作面から Composition の実体削除を公開しない
 - 完了条件: MCP から Composition を作成し、publish した version を `script.edit` の `composition.full-bleed@1` 参照へ渡せる。
 
@@ -65,7 +65,7 @@
 
 - [x] [ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md) を追加して [ADR 0074](../adr/0074-agent-direct-reversible-operations.md) を amendment する。利用者が事前設定したループバック TTS Adapter への合成 Job は、生成 Asset と ScriptVersion のいずれも履歴から戻せるため、Agent Access に公開する。`openai-compatible` を含める一方、エージェントは接続先・認証情報・Adapter設定を変更できず、TTS以外の課金生成を一般に許可しない。
 - [x] Agent Access に長尺変更 `tts.create`（1 Narration Segment）と `tts.createBulk`（未選択の要点セリフ）を追加し、既存HTTPのTTS入力・出力契約、Adapter解決、エラーコード、Job snapshot をそのまま共有する。完了 Job の `ttsResult` を `job.get` / `job.wait` で返し、Takeの正本への反映は既存の `script.edit` + `line.assignTake` とする。添付前に最新台本を読み直し、対象 Segment と読み上げテキストを照合してから新しい版へ保存する。
-- [x] Agent Access に `character.list` / `character.get` を追加し、操作コアに `character.addFromLibrary` を追加する。これはライブラリの Character を新しいローカル Character・Appearance・Speaker IDで台本へコピーし、Face Set参照とEdition localeに対応するVoice Profileを既存のコピー規則どおり引き継ぐ。作成された Character・Appearance・Speaker IDを `script.edit` の `created` 結果で返し、後続のセリフ割り当てと `standing.set` で使えるようにする。キャラクターライブラリ自体の作成・更新・削除は公開しない。
+- [x] Agent Access に `character.list` / `character.get` を追加し、操作コアに `character.addFromLibrary` を追加する。これはライブラリの Character を新しいローカル Character・Appearance・Speaker IDで台本へコピーし、Face Set参照とEdition localeに対応するVoice Profileを既存のコピー規則どおり引き継ぐ。作成された Character・Appearance・Speaker IDを `script.edit` の `created` 結果で返し、後続のセリフ割り当てと `standing.upsert` で使えるようにする。キャラクターライブラリ自体の作成・更新・削除は公開しない。
 - [x] `asset.list` をページング可能な検索操作へ拡張する。`kind` に加え、`ready` を指定できる状態、ファイル名部分一致、タグ（AND / OR を明示）、お気に入り、アーカイブ表示を組み合わせて絞り込めるようにし、既定ではアーカイブ済みを除外する。HTTP API、ローカルソケット、MCP、CLIは同じ契約を使い、返却順・cursor・page sizeの上限を固定する。
 - [x] 新操作を `schema.get` の Agent操作カタログと schema digest へ反映し、dispatcher・MCP・CLIがカタログから自動公開することを保つ。Agent Access仕様、ユーザーガイド、エラー／Job待機の説明も同じ変更で更新する。
 - [x] `skills/kakeai-production/SKILL.md` を追加する。台本投入とScene分割、ライブラリCharacterのコピー、素材の検索・取り込み待ち、Cue／立ち絵／全体BGMの一括編集、TTS Job作成・待機・Take添付、validate・renderまでの順序、`SCRIPT_BASE_STALE` 時の再読込とrequestId再送規則を定める。スキルは `schema.get` を正とし、個別のTemplate契約や操作スキーマを複製しない。視覚的なプレビュー／レンダー品質の自律確認は対象外とする。
@@ -288,7 +288,7 @@
 
 ### [x] B22 Asset の可逆な整理（C13 / ADR 0107）
 
-- [x] [ADR 0107](../adr/0107-agent-asset-organization.md) を追加し、お気に入り・アーカイブだけを公開し、タグは `asset.tag` に残し、削除は人専用を維持することを決定する
+- [x] [ADR 0107](../adr/0107-agent-asset-organization.md) を追加し、お気に入り・アーカイブだけを公開し、タグは `asset.update` に残し、削除は人専用を維持することを決定する
 - [x] 契約に `asset.update`（mutation）を追加する。`{ assetId, favorited?, archived? }` を少なくとも1項目必須で受け、`{ asset }` を返す。`AGENT_PROTOCOL_VERSION` は `1` のままにする
 - [x] Agent サービスで既存の `updateAsset` をそのまま呼ぶ。`requestId` は持たず、冪等台帳に載せない。`asset.delete` は公開しない
 - [x] MCP の説明文を追加する。CLI はカタログ導出のため変更しない

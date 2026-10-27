@@ -63,8 +63,8 @@ Voice Profile の読み取りと既存 Profile の割り当てを追加して解
 | 領域 | できること | 条件・補足 |
 | --- | --- | --- |
 | 作品・台本 | `work.create`（ja-JP / en-US）、`script.get`、`script.edit`、`script.validate`、`script.save`（任意の基準版ガード・同一 Edition の復元元） | `script.edit` は `baseScriptVersionId` と `requestId` で競合検出・冪等再送ができる |
-| 素材 | `asset.list`（検索・ソート・ページング）、`asset.import`（ローカルパス）、内容ハッシュ重複排除、`asset.tag`、`job.wait` | アプリと同じマシンで読めるファイルであること |
-| キャラクター・話者 | `character.list` / `character.get`、`character.addFromLibrary`、`speaker.add` / `speaker.setVoiceProfile`、`line.setSpeaker`、`standing.set` | 対象 locale の Voice Profile、または locale 一致の声を持つ Character があること |
+| 素材 | `asset.list`（検索・ソート・ページング）、`asset.import`（ローカルパス）、内容ハッシュ重複排除、`asset.update`、`job.wait` | アプリと同じマシンで読めるファイルであること |
+| キャラクター・話者 | `character.list` / `character.get`、`character.addFromLibrary`、`speaker.add` / `speaker.setVoiceProfile`、`line.setSpeaker`、`standing.upsert` | 対象 locale の Voice Profile、または locale 一致の声を持つ Character があること |
 | ライブラリ読み取り | `theme.list` / `theme.get`、`faceSet.list` / `faceSet.get`、`voiceProfile.list` / `voiceProfile.get` | 読み取りのみ。Theme は最新公開 Revision だけを返す |
 | TTS | `tts.create`、`tts.createBulk`、`tts.attachBulk`、`line.assignTake`、話速指定、`requestId` 冪等 | 利用者が設定済みの TTS Adapter と、話者に紐づく locale 一致の Voice Profile があること |
 | レンダー・Job | `render.start`、`job.get` / `job.list` / `job.cancel`（queuedのみ）/ `job.wait`、`preview.frame` | ワーカーが動作していること。`preview.frame` はレンダー成果物が前提 |
@@ -188,7 +188,7 @@ Job は一覧できなかった
 - P4 で `script.restore` を追加した。復元元の ID だけを送り、サーバーが内容を
   読む。必須の `requestId` は版単位で冪等（`script.edit` と同じ）であり、
   同じ入力の再送で版が増えない。current を復元元にすると `VALIDATION_ERROR`。
-- `asset.tag` はタグ全体の置換なので、読み→書きの間に人間が編集すると
+- `asset.update` はタグ全体の置換なので、読み→書きの間に人間が編集すると
   上書きする。
 - 高コスト操作（`tts.create` / `tts.createBulk` / `render.start` /
   `composition.publish`）は `requestId` で冪等化される。

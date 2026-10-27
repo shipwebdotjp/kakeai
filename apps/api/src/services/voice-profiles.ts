@@ -159,6 +159,51 @@ export async function updateVoiceProfile(
   }
 }
 
+export async function updateVoiceProfilePartial(
+  prisma: PrismaClient,
+  voiceProfileId: string,
+  input: {
+    name?: string;
+    voiceId?: string;
+    locale?: string;
+    settings?: unknown;
+  },
+): Promise<VoiceProfile> {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.voiceProfile.findUnique({ where: { id: voiceProfileId } });
+    if (existing === null) {
+      throw resourceNotFound("voice_profile", voiceProfileId);
+    }
+    const adapterId = voiceAdapterIdSchema.safeParse(existing.adapterId);
+    if (!adapterId.success) {
+      throw new ApiError(500, "INTERNAL_ERROR", "声プロファイルのアダプターが不正です。");
+    }
+    const data: Record<string, unknown> = {};
+    if (input.name !== undefined) {
+      data.name = input.name;
+    }
+    if (input.voiceId !== undefined) {
+      data.voiceId = input.voiceId;
+    }
+    if (input.locale !== undefined) {
+      data.locale = parseVoiceProfileLocale(input.locale);
+    }
+    if (input.settings !== undefined) {
+      const settings = parseVoiceProfileExtras(adapterId.data, input.settings);
+      await validateRefAudioAsset(tx as unknown as PrismaClient, settings);
+      data.settingsJson = JSON.stringify(settings);
+    }
+    if (Object.keys(data).length === 0) {
+      throw new ApiError(400, "VALIDATION_ERROR", "更新する項目を1つ以上指定してください。");
+    }
+    const row = await tx.voiceProfile.update({
+      where: { id: voiceProfileId },
+      data,
+    });
+    return toVoiceProfile(row);
+  });
+}
+
 async function findVoiceProfileReferences(
   client: Prisma.TransactionClient,
   voiceProfileId: string,

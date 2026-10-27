@@ -316,7 +316,7 @@ export function moveLine(
   };
 }
 
-export function setLineText(
+export function updateLineText(
   document: ContentDocument,
   sceneId: string,
   lineId: string,

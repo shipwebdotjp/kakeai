@@ -218,7 +218,7 @@ describe("structural operation adapter", () => {
       values,
       [
         {
-          op: "line.setText",
+          op: "line.updateText",
           sceneId: DEFAULT_SCENE_IDS.point1,
           lineId: "line-a",
           captionText: "変更後",

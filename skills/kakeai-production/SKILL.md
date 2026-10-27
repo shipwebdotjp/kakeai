@@ -67,8 +67,8 @@ files.
 | 1 | Preflight | `schema.get` | Digest and catalog confirmed |
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
 | 3 | Characters and voices | `voiceAdapter.list`, `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.addAppearance`, `character.updateAppearance`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
-| 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.tag`, `asset.update` | Reuse a ready asset or import one; tidy with favorite/archive |
-| 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.set` / `audio.add`) | Template and asset chosen from the catalog |
+| 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.update`, `asset.update` | Reuse a ready asset or import one; tidy with favorite/archive |
+| 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.upsert` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
 | 8 | Optional pre-render visual check | `preview.scriptFrame`, `preview.assetFrame` | Layout, text overflow, overlap, missing media |
@@ -289,7 +289,7 @@ local IDs and requires reassigning the lines.
 4. Read `created.characterIds`, `created.appearanceIds`, `created.speakerIds`
    from the result.
 5. In a **second** `script.edit`, use those IDs with `line.setSpeaker` and
-   `standing.set`. Same-call `{ "key": ... }` references cannot point at a
+   `standing.upsert`. Same-call `{ "key": ... }` references cannot point at a
    `character.addFromLibrary` result.
 6. When you switch a line to a voice-only speaker, omit `expressionId`.
    `line.setSpeaker` clears it automatically, but `line.add` rejects an explicit
@@ -388,7 +388,7 @@ speaker.
 - Wait for ingest with `job_wait` / `job.wait` (or poll `job.get`). Then re-read
   `asset.get` and require `status: "ready"` before referencing it. A pending or
   failed asset is `ASSET_UNAVAILABLE` at edit time.
-- Tag with `asset.tag` after ingest. Use a stable production tag plus a role tag
+- Tag with `asset.update` after ingest. Use a stable production tag plus a role tag
   (for example `production/<slug>`, `background`, `bgm`) so later searches are
   reproducible. Tags are user-facing metadata; do not repurpose them for IDs.
 - Tidy the library with `asset.update` (`favorited` / `archived`, at least one
@@ -415,7 +415,7 @@ speaker.
     call `template.get` again for that nested template. Do not stop at one
     level.
 - Add with `cue.add`; adjust later with `cue.setInput` (partial merge) or
-  `cue.setRange`. Put left/right characters on screen with `standing.set`.
+  `cue.setRange`. Put left/right characters on screen with `standing.upsert`.
 - Add scene or work BGM with `audio.add`: `role: "bgm"`, a ready audio asset,
   `range: { kind: "scene", sceneId }` or `{ kind: "work" }`. A work may have at
   most one work-range BGM.

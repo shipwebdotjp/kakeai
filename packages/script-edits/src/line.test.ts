@@ -355,7 +355,7 @@ describe("line operations", () => {
     const edited = applyScriptOperation(
       document,
       {
-        op: "line.setText",
+        op: "line.updateText",
         sceneId: point.id,
         lineId: "line-b",
         captionText: "変更後",

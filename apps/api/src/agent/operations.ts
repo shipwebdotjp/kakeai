@@ -12,8 +12,6 @@ import {
   agentAssetImportOutputSchema,
   agentAssetListInputSchema,
   agentAssetListOutputSchema,
-  agentAssetTagInputSchema,
-  agentAssetTagOutputSchema,
   agentAssetUpdateInputSchema,
   agentAssetUpdateOutputSchema,
   agentCompositionAuthoringContextInputSchema,
@@ -22,8 +20,8 @@ import {
   agentCompositionCreateOutputSchema,
   agentCompositionDraftGetInputSchema,
   agentCompositionDraftGetOutputSchema,
-  agentCompositionDraftSaveInputSchema,
-  agentCompositionDraftSaveOutputSchema,
+  agentCompositionDraftUpdateInputSchema,
+  agentCompositionDraftUpdateOutputSchema,
   agentCompositionGetInputSchema,
   agentCompositionGetOutputSchema,
   agentCompositionListInputSchema,
@@ -351,18 +349,12 @@ const definitions: AgentOperationDefinitions = {
     run: async (input, context) =>
       importAgentAsset(context.prisma, context.directories, context.config.limits, input),
   },
-  "asset.tag": {
-    input: agentAssetTagInputSchema,
-    output: agentAssetTagOutputSchema,
-    run: async (input, context) => ({
-      asset: await updateAsset(context.prisma, input.assetId, { tags: input.tags }),
-    }),
-  },
   "asset.update": {
     input: agentAssetUpdateInputSchema,
     output: agentAssetUpdateOutputSchema,
     run: async (input, context) => ({
       asset: await updateAsset(context.prisma, input.assetId, {
+        tags: input.tags,
         favorited: input.favorited,
         archived: input.archived,
       }),
@@ -477,9 +469,9 @@ const definitions: AgentOperationDefinitions = {
       };
     },
   },
-  "composition.draft.save": {
-    input: agentCompositionDraftSaveInputSchema,
-    output: agentCompositionDraftSaveOutputSchema,
+  "composition.draft.update": {
+    input: agentCompositionDraftUpdateInputSchema,
+    output: agentCompositionDraftUpdateOutputSchema,
     run: async (input, context) => {
       const { compositionId, ...draftInput } = input;
       return {

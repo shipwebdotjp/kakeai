@@ -175,9 +175,9 @@ export const lineMoveOperationSchema = z.strictObject({
   index: nonNegativeInt,
 });
 
-export const lineSetTextOperationSchema = z
+export const lineUpdateTextOperationSchema = z
   .strictObject({
-    op: z.literal("line.setText"),
+    op: z.literal("line.updateText"),
     sceneId: scriptIdRefSchema,
     lineId: scriptIdRefSchema,
     captionText: z.string().optional(),
@@ -262,7 +262,13 @@ export const cueSetInputOperationSchema = z.strictObject({
   sceneId: scriptIdRefSchema,
   cueId: scriptIdRefSchema,
   input: z.unknown(),
-  replace: z.boolean().optional(),
+});
+
+export const cueUpdateInputOperationSchema = z.strictObject({
+  op: z.literal("cue.updateInput"),
+  sceneId: scriptIdRefSchema,
+  cueId: scriptIdRefSchema,
+  input: z.unknown(),
 });
 
 export const cueSetPlacementOperationSchema = z.strictObject({
@@ -273,9 +279,9 @@ export const cueSetPlacementOperationSchema = z.strictObject({
   order: nonNegativeInt,
 });
 
-export const cueSetTransitionOperationSchema = z
+export const cueUpdateTransitionOperationSchema = z
   .strictObject({
-    op: z.literal("cue.setTransition"),
+    op: z.literal("cue.updateTransition"),
     sceneId: scriptIdRefSchema,
     cueId: scriptIdRefSchema,
     enter: transitionEdgeSchema.optional(),
@@ -301,8 +307,8 @@ export const cueCopyOperationSchema = z.strictObject({
   toSceneIds: z.array(scriptIdRefSchema).min(1),
 });
 
-export const standingSetOperationSchema = z.strictObject({
-  op: z.literal("standing.set"),
+export const standingUpsertOperationSchema = z.strictObject({
+  op: z.literal("standing.upsert"),
   key: scriptKeySchema.optional(),
   sceneId: scriptIdRefSchema,
   side: standingSideSchema,
@@ -330,9 +336,9 @@ export const audioAddOperationSchema = z.strictObject({
   loop: z.boolean().optional(),
 });
 
-export const audioSetOperationSchema = z
+export const audioUpdateOperationSchema = z
   .strictObject({
-    op: z.literal("audio.set"),
+    op: z.literal("audio.update"),
     audioCueId: scriptIdRefSchema,
     role: audioCueRoleSchema.optional(),
     assetId: idSchema.optional(),
@@ -398,7 +404,7 @@ const scriptOperationSchemas = [
   lineAddOperationSchema,
   lineRemoveOperationSchema,
   lineMoveOperationSchema,
-  lineSetTextOperationSchema,
+  lineUpdateTextOperationSchema,
   lineSetSpeakerOperationSchema,
   lineSetExpressionOperationSchema,
   lineSetGapOperationSchema,
@@ -409,14 +415,15 @@ const scriptOperationSchemas = [
   cueRemoveOperationSchema,
   cueSetRangeOperationSchema,
   cueSetInputOperationSchema,
+  cueUpdateInputOperationSchema,
   cueSetPlacementOperationSchema,
-  cueSetTransitionOperationSchema,
+  cueUpdateTransitionOperationSchema,
   cueMoveOperationSchema,
   cueCopyOperationSchema,
-  standingSetOperationSchema,
+  standingUpsertOperationSchema,
   standingRemoveOperationSchema,
   audioAddOperationSchema,
-  audioSetOperationSchema,
+  audioUpdateOperationSchema,
   audioRemoveOperationSchema,
   characterAddFromLibraryOperationSchema,
   speakerAddOperationSchema,
@@ -449,7 +456,7 @@ export type LineSplitOperation = z.infer<typeof lineSplitOperationSchema>;
 export type LineAddOperation = z.infer<typeof lineAddOperationSchema>;
 export type LineRemoveOperation = z.infer<typeof lineRemoveOperationSchema>;
 export type LineMoveOperation = z.infer<typeof lineMoveOperationSchema>;
-export type LineSetTextOperation = z.infer<typeof lineSetTextOperationSchema>;
+export type LineUpdateTextOperation = z.infer<typeof lineUpdateTextOperationSchema>;
 export type LineSetSpeakerOperation = z.infer<typeof lineSetSpeakerOperationSchema>;
 export type LineSetExpressionOperation = z.infer<typeof lineSetExpressionOperationSchema>;
 export type LineSetGapOperation = z.infer<typeof lineSetGapOperationSchema>;
@@ -460,14 +467,15 @@ export type CueAddOperation = z.infer<typeof cueAddOperationSchema>;
 export type CueRemoveOperation = z.infer<typeof cueRemoveOperationSchema>;
 export type CueSetRangeOperation = z.infer<typeof cueSetRangeOperationSchema>;
 export type CueSetInputOperation = z.infer<typeof cueSetInputOperationSchema>;
+export type CueUpdateInputOperation = z.infer<typeof cueUpdateInputOperationSchema>;
 export type CueSetPlacementOperation = z.infer<typeof cueSetPlacementOperationSchema>;
-export type CueSetTransitionOperation = z.infer<typeof cueSetTransitionOperationSchema>;
+export type CueUpdateTransitionOperation = z.infer<typeof cueUpdateTransitionOperationSchema>;
 export type CueMoveOperation = z.infer<typeof cueMoveOperationSchema>;
 export type CueCopyOperation = z.infer<typeof cueCopyOperationSchema>;
-export type StandingSetOperation = z.infer<typeof standingSetOperationSchema>;
+export type StandingUpsertOperation = z.infer<typeof standingUpsertOperationSchema>;
 export type StandingRemoveOperation = z.infer<typeof standingRemoveOperationSchema>;
 export type AudioAddOperation = z.infer<typeof audioAddOperationSchema>;
-export type AudioSetOperation = z.infer<typeof audioSetOperationSchema>;
+export type AudioUpdateOperation = z.infer<typeof audioUpdateOperationSchema>;
 export type AudioRemoveOperation = z.infer<typeof audioRemoveOperationSchema>;
 export type CharacterAddFromLibraryOperation = z.infer<
   typeof characterAddFromLibraryOperationSchema

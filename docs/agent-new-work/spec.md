@@ -18,7 +18,7 @@
 
 - `tts.createBulk`は必ず`requestId`付で開始する（なし開始は永久に確定不可、`docs/agent-access/spec.md`のTTS契約）。
 - `tts.createBulk`→`tts.attachBulk`間は台本を書き換えない（書換えは`SCRIPT_BASE_STALE`で無添付停止）。
-- `character.addFromLibrary`は`key`を持たないため、1呼目コピー・2呼目`line.setSpeaker`/`standing.set`に分ける（`docs/agent-access/spec.md`のCharacter契約）。
+- `character.addFromLibrary`は`key`を持たないため、1呼目コピー・2呼目`line.setSpeaker`/`standing.upsert`に分ける（`docs/agent-access/spec.md`のCharacter契約）。
 - タイムアウト後は状態確認先行。`script.edit`/`tts.attachBulk`のみ同`requestId`即再送可、その他変更は`script.get`/`job.list`/`asset.list`/`composition.get`で確認後に再実行（`skills/kakeai-production/SKILL.md` 9章）。
 - `job.wait`の`timedOut:true`は失敗ではない。同Job IDで継続待機する。
 - `agentId`は必ず送る（MCP/CLI既定を利用）。未送出は台帳`none`枠共有で衝突余地（`docs/agent-access/spec.md`冪等台帳）。

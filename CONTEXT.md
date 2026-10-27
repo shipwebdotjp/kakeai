@@ -340,3 +340,15 @@ _Avoid_: background removal result, character image, main visual
 **Rich Text Value**:
 A thumbnail text input that carries inline emphasis in a small plain-text syntax, mapped to the resolved Thumbnail Appearance and the owning Thumbnail Template rather than raw user CSS. It stays an ordinary string in the saved document.
 _Avoid_: HTML, Markdown document, rich text editor state
+
+**Set Operation**:
+An Agent/Script operation whose name indicates full replacement of the named value; other values are unchanged.
+
+**Update Operation**:
+An Agent/Script operation that changes only the specified fields; omitted fields stay unchanged.
+
+**Upsert Operation**:
+An operation that creates when absent and partially updates when present.
+
+**Save Operation**:
+An operation that saves a whole document or draft; not for partial updates.

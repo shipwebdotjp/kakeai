@@ -169,7 +169,7 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 立ち絵が必要な場合は、対象 locale の声を持つ Entry を選びます。使いたい Entry に声が無い場合は、先に `kakeai_character_set_voices`（`characterId` と `voices: [{ locale, voiceProfileId }]`。Profile は実在し `locale` が一致すること）で声を付けてからコピーします。声が無い Entry をそのままコピーすると `voiceProfileId: null` になり、その話者の TTS は `TTS_INPUT_INVALID` で失敗します。既存作品の話者に有効な `voiceProfileId` があれば、ライブラリから追加せずそのまま使えます。
 
-台本へ入れるときは、`kakeai_script_edit` の操作 `character.addFromLibrary`（`libraryCharacterId`）で新しいローカル Character・Appearance・Speaker としてコピーします。結果の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` を読み、次の `kakeai_script_edit` で `line.setSpeaker` と `standing.set` に使います。`character.addFromLibrary` は `key` を持たないため、同じ呼び出し内で `{ "key": ... }` として参照することはできません。
+台本へ入れるときは、`kakeai_script_edit` の操作 `character.addFromLibrary`（`libraryCharacterId`）で新しいローカル Character・Appearance・Speaker としてコピーします。結果の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` を読み、次の `kakeai_script_edit` で `line.setSpeaker` と `standing.upsert` に使います。`character.addFromLibrary` は `key` を持たないため、同じ呼び出し内で `{ "key": ... }` として参照することはできません。
 
 ### Face Set
 

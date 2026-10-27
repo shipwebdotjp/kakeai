@@ -59,7 +59,7 @@ describe("standing operations", () => {
     const left = applyScriptOperation(
       document,
       {
-        op: "standing.set",
+        op: "standing.upsert",
         sceneId: point.id,
         side: "left",
         characterId: "char-1",
@@ -99,7 +99,7 @@ describe("standing operations", () => {
     const updated = applyScriptOperation(
       left.document,
       {
-        op: "standing.set",
+        op: "standing.upsert",
         sceneId: point.id,
         side: "left",
         characterId: "char-1",
@@ -132,7 +132,7 @@ describe("standing operations", () => {
     const right = applyScriptOperation(
       updated.document,
       {
-        op: "standing.set",
+        op: "standing.upsert",
         sceneId: point.id,
         side: "right",
         characterId: "char-1",
@@ -165,7 +165,7 @@ describe("standing operations", () => {
     const created = applyScriptOperation(
       document,
       {
-        op: "standing.set",
+        op: "standing.upsert",
         sceneId: point.id,
         side: "left",
         characterId: "char-1",
@@ -187,7 +187,7 @@ describe("standing operations", () => {
     const kept = applyScriptOperation(
       created.document,
       {
-        op: "standing.set",
+        op: "standing.upsert",
         sceneId: point.id,
         side: "left",
         characterId: "char-1",
@@ -212,7 +212,7 @@ describe("standing operations", () => {
       applyScriptOperation(
         document,
         {
-          op: "standing.set",
+          op: "standing.upsert",
           sceneId: point.id,
           side: "left",
           characterId: "char-1",
@@ -318,7 +318,7 @@ describe("audio operations", () => {
     const updated = applyScriptOperation(
       sceneAudio.document,
       {
-        op: "audio.set",
+        op: "audio.update",
         audioCueId,
         gainDb: null,
         loop: null,

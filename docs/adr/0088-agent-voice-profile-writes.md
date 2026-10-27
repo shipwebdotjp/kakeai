@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Amended by [ADR 0109](./0109-agent-operation-set-update-semantics.md)（`voiceProfile.update` を部分更新化）。
+
 ## 背景
 
 Voice Profile の作成・更新・削除は人専用とし、エージェントには `voiceProfile.list` / `voiceProfile.get` の読み取りと、既存 Profile の `speaker.add` / `speaker.setVoiceProfile` による割り当てだけを公開してきた（[Agent Access 仕様](../agent-access/spec.md)、B8・B9）。対象 locale の Profile が無い新規作品では、エージェントは制作を止めて人間に作成を依頼するしかなかった（[MP4 制作仕様](../agent-mp4-production/spec.md)）。

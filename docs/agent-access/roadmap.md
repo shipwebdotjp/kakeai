@@ -24,7 +24,7 @@
 | B13 サムネイル操作の公開 | 読み取り・作成・更新・primary 選択・未保存プレビュー・PNG 取得を公開し、削除・共通 Appearance の保存・プリセットは人専用に残す | 候補は版履歴のない可変文書で、削除は取り消せない。PNG はオンデマンド生成で Job を増やさず、素材は利用者が取り込んだ画像だけを使う（ADR 0098） |
 | B14 Character ライブラリ作成・更新の公開 | 作成と部分更新を公開し、削除は人専用に残す。外観 ID は作成時にサーバー生成、外観画像は取り込み済みの ready 画像だけを使う。更新は既存 ID を維持できる | 台本の外側の共有ライブラリで、既存台本はコピーを持つため可逆。全項目必須の更新は空配列で意図せず消す事故があるため部分更新にする（ADR 0099） |
 | C12 Asset 検索の寸法条件 | `asset.list` に完全一致の `widthPx` / `heightPx` と両端を含む範囲を追加する。寸法を持たない素材は一致させない。向き・寸法順の並べ替え・索引は追加しない | Face Set の同寸レイヤー探索が主目的。向きは正方形の境界と比率の丸めの意味づけが必要で、寸法は DTO で返るため呼び出し側で判定できる（ADR 0106） |
-| C13 Asset の可逆な整理 | `asset.update` で `favorited` / `archived` を切り替える。タグは既存の `asset.tag` に残し、削除は人専用のままにする | どちらも真偽値の印で、`false` で元に戻り、行・参照・レンダーを壊さない。タグまで含めると `asset.tag` と意味が重複するため、整理の印だけに限定する（ADR 0107） |
+| C13 Asset の可逆な整理 | `asset.update` で `favorited` / `archived` を切り替える。タグは既存の `asset.update` に残し、削除は人専用のままにする | どちらも真偽値の印で、`false` で元に戻り、行・参照・レンダーを壊さない。タグまで含めると `asset.update` と意味が重複するため、整理の印だけに限定する（ADR 0107） |
 | B23 Character 外観の差分操作 | 1件追加（addAppearance）と部分更新（updateAppearance）を公開し、削除は人専用に残す。既存 character.update の配列置換は維持する | 1件単位の操作で read-modify-write を解消し、作品コピーの libraryAppearanceId 参照を壊さずに維持できる（ADR 0108） |
 
 ## 実施順序
@@ -196,7 +196,7 @@ C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張�
 ### B22 Asset の可逆な整理（C13）
 
 - 状態: 完了。`asset.update`（mutation）を追加し、`{ assetId, favorited?, archived? }` で素材のお気に入りとアーカイブを切り替える。既存の `updateAsset` をそのまま呼ぶ。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0107](../adr/0107-agent-asset-organization.md) を参照。
-- 少なくとも1つの項目を必須とし、項目なしは `VALIDATION_ERROR`、未知の素材は `RESOURCE_NOT_FOUND`。タグは既存の `asset.tag` が担い、`asset.update` には含めない。`requestId` は持たず、冪等台帳に載せない（タイムアウト後は `asset.get` で確認する）。
+- 少なくとも1つの項目を必須とし、項目なしは `VALIDATION_ERROR`、未知の素材は `RESOURCE_NOT_FOUND`。タグは既存の `asset.update` が担い、`asset.update` には含めない。`requestId` は持たず、冪等台帳に載せない（タイムアウト後は `asset.get` で確認する）。
 - アーカイブは行を残して既定の `asset.list` とピッカーから隠すだけで、台本の参照・Job・レンダーを壊さない。`archived: false` で解除でき、アーカイブ済みは `asset.list` の `archived: "only"` で見つけられる。`asset.delete` は人専用のまま残す。
 - 完了条件: ソケット・MCP・CLI から `asset.update` でお気に入り・アーカイブを設定・解除でき、既定の検索から隠れ、`archived: "only"` で発見でき、未知 ID は `RESOURCE_NOT_FOUND`、項目なしは `VALIDATION_ERROR`、`asset.delete` は `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 

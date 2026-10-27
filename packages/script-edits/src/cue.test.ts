@@ -80,7 +80,7 @@ describe("cue operations", () => {
           input: { text: "T", role: "body", anchor: "left" },
         },
         {
-          op: "cue.setInput",
+          op: "cue.updateInput",
           sceneId: point.id,
           cueId: { key: "new-cue" },
           input: { text: "U" },
@@ -107,7 +107,6 @@ describe("cue operations", () => {
         sceneId: point.id,
         cueId,
         input: { text: "V", role: "body" },
-        replace: true,
       },
       createTestContext(),
     );
@@ -344,7 +343,7 @@ describe("cue operations", () => {
     const transitioned = applyScriptOperation(
       added.document,
       {
-        op: "cue.setTransition",
+        op: "cue.updateTransition",
         sceneId: point.id,
         cueId,
         enter: { preset: "fade", durationMs: 200 },
@@ -365,7 +364,7 @@ describe("cue operations", () => {
         applyScriptOperation(
           added.document,
           {
-            op: "cue.setTransition",
+            op: "cue.updateTransition",
             sceneId: point.id,
             cueId,
             enter: { preset: "fade", durationMs: 2000 },

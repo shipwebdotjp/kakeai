@@ -2,6 +2,8 @@
 
 Status: accepted
 
+Amended by [ADR 0109](./0109-agent-operation-set-update-semantics.md)（`asset.tag` を `asset.update` に統合）。
+
 ## 背景
 
 素材の整理は `Asset.favoritedAt` と `Asset.archivedAt` の2つの印で行う。HTTP の `PATCH /assets/:assetId`（`updateAssetRequestSchema`）と Web UI はタグ・お気に入り・アーカイブを更新できるが、エージェントに公開されているのは `asset.tag` だけで、お気に入りとアーカイブは人間専用だった。

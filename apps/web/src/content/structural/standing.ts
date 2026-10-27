@@ -105,7 +105,7 @@ export function commitStandingStructural(
     values,
     [
       {
-        op: "standing.set",
+        op: "standing.upsert",
         sceneId,
         side,
         characterId: standing.characterId,
@@ -194,7 +194,7 @@ export function commitSceneAudioStructural(
     values,
     [
       {
-        op: "audio.set",
+        op: "audio.update",
         audioCueId: existing.id,
         role: slot.role,
         assetId: slot.assetId,
@@ -231,7 +231,7 @@ function standingSlotOperation(
       DEFAULT_STANDING_VERTICAL,
     );
     return {
-      op: "standing.set",
+      op: "standing.upsert",
       sceneId: targetSceneId,
       side: slot.side,
       characterId: slot.characterId,

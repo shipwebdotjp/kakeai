@@ -58,7 +58,7 @@
 | `asset.list` | read | no | `kakeai_asset_list` |
 | `asset.get` | read | no | `kakeai_asset_get` |
 | `asset.import` | mutation | yes | `kakeai_asset_import` |
-| `asset.tag` | mutation | no | `kakeai_asset_tag` |
+| `asset.update` | mutation | no | `kakeai_asset_tag` |
 | `asset.update` | mutation | no | `kakeai_asset_update` |
 | `render.start` | mutation | yes | `kakeai_render_start` |
 | `job.get` | read | no | `kakeai_job_get` |
@@ -85,7 +85,7 @@
 | `composition.draft.get` | read | no | `kakeai_composition_draft_get` |
 | `composition.authoringContext` | read | no | `kakeai_composition_authoring_context` |
 | `composition.create` | mutation | no | `kakeai_composition_create` |
-| `composition.draft.save` | mutation | no | `kakeai_composition_draft_save` |
+| `composition.draft.update` | mutation | no | `kakeai_composition_draft_save` |
 | `composition.publish` | mutation | no | `kakeai_composition_publish` |
 | `tts.create` | mutation | yes | `kakeai_tts_create` |
 | `tts.createBulk` | mutation | yes | `kakeai_tts_create_bulk` |
@@ -244,9 +244,9 @@
 - `script.edit` — 基準版と `ScriptOperation` の配列を受け、操作コアで一括適用し、保存検証を通して新しい Script Version を追加する。1 呼び出しは 1 版とし、途中失敗時は版を作らない。
 - `script.restore` — 過去の Script Version を新しい版として復元する。`{ scriptVersionId, baseScriptVersionId?, requestId, authorAgentId? }` を受け、復元元の `ContentDocument` をサーバー側で読み、保存検証を通して新しい版を追加する。呼び出し側は ContentDocument を送らない。復元元の Edition にだけ保存し、新しい版の `sourceScriptVersionId` に復元元を記録する。復元元が current の場合は `VALIDATION_ERROR`。`requestId` は必須で、同じ ID・同じ復元元の再送は既存の版を返す（`replay: true`）。異なる復元元・基準版で同じ ID を使うと `IDEMPOTENCY_CONFLICT`。`baseScriptVersionId` は任意の基準版ガードで、省略時は last-write-wins（[ADR 0021](../adr/0021-script-save-last-write-wins.md)）。
 - `asset.import` — 後述の手順で Asset を取り込む。
-- `asset.tag` — Asset のタグを更新する。
-- `asset.update` — Asset のお気に入り・アーカイブを切り替える（[ADR 0107](../adr/0107-agent-asset-organization.md)）。`{ assetId, favorited?, archived? }` を受け、少なくとも1つを必須とし、`{ asset }` を返す。存在しない ID は `RESOURCE_NOT_FOUND`、項目を指定しない呼び出しは `VALIDATION_ERROR`。タグは `asset.tag` が担う。アーカイブは行を残して既定の `asset.list` とピッカーから隠すだけで、台本の参照・Job・レンダーを壊さない。解除は `archived: false` で行い、アーカイブ済みは `asset.list` の `archived: "only"` で見つけられる。`requestId` は持たず、タイムアウト後は `asset.get` で状態を確認してから再実行する。実体削除は公開しない。
-- `composition.create` / `composition.draft.save` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。publish は `dryRun` を受け付ける。
+- `asset.update` — Asset のタグを更新する。
+- `asset.update` — Asset のお気に入り・アーカイブを切り替える（[ADR 0107](../adr/0107-agent-asset-organization.md)）。`{ assetId, favorited?, archived? }` を受け、少なくとも1つを必須とし、`{ asset }` を返す。存在しない ID は `RESOURCE_NOT_FOUND`、項目を指定しない呼び出しは `VALIDATION_ERROR`。タグは `asset.update` が担う。アーカイブは行を残して既定の `asset.list` とピッカーから隠すだけで、台本の参照・Job・レンダーを壊さない。解除は `archived: false` で行い、アーカイブ済みは `asset.list` の `archived: "only"` で見つけられる。`requestId` は持たず、タイムアウト後は `asset.get` で状態を確認してから再実行する。実体削除は公開しない。
+- `composition.create` / `composition.draft.update` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。publish は `dryRun` を受け付ける。
 - `render.start` — 対象版と ready な素材から render Job を投入する。
 - `tts.create` — 保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter へ合成 Job を投入する（後述）。
 - `tts.createBulk` — 保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する（後述）。
@@ -337,7 +337,7 @@
 ### Composition authoring の契約
 
 - 読み取りは `composition.list` / `composition.get` / `composition.draft.get` / `composition.authoringContext`。`composition.authoringContext` は HTTP の `POST /composition-authoring-contexts` と同じ入力（`visualTheme` と任意の `canvasProfile`）を受け、`context` を返す。
-- 変更は `composition.create` / `composition.draft.save` / `composition.publish`。入出力は [../composition-library/spec.md](../composition-library/spec.md) の HTTP authoring API と同じ `packages/contracts` のスキーマを使う。`authoringStyle` 付きの作成は HTTP と同じ authoring context の解決を通す。
+- 変更は `composition.create` / `composition.draft.update` / `composition.publish`。入出力は [../composition-library/spec.md](../composition-library/spec.md) の HTTP authoring API と同じ `packages/contracts` のスキーマを使う。`authoringStyle` 付きの作成は HTTP と同じ authoring context の解決を通す。
 - `composition.publish` は任意の `dryRun` を受け付ける。`true` なら version を作らずに publish と同じ検証だけを行い `{ dryRun: true, manifest, fontDiagnostics }` を返し、`false` または省略時は publish して `{ dryRun: false, version, fontDiagnostics }` を返す。検証失敗は `VALIDATION_ERROR` と `issues`、Style Kit の改変は `STYLE_KIT_MODIFIED` とする。
 - 存在しない Composition は、束縛に依存しない HTTP の安定コード `RESOURCE_NOT_FOUND` で返す。
 - Composition の実体削除は操作面に公開しない（HTTP の削除系も従来どおり人専用）。
@@ -400,7 +400,7 @@
 - `character.updateAppearance` — Character 外観の 1 件部分更新（[ADR 0105](../adr/0108-agent-character-appearance-diff-operations.md)）。`{ characterId, appearanceId, assetId?, expression?, pose?, label?: string | null, faceSetId?: string | null }` を受け、`{ character }` を返す。省略された項目は不変、`label: null` および `faceSetId: null` は解除とする。0 項目指定は `VALIDATION_ERROR`。存在しない `characterId` または `appearanceId` は `RESOURCE_NOT_FOUND`、素材・Face Set の参照欠落や寸法不一致は `VALIDATION_ERROR`。
 - `character.setVoices` — Character の声の付け替え（[ADR 0089](../adr/0089-agent-character-set-voices.md)）。`{ characterId, voices }` を受け、`{ character }` を返す。`voices` は `{ locale, voiceProfileId }[]` で、参照する Profile は実在し、その `locale` と voice の `locale` が一致しなければならない。空配列も許し、全解除できる。外観と `names` は変えない。存在しない `characterId` は `RESOURCE_NOT_FOUND`、参照欠落・locale 不一致・locale 重複は `VALIDATION_ERROR` とする。付け替えは以後の `character.addFromLibrary` コピーにだけ影響し、既存の Script Version は変えない。`requestId` は持たないため、タイムアウト後は `character.get` で確認してから再実行する。
 - 台本へ入れるときは `script.edit` の操作コア操作 `character.addFromLibrary`（`{ op, libraryCharacterId }`）を使う。ライブラリのキャラクターを、名前・`names`・`voices`・全外観を引き継いだ新しいローカル ID の Character・Appearance・Speaker として文書へコピーする。`faceSetId` は参照のまま引き継ぎ、その時点の最新改訂版を `faceSetVersion` に固定する。`libraryCharacterId` / `libraryAppearanceId` も記録するが、レンダーには使わない。`Character.name` と `Speaker.name` は `ContentDocument.locale` に一致する `names` の名前、一致がなければ既定の `name` とする。Speaker の `voiceProfileId` は `ContentDocument.locale` に一致する `voices` の声、一致がなければ `null` とする。ライブラリ側は変更しない。
-- コピーで作られた ID は `script.edit` の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` で返る。後続の `line.add`・`line.setSpeaker`・`standing.set` にはこの ID をそのまま使う。`character.addFromLibrary` は `key` を持たないため、同一呼び出し内で作った ID を `{ key }` で参照することはできない。
+- コピーで作られた ID は `script.edit` の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` で返る。後続の `line.add`・`line.setSpeaker`・`standing.upsert` にはこの ID をそのまま使う。`character.addFromLibrary` は `key` を持たないため、同一呼び出し内で作った ID を `{ key }` で参照することはできない。
 - 未知の `libraryCharacterId` は `EDIT_TARGET_NOT_FOUND`、`ScriptContext.libraryCharacters` を用意できない場合は `EDIT_PRECONDITION_FAILED` とする。
 
 ## 冪等台帳（高コスト操作）

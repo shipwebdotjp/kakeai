@@ -719,16 +719,13 @@ describe("character write operation contracts", () => {
   });
 
   it("accepts a partial update and rejects unknown fields", () => {
-    expect(agentCharacterUpdateInputSchema.parse({ characterId: "char-1" })).toEqual({
-      characterId: "char-1",
-    });
+    expect(agentCharacterUpdateInputSchema.safeParse({ characterId: "char-1" }).success).toBe(false);
     expect(
       agentCharacterUpdateInputSchema.safeParse({
         characterId: "char-1",
         name: "リン",
         names: [],
         voices: [],
-        appearances: [],
       }).success,
     ).toBe(true);
     expect(
@@ -743,7 +740,7 @@ describe("character write operation contracts", () => {
           },
         ],
       }).success,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       agentCharacterUpdateInputSchema.safeParse({ characterId: "char-1", extra: true })
         .success,
@@ -1366,7 +1363,7 @@ describe("asset.update operation contract", () => {
       agentAssetUpdateInputSchema.safeParse({
         assetId: "asset-1",
         favorited: true,
-        tags: ["bgm"],
+        extra: true,
       }).success,
     ).toBe(false);
     expect(

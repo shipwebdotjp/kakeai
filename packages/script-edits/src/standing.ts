@@ -43,7 +43,7 @@ function findStandingIndex(
   return { scene, sceneIndex, cueIndex };
 }
 
-export function setStanding(
+export function upsertStanding(
   document: ContentDocument,
   sceneId: string,
   side: StandingSide,

@@ -522,7 +522,7 @@ export function LineEditor({
           }
           onCommitLineFields(line.id, [
             {
-              op: "line.setText",
+              op: "line.updateText",
               sceneId,
               lineId: line.id,
               captionText: event.target.value,
@@ -544,7 +544,7 @@ export function LineEditor({
           }
           onCommitLineFields(line.id, [
             {
-              op: "line.setText",
+              op: "line.updateText",
               sceneId,
               lineId: line.id,
               speechText: event.target.value,

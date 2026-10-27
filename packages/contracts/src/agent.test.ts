@@ -3,7 +3,7 @@ import {
   AGENT_ERROR_CODES,
   agentCompositionAuthoringContextInputSchema,
   agentCompositionCreateInputSchema,
-  agentCompositionDraftSaveInputSchema,
+  agentCompositionDraftUpdateInputSchema,
   agentCompositionGetInputSchema,
   agentCompositionPublishInputSchema,
   agentCompositionPublishOutputSchema,
@@ -242,7 +242,7 @@ describe("composition operations", () => {
       "composition.draft.get",
       "composition.authoringContext",
       "composition.create",
-      "composition.draft.save",
+      "composition.draft.update",
       "composition.publish",
     ] as const;
 
@@ -254,7 +254,7 @@ describe("composition operations", () => {
       expect(agentReadOperationNames).toContain(name);
       expect(isAgentMutationOperation(name)).toBe(false);
     }
-    for (const name of ["composition.create", "composition.draft.save", "composition.publish"] as const) {
+    for (const name of ["composition.create", "composition.draft.update", "composition.publish"] as const) {
       expect(agentMutationOperationNames).toContain(name);
       expect(isAgentMutationOperation(name)).toBe(true);
     }
@@ -325,26 +325,26 @@ describe("composition operations", () => {
 
   it("accepts partial draft saves and rejects unknown draft fields", () => {
     expect(
-      agentCompositionDraftSaveInputSchema.safeParse({
+      agentCompositionDraftUpdateInputSchema.safeParse({
         compositionId: "cmp-1",
         files: { "index.html": "<!doctype html>" },
         manifest: { durationMs: 4000, canvasProfile: "portrait" },
       }).success,
     ).toBe(true);
     expect(
-      agentCompositionDraftSaveInputSchema.safeParse({ compositionId: "cmp-1" }).success,
+      agentCompositionDraftUpdateInputSchema.safeParse({ compositionId: "cmp-1" }).success,
     ).toBe(true);
     expect(
-      agentCompositionDraftSaveInputSchema.safeParse({ files: { "a.txt": "x" } }).success,
+      agentCompositionDraftUpdateInputSchema.safeParse({ files: { "a.txt": "x" } }).success,
     ).toBe(false);
     expect(
-      agentCompositionDraftSaveInputSchema.safeParse({
+      agentCompositionDraftUpdateInputSchema.safeParse({
         compositionId: "cmp-1",
         files: { "/abs.txt": "x" },
       }).success,
     ).toBe(false);
     expect(
-      agentCompositionDraftSaveInputSchema.safeParse({ compositionId: "cmp-1", bin: {} }).success,
+      agentCompositionDraftUpdateInputSchema.safeParse({ compositionId: "cmp-1", bin: {} }).success,
     ).toBe(false);
   });
 

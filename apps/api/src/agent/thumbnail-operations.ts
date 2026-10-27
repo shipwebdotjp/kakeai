@@ -22,6 +22,7 @@ import {
   listThumbnails,
   saveThumbnail,
   setPrimaryThumbnail,
+  updateThumbnailPartial,
 } from "../services/thumbnails.ts";
 import { asWorkResource } from "./errors.ts";
 import type { AgentOperationFragment } from "./operations.ts";
@@ -84,7 +85,7 @@ export const thumbnailOperationDefinitions = {
     run: async (input, context) => {
       const { thumbnailId, ...request } = input;
       return {
-        thumbnail: await saveThumbnail(context.prisma, thumbnailId, request),
+        thumbnail: await updateThumbnailPartial(context.prisma, thumbnailId, request),
       };
     },
   },

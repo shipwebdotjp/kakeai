@@ -3,6 +3,7 @@
 Status: accepted
 
 Amended by [ADR 0105](./0108-agent-character-appearance-diff-operations.md)（外観の 1 件追加 addAppearance と部分更新 updateAppearance を公開する。削除は人専用のまま）。
+Amended by [ADR 0109](./0109-agent-operation-set-update-semantics.md)（`character.update` から `appearances` を削除）.
 
 ## 背景
 

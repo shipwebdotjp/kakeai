@@ -916,19 +916,14 @@ describe("agent character operations over the socket", () => {
         "VALIDATION_ERROR",
       );
 
-      // 5. Existing character.update (array replace) still works
-      const arrayUpdated = await client.request("character.update", {
+      // 5. Existing appearance can be updated via character.updateAppearance
+      const arrayUpdated = await client.request("character.updateAppearance", {
         characterId: created.character.id,
-        appearances: [
-          {
-            id: initialAppearanceId,
-            assetId: imageAssetId,
-            expression: "smile",
-            pose: "front",
-          },
-        ],
+        appearanceId: initialAppearanceId,
+        expression: "smile",
+        pose: "front",
       });
-      expect(arrayUpdated.character.appearances).toHaveLength(1);
+      expect(arrayUpdated.character.appearances).toHaveLength(2);
       expect(arrayUpdated.character.appearances[0]!.id).toBe(initialAppearanceId);
     },
   );
@@ -961,23 +956,26 @@ describe("agent character operations over the socket", () => {
       // Replacing appearances leaves names and voices alone. Existing IDs are
       // preserved so work copies keep their library-appearance link.
       const firstAppearanceId = created.character.appearances[0]!.id;
-      const appearanceUpdated = await client.request("character.update", {
+      const updatedAppearance = await client.request("character.updateAppearance", {
         characterId: created.character.id,
-        appearances: [
-          {
-            id: firstAppearanceId,
-            assetId: imageAssetId,
-            expression: "normal",
-            pose: "side",
-            label: "私服",
-          },
-          { assetId: imageAssetId, expression: "smile", pose: "front", faceSetId },
-        ],
+        appearanceId: firstAppearanceId,
+        expression: "normal",
+        pose: "side",
+        label: "私服",
+        faceSetId: null,
       });
+      const addedAppearance = await client.request("character.addAppearance", {
+        characterId: created.character.id,
+        assetId: imageAssetId,
+        expression: "smile",
+        pose: "front",
+        faceSetId,
+      });
+      const appearanceUpdated = addedAppearance;
       expect(appearanceUpdated.character.names).toEqual(created.character.names);
       expect(appearanceUpdated.character.voices).toEqual(created.character.voices);
       expect(appearanceUpdated.character.appearances).toHaveLength(2);
-      expect(appearanceUpdated.character.appearances[0]).toMatchObject({
+      expect(updatedAppearance.character.appearances[0]).toMatchObject({
         id: firstAppearanceId,
         expression: "normal",
         pose: "side",
@@ -1009,29 +1007,6 @@ describe("agent character operations over the socket", () => {
       );
       await expectAgentError(
         client.request("character.update", { characterId: created.character.id }),
-        "VALIDATION_ERROR",
-      );
-      await expectAgentError(
-        client.request("character.update", {
-          characterId: created.character.id,
-          appearances: [
-            { assetId: "missing-asset", expression: "smile", pose: "front" },
-          ],
-        }),
-        "VALIDATION_ERROR",
-      );
-      await expectAgentError(
-        client.request("character.update", {
-          characterId: created.character.id,
-          appearances: [
-            {
-              assetId: imageAssetId,
-              expression: "smile",
-              pose: "front",
-              faceSetId: "missing-face-set",
-            },
-          ],
-        }),
         "VALIDATION_ERROR",
       );
       await expectAgentError(
@@ -1236,7 +1211,7 @@ describe("agent character operations over the socket", () => {
             speakerId: secondSpeakerId,
           },
           {
-            op: "standing.set",
+            op: "standing.upsert",
             sceneId: pointScene.id,
             side: "left",
             characterId: firstCharacterId,

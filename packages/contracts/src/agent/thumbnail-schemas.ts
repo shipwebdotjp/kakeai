@@ -2,6 +2,7 @@ import { AGENT_PREVIEW_IMAGE_BASE64_MAX, agentEmptyInputSchema } from "./protoco
 import { agentThumbnailTemplateContractSchema } from "./template";
 import { z } from "zod";
 import { idSchema, positiveInt } from "../content/primitives";
+import { templateRefSchema } from "../content/nested";
 import { thumbnailSchema } from "../dto";
 import {
   createThumbnailRequestSchema,
@@ -77,10 +78,26 @@ export type AgentThumbnailCreateOutput = z.infer<
   typeof agentThumbnailCreateOutputSchema
 >;
 
-/** Same body as the HTTP save (last-write-wins), plus the candidate id. */
-export const agentThumbnailUpdateInputSchema = saveThumbnailRequestSchema.extend({
-  thumbnailId: idSchema,
-});
+/**
+ * Partial update of one Thumbnail candidate. Every field is optional; at least
+ * one must be given. `appearanceOverride: null` clears the override.
+ */
+export const agentThumbnailUpdateInputSchema = z
+  .strictObject({
+    thumbnailId: idSchema,
+    label: z.string().trim().min(1).optional(),
+    template: templateRefSchema.optional(),
+    input: z.unknown().optional(),
+    appearanceOverride: thumbnailAppearanceSchema.nullable().optional(),
+  })
+  .refine(
+    (value) =>
+      value.label !== undefined ||
+      value.template !== undefined ||
+      value.input !== undefined ||
+      value.appearanceOverride !== undefined,
+    { message: "label / template / input / appearanceOverride のいずれかを指定してください。" },
+  );
 export const agentThumbnailUpdateOutputSchema = z.strictObject({
   thumbnail: thumbnailSchema,
 });
