@@ -5,6 +5,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import HomepageFeatures from '@site/src/components/HomepageFeatures';
 import Heading from '@theme/Heading';
+import {docRoutes} from '@site/src/routes';
 
 import styles from './index.module.css';
 
@@ -20,8 +21,8 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"
-            to="/docs/">
-            ユーザーガイドを読む
+            to={docRoutes.firstVideo}>
+            はじめての動画を作る
           </Link>
         </div>
       </div>
@@ -33,8 +34,8 @@ export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
   return (
     <Layout
-      title={`Hello from ${siteConfig.title}`}
-      description="Description will go into a meta tag in <head />">
+      title={siteConfig.title}
+      description="Kakeai のインストール、動画制作、応用機能を案内するユーザーガイドです。">
       <HomepageHeader />
       <main>
         <HomepageFeatures />

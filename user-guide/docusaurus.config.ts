@@ -1,12 +1,13 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import {docRoutes} from './src/routes';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
   title: 'Kakeai ユーザーガイド',
-  tagline: 'コードから動画を作成する',
+  tagline: '日本語の解説動画を作るためのガイド',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -70,7 +71,7 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
-          label: 'Docs',
+          label: 'ガイド',
         }
       ],
     },
@@ -78,11 +79,11 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'ガイド',
           items: [
             {
-              label: 'Docs',
-              to: '/docs/',
+              label: 'ガイドの目次',
+              to: docRoutes.docsHome,
             },
           ],
         },

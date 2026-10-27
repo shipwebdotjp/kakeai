@@ -1,11 +1,21 @@
 .features {
-  display: flex;
-  align-items: center;
-  padding: 2rem 0;
-  width: 100%;
+  padding: 2rem 0 3rem;
 }
 
-.featureSvg {
-  height: 200px;
-  width: 200px;
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--ifm-card-border-radius);
+  background: var(--ifm-background-surface-color);
+}
+
+.card h2 {
+  font-size: 1.25rem;
+}
+
+.card p {
+  flex-grow: 1;
 }

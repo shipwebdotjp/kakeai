@@ -1,68 +1,56 @@
 import type {ReactNode} from 'react';
-import clsx from 'clsx';
+import Link from '@docusaurus/Link';
 import Heading from '@theme/Heading';
+import {docRoutes} from '@site/src/routes';
 import styles from './styles.module.css';
 
-type FeatureItem = {
+type GuidePath = {
+  id: string;
   title: string;
-  Svg: React.ComponentType<React.ComponentProps<'svg'>>;
-  description: ReactNode;
+  description: string;
+  href: string;
+  action: string;
 };
 
-const FeatureList: FeatureItem[] = [
+const guidePaths: GuidePath[] = [
   {
-    title: 'Easy to Use',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
-    description: (
-      <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
-      </>
-    ),
+    id: 'start',
+    title: 'まずは動画を作る',
+    description: 'インストールから作品の作成、プレビュー、MP4出力までを順番に確認できます。',
+    href: docRoutes.installation,
+    action: 'インストールから始める',
   },
   {
-    title: 'Focus on What Matters',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
-    description: (
-      <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
-      </>
-    ),
+    id: 'feature-lookup',
+    title: '機能から探す',
+    description: '作品管理、素材ライブラリ、音声プロファイルなど、使いたい機能の説明を探せます。',
+    href: docRoutes.docsHome,
+    action: 'ガイドの目次を見る',
   },
   {
-    title: 'Powered by React',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
-    description: (
-      <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
-      </>
-    ),
+    id: 'advanced',
+    title: '応用・自動化',
+    description: '映像のカスタマイズやエージェント連携など、制作を広げる機能を案内します。',
+    href: docRoutes.agentAccess,
+    action: 'エージェント連携を見る',
   },
 ];
-
-function Feature({title, Svg, description}: FeatureItem) {
-  return (
-    <div className={clsx('col col--4')}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
-      </div>
-      <div className="text--center padding-horiz--md">
-        <Heading as="h3">{title}</Heading>
-        <p>{description}</p>
-      </div>
-    </div>
-  );
-}
 
 export default function HomepageFeatures(): ReactNode {
   return (
     <section className={styles.features}>
       <div className="container">
         <div className="row">
-          {FeatureList.map((props, idx) => (
-            <Feature key={idx} {...props} />
+          {guidePaths.map((path) => (
+            <div className="col col--4 margin-bottom--md" key={path.id}>
+              <article className={styles.card}>
+                <Heading as="h2">{path.title}</Heading>
+                <p>{path.description}</p>
+                <Link className="button button--primary" to={path.href}>
+                  {path.action}
+                </Link>
+              </article>
+            </div>
           ))}
         </div>
       </div>
