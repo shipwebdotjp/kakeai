@@ -17,6 +17,7 @@ import type {
 } from "../media/preview-rasterize.ts";
 import { assetStorageKey, commitFile } from "../storage/asset-store.ts";
 import { ensureDataDirectories } from "../storage/paths.ts";
+import { deserializeContent } from "../domain/content-json.ts";
 import { getAssetFrame } from "./preview-asset-frames.ts";
 import { getScriptVersionFrame } from "./preview-script-frames.ts";
 import * as works from "./works.ts";
@@ -182,6 +183,119 @@ describe("preview.scriptFrame", () => {
         timeMs: 0,
       }),
     ).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("rasterizes an unsaved ContentDocument without writing a version or artifact", async () => {
+    const work = await works.createWork(prisma, "下書きプレビュー作品", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const versionRow = await prisma.scriptVersion.findUniqueOrThrow({
+      where: { id: edition.currentScriptVersion.id },
+    });
+    const content = deserializeContent(versionRow.contentJson);
+    const before = {
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    };
+
+    const frame = await getScriptVersionFrame(
+      prisma,
+      config.directories,
+      fakeRasterizer,
+      "http://127.0.0.1:4317",
+      { content, timeMs: 500 },
+    );
+
+    expect(frame.scriptVersionId).toBeNull();
+    expect(frame.requestedTimeMs).toBe(500);
+    expect(frame.durationMs).toBeGreaterThan(0);
+    expect(frame.width).toBe(1);
+    expect(frame.height).toBe(1);
+    expect(frame.mimeType).toBe("image/png");
+    expect(Buffer.from(frame.imageBase64, "base64")).toEqual(PNG_1X1);
+
+    expect({
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    }).toEqual(before);
+  });
+
+  it("validates languageEditionId and locale for unsaved content documents", async () => {
+    const work = await works.createWork(prisma, "言語版検証作品", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const versionRow = await prisma.scriptVersion.findUniqueOrThrow({
+      where: { id: edition.currentScriptVersion.id },
+    });
+    const content = deserializeContent(versionRow.contentJson);
+
+    // Matching edition and locale
+    const frame = await getScriptVersionFrame(
+      prisma,
+      config.directories,
+      fakeRasterizer,
+      "http://127.0.0.1:4317",
+      { content, languageEditionId: edition.id, timeMs: 0 },
+    );
+    expect(frame.scriptVersionId).toBeNull();
+
+    // Locale mismatch
+    const mismatchedContent = { ...content, locale: "en-US" as const };
+    await expect(
+      getScriptVersionFrame(
+        prisma,
+        config.directories,
+        fakeRasterizer,
+        "http://127.0.0.1:4317",
+        { content: mismatchedContent, languageEditionId: edition.id, timeMs: 0 },
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    // Non-existent edition
+    await expect(
+      getScriptVersionFrame(
+        prisma,
+        config.directories,
+        fakeRasterizer,
+        "http://127.0.0.1:4317",
+        { content, languageEditionId: "led_missing", timeMs: 0 },
+      ),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("rejects unsaved content with invalid visual theme or out-of-bounds timeMs", async () => {
+    const work = await works.createWork(prisma, "下書きエラー作品", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const versionRow = await prisma.scriptVersion.findUniqueOrThrow({
+      where: { id: edition.currentScriptVersion.id },
+    });
+    const content = deserializeContent(versionRow.contentJson);
+
+    // Invalid theme ID -> PREVIEW_INPUT_INVALID
+    const invalidThemeContent = {
+      ...content,
+      visualTheme: { ...content.visualTheme, id: "missing-theme" },
+    };
+    await expect(
+      getScriptVersionFrame(
+        prisma,
+        config.directories,
+        fakeRasterizer,
+        "http://127.0.0.1:4317",
+        { content: invalidThemeContent, timeMs: 0 },
+      ),
+    ).rejects.toMatchObject({ code: "PREVIEW_INPUT_INVALID" });
+
+    // timeMs beyond total duration -> VALIDATION_ERROR
+    await expect(
+      getScriptVersionFrame(
+        prisma,
+        config.directories,
+        fakeRasterizer,
+        "http://127.0.0.1:4317",
+        { content, timeMs: 24 * 60 * 60 * 1000 },
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 });
 

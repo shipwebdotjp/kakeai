@@ -309,6 +309,7 @@ kakeai-agent preview.assetFrame --input '{"assetId":"ast-123","timeMs":1500}' --
 ```
 
 - `preview.scriptFrame` は `script.get` / `script.edit` が返す `scriptVersionId` と、`script.validate` の解決済み `timeline` から時刻を選びます。シーンの開始直後はトランジション中なので、開始から 500ms ほど後にすると構図を確認しやすくなります。
+- 保存前の下書きを確認する場合は、`scriptVersionId` の代わりに `{ content, languageEditionId?, timeMs }` を渡します。`content` は ContentDocument、`languageEditionId` はロケール一致と存在を検証する任意項目です。この経路では版・Job・Artifact を作りません。
 - 文字切れ、要素の重なり、画像の欠落、表の見切れ、立ち絵の位置を確認します。問題があれば `script.edit` で直し、新しい版で再度プレビューします。
 - `preview.assetFrame` の画像は保存されている画像そのもの（正規化された画像があればそれ）で、`mimeType` が実際の形式です。動画は指定時刻の PNG、音声は `VALIDATION_ERROR` になります。画像に `timeMs` は指定できません。MCP の image ブロックは PNG / JPEG の素材だけに付き、WebP / GIF / BMP / AVIF は `structuredContent` または CLI の `--out` で取得します。
 - `preview.scriptFrame` は台本版・Job・Artifact を作りません。読み取り操作です。

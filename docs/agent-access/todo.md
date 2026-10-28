@@ -308,3 +308,11 @@
 - [ ] Agent Access 仕様・roadmap・キャラクターライブラリ仕様・制作スキル・ユーザーガイドを更新する。DB migration と HTTP API の変更は行わない
 - 完了条件: ソケット・MCP・CLI から `character.addAppearance` → `character.updateAppearance` で差分操作ができ、既存作品コピーの `libraryAppearanceId` 参照が維持され、削除は `AGENT_OPERATION_UNKNOWN` のままである。
 
+### [x] C15 未保存 ContentDocument のプレビュー
+
+- [x] 契約 `agentPreviewScriptFrameInputSchema` を `z.union` に拡張し、`{ scriptVersionId, timeMs }`（保存版）と `{ content, languageEditionId?, timeMs }`（未保存下書き）の両方を受け付ける。`agentPreviewScriptFrameOutputSchema` の `scriptVersionId` を `idSchema.nullable()` にする。
+- [x] `getScriptVersionFrame` に下書き分岐を追加し、`content` 指定時は `compilePreview(..., { strictTakeDurations: true })` で版を作らず PNG プレビューを返す。`languageEditionId` 指定時は存在確認とロケール一致を検証する。`scriptVersionId`・`Job`・`Artifact` を DB へ追加・編集しないことを保証する。
+- [x] 契約・サービス・ソケット統合・MCP・CLI のテストを追加し、下書きプレビュー、言語版の存在・ロケール不一致検証、コンパイルエラー（`PREVIEW_INPUT_INVALID`）、尺超過（`VALIDATION_ERROR`）、DB 不変性を検証する。
+- [x] 仕様・ロードマップ・TODO・ユーザーガイド・視覚確認仕様を更新する。
+- 完了条件: ソケット・MCP・CLI から未保存の ContentDocument と指定時刻を使って PNG プレビューを取得でき、DB が更新されず、既存の保存版プレビュー契約と挙動が維持される。
+

@@ -18,6 +18,7 @@ import {
   fixtureTtsJob,
   fixtureWork,
 } from "@kakeai/contracts/testing/agent-fixtures";
+import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 
 interface Harness {
   client: Client;
@@ -82,6 +83,37 @@ describe("MCP server over an in-memory transport", () => {
         expect(tool.outputSchema?.type).toBe("object");
         expect(tool.annotations?.destructiveHint).toBe(false);
       }
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it("returns preview.scriptFrame bytes for an unsaved content document draft", async () => {
+    const frame = {
+      scriptVersionId: null,
+      requestedTimeMs: 500,
+      durationMs: 9000,
+      width: 320,
+      height: 240,
+      mimeType: "image/png",
+      imageBase64:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=",
+    };
+    const harness = await connectHarness((operation) => {
+      if (operation === "preview.scriptFrame") {
+        return frame;
+      }
+      throw new Error(`unexpected operation: ${operation}`);
+    });
+    try {
+      const result = await harness.client.callTool({
+        name: "kakeai_preview_script_frame",
+        arguments: { content: validContentDocument(), timeMs: 500 },
+      });
+      expect(result.isError).toBeUndefined();
+      const { imageBase64: _omitted, ...metadata } = frame;
+      expect(textPayload(result)).toEqual(metadata);
+      expect(result.structuredContent).toEqual(frame);
     } finally {
       await harness.close();
     }

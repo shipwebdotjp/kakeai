@@ -25,10 +25,10 @@ Agent Access の R3-4「視覚確認」を正とする。エージェントが�
 ### `preview.scriptFrame`（V2）
 
 - 種別は read、同期、Job を返さない（`longRunning: false`）。版の追加も Artifact の作成も行わない。
-- 入力は `{ scriptVersionId, timeMs }` とする。`scriptVersionId` は `script.get` / `script.edit` が返す現行版を指す。
-- `getScriptVersionPreview` と同じコンパイラで `compositionHtml` と解決済み `timeline` を作り、`timeMs` の PNG を返す。新しいコンパイラや第二のプレビュー HTML は持たない。
+- 入力は `{ scriptVersionId, timeMs }`（保存版）または `{ content, languageEditionId?, timeMs }`（未保存下書き）とする。`scriptVersionId` は `script.get` / `script.edit` が返す現行版を指す。未保存下書きは `ContentDocument` を直接渡し、版・Job・Artifact を作らずに PNG プレビューを得る（C15）。
+- `getScriptVersionPreview` / `compilePreview` と同じコンパイラで `compositionHtml` と解決済み `timeline` を作り、`timeMs` の PNG を返す。新しいコンパイラや第二のプレビュー HTML は持たない。
 - `timeMs` は `timeline.totalDurationMs` 以下とする。超える場合は `VALIDATION_ERROR`（issue path は `["timeMs"]`）。
-- 出力は `{ scriptVersionId, requestedTimeMs, durationMs, width, height, mimeType: "image/png", imageBase64 }` とする。PNG は原寸で、縮小しない。
+- 出力は `{ scriptVersionId, requestedTimeMs, durationMs, width, height, mimeType: "image/png", imageBase64 }` とする。未保存下書きの場合 `scriptVersionId` は `null` となる。PNG は原寸で、縮小しない。
 - 未知の `scriptVersionId` は `RESOURCE_NOT_FOUND`、コンパイル不能は `PREVIEW_INPUT_INVALID`、ブラウザ・描画の失敗は `INTERNAL_ERROR` とする。
 - プレビューは構図・文字切れ・重なり・素材の欠落の確認用であり、render 成果物そのものではない。色・動き・音の最終判断は人に残す。
 
@@ -65,6 +65,6 @@ Agent Access の R3-4「視覚確認」を正とする。エージェントが�
 
 ## 非ゴール
 
-- 下書き（未保存 ContentDocument）のプレビューは V2 に含めない。エージェントの `script.edit` は保存を伴うため、保存版で足りる。必要になった時点で個別に仕様化する。
+- 下書き（未保存 ContentDocument）のプレビューは C15 で実装済み。
 - 動画クリップの返却、複数時刻の一括取得、画像の縮小・形式指定パラメータは V2 に含めない。単一フレームの利用実績を見てから改訂する。
 - プロトコル版は上げない。操作追加は「追加は自由」に該当し、`operationDigest`・`schemaDigest` の変化は想定内とする。

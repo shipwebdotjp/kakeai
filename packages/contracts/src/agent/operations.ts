@@ -402,16 +402,23 @@ export const agentPreviewImageMimeTypeSchema = z.enum([
 ]);
 
 /**
- * `preview.scriptFrame` rasterizes a saved ScriptVersion with the same HTML
- * compiler as the Web UI and render worker, seeking to `timeMs` without
- * creating a render Job, ScriptVersion, or Artifact.
+ * `preview.scriptFrame` rasterizes a saved ScriptVersion or an unsaved draft
+ * ContentDocument with the same HTML compiler as the Web UI and render worker,
+ * seeking to `timeMs` without creating a render Job, ScriptVersion, or Artifact.
  */
-export const agentPreviewScriptFrameInputSchema = z.strictObject({
-  scriptVersionId: idSchema,
-  timeMs: nonNegativeInt,
-});
+export const agentPreviewScriptFrameInputSchema = z.union([
+  z.strictObject({
+    scriptVersionId: idSchema,
+    timeMs: nonNegativeInt,
+  }),
+  z.strictObject({
+    content: contentDocumentSchema,
+    languageEditionId: idSchema.optional(),
+    timeMs: nonNegativeInt,
+  }),
+]);
 export const agentPreviewScriptFrameOutputSchema = z.strictObject({
-  scriptVersionId: idSchema,
+  scriptVersionId: idSchema.nullable(),
   requestedTimeMs: nonNegativeInt,
   durationMs: nonNegativeInt,
   width: positiveInt,
@@ -419,7 +426,7 @@ export const agentPreviewScriptFrameOutputSchema = z.strictObject({
   mimeType: z.literal("image/png"),
   imageBase64: z.string().min(1).max(AGENT_PREVIEW_IMAGE_BASE64_MAX),
 });
-export type AgentPreviewScriptFrameInput = z.input<
+export type AgentPreviewScriptFrameInput = z.output<
   typeof agentPreviewScriptFrameInputSchema
 >;
 export type AgentPreviewScriptFrameOutput = z.infer<

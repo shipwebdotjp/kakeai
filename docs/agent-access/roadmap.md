@@ -226,7 +226,7 @@ B1〜B14 の後、または並行して検討する候補である。C1〜C8 は
 | C12（実装済み） | Asset 検索の寸法条件 | read | `asset.list` の `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む範囲） | B21 で実装。表情レイヤー・背景の「同寸画像」を探す。向きは追加していない |
 | C13（実装済み） | Asset の可逆な整理 | mutation | `asset.update` の `favorited` / `archived` | B22 で実装。削除は人専用のまま。アーカイブは既定の検索から隠すだけで参照は壊さない |
 | C14（実装済み） | Character 外観の差分操作 | mutation | `character.addAppearance` / `character.updateAppearance` | B23 で実装。1件追加（全項目）と部分更新（省略＝不変、null＝解除）を公開し、作品コピーの ID 参照を維持する |
-| C15 | 未保存 ContentDocument のプレビュー | read | `preview.scriptFrame` の下書き対応 | 版を作らず構図を反復できる。保存済み版の既存契約は変えない |
+| C15（実装済み） | 未保存 ContentDocument のプレビュー | read | `preview.scriptFrame` の下書き対応 | C15 で実装。`{ content, languageEditionId?, timeMs }` を受け、版を作らず PNG を返す。`scriptVersionId` は `null` になる |
 | C16 | 音声の自動検査 | read | `tts.inspect` / `preview.audio`（長さ・ラウドネス・無音） | エージェントは音を聴けないため、無音 TTS を検出できない。新しい解析能力の要否から決める |
 
 ### 着手時に決めた論点（B20）
@@ -311,6 +311,7 @@ A9 完了時点で認識している制約である。B1〜B4・B10 の完了で
 | 完了 | C9〜C11 Face Set 作成・部分更新・合成プレビュー | B20 で実装。`faceSet.create` / `faceSet.update` / `faceSet.usages` / `preview.faceSet`（[ADR 0105](../adr/0105-agent-face-set-writes-and-preview.md)） |
 | 完了 | C12 Asset 検索の寸法条件 | B21 で実装。`asset.list` の完全一致と範囲。向き・索引は追加しない |
 | 完了 | C13 Asset の可逆な整理 | B22 で実装。`asset.update` のお気に入り・アーカイブ。削除は人専用 |
+| 完了 | C15 未保存 ContentDocument プレビュー | C15 で実装。`preview.scriptFrame` の `{ content, languageEditionId?, timeMs }` |
 | 未定 | C14〜C16 次期候補 | 台本の外側のライブラリ・成果物・診断。着手時に優先順位と設計を決める（[次期候補](#次期候補c1c16)） |
 
 ## 変わらない原則

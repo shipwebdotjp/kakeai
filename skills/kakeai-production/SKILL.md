@@ -501,6 +501,9 @@ tools and bring in through `asset.import`.
      a full-resolution PNG without creating a version, Job, or Artifact. In MCP
      the picture is an image block; in the CLI use `--out frame.png` to write
      the file and keep stdout small.
+   - For an unsaved draft, call `preview.scriptFrame` with
+     `{ content, languageEditionId?, timeMs }` instead. This also creates no
+     version, Job, or Artifact; `scriptVersionId` is `null` in the response.
    - Look for text overflow, overlapping elements, missing images, table
      clipping and standing-character placement. If you find a real problem,
      fix it with `script.edit` and preview the new version again.

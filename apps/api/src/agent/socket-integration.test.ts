@@ -22,6 +22,7 @@ import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
 import { applySqlitePragmas } from "../db/pragmas.ts";
 import type { PreviewRasterizer } from "../media/preview-rasterize.ts";
+import { deserializeContent } from "../domain/content-json.ts";
 import { FakeFontCatalogAdapter, FontCatalogService } from "../services/font-catalog.ts";
 import { ensureDataDirectories } from "../storage/paths.ts";
 import { commitFile } from "../storage/asset-store.ts";
@@ -532,6 +533,38 @@ describe("agent socket integration", () => {
       }),
       "RESOURCE_NOT_FOUND",
     );
+
+    expect({
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    }).toEqual(before);
+  });
+
+  it("rasterizes an unsaved content document without creating a version or render", async () => {
+    const work = await createWork("下書きソケットテスト作品");
+    const edition = firstEdition(work);
+    const versionRow = await prisma.scriptVersion.findUniqueOrThrow({
+      where: { id: edition.currentScriptVersion.id },
+    });
+    const content = deserializeContent(versionRow.contentJson);
+    const before = {
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    };
+
+    const frame = await client.request("preview.scriptFrame", {
+      content,
+      timeMs: 500,
+    });
+    expect(frame.scriptVersionId).toBeNull();
+    expect(frame.requestedTimeMs).toBe(500);
+    expect(frame.durationMs).toBeGreaterThan(0);
+    expect(frame.width).toBe(1);
+    expect(frame.height).toBe(1);
+    expect(frame.mimeType).toBe("image/png");
+    expect(Buffer.from(frame.imageBase64, "base64")).toEqual(PNG_1X1);
 
     expect({
       versions: await prisma.scriptVersion.count(),

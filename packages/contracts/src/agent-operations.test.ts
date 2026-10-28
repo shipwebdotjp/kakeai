@@ -394,10 +394,22 @@ describe("preview.scriptFrame operation contract", () => {
     imageBase64: "aVBORw0KGgo=",
   };
 
-  it("takes a script version and a non-negative time", () => {
+  it("takes a script version or unsaved content document and a non-negative time", () => {
+    const content = validContentDocument();
     expect(
       agentPreviewScriptFrameInputSchema.parse({ scriptVersionId: "scr-1", timeMs: 0 }),
     ).toEqual({ scriptVersionId: "scr-1", timeMs: 0 });
+    expect(
+      agentPreviewScriptFrameInputSchema.parse({ content, timeMs: 1000 }),
+    ).toEqual({ content, timeMs: 1000 });
+    expect(
+      agentPreviewScriptFrameInputSchema.parse({
+        content,
+        languageEditionId: "led-1",
+        timeMs: 1000,
+      }),
+    ).toEqual({ content, languageEditionId: "led-1", timeMs: 1000 });
+
     expect(
       agentPreviewScriptFrameInputSchema.safeParse({ scriptVersionId: "scr-1", timeMs: -1 })
         .success,
@@ -406,11 +418,22 @@ describe("preview.scriptFrame operation contract", () => {
     expect(
       agentPreviewScriptFrameInputSchema.safeParse({
         scriptVersionId: "scr-1",
+        content,
+        timeMs: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({
+        scriptVersionId: "scr-1",
         timeMs: 0,
         extra: true,
       }).success,
     ).toBe(false);
+
     expect(agentPreviewScriptFrameOutputSchema.safeParse(frame).success).toBe(true);
+    expect(
+      agentPreviewScriptFrameOutputSchema.safeParse({ ...frame, scriptVersionId: null }).success,
+    ).toBe(true);
     expect(
       agentPreviewScriptFrameOutputSchema.safeParse({ ...frame, imageBase64: "" }).success,
     ).toBe(false);

@@ -19,6 +19,7 @@ import {
   fixtureTtsJob,
   fixtureWork,
 } from "@kakeai/contracts/testing/agent-fixtures";
+import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 
 type Handler = (operation: AgentOperationName, input: unknown) => unknown;
 
@@ -375,6 +376,46 @@ describe("CLI invocation", () => {
     expect(stdout.imageBase64).toBeUndefined();
     expect(stdout.path).toBe(outPath);
     expect(stdout.scriptVersionId).toBe("scr-1");
+    expect(stdout.durationMs).toBe(9000);
+  });
+
+  it("writes preview.scriptFrame image bytes for an unsaved draft with --out", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kakeai-cli-out-"));
+    dirs.push(dir);
+    const frame = {
+      scriptVersionId: null,
+      requestedTimeMs: 500,
+      durationMs: 9000,
+      width: 320,
+      height: 240,
+      mimeType: "image/png",
+      imageBase64: "aVBORw0KGgo=",
+    };
+    const handler: Handler = (operation, input) => {
+      expect(operation).toBe("preview.scriptFrame");
+      expect(input).toMatchObject({ timeMs: 500 });
+      return frame;
+    };
+    const outPath = join(dir, "unsaved-script-frame.png");
+    const captured = capture(handler);
+    expect(
+      await runCli(
+        [
+          "preview.scriptFrame",
+          "--input",
+          JSON.stringify({ content: validContentDocument(), timeMs: 500 }),
+          "--out",
+          outPath,
+        ],
+        captured.io,
+      ),
+    ).toBe(0);
+    expect(captured.stderr()).toBe("");
+    expect(await readFile(outPath)).toEqual(Buffer.from(frame.imageBase64, "base64"));
+    const stdout = JSON.parse(captured.stdout()) as Record<string, unknown>;
+    expect(stdout.imageBase64).toBeUndefined();
+    expect(stdout.path).toBe(outPath);
+    expect(stdout.scriptVersionId).toBeNull();
     expect(stdout.durationMs).toBe(9000);
   });
 
