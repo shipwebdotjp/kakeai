@@ -335,7 +335,7 @@ kakeai-agent thumbnail.image --input '{"thumbnailId":"thm-123"}' --out thumbnail
 ```
 
 - `thumbnail.listTemplates` の `example` にある `<...>` は実在する画像 Asset の ID に置き換えます。背景・前景は `ready` な画像が必要です。前景は透過 PNG / WebP を想定していますが、アプリは透過性を検査しません。`preview.thumbnail` の PNG で確認してください。
-- 候補の `appearanceOverride` で見出しの色・書体・サイズなどを候補単位で上書きできます。言語版共通の Appearance の保存と外観プリセットは UI 専用です。
+- 候補の `appearanceOverride` で見出しの色・書体・サイズなどを候補単位で上書きできます。Work 共通の Appearance の保存と外観プリセットは UI 専用です。
 - 候補の削除は公開していません。不要な候補は UI で整理してください。
 - `thumbnail.create` / `thumbnail.update` は `requestId` を持ちません。タイムアウト後は `thumbnail.list` で `label` と `createdAt` / `updatedAt` を確認してから再実行します。
 - サムネイルの PNG 生成も画像系の読み取りで、タイムアウトは 30 秒です。Job や Artifact は作りません。

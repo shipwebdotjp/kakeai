@@ -1,6 +1,6 @@
 # サムネイルはTheme継承の疎なAppearance上書きで個別化する
 
-Status: amends ADR-0059, ADR-0080, amended by [ADR-0085](./0085-thumbnail-appearance-presets-as-snapshots.md)
+Status: amends ADR-0059, ADR-0080, amended by [ADR-0085](./0085-thumbnail-appearance-presets-as-snapshots.md), [ADR-0111](./0111-work-scoped-thumbnail-appearance.md)
 
 サムネイルの見た目は引き続き Visual Theme を既定とするが、チャンネルごとの文字サイズ・色・書体・強調色・暗幕を調整するために、言語版共通と候補単位の2段階で**プロパティ単位の疎な上書き**を持つ。あわせて同梱テンプレートを `thumbnail.cutout-hero@1` だけに整理し、旧4テンプレートを削除する。
 

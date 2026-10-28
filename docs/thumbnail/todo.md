@@ -80,3 +80,15 @@
 - [x] 既存候補で新しい任意項目が未設定でもUI既定値が表示されるよう、テンプレートのUI既定値を候補入力へマージする
 - [x] 契約・コンパイラ・UIヘルパーのテストと、spec・ユーザーガイドを更新する
 - 完了条件: 0.5倍と1.8倍、6種の基準点、文字幅、折り返しON/OFFがプレビューとPNGに反映される。
+
+### [x] T10 作品共通のサムネイル外観と他言語候補の取り込み
+
+- [x] 外観の所有先を `LanguageEdition` から `Work` へ移し、解決順を Theme → Work → 候補上書きにする
+- [x] Thumbnail Appearance の Font Face を `fontFaceByLocale` に変え、localeごとの解決とUIタブを実装する
+- [x] 外観APIを `GET/PUT /works/:workId/thumbnail-appearance?languageEditionId=...` へ変更し、EditionのWork所属を検証する
+- [x] Thumbnail文書をv3へ上げ、旧候補・Edition外観値・旧形式プリセットを破棄するDB更新を追加する
+- [x] Webのサムネイル画面に現在localeを表示し、他言語版の候補を取り込むフォームと破棄操作を追加する
+- [x] 外観プリセットの適用先をWork共通外観の下書きへ移す
+- [x] [spec.md](./spec.md)、MVP仕様・API契約、ユーザーガイド、CONTEXT、ADR-0111/0112を更新する
+- 完了条件: Work外観のライブ反映、locale別フォント、候補固有上書きの優先、他言語候補の取り込みと破棄、DB更新後の保持データがテストで確認でき、`npm run typecheck` と `npm test` が通る。
+

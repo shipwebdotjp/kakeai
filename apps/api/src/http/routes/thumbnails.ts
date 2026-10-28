@@ -13,7 +13,7 @@ import type { DataDirectories } from "../../storage/paths.ts";
 import type { Rasterizer } from "../../media/rasterize.ts";
 import { getSharedRasterizer } from "../../media/rasterize.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
-import { parseBody, pathParam } from "../validation.ts";
+import { parseBody, pathParam, validationError } from "../validation.ts";
 import * as thumbnails from "../../services/thumbnails.ts";
 import * as thumbnailAppearancePresets from "../../services/thumbnail-appearance-presets.ts";
 
@@ -22,6 +22,20 @@ export interface ThumbnailsRouterDependencies {
   directories: DataDirectories;
   mediaGuard: RequestHandler;
   rasterizer?: Rasterizer;
+}
+
+function requiredQuery(req: { query: Record<string, unknown> }, name: string): string {
+  const value = req.query[name];
+  if (typeof value !== "string" || value.length === 0) {
+    throw validationError([
+      {
+        path: [name],
+        code: "invalid_value",
+        message: `クエリ ${name} が必要です。`,
+      },
+    ]);
+  }
+  return value;
 }
 
 export function createThumbnailsRouter(dependencies: ThumbnailsRouterDependencies): Router {
@@ -117,18 +131,22 @@ export function createThumbnailsRouter(dependencies: ThumbnailsRouterDependencie
   );
 
   router.get(
-    "/language-editions/:editionId/thumbnail-appearance",
+    "/works/:workId/thumbnail-appearance",
     asyncHandler(async (req, res) => {
       sendData(
         res,
         200,
-        await thumbnails.getThumbnailAppearance(prisma, pathParam(req, "editionId")),
+        await thumbnails.getThumbnailAppearance(
+          prisma,
+          pathParam(req, "workId"),
+          requiredQuery(req, "languageEditionId"),
+        ),
       );
     }),
   );
 
   router.put(
-    "/language-editions/:editionId/thumbnail-appearance",
+    "/works/:workId/thumbnail-appearance",
     asyncHandler(async (req, res) => {
       const input = parseBody(updateThumbnailAppearanceRequestSchema, req.body);
       sendData(
@@ -136,7 +154,8 @@ export function createThumbnailsRouter(dependencies: ThumbnailsRouterDependencie
         200,
         await thumbnails.saveThumbnailAppearance(
           prisma,
-          pathParam(req, "editionId"),
+          pathParam(req, "workId"),
+          requiredQuery(req, "languageEditionId"),
           input.appearance,
         ),
       );

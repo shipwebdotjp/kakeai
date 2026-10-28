@@ -94,7 +94,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "preview.assetFrame":
     "素材 1 件の絵を返す。画像は保存されている画像そのもの（MIME は `mimeType`）、動画は指定時刻（`timeMs`、既定 0）の PNG 静止画を返す。音声素材は指定できない。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。素材の見た目を確認したいときに使う。",
   "preview.thumbnail":
-    "未保存のサムネイル下書き（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の Edition 共通 `appearance`）を 1280x720 の PNG にする。DB へは書かない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。保存前に見出しの折り返しと前景の透過を確認するときに使う。`appearance` を省略すると保存済みの Edition 共通 Appearance を使い、null なら使わない。",
+    "未保存のサムネイル下書き（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の Work 共通 `appearance`）を 1280x720 の PNG にする。DB へは書かない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。保存前に見出しの折り返しと前景の透過を確認するときに使う。`appearance` を省略すると保存済みの Work 共通 Appearance を使い、null なら使わない。",
   "preview.faceSet":
     "未保存の Face Set 下書き（`layers`・`expressions`・任意の `expressionId`（既定 `normal`）・ベースになる ready な画像 Asset の `baseAssetId`）を合成し、PNG を返す。ベース画像の寸法で、眉・目・口と foreground を重ねる。DB・Face Set・改訂版・Job・Artifact は作らない。Face Set を作成・更新する前に、表情の見た目と位置ずれを確認するときに使う。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。`--out` で PNG を書き出せる。",
   "thumbnail.listTemplates":
@@ -103,7 +103,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "言語版のサムネイル候補を一覧で返す。各候補に `isPrimary` と `appearanceOverride` を含む。存在しない言語版は WORK_NOT_FOUND。",
   "thumbnail.get": "サムネイル候補 1 件を返す。存在しない ID は RESOURCE_NOT_FOUND。",
   "thumbnail.appearance":
-    "言語版の共通サムネイル Appearance を、Theme 由来の既定値と解決済みの値付きで返す。共通 Appearance の保存はアプリ UI に限る。",
+    "その言語版の文脈で解決した Work 共通サムネイル Appearance を、Theme 由来の既定値と解決済みの値付きで返す。共通 Appearance の保存はアプリ UI に限る。",
   "thumbnail.create":
     "言語版にサムネイル候補を作成して返す。`label`・`template`・`input` と任意の `appearanceOverride` を指定する。`input` は thumbnail.listTemplates の `inputSchema` に従い、背景と前景は ready な画像 Asset の ID にする。最初の候補は自動で primary になる。`requestId` は持たないため、タイムアウト後は thumbnail.list で `label` と `createdAt` を確認してから再実行する。",
   "thumbnail.update":

@@ -4,14 +4,18 @@ import {
   clearOutlineValue,
   clearScrimValue,
   clearTextDecoration,
+  clearTextFontFaceForLocale,
   clearTextValue,
   setAccent,
   setDecorationValue,
   setOutlineValue,
   setScrimValue,
   setTextDecoration,
+  setTextFontFaceForLocale,
   setTextValue,
 } from "./thumbnailAppearance";
+
+const FACE = { family: "Noto Sans JP", style: "normal" as const, weight: 400, fallbacks: [] };
 
 describe("thumbnailAppearance helpers", () => {
   it("sets and clears text properties", () => {
@@ -75,5 +79,28 @@ describe("thumbnailAppearance helpers", () => {
     const cleared = clearScrimValue(original, "opacity");
     expect(original).toEqual({ scrim: { color: "#000000", opacity: 0.2 } });
     expect(cleared).toEqual({ scrim: { color: "#000000" } });
+  });
+
+  it("sets and clears the Font Face for one locale", () => {
+    const ja = setTextFontFaceForLocale(null, "headline", "ja-JP", FACE);
+    expect(ja).toEqual({ headline: { fontFaceByLocale: { "ja-JP": FACE } } });
+    const both = setTextFontFaceForLocale(
+      ja,
+      "headline",
+      "en-US",
+      { ...FACE, family: "Inter" },
+    );
+    expect(both).toEqual({
+      headline: {
+        fontFaceByLocale: {
+          "ja-JP": FACE,
+          "en-US": { ...FACE, family: "Inter" },
+        },
+      },
+    });
+    expect(clearTextFontFaceForLocale(both, "headline", "ja-JP")).toEqual({
+      headline: { fontFaceByLocale: { "en-US": { ...FACE, family: "Inter" } } },
+    });
+    expect(clearTextFontFaceForLocale(ja, "headline", "ja-JP")).toBeNull();
   });
 });

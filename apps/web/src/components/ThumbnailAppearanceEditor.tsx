@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from "react";
-import type {
-  FontFace,
-  ResolvedThumbnailAppearance,
-  ResolvedThumbnailTextStyle,
-  ThumbnailAppearance,
-  ThumbnailTextAppearance,
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  SUPPORTED_LOCALES,
+  type FontFace,
+  type ResolvedThumbnailAppearance,
+  type ResolvedThumbnailTextStyle,
+  type SupportedLocale,
+  type ThumbnailAppearance,
+  type ThumbnailTextAppearance,
 } from "@kakeai/contracts";
 import { selectableFontFaces } from "../lib/fontFaceOptions";
 import {
@@ -12,12 +14,14 @@ import {
   clearOutlineValue,
   clearScrimValue,
   clearTextDecoration,
+  clearTextFontFaceForLocale,
   clearTextValue,
   setAccent,
   setDecorationValue,
   setOutlineValue,
   setScrimValue,
   setTextDecoration,
+  setTextFontFaceForLocale,
   setTextValue,
   type ThumbnailDecorationKey,
   type ThumbnailTextRole,
@@ -28,6 +32,7 @@ import {
   metaTextClass,
   textFieldClass,
 } from "../ui";
+import { LOCALE_LABELS } from "../lib/localeLabels";
 
 const FONT_CATEGORIES = [
   "sans",
@@ -100,6 +105,7 @@ function TextRoleEditor({
   fontCatalogSupported,
   fontSearch,
   idPrefix,
+  locale,
 }: {
   role: ThumbnailTextRole;
   label: string;
@@ -110,11 +116,19 @@ function TextRoleEditor({
   fontCatalogSupported: boolean;
   fontSearch: string;
   idPrefix: string;
+  locale: SupportedLocale;
 }) {
   const text: ThumbnailTextAppearance = value?.[role] ?? {};
-  const faceOptions = selectableFontFaces(fontFaces, fontSearch, text.fontFace?.platformId);
+  const [fontLocale, setFontLocale] = useState<SupportedLocale>(locale);
+  useEffect(() => {
+    setFontLocale(locale);
+  }, [locale]);
+  const localeFace = text.fontFaceByLocale?.[fontLocale];
+  const faceOptions = selectableFontFaces(fontFaces, fontSearch, localeFace?.platformId);
   const inheritedFace =
-    base.fontFace === undefined ? "カテゴリ既定" : base.fontFace.family;
+    fontLocale === locale && base.fontFace !== undefined
+      ? base.fontFace.family
+      : "Themeのフォント";
 
   return (
     <fieldset className="rounded border border-border p-2">
@@ -145,32 +159,53 @@ function TextRoleEditor({
           </select>
         </label>
 
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="w-28 shrink-0">Font Face</span>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="フォントを指定する言語">
+            {SUPPORTED_LOCALES.map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                aria-pressed={candidate === fontLocale}
+                className={`rounded border px-2 py-0.5 text-xs ${
+                  candidate === fontLocale
+                    ? "border-brand-600 bg-brand-50 text-brand-700"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setFontLocale(candidate)}
+              >
+                {LOCALE_LABELS[candidate]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {fontCatalogSupported ? (
           <label className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="w-28 shrink-0">Font Face</span>
+            <span className="w-28 shrink-0">指定（{LOCALE_LABELS[fontLocale]}）</span>
             <select
-              id={`${idPrefix}-${role}-face`}
+              id={`${idPrefix}-${role}-face-${fontLocale}`}
               className={textFieldClass}
-              value={text.fontFace?.platformId ?? ""}
+              value={localeFace?.platformId ?? ""}
               onChange={(event) => {
                 const selected = event.target.value;
                 if (selected.length === 0) {
-                  onChange(clearTextValue(value, role, "fontFace"));
+                  onChange(clearTextFontFaceForLocale(value, role, fontLocale));
                   return;
                 }
                 const face = fontFaces.find((candidate) => candidate.postScriptName === selected);
                 if (face !== undefined) {
-                  onChange(setTextValue(value, role, "fontFace", toFontFaceSpec(face)));
+                  onChange(setTextFontFaceForLocale(value, role, fontLocale, toFontFaceSpec(face)));
                 }
               }}
             >
               <option value="">継承（{inheritedFace}）</option>
-              {text.fontFace?.platformId !== undefined &&
+              {localeFace?.platformId !== undefined &&
                 !faceOptions.some(
-                  (face) => face.postScriptName === text.fontFace?.platformId,
+                  (face) => face.postScriptName === localeFace?.platformId,
                 ) && (
-                  <option value={text.fontFace.platformId}>
-                    （この端末にないフォント: {text.fontFace.family}）
+                  <option value={localeFace.platformId}>
+                    （この端末にないフォント: {localeFace.family}）
                   </option>
                 )}
               {faceOptions.map((face) => (
@@ -182,18 +217,21 @@ function TextRoleEditor({
           </label>
         ) : (
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="w-28 shrink-0">Font Face</span>
-            <span className={metaTextClass}>{text.fontFace?.family ?? inheritedFace}</span>
-            {text.fontFace !== undefined && (
+            <span className="w-28 shrink-0">指定（{LOCALE_LABELS[fontLocale]}）</span>
+            <span className={metaTextClass}>{localeFace?.family ?? inheritedFace}</span>
+            {localeFace !== undefined && (
               <button
                 type="button"
                 className={buttonNeutralClass}
-                onClick={() => onChange(clearTextValue(value, role, "fontFace"))}
+                onClick={() => onChange(clearTextFontFaceForLocale(value, role, fontLocale))}
               >
                 解除
               </button>
             )}
           </div>
+        )}
+        {localeFace === undefined && (
+          <p className={metaTextClass}>この言語ではThemeのフォントを使います。</p>
         )}
 
         <PropertyRow
@@ -406,6 +444,8 @@ export interface ThumbnailAppearanceEditorProps {
   fontFaces: readonly FontFace[];
   fontCatalogSupported: boolean;
   idPrefix: string;
+  /** Locale of the Language Edition that supplies Theme and rendering context. */
+  locale: SupportedLocale;
   resetLabel?: string;
 }
 
@@ -416,6 +456,7 @@ export function ThumbnailAppearanceEditor({
   fontFaces,
   fontCatalogSupported,
   idPrefix,
+  locale,
   resetLabel = "すべてThemeに戻す",
 }: ThumbnailAppearanceEditorProps) {
   const [fontSearch, setFontSearch] = useState("");
@@ -444,6 +485,7 @@ export function ThumbnailAppearanceEditor({
         fontCatalogSupported={fontCatalogSupported}
         fontSearch={fontSearch}
         idPrefix={idPrefix}
+        locale={locale}
       />
       <TextRoleEditor
         role="subline"
@@ -455,6 +497,7 @@ export function ThumbnailAppearanceEditor({
         fontCatalogSupported={fontCatalogSupported}
         fontSearch={fontSearch}
         idPrefix={idPrefix}
+        locale={locale}
       />
 
       <fieldset className="rounded border border-border p-2">

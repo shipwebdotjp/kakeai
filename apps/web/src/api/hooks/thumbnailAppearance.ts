@@ -8,38 +8,53 @@ import type {
   UpdateThumbnailAppearancePresetRequest,
 } from "@kakeai/contracts";
 import { apiRequest } from "../client";
-import { queryKeys } from "./queryKeys";
 
-export function useThumbnailAppearance(editionId: string | undefined) {
+export function useThumbnailAppearance(
+  workId: string | undefined,
+  editionId: string | undefined,
+) {
   return useQuery({
-    queryKey: ["thumbnail-appearance", editionId],
-    enabled: editionId !== undefined && editionId.length > 0,
+    queryKey: ["thumbnail-appearance", workId, editionId],
+    enabled:
+      workId !== undefined &&
+      workId.length > 0 &&
+      editionId !== undefined &&
+      editionId.length > 0,
     queryFn: async () =>
       (
         await apiRequest<ThumbnailAppearanceView>(
-          `/language-editions/${encodeURIComponent(editionId ?? "")}/thumbnail-appearance`,
+          `/works/${encodeURIComponent(workId ?? "")}/thumbnail-appearance?languageEditionId=${encodeURIComponent(editionId ?? "")}`,
         )
       ).data,
   });
 }
 
-export function useSaveThumbnailAppearance(editionId: string | undefined) {
+export function useSaveThumbnailAppearance(
+  workId: string | undefined,
+  editionId: string | undefined,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (appearance: ThumbnailAppearance | null) => {
-      if (editionId === undefined || editionId.length === 0) {
-        throw new Error("editionId がありません");
+      if (
+        workId === undefined ||
+        workId.length === 0 ||
+        editionId === undefined ||
+        editionId.length === 0
+      ) {
+        throw new Error("workId / editionId がありません");
       }
       return (
         await apiRequest<ThumbnailAppearanceView>(
-          `/language-editions/${encodeURIComponent(editionId)}/thumbnail-appearance`,
+          `/works/${encodeURIComponent(workId)}/thumbnail-appearance?languageEditionId=${encodeURIComponent(editionId)}`,
           { method: "PUT", body: { appearance } },
         )
       ).data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance", editionId] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.thumbnails(editionId) });
+      queryClient.invalidateQueries({ queryKey: ["thumbnail-appearance"] });
+      // The Work appearance is live, so every Edition's candidates change.
+      queryClient.invalidateQueries({ queryKey: ["thumbnails"] });
     },
   });
 }

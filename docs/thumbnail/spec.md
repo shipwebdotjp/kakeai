@@ -17,7 +17,7 @@
 - コンパイル済みサムネイル HTML（プレビュー用）
 - 生成した PNG
 
-サムネイル文書は ScriptVersion の `contentJson` にも含めない。独立した契約とする。新規保存は `schemaVersion: 2` とし、v1 文書は読み取りのみ互換とする（[ADR 0058](../adr/0058-thumbnail-mutable-candidates.md)）。
+サムネイル文書は ScriptVersion の `contentJson` にも含めない。独立した契約とする。新規保存は `schemaVersion: 3` とし、旧 v1/v2 文書の読み取り互換は持たない（[ADR 0111](../adr/0111-work-scoped-thumbnail-appearance.md)）。
 
 ## データモデル
 
@@ -26,33 +26,36 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 | モデル | 主な列 | 制約・用途 |
 | --- | --- | --- |
 | `Thumbnail` | `id`, `languageEditionId`, `label`, `schemaVersion`, `templateId`, `templateVersion`, `inputJson`, `createdAt`, `updatedAt` | Language Edition 配下の可変なサムネイル候補。`@@index([languageEditionId])`。テンプレート版のGC条件に使うため `templateId`/`templateVersion` を検索用カラムにも持つ。 |
-| `LanguageEdition`（追加列） | `primaryThumbnailId?`, `thumbnailAppearanceJson?` | `primaryThumbnailId` は選択中の候補。`thumbnailAppearanceJson` は言語版共通のサムネイル外観（疎な上書きJSON）。 |
-| `ThumbnailAppearancePreset` | `id`, `name`, `appearanceJson`, `createdAt`, `updatedAt` | アプリ全体で再利用する名前付きのサムネイル外観プリセット。`appearanceJson` は疎な上書きJSON。適用は言語版の `thumbnailAppearanceJson` へのスナップショットコピーで、プリセットへの参照は保存しない。`@@index([updatedAt])`。 |
+| `Work`（追加列） | `thumbnailAppearanceJson?` | 作品共通のサムネイル外観（疎な上書きJSON）。同じ Work の全 Language Edition と候補が共有する。 |
+| `LanguageEdition`（追加列） | `primaryThumbnailId?` | 選択中の候補。外観は持たない。 |
+| `ThumbnailAppearancePreset` | `id`, `name`, `appearanceJson`, `createdAt`, `updatedAt` | アプリ全体で再利用する名前付きのサムネイル外観プリセット。`appearanceJson` は疎な上書きJSON。適用は Work の `thumbnailAppearanceJson` へのスナップショットコピーで、プリセットへの参照は保存しない。`@@index([updatedAt])`。 |
 
 - 候補は可変とし、明示保存で `inputJson` をその場で上書きする（last-write-wins）。版履歴・復元は持たない。
 - 候補の追加・削除・選択は自由。`primaryThumbnailId` を指す候補を削除する場合は、同一トランザクションで別候補へ付け替えるか NULL にする。
-- `inputJson` は v2 では `{ schemaVersion: 2, template: { id, version }, input: <template固有>, appearanceOverride?: <Thumbnail Appearance> }` を持つ。v1 は `appearanceOverride` を持たない文書として読み取る。旧テンプレートを参照する保存済み候補は存在しない前提で、旧テンプレートの解決は行わない。テンプレートの `inputSchema` で保存前に検証する。
+- `inputJson` は v3 では `{ schemaVersion: 3, template: { id, version }, input: <template固有>, appearanceOverride?: <Thumbnail Appearance> }` を持つ。旧 v1/v2 文書は読まない。テンプレートの `inputSchema` で保存前に検証する。
 - `inputJson` が参照する `assetId` は、保存前に ready な素材の存在と種別（画像）をアプリケーション層で検証する。ContentDocument と同じく外部キーにはしない。
-- Work削除時は、Edition 配下の候補も同一の削除計画で消す。
+- Work削除時は、Edition 配下の候補も同一の削除計画で消す。Work 外観も Work と一緒に消える。
 
 ## Thumbnail Appearance
 
-サムネイルの見た目は、Visual Theme を既定として、言語版共通と候補単位の2段階で**プロパティ単位の疎な上書き**を行う（[ADR 0084](../adr/0084-thumbnail-appearance-overrides.md)）。全プロパティが省略可能で、未指定の項目は Theme の変更に追従する。明示した色・書体・サイズ・太さ・行間は保持する。
+サムネイルの見た目は、Visual Theme を既定として、Work 共通と候補単位の2段階で**プロパティ単位の疎な上書き**を行う（[ADR 0084](../adr/0084-thumbnail-appearance-overrides.md)、[ADR 0111](../adr/0111-work-scoped-thumbnail-appearance.md)）。全プロパティが省略可能で、未指定の項目は Theme の変更に追従する。明示した色・書体・サイズ・太さ・行間は保持する。
 
 解決順は次とする。
 
-1. Theme（`title` / `heading` / `scrim` / primary accent）
-2. 言語版共通 Appearance（`LanguageEdition.thumbnailAppearanceJson`）
-3. 候補の Appearance（`Thumbnail` 文書 v2 の `appearanceOverride`）
+1. Edition の Visual Theme（`title` / `heading` / `scrim` / primary accent）
+2. Work 共通 Appearance（`Work.thumbnailAppearanceJson`）
+3. 候補の Appearance（`Thumbnail` 文書 v3 の `appearanceOverride`）
 4. テンプレートの構図・倍率（文字量による自動サイズ補正を含む）
 
-共通と候補のマージは、テキストプロパティ単位、`decoration` のフラグ単位、`outline` のプロパティ単位、`scrim` のプロパティ単位で行う。
+Work 共通 Appearance は候補へコピーせず、プレビューと PNG 生成のたびに読み直す。Work 外観を変更すると、候補固有の上書きがない項目は既存候補の次回プレビュー／PNG に反映される。
+
+共通と候補のマージは、テキストプロパティ単位、`decoration` のフラグ単位、`outline` のプロパティ単位、`scrim` のプロパティ単位で行う。`fontFaceByLocale` は locale キー単位でマージする。
 
 | プロパティ | 内容 | 既定 |
 | --- | --- | --- |
 | `headline` / `subline` | 各テキストロールの上書き | Theme の `title` / `heading` |
 | `font` | `sans` / `serif` / `mono` | Theme のロール値 |
-| `fontFace` | Font Catalog の Face | Theme のロール値 |
+| `fontFaceByLocale` | locale ごとの Font Catalog の Face | 該当 locale がなければ Theme のフォント |
 | `fontSize` | 8–240。1080基準px | Theme のロール値 |
 | `color` | `#RRGGBB` | 写真上で読める Theme の `onMedia` |
 | `lineHeight` | 1–3 | Theme のロール値 |
@@ -63,19 +66,20 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 | `scrim.color` / `scrim.opacity` | 写真上の暗幕 | Theme の `scrim` |
 
 - 既定の文字色は写真上での可読性を優先し、`onMedia` とする。書体・カテゴリ・サイズ・行間・装飾は `title` / `heading` を継承する。
+- Font Face は Work が複数の言語版で共有されるため locale 別に持つ。描画中の Edition locale に対応するエントリだけを使い、該当エントリがなければ Theme の `fontFaceByLocale`、Theme の共通 `fontFace`、locale 依存スタックの順に解決する。単一の共通 Font Face 上書きは持たない。
 - 明示した `accent` は自動でコントラスト補正しない。テンプレートの scrim・常時影・任意の縁取りで可読性を支える。未指定時は Theme primary accent を背景とのコントラスト比3以上へ解決する。
 - 縁取り色を未指定にした場合、文字色と背景から Theme ニュートラルを選ぶ。明示色はそのまま使う。縁取りの太さは自動文字サイズ補正には連動しない。
-- 空のオブジェクト・空の入れ子は保存正規化で削除する。
+- 空のオブジェクト・空の入れ子・空の `fontFaceByLocale` は保存正規化で削除する。
 
 ## 外観プリセット
 
-言語版共通 Appearance を、作品・言語版をまたいで再利用するための名前付きプリセットを持つ（[ADR 0085](../adr/0085-thumbnail-appearance-presets-as-snapshots.md)）。
+Work 共通 Appearance を、作品・言語版をまたいで再利用するための名前付きプリセットを持つ（[ADR 0085](../adr/0085-thumbnail-appearance-presets-as-snapshots.md)）。
 
 - プリセットはアプリ全体の共有資産で、Work や LanguageEdition に属さない。異なるテーマの作品にも適用できる。
 - プリセットは**解決済みの値ではなく、疎な上書きパッチ**を保存する。適用先のテーマで未指定プロパティはそのテーマの値に従い、明示したプロパティだけが上書きされる。
-- 適用は**スナップショット**とする。プリセットを読み込むと、現在の言語版共通 Appearance の下書きをそのパッチで置き換える。ユーザーが明示保存して初めて言語版へ反映される。
-- 言語版はプリセットへの参照を保存しない。プリセットを後から上書き・削除しても、適用済みの言語版の外観は変わらない。
-- プリセットの作成・上書きは、現在の言語版共通 Appearance の下書きから行える。空のパッチはプリセットとして保存できない。
+- 適用は**スナップショット**とする。プリセットを読み込むと、現在の Work 共通 Appearance の下書きをそのパッチで置き換える。ユーザーが明示保存して初めて Work へ反映される。
+- Work はプリセットへの参照を保存しない。プリセットを後から上書き・削除しても、適用済みの Work の外観は変わらない。
+- プリセットの作成・上書きは、現在の Work 共通 Appearance の下書きから行える。空のパッチはプリセットとして保存できない。
 - プリセットの一覧は更新日時の新しい順に返す。名前は一意でなくてよい。UI は ID で選択する。
 - プリセットのライブ参照、テーマごとの既定プリセット、プリセットのインポート／エクスポートは今回の対象外とする。
 
@@ -86,17 +90,17 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 - `GET /api/v1/thumbnail-appearance-presets` は一覧（id、name、createdAt、updatedAt）を返す。
 - `POST /api/v1/thumbnail-appearance-presets` は `{ name, appearance }` で作成する。
 - `GET /api/v1/thumbnail-appearance-presets/:presetId` は `appearance` を含む完全なプリセットを返す。
-- `PUT /api/v1/thumbnail-appearance-presets/:presetId` は `{ name, appearance }` でプリセット自体を上書きする。適用済みの言語版には影響しない。
-- `DELETE /api/v1/thumbnail-appearance-presets/:presetId` はプリセットを削除する。適用済みの言語版には影響しない。
+- `PUT /api/v1/thumbnail-appearance-presets/:presetId` は `{ name, appearance }` でプリセット自体を上書きする。適用済みの Work には影響しない。
+- `DELETE /api/v1/thumbnail-appearance-presets/:presetId` はプリセットを削除する。適用済みの Work には影響しない。
 
 ### UI
 
 - 共通の見た目セクションに「外観プリセット」を置く。
 - 現在の下書きを名前付きで新規保存できる。
 - 一覧からプリセットを選び、現在の下書きへ読み込める。未保存の変更がある場合は確認する。
-- 選択中のプリセットを現在の下書きで上書きできる。適用済みの言語版は自動では変わらないことを確認ダイアログと注記で示す。
+- 選択中のプリセットを現在の下書きで上書きできる。適用済みの Work は自動では変わらないことを確認ダイアログと注記で示す。
 - 選択中のプリセットを削除できる。
-- 共通の見た目に上書きがない場合は、新規保存・上書きを無効にする。読み込みは可能とする。
+- Work の共通の見た目に上書きがない場合は、新規保存・上書きを無効にする。読み込みは可能とする。
 
 ## テンプレート
 
@@ -165,7 +169,7 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 - 被写体の左右バリアント・左右反転・倍率・拡大基準点
 - 文字ブロックの幅と自動折り返しの有無
 - 文字量に応じた自動サイズ補正の範囲内での見た目（Appearance の書体・サイズ・色・装飾）
-- 言語版共通／候補単位の Appearance 上書き
+- Work 共通／候補単位の Appearance 上書き
 
 構図差はテンプレートを増やすことで広げ、チャンネルごとの個性は Theme と Appearance で出す（[ADR 0059](../adr/0059-thumbnail-shares-visual-theme.md)）。`TemplateFieldSpec` に座標・サイズ・回転の種別は追加しない。
 
@@ -174,7 +178,7 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 - サムネイルは独自のブランド設定を持たず、その Edition の現行 ScriptVersion の `visualTheme`（選択中 Theme Revision）を参照する。
 - 描画に使うトークンは canvas、accents、text／muted／onMedia、scrim、shadow、textRoles（title／heading）の範囲とする。motion・semantic・categoryColors・surfaces は使わない。
 - Theme の文字サイズは 1920x1080 基準のため、サムネイル（1280x720）ではテンプレート側でスケールする。色・書体・装飾はそのまま使う。
-- 言語版共通 Appearance と候補 Appearance は、Theme を置き換えず、明示したプロパティだけを上書きする。
+- Work 共通 Appearance と候補 Appearance は、Theme を置き換えず、明示したプロパティだけを上書きする。
 - Theme を変更すると、未上書きの項目は新しい Theme に追従する。明示した色・書体・サイズ・太さ・行間は保持する。
 - ロゴ／チャンネル名帯は、今回は Theme に持たせず、サムネイルテンプレートの入力（画像 Asset）に置く。将来 Theme にロゴを持たせる場合は「Theme優先→入力上書き」の解決順で非破壊に移行する。
 
@@ -182,7 +186,7 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 
 - 描画は `packages/video` にサムネイル用コンパイラを追加し、サムネイル文書・テンプレート・Theme・Appearance から静止画 HTML（1280x720）を生成する。レンダーと同様、検証済みJSONだけから HTML を派生させ、任意 HTML を実行しない。
 - プレビューは、未保存の編集中入力に対するコンパイル済み HTML をデバウンスして取得し、同一origin の `srcDoc` iframe で表示する。iframe は `sandbox="allow-same-origin"`（スクリプトは実行しない）とし、不透明originになる sandbox で実行しない。これにより HTML 内の写真（`/api/v1/assets/:id/render-content`）のリクエストが同一originとなり、メディアセッション Cookie で認可される（[../mvp/api-contract.md](../mvp/api-contract.md)）。
-- プレビューAPIは未保存の言語版共通 Appearance を受け取れるため、保存前の見た目を確認できる。
+- プレビューAPIは未保存の Work 共通 Appearance を受け取れるため、保存前の見た目を確認できる。
 - PNG（1280x720）は保存済み候補からオンデマンド生成する。管理下の Chrome とフォントでコンパイル済み HTML をラスタライズして返す。Job を作らない。
 - 描画に使う背景・前景の両 Asset は、保存前とPNG生成時に ready な画像として検証する。
 - コンパイルや PNG 生成は、テンプレート未対応・入力不正・素材欠損・Theme未解決などの理由で失敗しうる。失敗は JSON エラー契約で返す。
@@ -197,35 +201,38 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 - `PUT /api/v1/thumbnails/:thumbnailId` は候補を明示保存（上書き）する。本文は `label`、`template`、`input`、任意の `appearanceOverride`。
 - `DELETE /api/v1/thumbnails/:thumbnailId` は候補を削除する。選択中を消す場合は付け替えまたは NULL にする。
 - `PUT /api/v1/language-editions/:editionId/primary-thumbnail` は選択中の候補を設定する。本文は `thumbnailId`（解除は null）。
-- `GET /api/v1/language-editions/:editionId/thumbnail-appearance` は言語版共通 Appearance と、Theme 由来の既定値・解決済み値を返す。
-- `PUT /api/v1/language-editions/:editionId/thumbnail-appearance` は `{ appearance }`（解除は null）で共通 Appearance を保存する。
-- `POST /api/v1/language-editions/:editionId/thumbnail-preview` は未保存の編集中入力（`template`、`input`、`appearanceOverride`、任意の `appearance`）のコンパイル済み HTML を返す。`appearance` を省略すると保存済み共通 Appearance を使い、null なら共通 Appearance なしでプレビューする。DBへ書かない。
+- `GET /api/v1/works/:workId/thumbnail-appearance?languageEditionId=:editionId` は Work 共通 Appearance と、Edition の Theme・locale 由来の既定値・解決済み値を返す。Edition が別 Work に属する場合は `RESOURCE_NOT_FOUND` とする。
+- `PUT /api/v1/works/:workId/thumbnail-appearance?languageEditionId=:editionId` は `{ appearance }`（解除は null）で Work 共通 Appearance を保存する。Edition ID は Theme・locale の解決文脈にだけ使う。
+- `POST /api/v1/language-editions/:editionId/thumbnail-preview` は未保存の編集中入力（`template`、`input`、`appearanceOverride`、任意の `appearance`）のコンパイル済み HTML を返す。`appearance` を省略すると保存済みの Work 共通 Appearance を使い、null なら共通 Appearance なしでプレビューする。DBへ書かない。
 - `GET /api/v1/thumbnail-appearance-presets` は外観プリセットの一覧を返す。
 - `POST /api/v1/thumbnail-appearance-presets` は `{ name, appearance }` で外観プリセットを作成する。
 - `GET /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを返す。
-- `PUT /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを上書きする。適用済みの言語版へは波及しない。
-- `DELETE /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを削除する。適用済みの言語版へは波及しない。
+- `PUT /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを上書きする。適用済みの Work へは波及しない。
+- `DELETE /api/v1/thumbnail-appearance-presets/:presetId` は外観プリセットを削除する。適用済みの Work へは波及しない。
 - `GET /api/v1/thumbnails/:thumbnailId/image` は PNG バイト列を返す。オンデマンド生成で、DBへ書かない。
   - `Content-Type: image/png`
   - `Content-Disposition: attachment`（ファイル名は Work タイトル由来の `.png`、空題は `thumbnail.png`）
   - `X-Content-Type-Options: nosniff`、`Cache-Control: private, max-age=0, must-revalidate`
-- 検証不正は `VALIDATION_ERROR`、存在しない候補・言語版・外観プリセットは `RESOURCE_NOT_FOUND`、素材欠損は既存の `ASSET_UNAVAILABLE` 系で返す。
+- 検証不正は `VALIDATION_ERROR`、存在しない候補・言語版・Work・外観プリセットは `RESOURCE_NOT_FOUND`、素材欠損は既存の `ASSET_UNAVAILABLE` 系で返す。
 
 ## Agent Access
 
 エージェント向けには、既存の HTTP API と同じサービスを呼ぶ 9 操作を公開する（[ADR 0098](../adr/0098-agent-thumbnail-operations.md)、[Agent Access 仕様](../agent-access/spec.md)）。
 
-- 読み取り: `thumbnail.listTemplates`（同梱テンプレートの `inputSchema` と `example`）、`thumbnail.list` / `thumbnail.get`（`Thumbnail` DTO）、`thumbnail.appearance`（言語版共通 Appearance と Theme 既定・解決値）。
+- 読み取り: `thumbnail.listTemplates`（同梱テンプレートの `inputSchema` と `example`）、`thumbnail.list` / `thumbnail.get`（`Thumbnail` DTO）、`thumbnail.appearance`（Edition の文脈で解決した Work 共通 Appearance と Theme 既定・解決値）。
 - 変更: `thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary`。作成・明示保存の入力は HTTP と同じで、素材検証も同じ規則を使う。`thumbnail.setPrimary` の `thumbnailId: null` は primary の解除である。
 - 画像: `preview.thumbnail` は未保存のドラフトを PNG（1280x720）にし、DB へ書かない。`thumbnail.image` は保存済み候補の PNG をオンデマンド生成して返す。どちらも Job・Artifact を作らず、MCP の image ブロックと CLI の `--out` に対応する。
-- 候補の削除、言語版共通 Appearance の保存、外観プリセットの読み書きは公開しない。`requestId` は持たず、タイムアウト後は `thumbnail.list` で確認してから再実行する。
+- 候補の削除、Work 共通 Appearance の保存、外観プリセットの読み書きは公開しない。`requestId` は持たず、タイムアウト後は `thumbnail.list` で確認してから再実行する。
 
 ## UI
 
 - 作品編集画面から、各 Language Edition のサムネイル編集を開く。
-- サムネイル画面に「共通の見た目」を置き、Theme 継承中の項目をプロパティ単位でリセットできる。共通 Appearance は明示保存する。
+- サムネイル画面に現在の言語版を表示する。
+- サムネイル画面に「共通の見た目（この作品）」を置き、Theme 継承中の項目をプロパティ単位でリセットできる。Work 共通 Appearance は明示保存し、同じ Work の全言語版にライブ適用される。
+- 見出し・補足文の Font Face は locale タブで編集し、該当 locale の指定がなければ Theme のフォントを使う。
 - 共通の見た目セクションに「外観プリセット」を置き、現在の下書きの新規保存、読込み、上書き、削除ができる。読込みは下書きへのスナップショット適用で、共通 Appearance の保存とは独立する。
-- 候補フォームでは、必要な項目だけ候補単位の上書きを有効化できる。Font Face は既存の Font Catalog から選ぶ。
+- 候補フォームでは、必要な項目だけ候補単位の上書きを有効化できる。Font Face は既存の Font Catalog から locale 別に選ぶ。
+- 新規候補フォームから、同じ Work の他言語版とその候補を選んで取り込める。取り込みは候補名・文言・テンプレート・素材参照・切り出し／配置設定をフォームへ複製し、元候補の外観上書きは引き継がない。保存するまで候補は作成されず、「取り込みをやめる」でフォームを破棄できる。
 - 未保存の共通 Appearance は、候補フォームのプレビューに反映される。
 - テンプレートを選び、文字・背景・前景を入力する。プレビューを表示し、明示保存で候補を保存する。
 - 候補一覧を表示し、追加・選択（投稿用の1枚）・削除ができる。
@@ -247,7 +254,8 @@ Prisma モデル `Thumbnail` を追加する。1つの LanguageEdition が複数
 
 ## 検証
 
-- 契約テスト: サムネイル文書v1/v2の検証、テンプレート参照、未知テンプレート拒否、素材種別の検証、Appearanceのプロパティ単位マージと正規化、縁取り色・太さの範囲。部分装飾記法の解析（入れ子・エスケープ・対になっていない記号・未許可装飾）とフィールド宣言との一致。
+- 契約テスト: サムネイル文書v3の検証と旧版拒否、テンプレート参照、未知テンプレート拒否、素材種別の検証、Appearanceのプロパティ単位マージと正規化、locale別 Font Face の解決、縁取り色・太さの範囲。部分装飾記法の解析（入れ子・エスケープ・対になっていない記号・未許可装飾）とフィールド宣言との一致。
 - コンパイラテスト: Theme トークンの適用、Appearance の継承順、背景クロップ、前景の左右・反転・倍率（0.5–1.8）・拡大基準点、文字ブロック幅・折り返しON/OFF、1280x720 の確定性、文字量による自動サイズ、アクセント色のコントラスト解決と明示色の保持、縁取り色・太さ（全体と `%%`）、HTMLエスケープ、改行保持。
-- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、共通 Appearance の取得・保存・解除、未保存 Appearance のプレビュー、背景・前景両 Asset の検証、PNGのオンデマンド生成、Work削除での連鎖削除、v1文書の読み取り。外観プリセットの CRUD、空パッチの拒否、プリセット更新・削除が適用済み言語版へ波及しないこと。Agent Access の 9 操作（テンプレート取得、作成・更新・選択、未保存 PNG、保存済み PNG、削除・共通 Appearance 保存・プリセットが未公開であること）。
-- Webテスト: テンプレ選択・入力の往復、候補の追加・選択・削除、選択範囲への装飾適用、Appearance の set/clear と継承シード。
+- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、Work 共通 Appearance の取得・保存・解除、Edition の Work 所属検証、Work 外観変更の既存候補へのライブ反映、locale 別 Font Face、未保存 Appearance のプレビュー、背景・前景両 Asset の検証、PNGのオンデマンド生成、Work削除での連鎖削除、旧文書の拒否。外観プリセットの CRUD、空パッチの拒否、プリセット更新・削除が適用済み Work へ波及しないこと。Agent Access の 9 操作（テンプレート取得、作成・更新・選択、未保存 PNG、保存済み PNG、削除・Work 共通 Appearance 保存・プリセットが未公開であること）。
+- DB更新テスト: 旧 Thumbnail 候補・Edition 外観値・旧形式プリセットを破棄し、Work・Edition・ScriptVersion・Asset を保持すること。
+- Webテスト: テンプレ選択・入力の往復、候補の追加・選択・削除、選択範囲への装飾適用、Appearance の set/clear と継承シード、現在 locale の表示、他言語候補の取り込みと破棄、取り込み後の文言編集が元候補を変えないこと。

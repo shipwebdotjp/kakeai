@@ -64,16 +64,20 @@ describe("thumbnail appearance", () => {
 
   it("applies the merged patch over theme defaults", () => {
     const defaults = resolveThumbnailAppearanceDefaults(theme, "ja-JP");
-    const resolved = applyThumbnailAppearance(defaults, {
-      headline: {
-        fontSize: 80,
-        color: "#222222",
-        decoration: { bold: false, italic: true },
-        outline: { color: "#000000", width: 6 },
+    const resolved = applyThumbnailAppearance(
+      defaults,
+      {
+        headline: {
+          fontSize: 80,
+          color: "#222222",
+          decoration: { bold: false, italic: true },
+          outline: { color: "#000000", width: 6 },
+        },
+        accent: "#FF0000",
+        scrim: { opacity: 0.3, color: "#000000" },
       },
-      accent: "#FF0000",
-      scrim: { opacity: 0.3, color: "#000000" },
-    });
+      "ja-JP",
+    );
     expect(resolved.headline.fontSize).toBe(80);
     expect(resolved.headline.color).toBe("#222222");
     expect(resolved.headline.decoration).toEqual({ ...defaults.headline.decoration, bold: false, italic: true });
@@ -110,13 +114,66 @@ describe("thumbnail appearance", () => {
     expect("fontFaceByLocale" in zhDefaults.headline).toBe(false);
     const jaDefaults = resolveThumbnailAppearanceDefaults(localized, "ja-JP");
     expect(jaDefaults.headline.fontFace?.family).toBe("Noto Sans JP");
-    // An explicit appearance font still wins over the Theme locale entry.
-    const resolved = applyThumbnailAppearance(zhDefaults, {
-      headline: {
-        fontFace: { family: "Explicit Font", style: "normal" as const, weight: 400, fallbacks: [] },
-      },
+  });
+
+  it("uses the appearance font for the matching locale only", () => {
+    const face = (family: string) => ({
+      family,
+      style: "normal" as const,
+      weight: 400,
+      fallbacks: [],
     });
-    expect(resolved.headline.fontFace?.family).toBe("Explicit Font");
+    const defaults = resolveThumbnailAppearanceDefaults(theme, "zh-Hant");
+    const resolved = applyThumbnailAppearance(
+      defaults,
+      {
+        headline: {
+          fontFaceByLocale: { "zh-Hant": face("Explicit TC") },
+        },
+      },
+      "zh-Hant",
+    );
+    expect(resolved.headline.fontFace?.family).toBe("Explicit TC");
+
+    // A face for another locale does not affect the rendered locale; the Theme
+    // font stays in effect.
+    const otherLocale = applyThumbnailAppearance(
+      defaults,
+      { headline: { fontFaceByLocale: { "en-US": face("English Only") } } },
+      "zh-Hant",
+    );
+    expect(otherLocale.headline.fontFace?.family).toBe(defaults.headline.fontFace?.family);
+  });
+
+  it("lets a candidate locale font override the Work appearance per locale", () => {
+    const face = (family: string) => ({
+      family,
+      style: "normal" as const,
+      weight: 400,
+      fallbacks: [],
+    });
+    const workAppearance = {
+      headline: {
+        fontSize: 100,
+        fontFaceByLocale: { "ja-JP": face("Work JA"), "en-US": face("Work EN") },
+      },
+    };
+    const candidateOverride = {
+      headline: {
+        fontFaceByLocale: { "ja-JP": face("Candidate JA") },
+      },
+    };
+    const merged = mergeThumbnailAppearance(workAppearance, candidateOverride);
+    expect(merged?.headline?.fontFaceByLocale).toEqual({
+      "ja-JP": face("Candidate JA"),
+      "en-US": face("Work EN"),
+    });
+    expect(merged?.headline?.fontSize).toBe(100);
+
+    const defaults = resolveThumbnailAppearanceDefaults(theme, "ja-JP");
+    const resolved = applyThumbnailAppearance(defaults, merged, "ja-JP");
+    expect(resolved.headline.fontFace?.family).toBe("Candidate JA");
+    expect(resolved.headline.fontSize).toBe(100);
   });
 
   it("validates outline width, colors, and unknown keys", () => {

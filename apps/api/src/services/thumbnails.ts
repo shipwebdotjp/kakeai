@@ -67,15 +67,6 @@ function buildDocument(input: {
 }
 
 export function serializeThumbnailDocument(document: ThumbnailDocument): string {
-  // New writes are always v2. The v1 branch is defensive for callers that
-  // serialize a parsed legacy document without rewriting it.
-  if (document.schemaVersion === 1) {
-    return JSON.stringify({
-      schemaVersion: 1,
-      template: document.template,
-      input: document.input,
-    });
-  }
   const appearanceOverride = normalizeThumbnailAppearance(document.appearanceOverride);
   return JSON.stringify({
     schemaVersion: THUMBNAIL_SCHEMA_VERSION,
@@ -152,12 +143,19 @@ async function validateDocument(
   assertAssetsAvailable(references, assetById);
 }
 
-async function requireEditionWithTheme(prisma: PrismaClient, editionId: string) {
+async function requireEditionWithTheme(
+  prisma: PrismaClient,
+  editionId: string,
+  expectedWorkId?: string,
+) {
   const edition = await prisma.languageEdition.findUnique({
     where: { id: editionId },
-    include: { currentScriptVersion: true },
+    include: {
+      currentScriptVersion: true,
+      work: { select: { id: true, thumbnailAppearanceJson: true } },
+    },
   });
-  if (edition === null) {
+  if (edition === null || (expectedWorkId !== undefined && edition.workId !== expectedWorkId)) {
     throw resourceNotFound("language_edition", editionId);
   }
   const current = edition.currentScriptVersion;
@@ -190,7 +188,7 @@ function appearanceView(
   return {
     appearance,
     defaults,
-    resolved: applyThumbnailAppearance(defaults, appearance),
+    resolved: applyThumbnailAppearance(defaults, appearance, locale),
   };
 }
 
@@ -398,23 +396,46 @@ export async function setPrimaryThumbnail(
   return getThumbnail(prisma, thumbnailId);
 }
 
+/**
+ * Reads the Work-scoped appearance through the Edition that supplies the
+ * Theme and locale context. The Edition must belong to the Work.
+ */
 export async function getThumbnailAppearance(
+  prisma: PrismaClient,
+  workId: string,
+  editionId: string,
+): Promise<ThumbnailAppearanceView> {
+  const { edition, theme } = await requireEditionWithTheme(prisma, editionId, workId);
+  return appearanceView(
+    theme,
+    edition.locale,
+    parseThumbnailAppearanceJson(edition.work.thumbnailAppearanceJson),
+  );
+}
+
+/** Agent entry point: resolve the Work appearance with only an Edition id. */
+export async function getThumbnailAppearanceForEdition(
   prisma: PrismaClient,
   editionId: string,
 ): Promise<ThumbnailAppearanceView> {
   const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
-  return appearanceView(theme, edition.locale, parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson));
+  return appearanceView(
+    theme,
+    edition.locale,
+    parseThumbnailAppearanceJson(edition.work.thumbnailAppearanceJson),
+  );
 }
 
 export async function saveThumbnailAppearance(
   prisma: PrismaClient,
+  workId: string,
   editionId: string,
   appearance: ThumbnailAppearance | null,
 ): Promise<ThumbnailAppearanceView> {
-  const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
+  const { edition, theme } = await requireEditionWithTheme(prisma, editionId, workId);
   const normalized = normalizeThumbnailAppearance(appearance);
-  await prisma.languageEdition.update({
-    where: { id: editionId },
+  await prisma.work.update({
+    where: { id: workId },
     data: {
       thumbnailAppearanceJson: normalized === null ? null : JSON.stringify(normalized),
     },
@@ -432,7 +453,7 @@ export async function createThumbnailPreview(
   const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
   const commonAppearance =
     input.appearance === undefined
-      ? parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson)
+      ? parseThumbnailAppearanceJson(edition.work.thumbnailAppearanceJson)
       : normalizeThumbnailAppearance(input.appearance);
   const compiled = compile(document, theme, edition.locale, (assetId) => ({
     url: renderContentUrl(assetId),
@@ -528,7 +549,7 @@ export async function renderThumbnailPreviewImage(
   const { edition, theme } = await requireEditionWithTheme(prisma, editionId);
   const commonAppearance =
     input.appearance === undefined
-      ? parseThumbnailAppearanceJson(edition.thumbnailAppearanceJson)
+      ? parseThumbnailAppearanceJson(edition.work.thumbnailAppearanceJson)
       : normalizeThumbnailAppearance(input.appearance);
   return renderDocumentPng(
     prisma,
@@ -558,7 +579,7 @@ export async function generateThumbnailImage(
   await validateDocument(prisma, document);
   const { edition, theme } = await requireEditionWithTheme(prisma, row.languageEditionId);
   const commonAppearance = parseThumbnailAppearanceJson(
-    row.languageEdition.thumbnailAppearanceJson,
+    row.languageEdition.work.thumbnailAppearanceJson,
   );
   const rendered = await renderDocumentPng(
     prisma,

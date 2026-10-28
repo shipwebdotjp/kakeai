@@ -1,17 +1,13 @@
 import { useState } from "react";
 import { SUPPORTED_LOCALES, normalizeFontFaceByLocale, type FontFace, type FontFaceSpec, type SupportedLocale, type TextStyle } from "@kakeai/contracts";
 import { selectableFontFaces } from "../lib/fontFaceOptions";
+import { LOCALE_LABELS } from "../lib/localeLabels";
 import { metaTextClass, textFieldClass } from "../ui";
+
+export { LOCALE_LABELS } from "../lib/localeLabels";
 
 type FontFaceLocaleTab = "common" | SupportedLocale;
 
-/** Localized labels for the supported locales, shared with the preview picker. */
-export const LOCALE_LABELS: Record<SupportedLocale, string> = {
-  "ja-JP": "日本語",
-  "en-US": "English",
-  "zh-Hans": "简体中文",
-  "zh-Hant": "繁體中文",
-};
 
 const TAB_LABELS: Record<FontFaceLocaleTab, string> = {
   common: "共通",

@@ -326,11 +326,11 @@ A trusted reusable thumbnail layout with a defined input contract, separate from
 _Avoid_: Visual Template, scene, Visual Cue
 
 **Thumbnail Appearance**:
-A sparse visual override for thumbnails that is layered over the current Visual Theme. One appearance belongs to a Language Edition and each Thumbnail may carry a further sparse override; unset properties keep following the Theme.
+A sparse visual override for thumbnails that is layered over the current Visual Theme. One appearance belongs to a Work and is shared by all of its Language Editions; each Thumbnail may carry a further sparse override. Unset properties keep following the Theme, and the Work appearance is resolved live when a candidate is previewed or rendered. Font Face is set per locale, falling back to the Theme's font for that locale.
 _Avoid_: Theme, Theme Draft, template preset
 
 **Thumbnail Appearance Preset**:
-An app-wide named snapshot of a sparse Thumbnail Appearance patch. Applying it copies the patch into a Language Edition's common appearance draft; the edition does not reference the preset afterwards.
+An app-wide named snapshot of a sparse Thumbnail Appearance patch. Applying it copies the patch into a Work's common appearance draft; the Work does not reference the preset afterwards.
 _Avoid_: Theme, live preset, Theme Draft
 
 **Foreground Cutout**:

@@ -259,7 +259,7 @@ describe("agent thumbnail operations over the socket", () => {
       input,
     });
     expect(first.thumbnail.isPrimary).toBe(true);
-    expect(first.thumbnail.schemaVersion).toBe(2);
+    expect(first.thumbnail.schemaVersion).toBe(3);
     expect(first.thumbnail.appearanceOverride).toBeNull();
 
     const second = await client.request("thumbnail.create", {

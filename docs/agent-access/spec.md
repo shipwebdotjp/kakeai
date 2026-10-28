@@ -225,14 +225,14 @@
 - `thumbnail.listTemplates` — 同梱サムネイルテンプレートの一覧を返す。サムネイルテンプレートは VisualTemplate とは別レジストリのため `schema.get` には含めず、この操作だけがカタログになる。各要素は `id`・`version`・`display`（`label` / `description`）・`inputSchema`（保存時検証と同じ Zod スキーマを `toAgentJsonSchema` で変換した JSON Schema）・`example`（そのまま保存検証を通る入力）を持つ。`example` の `<...>` は実在する画像 Asset の ID に置き換える。サムネイルテンプレートの入力契約は `schemaDigest` に含まれる。
 - `thumbnail.list` — `{ languageEditionId }` を受け、`{ thumbnails }` を返す。各候補は HTTP と同じ `Thumbnail` DTO で、`isPrimary` と `appearanceOverride` を含む。存在しない言語版は `WORK_NOT_FOUND`。
 - `thumbnail.get` — `{ thumbnailId }` を受け、`{ thumbnail }` を返す。存在しない ID は `RESOURCE_NOT_FOUND`。
-- `thumbnail.appearance` — `{ languageEditionId }` を受け、言語版共通 Appearance を `{ appearance, defaults, resolved }` で返す。`appearance` は保存済みの疎な上書き（無ければ null）、`defaults` は Theme と locale から解決した既定値、`resolved` は両者をマージした解決済みの値である。共通 Appearance の保存は公開せず、人専用のまま残す。
+- `thumbnail.appearance` — `{ languageEditionId }` を受け、その Edition の文脈で解決した Work 共通 Appearance を `{ appearance, defaults, resolved }` で返す。`appearance` は保存済みの疎な上書き（無ければ null）、`defaults` は Theme と locale から解決した既定値、`resolved` は両者をマージした解決済みの値である。Work 共通 Appearance の保存は公開せず、人専用のまま残す。
 - `thumbnail.create` — `{ languageEditionId, label, template, input }` と任意の `appearanceOverride` を受け、`{ thumbnail }` を返す。HTTP の作成と同じ入力で、`input` はテンプレートの `inputSchema` で検証し、背景・前景は ready な画像 Asset でなければならない。最初の候補は自動で primary になる。
 - `thumbnail.update` — `{ thumbnailId, label, template, input }` と任意の `appearanceOverride` を受け、`{ thumbnail }` を返す。HTTP の明示保存と同じ last-write-wins で、候補に版履歴はない。存在しない ID は `RESOURCE_NOT_FOUND`。
 - `thumbnail.setPrimary` — `{ languageEditionId, thumbnailId }` を受け、選んだ候補を `{ thumbnail }` で返す。`thumbnailId: null` で解除し、そのとき `thumbnail` は null になる。同じ言語版に属さない候補と存在しない候補は `RESOURCE_NOT_FOUND`。
 - `preview.faceSet` — 未保存の Face Set 下書き（`layers`・`expressions`・任意の `expressionId`（既定 `normal`）・ベース画像の `baseAssetId`）を合成し、PNG（base64）を返す。`baseAssetId` は ready な画像 Asset で、その寸法で描く。ベース画像の上に眉・目・口と `foreground` をこの順に重ねる。DB・Face Set・Revision・Job・Artifact は作らない。`expressionId` が下書きに無い場合は `VALIDATION_ERROR`、`baseAssetId` が無い場合は `RESOURCE_NOT_FOUND`。保存前の見た目・位置ずれの確認用で、寸法の最終検証は `faceSet.create` / `faceSet.update` が担う。
-- `preview.thumbnail` — 未保存のドラフト（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の `appearance`）を 1280x720 の PNG にする。`appearance` を省略すると保存済みの言語版共通 Appearance を使い、null なら使わない（HTTP のプレビューと同じ規則）。DB へは書かず、版・Job・Artifact も作らない。
+- `preview.thumbnail` — 未保存のドラフト（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の `appearance`）を 1280x720 の PNG にする。`appearance` を省略すると保存済みの Work 共通 Appearance を使い、null なら使わない（HTTP のプレビューと同じ規則）。DB へは書かず、版・Job・Artifact も作らない。
 - `thumbnail.image` — 保存済み候補の PNG（1280x720）をオンデマンドで生成し、`{ thumbnailId, filename, width, height, mimeType, pngBase64 }` を返す。Job・Artifact は作らず、ファイルも永続化しない。存在しない ID は `RESOURCE_NOT_FOUND`。
-- サムネイル候補の削除、言語版共通 Appearance の保存、外観プリセットの読み書きは公開しない。不要な候補の整理は人が UI で行う。`requestId` は持たず、冪等台帳に載せない。タイムアウト後は `thumbnail.list` の `label` と `createdAt` で結果を確認してから再実行する。
+- サムネイル候補の削除、Work 共通 Appearance の保存、外観プリセットの読み書きは公開しない。不要な候補の整理は人が UI で行う。`requestId` は持たず、冪等台帳に載せない。タイムアウト後は `thumbnail.list` の `label` と `createdAt` で結果を確認してから再実行する。
 
 可逆な変更:
 

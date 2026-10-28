@@ -112,6 +112,7 @@ export function compileThumbnail(options: CompileThumbnailOptions): CompiledThum
   const appearance = applyThumbnailAppearance(
     resolveThumbnailAppearanceDefaults(theme, locale),
     merged,
+    locale,
   );
   const rendered = dispatch(`${id}@${version}`, parsed.data, {
     theme,

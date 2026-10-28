@@ -60,7 +60,7 @@
 - P6 サムネイル（B13）: `thumbnail.listTemplates` でテンプレートの入力契約を取り、
   `thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary` で候補を作り、
   `preview.thumbnail` で未保存の絵を PNG 確認し、`thumbnail.image` で PNG を
-  取得できる。候補の削除、言語版共通 Appearance の保存、外観プリセットは
+  取得できる。候補の削除、Work 共通 Appearance の保存、外観プリセットは
   人専用のままである。詳細は
   [Agent Access ロードマップ](../agent-access/roadmap.md) の B13 と
   [ADR 0098](../adr/0098-agent-thumbnail-operations.md)。

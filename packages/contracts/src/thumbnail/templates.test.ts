@@ -97,7 +97,7 @@ describe("thumbnail templates", () => {
 
   it("collects both image asset references", () => {
     const refs = collectThumbnailAssetRefs({
-      schemaVersion: 2,
+      schemaVersion: 3,
       template: { id: "thumbnail.cutout-hero", version: 1 },
       input: VALID_INPUT,
     });
@@ -107,25 +107,25 @@ describe("thumbnail templates", () => {
     ]);
   });
 
-  it("parses v1 and v2 documents and rejects unknown versions", () => {
+  it("parses v3 documents and rejects old or unknown versions", () => {
     const template = { id: "thumbnail.cutout-hero", version: 1 };
     expect(
-      thumbnailDocumentSchema.safeParse({ schemaVersion: 1, template, input: VALID_INPUT }).success,
-    ).toBe(true);
-    expect(
       thumbnailDocumentSchema.safeParse({
-        schemaVersion: 2,
+        schemaVersion: 3,
         template,
         input: VALID_INPUT,
         appearanceOverride: { headline: { color: "#FFFFFF" } },
       }).success,
     ).toBe(true);
     expect(
-      thumbnailDocumentSchema.safeParse({ schemaVersion: 3, template, input: VALID_INPUT }).success,
+      thumbnailDocumentSchema.safeParse({ schemaVersion: 2, template, input: VALID_INPUT }).success,
+    ).toBe(false);
+    expect(
+      thumbnailDocumentSchema.safeParse({ schemaVersion: 1, template, input: VALID_INPUT }).success,
     ).toBe(false);
     expect(
       thumbnailDocumentSchema.safeParse({
-        schemaVersion: 2,
+        schemaVersion: 3,
         template,
         input: VALID_INPUT,
         unknown: true,

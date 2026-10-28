@@ -367,5 +367,5 @@ SRT と MP4 の取得は B18 として公開した（[ADR 0103](../adr/0103-agen
   `thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary`、
   `preview.thumbnail` / `thumbnail.image` を公開した。MP4 の合格ラインは変えず、
   レンダー成功後に投稿用サムネイルを作り、PNG を取得できる。候補の削除、
-  言語版共通 Appearance の保存、外観プリセットは人専用のままである
+  Work 共通 Appearance の保存、外観プリセットは人専用のままである
   （[Agent Access B13](../agent-access/roadmap.md)、[ADR 0098](../adr/0098-agent-thumbnail-operations.md)）。

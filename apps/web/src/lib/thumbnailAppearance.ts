@@ -1,11 +1,14 @@
 import {
+  normalizeFontFaceByLocale,
   normalizeThumbnailAppearance,
+  type FontFaceSpec,
+  type SupportedLocale,
   type ThumbnailAppearance,
   type ThumbnailTextAppearance,
 } from "@kakeai/contracts";
 
 export type ThumbnailTextRole = "headline" | "subline";
-export type ThumbnailTextScalarKey = "font" | "fontFace" | "fontSize" | "color" | "lineHeight";
+export type ThumbnailTextScalarKey = "font" | "fontSize" | "color" | "lineHeight";
 export type ThumbnailDecorationKey = keyof NonNullable<
   ThumbnailTextAppearance["decoration"]
 >;
@@ -65,6 +68,45 @@ export function setTextDecoration(
 ): ThumbnailAppearance | null {
   return updateText(current, role, (text) => {
     text.decoration = decoration;
+  });
+}
+
+export function setTextFontFaceForLocale(
+  current: ThumbnailAppearance | null,
+  role: ThumbnailTextRole,
+  locale: SupportedLocale,
+  face: FontFaceSpec,
+): ThumbnailAppearance | null {
+  return updateText(current, role, (text) => {
+    const normalized = normalizeFontFaceByLocale({
+      ...text.fontFaceByLocale,
+      [locale]: face,
+    });
+    if (normalized === undefined) {
+      delete text.fontFaceByLocale;
+    } else {
+      text.fontFaceByLocale = normalized;
+    }
+  });
+}
+
+export function clearTextFontFaceForLocale(
+  current: ThumbnailAppearance | null,
+  role: ThumbnailTextRole,
+  locale: SupportedLocale,
+): ThumbnailAppearance | null {
+  return updateText(current, role, (text) => {
+    if (text.fontFaceByLocale === undefined) {
+      return;
+    }
+    const dictionary = { ...text.fontFaceByLocale };
+    delete dictionary[locale];
+    const normalized = normalizeFontFaceByLocale(dictionary);
+    if (normalized === undefined) {
+      delete text.fontFaceByLocale;
+    } else {
+      text.fontFaceByLocale = normalized;
+    }
   });
 }
 

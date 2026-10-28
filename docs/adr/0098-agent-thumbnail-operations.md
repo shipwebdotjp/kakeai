@@ -2,7 +2,7 @@
 
 Status: accepted
 
-Amended by [ADR 0109](./0109-agent-operation-set-update-semantics.md)（`thumbnail.update` を部分更新化）。
+Amended by [ADR 0109](./0109-agent-operation-set-update-semantics.md)（`thumbnail.update` を部分更新化）、[ADR 0111](./0111-work-scoped-thumbnail-appearance.md)（外観の所有先を Work へ変更）。
 
 ## 背景
 

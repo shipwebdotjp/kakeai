@@ -135,7 +135,7 @@ C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張�
 
 - 状態: 完了。`thumbnail.listTemplates` / `thumbnail.list` / `thumbnail.get` / `thumbnail.appearance`（read）、`thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary`（mutation）、`preview.thumbnail` / `thumbnail.image`（画像 read）を追加した。既存の `services/thumbnails.ts` をそのまま呼び、素材検証・Appearance 解決・PNG ラスタライズを複製しない。`preview.thumbnail` と `thumbnail.image` は画像系操作として MCP の image ブロックと CLI の `--out` に対応する。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0098](../adr/0098-agent-thumbnail-operations.md) を参照。
 - サムネイルテンプレートは VisualTemplate と別レジストリのため、`schema.get` を増やさず `thumbnail.listTemplates` で `inputSchema` と `example` を返す。入力契約は `schemaDigest` に含め、テンプレート入力の変更でも検知できるようにする。
-- 候補の削除、言語版共通 Appearance の保存、外観プリセットの読み書きは公開しない。`requestId` は持たず、タイムアウト後は `thumbnail.list` で確認してから再実行する。PNG はオンデマンド生成で、Job・Artifact・版を作らない。
+- 候補の削除、Work 共通 Appearance の保存、外観プリセットの読み書きは公開しない。`requestId` は持たず、タイムアウト後は `thumbnail.list` で確認してから再実行する。PNG はオンデマンド生成で、Job・Artifact・版を作らない。
 - 完了条件: ソケット・MCP・CLI からテンプレート取得 → 候補作成 → 未保存プレビュー → 更新 → primary 選択 → PNG 取得が通り、削除・共通 Appearance 保存・プリセットが `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
 
 ### B14 Character ライブラリ作成・更新の公開

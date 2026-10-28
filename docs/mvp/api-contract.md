@@ -10,7 +10,7 @@
 
 ### 基本
 
-- ベースURLは /api/v1 とする。破壊的変更は /api/v2 を追加して行い、v1には後方互換な追加だけを行う。
+- ベースURLは /api/v1 とする。pre-1.0のローカルアプリであり、同梱のWeb UI・CLI・MCP以外の利用者がいないため、破壊的変更はv1の経路をその場で置き換える。旧経路の互換提供は行わない（[ADR-0112](../adr/0112-pre-1.0-in-place-v1-api-updates.md)）。安定版APIを外部提供する時点でこの方針を見直す。
 - JSONのContent-Typeは application/json; charset=utf-8、文字コードはUTF-8、日時はUTCのRFC 3339形式、IDは不透明な文字列とする。
 - 成功したJSONレスポンスは常に { "data": ... } で包む。配列も data に入れる。
 - リクエストの未定義フィールドは拒否する。API入力、ContentDocument、VisualTemplate入力はZodで検証する。
@@ -72,11 +72,11 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | VoiceAdapter | id, label, defaultLocale, voiceSelection, modelSelection | 登録済み TTS アダプター記述子。`defaultLocale` は固定言語（無ければnull）、`voiceSelection` は `list` / `list-or-manual`、`modelSelection` はモデル指定の要否。 |
 | TtsVoice | voiceId, name, locale? | 接続中エンジンの声。`voiceId` はアダプター定義の不透明な ID、`locale` は任意の申告言語。 |
 | BulkTtsJobsResult | jobs, excluded | 一括TTS生成の応答。`jobs` は `narrationSegmentId` と Job DTO の組、`excluded` は `narrationSegmentId`・エラーコード・安全な理由。詳細は [../tts/spec.md](../tts/spec.md)。 |
-| Thumbnail | id, languageEditionId, label, schemaVersion, template, input, appearanceOverride, isPrimary, createdAt, updatedAt | 言語版のサムネイル候補。`template` は `{ id, version }`、`input` はテンプレート固有のJSON、`appearanceOverride` は候補単位の疎な外観上書き（v1文書ではnull）。複数候補を持ち、`isPrimary` が投稿に使う1枚。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
-| ThumbnailAppearance | headline, subline, accent, scrim | サムネイルの疎な外観上書き。`headline`/`subline` は font・fontFace・fontSize・color・lineHeight・decoration・outline、`scrim` は color・opacity を持つ。未指定プロパティはTheme継承。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
-| ThumbnailAppearanceView | appearance, defaults, resolved | 言語版共通のサムネイル外観。`appearance` は保存済みの疎な上書き（未設定はnull）、`defaults` はTheme由来の既定値、`resolved` は `appearance` 適用後の値。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
+| Thumbnail | id, languageEditionId, label, schemaVersion, template, input, appearanceOverride, isPrimary, createdAt, updatedAt | 言語版のサムネイル候補。`template` は `{ id, version }`、`input` はテンプレート固有のJSON、`appearanceOverride` は候補単位の疎な外観上書き（Thumbnail文書v3。旧形式は読まない）。複数候補を持ち、`isPrimary` が投稿に使う1枚。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
+| ThumbnailAppearance | headline, subline, accent, scrim | サムネイルの疎な外観上書き。`headline`/`subline` は font・fontFaceByLocale・fontSize・color・lineHeight・decoration・outline、`scrim` は color・opacity を持つ。`fontFaceByLocale` は対応localeごとのFont Faceで、該当localeがなければThemeのフォントを使う。未指定プロパティはTheme継承。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
+| ThumbnailAppearanceView | appearance, defaults, resolved | Work共通のサムネイル外観。`appearance` は保存済みの疎な上書き（未設定はnull）、`defaults` はEditionのTheme・locale由来の既定値、`resolved` は `appearance` 適用後の値。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
 | ThumbnailAppearancePresetSummary | id, name, createdAt, updatedAt | アプリ全体で再利用する名前付きサムネイル外観プリセットの一覧用要約。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
-| ThumbnailAppearancePreset | id, name, appearance, createdAt, updatedAt | 名前付きサムネイル外観プリセット。`appearance` は疎な上書き。適用は言語版の共通Appearanceへのスナップショットコピーで、プリセットへの参照は保存しない。 |
+| ThumbnailAppearancePreset | id, name, appearance, createdAt, updatedAt | 名前付きサムネイル外観プリセット。`appearance` は疎な上書き。適用はWorkの共通Appearanceへのスナップショットコピーで、プリセットへの参照は保存しない。 |
 | ThumbnailPreview | html, width, height | 未保存のサムネイル入力をコンパイルした静止画HTML（1280x720）。DBへ書かない。 |
 | CharacterLibraryEntry | id, name, names, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`names` は locale 別の名前の対応（`locale` 重複・空名を拒否、無ければ既定名）。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
 | FaceSet | id, name, version, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
@@ -122,8 +122,8 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /language-editions/:editionId/thumbnails | 200 | 言語版のサムネイル候補一覧を取得（[../thumbnail/spec.md](../thumbnail/spec.md)） |
 | POST | /language-editions/:editionId/thumbnails | 201 | サムネイル候補を作成 |
 | PUT | /language-editions/:editionId/primary-thumbnail | 200 | 投稿に使うサムネイル候補を選択 |
-| GET | /language-editions/:editionId/thumbnail-appearance | 200 | 言語版共通のサムネイル外観とTheme既定値を取得 |
-| PUT | /language-editions/:editionId/thumbnail-appearance | 200 | 言語版共通のサムネイル外観を保存（nullで解除） |
+| GET | /works/:workId/thumbnail-appearance | 200 | Work共通のサムネイル外観とTheme既定値を取得（`languageEditionId` クエリ必須） |
+| PUT | /works/:workId/thumbnail-appearance | 200 | Work共通のサムネイル外観を保存（nullで解除、`languageEditionId` クエリ必須） |
 | GET | /thumbnail-appearance-presets | 200 | アプリ全体のサムネイル外観プリセット一覧を取得 |
 | POST | /thumbnail-appearance-presets | 201 | サムネイル外観プリセットを作成 |
 | GET | /thumbnail-appearance-presets/:presetId | 200 | サムネイル外観プリセットを取得 |
@@ -764,24 +764,24 @@ GET /api/v1/script-versions/scr_003/subtitles
 
 ## サムネイル
 
-言語版ごとにYouTube投稿用のサムネイル候補を作成・管理する。候補は動画の台本とは別の可変な正本で、明示保存で上書きし、版履歴を持たない。ブランドはその言語版の現行ScriptVersionのVisual Themeを共有し、言語版共通と候補単位の疎なAppearance上書きを持つ。詳細は [../thumbnail/spec.md](../thumbnail/spec.md) を正とする。
+言語版ごとにYouTube投稿用のサムネイル候補を作成・管理する。候補は動画の台本とは別の可変な正本で、明示保存で上書きし、版履歴を持たない。ブランドはその言語版の現行ScriptVersionのVisual Themeを共有し、Work共通と候補単位の疎なAppearance上書きを持つ。Work共通外観は候補のプレビュー／PNG生成時にライブで解決する。詳細は [../thumbnail/spec.md](../thumbnail/spec.md) を正とする。
 
 - GET /language-editions/:editionId/thumbnails は候補一覧を返す。各候補に `isPrimary` と `appearanceOverride` を含める。
 - POST /language-editions/:editionId/thumbnails は `{ label, template, input, appearanceOverride? }` から候補を作成する。最初の候補は自動的に投稿用になる。
 - PUT /language-editions/:editionId/primary-thumbnail は `{ thumbnailId }`（解除は null）で投稿用の候補を切り替える。
-- GET /language-editions/:editionId/thumbnail-appearance は `{ appearance, defaults, resolved }` を返す。
-- PUT /language-editions/:editionId/thumbnail-appearance は `{ appearance }`（解除は null）で言語版共通の外観を保存する。
+- GET /works/:workId/thumbnail-appearance?languageEditionId=:editionId は `{ appearance, defaults, resolved }` を返す。EditionはTheme・localeの解決文脈にだけ使い、別Workに属する場合は 404 `RESOURCE_NOT_FOUND` とする。
+- PUT /works/:workId/thumbnail-appearance?languageEditionId=:editionId は `{ appearance }`（解除は null）でWork共通の外観を保存する。
 - GET /thumbnail-appearance-presets はアプリ全体の外観プリセット一覧を返す。
 - POST /thumbnail-appearance-presets は `{ name, appearance }` で外観プリセットを作成する。空の `appearance` は 422 `VALIDATION_ERROR`。
 - GET /thumbnail-appearance-presets/:presetId は `appearance` を含む完全なプリセットを返す。
-- PUT /thumbnail-appearance-presets/:presetId は `{ name, appearance }` でプリセット自体を上書きする。適用済みの言語版へは波及しない。
-- DELETE /thumbnail-appearance-presets/:presetId はプリセットを削除する。適用済みの言語版へは波及しない。
+- PUT /thumbnail-appearance-presets/:presetId は `{ name, appearance }` でプリセット自体を上書きする。適用済みのWorkへは波及しない。
+- DELETE /thumbnail-appearance-presets/:presetId はプリセットを削除する。適用済みのWorkへは波及しない。
 - PUT /thumbnails/:thumbnailId は `{ label, template, input, appearanceOverride? }` で候補を明示保存（上書き）する。
 - DELETE /thumbnails/:thumbnailId は候補を削除する。投稿用を削除した場合は別の候補へ付け替えるか null にする。
-- POST /language-editions/:editionId/thumbnail-preview は `{ template, input, appearanceOverride?, appearance? }` のコンパイル済みHTMLを返す。`appearance` を省略すると保存済み共通Appearanceを使い、nullなら共通Appearanceなしでプレビューする。DBへ書かない。
+- POST /language-editions/:editionId/thumbnail-preview は `{ template, input, appearanceOverride?, appearance? }` のコンパイル済みHTMLを返す。`appearance` を省略すると保存済みのWork共通Appearanceを使い、nullなら共通Appearanceなしでプレビューする。DBへ書かない。
 - GET /thumbnails/:thumbnailId/image は 1280x720 のPNGをオンデマンド生成して返す。JobもArtifactも作らない。
 
-未知のテンプレート参照・入力不整合・素材種別違反は 422 `VALIDATION_ERROR`、静止画へ変換できない場合は 422 `THUMBNAIL_INPUT_INVALID` を返す。存在しない候補・言語版・外観プリセットは 404 `RESOURCE_NOT_FOUND`（候補のPNGは `Content-Disposition: attachment` と `Cache-Control: private, max-age=0, must-revalidate` を付け、メディアセッションCookieで認可する）。
+未知のテンプレート参照・入力不整合・素材種別違反は 422 `VALIDATION_ERROR`、静止画へ変換できない場合は 422 `THUMBNAIL_INPUT_INVALID` を返す。存在しない候補・言語版・Work・外観プリセットは 404 `RESOURCE_NOT_FOUND`（候補のPNGは `Content-Disposition: attachment` と `Cache-Control: private, max-age=0, must-revalidate` を付け、メディアセッションCookieで認可する）。
 
 ## エラー契約
 

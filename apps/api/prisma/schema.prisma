@@ -17,6 +17,8 @@ model Work {
   childWorks    Work[]            @relation("WorkParent")
   languageEditions LanguageEdition[]
   jobs          Job[]
+  /// Work-wide sparse thumbnail appearance, shared by every Language Edition.
+  thumbnailAppearanceJson String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 }
@@ -32,7 +34,6 @@ model LanguageEdition {
   thumbnails             Thumbnail[]     @relation("EditionThumbnails")
   primaryThumbnailId     String?         @unique
   primaryThumbnail       Thumbnail?      @relation("EditionPrimaryThumbnail", fields: [primaryThumbnailId], references: [id], onDelete: SetNull)
-  thumbnailAppearanceJson String?
   jobs                   Job[]
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
@@ -374,8 +375,8 @@ model Thumbnail {
 }
 
 /// App-wide named snapshot of a Thumbnail Appearance patch. Applying a preset
-/// copies its patch into LanguageEdition.thumbnailAppearanceJson; the edition
-/// does not reference the preset afterwards.
+/// copies its patch into Work.thumbnailAppearanceJson; the Work does not
+/// reference the preset afterwards.
 model ThumbnailAppearancePreset {
   id             String   @id @default(cuid())
   name           String

@@ -1,4 +1,7 @@
-import { getThumbnailTemplate } from "@kakeai/contracts";
+import { getThumbnailTemplate, listThumbnailTemplateCatalog } from "@kakeai/contracts";
+
+/** Immutable catalogue shared by the thumbnail page and candidate form. */
+export const THUMBNAIL_TEMPLATE_CATALOG = listThumbnailTemplateCatalog();
 
 /** Builds the editable input shape for a template before any asset is chosen. */
 export function defaultThumbnailInput(

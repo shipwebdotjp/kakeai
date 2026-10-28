@@ -19,7 +19,8 @@
 
 ## サムネイル
 
-- 解決順は「候補 Appearance の明示 fontFace → Edition 共通 Appearance の fontFace → Theme の `fontFaceByLocale` → Theme の共通 fontFace → locale 依存スタック」。
+- 解決順は「候補 Appearance の locale 別 fontFace → Work 共通 Appearance の locale 別 fontFace → Theme の `fontFaceByLocale` → Theme の共通 fontFace → locale 依存スタック」（[ADR 0111](../adr/0111-work-scoped-thumbnail-appearance.md)）。
+- サムネイルの Appearance は単一の共通 `fontFace` 上書きを持たず、`fontFaceByLocale` だけを持つ。該当 locale のエントリがない項目は Theme のフォントへ落ちる。
 - `resolveThumbnailAppearanceDefaults`（packages/contracts/src/thumbnail/appearance.ts）と `compileThumbnail`（packages/video/src/thumbnails/compile.ts）は Language Edition の locale を受け取る。Appearance の明示指定が Theme の locale 指定より強いことを前提に、既存の日本語用サムネイル Appearance が中国語版の Theme locale 指定を再上書きしない。
 
 ## テーマ編集 UI
@@ -53,7 +54,7 @@
 
 - スキーマの往復（既存 definitionJson がそのまま通り、新フィールド付き定義がパースできること）。未知 locale キーの拒否、空辞書が `fontFaceByLocale` 省略に正規化されること。
 - 解決順の境界：Cue 上書きが最強であること、locale 指定が共通指定に勝つこと、未指定が共通指定に落ちること。
-- サムネイルの解決順（候補 Appearance → Edition 共通 → Theme locale 指定 → Theme 共通 → locale スタック）と、locale 受け渡しの境界。
+- サムネイルの解決順（候補 Appearance → Work 共通 → Theme locale 指定 → Theme 共通 → locale スタック）と、locale 受け渡しの境界。
 - locale 別スタック（mono の CJK フォールバック位置を含む）の生成と、ja 作品の出力が変わらないこと。
 - `lang` 属性が locale を従うこと。
 - テーマ編集 UI の locale タブ操作の往復（保存・復元は既存の theme draft 操作を再利用）。

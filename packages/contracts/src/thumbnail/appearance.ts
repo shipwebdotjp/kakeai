@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { accentColorSchema } from "../content/primitives";
+import { accentColorSchema, asSupportedLocale } from "../content/primitives";
 import {
-  fontFaceSpecSchema,
+  fontFaceByLocaleSchema,
+  normalizeFontFaceByLocale,
   resolveTextStyleFontFace,
   textStyleSchema,
   themeFontCategorySchema,
@@ -14,10 +15,15 @@ import {
  * Thumbnail Appearance is a sparse override layered over the current Visual
  * Theme. Every property is optional so an unset property keeps following the
  * Theme, while an explicit value stays fixed when the Theme changes.
+ *
+ * The Font Face is a per-locale setting because one Work shares its appearance
+ * across its Language Editions. A locale without an entry falls back to the
+ * Theme's font for that locale, so the Work appearance never has to guess a
+ * single face for every language.
  */
 export const thumbnailTextAppearanceSchema = z.strictObject({
   font: themeFontCategorySchema.optional(),
-  fontFace: fontFaceSpecSchema.optional(),
+  fontFaceByLocale: fontFaceByLocaleSchema.optional(),
   fontSize: z.number().int().min(8).max(240).optional(),
   color: accentColorSchema.optional(),
   lineHeight: z.number().min(1).max(3).optional(),
@@ -62,9 +68,11 @@ export const resolvedThumbnailOutlineSchema = z.strictObject({
   width: z.number().min(0).max(12),
 });
 
-export const resolvedThumbnailTextStyleSchema = textStyleSchema.extend({
-  outline: resolvedThumbnailOutlineSchema,
-});
+export const resolvedThumbnailTextStyleSchema = textStyleSchema
+  .extend({
+    outline: resolvedThumbnailOutlineSchema,
+  })
+  .omit({ fontFaceByLocale: true });
 export type ResolvedThumbnailTextStyle = z.infer<typeof resolvedThumbnailTextStyleSchema>;
 
 export const resolvedThumbnailAppearanceSchema = z.strictObject({
@@ -153,6 +161,12 @@ function cleanTextAppearance(
     return undefined;
   }
   const cleaned: ThumbnailTextAppearance = { ...definedEntries(appearance) };
+  const fontFaceByLocale = normalizeFontFaceByLocale(appearance.fontFaceByLocale);
+  if (fontFaceByLocale !== undefined) {
+    cleaned.fontFaceByLocale = fontFaceByLocale;
+  } else {
+    delete cleaned.fontFaceByLocale;
+  }
   const decoration = cleanDecoration(appearance.decoration);
   if (decoration !== undefined) {
     cleaned.decoration = decoration;
@@ -208,6 +222,15 @@ function mergeTextAppearance(
     ...definedEntries(base),
     ...definedEntries(patch),
   };
+  const fontFaceByLocale = normalizeFontFaceByLocale({
+    ...(base.fontFaceByLocale ?? {}),
+    ...(patch.fontFaceByLocale ?? {}),
+  });
+  if (fontFaceByLocale === undefined) {
+    delete merged.fontFaceByLocale;
+  } else {
+    merged.fontFaceByLocale = fontFaceByLocale;
+  }
   const decoration = cleanDecoration({
     ...definedEntries(base.decoration),
     ...definedEntries(patch.decoration),
@@ -229,7 +252,7 @@ function mergeTextAppearance(
   return Object.keys(merged).length === 0 ? undefined : merged;
 }
 
-/** Merges the language-edition appearance with a candidate override. */
+/** Merges the Work appearance with a candidate override. */
 export function mergeThumbnailAppearance(
   base: ThumbnailAppearance | null | undefined,
   patch: ThumbnailAppearance | null | undefined,
@@ -271,10 +294,14 @@ export function mergeThumbnailAppearance(
 function applyTextAppearance(
   base: ResolvedThumbnailTextStyle,
   patch: ThumbnailTextAppearance | undefined,
+  locale: string | undefined,
 ): ResolvedThumbnailTextStyle {
   if (patch === undefined) {
     return base;
   }
+  const parsedLocale = asSupportedLocale(locale);
+  const localeFace =
+    parsedLocale === undefined ? undefined : patch.fontFaceByLocale?.[parsedLocale];
   const decoration = {
     ...base.decoration,
     ...definedEntries(patch.decoration),
@@ -282,7 +309,7 @@ function applyTextAppearance(
   return {
     ...base,
     ...(patch.font !== undefined ? { font: patch.font } : {}),
-    ...(patch.fontFace !== undefined ? { fontFace: patch.fontFace } : {}),
+    ...(localeFace !== undefined ? { fontFace: localeFace } : {}),
     ...(patch.fontSize !== undefined ? { fontSize: patch.fontSize } : {}),
     ...(patch.color !== undefined ? { color: patch.color } : {}),
     ...(patch.lineHeight !== undefined ? { lineHeight: patch.lineHeight } : {}),
@@ -298,13 +325,14 @@ function applyTextAppearance(
 export function applyThumbnailAppearance(
   base: ResolvedThumbnailAppearance,
   patch: ThumbnailAppearance | null | undefined,
+  locale: string | undefined,
 ): ResolvedThumbnailAppearance {
   if (patch === null || patch === undefined) {
     return base;
   }
   return {
-    headline: applyTextAppearance(base.headline, patch.headline),
-    subline: applyTextAppearance(base.subline, patch.subline),
+    headline: applyTextAppearance(base.headline, patch.headline, locale),
+    subline: applyTextAppearance(base.subline, patch.subline, locale),
     accent: patch.accent ?? base.accent,
     scrim: {
       color: patch.scrim?.color ?? base.scrim.color,

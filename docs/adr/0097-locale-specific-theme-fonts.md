@@ -1,5 +1,7 @@
 # テーマのフォント指定を locale 別に上書きできるようにする
 
+Status: accepted, amended by [ADR-0111](./0111-work-scoped-thumbnail-appearance.md)
+
 加算拡張。`themeDefinitionSchemaVersion` 据え置きの方針は ADR-0094 と同型。
 
 Theme のテキストスタイルに、locale 別の fontFace 上書き辞書 `fontFaceByLocale` を加算する。既存の `fontFace`（共通指定）は ja-JP / en-US を含む「既定 locale 用の指定」として扱い、対象 locale に対応する上書きがあればそちらを優先する。フォールバックスタックも document locale 由来に差し替える。適用範囲は信頼済みテンプレート（trusted video templates）、話者字幕、サムネイルとする。AI Composition（Style Kit 生成）は生成コンテキストに locale を持たないため対象外とし、対応は別フェーズで判断する。

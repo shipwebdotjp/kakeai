@@ -53,9 +53,9 @@ async function createImageAsset(): Promise<string> {
   return row.id;
 }
 
-async function createEdition(): Promise<string> {
+async function createEdition(): Promise<{ workId: string; editionId: string }> {
   const work = await works.createWork(prisma, "サムネ作品", "ja-JP");
-  return work.languageEditions[0]!.id;
+  return { workId: work.id, editionId: work.languageEditions[0]!.id };
 }
 
 function inputFor(backgroundAssetId: string, foregroundAssetId: string) {
@@ -85,7 +85,7 @@ afterAll(async () => {
 
 describe("thumbnail flow", () => {
   it("creates candidates and makes the first one primary", async () => {
-    const editionId = await createEdition();
+    const { editionId } = await createEdition();
     const backgroundAssetId = await createImageAsset();
     const foregroundAssetId = await createImageAsset();
     expect(await thumbnails.listThumbnails(prisma, editionId)).toEqual([]);
@@ -96,7 +96,7 @@ describe("thumbnail flow", () => {
       input: inputFor(backgroundAssetId, foregroundAssetId),
     });
     expect(first.isPrimary).toBe(true);
-    expect(first.schemaVersion).toBe(2);
+    expect(first.schemaVersion).toBe(3);
     expect(first.appearanceOverride).toBeNull();
 
     const second = await thumbnails.createThumbnail(prisma, editionId, {
@@ -114,7 +114,7 @@ describe("thumbnail flow", () => {
   });
 
   it("rejects an unknown template and missing assets", async () => {
-    const editionId = await createEdition();
+    const { editionId } = await createEdition();
     const backgroundAssetId = await createImageAsset();
     const foregroundAssetId = await createImageAsset();
     await expect(
@@ -143,7 +143,7 @@ describe("thumbnail flow", () => {
   });
 
   it("accepts inline text marks", async () => {
-    const editionId = await createEdition();
+    const { editionId } = await createEdition();
     const backgroundAssetId = await createImageAsset();
     const foregroundAssetId = await createImageAsset();
     const created = await thumbnails.createThumbnail(prisma, editionId, {
@@ -158,7 +158,7 @@ describe("thumbnail flow", () => {
   });
 
   it("saves, switches primary, and deletes with fallback", async () => {
-    const editionId = await createEdition();
+    const { editionId } = await createEdition();
     const backgroundAssetId = await createImageAsset();
     const foregroundAssetId = await createImageAsset();
     const input = inputFor(backgroundAssetId, foregroundAssetId);
@@ -191,18 +191,18 @@ describe("thumbnail flow", () => {
     expect(remaining[0]!.isPrimary).toBe(true);
   });
 
-  it("stores the language-edition appearance and previews an unsaved draft", async () => {
-    const editionId = await createEdition();
+  it("stores the Work appearance and previews an unsaved draft", async () => {
+    const { workId, editionId } = await createEdition();
     const backgroundAssetId = await createImageAsset();
     const foregroundAssetId = await createImageAsset();
     const input = inputFor(backgroundAssetId, foregroundAssetId);
 
-    const initial = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    const initial = await thumbnails.getThumbnailAppearance(prisma, workId, editionId);
     expect(initial.appearance).toBeNull();
     expect(initial.defaults.headline.color).toBe("#FFFFFF");
     expect(initial.resolved.headline.color).toBe("#FFFFFF");
 
-    const saved = await thumbnails.saveThumbnailAppearance(prisma, editionId, {
+    const saved = await thumbnails.saveThumbnailAppearance(prisma, workId, editionId, {
       headline: {
         fontSize: 120,
         color: "#00FFFF",
@@ -222,7 +222,7 @@ describe("thumbnail flow", () => {
     });
     expect(saved.resolved.headline.fontSize).toBe(120);
 
-    const reloaded = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    const reloaded = await thumbnails.getThumbnailAppearance(prisma, workId, editionId);
     expect(reloaded.appearance).toEqual(saved.appearance);
 
     const unsavedPreview = await thumbnails.createThumbnailPreview(prisma, editionId, {
@@ -245,33 +245,130 @@ describe("thumbnail flow", () => {
     });
     expect(ignoredPreview.html).not.toContain("color:#00FFFF");
 
-    const noAppearance = await thumbnails.saveThumbnailAppearance(prisma, editionId, null);
+    const noAppearance = await thumbnails.saveThumbnailAppearance(
+      prisma,
+      workId,
+      editionId,
+      null,
+    );
     expect(noAppearance.appearance).toBeNull();
   });
 
-  it("falls back to the theme when the stored appearance JSON is corrupt", async () => {
-    const editionId = await createEdition();
-    await prisma.languageEdition.update({
-      where: { id: editionId },
+  it("rejects an Edition that belongs to another Work", async () => {
+    const { workId } = await createEdition();
+    const other = await createEdition();
+
+    await expect(
+      thumbnails.getThumbnailAppearance(prisma, workId, other.editionId),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+    await expect(
+      thumbnails.saveThumbnailAppearance(prisma, workId, other.editionId, {
+        headline: { color: "#00FFFF" },
+      }),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("applies Work appearance changes live to existing candidates without overrides", async () => {
+    const { workId, editionId } = await createEdition();
+    const backgroundAssetId = await createImageAsset();
+    const foregroundAssetId = await createImageAsset();
+    const input = inputFor(backgroundAssetId, foregroundAssetId);
+    await thumbnails.saveThumbnailAppearance(prisma, workId, editionId, {
+      headline: { color: "#00FFFF" },
+    });
+    const withoutOverride = await thumbnails.createThumbnail(prisma, editionId, {
+      label: "継承",
+      template: { id: "thumbnail.cutout-hero", version: 1 },
+      input,
+    });
+    const withOverride = await thumbnails.createThumbnail(prisma, editionId, {
+      label: "上書き",
+      template: { id: "thumbnail.cutout-hero", version: 1 },
+      input,
+      appearanceOverride: { headline: { color: "#FF00FF" } },
+    });
+
+    await thumbnails.saveThumbnailAppearance(prisma, workId, editionId, {
+      headline: { color: "#123456" },
+    });
+
+    const inherited = await thumbnails.generateThumbnailImage(
+      prisma,
+      directories,
+      fakeRasterizer,
+      withoutOverride.id,
+    );
+    expect(inherited.png.length).toBeGreaterThan(0);
+    expect(lastRenderedHtml).toContain("color:#123456");
+    expect(lastRenderedHtml).not.toContain("color:#00FFFF");
+
+    await thumbnails.generateThumbnailImage(
+      prisma,
+      directories,
+      fakeRasterizer,
+      withOverride.id,
+    );
+    expect(lastRenderedHtml).toContain("color:#FF00FF");
+    expect(lastRenderedHtml).not.toContain("color:#123456");
+  });
+
+  it("resolves a Work locale font only for the Edition locale", async () => {
+    const work = await works.createWork(prisma, "多言語サムネ作品", "ja-JP");
+    const jaEditionId = work.languageEditions[0]!.id;
+    const withEnglish = await works.createLanguageEdition(
+      prisma,
+      work.id,
+      "en-US",
+      jaEditionId,
+    );
+    const enEditionId = withEnglish.languageEditions.find(
+      (edition) => edition.locale === "en-US",
+    )!.id;
+    const face = (family: string) => ({
+      family,
+      style: "normal" as const,
+      weight: 400,
+      fallbacks: [],
+    });
+
+    await thumbnails.saveThumbnailAppearance(prisma, work.id, jaEditionId, {
+      headline: {
+        fontFaceByLocale: {
+          "ja-JP": face("Japanese Face"),
+          "en-US": face("English Face"),
+        },
+      },
+    });
+
+    const ja = await thumbnails.getThumbnailAppearance(prisma, work.id, jaEditionId);
+    expect(ja.resolved.headline.fontFace?.family).toBe("Japanese Face");
+    const en = await thumbnails.getThumbnailAppearance(prisma, work.id, enEditionId);
+    expect(en.resolved.headline.fontFace?.family).toBe("English Face");
+  });
+
+  it("falls back to the theme when the stored Work appearance JSON is corrupt", async () => {
+    const { workId, editionId } = await createEdition();
+    await prisma.work.update({
+      where: { id: workId },
       data: { thumbnailAppearanceJson: "not-json" },
     });
-    const corrupt = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    const corrupt = await thumbnails.getThumbnailAppearance(prisma, workId, editionId);
     expect(corrupt.appearance).toBeNull();
     expect(corrupt.resolved.headline.color).toBe("#FFFFFF");
 
-    await prisma.languageEdition.update({
-      where: { id: editionId },
+    await prisma.work.update({
+      where: { id: workId },
       data: { thumbnailAppearanceJson: JSON.stringify({ unknown: true }) },
     });
-    const unknownKey = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    const unknownKey = await thumbnails.getThumbnailAppearance(prisma, workId, editionId);
     expect(unknownKey.appearance).toBeNull();
   });
 
-  it("applies the saved appearance and both images when generating a PNG", async () => {
-    const editionId = await createEdition();
+  it("applies the saved Work appearance and both images when generating a PNG", async () => {
+    const { workId, editionId } = await createEdition();
     const backgroundAssetId = await createImageAsset();
     const foregroundAssetId = await createImageAsset();
-    await thumbnails.saveThumbnailAppearance(prisma, editionId, {
+    await thumbnails.saveThumbnailAppearance(prisma, workId, editionId, {
       headline: { color: "#00FFFF" },
     });
     const created = await thumbnails.createThumbnail(prisma, editionId, {
@@ -292,26 +389,26 @@ describe("thumbnail flow", () => {
     expect(lastRenderedHtml.match(/data:image\/png;base64,/g)?.length).toBe(2);
   });
 
-  it("reads a v1 document without an appearance override", async () => {
-    const editionId = await createEdition();
+  it("does not read old candidate documents", async () => {
+    const { editionId } = await createEdition();
     const assetId = await createImageAsset();
     const row = await prisma.thumbnail.create({
       data: {
         languageEditionId: editionId,
-        label: "v1",
-        schemaVersion: 1,
+        label: "v2",
+        schemaVersion: 2,
         templateId: "thumbnail.cutout-hero",
         templateVersion: 1,
         inputJson: JSON.stringify({
-          schemaVersion: 1,
+          schemaVersion: 2,
           template: { id: "thumbnail.cutout-hero", version: 1 },
           input: inputFor(assetId, assetId),
         }),
       },
     });
-    const dto = await thumbnails.getThumbnail(prisma, row.id);
-    expect(dto.schemaVersion).toBe(1);
-    expect(dto.appearanceOverride).toBeNull();
+    await expect(thumbnails.getThumbnail(prisma, row.id)).rejects.toMatchObject({
+      code: "INTERNAL_ERROR",
+    });
   });
 
   it("removes candidates when the work is deleted", async () => {
@@ -405,8 +502,8 @@ describe("thumbnail flow", () => {
     ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
   });
 
-  it("keeps applied editions unchanged when a preset is updated or deleted", async () => {
-    const editionId = await createEdition();
+  it("keeps the applied Work unchanged when a preset is updated or deleted", async () => {
+    const { workId, editionId } = await createEdition();
     const original = {
       headline: { fontSize: 120, color: "#00FFFF" },
       accent: "#FF00FF",
@@ -415,17 +512,17 @@ describe("thumbnail flow", () => {
       name: "スナップショット",
       appearance: original,
     });
-    await thumbnails.saveThumbnailAppearance(prisma, editionId, created.appearance);
+    await thumbnails.saveThumbnailAppearance(prisma, workId, editionId, created.appearance);
 
     await appearancePresets.updateThumbnailAppearancePreset(prisma, created.id, {
       name: "スナップショット 改",
       appearance: { accent: "#00FF00" },
     });
-    const afterUpdate = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    const afterUpdate = await thumbnails.getThumbnailAppearance(prisma, workId, editionId);
     expect(afterUpdate.appearance).toEqual(original);
 
     await appearancePresets.deleteThumbnailAppearancePreset(prisma, created.id);
-    const afterDelete = await thumbnails.getThumbnailAppearance(prisma, editionId);
+    const afterDelete = await thumbnails.getThumbnailAppearance(prisma, workId, editionId);
     expect(afterDelete.appearance).toEqual(original);
   });
 });

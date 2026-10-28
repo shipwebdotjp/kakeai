@@ -34,7 +34,7 @@ function document(
   appearanceOverride?: ThumbnailAppearance,
 ): ThumbnailDocument {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     template: { id: "thumbnail.cutout-hero", version: 1 },
     input,
     ...(appearanceOverride === undefined ? {} : { appearanceOverride }),
@@ -139,13 +139,9 @@ describe("compileThumbnail", () => {
     expect(compiled.html).toContain("rgba(27,39,64,0.2)");
   });
 
-  it("renders a v1 document and still applies the language-edition appearance", () => {
+  it("applies the Work appearance through the Edition locale", () => {
     const compiled = compileThumbnail({
-      document: {
-        schemaVersion: 1,
-        template: { id: "thumbnail.cutout-hero", version: 1 },
-        input: BASE_INPUT,
-      },
+      document: document(),
       theme,
       locale: "ja-JP",
       assetResolver,
@@ -186,7 +182,7 @@ describe("compileThumbnail", () => {
       theme: localizedTheme,
       locale: "zh-Hant",
       assetResolver,
-      appearance: { headline: { fontFace: face("Explicit Font") } },
+      appearance: { headline: { fontFaceByLocale: { "zh-Hant": face("Explicit Font") } } },
     });
     expect(overridden.html).toContain("font-family:'Explicit Font'");
   });
@@ -258,7 +254,7 @@ describe("compileThumbnail", () => {
     expect(() =>
       compileThumbnail({
         document: {
-          schemaVersion: 2,
+          schemaVersion: 3,
           template: { id: "thumbnail.missing", version: 1 },
           input: BASE_INPUT,
         },

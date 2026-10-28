@@ -18,7 +18,7 @@ import {
 import {
   createThumbnail,
   getThumbnail,
-  getThumbnailAppearance,
+  getThumbnailAppearanceForEdition,
   listThumbnails,
   saveThumbnail,
   setPrimaryThumbnail,
@@ -32,7 +32,7 @@ import type { AgentOperationFragment } from "./operations.ts";
  * operations have no `requestId` and no ledger. A timeout is recovered by
  * reading `thumbnail.list` and comparing `label` / timestamps before retrying.
  *
- * Deletion, the Edition common Appearance write and appearance presets stay
+ * Deletion, the Work common Appearance write and appearance presets stay
  * human-only: deletion has no undo, and the appearance patch is edited in the
  * app UI. `appearanceOverride` on a candidate is part of create/update.
  */
@@ -62,9 +62,11 @@ export const thumbnailOperationDefinitions = {
   "thumbnail.appearance": {
     input: agentThumbnailAppearanceInputSchema,
     output: agentThumbnailAppearanceOutputSchema,
+    // Reads the Work-scoped appearance through the Edition context (Theme and
+    // locale), so the agent contract keeps a single Edition id.
     run: async (input, context) =>
       asWorkResource(
-        getThumbnailAppearance(context.prisma, input.languageEditionId),
+        getThumbnailAppearanceForEdition(context.prisma, input.languageEditionId),
       ),
   },
   "thumbnail.create": {
