@@ -36,6 +36,11 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
     return null;
   }
 
+  const widthClass =
+    className !== undefined && className.includes("max-w-")
+      ? className
+      : `max-w-3xl ${className ?? ""}`;
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
@@ -43,9 +48,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-xl ${
-          className ?? ""
-        }`}
+        className={`relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-xl ${widthClass}`}
       >
         {title !== undefined && (
           <div className="flex items-center justify-between border-b border-border px-4 py-2">

@@ -170,44 +170,73 @@ export function WorkEditPage() {
   };
 
   const scriptVersionId = previewVersionId ?? current.data?.id;
+  const agentAuthor = current.data?.author;
+  const agentAuthored = agentAuthor !== undefined && isAgentAuthored(agentAuthor);
+  const agentId = agentAuthored ? (current.data?.authorAgentId ?? null) : null;
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <p className="shrink-0 text-sm">
-        <Link to="/" className="text-brand-700 hover:underline dark:text-brand-400">
+      <div className="mb-1 flex shrink-0 flex-wrap items-center gap-2 md:flex-nowrap">
+        <Link
+          to="/"
+          className="shrink-0 text-sm text-brand-700 hover:underline dark:text-brand-400"
+        >
           ← 作品一覧
         </Link>
-      </p>
 
-      {current.data !== undefined && isAgentAuthored(current.data.author) && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 text-sm">
-          <span className={badgeInfoClass}>現在版はエージェント作</span>
-          {current.data.authorAgentId !== null && (
-            <span
-              className={`min-w-0 break-all ${metaTextClass}`}
-              title={current.data.authorAgentId}
+        {work.data && (
+          <form onSubmit={onRename} className="flex min-w-0 flex-1 items-center gap-2">
+            <input
+              value={title}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              className={`min-w-0 flex-1 ${textFieldClass}`}
+              aria-label="作品タイトル"
+            />
+            <button
+              type="submit"
+              className={`${buttonPrimaryClass} shrink-0`}
+              disabled={updateWork.isPending}
             >
-              ID: {current.data.authorAgentId}
-            </span>
-          )}
-        </div>
-      )}
+              作品名を保存
+            </button>
+          </form>
+        )}
+
+        {!editionNotFound && work.data && editions.length > 0 && (
+          <EditionSelector
+            editions={editions}
+            editionId={editionId}
+            onSelect={(id) => {
+              if (workId !== undefined) {
+                navigate(workEditionRoute(workId, id));
+              }
+            }}
+            onCreated={(id) => {
+              if (workId !== undefined) {
+                navigate(workEditionRoute(workId, id));
+              }
+            }}
+            createEdition={createEdition}
+          />
+        )}
+
+        {agentAuthored && (
+          <span className="flex shrink-0 items-center gap-2">
+            <span className={badgeInfoClass}>現在版はエージェント作</span>
+            {agentId !== null && (
+              <span
+                className={`hidden max-w-[18rem] truncate text-xs xl:inline ${metaTextClass}`}
+                title={agentId}
+              >
+                ID: {agentId}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
 
       {work.isLoading && <p className="shrink-0">読み込み中…</p>}
       {work.isError && <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(work.error)}</p>}
-
-      {work.data && (
-        <form onSubmit={onRename} className="my-2 flex shrink-0 flex-wrap items-center gap-2">
-          <input
-            value={title}
-            onChange={(event) => setTitleDraft(event.target.value)}
-            className={`min-w-[200px] flex-1 ${textFieldClass}`}
-          />
-          <button type="submit" className={buttonPrimaryClass} disabled={updateWork.isPending}>
-            作品名を保存
-          </button>
-        </form>
-      )}
       {updateWork.isError && (
         <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(updateWork.error)}</p>
       )}
@@ -220,27 +249,6 @@ export function WorkEditPage() {
           </Link>
           から選び直してください。
         </p>
-      )}
-
-      {!editionNotFound && work.data && editions.length > 0 && (
-        <EditionSelector
-          editions={editions}
-          editionId={editionId}
-          onSelect={(id) => {
-            if (workId !== undefined) {
-              navigate(workEditionRoute(workId, id));
-            }
-          }}
-          onCreated={(id) => {
-            if (workId !== undefined) {
-              navigate(workEditionRoute(workId, id));
-            }
-          }}
-          createEdition={createEdition}
-        />
-      )}
-      {createEdition.isError && (
-        <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(createEdition.error)}</p>
       )}
 
       {!editionNotFound && (
