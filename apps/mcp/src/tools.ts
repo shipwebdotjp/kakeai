@@ -86,7 +86,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "job.get": "Job 1 件の状態を返す。",
   "job.list":
     "作品の Job 一覧を返す。`kind` で種別を選ぶ（既定 `render`、`render` / `tts`）。`asset_ingest` は作品に紐づかないため指定できない。",
-  "job.cancel": "queued の Job をキャンセルする。",
+  "job.cancel": "queued の Job、または実行中の render Job をキャンセルする。",
   "preview.frame":
     "render 成果物（MP4）の指定時刻（`timeMs` ミリ秒）の静止画を原寸 PNG で返す。絵は image ブロック、解決時刻と寸法は JSON で返る。JSON にも原寸 PNG の base64（`pngBase64`）が入るため転記せず、絵が必要なときは image ブロックを使う。",
   "preview.scriptFrame":

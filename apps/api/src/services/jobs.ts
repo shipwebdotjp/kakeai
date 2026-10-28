@@ -3,6 +3,8 @@ import { toJob } from "../dto/mappers.ts";
 import type { Job as JobDto, JobKind } from "@kakeai/contracts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
+import { logger } from "../logger.ts";
+import { abortActiveRender } from "./render-cancellation.ts";
 
 export async function getJob(prisma: PrismaClient, jobId: string): Promise<JobDto> {
   const row = await prisma.job.findUnique({
@@ -33,19 +35,22 @@ export async function listWorkJobs(
 }
 
 export async function cancelJob(prisma: PrismaClient, jobId: string): Promise<JobDto> {
+  let abortRender = false;
   const cancelled = await prisma.$transaction(async (transaction) => {
     const row = await transaction.job.findUnique({ where: { id: jobId } });
     if (row === null) {
       throw resourceNotFound("job", jobId);
     }
-    if (row.status !== "queued") {
+    const cancellableRunningRender = row.kind === "render" && row.status === "running";
+    if (row.status !== "queued" && !cancellableRunningRender) {
       throw new ApiError(409, "JOB_NOT_CANCELLABLE", undefined, {
         jobId,
         status: row.status,
       });
     }
+    const previousStatus = row.status;
     const claimed = await transaction.job.updateMany({
-      where: { id: jobId, status: "queued" },
+      where: { id: jobId, status: previousStatus },
       data: { status: "cancelled", finishedAt: new Date() },
     });
     if (claimed.count === 0) {
@@ -54,6 +59,11 @@ export async function cancelJob(prisma: PrismaClient, jobId: string): Promise<Jo
         jobId,
         status: latest?.status ?? "unknown",
       });
+    }
+    if (previousStatus === "running") {
+      // Stop the render engine only after the status is committed as cancelled,
+      // so a late success write can never overwrite it.
+      abortRender = true;
     }
     if (row.kind === "asset_ingest" && row.assetId !== null) {
       await transaction.asset.updateMany({
@@ -66,5 +76,12 @@ export async function cancelJob(prisma: PrismaClient, jobId: string): Promise<Jo
       include: { artifacts: true },
     });
   });
+  if (abortRender) {
+    // The DB status already prevents a late success. A missing live controller
+    // means the worker had not registered yet or already finished.
+    if (!abortActiveRender(jobId)) {
+      logger.warn("render_cancel_without_active_worker", { jobId });
+    }
+  }
   return toJob(cancelled);
 }

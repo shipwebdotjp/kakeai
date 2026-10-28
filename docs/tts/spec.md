@@ -134,7 +134,7 @@ Job 実行中の失敗（`GET /jobs/:jobId` の `status: failed`）:
   - 応答（202）は投入した Job の一覧と除外したセリフ（ID・エラーコード・理由）を返す
 - `GET /health` の `capabilities.jobKinds` に `tts`、`capabilities.voiceAdapters` に登録済みアダプター（`voicevox`、`aivisspeech`、`openai-compatible`）を含める
 
-Job 種別は `asset_ingest` / `render` / `tts` の 3 つとなる。単一 worker、`queued → running → succeeded|failed`・`queued → cancelled` の状態遷移、リースなし、起動時 `WORKER_INTERRUPTED` 掃除は [ADR 0020](../adr/0020-no-job-lease-startup-reap.md) と [../mvp/spec.md](../mvp/spec.md) の規則をそのまま適用する。
+Job 種別は `asset_ingest` / `render` / `tts` の 3 つとなる。単一 worker、`queued → running → succeeded|failed`・`queued → cancelled`（render は `running → cancelled` も可）の状態遷移、リースなし、起動時 `WORKER_INTERRUPTED` 掃除は [ADR 0020](../adr/0020-no-job-lease-startup-reap.md) と [../mvp/spec.md](../mvp/spec.md) の規則をそのまま適用する。実行中の tts Job はキャンセルしない。
 
 ## Prisma
 

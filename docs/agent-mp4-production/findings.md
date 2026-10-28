@@ -67,7 +67,7 @@ Voice Profile の読み取りと既存 Profile の割り当てを追加して解
 | キャラクター・話者 | `character.list` / `character.get`、`character.addFromLibrary`、`speaker.add` / `speaker.setVoiceProfile`、`line.setSpeaker`、`standing.upsert` | 対象 locale の Voice Profile、または locale 一致の声を持つ Character があること |
 | ライブラリ読み取り | `theme.list` / `theme.get`、`faceSet.list` / `faceSet.get`、`voiceProfile.list` / `voiceProfile.get` | 読み取りのみ。Theme は最新公開 Revision だけを返す |
 | TTS | `tts.create`、`tts.createBulk`、`tts.attachBulk`、`line.assignTake`、話速指定、`requestId` 冪等 | 利用者が設定済みの TTS Adapter と、話者に紐づく locale 一致の Voice Profile があること |
-| レンダー・Job | `render.start`、`job.get` / `job.list` / `job.cancel`（queuedのみ）/ `job.wait`、`preview.frame` | ワーカーが動作していること。`preview.frame` はレンダー成果物が前提 |
+| レンダー・Job | `render.start`、`job.get` / `job.list` / `job.cancel`（queuedと実行中render）/ `job.wait`、`preview.frame` | ワーカーが動作していること。`preview.frame` はレンダー成果物が前提 |
 | 契約・束縛 | `schema.get`、`schemaDigest` / `operationDigest`、MCP/CLI の同じ操作・同じエラーコード | 最初に `schema.get` を呼ぶ運用が前提 |
 | 多言語 | `edition.create`、翻訳 ContentDocument の `script.save` | 声は引き継がれない。TTS には別途、対象 locale の声の設定が必要 |
 

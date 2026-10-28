@@ -180,12 +180,22 @@ export const RenderSection = memo(function RenderSection({
                   {new Date(job.createdAt).toLocaleString("ja-JP")}
                   {job.status === "running" ? ` ・ ${job.progressPercent}%` : ""}
                 </span>
-                {job.status === "queued" && (
+                {(job.status === "queued" || job.status === "running") && (
                   <button
                     type="button"
                     className={buttonNeutralClass}
                     disabled={cancelJob.isPending}
-                    onClick={() => cancelJob.mutate(job.id)}
+                    onClick={() => {
+                      if (
+                        job.status === "running" &&
+                        !window.confirm(
+                          "実行中のレンダーをキャンセルしますか？ここまでの出力は保存されません。",
+                        )
+                      ) {
+                        return;
+                      }
+                      cancelJob.mutate(job.id);
+                    }}
                   >
                     キャンセル
                   </button>

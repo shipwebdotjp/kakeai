@@ -137,7 +137,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /script-versions/:scriptVersionId/render-jobs | 202 | 入力スナップショットを持つRender Jobをキューへ追加 |
 | GET | /works/:workId/jobs | 200 | 作品のRender Job履歴を新しい順に取得 |
 | GET | /jobs/:jobId | 200 | Render Jobの状態をポーリング |
-| POST | /jobs/:jobId/cancel | 200 | queued Jobをキャンセル |
+| POST | /jobs/:jobId/cancel | 200 | queued Jobまたは実行中のrender Jobをキャンセル |
 | GET | /artifacts/:artifactId | 200 | Artifactのメタデータを取得 |
 | GET | /artifacts/:artifactId/content | 200 / 206 | Artifactファイルを配信 |
 | DELETE | /artifacts/:artifactId | 204 | 生成済み出力を明示削除 |
@@ -683,7 +683,7 @@ Content-Type: application/json
 
 GET /jobs/:jobId は常に最新のJob DTOを返す。UIはqueuedまたはrunningの間だけこのエンドポイントをポーリングする。GET /works/:workId/jobs はそのWorkのRender Jobを作成日時の降順で返し、レンダー履歴画面に使う。
 
-POST /jobs/:jobId/cancel は `status=queued` のJobだけを `cancelled` に遷移させ、200 OKで更新済みJob DTOを返す。render Jobのキャンセルは入力・素材を変更しない。asset_ingest JobのキャンセルはAssetを `failed` にし、同じ原本を再アップロードした場合は新しいasset_ingest Jobを作って再試行する。`running`、`succeeded`、`failed`、`cancelled` のJobは409 `JOB_NOT_CANCELLABLE` とする。実行中のFFmpegやChromeを止める操作はMVPの対象外である。
+POST /jobs/:jobId/cancel は `status=queued` のJob、または実行中（`running`）のrender Jobを `cancelled` に遷移させ、200 OKで更新済みJob DTOを返す。実行中renderはDBの状態を先に `cancelled` にしてから、APIプロセス内のワーカーが保持する `AbortController` でレンダーエンジン（FFmpeg・Chrome）を停止する。停止はベストエフォートで、完了直前の競合時もJobを `succeeded` にしない。render Jobのキャンセルは入力・素材・既存の出力を変更しない。asset_ingest JobのキャンセルはAssetを `failed` にし、同じ原本を再アップロードした場合は新しいasset_ingest Jobを作って再試行する。実行中のtts・asset_ingest、`succeeded`、`failed`、`cancelled` のJobは409 `JOB_NOT_CANCELLABLE` とする。
 
 成功したJobの例:
 
@@ -804,7 +804,7 @@ Face Set の改訂版が存在しない場合や、固定版に `expressionId` �
 | 409 | LANGUAGE_EDITION_JOB_RUNNING | 実行中Jobを持つ言語版を削除しようとした | editionId, jobIds |
 | 409 | CURRENT_SCRIPT_VERSION_DELETE | 現在版を過去版の一括削除に含めた | editionId, currentScriptVersionId |
 | 409 | SCRIPT_VERSION_JOB_RUNNING | 実行中Jobを持つ版を一括削除に含めた | editionId, jobIds |
-| 409 | JOB_NOT_CANCELLABLE | queued以外のJobをキャンセルしようとした | jobId, status |
+| 409 | JOB_NOT_CANCELLABLE | queued以外（実行中renderを除く）のJobをキャンセルしようとした | jobId, status |
 | 413 | FILE_TOO_LARGE | アップロードが設定済み上限を超過 | maxBytes |
 | 415 | UNSUPPORTED_MEDIA_TYPE | 許可されない画像、動画、音声形式 | receivedMediaType, allowedMediaTypes |
 | 422 | VALIDATION_ERROR | Zod検証、未対応locale、Scene構成規則などに違反 | issues |
@@ -850,4 +850,4 @@ RENDER_INPUT_INVALIDはキュー投入前の422であり、Job error codeでは�
 - Assetの取り込みは、一時領域への保存、ハッシュ計算とメディア検査、既存SHA-256行とそのstorageKeyの確認、アプリ管理領域への確定、Asset行とasset_ingest Jobの作成の順に行う。workerは原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけrender Renditionを作ってからAssetをreadyにする。既存Assetの実体が欠損・破損している場合は、内容ハッシュ由来の同じstorageKeyを上書きして取り込み直す。競合アップロードは一意制約で直列化し、失敗時の一時ファイルは清掃する。
 - すべての書込みはDBトランザクションの単位を [spec.md](./spec.md) の「書込みとJob状態遷移」に合わせる。ファイルシステム操作と完全な原子性は持てないため、確定前のファイルを公開せず、確定に失敗した孤立ファイルは起動時に清掃する。削除時はDBから参照を切った後に実体を隔離し、隔離ファイルは起動時に清掃する。
 - プレビューとレンダーは同じコンパイラと信頼済みVisualTemplateを使い、Asset解決だけを `assetResolver` の注入で切り替えて生成する。render時は正本JSON、Rendition（無ければ原本）、テンプレート版、出力設定をJobスナップショットへ固定し、ワーカーはそのJSONを実行時にコンパイルする。実行ツールの版は診断用に記録するが、完全な再現性は保証しない。
-- Job取得は単一workerを前提にPrismaだけで行う。最古のqueued Jobを検索し、`id` と `status=queued` を条件に `updateMany` して更新件数が1のときだけ実行する。これは偶発的な二重実行を減らすベストエフォートであり、複数workerを厳密に排他するための生SQL・分散ロック・専用キューは導入しない。cancelも `status=queued` を条件に同じ方式で更新する。
+- Job取得は単一workerを前提にPrismaだけで行う。最古のqueued Jobを検索し、`id` と `status=queued` を条件に `updateMany` して更新件数が1のときだけ実行する。これは偶発的な二重実行を減らすベストエフォートであり、複数workerを厳密に排他するための生SQL・分散ロック・専用キューは導入しない。cancelも `status=queued`（または実行中renderなら `status=running`）を条件に同じ方式で更新する。

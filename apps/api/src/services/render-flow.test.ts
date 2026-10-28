@@ -12,6 +12,7 @@ import {
   renderJobSnapshotSchema,
   toVisualThemeDefinitionV2,
 } from "@kakeai/contracts";
+import { RenderCancelledError } from "@hyperframes/producer";
 import type { AppConfig } from "../config.ts";
 import { loadConfig } from "../config.ts";
 import { createPrismaClient } from "../db/client.ts";
@@ -21,6 +22,7 @@ import { ensureDataDirectories } from "../storage/paths.ts";
 import { ApiError } from "../http/errors.ts";
 import { createWorker } from "../worker/index.ts";
 import { processAssetIngest } from "../worker/asset-ingest.ts";
+import { processRenderJob } from "../worker/render.ts";
 import * as artifacts from "./artifacts.ts";
 import * as assets from "./assets.ts";
 import * as faceSets from "./face-sets.ts";
@@ -443,6 +445,23 @@ describe("render job polling and cancel", () => {
     });
   });
 
+  it("cancels a running render job", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const image = await readyImage();
+    const { saved } = await versionWithBackground(image.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    await prisma.job.update({
+      where: { id: job.id },
+      data: { status: "running", startedAt: new Date(), progressPercent: 42 },
+    });
+
+    const cancelled = await jobs.cancelJob(prisma, job.id);
+    expect(cancelled.status).toBe("cancelled");
+    expect(cancelled.finishedAt).not.toBeNull();
+  });
+
   it("marks the asset failed when cancelling ingest", async () => {
     if (!ffmpegReady) {
       return;
@@ -462,6 +481,23 @@ describe("render job polling and cancel", () => {
 });
 
 describe("render worker", () => {
+  it("does not render a job that was already cancelled", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const image = await readyImage();
+    const { saved } = await versionWithBackground(image.id);
+    const job = await renderJobs.createRenderJob(prisma, saved.scriptVersion.id, testFontCatalog);
+    await prisma.job.update({
+      where: { id: job.id },
+      data: { status: "cancelled", finishedAt: new Date() },
+    });
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+
+    await expect(processRenderJob(prisma, config, row)).rejects.toBeInstanceOf(RenderCancelledError);
+    expect(await prisma.artifact.count({ where: { jobId: job.id } })).toBe(0);
+  });
+
   it("renders the snapshot to an mp4 artifact", async () => {
     if (!ffmpegReady || !renderEnabled) {
       return;

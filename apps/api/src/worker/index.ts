@@ -1,4 +1,5 @@
 import type { WorkerStatus } from "@kakeai/contracts";
+import { RenderCancelledError } from "@hyperframes/producer";
 import type { AppConfig } from "../config.ts";
 import type { Job, PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
@@ -65,8 +66,8 @@ export function createWorker(dependencies: WorkerDependencies): Worker {
     logger.warn("job_failed", { jobId: job.id, kind: job.kind, error: message });
     await prisma
       .$transaction(async (transaction) => {
-        await transaction.job.update({
-          where: { id: job.id },
+        const updated = await transaction.job.updateMany({
+          where: { id: job.id, status: "running" },
           data: {
             status: "failed",
             finishedAt: new Date(),
@@ -74,6 +75,10 @@ export function createWorker(dependencies: WorkerDependencies): Worker {
             errorMessage: message,
           },
         });
+        if (updated.count === 0) {
+          // The Job was cancelled while the worker was stopping; keep that state.
+          return;
+        }
         if (job.kind === "asset_ingest" && job.assetId !== null) {
           await transaction.asset.updateMany({
             where: { id: job.assetId },
@@ -105,6 +110,16 @@ export function createWorker(dependencies: WorkerDependencies): Worker {
         throw new Error(`未対応のJob種別です: ${job.kind}`);
       }
     } catch (error) {
+      if (error instanceof RenderCancelledError) {
+        const row = await prisma.job.findUnique({
+          where: { id: job.id },
+          select: { status: true },
+        });
+        if (row?.status === "cancelled") {
+          logger.info("render_cancelled", { jobId: job.id });
+          return true;
+        }
+      }
       await markFailed(job, error);
     }
     return true;

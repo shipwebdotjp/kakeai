@@ -1,6 +1,6 @@
 import { mkdir, rm, stat, symlink, writeFile, cp } from "node:fs/promises";
 import { join } from "node:path";
-import { createRenderJob, executeRenderJob } from "@hyperframes/producer";
+import { createRenderJob, executeRenderJob, RenderCancelledError } from "@hyperframes/producer";
 import {
   compileDocument,
   collectStillFrameRequests,
@@ -29,9 +29,14 @@ import {
 import {
   commitFile,
   hashFile,
+  removeStorageFile,
   resolveStoragePath,
 } from "../storage/asset-store.ts";
 import type { DataDirectories } from "../storage/paths.ts";
+import {
+  registerRenderCancellation,
+  unregisterRenderCancellation,
+} from "../services/render-cancellation.ts";
 
 export type RenderErrorCode = "ASSET_UNAVAILABLE" | "RENDER_FAILED";
 
@@ -43,6 +48,24 @@ export class RenderJobError extends Error {
     this.name = "RenderJobError";
     this.code = code;
   }
+}
+
+function renderCancelledError(): RenderCancelledError {
+  return new RenderCancelledError("レンダーをキャンセルしました。", "user_cancelled");
+}
+
+function throwIfCancelled(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw renderCancelledError();
+  }
+}
+
+async function isJobCancelled(prisma: PrismaClient, jobId: string): Promise<boolean> {
+  const row = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { status: true },
+  });
+  return row?.status === "cancelled";
 }
 
 function extensionForMediaType(mediaType: string): string {
@@ -163,8 +186,13 @@ export async function processRenderJob(
   const snapshot = parseSnapshot(job);
   const projectDir = join(config.directories.tmp, `render-${job.id}`);
   const assetsDir = join(projectDir, "assets");
+  const signal = registerRenderCancellation(job.id);
   try {
+    if (await isJobCancelled(prisma, job.id)) {
+      throw renderCancelledError();
+    }
     const assets = await resolveSnapshotAssets(prisma, config.directories, snapshot);
+    throwIfCancelled(signal);
     await mkdir(assetsDir, { recursive: true });
     for (const asset of assets) {
       await symlink(asset.filePath, join(assetsDir, asset.fileName)).catch((error: unknown) => {
@@ -312,6 +340,7 @@ export async function processRenderJob(
       throw new RenderJobError("RENDER_FAILED", "Compositionを生成できません。");
     }
     await writeFile(join(projectDir, "index.html"), compiled.html);
+    throwIfCancelled(signal);
 
     const renderJob = createRenderJob({
       fps: snapshot.output.fps,
@@ -321,36 +350,63 @@ export async function processRenderJob(
     const outputTempPath = join(projectDir, "output.mp4");
     let lastReportedPercent = 0;
     try {
-      await executeRenderJob(renderJob, projectDir, outputTempPath, (renderState) => {
-        const percent = Math.max(0, Math.min(100, Math.round(renderState.progress)));
-        if (percent > lastReportedPercent) {
-          lastReportedPercent = percent;
-          void prisma.job
-            .updateMany({
-              where: { id: job.id, progressPercent: { lt: percent } },
-              data: { progressPercent: percent },
-            })
-            .catch((error: unknown) => {
-              logger.warn("render_progress_update_failed", {
-                jobId: job.id,
-                error: error instanceof Error ? error.message : String(error),
+      await executeRenderJob(
+        renderJob,
+        projectDir,
+        outputTempPath,
+        (renderState) => {
+          const percent = Math.max(0, Math.min(100, Math.round(renderState.progress)));
+          if (percent > lastReportedPercent) {
+            lastReportedPercent = percent;
+            void prisma.job
+              .updateMany({
+                where: {
+                  id: job.id,
+                  status: "running",
+                  progressPercent: { lt: percent },
+                },
+                data: { progressPercent: percent },
+              })
+              .catch((error: unknown) => {
+                logger.warn("render_progress_update_failed", {
+                  jobId: job.id,
+                  error: error instanceof Error ? error.message : String(error),
+                });
               });
-            });
-        }
-      });
+          }
+        },
+        signal,
+        () => throwIfCancelled(signal),
+      );
     } catch (error) {
-      if (error instanceof RenderJobError) {
+      if (error instanceof RenderCancelledError || error instanceof RenderJobError) {
         throw error;
       }
       throw new RenderJobError("RENDER_FAILED", "レンダーに失敗しました。");
     }
+    throwIfCancelled(signal);
 
     const digest = await hashFile(outputTempPath);
+    const probe = await probeMedia(outputTempPath, "video", "video/mp4").catch(() => null);
+    throwIfCancelled(signal);
+    if (await isJobCancelled(prisma, job.id)) {
+      throw renderCancelledError();
+    }
+
     const storageKey = `artifacts/${job.id}-${digest.sha256}.mp4`;
     await commitFile(outputTempPath, storageKey, config.directories);
-    const outputPath = resolveStoragePath(config.directories, storageKey);
-    const probe = await probeMedia(outputPath, "video", "video/mp4").catch(() => null);
-    await prisma.$transaction(async (transaction) => {
+    const artifactId = await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.job.updateMany({
+        where: { id: job.id, status: "running" },
+        data: {
+          status: "succeeded",
+          progressPercent: 100,
+          finishedAt: new Date(),
+        },
+      });
+      if (updated.count === 0) {
+        return null;
+      }
       const artifact = await transaction.artifact.create({
         data: {
           jobId: job.id,
@@ -369,16 +425,39 @@ export async function processRenderJob(
       });
       await transaction.job.update({
         where: { id: job.id },
-        data: {
-          status: "succeeded",
-          progressPercent: 100,
-          finishedAt: new Date(),
-          resultJson: JSON.stringify({ artifactId: artifact.id }),
-        },
+        data: { resultJson: JSON.stringify({ artifactId: artifact.id }) },
       });
+      return artifact.id;
     });
+    if (artifactId === null) {
+      await removeStorageFile(config.directories, storageKey).catch((error: unknown) => {
+        logger.warn("render_artifact_cleanup_failed", {
+          jobId: job.id,
+          storageKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+      const latestCancelled = await isJobCancelled(prisma, job.id);
+      if (latestCancelled) {
+        throw renderCancelledError();
+      }
+      throw new RenderJobError("RENDER_FAILED", "レンダー結果を保存できませんでした。");
+    }
     logger.info("render_succeeded", { jobId: job.id, storageKey });
+  } catch (error) {
+    if (signal.aborted) {
+      if (error instanceof RenderCancelledError) {
+        throw error;
+      }
+      logger.warn("render_cancelled_with_error", {
+        jobId: job.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw renderCancelledError();
+    }
+    throw error;
   } finally {
+    unregisterRenderCancellation(job.id, signal);
     await rm(projectDir, { recursive: true, force: true });
   }
 }

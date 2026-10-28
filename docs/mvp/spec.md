@@ -166,7 +166,7 @@ Render Jobを作る時点で、次を `inputSnapshotJson` に不変の値とし�
 5. **ワーカー取得**：MVPは単一プロセス起動とし、ワーカーはAPIプロセス内のバックグラウンドループとして動作する。単一ワーカーのみを正式にサポートする。ワーカーはPrismaで最古のqueued Jobを読み、`id` と `status=queued` を条件に `updateMany` して取得を試みる。更新件数が0なら取り直す。この軽量な比較更新は偶発的な二重取得を減らすためのベストエフォートであり、複数ワーカーの厳密な排他・分散キューは提供しない。リースは持たず、API起動時に `running` のまま残ったJobを `WORKER_INTERRUPTED` として failed に掃除する。renderワーカーはスナップショットJSONを信頼済みテンプレートで実行時にコンパイルする。
 6. **完了または失敗**：出力MP4またはRenditionを確定保存できた場合に対応する行を作成してJobを `succeeded` にする。失敗時は `errorCode` と利用者向け `errorMessage` を記録して `failed` にする。異常終了で `running` のまま残ったJobは起動時に `WORKER_INTERRUPTED` として失敗扱いにし、自動再試行せず利用者が再実行する。
 
-Jobの状態遷移は `queued → running → succeeded | failed` と `queued → cancelled` のみとする。実行中Jobの停止は行わない。画面上の進捗は `progressPercent`（0〜100）に保存するが、HyperFrames側から取得できない区間は概算値または0のままでよい。
+Jobの状態遷移は `queued → running → succeeded | failed`、`queued → cancelled`、`running → cancelled`（`render` のみ）とする。実行中renderのキャンセルは、APIプロセス内のワーカーが保持する `AbortController` でレンダーエンジン（FFmpeg・Chrome）を停止し、DBの状態を先に `cancelled` にしてから中断する。完了直前の競合では状態更新を `running` 条件付きにし、`cancelled` を上書きしない。`asset_ingest` と `tts` の実行中Jobは停止しない。画面上の進捗は `progressPercent`（0〜100）に保存するが、HyperFrames側から取得できない区間は概算値または0のままでよい。
 
 ## 視覚・音声の構成
 
@@ -238,4 +238,4 @@ HyperFramesはApache-2.0で公開されているが、導入するCatalogブロ�
 - テスト素材を使い、作成→保存→再読込→プレビュー→レンダー→`<video>`でのMP4再生・シークを自動確認できる。
 - MP4/WebM/MP3/WAVの原本を取り込み、そのまま使える素材は正規化せずに、必要時だけRenditionを作って使用できる。取り込み中は状態を表示する。対応外コーデック、可変フレームレート、回転メタデータを含む入力も、必要時に作られるRendition経由でプレビューとレンダーができる。
 - 参照されていないAsset、個別Artifact、Work全体を明示削除できる。参照中のAssetは409で拒否され、削除後の履歴が再プレビュー・再レンダー不可であることをUIに表示する。
-- queued状態のrender Jobまたはasset_ingest Jobをキャンセルできる。実行中Jobはキャンセルできず、アプリまたはワーカーの中断時は従来どおり `WORKER_INTERRUPTED` で失敗する。
+- queued状態のrender Jobまたはasset_ingest Jobと、実行中のrender Jobをキャンセルできる。実行中のasset_ingest・ttsはキャンセルできず、アプリまたはワーカーの中断時は従来どおり `WORKER_INTERRUPTED` で失敗する。

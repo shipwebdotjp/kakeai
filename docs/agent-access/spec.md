@@ -16,7 +16,7 @@
 
 | 区分 | 操作 | エージェント |
 | --- | --- | --- |
-| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、お気に入り・アーカイブの切り替え、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job のキャンセル、Voice Profile と Character の作成・更新、Character 外観の差分追加・部分更新（addAppearance / updateAppearance）、Face Set の作成・部分更新、Theme の作成・Draft 編集・公開、Artifact の書き出し（既存ファイルは上書きしない） | 可 |
+| 可逆 | 作品作成、作品複製、台本保存（新しい Script Version の追加）と過去版の復元、操作コアによる Scene・セリフ・Cue・素材割り当て・立ち絵・Character コピー・話者と声の割り当ての編集、Composition の draft 更新と publish、Asset 取り込み、タグ更新、お気に入り・アーカイブの切り替え、レンダー投入、利用者が設定済みの TTS Adapter への合成 Job 投入、queued Job と実行中 render Job のキャンセル、Voice Profile と Character の作成・更新、Character 外観の差分追加・部分更新（addAppearance / updateAppearance）、Face Set の作成・部分更新、Theme の作成・Draft 編集・公開、Artifact の書き出し（既存ファイルは上書きしない） | 可 |
 | 不可逆 | Work・Asset 本体・Composition Version・Artifact の実体削除、Theme のアーカイブ、外部サービスへの公開 | 人のみ |
 
 「台本上の削除」（Cue・Scene・セリフ・割り当ての除去）は、要素を除いた新しい Script Version を作るだけの可逆な操作であり、エージェントに許す。実体ファイルや行を消す操作だけが不可逆である。既存の [../mvp/api-contract.md](../mvp/api-contract.md) の削除系はそのまま人専用とし、エージェントの操作面には公開しない。Composition の publish は Kakeai 内の不変版の追加であり、外部サービスへの公開ではない。TTS の合成 Job は、利用者が設定したループバック Adapter だけを対象に可逆な操作として公開する（[ADR 0077](../adr/0077-agent-tts-on-configured-adapters.md)）。
@@ -251,7 +251,7 @@
 - `tts.create` — 保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter へ合成 Job を投入する（後述）。
 - `tts.createBulk` — 保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する（後述）。
 - `tts.attachBulk` — `requestId` 付きで開始した一括生成の結果を確定し、成功 Job だけを一つの Script Version へ添付する（後述）。短時間の操作で Job 待機の対象にしない。
-- `job.cancel` — queued の Job をキャンセルする。
+- `job.cancel` — queued の Job、または実行中の render Job をキャンセルする。
 - `thumbnail.create` / `thumbnail.update` / `thumbnail.setPrimary` — サムネイル候補の作成・明示保存・primary 選択（前述）。
 
 ### `script.edit` の契約
