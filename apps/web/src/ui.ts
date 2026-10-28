@@ -21,6 +21,9 @@ export const buttonNeutralClass = `${buttonBase} ${neutralSurfaceClass} text-for
 
 export const buttonDangerClass = `${buttonBase} border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950`;
 
+export const buttonDangerOutlineClass =
+  "rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950";
+
 export const errorTextClass = "text-sm text-red-600 dark:text-red-400";
 
 export const warningTextClass = "text-sm text-amber-700 dark:text-amber-300";

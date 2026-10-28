@@ -10,3 +10,4 @@
 - [x] H. R2 skills: `skills/kakeai-production/` に翻訳版の手順（`edition.create` → `script.get` 翻訳 → `script.save`）
 - [x] I. R2 完了: `edition.create` のサービス境界テスト（シード置き換え・重複 409・他 Work シード拒否）、契約テスト、MCP/CLI カタログ反映の確認。TTS・レンダーの実機通しは利用環境での確認に委ねる（コード経路は既存のまま）
 - [x] J. 完了後: [../mvp/roadmap.md](../mvp/roadmap.md) Phase 4 の該当箇所と、その完了状況を更新する
+- [x] K. Edition単位の削除: `DELETE /language-editions/:editionId`、最後のEdition拒否、実行中Job拒否、作品全体削除との分離（[../work-history/spec.md](../work-history/spec.md)）

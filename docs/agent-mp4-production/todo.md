@@ -231,7 +231,7 @@ MCP の二重出力でコストが増えるため）。
 - SRT 字幕のエクスポート
 - YouTube 投稿設定・チャプター
 - MP4 Artifact のダウンロード
-- 版の削除・履歴圧縮、全 Edition の複製、Edition をまたぐ復元
+- Agent 操作としての版の削除・履歴圧縮（Web UI / HTTP では実装済み）、全 Edition の複製、Edition をまたぐ復元
 - Theme / Face Set の管理（作成・更新・削除）、Voice Profile / Character の削除
 - 縦型（9:16）の完成動画
 - リモート/クラウド接続、アプリ自動起動

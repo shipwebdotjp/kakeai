@@ -8,9 +8,8 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent, serializeContent } from "../domain/content-json.ts";
-import { logger } from "../logger.ts";
-import { removeStorageFile } from "../storage/asset-store.ts";
 import type { DataDirectories } from "../storage/paths.ts";
+import { deleteJobsAndArtifacts, removeArtifactFiles } from "./job-cleanup.ts";
 import {
   toWork,
   type EditionWithCurrent,
@@ -111,6 +110,7 @@ export async function cloneWork(
   prisma: PrismaClient,
   workId: string,
   title: string,
+  sourceEditionId: string,
   attribution?: CloneWorkAttribution,
 ): Promise<Work> {
   const work = await prisma.work.findUnique({
@@ -126,16 +126,16 @@ export async function cloneWork(
   if (work === null) {
     throw resourceNotFound("work", workId);
   }
-  const primaryEdition =
-    work.languageEditions.find((edition) => edition.locale === work.originalLocale) ??
-    work.languageEditions[0];
-  if (!primaryEdition) {
-    throw resourceNotFound("work", workId);
+  const sourceEdition = work.languageEditions.find(
+    (edition) => edition.id === sourceEditionId,
+  );
+  if (!sourceEdition) {
+    throw resourceNotFound("language_edition", sourceEditionId);
   }
-  if (!primaryEdition.currentScriptVersion) {
+  if (!sourceEdition.currentScriptVersion) {
     throw new ApiError(500, "INTERNAL_ERROR", "現在の台本版が設定されていません。");
   }
-  const sourceScript = primaryEdition.currentScriptVersion;
+  const sourceScript = sourceEdition.currentScriptVersion;
   const author = attribution?.author ?? "human";
   const authorAgentId =
     author === "agent" ? normalizeAgentId(attribution?.authorAgentId) : null;
@@ -144,14 +144,14 @@ export async function cloneWork(
     const newWork = await tx.work.create({
       data: {
         title,
-        originalLocale: work.originalLocale,
+        originalLocale: sourceEdition.locale,
         parentWorkId: workId,
       },
     });
     const newEdition = await tx.languageEdition.create({
       data: {
         workId: newWork.id,
-        locale: primaryEdition.locale,
+        locale: sourceEdition.locale,
       },
     });
     const newScript = await tx.scriptVersion.create({
@@ -328,21 +328,10 @@ export async function deleteWork(
       },
       select: { id: true },
     });
-    const jobIds = jobs.map((job) => job.id);
-    let removedArtifactKeys: string[] = [];
-    if (jobIds.length > 0) {
-      const artifactRows = await tx.artifact.findMany({
-        where: { jobId: { in: jobIds } },
-        select: { storageKey: true },
-      });
-      removedArtifactKeys = artifactRows.map((artifact) => artifact.storageKey);
-      await tx.artifact.deleteMany({ where: { jobId: { in: jobIds } } });
-      await tx.asset.updateMany({
-        where: { generatedByJobId: { in: jobIds } },
-        data: { generatedByJobId: null },
-      });
-      await tx.job.deleteMany({ where: { id: { in: jobIds } } });
-    }
+    const removedArtifactKeys = await deleteJobsAndArtifacts(
+      tx,
+      jobs.map((job) => job.id),
+    );
 
     await tx.languageEdition.updateMany({
       where: { workId },
@@ -363,14 +352,88 @@ export async function deleteWork(
     return removedArtifactKeys;
   });
 
-  await Promise.allSettled(
-    artifactKeys.map((storageKey) =>
-      removeStorageFile(directories, storageKey).catch((error: unknown) => {
-        logger.warn("artifact_file_cleanup_failed", {
-          storageKey,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }),
-    ),
-  );
+  await removeArtifactFiles(directories, artifactKeys);
+}
+
+/**
+ * Deletes one LanguageEdition and its scripts, Jobs, Artifacts and thumbnails.
+ * Work.originalLocale is provenance and is never rewritten. The last Edition
+ * of a Work cannot be deleted, and a running Job blocks the deletion.
+ */
+export async function deleteLanguageEdition(
+  prisma: PrismaClient,
+  directories: DataDirectories,
+  editionId: string,
+): Promise<void> {
+  const edition = await prisma.languageEdition.findUnique({
+    where: { id: editionId },
+    select: { id: true, workId: true },
+  });
+  if (edition === null) {
+    throw resourceNotFound("language_edition", editionId);
+  }
+  const artifactKeys = await prisma.$transaction(async (tx) => {
+    // Count and Job state are re-read inside the transaction so concurrent
+    // deletions cannot remove every Edition or race the worker's Job claim.
+    const editionCount = await tx.languageEdition.count({
+      where: { workId: edition.workId },
+    });
+    if (editionCount <= 1) {
+      throw new ApiError(409, "LAST_LANGUAGE_EDITION", undefined, {
+        workId: edition.workId,
+        editionId,
+      });
+    }
+
+    const versions = await tx.scriptVersion.findMany({
+      where: { languageEditionId: editionId },
+      select: { id: true },
+    });
+    const versionIds = versions.map((version) => version.id);
+    const jobs = await tx.job.findMany({
+      where: {
+        OR: [
+          { languageEditionId: editionId },
+          { scriptVersionId: { in: versionIds } },
+        ],
+      },
+      select: { id: true, status: true },
+    });
+    // Only a running Job blocks the deletion. Queued Jobs are deleted with the
+    // Edition because the user explicitly removed their source scripts.
+    const runningJobIds = jobs
+      .filter((job) => job.status === "running")
+      .map((job) => job.id);
+    if (runningJobIds.length > 0) {
+      throw new ApiError(409, "LANGUAGE_EDITION_JOB_RUNNING", undefined, {
+        editionId,
+        jobIds: runningJobIds,
+      });
+    }
+
+    const removedArtifactKeys = await deleteJobsAndArtifacts(
+      tx,
+      jobs.map((job) => job.id),
+    );
+    await tx.languageEdition.update({
+      where: { id: editionId },
+      data: { currentScriptVersionId: null, primaryThumbnailId: null },
+    });
+    await tx.scriptVersion.updateMany({
+      where: { sourceScriptVersionId: { in: versionIds } },
+      data: { sourceScriptVersionId: null },
+    });
+    await tx.scriptVersion.deleteMany({
+      where: { languageEditionId: editionId },
+    });
+    await tx.thumbnail.deleteMany({ where: { languageEditionId: editionId } });
+    await tx.languageEdition.delete({ where: { id: editionId } });
+    await tx.work.update({
+      where: { id: edition.workId },
+      data: { updatedAt: new Date() },
+    });
+    return removedArtifactKeys;
+  });
+
+  await removeArtifactFiles(directories, artifactKeys);
 }

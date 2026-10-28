@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useBeforeUnload, useBlocker, useParams } from "react-router-dom";
+import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { SUPPORTED_LOCALES, type SupportedLocale, type ScriptVersion } from "@kakeai/contracts";
+import type { ScriptVersion } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useCreateLanguageEdition, useUpdateWork, useWork } from "../api/hooks";
 import { CueMap } from "../components/CueMap";
+import { EditionSelector } from "../components/EditionSelector";
+import { PaneDivider } from "../components/PaneDivider";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
@@ -34,7 +36,7 @@ import {
   type LayoutStorage,
 } from "../lib/editorLayout";
 import { EDITOR_WIDE_MEDIA_QUERY, useMediaQuery } from "../lib/useMediaQuery";
-import { thumbnailsRoute } from "../lib/routes";
+import { thumbnailsRoute, workEditionRoute } from "../lib/routes";
 import { isAgentAuthored } from "../lib/versionHistory";
 import {
   badgeInfoClass,
@@ -61,80 +63,27 @@ function getLayoutStorage(): LayoutStorage | null {
   }
 }
 
-function PaneDivider({
-  ariaValue,
-  ariaMin,
-  ariaMax,
-  onMove,
-}: {
-  ariaValue: number;
-  ariaMin: number;
-  ariaMax: number;
-  onMove: (deltaX: number) => void;
-}) {
-  const lastX = useRef(0);
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-valuenow={Math.round(ariaValue)}
-      aria-valuemin={ariaMin}
-      aria-valuemax={ariaMax}
-      tabIndex={0}
-      className="w-1.5 shrink-0 cursor-col-resize bg-border focus:bg-brand-500 focus:outline-none"
-      onPointerDown={(event) => {
-        lastX.current = event.clientX;
-        try {
-          event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-          // pointer capture may already be released
-        }
-      }}
-      onPointerMove={(event) => {
-        if (event.buttons !== 1) {
-          return;
-        }
-        const deltaX = event.clientX - lastX.current;
-        lastX.current = event.clientX;
-        onMove(deltaX);
-      }}
-      onPointerUp={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-      }}
-      onPointerCancel={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") {
-          event.preventDefault();
-          onMove(-16);
-        } else if (event.key === "ArrowRight") {
-          event.preventDefault();
-          onMove(16);
-        }
-      }}
-    />
-  );
-}
-
 type PreviewSeekTarget =
   | { kind: "scene"; id: string }
   | { kind: "cue"; id: string }
   | { kind: "line"; id: string };
 
 export function WorkEditPage() {
-  const { workId } = useParams<{ workId: string }>();
+  const { workId, editionId: routeEditionId } = useParams<{
+    workId: string;
+    editionId?: string;
+  }>();
+  const navigate = useNavigate();
   const work = useWork(workId);
-  const editions = work.data?.languageEditions ?? [];
-  const [selectedEditionId, setSelectedEditionId] = useState<string | null>(null);
+  const editions = useMemo(() => work.data?.languageEditions ?? [], [work.data]);
+  const routeEdition =
+    routeEditionId === undefined
+      ? undefined
+      : editions.find((edition) => edition.id === routeEditionId);
+  const editionNotFound =
+    routeEditionId !== undefined && editions.length > 0 && routeEdition === undefined;
   const editionId =
-    selectedEditionId !== null && editions.some((edition) => edition.id === selectedEditionId)
-      ? selectedEditionId
-      : (editions[0]?.id ?? undefined);
+    routeEdition?.id ?? (routeEditionId === undefined ? editions[0]?.id : undefined);
   const current = useCurrentScriptVersion(editionId);
   const updateWork = useUpdateWork(workId);
   const createEdition = useCreateLanguageEdition(workId);
@@ -152,11 +101,18 @@ export function WorkEditPage() {
     setUnsaved({ dirty: false, document: null });
   }, [workId, editionId]);
 
+  // Keep the Edition in the URL so a reload opens the same language, and
+  // canonicalise the legacy /works/:workId URL to the first Edition. An unknown
+  // Edition id is not rewritten, so a stale link cannot open another language.
   useEffect(() => {
-    if (selectedEditionId === null && editions[0] !== undefined) {
-      setSelectedEditionId(editions[0].id);
+    if (workId === undefined || routeEditionId !== undefined) {
+      return;
     }
-  }, [editions, selectedEditionId]);
+    const target = editions[0]?.id;
+    if (target !== undefined) {
+      navigate(workEditionRoute(workId, target), { replace: true });
+    }
+  }, [editions, navigate, routeEditionId, workId]);
 
   const savedTitle = (work.data?.title ?? "").trim();
   const titleDraftTrimmed = titleDraft !== null ? titleDraft.trim() : null;
@@ -256,12 +212,30 @@ export function WorkEditPage() {
         <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(updateWork.error)}</p>
       )}
 
-      {work.data && editions.length > 0 && (
+      {editionNotFound && (
+        <p className={errorTextClass}>
+          指定された言語版が見つかりません。URLを確認するか、
+          <Link to="/" className="underline">
+            作品一覧
+          </Link>
+          から選び直してください。
+        </p>
+      )}
+
+      {!editionNotFound && work.data && editions.length > 0 && (
         <EditionSelector
           editions={editions}
           editionId={editionId}
-          onSelect={setSelectedEditionId}
-          onCreated={setSelectedEditionId}
+          onSelect={(id) => {
+            if (workId !== undefined) {
+              navigate(workEditionRoute(workId, id));
+            }
+          }}
+          onCreated={(id) => {
+            if (workId !== undefined) {
+              navigate(workEditionRoute(workId, id));
+            }
+          }}
           createEdition={createEdition}
         />
       )}
@@ -269,102 +243,25 @@ export function WorkEditPage() {
         <p className={`shrink-0 ${errorTextClass}`}>{errorMessage(createEdition.error)}</p>
       )}
 
-      <PreviewControllerProvider playerRef={playerRef} scriptVersionId={scriptVersionId} draft={draft}>
-        <WorkEditPanes
-          workId={workId}
-          editionId={editionId}
-          workTitle={title}
+      {!editionNotFound && (
+        <PreviewControllerProvider
+          playerRef={playerRef}
           scriptVersionId={scriptVersionId}
-          current={current}
-          onSaved={onSaved}
-          onDocumentChange={setUnsaved}
-          onDirtyChange={setSceneEditorDirty}
-        />
-      </PreviewControllerProvider>
-    </section>
-  );
-}
-
-function EditionSelector({
-  editions,
-  editionId,
-  onSelect,
-  onCreated,
-  createEdition,
-}: {
-  editions: { id: string; locale: string }[];
-  editionId: string | undefined;
-  onSelect: (id: string) => void;
-  onCreated: (id: string) => void;
-  createEdition: ReturnType<typeof useCreateLanguageEdition>;
-}) {
-  const [localeDraft, setLocaleDraft] = useState<SupportedLocale>("en-US");
-  const existingLocales = new Set(editions.map((edition) => edition.locale));
-  const creatableLocales = SUPPORTED_LOCALES.filter((locale) => !existingLocales.has(locale));
-  useEffect(() => {
-    if (!creatableLocales.includes(localeDraft) && creatableLocales[0] !== undefined) {
-      setLocaleDraft(creatableLocales[0]);
-    }
-  }, [creatableLocales, localeDraft]);
-
-  return (
-    <div className="my-2 flex shrink-0 flex-wrap items-center gap-2 text-sm">
-      <label className="flex items-center gap-2">
-        言語版
-        <select
-          value={editionId ?? ""}
-          onChange={(event) => onSelect(event.target.value)}
-          className={textFieldClass}
+          draft={draft}
         >
-          {editions.map((edition) => (
-            <option key={edition.id} value={edition.id}>
-              {edition.locale}
-            </option>
-          ))}
-        </select>
-      </label>
-      {creatableLocales.length > 0 && editionId !== undefined && (
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createEdition.mutate(
-              { locale: localeDraft, sourceEditionId: editionId },
-              {
-                onSuccess: (work) => {
-                  const created = work.languageEditions.find(
-                    (edition) => edition.locale === localeDraft,
-                  );
-                  if (created !== undefined) {
-                    onCreated(created.id);
-                  }
-                },
-              },
-            );
-          }}
-        >
-          <select
-            value={localeDraft}
-            onChange={(event) => setLocaleDraft(event.target.value as SupportedLocale)}
-            className={textFieldClass}
-            aria-label="追加する言語"
-          >
-            {creatableLocales.map((locale) => (
-              <option key={locale} value={locale}>
-                {locale}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className={buttonNeutralClass}
-            disabled={createEdition.isPending}
-          >
-            言語版を追加
-          </button>
-        </form>
+          <WorkEditPanes
+            workId={workId}
+            editionId={editionId}
+            workTitle={title}
+            scriptVersionId={scriptVersionId}
+            current={current}
+            onSaved={onSaved}
+            onDocumentChange={setUnsaved}
+            onDirtyChange={setSceneEditorDirty}
+          />
+        </PreviewControllerProvider>
       )}
-    </div>
+    </section>
   );
 }
 

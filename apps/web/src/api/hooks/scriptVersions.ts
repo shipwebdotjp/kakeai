@@ -92,6 +92,39 @@ export function useRestoreScriptVersion(workId: string | undefined, editionId: s
   });
 }
 
+export function useDeleteScriptVersions(
+  workId: string | undefined,
+  editionId: string | undefined,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scriptVersionIds: string[]) => {
+      if (editionId === undefined || editionId.length === 0) {
+        throw new Error("editionId がありません");
+      }
+      await apiRequest(
+        `/language-editions/${encodeURIComponent(editionId)}/script-versions/bulk-delete`,
+        { method: "POST", body: { scriptVersionIds } },
+      );
+    },
+    onSuccess: (_data, scriptVersionIds) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.works() });
+      if (workId !== undefined && workId.length > 0) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.work(workId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.workJobs(workId) });
+      }
+      if (editionId !== undefined && editionId.length > 0) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.currentScriptVersion(editionId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.scriptVersions(editionId) });
+      }
+      for (const scriptVersionId of scriptVersionIds) {
+        queryClient.removeQueries({ queryKey: ["script-version", scriptVersionId] });
+        queryClient.removeQueries({ queryKey: ["script-version-preview", scriptVersionId] });
+      }
+    },
+  });
+}
+
 export function useScriptVersionPreview(scriptVersionId: string | undefined) {
   return useQuery({
     queryKey: ["script-version-preview", scriptVersionId],

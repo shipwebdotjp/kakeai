@@ -179,7 +179,11 @@ describe("work clone and recovery data", () => {
     const sourceVersionId = edition.currentScriptVersion.id;
 
     const cloned = (
-      await client.request("work.clone", { workId: work.id, title: "複製先" })
+      await client.request("work.clone", {
+        workId: work.id,
+        title: "複製先",
+        sourceEditionId: edition.id,
+      })
     ).work;
     expect(cloned.title).toBe("複製先");
     expect(cloned.parentWorkId).toBe(work.id);
@@ -206,7 +210,11 @@ describe("work clone and recovery data", () => {
     expect(child?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
 
     await expectAgentError(
-      client.request("work.clone", { workId: "wrk-missing", title: "不明" }),
+      client.request("work.clone", {
+        workId: "wrk-missing",
+        title: "不明",
+        sourceEditionId: "led-missing",
+      }),
       "WORK_NOT_FOUND",
     );
   });

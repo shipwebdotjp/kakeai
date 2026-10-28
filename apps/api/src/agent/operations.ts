@@ -257,7 +257,7 @@ const definitions: AgentOperationDefinitions = {
     // is retried, so the agent never blindly creates a second child.
     run: async (input, context) => ({
       work: await asWorkResource(
-        cloneWork(context.prisma, input.workId, input.title, {
+        cloneWork(context.prisma, input.workId, input.title, input.sourceEditionId, {
           author: "agent",
           authorAgentId: context.agentId,
         }),

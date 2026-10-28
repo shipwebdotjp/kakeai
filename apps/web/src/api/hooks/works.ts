@@ -52,16 +52,50 @@ export function useUpdateWork(workId: string | undefined) {
 export function useCloneWork() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ workId, title }: { workId: string; title: string }) =>
+    mutationFn: async ({
+      workId,
+      title,
+      sourceEditionId,
+    }: {
+      workId: string;
+      title: string;
+      sourceEditionId: string;
+    }) =>
       (
         await apiRequest<Work>(`/works/${encodeURIComponent(workId)}/clone`, {
           method: "POST",
-          body: { title },
+          body: { title, sourceEditionId },
         })
       ).data,
     onSuccess: (newWork) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.works() });
       queryClient.setQueryData(queryKeys.work(newWork.id), newWork);
+    },
+  });
+}
+
+export function useDeleteLanguageEdition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      workId,
+      editionId,
+    }: {
+      workId: string;
+      editionId: string;
+    }) => {
+      await apiRequest(`/language-editions/${encodeURIComponent(editionId)}`, {
+        method: "DELETE",
+      });
+      return { workId, editionId };
+    },
+    onSuccess: ({ workId, editionId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.works() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.work(workId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workJobs(workId) });
+      queryClient.removeQueries({ queryKey: queryKeys.currentScriptVersion(editionId) });
+      queryClient.removeQueries({ queryKey: queryKeys.scriptVersions(editionId) });
+      queryClient.removeQueries({ queryKey: queryKeys.thumbnails(editionId) });
     },
   });
 }
@@ -75,6 +109,7 @@ export function useDeleteWork() {
     onSuccess: (_data, workId) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.works() });
       queryClient.removeQueries({ queryKey: queryKeys.work(workId) });
+      queryClient.removeQueries({ queryKey: queryKeys.workJobs(workId) });
     },
   });
 }

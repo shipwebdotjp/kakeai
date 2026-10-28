@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { ScriptVersionSummary, WorkSummary } from "@kakeai/contracts";
+import type {
+  LanguageEditionSummary,
+  ScriptVersionSummary,
+  WorkSummary,
+} from "@kakeai/contracts";
 import {
   useCloneWork,
   useCreateWork,
+  useDeleteLanguageEdition,
+  useDeleteScriptVersions,
   useDeleteWork,
   useRestoreScriptVersion,
   useScriptVersion,
@@ -13,7 +19,7 @@ import {
 import { Modal } from "../components/Modal";
 import { SCENE_LABELS } from "../content/labels";
 import { errorMessage } from "../lib/errorMessage";
-import { workRoute } from "../lib/routes";
+import { workEditionRoute, workRoute } from "../lib/routes";
 import {
   abbreviateAgentId,
   buildVersionOutline,
@@ -23,6 +29,7 @@ import {
 import {
   badgeInfoClass,
   badgeNeutralClass,
+  buttonDangerOutlineClass,
   buttonNeutralClass,
   buttonPrimaryClass,
   errorTextClass,
@@ -30,13 +37,31 @@ import {
   textFieldClass,
 } from "../ui";
 
+interface EditionTarget {
+  workId: string;
+  editionId: string;
+}
+
+function resolveTarget(
+  works: WorkSummary[] | undefined,
+  target: EditionTarget | null,
+): { work: WorkSummary; edition: LanguageEditionSummary } | null {
+  if (target === null) {
+    return null;
+  }
+  const work = works?.find((entry) => entry.id === target.workId);
+  const edition = work?.languageEditions.find((entry) => entry.id === target.editionId);
+  return work === undefined || edition === undefined ? null : { work, edition };
+}
+
 interface CloneModalProps {
   open: boolean;
   onClose: () => void;
   work: WorkSummary | null;
+  edition: LanguageEditionSummary | null;
 }
 
-function CloneModal({ open, onClose, work }: CloneModalProps) {
+function CloneModal({ open, onClose, work, edition }: CloneModalProps) {
   const navigate = useNavigate();
   const cloneWork = useCloneWork();
   const [title, setTitle] = useState("");
@@ -49,7 +74,7 @@ function CloneModal({ open, onClose, work }: CloneModalProps) {
     }
   }, [open, work, resetMutation]);
 
-  if (work === null) {
+  if (work === null || edition === null) {
     return null;
   }
 
@@ -60,21 +85,30 @@ function CloneModal({ open, onClose, work }: CloneModalProps) {
       return;
     }
     cloneWork.mutate(
-      { workId: work.id, title: trimmed },
+      { workId: work.id, title: trimmed, sourceEditionId: edition.id },
       {
         onSuccess: (newWork) => {
           onClose();
-          navigate(workRoute(newWork.id));
+          const newEdition =
+            newWork.languageEditions.find((entry) => entry.locale === edition.locale) ??
+            newWork.languageEditions[0];
+          navigate(
+            newEdition === undefined
+              ? workRoute(newWork.id)
+              : workEditionRoute(newWork.id, newEdition.id),
+          );
         },
       },
     );
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="作品の複製">
+    <Modal open={open} onClose={onClose} title="言語版の複製">
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <p className="text-sm">
-          現在版の台本（素材・音声・BGM・演出設定）を引き継いだ新しい作品を作成します。
+          「{work.title}」の {edition.locale} 版（v
+          {edition.currentScriptVersion.versionNumber}）の現在内容を引き継いだ新しい作品を作成します。
+          複製先には {edition.locale} 版だけが作られます。
         </p>
         <div>
           <label className="mb-1 block text-sm font-medium">作品名</label>
@@ -114,6 +148,7 @@ interface HistoryModalProps {
   open: boolean;
   onClose: () => void;
   work: WorkSummary | null;
+  edition: LanguageEditionSummary | null;
 }
 
 function CurrentVersionBadge() {
@@ -264,27 +299,43 @@ function VersionInspectPanel({
   );
 }
 
-function HistoryModal({ open, onClose, work }: HistoryModalProps) {
-  const edition = work?.languageEditions[0];
+function HistoryModal({ open, onClose, work, edition }: HistoryModalProps) {
   const editionId = edition?.id;
   const currentScriptVersionId = edition?.currentScriptVersion.id;
 
   const versionsQuery = useScriptVersions(editionId);
   const restoreMutation = useRestoreScriptVersion(work?.id, editionId);
+  const deleteMutation = useDeleteScriptVersions(work?.id, editionId);
   const [inspecting, setInspecting] = useState<ScriptVersionSummary | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const resetRestore = restoreMutation.reset;
+  const resetDelete = deleteMutation.reset;
 
-  // A new work (or a reopened modal) must not show another work's version or
-  // a restore error left over from a previous attempt.
+  // A new work, edition, or reopened modal must not show another history's
+  // version, selection, or a mutation error left over from a previous attempt.
   useEffect(() => {
     if (!open) {
       return;
     }
     setInspecting(null);
+    setSelectedIds([]);
     resetRestore();
-  }, [open, editionId, resetRestore]);
+    resetDelete();
+  }, [open, editionId, resetDelete, resetRestore]);
 
-  if (work === null) {
+  useEffect(() => {
+    if (versionsQuery.data === undefined) {
+      return;
+    }
+    const available = new Set(
+      versionsQuery.data
+        .filter((version) => version.id !== currentScriptVersionId)
+        .map((version) => version.id),
+    );
+    setSelectedIds((previous) => previous.filter((id) => available.has(id)));
+  }, [currentScriptVersionId, versionsQuery.data]);
+
+  if (work === null || edition === null) {
     return null;
   }
 
@@ -298,8 +349,33 @@ function HistoryModal({ open, onClose, work }: HistoryModalProps) {
     }
   };
 
+  const toggleSelected = (versionId: string) => {
+    setSelectedIds((previous) =>
+      previous.includes(versionId)
+        ? previous.filter((id) => id !== versionId)
+        : [...previous, versionId],
+    );
+  };
+
+  const onBulkDelete = () => {
+    if (selectedIds.length === 0) {
+      return;
+    }
+    if (
+      window.confirm(
+        `選択した${selectedIds.length}件の版を削除しますか？\n※現在版は削除できません。削除した版に関連するJob・出力ファイルも削除され、元に戻せません。`,
+      )
+    ) {
+      deleteMutation.mutate(selectedIds, { onSuccess: () => setSelectedIds([]) });
+    }
+  };
+
   return (
-    <Modal open={open} onClose={onClose} title={`「${work.title}」の版履歴・復元`}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`「${work.title}」（${edition.locale}）の版履歴・復元`}
+    >
       {inspecting !== null ? (
         <VersionInspectPanel
           version={inspecting}
@@ -312,11 +388,14 @@ function HistoryModal({ open, onClose, work }: HistoryModalProps) {
       ) : (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            各版には作成者（利用者／エージェント）を表示します。「内容を確認」で保存済みの内容を読み取り専用で確認でき、そこから新しい版として復元できます。
+            各版には作成者（利用者／エージェント）を表示します。「内容を確認」で保存済みの内容を読み取り専用で確認でき、そこから新しい版として復元できます。現在版以外は選択してまとめて削除できます。
           </p>
 
           {restoreMutation.isError && (
             <p className={errorTextClass}>{errorMessage(restoreMutation.error)}</p>
+          )}
+          {deleteMutation.isError && (
+            <p className={errorTextClass}>{errorMessage(deleteMutation.error)}</p>
           )}
 
           {versionsQuery.isLoading && <p>履歴を読み込み中…</p>}
@@ -325,52 +404,75 @@ function HistoryModal({ open, onClose, work }: HistoryModalProps) {
           )}
 
           {versionsQuery.data !== undefined && (
-            <ul className="divide-y divide-border rounded-md border border-border">
-              {versionsQuery.data.map((version) => {
-                const isCurrent = version.id === currentScriptVersionId;
-                return (
-                  <li
-                    key={version.id}
-                    className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold">v{version.versionNumber}</span>
-                        <AuthorBadge version={version} />
-                        {isCurrent && <CurrentVersionBadge />}
-                        <span className={metaTextClass}>
-                          {new Date(version.createdAt).toLocaleString("ja-JP")}
-                        </span>
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className={metaTextClass}>選択中: {selectedIds.length}件</span>
+                <button
+                  type="button"
+                  className={buttonNeutralClass}
+                  disabled={selectedIds.length === 0 || deleteMutation.isPending}
+                  onClick={onBulkDelete}
+                >
+                  {deleteMutation.isPending ? "削除中…" : "選択した版を削除"}
+                </button>
+              </div>
+              <ul className="divide-y divide-border rounded-md border border-border">
+                {versionsQuery.data.map((version) => {
+                  const isCurrent = version.id === currentScriptVersionId;
+                  return (
+                    <li
+                      key={version.id}
+                      className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                      <div className="flex min-w-0 gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 shrink-0"
+                          aria-label={`v${version.versionNumber} を削除対象に選択`}
+                          checked={selectedIds.includes(version.id)}
+                          disabled={isCurrent || deleteMutation.isPending}
+                          onChange={() => toggleSelected(version.id)}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold">v{version.versionNumber}</span>
+                            <AuthorBadge version={version} />
+                            {isCurrent && <CurrentVersionBadge />}
+                            <span className={metaTextClass}>
+                              {new Date(version.createdAt).toLocaleString("ja-JP")}
+                            </span>
+                          </div>
+                          {version.authorAgentId !== null && (
+                            <AgentIdText agentId={version.authorAgentId} />
+                          )}
+                        </div>
                       </div>
-                      {version.authorAgentId !== null && (
-                        <AgentIdText agentId={version.authorAgentId} />
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        className={buttonNeutralClass}
-                        aria-label={`v${version.versionNumber} の内容を確認`}
-                        onClick={() => setInspecting(version)}
-                      >
-                        内容を確認
-                      </button>
-                      {!isCurrent && (
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
                         <button
                           type="button"
                           className={buttonNeutralClass}
-                          aria-label={`v${version.versionNumber} から復元`}
-                          disabled={restoreMutation.isPending}
-                          onClick={() => onRestore(version)}
+                          aria-label={`v${version.versionNumber} の内容を確認`}
+                          onClick={() => setInspecting(version)}
                         >
-                          {restoreMutation.isPending ? "復元中…" : "復元"}
+                          内容を確認
                         </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                        {!isCurrent && (
+                          <button
+                            type="button"
+                            className={buttonNeutralClass}
+                            aria-label={`v${version.versionNumber} から復元`}
+                            disabled={restoreMutation.isPending}
+                            onClick={() => onRestore(version)}
+                          >
+                            {restoreMutation.isPending ? "復元中…" : "復元"}
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
         </div>
       )}
@@ -382,17 +484,26 @@ export function WorkListPage() {
   const works = useWorks();
   const createWork = useCreateWork();
   const deleteWork = useDeleteWork();
+  const deleteEdition = useDeleteLanguageEdition();
   const [title, setTitle] = useState("");
+  const [expandedWorkIds, setExpandedWorkIds] = useState<Set<string>>(() => new Set());
+  const [cloneTarget, setCloneTarget] = useState<EditionTarget | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<EditionTarget | null>(null);
 
-  const [openMenuWorkId, setOpenMenuWorkId] = useState<string | null>(null);
-  const [cloneModalWork, setCloneModalWork] = useState<WorkSummary | null>(null);
-  const [historyModalWork, setHistoryModalWork] = useState<WorkSummary | null>(null);
+  const resolvedClone = resolveTarget(works.data, cloneTarget);
+  const resolvedHistory = resolveTarget(works.data, historyTarget);
 
-  useEffect(() => {
-    const handleDocumentClick = () => setOpenMenuWorkId(null);
-    document.addEventListener("click", handleDocumentClick);
-    return () => document.removeEventListener("click", handleDocumentClick);
-  }, []);
+  const toggleExpanded = (workId: string) => {
+    setExpandedWorkIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(workId)) {
+        next.delete(workId);
+      } else {
+        next.add(workId);
+      }
+      return next;
+    });
+  };
 
   const onCreate = (event: FormEvent) => {
     event.preventDefault();
@@ -420,80 +531,132 @@ export function WorkListPage() {
       </form>
       {createWork.isError && <p className={errorTextClass}>{errorMessage(createWork.error)}</p>}
       {deleteWork.isError && <p className={errorTextClass}>{errorMessage(deleteWork.error)}</p>}
+      {deleteEdition.isError && (
+        <p className={errorTextClass}>{errorMessage(deleteEdition.error)}</p>
+      )}
 
       {works.isLoading && <p>読み込み中…</p>}
       {works.isError && <p className={errorTextClass}>{errorMessage(works.error)}</p>}
 
       <ul className="list-none p-0">
         {works.data?.map((work) => {
-          const edition = work.languageEditions[0];
-          const isMenuOpen = openMenuWorkId === work.id;
+          const isExpanded = expandedWorkIds.has(work.id);
+          const firstEdition = work.languageEditions[0];
           return (
-            <li
-              key={work.id}
-              className="flex items-center gap-3 border-b border-border py-2.5"
-            >
-              <Link to={workRoute(work.id)} className="flex-1 font-semibold text-inherit">
-                {work.title}
-              </Link>
-              <span className={metaTextClass}>
-                v{edition?.currentScriptVersion.versionNumber ?? "-"} ・{" "}
-                {new Date(work.updatedAt).toLocaleString("ja-JP")}
-              </span>
-
-              <div className="relative">
+            <li key={work.id} className="border-b border-border py-2.5">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   className={buttonNeutralClass}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenuWorkId(isMenuOpen ? null : work.id);
+                  aria-expanded={isExpanded}
+                  aria-label={`${work.title} の言語版を${isExpanded ? "閉じる" : "開く"}`}
+                  onClick={() => toggleExpanded(work.id)}
+                >
+                  {isExpanded ? "▾" : "▸"}
+                </button>
+                <Link
+                  to={
+                    firstEdition === undefined
+                      ? workRoute(work.id)
+                      : workEditionRoute(work.id, firstEdition.id)
+                  }
+                  className="min-w-0 flex-1 font-semibold text-inherit"
+                >
+                  {work.title}
+                </Link>
+                <span className={metaTextClass}>
+                  最終更新 {new Date(work.updatedAt).toLocaleString("ja-JP")} ・ 言語版{" "}
+                  {work.languageEditions.length}件
+                </span>
+                <button
+                  type="button"
+                  className={buttonDangerOutlineClass}
+                  disabled={deleteWork.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `「${work.title}」とすべての言語版・版履歴・出力ファイルを削除しますか？\nこの操作は元に戻せません。`,
+                      )
+                    ) {
+                      deleteWork.mutate(work.id);
+                    }
                   }}
                 >
-                  操作 ▾
+                  作品を削除
                 </button>
-
-                {isMenuOpen && (
-                  <div
-                    className="absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-md border border-border bg-surface py-1 shadow-lg"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface-muted"
-                      onClick={() => {
-                        setOpenMenuWorkId(null);
-                        setCloneModalWork(work);
-                      }}
-                    >
-                      複製
-                    </button>
-                    <button
-                      type="button"
-                      className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface-muted"
-                      onClick={() => {
-                        setOpenMenuWorkId(null);
-                        setHistoryModalWork(work);
-                      }}
-                    >
-                      履歴・復元
-                    </button>
-                    <button
-                      type="button"
-                      className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-surface-muted dark:text-red-400"
-                      disabled={deleteWork.isPending}
-                      onClick={() => {
-                        setOpenMenuWorkId(null);
-                        if (window.confirm(`「${work.title}」を削除しますか？`)) {
-                          deleteWork.mutate(work.id);
-                        }
-                      }}
-                    >
-                      削除
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {isExpanded && (
+                <ul className="m-0 mt-2 list-none space-y-2 border-l-2 border-border pl-4">
+                  {work.languageEditions.map((edition) => (
+                    <li
+                      key={edition.id}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md bg-surface-muted/50 px-3 py-2"
+                    >
+                      <span className="font-medium">{edition.locale}</span>
+                      <span className="text-sm font-semibold tabular-nums">
+                        v{edition.currentScriptVersion.versionNumber}
+                      </span>
+                      <span className={metaTextClass}>
+                        最終更新 {new Date(edition.updatedAt).toLocaleString("ja-JP")}
+                      </span>
+
+                      <div className="ml-auto flex flex-wrap items-center gap-2">
+                        <Link
+                          className={buttonNeutralClass}
+                          to={workEditionRoute(work.id, edition.id)}
+                        >
+                          編集
+                        </Link>
+                        <button
+                          type="button"
+                          className={buttonNeutralClass}
+                          onClick={() =>
+                            setCloneTarget({ workId: work.id, editionId: edition.id })
+                          }
+                        >
+                          複製
+                        </button>
+                        <button
+                          type="button"
+                          className={buttonNeutralClass}
+                          onClick={() =>
+                            setHistoryTarget({ workId: work.id, editionId: edition.id })
+                          }
+                        >
+                          履歴・復元
+                        </button>
+                        <button
+                          type="button"
+                          className={buttonDangerOutlineClass}
+                          disabled={
+                            deleteEdition.isPending || work.languageEditions.length <= 1
+                          }
+                          title={
+                            work.languageEditions.length <= 1
+                              ? "作品には少なくとも1つの言語版が必要です。"
+                              : undefined
+                          }
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `「${work.title}」の ${edition.locale} 版を削除しますか？\n※この言語版の台本履歴・レンダー履歴・出力ファイル・サムネイルも削除されます。作品全体は残ります。`,
+                              )
+                            ) {
+                              deleteEdition.mutate({
+                                workId: work.id,
+                                editionId: edition.id,
+                              });
+                            }
+                          }}
+                        >
+                          言語版を削除
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           );
         })}
@@ -501,20 +664,18 @@ export function WorkListPage() {
       {works.data?.length === 0 && <p>作品がありません。上のフォームから作成してください。</p>}
 
       <CloneModal
-        open={cloneModalWork !== null}
-        onClose={() => setCloneModalWork(null)}
-        work={cloneModalWork}
+        open={resolvedClone !== null}
+        onClose={() => setCloneTarget(null)}
+        work={resolvedClone?.work ?? null}
+        edition={resolvedClone?.edition ?? null}
       />
 
-      {historyModalWork !== null && (
-        <HistoryModal
-          open={historyModalWork !== null}
-          onClose={() => setHistoryModalWork(null)}
-          work={
-            works.data?.find((w) => w.id === historyModalWork.id) ?? historyModalWork
-          }
-        />
-      )}
+      <HistoryModal
+        open={resolvedHistory !== null}
+        onClose={() => setHistoryTarget(null)}
+        work={resolvedHistory?.work ?? null}
+        edition={resolvedHistory?.edition ?? null}
+      />
     </section>
   );
 }

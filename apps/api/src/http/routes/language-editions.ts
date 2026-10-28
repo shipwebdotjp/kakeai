@@ -1,10 +1,15 @@
 import { Router } from "express";
-import { draftPreviewRequestSchema, saveScriptVersionRequestSchema } from "@kakeai/contracts";
+import {
+  bulkDeleteScriptVersionsRequestSchema,
+  draftPreviewRequestSchema,
+  saveScriptVersionRequestSchema,
+} from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
 import { asyncHandler, sendData } from "../envelope.ts";
 import { parseBody, pathParam } from "../validation.ts";
 import * as scriptVersions from "../../services/script-versions.ts";
+import * as works from "../../services/works.ts";
 
 export interface LanguageEditionsRouterDependencies {
   prisma: PrismaClient;
@@ -50,6 +55,20 @@ export function createLanguageEditionsRouter(
   );
 
   router.post(
+    "/language-editions/:editionId/script-versions/bulk-delete",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(bulkDeleteScriptVersionsRequestSchema, req.body);
+      await scriptVersions.deleteScriptVersions(
+        prisma,
+        directories,
+        pathParam(req, "editionId"),
+        input.scriptVersionIds,
+      );
+      res.status(204).end();
+    }),
+  );
+
+  router.post(
     "/language-editions/:editionId/draft-preview",
     asyncHandler(async (req, res) => {
       const input = parseBody(draftPreviewRequestSchema, req.body);
@@ -63,6 +82,14 @@ export function createLanguageEditionsRouter(
           input,
         ),
       );
+    }),
+  );
+
+  router.delete(
+    "/language-editions/:editionId",
+    asyncHandler(async (req, res) => {
+      await works.deleteLanguageEdition(prisma, directories, pathParam(req, "editionId"));
+      res.status(204).end();
     }),
   );
 

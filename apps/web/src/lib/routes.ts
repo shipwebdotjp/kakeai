@@ -8,6 +8,10 @@ export function workRoute(workId: string): string {
   return `/works/${encodeURIComponent(workId)}`;
 }
 
+export function workEditionRoute(workId: string, editionId: string): string {
+  return `/works/${encodeURIComponent(workId)}/editions/${encodeURIComponent(editionId)}`;
+}
+
 export function thumbnailsRoute(workId: string, editionId: string): string {
   return `/works/${encodeURIComponent(workId)}/editions/${encodeURIComponent(editionId)}/thumbnails`;
 }

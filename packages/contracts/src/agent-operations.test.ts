@@ -510,18 +510,33 @@ describe("preview.assetFrame operation contract", () => {
 });
 
 describe("work.clone operation contract", () => {
-  it("takes a work id and a non-empty title", () => {
+  it("takes a work id, a non-empty title, and a source edition", () => {
     expect(
-      agentWorkCloneInputSchema.parse({ workId: "work-1", title: "  複製  " }),
-    ).toEqual({ workId: "work-1", title: "複製" });
+      agentWorkCloneInputSchema.parse({
+        workId: "work-1",
+        title: "  複製  ",
+        sourceEditionId: "edition-1",
+      }),
+    ).toEqual({ workId: "work-1", title: "複製", sourceEditionId: "edition-1" });
     expect(agentWorkCloneInputSchema.safeParse({ workId: "work-1" }).success).toBe(false);
     expect(
-      agentWorkCloneInputSchema.safeParse({ workId: "work-1", title: "  " }).success,
+      agentWorkCloneInputSchema.safeParse({
+        workId: "work-1",
+        title: "複製",
+      }).success,
+    ).toBe(false);
+    expect(
+      agentWorkCloneInputSchema.safeParse({
+        workId: "work-1",
+        title: "  ",
+        sourceEditionId: "edition-1",
+      }).success,
     ).toBe(false);
     expect(
       agentWorkCloneInputSchema.safeParse({
         workId: "work-1",
         title: "複製",
+        sourceEditionId: "edition-1",
         extra: true,
       }).success,
     ).toBe(false);

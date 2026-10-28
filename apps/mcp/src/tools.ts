@@ -57,7 +57,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "work.update":
     "作品の管理上の作品名（`title`）を変更する。動画内に表示するタイトルは台本側の Scene スロットで、これとは別。",
   "work.clone":
-    "元作品の現在版から子 Work を作る。元作品は変更せず、子 Work には `parentWorkId` が付く。複製されるのは元作品の `originalLocale` の Edition の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しない。`requestId` は持たないため、タイムアウト後は work.list で `parentWorkId` と `title`、`createdAt` を確認してから再実行する。不明な作品は WORK_NOT_FOUND。",
+    "指定した Edition（`sourceEditionId`）の現在版から子 Work を作る。`sourceEditionId` は必須で、元作品に属する Edition を指定する。元作品は変更せず、子 Work には `parentWorkId` が付き、`originalLocale` と唯一の Edition は複製元の locale になる。複製されるのは指定 Edition の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しない。`requestId` は持たないため、タイムアウト後は work.list で `parentWorkId` と `title`、`createdAt` を確認してから再実行する。不明な作品・Edition は WORK_NOT_FOUND。",
   "edition.create":
     "既存作品に言語版を追加する。シード元の現行台本をコピーし、声と音声を取り除いた初期版を作る。翻訳は script.save で別途保存する。",
   "script.get":

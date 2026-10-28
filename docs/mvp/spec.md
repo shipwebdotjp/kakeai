@@ -101,7 +101,7 @@ SQLiteでリレーションとして管理するのは、作品の一覧・版�
 
 Assetは作品に所属させず、ローカルアプリ全体で再利用できる素材ライブラリとする。ScriptVersionのJSONはAssetのIDと、対応VisualTemplateに限ってCompositionVersionのIDを参照する。Assetの論理的なID・原本メタデータ・バイト列は取り込み後に不変とし、`status` とreadyなRendition由来の表示メタデータだけは取り込み処理により更新される。利用者が後から編集できるのは、分類用のタグ（`tagsJson`）とお気に入り（`favoritedAt`）・アーカイブ（`archivedAt`）だけで、これらは原本の同一性に影響しない（[ADR 0039](../adr/0039-asset-tags-mutable-metadata.md)、[ADR 0054](../adr/0054-asset-favorite-archive-metadata.md)）。実体ファイルが欠損・改変された場合は、同じSHA-256の再アップロードで内容ハッシュ由来の同じパスへ上書きして取り込み直す。原本とは別に、レンダー入力として使う不変の `AssetRendition` を持てる。
 
-履歴と実体を永久保持することはMVPの要件にしない。Workが存続する間は全ScriptVersionを保持し、個別の版削除・履歴圧縮は提供しない。不要になった作品はWorkの明示削除で、そのEdition、ScriptVersion、render Job、Artifactをまとめて削除する。Assetは残存するScriptVersionまたはキュー・実行中のrender Jobの入力スナップショットから参照されている間は削除できず、参照がない場合だけ明示削除または未参照データ清掃で実体と行を削除できる。CompositionVersionも同様に参照中は削除できず、draftだけはいつでも破棄できる。Asset自身のasset_ingest JobはAssetとともに削除する。Artifactは個別に削除できる。削除された版やRenditionを必要とする過去Jobは、再プレビュー・再レンダーできないものとして扱い、履歴を偽って保持しない。
+履歴と実体を永久保持することは要件にしない。Workが存続する間も、現在版以外の過去ScriptVersionを明示的に一括削除できる（[ADR-0110](../adr/0110-edition-scoped-list-and-selective-version-deletion.md)）。版番号は振り直さず、削除した版を `sourceScriptVersionId` で参照する版は参照を null にする。Editionも、作品に少なくとも1つ残る限り削除できる。`Work.originalLocale` はEdition削除後も作品の来歴として保持する。不要になった作品はWorkの明示削除で、その全Edition、ScriptVersion、render Job、Artifactをまとめて削除する。Assetは残存するScriptVersionまたはキュー・実行中のrender Jobの入力スナップショットから参照されている間は削除できず、参照がない場合だけ明示削除または未参照データ清掃で実体と行を削除できる。CompositionVersionも同様に参照中は削除できず、draftだけはいつでも破棄できる。Asset自身のasset_ingest JobはAssetとともに削除する。Artifactは個別に削除できる。削除された版やRenditionを必要とする過去Jobは、再プレビュー・再レンダーできないものとして扱い、履歴を偽って保持しない。
 
 ### テーブルと制約
 

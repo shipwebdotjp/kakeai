@@ -55,7 +55,16 @@ export function createWorksRouter(dependencies: WorksRouterDependencies): Router
     "/works/:workId/clone",
     asyncHandler(async (req, res) => {
       const input = parseBody(cloneWorkRequestSchema, req.body);
-      sendData(res, 201, await works.cloneWork(prisma, pathParam(req, "workId"), input.title));
+      sendData(
+        res,
+        201,
+        await works.cloneWork(
+          prisma,
+          pathParam(req, "workId"),
+          input.title,
+          input.sourceEditionId,
+        ),
+      );
     }),
   );
 

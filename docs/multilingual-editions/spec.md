@@ -24,9 +24,19 @@
   - 初期版の `author` は `human` とする（システムによるコピー操作）。
 - レスポンスは作成した Edition と初期版を、既存の Edition DTO の形に従って返す。
 
+## Edition削除
+
+`DELETE /language-editions/:editionId` を追加する。
+
+- EditionのScriptVersion、関連Job、Artifactとファイル実体、サムネイルを削除し、204 No Contentを返す。キュー済みJobも削除対象に含め、共有Assetは削除せず必要なJob参照（`generatedByJobId`）だけを外す。
+- 対象Editionに実行中（`running`）のJobがある場合は409 `LANGUAGE_EDITION_JOB_RUNNING`、作品の最後のEditionは409 `LAST_LANGUAGE_EDITION`、存在しないEditionは404 `RESOURCE_NOT_FOUND`。
+- `Work.originalLocale` は原本localeのEditionを削除しても変更しない。作品の来歴として保持し、Workには少なくとも1つのEditionを残す。
+- 作品全体の削除（`DELETE /works/:workId`）は別操作として残す。
+- 過去版だけを削除する操作は `POST /language-editions/:editionId/script-versions/bulk-delete` を使う（[../work-history/spec.md](../work-history/spec.md)）。
+
 ## 言語版の切替と編集
 
-- 編集画面は `WorkEditPage` が `languageEditions[0]` を無条件に使っているのを解消し、Edition を選んで切替できるようにする。URL は既存の `/works/:workId/editions/:editionId/...` を維持する。
+- 編集画面は `WorkEditPage` が `languageEditions[0]` を無条件に使っているのを解消し、Edition を選んで切替できるようにする。URL は既存の `/works/:workId/editions/:editionId/...` を維持し、作品一覧のEdition行からは `/works/:workId/editions/:editionId` を開く。再読込後もURLのEditionを開く。
 - Edition 追加は Work の編集画面（または作品一覧の操作）から、locale とシード元 Edition を選んで行う。
 - 編集・保存・復元・プレビュー・レンダーは既存の Edition スコープの機能をそのまま使う。Edition 間で Edition データの共有（locale 中立なもの）を増やさない。キャラクターライブラリはアプリ共通のままとする。
 

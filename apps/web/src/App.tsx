@@ -92,6 +92,10 @@ export const router = createBrowserRouter([
         element: <WorkEditPage />,
       },
       {
+        path: "works/:workId/editions/:editionId",
+        element: <WorkEditPage />,
+      },
+      {
         path: "works/:workId/editions/:editionId/thumbnails",
         element: <ThumbnailsPage />,
       },

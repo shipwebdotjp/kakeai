@@ -22,6 +22,7 @@ export const updateWorkRequestSchema = z.strictObject({
 
 export const cloneWorkRequestSchema = z.strictObject({
   title: z.string().trim().min(1),
+  sourceEditionId: idSchema,
 });
 
 export const createLanguageEditionRequestSchema = z.strictObject({
@@ -36,6 +37,16 @@ export const saveScriptVersionRequestSchema = z.strictObject({
 
 export const draftPreviewRequestSchema = z.strictObject({
   content: contentDocumentSchema,
+});
+
+export const bulkDeleteScriptVersionsRequestSchema = z.strictObject({
+  scriptVersionIds: z
+    .array(idSchema)
+    .min(1)
+    .max(100)
+    .refine((values) => new Set(values).size === values.length, {
+      message: "scriptVersionIds に重複したIDを含めないでください。",
+    }),
 });
 
 export const createRenderJobRequestSchema = z.strictObject({});
@@ -81,6 +92,9 @@ export type CloneWorkRequest = z.infer<typeof cloneWorkRequestSchema>;
 export type CreateLanguageEditionRequest = z.infer<typeof createLanguageEditionRequestSchema>;
 export type SaveScriptVersionRequest = z.infer<typeof saveScriptVersionRequestSchema>;
 export type DraftPreviewRequest = z.infer<typeof draftPreviewRequestSchema>;
+export type BulkDeleteScriptVersionsRequest = z.infer<
+  typeof bulkDeleteScriptVersionsRequestSchema
+>;
 export type CreateRenderJobRequest = z.infer<typeof createRenderJobRequestSchema>;
 export type CreateTtsJobRequest = z.infer<typeof createTtsJobRequestSchema>;
 export type CreateBulkTtsJobsRequest = z.infer<typeof createBulkTtsJobsRequestSchema>;

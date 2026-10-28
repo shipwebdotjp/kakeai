@@ -92,11 +92,13 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /works | 201 | Work、初期言語 Edition、ContentDocument v8の初期ScriptVersionを作成 |
 | GET | /works/:workId | 200 | 作品とEditionの取得 |
 | PATCH | /works/:workId | 200 | 管理上の作品名を変更 |
-| POST | /works/:workId/clone | 201 | 元作品の現在版を複製した新しい子Workを作成。初期版は複製元を `sourceScriptVersionId` に記録する |
-| DELETE | /works/:workId | 204 | 作品、版、Job、Artifactを明示削除 |
+| POST | /works/:workId/clone | 201 | 指定Editionの現在版だけを複製した新しい子Workを作成。初期版は複製元を `sourceScriptVersionId` に記録する |
+| DELETE | /works/:workId | 204 | 作品、全Edition、版、Job、Artifactを明示削除 |
 | GET | /language-editions/:editionId/current-script-version | 200 | 現在の完全な台本を取得 |
 | GET | /language-editions/:editionId/script-versions | 200 | 台本版のメタデータ履歴を取得 |
 | POST | /language-editions/:editionId/script-versions | 201 | 検証済みContentDocumentから新しい不変版を作成 |
+| POST | /language-editions/:editionId/script-versions/bulk-delete | 204 | 現在版以外の選択した版を一括削除 |
+| DELETE | /language-editions/:editionId | 204 | 1つのEditionとその版・Job・Artifact・サムネイルを明示削除 |
 | GET | /script-versions/:scriptVersionId | 200 | 指定した完全な台本版を取得 |
 | GET | /assets | 200 | アプリ共通素材ライブラリを取得 |
 | POST | /assets | 202 / 200 | 原本をアップロードし、素材取り込みJobを開始または既存素材を取得 |
@@ -292,15 +294,21 @@ Content-Type: application/json
 
 この操作はContentDocumentのSceneスロット（導入タイトル等）、ScriptVersion、既存Artifactを変更しない。動画に表示する文言は台本保存で変更する。
 
-DELETE /works/:workId は確認済みの破壊的操作である。子Workがあるときは409 `WORK_HAS_CHILDREN` を返す。子がなければ、当該WorkのEdition、ScriptVersion、Job、ArtifactのDB行と実体を削除する。共有Assetは削除しない。削除済みWorkの出力・履歴は復元できない。
+POST /works/:workId/clone は `{ title, sourceEditionId }` を受け取る。`sourceEditionId` は必須で、対象 Work に属する Edition でなければ 404 `RESOURCE_NOT_FOUND` とする。指定 Edition の current ScriptVersion だけを、同じ locale の単一 Edition として新しい子 Work に複製する。新 Work の `originalLocale` は複製元 Edition の locale とし、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。[../work-history/spec.md](../work-history/spec.md) を正とする。
+
+DELETE /works/:workId は確認済みの破壊的操作である。子Workがあるときは409 `WORK_HAS_CHILDREN` を返す。子がなければ、当該Workの全Edition、ScriptVersion、Job、ArtifactのDB行と実体を削除する。共有Assetは削除しない。削除済みWorkの出力・履歴は復元できない。
 
 POST /works/:workId/language-editions は、既存 Work に言語版を追加する。リクエストは `{ locale, sourceEditionId }`（[../multilingual-editions/spec.md](../multilingual-editions/spec.md)）とし、同一トランザクションで Edition と初期 ScriptVersion v1 を作って `currentScriptVersionId` を設定する。初期版はシード元 Edition の current の深いコピーに置き換え規則（`document.locale` 変換、話者 `voiceProfileId` の null 化、`audioTakes` の空化と `selectedAudioTakeId` の null 化）を適用したものとし、`sourceScriptVersionId` にシード元を記録する。当該 Work に既にある locale は 409 `LANGUAGE_EDITION_EXISTS`、他 Work の Edition や存在しない Work/Edition は 404 `RESOURCE_NOT_FOUND` とする。
+
+DELETE /language-editions/:editionId は、1つの Edition とその ScriptVersion、関連 Job、Artifact の DB 行と実体、サムネイルを削除して 204 No Content を返す。対象 Edition に実行中（`running`）の Job がある場合は 409 `LANGUAGE_EDITION_JOB_RUNNING`、作品の最後の Edition は 409 `LAST_LANGUAGE_EDITION`、存在しない Edition は 404 `RESOURCE_NOT_FOUND` とする。キュー済み Job も削除対象に含め、共有 Asset は削除せず `generatedByJobId` の参照だけを外す。`Work.originalLocale` は作品の来歴として変更しない。作品全体の削除は `DELETE /works/:workId` を使う。
 
 ### 台本の取得と版履歴
 
 編集画面は最初に GET /language-editions/:editionId/current-script-version を呼び、完全なScriptVersion DTOを取得する。currentはEditionの `currentScriptVersionId` が指すScriptVersionであり、最大のversionNumberから推測しない。特定の版やレンダー履歴から台本を開く場合は GET /script-versions/:scriptVersionId を使う。
 
-GET /language-editions/:editionId/script-versions は、本文を含まない版の一覧を版番号の降順で返す。MVPのUIでは履歴表示を必須にしないが、将来の差分表示やレンダーの追跡に備えて公開する。
+GET /language-editions/:editionId/script-versions は、本文を含まない版の一覧を版番号の降順で返す。UIの履歴・復元モーダルはこの一覧と現在版IDを使う。
+
+POST /language-editions/:editionId/script-versions/bulk-delete は `{ scriptVersionIds }` を受け取り、現在版以外の選択した版を一括削除して 204 No Content を返す。ID配列は1件以上100件以下で重複不可とし、存在しない版・他Editionの版を含む場合は全件未処理で 422 `VALIDATION_ERROR`、現在版を含む場合は 409 `CURRENT_SCRIPT_VERSION_DELETE`、対象版に実行中（`running`）の Job がある場合は 409 `SCRIPT_VERSION_JOB_RUNNING` とする。検証は全IDについて行い、1件でも失敗すれば1件も削除しない。対象版を `sourceScriptVersionId` で参照する版は、同一Workかどうかによらず参照を null にしてから削除する。キュー済み・完了・失敗・キャンセルの関連 Job、Artifact、ファイル実体は削除し、共有 Asset は残す。版番号は振り直さない。
 
 ~~~json
 {
@@ -792,6 +800,10 @@ GET /api/v1/script-versions/scr_003/subtitles
 Face Set の改訂版が存在しない場合や、固定版に `expressionId` が存在しない場合は、保存・プレビュー・レンダーで422 `VALIDATION_ERROR` または `*_INVALID` を返す。
 | 409 | WORK_HAS_CHILDREN | 子Workを持つWorkの削除 | workId, childWorkIds |
 | 409 | LANGUAGE_EDITION_EXISTS | 同一 Work に既にある locale の言語版を追加しようとした | workId, locale |
+| 409 | LAST_LANGUAGE_EDITION | 作品の最後の言語版を削除しようとした | workId, editionId |
+| 409 | LANGUAGE_EDITION_JOB_RUNNING | 実行中Jobを持つ言語版を削除しようとした | editionId, jobIds |
+| 409 | CURRENT_SCRIPT_VERSION_DELETE | 現在版を過去版の一括削除に含めた | editionId, currentScriptVersionId |
+| 409 | SCRIPT_VERSION_JOB_RUNNING | 実行中Jobを持つ版を一括削除に含めた | editionId, jobIds |
 | 409 | JOB_NOT_CANCELLABLE | queued以外のJobをキャンセルしようとした | jobId, status |
 | 413 | FILE_TOO_LARGE | アップロードが設定済み上限を超過 | maxBytes |
 | 415 | UNSUPPORTED_MEDIA_TYPE | 許可されない画像、動画、音声形式 | receivedMediaType, allowedMediaTypes |

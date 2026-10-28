@@ -164,13 +164,15 @@ export const agentWorkUpdateInputSchema = z.strictObject({
 export const agentWorkUpdateOutputSchema = z.strictObject({ work: workSchema });
 
 /**
- * Clones the primary edition's current version into a new child Work. The
- * operation has no `requestId`; a timed-out clone is checked through
- * `work.list` (`parentWorkId` / `createdAt`) before retrying.
+ * Clones one Edition's current version into a new child Work. The selected
+ * Edition must belong to the source Work, and the child Work holds only that
+ * locale. The operation has no `requestId`; a timed-out clone is checked
+ * through `work.list` (`parentWorkId` / `createdAt`) before retrying.
  */
 export const agentWorkCloneInputSchema = z.strictObject({
   workId: idSchema,
   title: z.string().trim().min(1),
+  sourceEditionId: idSchema,
 });
 export const agentWorkCloneOutputSchema = z.strictObject({ work: workSchema });
 

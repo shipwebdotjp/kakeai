@@ -78,7 +78,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 
 - `kakeai_script_list_versions` は Edition の版履歴を新しい順に全件返します（Edition の版数は通常小さい想定です）。`currentScriptVersionId` と各版の要約（版番号・作成者・要求ID・復元元・作成日時）を含み、ContentDocument は含みません。過去版を選ぶときや、復元の基準版を決めるときに使います。
 - `kakeai_script_restore` は過去版の `scriptVersionId` を指定して、その内容を新しい版として復元します。ContentDocument を取得して送り直す必要はありません。`requestId` は必須で、同じ ID・同じ復元元の再送は既存の版を返します。任意の `baseScriptVersionId` を渡すと、その版が current のときだけ復元し、一致しなければ `SCRIPT_BASE_STALE` になります。復元元が current の場合は `VALIDATION_ERROR` です。
-- `kakeai_work_clone` は作品の現在版から子 Work を作ります。元の Work は変更せず、子には `parentWorkId` が付き、初期版には `sourceScriptVersionId` が記録されます。複製されるのは元の `originalLocale` の Edition の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しません。`requestId` はありません。タイムアウト後は `kakeai_work_list` で `parentWorkId`・`title`・`createdAt` を確認してから再実行してください。
+- `kakeai_work_clone` は `workId`・`title`・`sourceEditionId` を受け取り、指定した言語版の現在版から子 Work を作ります。`sourceEditionId` は元 Work に属する言語版を指定してください。元の Work は変更せず、子には `parentWorkId` が付き、`originalLocale` と唯一の言語版は複製元の locale になり、初期版には `sourceScriptVersionId` が記録されます。複製されるのは指定した言語版の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しません。`requestId` はありません。タイムアウト後は `kakeai_work_list` で `parentWorkId`・`title`・`createdAt` を確認してから再実行してください。
 
 ### 冪等化（requestId）
 

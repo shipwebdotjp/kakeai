@@ -41,6 +41,41 @@ afterAll(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
+async function createJobWithArtifact(
+  workId: string,
+  editionId: string,
+  scriptVersionId: string,
+  status: string,
+): Promise<{ jobId: string; artifactId: string; artifactPath: string }> {
+  const job = await prisma.job.create({
+    data: {
+      kind: "render",
+      status,
+      workId,
+      languageEditionId: editionId,
+      scriptVersionId,
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      inputSnapshotJson: "{}",
+      progressPercent: status === "succeeded" ? 100 : 0,
+      finishedAt: status === "succeeded" ? new Date() : null,
+    },
+  });
+  const storageKey = `artifacts/${job.id}-${status}.mp4`;
+  const artifactPath = join(dataDir, storageKey);
+  await writeFile(artifactPath, "fake-mp4");
+  const artifact = await prisma.artifact.create({
+    data: {
+      jobId: job.id,
+      role: "render",
+      format: "mp4",
+      storageKey,
+      sha256: `sha-${job.id}`,
+      byteSize: BigInt(8),
+    },
+  });
+  return { jobId: job.id, artifactId: artifact.id, artifactPath };
+}
+
 describe("work and script version flow", () => {
   it("creates a work with an initial v1 script version", async () => {
     const work = await works.createWork(prisma, "テスト作品", "ja-JP");
@@ -268,7 +303,12 @@ describe("work and script version flow", () => {
       parentEdition.id,
     );
 
-    const clonedWork = await works.cloneWork(prisma, parentWork.id, "親作品のコピー");
+    const clonedWork = await works.cloneWork(
+      prisma,
+      parentWork.id,
+      "親作品のコピー",
+      parentEdition.id,
+    );
     expect(clonedWork.title).toBe("親作品のコピー");
     expect(clonedWork.parentWorkId).toBe(parentWork.id);
     expect(clonedWork.languageEditions).toHaveLength(1);
@@ -306,10 +346,16 @@ describe("work and script version flow", () => {
       parentEdition.id,
     );
 
-    const clonedWork = await works.cloneWork(prisma, parentWork.id, "Agent複製先", {
-      author: "agent",
-      authorAgentId: " agent-1 ",
-    });
+    const clonedWork = await works.cloneWork(
+      prisma,
+      parentWork.id,
+      "Agent複製先",
+      parentEdition.id,
+      {
+        author: "agent",
+        authorAgentId: " agent-1 ",
+      },
+    );
     const clonedEdition = clonedWork.languageEditions[0]!;
     const clonedCurrent = await scriptVersions.getCurrentScriptVersion(
       prisma,
@@ -783,6 +829,292 @@ describe("work and script version flow", () => {
     });
     await expect(stat(artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(prisma.artifact.findUnique({ where: { id: artifact.id } })).resolves.toBeNull();
+  });
+
+  it("clones only the selected edition and rejects an edition from another work", async () => {
+    const work = await works.createWork(prisma, "選択Edition複製元", "ja-JP");
+    const sourceEdition = work.languageEditions[0]!;
+    const withEnglish = await works.createLanguageEdition(
+      prisma,
+      work.id,
+      "en-US",
+      sourceEdition.id,
+    );
+    const englishEdition = withEnglish.languageEditions.find(
+      (edition) => edition.locale === "en-US",
+    )!;
+    const englishCurrent = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      englishEdition.id,
+    );
+    const content = structuredClone(englishCurrent.content);
+    content.scenes[0]!.label = "English custom intro";
+    const saved = await scriptVersions.saveScriptVersion(prisma, englishEdition.id, {
+      sourceScriptVersionId: englishCurrent.id,
+      content,
+    });
+
+    const cloned = await works.cloneWork(
+      prisma,
+      work.id,
+      "英語版の複製",
+      englishEdition.id,
+    );
+    expect(cloned.originalLocale).toBe("en-US");
+    expect(cloned.languageEditions).toHaveLength(1);
+    const clonedEdition = cloned.languageEditions[0]!;
+    expect(clonedEdition.locale).toBe("en-US");
+
+    const clonedCurrent = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      clonedEdition.id,
+    );
+    expect(clonedCurrent.versionNumber).toBe(1);
+    expect(clonedCurrent.sourceScriptVersionId).toBe(saved.scriptVersion.id);
+    expect(clonedCurrent.content.locale).toBe("en-US");
+    expect(clonedCurrent.content.scenes[0]!.label).toBe("English custom intro");
+    expect(clonedCurrent.content.scenes[0]!.id).toBe(content.scenes[0]!.id);
+
+    const foreign = await works.createWork(prisma, "別作品", "ja-JP");
+    await expect(
+      works.cloneWork(
+        prisma,
+        work.id,
+        "不正な複製",
+        foreign.languageEditions[0]!.id,
+      ),
+    ).rejects.toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+  });
+
+  it("deletes one language edition with its data and keeps the other editions", async () => {
+    const work = await works.createWork(prisma, "Edition削除", "ja-JP");
+    const japaneseEdition = work.languageEditions[0]!;
+    const withEnglish = await works.createLanguageEdition(
+      prisma,
+      work.id,
+      "en-US",
+      japaneseEdition.id,
+    );
+    const englishEdition = withEnglish.languageEditions.find(
+      (edition) => edition.locale === "en-US",
+    )!;
+    const englishCurrent = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      englishEdition.id,
+    );
+    const englishSaved = await scriptVersions.saveScriptVersion(
+      prisma,
+      englishEdition.id,
+      {
+        sourceScriptVersionId: englishCurrent.id,
+        content: englishCurrent.content,
+      },
+    );
+    const succeeded = await createJobWithArtifact(
+      work.id,
+      englishEdition.id,
+      englishSaved.scriptVersion.id,
+      "succeeded",
+    );
+    const queued = await createJobWithArtifact(
+      work.id,
+      englishEdition.id,
+      englishSaved.scriptVersion.id,
+      "queued",
+    );
+    const thumbnail = await prisma.thumbnail.create({
+      data: {
+        languageEditionId: englishEdition.id,
+        label: "English thumbnail",
+        schemaVersion: 1,
+        templateId: "thumbnail.hero-cutout",
+        templateVersion: 1,
+        inputJson: "{}",
+      },
+    });
+    await prisma.languageEdition.update({
+      where: { id: englishEdition.id },
+      data: { primaryThumbnailId: thumbnail.id },
+    });
+
+    await works.deleteLanguageEdition(prisma, directories, englishEdition.id);
+
+    const remaining = await works.getWork(prisma, work.id);
+    expect(remaining.originalLocale).toBe("ja-JP");
+    expect(remaining.languageEditions).toHaveLength(1);
+    expect(remaining.languageEditions[0]!.id).toBe(japaneseEdition.id);
+    await expect(
+      scriptVersions.getCurrentScriptVersion(prisma, japaneseEdition.id),
+    ).resolves.toMatchObject({ versionNumber: 1 });
+    await expect(
+      prisma.scriptVersion.findMany({ where: { languageEditionId: englishEdition.id } }),
+    ).resolves.toEqual([]);
+    await expect(prisma.thumbnail.findUnique({ where: { id: thumbnail.id } })).resolves.toBeNull();
+    await expect(
+      prisma.job.findMany({
+        where: { id: { in: [succeeded.jobId, queued.jobId] } },
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      prisma.artifact.findMany({
+        where: { id: { in: [succeeded.artifactId, queued.artifactId] } },
+      }),
+    ).resolves.toEqual([]);
+    await expect(stat(succeeded.artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(queued.artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
+
+    await expect(
+      works.deleteLanguageEdition(prisma, directories, japaneseEdition.id),
+    ).rejects.toMatchObject({ code: "LAST_LANGUAGE_EDITION" });
+  });
+
+  it("rejects deleting an edition with a running job", async () => {
+    const work = await works.createWork(prisma, "Edition実行中", "ja-JP");
+    const japaneseEdition = work.languageEditions[0]!;
+    const withEnglish = await works.createLanguageEdition(
+      prisma,
+      work.id,
+      "en-US",
+      japaneseEdition.id,
+    );
+    const englishEdition = withEnglish.languageEditions.find(
+      (edition) => edition.locale === "en-US",
+    )!;
+    const running = await createJobWithArtifact(
+      work.id,
+      englishEdition.id,
+      englishEdition.currentScriptVersion.id,
+      "running",
+    );
+
+    await expect(
+      works.deleteLanguageEdition(prisma, directories, englishEdition.id),
+    ).rejects.toMatchObject({ code: "LANGUAGE_EDITION_JOB_RUNNING" });
+    await expect(
+      prisma.job.findUnique({ where: { id: running.jobId } }),
+    ).resolves.not.toBeNull();
+    await expect(
+      prisma.languageEdition.findUnique({ where: { id: englishEdition.id } }),
+    ).resolves.not.toBeNull();
+  });
+
+  it("bulk-deletes past versions atomically and keeps version numbers", async () => {
+    const work = await works.createWork(prisma, "過去版削除", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const v1 = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+    const v2Content = structuredClone(v1.content);
+    v2Content.scenes[0]!.label = "v2";
+    const v2 = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: v1.id,
+      content: v2Content,
+    });
+    const v3Content = structuredClone(v2Content);
+    v3Content.scenes[0]!.label = "v3";
+    const v3 = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: v2.scriptVersion.id,
+      content: v3Content,
+    });
+
+    const withEnglish = await works.createLanguageEdition(
+      prisma,
+      work.id,
+      "en-US",
+      edition.id,
+    );
+    const englishEdition = withEnglish.languageEditions.find(
+      (entry) => entry.locale === "en-US",
+    )!;
+    const foreign = await works.createWork(prisma, "参照元作品", "ja-JP");
+    const foreignEdition = foreign.languageEditions[0]!;
+    await prisma.scriptVersion.update({
+      where: { id: foreignEdition.currentScriptVersion.id },
+      data: { sourceScriptVersionId: v1.id },
+    });
+
+    const v1Job = await createJobWithArtifact(work.id, edition.id, v1.id, "queued");
+    const v2Job = await createJobWithArtifact(
+      work.id,
+      edition.id,
+      v2.scriptVersion.id,
+      "succeeded",
+    );
+    const runningJob = await createJobWithArtifact(
+      work.id,
+      edition.id,
+      v2.scriptVersion.id,
+      "running",
+    );
+
+    await expect(
+      scriptVersions.deleteScriptVersions(prisma, directories, edition.id, [
+        `${v1.id}-missing`,
+      ]),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      scriptVersions.deleteScriptVersions(prisma, directories, edition.id, [
+        v3.scriptVersion.id,
+      ]),
+    ).rejects.toMatchObject({ code: "CURRENT_SCRIPT_VERSION_DELETE" });
+    await expect(
+      scriptVersions.deleteScriptVersions(prisma, directories, edition.id, [
+        englishEdition.currentScriptVersion.id,
+      ]),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      scriptVersions.deleteScriptVersions(prisma, directories, edition.id, [
+        v1.id,
+        v2.scriptVersion.id,
+      ]),
+    ).rejects.toMatchObject({ code: "SCRIPT_VERSION_JOB_RUNNING" });
+    await expect(
+      scriptVersions.deleteScriptVersions(prisma, directories, edition.id, [
+        v1.id,
+        "scr_missing",
+      ]),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      prisma.scriptVersion.findUnique({ where: { id: v1.id } }),
+    ).resolves.not.toBeNull();
+
+    await prisma.job.update({
+      where: { id: runningJob.jobId },
+      data: { status: "succeeded", progressPercent: 100, finishedAt: new Date() },
+    });
+    await scriptVersions.deleteScriptVersions(prisma, directories, edition.id, [
+      v1.id,
+      v2.scriptVersion.id,
+    ]);
+
+    const remainingVersions = await prisma.scriptVersion.findMany({
+      where: { languageEditionId: edition.id },
+      orderBy: { versionNumber: "asc" },
+    });
+    expect(remainingVersions.map((version) => version.versionNumber)).toEqual([3]);
+    expect(remainingVersions[0]!.id).toBe(v3.scriptVersion.id);
+    expect(remainingVersions[0]!.sourceScriptVersionId).toBeNull();
+    const current = await scriptVersions.getCurrentScriptVersion(prisma, edition.id);
+    expect(current.id).toBe(v3.scriptVersion.id);
+    await expect(
+      prisma.scriptVersion.findUnique({
+        where: { id: foreignEdition.currentScriptVersion.id },
+      }),
+    ).resolves.toMatchObject({ sourceScriptVersionId: null });
+
+    const removedJobIds = [v1Job.jobId, v2Job.jobId, runningJob.jobId];
+    const removedArtifactIds = [
+      v1Job.artifactId,
+      v2Job.artifactId,
+      runningJob.artifactId,
+    ];
+    await expect(
+      prisma.job.findMany({ where: { id: { in: removedJobIds } } }),
+    ).resolves.toEqual([]);
+    await expect(
+      prisma.artifact.findMany({ where: { id: { in: removedArtifactIds } } }),
+    ).resolves.toEqual([]);
+    for (const removed of [v1Job, v2Job, runningJob]) {
+      await expect(stat(removed.artifactPath)).rejects.toMatchObject({ code: "ENOENT" });
+    }
   });
 });
 

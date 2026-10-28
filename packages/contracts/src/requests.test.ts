@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bulkDeleteScriptVersionsRequestSchema,
   cloneWorkRequestSchema,
   createLanguageEditionRequestSchema,
   createWorkRequestSchema,
@@ -15,17 +16,64 @@ import { validContentDocument } from "./testing/fixtures";
 
 describe("cloneWorkRequestSchema", () => {
   it("accepts a valid request", () => {
-    expect(cloneWorkRequestSchema.safeParse({ title: "作品のコピー" }).success).toBe(true);
+    expect(
+      cloneWorkRequestSchema.safeParse({
+        title: "作品のコピー",
+        sourceEditionId: "led_1",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires a source edition", () => {
+    expect(cloneWorkRequestSchema.safeParse({ title: "作品のコピー" }).success).toBe(false);
   });
 
   it("rejects unknown fields", () => {
     expect(
-      cloneWorkRequestSchema.safeParse({ title: "作品のコピー", extra: "bar" }).success,
+      cloneWorkRequestSchema.safeParse({
+        title: "作品のコピー",
+        sourceEditionId: "led_1",
+        extra: "bar",
+      }).success,
     ).toBe(false);
   });
 
   it("rejects blank title", () => {
-    expect(cloneWorkRequestSchema.safeParse({ title: "   " }).success).toBe(false);
+    expect(
+      cloneWorkRequestSchema.safeParse({ title: "   ", sourceEditionId: "led_1" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("bulkDeleteScriptVersionsRequestSchema", () => {
+  it("accepts unique version ids", () => {
+    expect(
+      bulkDeleteScriptVersionsRequestSchema.safeParse({
+        scriptVersionIds: ["scr_1", "scr_2"],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an empty list", () => {
+    expect(
+      bulkDeleteScriptVersionsRequestSchema.safeParse({ scriptVersionIds: [] }).success,
+    ).toBe(false);
+  });
+
+  it("rejects duplicate ids", () => {
+    expect(
+      bulkDeleteScriptVersionsRequestSchema.safeParse({
+        scriptVersionIds: ["scr_1", "scr_1"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects more than 100 ids", () => {
+    expect(
+      bulkDeleteScriptVersionsRequestSchema.safeParse({
+        scriptVersionIds: Array.from({ length: 101 }, (_, index) => `scr_${index}`),
+      }).success,
+    ).toBe(false);
   });
 });
 

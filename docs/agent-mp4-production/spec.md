@@ -72,7 +72,7 @@
 - YouTube 投稿設定・チャプター（人間 / 将来）
 - MP4 Artifact のダウンロード（B18 で `artifact.get` の絶対パスとして公開済み。視聴・品質判断は人間）
 - 下書きプレビュー（将来）
-- 版の削除・履歴圧縮、全 Edition の複製、Work 作成・複製の `requestId` 冪等化
+- Agent 操作としての版の削除・履歴圧縮（Web UI / HTTP では [work-history](../work-history/spec.md) で実装済み）、全 Edition の複製、Work 作成・複製の `requestId` 冪等化
 - Theme の作成・更新・削除と Voice Profile / Face Set の削除（人専用。Face Set の作成・部分更新は B20 で公開済み。読み取りと既存 Voice Profile の話者への割り当ては P5 で対象）
 - 新規 Composition の authoring（必要時のみ別スキル）
 - 縦型（9:16）の完成動画、リモート接続、アプリ自動起動
@@ -264,7 +264,7 @@ SRT と MP4 の取得は B18 として公開した（[ADR 0103](../adr/0103-agen
 - 既存 DTO への追加は非破壊とする。`WorkSummary` に `createdAt` / `parentWorkId`、
   `ScriptVersionSummary` に `sourceScriptVersionId` を追加する。`operationDigest` と
   `schemaDigest` は変わるが、`AGENT_PROTOCOL_VERSION` は上げない。
-- 版の削除・履歴圧縮、Edition をまたぐ復元、全 Edition の複製、`work.create` /
+- Agent 操作としての版の削除・履歴圧縮（Web UI / HTTP では実装済み）、Edition をまたぐ復元、全 Edition の複製、`work.create` /
   `work.clone` の台帳冪等化は今回の非ゴールとする。
 
 ### R10. ライブラリ読み取りと声の割り当て（P5）

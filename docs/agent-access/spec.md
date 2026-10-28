@@ -238,7 +238,7 @@
 
 - `work.create` — Work、指定 locale（既定は `ja-JP`）の LanguageEdition、その locale の初期 ContentDocument を持つ初期 ScriptVersion を [../mvp/spec.md](../mvp/spec.md) の作成規則で作る。初期 ContentDocument の `locale` は Edition の `originalLocale` と一致する。
 - `work.update` — Work の管理上の作品名 `title` を変更する。動画内に表示するタイトルは ContentDocument 側の Scene スロットであり、これとは別である（[../mvp/api-contract.md](../mvp/api-contract.md) の `PATCH /works/:workId` と同じ規則）。
-- `work.clone` — 元 Work の現在版から子 Work を作る。引数は `{ workId, title }`。HTTP の `POST /works/:workId/clone` と同じ規則で、元 Work の `originalLocale` の Edition（無ければ先頭の Edition）の current Script Version だけをコピーする。子 Work は `parentWorkId` を持ち、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。Agent 経由の初期版は `author: "agent"` / `authorAgentId` になる（HTTP は `human`）。`requestId` を持たず、タイムアウト後は `work.list` で `parentWorkId`・`title`・`createdAt` を確認してから再実行する。存在しない Work は `WORK_NOT_FOUND`。
+- `work.clone` — 指定 Edition の現在版から子 Work を作る。引数は `{ workId, title, sourceEditionId }` で、`sourceEditionId` は必須。HTTP の `POST /works/:workId/clone` と同じ規則で、`sourceEditionId` が対象 Work に属することを検証し、その current Script Version だけをコピーする。子 Work は `parentWorkId` を持ち、`originalLocale` と唯一の Edition は複製元 Edition の locale とし、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。Agent 経由の初期版は `author: "agent"` / `authorAgentId` になる（HTTP は `human`）。`requestId` を持たず、タイムアウト後は `work.list` で `parentWorkId`・`title`・`createdAt` を確認してから再実行する。存在しない Work・Edition は `WORK_NOT_FOUND`。
 - `edition.create` — 既存 Work に言語版を追加する。引数は HTTP の `POST /works/:workId/language-editions` と同じ（`workId`、`locale`、`sourceEditionId`）。初期版はシード元 current のコピーに置き換え規則を適用したもの（[../multilingual-editions/spec.md](../multilingual-editions/spec.md)）。重複 locale は `LANGUAGE_EDITION_EXISTS`、他 Work の Edition は `WORK_NOT_FOUND` とする。
 - `script.save` — `languageEditionId` と全 `ContentDocument` を受け、検証して新しい Script Version を追加し current を進める。任意の `baseScriptVersionId`（基準版ガード）と `sourceScriptVersionId`（同じ Edition の復元元）も受け付ける（後述）。全体の置換や取り込み向けであり、通常の編集は `script.edit` を使う。
 - `script.edit` — 基準版と `ScriptOperation` の配列を受け、操作コアで一括適用し、保存検証を通して新しい Script Version を追加する。1 呼び出しは 1 版とし、途中失敗時は版を作らない。
@@ -434,7 +434,7 @@
 - 帰属は `ContentDocument` ではなく DB の列として持つ。`contentSchemaVersion` は上げない。
 - 帰属は、履歴でエージェント作の版を識別し、巻き戻すために使う。`sourceScriptVersionId`（復元・翻訳・Work 複製・下書きの系統）とは別軸である。
 - `script.edit` / `script.restore` の `requestId` は `ScriptVersion.agentRequestId` として保存し、Edition 内で一意にする。`script.save` と UI 保存は `null` とする。要求内容のハッシュ（`agentRequestHash`）も保存し、同じ ID の再送と衝突を区別する。
-- `work.clone` の初期版は Agent 経由なら `author: "agent"` と接続の `agentId`、HTTP 経由なら `human` を記録する。複製元は `sourceScriptVersionId` に残す。
+- `work.clone` の初期版は Agent 経由なら `author: "agent"` と接続の `agentId`、HTTP 経由なら `human` を記録する。`sourceEditionId` で指定した Edition の current だけを複製し、複製元は `sourceScriptVersionId` に残す。
 - Asset の生成元は既存の `origin`（`generated`）と `provenanceJson` で表し、別の帰属列は持たない。
 
 ## エラー
