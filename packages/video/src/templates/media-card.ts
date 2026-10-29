@@ -14,7 +14,16 @@ export function renderMediaCardMedia(
   const { assetId, aspectRatio, focalPoint, zoom } = data;
   const media = resolveCueMedia(assetId, context.assetResolver, context.path);
   const src = escapeHtmlAttribute(media.url);
-  const frameStyle = `aspect-ratio:${aspectRatio.replace(":", "/")};height:640px;width:auto;position:relative;${clipStyleExtra}`;
+  // Width and height must both fit the portrait content box; a 16:9 card at
+  // 640px height would be wider than the 1080px canvas.
+  const [ratioWidth, ratioHeight] = aspectRatio.split(":").map((part) => Number(part));
+  const ratio = ratioWidth > 0 && ratioHeight > 0 ? ratioWidth / ratioHeight : 16 / 9;
+  const mediaHeight = Math.min(
+    640,
+    Math.round(context.canvas.contentWidth * 0.6),
+    Math.floor(context.canvas.contentWidth / ratio),
+  );
+  const frameStyle = `aspect-ratio:${aspectRatio.replace(":", "/")};height:${mediaHeight}px;width:auto;max-width:100%;position:relative;${clipStyleExtra}`;
   const mediaStyle = mediaCropStyle(focalPoint, zoom);
   const id = context.scope.id("media");
   if (data.videoPlayback !== undefined) {

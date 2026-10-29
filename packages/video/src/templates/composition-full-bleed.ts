@@ -46,13 +46,13 @@ export function renderCompositionFullBleed(
 
   const hostId = context.scope.id("comp-host");
   const src = resolved.previewUrl ?? resolved.entrypoint;
-  if (canvasProfileOf(resolved.manifest) !== "landscape") {
+  const compositionProfile = canvasProfileOf(resolved.manifest);
+  if (compositionProfile !== context.canvas.profile) {
     throw new CompositionCompileError([
       {
         path: [...context.path, "input", "compositionVersionId"],
         code: "invalid_composition_profile",
-        message:
-          "composition.full-bleed@1 には横長(landscape)のCompositionVersionだけを指定できます。縦型はscene.device-frame@1の画面に配置してください。",
+        message: `composition.full-bleed@1 には作品の出力形式と同じキャンバスのCompositionVersionだけを指定できます。縦型・横型が異なるCompositionはscene.device-frame@1の画面に配置してください。`,
       },
     ]);
   }

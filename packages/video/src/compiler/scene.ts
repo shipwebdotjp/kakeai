@@ -22,6 +22,7 @@ import type {
 } from "../resolver";
 import { cueScope } from "../scope";
 import { seededRandom } from "../random";
+import type { CanvasMetrics } from "../canvas";
 import type { LineInterval } from "../render-context";
 import { type VideoPlaybackPlan } from "../video-playback";
 import {
@@ -67,6 +68,7 @@ export interface SceneRenderContext {
   document: ContentDocument;
   theme: VisualThemeDefinition;
   skin: ResolvedVisualSkin;
+  canvas: CanvasMetrics;
   timeline: ResolvedTimeline;
   sceneById: ReadonlyMap<string, Scene>;
   assetResolver: AssetResolver;
@@ -110,6 +112,7 @@ export function renderScenes(context: SceneRenderContext): void {
     document,
     theme,
     skin,
+    canvas,
     timeline,
     sceneById,
     assetResolver,
@@ -210,6 +213,7 @@ export function renderScenes(context: SceneRenderContext): void {
         recordComposition,
         videoPlaybackPlans,
         stillResolver,
+        canvas,
       );
       if (
         scene.kind === "insert" &&

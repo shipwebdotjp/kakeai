@@ -5,6 +5,7 @@ import {
   COMPOSITION_ENGINE,
   compileDocument,
   CompositionCompileError,
+  canvasMetricsFor,
   deriveVideoPlaybackPlans,
   type ResolvedAssetKind,
 } from "@kakeai/video";
@@ -19,7 +20,7 @@ import {
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent } from "../domain/content-json.ts";
-import { bigIntToSafeNumber, toJob } from "../dto/mappers.ts";
+import { bigIntToSafeNumber, toJob, toOutputProfile } from "../dto/mappers.ts";
 import { ApiError } from "../http/errors.ts";
 import { resourceNotFound } from "../http/validation.ts";
 import {
@@ -65,11 +66,21 @@ export async function createRenderJob(
 ): Promise<JobDto> {
   const row = await prisma.scriptVersion.findUnique({
     where: { id: scriptVersionId },
-    include: { languageEdition: { select: { id: true, workId: true } } },
+    include: {
+      languageEdition: {
+        select: {
+          id: true,
+          workId: true,
+          work: { select: { outputProfile: true } },
+        },
+      },
+    },
   });
   if (row === null) {
     throw resourceNotFound("script_version", scriptVersionId);
   }
+  const outputProfile = toOutputProfile(row.languageEdition.work.outputProfile);
+  const canvas = canvasMetricsFor(outputProfile);
   let content: ContentDocument;
   try {
     content = deserializeContent(row.contentJson);
@@ -145,6 +156,7 @@ export async function createRenderJob(
     });
     compileDocument({
       document: content,
+      outputProfile,
       resolvedTheme: resolvedThemeDefinition,
       videoPlaybackPlans: playbackPlans.byPath,
       stillResolver: (assetId, sourceMs) =>
@@ -251,7 +263,7 @@ export async function createRenderJob(
       diagnostics: fontResolution.diagnostics,
     },
     template: { id: content.template.id, version: content.template.version },
-    output: { width: 1920, height: 1080, fps: 30, format: "mp4" },
+    output: { width: canvas.width, height: canvas.height, fps: 30, format: "mp4" },
     renderer: {
       engine: COMPOSITION_ENGINE,
       compilerVersion: COMPILER_VERSION,

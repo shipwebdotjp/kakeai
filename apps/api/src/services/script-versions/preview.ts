@@ -34,9 +34,11 @@ import {
   type PreviewCueTiming,
   type PreviewTimeline,
   type ScriptVersionPreview,
+  type WorkOutputProfile,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import { deserializeContent } from "../../domain/content-json.ts";
+import { toOutputProfile } from "../../dto/mappers.ts";
 
 import { ApiError } from "../../http/errors.ts";
 import { API_BASE_PATH } from "../../http/security.ts";
@@ -78,6 +80,7 @@ export type CompiledPreview = Omit<ScriptVersionPreview, "scriptVersionId">;
 
 export interface CompilePreviewOptions {
   strictTakeDurations?: boolean;
+  outputProfile?: WorkOutputProfile;
 }
 
 export interface PreviewCompositionResolution {
@@ -238,6 +241,7 @@ export async function compilePreview(
     }
     compiled = compileDocument({
       document: content,
+      outputProfile: options.outputProfile,
       resolvedTheme,
       videoPlaybackPlans: playbackPlans.byPath,
       stillResolver: (assetId, sourceMs) =>
@@ -335,6 +339,9 @@ export async function getScriptVersionPreview(
 ): Promise<ScriptVersionPreview> {
   const row = await prisma.scriptVersion.findUnique({
     where: { id: scriptVersionId },
+    include: {
+      languageEdition: { select: { work: { select: { outputProfile: true } } } },
+    },
   });
   if (row === null) {
     throw resourceNotFound("script_version", scriptVersionId);
@@ -352,7 +359,9 @@ export async function getScriptVersionPreview(
 
   const preview = {
     scriptVersionId: row.id,
-    ...(await compilePreview(prisma, directories, content)),
+    ...(await compilePreview(prisma, directories, content, {
+      outputProfile: toOutputProfile(row.languageEdition.work.outputProfile),
+    })),
   };
   const parsed = scriptVersionPreviewSchema.safeParse(preview);
   if (!parsed.success) {
@@ -386,6 +395,7 @@ export async function createDraftPreview(
     source: { kind: "draft" as const },
     ...(await compilePreview(prisma, directories, content, {
       strictTakeDurations: true,
+      outputProfile: toOutputProfile(edition.work.outputProfile),
     })),
   };
   const parsed = draftPreviewSchema.safeParse(draft);

@@ -193,7 +193,7 @@ describe("handmade-paper@1", () => {
         },
       },
     ]);
-    expect(compiled.html).toContain("max-width:840px");
+    expect(compiled.html).toContain("max-width:min(840px,var(--kakeai-content-width,1600px))");
     expect(compiled.html).toContain("text-align:right");
   });
 

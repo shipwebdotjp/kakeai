@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SNAPSHOT_SCHEMA_VERSION,
   jobInputSnapshotSchema,
+  outputSettingsSchema,
   parseRenderJobSnapshot,
   renderJobSnapshotSchema,
 } from "./job";
@@ -171,5 +172,29 @@ describe("parseRenderJobSnapshot", () => {
   it("parses a current snapshot unchanged", () => {
     const parsed = parseRenderJobSnapshot(renderSnapshotWith(validContentDocument()));
     expect(parsed.content.schemaVersion).toBe(1);
+  });
+});
+
+describe("outputSettingsSchema", () => {
+  it("accepts both supported output canvases", () => {
+    for (const [width, height] of [
+      [1920, 1080],
+      [1080, 1920],
+    ]) {
+      expect(
+        outputSettingsSchema.safeParse({ width, height, fps: 30, format: "mp4" }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("rejects unsupported canvases", () => {
+    expect(
+      outputSettingsSchema.safeParse({ width: 1920, height: 1920, fps: 30, format: "mp4" })
+        .success,
+    ).toBe(false);
+    expect(
+      outputSettingsSchema.safeParse({ width: 1080, height: 1080, fps: 30, format: "mp4" })
+        .success,
+    ).toBe(false);
   });
 });

@@ -296,7 +296,7 @@ Content-Type: application/json
 
 この操作はContentDocumentのSceneスロット（導入タイトル等）、ScriptVersion、既存Artifactを変更しない。動画に表示する文言は台本保存で変更する。
 
-POST /works/:workId/clone は `{ title, sourceEditionId, outputProfile? }` を受け取る。`sourceEditionId` は必須で、対象 Work に属する Edition でなければ 404 `RESOURCE_NOT_FOUND` とする。`outputProfile` は任意で `landscape` / `portrait` のいずれか（省略時 `landscape`）であり、子 Work の `outputProfile` に保存する。指定 Edition の current ScriptVersion だけを、同じ locale の単一 Edition として新しい子 Work に複製する。新 Work の `originalLocale` は複製元 Edition の locale とし、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。[../work-history/spec.md](../work-history/spec.md) を正とする。
+POST /works/:workId/clone は `{ title, sourceEditionId, outputProfile? }` を受け取る。`sourceEditionId` は必須で、対象 Work に属する Edition でなければ 404 `RESOURCE_NOT_FOUND` とする。`outputProfile` は任意で `landscape` / `portrait` のいずれかであり、省略時は複製元 Work の出力形式を継承する。子 Work の `outputProfile` に保存する。指定 Edition の current ScriptVersion だけを、同じ locale の単一 Edition として新しい子 Work に複製する。新 Work の `originalLocale` は複製元 Edition の locale とし、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。[../work-history/spec.md](../work-history/spec.md) を正とする。
 
 DELETE /works/:workId は確認済みの破壊的操作である。子Workがあるときは409 `WORK_HAS_CHILDREN` を返す。子がなければ、当該Workの全Edition、ScriptVersion、Job、ArtifactのDB行と実体を削除する。共有Assetは削除しない。削除済みWorkの出力・履歴は復元できない。
 

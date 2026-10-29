@@ -35,7 +35,7 @@
 
 | 項目 | MVPの仕様 |
 | --- | --- |
-| 映像 | 16:9、1920x1080、30fps、MP4 |
+| 映像 | 30fps、MP4。寸法は作品の出力形式に従い、横型 1920x1080 または縦型 1080x1920 |
 | テンプレート | `explanation-scenes@1`。導入＋要点0件以上＋結びの1種類。新規作品は要点1件で開始する |
 | 画像 | PNG / JPEG / WebP |
 | 動画 | MP4 / WebM。原本を保持し、原則は原本をそのまま使う。原本をレンダーに直接使えない場合だけ、必要時にH.264/AAC・定フレームレートのRenditionを作成して使用する。先頭からシーン尺までを使用する |
@@ -221,7 +221,7 @@ VisualCueの表示区間はフレーム番号ではなく判別union（Scene全�
 - プレビュー・映像出力：HyperFrames。編集データをComposition HTMLの正本にせず、検証済みJSONからHTML/CSS/JavaScriptを派生させる。`@hyperframes/player`をプレビューに、`@hyperframes/producer`をMP4出力に使う。
 - HyperFramesの採用は、実装開始前の別PoCを通過条件にしない。最初の縦切り実装で実素材の取り込み・プレビュー・レンダーを継続的に検証し、問題が出た場合も正本JSONとコンパイラ境界を保って対処または差し替える。
 - 実行環境：Node.js 22.20.0以上、FFmpeg、HyperFramesで指定したChrome、明示的に管理した日本語フォントを必要とする。依存バージョンは通常のlockfileで管理し、Jobには障害調査用の実行版を記録する。バイト単位の出力再現性は要件にせず、更新時は代表素材でレンダー回帰テストを実行する。
-- リソース上限：サーバー設定の既定値を、アップロード1ファイルあたり4GiB、動画・音声の最大長30分、入力映像の最大寸法3840x2160、管理領域の警告しきい値80GiBとする。出力は常に1920x1080である。上限値は環境設定で変更可能にし、80GiB到達は新規書込みを止めずUIとhealthで警告する。
+- リソース上限：サーバー設定の既定値を、アップロード1ファイルあたり4GiB、動画・音声の最大長30分、入力映像の最大寸法3840x2160、管理領域の警告しきい値80GiBとする。出力の寸法は作品の出力形式（横型 1920x1080／縦型 1080x1920）に従う。上限値は環境設定で変更可能にし、80GiB到達は新規書込みを止めずUIとhealthで警告する。
 - 安全性：無認証のローカルAPIをループバックに束縛し、JSON／アップロードAPIには厳密な `Host` と `Origin` の検証を要求する。素材・Artifact・published CompositionVersion bundleのcontent URLは、同一オリジンかつ `HttpOnly; SameSite=Strict` のメディアセッションCookieで認可し、JSON APIではCookieだけによる認可を許可しない。DNSリバインディングは `Host` 検証で、CSRFと素材漏洩は `Origin` 検証と `SameSite=Strict` Cookieで防ぐ。素材やArtifactの保存パスは内容ハッシュ由来とし、利用者入力のファイル名をパス生成に使わない。利用者または将来のAIが任意のHTML/JavaScriptをCompositionへ直接書き込むことは許可しない。例外はKakeaiが管理し不変bundleへpublishしたCompositionVersionだけであり、外部URL・絶対パスを含まないことを検証する。Zodで検証したVisualTemplate入力だけから、アプリが管理するHTMLを生成する。
 
 HyperFramesはApache-2.0で公開されているが、導入するCatalogブロック、フォント、素材、外部サービスは個別に利用条件を確認する。OSS候補の比較と導入上の注意は [oss-research.md](./oss-research.md) を参照する。

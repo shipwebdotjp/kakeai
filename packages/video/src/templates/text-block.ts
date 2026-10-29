@@ -258,13 +258,13 @@ export function renderTextBlock(
     "display:flex",
     `justify-content:${JUSTIFY[spec.anchor]}`,
     `align-items:${ALIGN_ITEMS[spec.verticalAlign]}`,
-    "padding:120px 140px",
+    "padding:max(var(--kakeai-text-pad-y,120px),var(--kakeai-safe-top,0px)) max(var(--kakeai-text-pad-x,140px),var(--kakeai-safe-right,0px)) max(var(--kakeai-text-pad-y,120px),var(--kakeai-safe-bottom,0px)) var(--kakeai-text-pad-x,140px)",
     "box-sizing:border-box",
   ].join(";");
 
   const textStyle = [
     "margin:0",
-    "max-width:1600px",
+    "max-width:var(--kakeai-content-width,1600px)",
     `font-family:${spec.fontFamilyCss}`,
     `font-size:${spec.fontSize}px`,
     `color:${spec.color}`,

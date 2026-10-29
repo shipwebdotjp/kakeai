@@ -5,6 +5,7 @@ import {
   compileDocument,
   collectStillFrameRequests,
   deriveVideoPlaybackPlans,
+  outputProfileForDimensions,
   resolveVisualSkin,
   type CompiledComposition,
   type ResolvedAssetKind,
@@ -277,6 +278,19 @@ export async function processRenderJob(
       }
       compiled = compileDocument({
         document: snapshot.content,
+        outputProfile: (() => {
+          const profile = outputProfileForDimensions(
+            snapshot.output.width,
+            snapshot.output.height,
+          );
+          if (profile === null) {
+            throw new RenderJobError(
+              "RENDER_FAILED",
+              "サポートされていない出力寸法です。",
+            );
+          }
+          return profile;
+        })(),
         resolvedTheme: snapshot.themeDefinition,
         resolvedSkin: resolveVisualSkin(skinRef),
         videoPlaybackPlans: playbackPlans.byPath,

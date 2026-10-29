@@ -14,7 +14,7 @@
 
 2. 言語版の複製 (`POST /works/:workId/clone`)
    - リクエストは厳密な `{ title, sourceEditionId, outputProfile? }` を受ける。`sourceEditionId` は必須。
-   - `outputProfile` は任意で `landscape` / `portrait` のいずれか。省略時は `landscape`。子Workの `Work.outputProfile` に保存し、以後変更しない。
+   - `outputProfile` は任意で `landscape` / `portrait` のいずれか。省略時は複製元 Work の出力形式を継承する。子Workの `Work.outputProfile` に保存し、以後変更しない。
    - `sourceEditionId` が対象Workに属することを検証する。存在しない、または他WorkのEditionは404 `RESOURCE_NOT_FOUND`。
    - 指定Editionの `currentScriptVersionId` が示す現在版だけを基に、同じlocaleのLanguageEditionと初期 `ScriptVersion v1` を単一トランザクションで作成する。
    - 新Workの `originalLocale` は複製元Editionのlocaleとし、新Workにはその言語版だけを作成する。

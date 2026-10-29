@@ -20,7 +20,7 @@
 | `portrait` | 1080 | 1920 | 30 | ショート版として複製した Work |
 
 - `Work.outputProfile` が唯一の正。全 Language Edition・全 Script Version・全レンダー・全プレビューが同じ値を使う。
-- 作成後は変更できない。変更は `POST /works/:workId/clone` の `outputProfile` を指定した複製で行う（既定 `landscape`）。
+- 作成後は変更できない。変更は `POST /works/:workId/clone` の `outputProfile` を指定した複製で行う。省略時は複製元 Work の出力形式を継承する（既存の横型 Work からの複製は従来どおり `landscape`）。
 - DB は `Work.outputProfile TEXT NOT NULL DEFAULT 'landscape'`。既存 Work は移行で `landscape` になる。
 - `LanguageEdition`・`ScriptVersion` は出力形式を保持しない。レンダー開始時に Work から導出した寸法を `RenderJobSnapshot.output` に記録する（スナップショットは実行時の不変記録であり、`portrait` / `landscape` の区別ではなく寸法を持つ）。
 
@@ -77,7 +77,7 @@
 
 - レンダー開始時、Work の出力形式とコンパイル結果の `data-width` / `data-height` が一致しなければ `RENDER_INPUT_INVALID` とする（実装上の不整合検出）。
 - 縦型で内容が収まらない場合の警告を、既存の検証警告と同じ形（`issues`）で返す。対象は少なくとも、字幕行数、チャートの項目数、表の列数。
-- 字幕の行数警告は出力形式に依存する。横型は従来どおり 2 行まで警告なし、縦型は 3 行まで警告なしとする。`docs/mvp/content-schema.md` の字幕の制約（1行の目安・警告行数）を出力形式別に更新する。
+- 字幕の行数警告は出力形式に依存させる。横型は従来どおり 2 行まで警告なし、縦型は 3 行まで警告なしとする。初期実装では保存時の警告が横型基準のままなので、縦型の閾値と `docs/mvp/content-schema.md` の更新は [todo.md](./todo.md) の P6 で行う。
 - 出力形式は Work の作成後に変更できないため、「出力形式を変更する」操作は提供しない。UI は複製（ショート版を作成）へ誘導する。
 
 ## 7. 既存機能との関係

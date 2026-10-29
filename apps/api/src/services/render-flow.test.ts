@@ -178,6 +178,32 @@ describe("render job creation", () => {
     await jobs.cancelJob(prisma, job.id);
   });
 
+  it("records the portrait canvas for a short Work", async () => {
+    if (!ffmpegReady) {
+      return;
+    }
+    const image = await readyImage();
+    const { work, edition } = await versionWithBackground(image.id);
+    const short = await works.cloneWork(
+      prisma,
+      work.id,
+      "レンダー作品（ショート）",
+      edition.id,
+      undefined,
+      "portrait",
+    );
+    const shortEdition = short.languageEditions[0]!;
+    const shortScript = await scriptVersions.getCurrentScriptVersion(prisma, shortEdition.id);
+
+    const job = await renderJobs.createRenderJob(prisma, shortScript.id, testFontCatalog);
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    const snapshot = renderJobSnapshotSchema.parse(JSON.parse(row.inputSnapshotJson));
+
+    expect(snapshot.output).toEqual({ width: 1080, height: 1920, fps: 30, format: "mp4" });
+
+    await jobs.cancelJob(prisma, job.id);
+  });
+
   it("freezes a standing appearance in the input snapshot", async () => {
     if (!ffmpegReady) {
       return;
@@ -534,6 +560,37 @@ describe("render worker", () => {
     await expect(artifacts.getArtifact(prisma, artifact.id)).rejects.toMatchObject({
       code: "RESOURCE_NOT_FOUND",
     });
+  }, 300000);
+
+  it("renders a portrait Work to a 1080x1920 mp4 artifact", async () => {
+    if (!ffmpegReady || !renderEnabled) {
+      return;
+    }
+    const image = await readyImage();
+    const { work, edition } = await versionWithBackground(image.id);
+    const short = await works.cloneWork(
+      prisma,
+      work.id,
+      "縦型レンダー",
+      edition.id,
+      undefined,
+      "portrait",
+    );
+    const shortScript = await scriptVersions.getCurrentScriptVersion(
+      prisma,
+      short.languageEditions[0]!.id,
+    );
+    const job = await renderJobs.createRenderJob(prisma, shortScript.id, testFontCatalog);
+
+    await drainWorker();
+
+    const finished = await jobs.getJob(prisma, job.id);
+    expect(finished.status).toBe("succeeded");
+    const artifact = finished.artifacts[0]!;
+    expect(artifact.widthPx).toBe(1080);
+    expect(artifact.heightPx).toBe(1920);
+
+    await artifacts.deleteArtifact(prisma, config.directories, artifact.id);
   }, 300000);
 
   it("renders a standing appearance into the mp4", async () => {

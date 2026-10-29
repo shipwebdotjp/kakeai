@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getVisualTheme } from "@kakeai/contracts";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import type { RenderContext } from "../render-context";
+import { LANDSCAPE_CANVAS, PORTRAIT_CANVAS } from "../canvas";
 import { neutralVisualSkin } from "../skins/neutral";
 import { cueScope } from "../scope";
 import type { AssetResolver } from "../resolver";
@@ -15,11 +16,12 @@ const assetResolver: AssetResolver = (assetId) => ({
   kind: "image",
 });
 
-function context(): RenderContext {
+function context(canvas = LANDSCAPE_CANVAS): RenderContext {
   return {
     document: validContentDocument(),
     theme,
     skin: neutralVisualSkin,
+    canvas,
     assetResolver,
     scope: cueScope("visual-chart-1"),
     path: ["scenes", 1, "visualCues", 2, "input"],
@@ -404,5 +406,13 @@ describe("renderChartBar effects", () => {
         { ...context(), cueTiming: { startMs: 0, spanMs: 9000 } },
       ),
     ).toThrow(CompositionCompileError);
+  });
+});
+
+
+describe("renderChartBar portrait", () => {
+  it("fits the plot to the portrait content width", () => {
+    const rendered = renderChartBar(singleSeries, context(PORTRAIT_CANVAS));
+    expect(rendered.html).toContain("width:936px");
   });
 });

@@ -449,6 +449,15 @@ describe("work and script version flow", () => {
     const listed = await works.listWorks(prisma);
     expect(listed.find((entry) => entry.id === shortWork.id)?.outputProfile).toBe("portrait");
     expect(listed.find((entry) => entry.id === parentWork.id)?.outputProfile).toBe("landscape");
+
+    // A derived Work keeps the parent profile unless another one is requested.
+    const inherited = await works.cloneWork(
+      prisma,
+      shortWork.id,
+      "縦型のコピー",
+      shortWork.languageEditions[0]!.id,
+    );
+    expect(inherited.outputProfile).toBe("portrait");
   });
 
   it("records agent attribution on a clone", async () => {

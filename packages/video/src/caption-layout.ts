@@ -1,12 +1,13 @@
 import type { CaptionLayout, VisualThemeDefinition } from "@kakeai/contracts";
+import type { CanvasMetrics } from "./canvas";
 
 /**
  * Geometry of the baked-in caption layer, shared by the compiler CSS and any
  * Visual Template that must keep its content clear of the caption.
  *
- * The caption is a fixed layer at the bottom of the 1920x1080 canvas. A phone
- * or desktop chat panel reserves the height of the two caption lines that the
- * content contract allows before warning.
+ * The caption is a fixed layer at the bottom of the canvas. A phone or desktop
+ * chat panel reserves the height of the two caption lines that the content
+ * contract allows before warning.
  */
 
 export const CAPTION_BOTTOM_OFFSET_PX = 72;
@@ -49,13 +50,14 @@ export const CAPTION_FALLBACK_PADDING_HORIZONTAL_PX = 36;
 export function captionSafeAreaPx(
   theme: VisualThemeDefinition,
   layout: CaptionLayout = "frame",
+  canvas: CanvasMetrics,
 ): number {
   const token = theme.textRoles.caption;
   const lineHeightPx = token.fontSize * token.lineHeight;
   if (layout === "band") {
     return Math.ceil(
       CAPTION_BAND_TOP_PADDING_PX +
-        CAPTION_SAFE_LINES_BAND * lineHeightPx +
+        Math.max(CAPTION_SAFE_LINES_BAND, canvas.captionMaxLines) * lineHeightPx +
         CAPTION_BAND_BOTTOM_PADDING_PX,
     );
   }
@@ -66,8 +68,8 @@ export function captionSafeAreaPx(
     : CAPTION_FALLBACK_PADDING_VERTICAL_PX;
   const borderWidth = surfaceEnabled && surface.border !== undefined ? surface.border.width : 0;
   return Math.ceil(
-    CAPTION_BOTTOM_OFFSET_PX +
-      CAPTION_SAFE_LINES * lineHeightPx +
+    canvas.captionBottomOffset +
+      canvas.captionMaxLines * lineHeightPx +
       2 * paddingVertical +
       2 * borderWidth,
   );
@@ -77,9 +79,10 @@ export function captionSafeAreaPx(
 export function captionLayoutStyle(
   theme: VisualThemeDefinition,
   layout: CaptionLayout = "frame",
+  canvas: CanvasMetrics,
 ): string {
   return [
-    `--kakeai-caption-offset:${CAPTION_BOTTOM_OFFSET_PX}px`,
-    `--kakeai-caption-safe:${captionSafeAreaPx(theme, layout)}px`,
+    `--kakeai-caption-offset:${canvas.captionBottomOffset}px`,
+    `--kakeai-caption-safe:${captionSafeAreaPx(theme, layout, canvas)}px`,
   ].join(";");
 }

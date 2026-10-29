@@ -180,7 +180,7 @@ export function toWorkSummary(
   };
 }
 
-function toOutputProfile(value: string): WorkOutputProfile {
+export function toOutputProfile(value: string): WorkOutputProfile {
   const parsed = workOutputProfileSchema.safeParse(value);
   return parsed.success ? parsed.data : "landscape";
 }

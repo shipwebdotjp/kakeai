@@ -11,6 +11,7 @@ import type { CompositionVersionResolved, CompositionVersionResolver } from "./c
 import type { RenderScope } from "./scope";
 import type { ResolvedVisualSkin } from "./skins/types";
 import type { VideoPlaybackPlan } from "./video-playback";
+import type { CanvasMetrics } from "./canvas";
 
 export type RenderAnimationAction = FigureAction | OnsetPreset;
 
@@ -93,5 +94,7 @@ export interface RenderContext {
   embeddedAudioGainDb?: number;
   videoPlaybackPlans?: ReadonlyMap<string, VideoPlaybackPlan>;
   stillResolver?: StillResolver;
+  /** Output canvas metrics. Always set explicitly from compileDocument. */
+  canvas: CanvasMetrics;
   renderNested: (node: NestedVisual, scope: RenderScope, path: (string | number)[]) => RenderedCue;
 }

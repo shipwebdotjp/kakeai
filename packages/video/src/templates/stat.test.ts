@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getVisualTheme } from "@kakeai/contracts";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import type { RenderContext } from "../render-context";
+import { LANDSCAPE_CANVAS } from "../canvas";
 import { neutralVisualSkin } from "../skins/neutral";
 import { cueScope } from "../scope";
 import type { AssetResolver } from "../resolver";
@@ -17,6 +18,7 @@ function context(): RenderContext {
     document: validContentDocument(),
     theme,
     skin: neutralVisualSkin,
+    canvas: LANDSCAPE_CANVAS,
     assetResolver,
     scope: cueScope("visual-stat-1"),
     path: ["scenes", 1, "visualCues", 2, "input"],

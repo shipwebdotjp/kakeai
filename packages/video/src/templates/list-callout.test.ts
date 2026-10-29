@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getVisualTheme } from "@kakeai/contracts";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import type { RenderContext } from "../render-context";
+import { LANDSCAPE_CANVAS } from "../canvas";
 import { neutralVisualSkin } from "../skins/neutral";
 import { cueScope } from "../scope";
 import type { AssetResolver } from "../resolver";
@@ -17,6 +18,7 @@ function context(scopeId = "callout-1"): RenderContext {
     document: validContentDocument(),
     theme,
     skin: neutralVisualSkin,
+    canvas: LANDSCAPE_CANVAS,
     assetResolver,
     scope: cueScope(scopeId),
     path: ["scenes", 1, "visualCues", 2, "input"],
@@ -181,20 +183,20 @@ describe("renderListCallout", () => {
   it("applies the width to the title and the list", () => {
     const rendered = renderListCallout({ ...baseInput, width: "short" }, context());
     expect(rendered.html).toContain(
-      '<figcaption class="kakeai-callouttitle" style="width:100%;max-width:840px">',
+      '<figcaption class="kakeai-callouttitle" style="width:100%;max-width:min(840px,var(--kakeai-content-width,1600px))">',
     );
     expect(rendered.html).toContain(
-      '<ul class="kakeai-calloutlist" style="width:100%;max-width:840px">',
+      '<ul class="kakeai-calloutlist" style="width:100%;max-width:min(840px,var(--kakeai-content-width,1600px))">',
     );
   });
 
   it("applies the alignment to the title, the list, and each item", () => {
     const rendered = renderListCallout({ ...baseInput, align: "center" }, context());
     expect(rendered.html).toContain(
-      '<figcaption class="kakeai-callouttitle" style="width:100%;max-width:1400px;text-align:center">',
+      '<figcaption class="kakeai-callouttitle" style="width:100%;max-width:min(1400px,var(--kakeai-content-width,1600px));text-align:center">',
     );
     expect(rendered.html).toContain(
-      '<ul class="kakeai-calloutlist" style="width:100%;max-width:1400px;text-align:center">',
+      '<ul class="kakeai-calloutlist" style="width:100%;max-width:min(1400px,var(--kakeai-content-width,1600px));text-align:center">',
     );
     expect(rendered.html).toContain("再利用できる");
   });
@@ -204,7 +206,7 @@ describe("renderListCallout", () => {
       { ...baseInput, width: "medium", align: "right" },
       context(),
     );
-    expect(rendered.html).toContain("max-width:1120px");
+    expect(rendered.html).toContain("max-width:min(1120px,var(--kakeai-content-width,1600px))");
     expect(rendered.html).toContain("text-align:right");
   });
 });

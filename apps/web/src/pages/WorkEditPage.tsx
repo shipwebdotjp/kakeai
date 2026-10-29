@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from "react-router-dom";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { ScriptVersion } from "@kakeai/contracts";
+import type { ScriptVersion, WorkOutputProfile } from "@kakeai/contracts";
 import { useCurrentScriptVersion, useCreateLanguageEdition, useUpdateWork, useWork } from "../api/hooks";
 import { CueMap } from "../components/CueMap";
 import { EditionSelector } from "../components/EditionSelector";
@@ -261,6 +261,7 @@ export function WorkEditPage() {
             workId={workId}
             editionId={editionId}
             workTitle={title}
+            outputProfile={work.data?.outputProfile ?? "landscape"}
             scriptVersionId={scriptVersionId}
             current={current}
             onSaved={onSaved}
@@ -277,6 +278,7 @@ interface WorkEditPanesProps {
   workId: string | undefined;
   editionId: string | undefined;
   workTitle: string;
+  outputProfile: WorkOutputProfile;
   scriptVersionId: string | undefined;
   current: UseQueryResult<ScriptVersion, Error>;
   onSaved: (scriptVersion: ScriptVersion) => void;
@@ -306,6 +308,7 @@ function WorkEditPanesContent({
   workId,
   editionId,
   workTitle,
+  outputProfile,
   scriptVersionId,
   current,
   onSaved,
@@ -715,7 +718,10 @@ function WorkEditPanesContent({
         >
           {current.data && editionId !== undefined && workId !== undefined && (
             <>
-              <PreviewSection sceneLabels={sceneLabels} />
+              <PreviewSection
+                sceneLabels={sceneLabels}
+                outputProfile={outputProfile}
+              />
               <p className="flex flex-wrap items-center gap-2 px-1">
                 <Link className={buttonNeutralClass} to={thumbnailsRoute(workId, editionId)}>
                   サムネイル

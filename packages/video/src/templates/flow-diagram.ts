@@ -24,6 +24,8 @@ import { toneHex } from "./tone";
 
 const FLOW_PLOT_W = 1320;
 const FLOW_PLOT_H = 760;
+/** Portrait has more vertical room; the vertical layout grows to use it. */
+const FLOW_PLOT_H_PORTRAIT = 1200;
 const FLOW_GAP = 72;
 const FLOW_ROUTE_OFFSET = 56;
 const FLOW_ROUTE_MARGIN = 24;
@@ -59,28 +61,34 @@ function fitGap(available: number, count: number, minSize: number): number {
   return Math.max(8, Math.min(FLOW_GAP, maxGapForMinSize));
 }
 
-function computeLayout(count: number, orientation: FlowOrientation): FlowLayout {
+interface PlotSize {
+  width: number;
+  height: number;
+}
+
+function computeLayout(count: number, orientation: FlowOrientation, size: PlotSize): FlowLayout {
   if (orientation === "vertical") {
-    const gap = fitGap(FLOW_PLOT_H, count, FLOW_NODE_MIN_H);
-    const nodeH = clamp((FLOW_PLOT_H - gap * (count - 1)) / count, FLOW_NODE_MIN_H, FLOW_NODE_MAX_H);
+    const gap = fitGap(size.height, count, FLOW_NODE_MIN_H);
+    const nodeH = clamp((size.height - gap * (count - 1)) / count, FLOW_NODE_MIN_H, FLOW_NODE_MAX_H);
     const total = count * nodeH + gap * (count - 1);
-    const offsetY = (FLOW_PLOT_H - total) / 2;
-    const offsetX = (FLOW_PLOT_W - FLOW_V_NODE_W) / 2;
+    const offsetY = (size.height - total) / 2;
+    const nodeW = Math.min(FLOW_V_NODE_W, size.width);
+    const offsetX = (size.width - nodeW) / 2;
     const ys = Array.from({ length: count }, (_value, index) => offsetY + index * (nodeH + gap));
     const xs = Array.from({ length: count }, () => offsetX);
     return {
-      nodeW: FLOW_V_NODE_W,
+      nodeW,
       nodeH,
       xs,
       ys,
-      centers: ys.map((y) => ({ x: FLOW_PLOT_W / 2, y: y + nodeH / 2 })),
+      centers: ys.map((y) => ({ x: size.width / 2, y: y + nodeH / 2 })),
     };
   }
-  const gap = fitGap(FLOW_PLOT_W, count, FLOW_NODE_MIN_W);
-  const nodeW = clamp((FLOW_PLOT_W - gap * (count - 1)) / count, FLOW_NODE_MIN_W, FLOW_NODE_MAX_W);
+  const gap = fitGap(size.width, count, FLOW_NODE_MIN_W);
+  const nodeW = clamp((size.width - gap * (count - 1)) / count, FLOW_NODE_MIN_W, FLOW_NODE_MAX_W);
   const total = count * nodeW + gap * (count - 1);
-  const offsetX = (FLOW_PLOT_W - total) / 2;
-  const offsetY = (FLOW_PLOT_H - FLOW_H_NODE_H) / 2;
+  const offsetX = (size.width - total) / 2;
+  const offsetY = (size.height - FLOW_H_NODE_H) / 2;
   const xs = Array.from({ length: count }, (_value, index) => offsetX + index * (nodeW + gap));
   const ys = Array.from({ length: count }, () => offsetY);
   return {
@@ -88,7 +96,7 @@ function computeLayout(count: number, orientation: FlowOrientation): FlowLayout 
     nodeH: FLOW_H_NODE_H,
     xs,
     ys,
-    centers: xs.map((x) => ({ x: x + nodeW / 2, y: FLOW_PLOT_H / 2 })),
+    centers: xs.map((x) => ({ x: x + nodeW / 2, y: size.height / 2 })),
   };
 }
 
@@ -100,6 +108,7 @@ function edgePath(
   edge: FlowEdge,
   layout: FlowLayout,
   orientation: FlowOrientation,
+  size: PlotSize,
 ): { d: string; labelX: number; labelY: number; anchor: "start" | "middle" | "end" } {
   const distance = Math.abs(edge.to - edge.from);
   if (orientation === "vertical") {
@@ -127,7 +136,7 @@ function edgePath(
     const ty = layout.centers[edge.to]!.y;
     const routeOffset = FLOW_ROUTE_OFFSET * Math.max(1, distance - 1);
     const routeX = forward
-      ? Math.min(FLOW_PLOT_W - FLOW_ROUTE_MARGIN, Math.max(sx, tx) + routeOffset)
+      ? Math.min(size.width - FLOW_ROUTE_MARGIN, Math.max(sx, tx) + routeOffset)
       : Math.max(FLOW_ROUTE_MARGIN, Math.min(sx, tx) - routeOffset);
     return {
       d: `M ${round(sx)} ${round(sy)} C ${round(routeX)} ${round(sy)} ${round(routeX)} ${round(ty)} ${round(tx)} ${round(ty)}`,
@@ -156,7 +165,7 @@ function edgePath(
   const ty = layout.ys[edge.to]! + (forward ? layout.nodeH : 0);
   const routeOffset = FLOW_ROUTE_OFFSET * Math.max(1, distance - 1);
   const routeY = forward
-    ? Math.min(FLOW_PLOT_H - FLOW_ROUTE_MARGIN, Math.max(sy, ty) + routeOffset)
+    ? Math.min(size.height - FLOW_ROUTE_MARGIN, Math.max(sy, ty) + routeOffset)
     : Math.max(FLOW_ROUTE_MARGIN, Math.min(sy, ty) - routeOffset);
   return {
     d: `M ${round(sx)} ${round(sy)} C ${round(sx)} ${round(routeY)} ${round(tx)} ${round(routeY)} ${round(tx)} ${round(ty)}`,
@@ -212,10 +221,29 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
   }
   const { title, diagram, style, effects } = parsed.data;
   const theme = context.theme;
-  const orientation = style?.orientation ?? "horizontal";
+  // `style.orientation` has a schema default, so it cannot tell an explicit
+  // choice from the default. Read the raw input to keep an explicit value and
+  // fall back to top-to-bottom only for portrait without one.
+  const rawOrientation =
+    typeof input === "object" && input !== null && "style" in input
+      ? (input as { style?: { orientation?: unknown } }).style?.orientation
+      : undefined;
+  const orientation =
+    rawOrientation === undefined
+      ? context.canvas.profile === "portrait"
+        ? "vertical"
+        : "horizontal"
+      : parsed.data.style?.orientation ?? "horizontal";
   const preset = style?.preset ?? "clean";
   const nodeIds = diagram.nodes.map((_node, index) => context.scope.id(`node-${index}`));
-  const layout = computeLayout(diagram.nodes.length, orientation);
+  const plotSize: PlotSize = {
+    width: Math.min(FLOW_PLOT_W, context.canvas.contentWidth),
+    height:
+      context.canvas.profile === "portrait" && orientation === "vertical"
+        ? FLOW_PLOT_H_PORTRAIT
+        : FLOW_PLOT_H,
+  };
+  const layout = computeLayout(diagram.nodes.length, orientation, plotSize);
   const markerId = context.scope.id("arrow");
 
   const animation: AnimationItem[] = [];
@@ -238,7 +266,7 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
 
   const edgesHtml = diagram.edges
     .map((edge) => {
-      const { d, labelX, labelY, anchor } = edgePath(edge, layout, orientation);
+      const { d, labelX, labelY, anchor } = edgePath(edge, layout, orientation, plotSize);
       const label =
         edge.label === undefined || edge.label.trim().length === 0
           ? ""
@@ -267,7 +295,7 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
       ? ""
       : `<figcaption class="kakeai-flowtitle" style="${themeRoleFontStyle(theme, "heading", context.document.locale)}">${escapeHtmlText(title)}</figcaption>`;
   const presetClass = preset === "boxed" ? " kakeai-flow-boxed" : "";
-  const plot = `<div class="kakeai-flowplot kakeai-flow-${orientation}${presetClass}" style="width:${FLOW_PLOT_W}px;height:${FLOW_PLOT_H}px"><svg class="kakeai-flowsvg" width="${FLOW_PLOT_W}" height="${FLOW_PLOT_H}" viewBox="0 0 ${FLOW_PLOT_W} ${FLOW_PLOT_H}"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--kakeai-muted)"></path></marker></defs>${edgesHtml}</svg>${nodesHtml}</div>`;
+  const plot = `<div class="kakeai-flowplot kakeai-flow-${orientation}${presetClass}" style="width:${plotSize.width}px;height:${plotSize.height}px"><svg class="kakeai-flowsvg" width="${plotSize.width}" height="${plotSize.height}" viewBox="0 0 ${plotSize.width} ${plotSize.height}"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--kakeai-muted)"></path></marker></defs>${edgesHtml}</svg>${nodesHtml}</div>`;
 
   return {
     html: `<figure class="kakeai-flowwrap" style="${themeRoleFontStyle(theme, "body", context.document.locale)}">${titleHtml}${plot}</figure>`,

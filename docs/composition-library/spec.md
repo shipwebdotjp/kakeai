@@ -57,7 +57,7 @@ Canvas Profile は CompositionVersion が描画する内部キャンバスの固
 - `landscape` = 1920×1080（既定）、`portrait` = 1080×1920。
 - version ごとの不変プロパティで、1つの Composition が landscape と portrait の版を別々に公開できる。ScriptVersion は使いたい版の ID を参照するだけで、既存参照は変わらない。
 - 最終レンダー出力は常に 1920×1080。Canvas Profile は親 Composition へ入れ子配置される child 自身のキャンバスだけを定義する。
-- `composition.full-bleed@1` は landscape の version だけを background に置ける。portrait は `scene.device-frame@1` の画面（9:16）に配置する。portrait を full-bleed へ保存・preview・render すると拒否する。
+- `composition.full-bleed@1` は、作品の Output Profile と一致する Canvas Profile の version だけを background に置ける。横型作品では landscape、縦型作品では portrait の version を使う。一致しない version は `scene.device-frame@1` の画面（9:16 など）に配置する。不一致の version を full-bleed へ保存・preview・render すると拒否する（[../short-video/spec.md](../short-video/spec.md)）。
 
 ### authoring API
 
