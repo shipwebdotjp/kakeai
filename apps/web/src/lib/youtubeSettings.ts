@@ -18,7 +18,19 @@ export function localDatetimeInputToUtcIso(localStr: string): string | null {
   if (localStr === "") {
     return null;
   }
-  const date = new Date(localStr);
+  const match = localStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/u);
+  if (!match) {
+    return null;
+  }
+  const [, y, mo, d, h, mi, s] = match;
+  const date = new Date(
+    Number(y),
+    Number(mo) - 1,
+    Number(d),
+    Number(h),
+    Number(mi),
+    Number(s ?? 0),
+  );
   if (Number.isNaN(date.getTime())) {
     return null;
   }
@@ -32,8 +44,16 @@ export function insertChaptersIntoDescription(
   selectionEnd?: number,
 ): string {
   const trimmed = chaptersText.trim();
-  const start = selectionStart ?? currentDescription.length;
-  const end = selectionEnd ?? currentDescription.length;
+  if (trimmed.length === 0) {
+    return currentDescription;
+  }
+
+  let start = Math.max(0, Math.min(selectionStart ?? currentDescription.length, currentDescription.length));
+  let end = Math.max(0, Math.min(selectionEnd ?? currentDescription.length, currentDescription.length));
+  if (start > end) {
+    [start, end] = [end, start];
+  }
+
   const before = currentDescription.slice(0, start);
   const after = currentDescription.slice(end);
 

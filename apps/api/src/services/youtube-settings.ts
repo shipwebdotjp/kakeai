@@ -138,7 +138,17 @@ export async function getYouTubeChaptersForScriptVersion(
     throw resourceNotFound("script_version", scriptVersionId);
   }
 
-  const contentDoc = deserializeContent(scriptVersion.contentJson);
+  let contentDoc;
+  try {
+    contentDoc = deserializeContent(scriptVersion.contentJson);
+  } catch {
+    throw new ApiError(
+      500,
+      "INTERNAL_ERROR",
+      `保存済みの台本を解釈できません: ${scriptVersionId}`,
+    );
+  }
+
   try {
     const result = buildYouTubeChapterList(contentDoc);
     return {
@@ -188,10 +198,30 @@ export async function getYouTubeSettingsTemplate(
     throw resourceNotFound("youtube_settings_template", templateId);
   }
 
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(row.settingsJson);
+  } catch {
+    throw new ApiError(
+      500,
+      "INTERNAL_ERROR",
+      `保存済みのテンプレートを解釈できません: ${templateId}`,
+    );
+  }
+
+  const parsed = youtubeVideoSettingsDocumentSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    throw new ApiError(
+      500,
+      "INTERNAL_ERROR",
+      `保存済みのテンプレートがスキーマを満たしていません: ${templateId}`,
+    );
+  }
+
   return {
     id: row.id,
     name: row.name,
-    document: JSON.parse(row.settingsJson) as YouTubeVideoSettingsDocument,
+    document: parsed.data,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -311,7 +341,14 @@ export async function deleteYouTubeSettingsTemplate(
     throw resourceNotFound("youtube_settings_template", templateId);
   }
 
-  await prisma.youTubeSettingsTemplate.delete({
-    where: { id: templateId },
-  });
+  try {
+    await prisma.youTubeSettingsTemplate.delete({
+      where: { id: templateId },
+    });
+  } catch (error) {
+    if (isPrismaCode(error, "P2025")) {
+      throw resourceNotFound("youtube_settings_template", templateId);
+    }
+    throw error;
+  }
 }

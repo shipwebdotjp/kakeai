@@ -83,6 +83,14 @@ export function YouTubeSettingsPage() {
   const selectedEdition = work.data?.languageEditions.find((e) => e.id === editionId);
 
   useEffect(() => {
+    setDraft(null);
+    setDirty(false);
+    setTagsInput("");
+    setSaveError(null);
+    setChapterInsertionWarnings(null);
+  }, [editionId]);
+
+  useEffect(() => {
     if (settingsQuery.data !== undefined && settingsQuery.data !== null && !dirty) {
       const doc = settingsQuery.data.document;
       setDraft(doc);
@@ -105,7 +113,7 @@ export function YouTubeSettingsPage() {
   const handleTagsChange = (raw: string) => {
     setTagsInput(raw);
     const parsedTags = raw
-      .split(/[,,\n]/u)
+      .split(/[,、，\n]/u)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
@@ -165,8 +173,16 @@ export function YouTubeSettingsPage() {
     return <p className={errorTextClass}>設定を読み込めませんでした。</p>;
   }
 
+  const titleCodePoints = countCodePoints(draft.title);
   const descCodePoints = countCodePoints(draft.description);
   const isMadeForKids = draft.declarations.audience === "made_for_kids";
+  const canSave =
+    dirty &&
+    !saveSettings.isPending &&
+    titleCodePoints > 0 &&
+    titleCodePoints <= 100 &&
+    descCodePoints <= 5000 &&
+    draft.tags.length <= 50;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -189,7 +205,7 @@ export function YouTubeSettingsPage() {
         <button
           type="button"
           className={buttonPrimaryClass}
-          disabled={!dirty || saveSettings.isPending}
+          disabled={!canSave}
           onClick={handleSave}
         >
           {saveSettings.isPending ? "保存中…" : "投稿設定を保存"}
@@ -210,8 +226,12 @@ export function YouTubeSettingsPage() {
               value={draft.title}
               onChange={(e) => updateDraft((prev) => ({ ...prev, title: e.target.value }))}
             />
-            <span className="mt-1 block text-right text-gray-500">
-              {draft.title.length} / 100
+            <span
+              className={`mt-1 block text-right text-xs ${
+                titleCodePoints > 100 ? "font-bold text-red-600" : "text-gray-500"
+              }`}
+            >
+              {titleCodePoints} / 100 コードポイント
             </span>
           </label>
 
@@ -221,7 +241,7 @@ export function YouTubeSettingsPage() {
               <button
                 type="button"
                 className={buttonNeutralClass}
-                disabled={chaptersQuery.isLoading || chaptersQuery.data === undefined}
+                disabled={chaptersQuery.isLoading || !chaptersQuery.data}
                 onClick={handleInsertChapters}
               >
                 {chaptersQuery.isLoading ? "チャプター取得中…" : "Sceneチャプターを挿入"}
@@ -250,7 +270,7 @@ export function YouTubeSettingsPage() {
             />
             <span
               className={`mt-1 block text-right text-xs ${
-                descCodePoints > 5000 ? "text-red-600 font-bold" : "text-gray-500"
+                descCodePoints > 5000 ? "font-bold text-red-600" : "text-gray-500"
               }`}
             >
               {descCodePoints} / 5,000 コードポイント
@@ -265,6 +285,11 @@ export function YouTubeSettingsPage() {
               onChange={(e) => handleTagsChange(e.target.value)}
               placeholder="例: アニメ, プログラミング, 解説"
             />
+            {draft.tags.length > 50 && (
+              <span className="mt-1 block text-right text-xs font-bold text-red-600">
+                タグは最大50個までです（現在 {draft.tags.length}個）
+              </span>
+            )}
           </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -273,15 +298,14 @@ export function YouTubeSettingsPage() {
               <select
                 className={`${textFieldClass} mt-1 block w-full`}
                 value={draft.category ?? ""}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const parsed = youtubeCategorySchema.safeParse(val);
                   updateDraft((prev) => ({
                     ...prev,
-                    category:
-                      e.target.value === ""
-                        ? null
-                        : youtubeCategorySchema.parse(e.target.value),
-                  }))
-                }
+                    category: parsed.success ? parsed.data : null,
+                  }));
+                }}
               >
                 <option value="">（未選択）</option>
                 {youtubeCategorySchema.options.map((cat) => (
@@ -319,12 +343,12 @@ export function YouTubeSettingsPage() {
             <select
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.visibility}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  visibility: youtubeVisibilitySchema.parse(e.target.value),
-                }))
-              }
+              onChange={(e) => {
+                const parsed = youtubeVisibilitySchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  updateDraft((prev) => ({ ...prev, visibility: parsed.data }));
+                }
+              }}
             >
               <option value="public">公開（public）</option>
               <option value="unlisted">限定公開（unlisted）</option>
@@ -376,15 +400,18 @@ export function YouTubeSettingsPage() {
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.declarations.audience}
               onChange={(e) => {
-                const val = youtubeAudienceDeclarationSchema.parse(e.target.value);
-                updateDraft((prev) => ({
-                  ...prev,
-                  declarations: { ...prev.declarations, audience: val },
-                  comments:
-                    val === "made_for_kids" && prev.comments.mode === "allow_all"
-                      ? { mode: youtubeCommentModeSchema.parse("disabled") }
-                      : prev.comments,
-                }));
+                const parsed = youtubeAudienceDeclarationSchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  const val = parsed.data;
+                  updateDraft((prev) => ({
+                    ...prev,
+                    declarations: { ...prev.declarations, audience: val },
+                    comments:
+                      val === "made_for_kids" && prev.comments.mode === "allow_all"
+                        ? { mode: "disabled" }
+                        : prev.comments,
+                  }));
+                }
               }}
             >
               <option value="not_applicable">設定しない / 該当なし</option>
@@ -398,15 +425,18 @@ export function YouTubeSettingsPage() {
             <select
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.declarations.ageRestriction}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  declarations: {
-                    ...prev.declarations,
-                    ageRestriction: youtubeAgeRestrictionDeclarationSchema.parse(e.target.value),
-                  },
-                }))
-              }
+              onChange={(e) => {
+                const parsed = youtubeAgeRestrictionDeclarationSchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  updateDraft((prev) => ({
+                    ...prev,
+                    declarations: {
+                      ...prev.declarations,
+                      ageRestriction: parsed.data,
+                    },
+                  }));
+                }
+              }}
             >
               <option value="not_applicable">設定しない / 該当なし</option>
               <option value="restrict_over_18">18歳以上の視聴者に制限する</option>
@@ -419,15 +449,18 @@ export function YouTubeSettingsPage() {
             <select
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.declarations.paidPromotion}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  declarations: {
-                    ...prev.declarations,
-                    paidPromotion: youtubePaidPromotionDeclarationSchema.parse(e.target.value),
-                  },
-                }))
-              }
+              onChange={(e) => {
+                const parsed = youtubePaidPromotionDeclarationSchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  updateDraft((prev) => ({
+                    ...prev,
+                    declarations: {
+                      ...prev.declarations,
+                      paidPromotion: parsed.data,
+                    },
+                  }));
+                }
+              }}
             >
               <option value="not_applicable">設定しない / 該当なし</option>
               <option value="contains_paid_promotion">有料プロモーションを含む</option>
@@ -440,15 +473,18 @@ export function YouTubeSettingsPage() {
             <select
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.declarations.syntheticContent}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  declarations: {
-                    ...prev.declarations,
-                    syntheticContent: youtubeSyntheticContentDeclarationSchema.parse(e.target.value),
-                  },
-                }))
-              }
+              onChange={(e) => {
+                const parsed = youtubeSyntheticContentDeclarationSchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  updateDraft((prev) => ({
+                    ...prev,
+                    declarations: {
+                      ...prev.declarations,
+                      syntheticContent: parsed.data,
+                    },
+                  }));
+                }
+              }}
             >
               <option value="not_applicable">設定しない / 該当なし</option>
               <option value="altered_or_synthetic">リアルに見える合成・改変コンテンツを含む</option>
@@ -467,12 +503,15 @@ export function YouTubeSettingsPage() {
             <select
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.comments.mode}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  comments: { mode: youtubeCommentModeSchema.parse(e.target.value) },
-                }))
-              }
+              onChange={(e) => {
+                const parsed = youtubeCommentModeSchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  updateDraft((prev) => ({
+                    ...prev,
+                    comments: { mode: parsed.data },
+                  }));
+                }
+              }}
             >
               <option value="allow_all" disabled={isMadeForKids}>
                 すべてのコメントを許可する{isMadeForKids ? "（子ども向け動画では不可）" : ""}
@@ -495,12 +534,15 @@ export function YouTubeSettingsPage() {
             <select
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.shortsRemix}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  shortsRemix: youtubeShortsRemixSchema.parse(e.target.value),
-                }))
-              }
+              onChange={(e) => {
+                const parsed = youtubeShortsRemixSchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  updateDraft((prev) => ({
+                    ...prev,
+                    shortsRemix: parsed.data,
+                  }));
+                }
+              }}
             >
               <option value="allow_video_and_audio">動画と音声のリミックスを許可</option>
               <option value="allow_audio_only">音声のみのリミックスを許可</option>
@@ -513,12 +555,15 @@ export function YouTubeSettingsPage() {
             <select
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.license}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  license: youtubeLicenseSchema.parse(e.target.value),
-                }))
-              }
+              onChange={(e) => {
+                const parsed = youtubeLicenseSchema.safeParse(e.target.value);
+                if (parsed.success) {
+                  updateDraft((prev) => ({
+                    ...prev,
+                    license: parsed.data,
+                  }));
+                }
+              }}
             >
               <option value="youtube">標準の YouTube ライセンス</option>
               <option value="creative_commons">クリエイティブ・コモンズ - 表示</option>

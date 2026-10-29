@@ -57,7 +57,8 @@ export function buildYouTubeChapterList(
 
   const chapterLines = includedScenes.map((item) => {
     const timestamp = formatChapterTimestamp(item.startMs, timeline.totalDurationMs);
-    return `${timestamp} ${item.label}`;
+    const safeLabel = item.label.replace(/\s+/gu, " ").trim();
+    return `${timestamp} ${safeLabel}`;
   });
 
   const chaptersText = chapterLines.join("\n");

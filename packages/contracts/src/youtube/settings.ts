@@ -120,20 +120,26 @@ export function safeTruncateTitle(title: string, maxLength = 100): string {
 }
 
 export function isValidIsoDateTime(str: string): boolean {
-  const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/u;
-  if (!isoRegex.test(str)) {
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,3})?Z$/u);
+  if (!match) {
     return false;
   }
+  const [, yearStr, monthStr, dayStr, hourStr, minStr, secStr] = match;
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const hour = Number(hourStr);
+  const minute = Number(minStr);
+  const second = Number(secStr);
+
+  if (hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+
   const date = new Date(str);
   if (isNaN(date.getTime())) {
     return false;
   }
-  const datePart = str.split("T")[0];
-  if (!datePart) return false;
-  const [yearStr, monthStr, dayStr] = datePart.split("-");
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
   if (
     date.getUTCFullYear() !== year ||
     date.getUTCMonth() + 1 !== month ||
@@ -146,7 +152,7 @@ export function isValidIsoDateTime(str: string): boolean {
 
 export const youtubeVideoSettingsDocumentSchema = z
   .strictObject({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(YOUTUBE_SETTINGS_SCHEMA_VERSION),
     title: z
       .string()
       .min(1, "タイトルは必須です")
@@ -157,11 +163,24 @@ export const youtubeVideoSettingsDocumentSchema = z
         message: "説明は最大5,000文字（コードポイント）までです",
       }),
     tags: z
-      .array(z.string().min(1).max(500))
+      .array(
+        z
+          .string()
+          .min(1)
+          .refine((v) => countCodePoints(v.trim()) <= 500, {
+            message: "各タグは最大500文字です",
+          }),
+      )
       .max(50, "タグは最大50個までです")
-      .refine((tags) => tags.length === new Set(tags).size, {
-        message: "タグに重複があります",
-      }),
+      .refine(
+        (tags) => {
+          const normalized = tags.map((t) => t.trim().toLowerCase());
+          return normalized.length === new Set(normalized).size;
+        },
+        {
+          message: "タグに重複があります",
+        },
+      ),
     category: youtubeCategorySchema.nullable(),
     language: z.string().nullable(),
     captionCertification: youtubeCaptionCertificationSchema.nullable(),
@@ -243,10 +262,10 @@ export function createDefaultYouTubeVideoSettingsDocument(
   workTitle: string,
   locale: string,
 ): YouTubeVideoSettingsDocument {
-  const derivedLanguage = locale.split("-")[0] || "ja";
+  const derivedLanguage = (locale.split("-")[0] ?? "").trim().toLowerCase() || "ja";
   const title = safeTruncateTitle(workTitle || "Untitled", 100);
   return {
-    schemaVersion: 1,
+    schemaVersion: YOUTUBE_SETTINGS_SCHEMA_VERSION,
     title,
     description: "",
     tags: [],
