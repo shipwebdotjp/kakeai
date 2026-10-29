@@ -3,6 +3,8 @@ import {
   createDefaultYouTubeVideoSettingsDocument,
   createInitialContentDocument,
   resolveCharacterName,
+  safeTruncateTitle,
+  youtubeVideoSettingsDocumentSchema,
   type ContentDocument,
   type ScriptVersionAuthor,
   type Work,
@@ -153,17 +155,22 @@ export async function cloneWork(
   const sourceSettingsRow = await prisma.youTubeVideoSettings.findUnique({
     where: { languageEditionId: sourceEditionId },
   });
-  let settingsDoc: YouTubeVideoSettingsDocument;
+  let settingsDoc: YouTubeVideoSettingsDocument | null = null;
   if (sourceSettingsRow !== null) {
     try {
-      settingsDoc = JSON.parse(sourceSettingsRow.settingsJson) as YouTubeVideoSettingsDocument;
+      const parsedJson = JSON.parse(sourceSettingsRow.settingsJson);
+      const validated = youtubeVideoSettingsDocumentSchema.safeParse(parsedJson);
+      if (validated.success) {
+        settingsDoc = validated.data;
+      }
     } catch {
-      settingsDoc = createDefaultYouTubeVideoSettingsDocument(title, sourceEdition.locale);
+      settingsDoc = null;
     }
-  } else {
+  }
+  if (settingsDoc === null) {
     settingsDoc = createDefaultYouTubeVideoSettingsDocument(title, sourceEdition.locale);
   }
-  settingsDoc.title = title.slice(0, 100);
+  settingsDoc.title = safeTruncateTitle(title, 100);
 
   const newWorkId = await prisma.$transaction(async (tx) => {
     const newWork = await tx.work.create({

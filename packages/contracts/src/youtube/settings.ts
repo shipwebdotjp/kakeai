@@ -115,12 +115,33 @@ export function countCodePoints(str: string): number {
   return [...str].length;
 }
 
-function isValidIsoDateTime(str: string): boolean {
-  if (isNaN(Date.parse(str))) {
+export function safeTruncateTitle(title: string, maxLength = 100): string {
+  return [...title].slice(0, maxLength).join("");
+}
+
+export function isValidIsoDateTime(str: string): boolean {
+  const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/u;
+  if (!isoRegex.test(str)) {
     return false;
   }
-  // Check that it conforms to ISO 8601 format
-  return !isNaN(new Date(str).getTime());
+  const date = new Date(str);
+  if (isNaN(date.getTime())) {
+    return false;
+  }
+  const datePart = str.split("T")[0];
+  if (!datePart) return false;
+  const [yearStr, monthStr, dayStr] = datePart.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export const youtubeVideoSettingsDocumentSchema = z
@@ -150,7 +171,7 @@ export const youtubeVideoSettingsDocumentSchema = z
       .string()
       .nullable()
       .refine((val) => val === null || isValidIsoDateTime(val), {
-        message: "publishAt は有効な日時形式（ISO 8601）である必要があります",
+        message: "publishAt は有効な日時形式（ISO 8601, UTC 'Z'のみ）である必要があります",
       }),
     premiere: z.boolean(),
     license: youtubeLicenseSchema,
@@ -220,7 +241,7 @@ export function createDefaultYouTubeVideoSettingsDocument(
   locale: string,
 ): YouTubeVideoSettingsDocument {
   const derivedLanguage = locale.split("-")[0] ?? "ja";
-  const title = workTitle.slice(0, 100);
+  const title = safeTruncateTitle(workTitle, 100);
   return {
     schemaVersion: 1,
     title,

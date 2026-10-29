@@ -1,50 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { countCodePoints } from "@kakeai/contracts";
-
-function utcIsoToLocalDatetimeInput(utcIso: string | null): string {
-  if (utcIso === null || utcIso === "") {
-    return "";
-  }
-  const date = new Date(utcIso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function localDatetimeInputToUtcIso(localStr: string): string | null {
-  if (localStr === "") {
-    return null;
-  }
-  const date = new Date(localStr);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toISOString();
-}
-
-function insertChaptersIntoDescription(
-  currentDescription: string,
-  chaptersText: string,
-  selectionStart?: number,
-  selectionEnd?: number,
-): string {
-  const trimmed = chaptersText.trim();
-  const start = selectionStart ?? currentDescription.length;
-  const end = selectionEnd ?? currentDescription.length;
-  const before = currentDescription.slice(0, start);
-  const after = currentDescription.slice(end);
-
-  const prefix = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
-  const suffix = after.length > 0 && !after.startsWith("\n") ? "\n" : "";
-
-  return before + prefix + trimmed + suffix + after;
-}
+import {
+  insertChaptersIntoDescription,
+  localDatetimeInputToUtcIso,
+  utcIsoToLocalDatetimeInput,
+} from "./youtubeSettings";
 
 describe("YouTube settings UI helpers", () => {
   it("converts UTC ISO 8601 string to local datetime-local input format and back", () => {

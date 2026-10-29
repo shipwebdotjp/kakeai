@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   createDefaultYouTubeVideoSettingsDocument,
+  isValidIsoDateTime,
+  safeTruncateTitle,
   updateYouTubeVideoSettingsRequestSchema,
   youtubeVideoSettingsDocumentSchema,
 } from "./settings";
@@ -23,6 +25,16 @@ describe("YouTubeVideoSettings contracts", () => {
 
     const parsed = youtubeVideoSettingsDocumentSchema.safeParse(doc);
     expect(parsed.success).toBe(true);
+  });
+
+  it("safely truncates titles without splitting surrogate pairs", () => {
+    const emojiTitle = "😀".repeat(105);
+    const truncated = safeTruncateTitle(emojiTitle, 100);
+    expect([...truncated].length).toBe(100);
+    expect(truncated).toBe("😀".repeat(100));
+
+    const defaultDoc = createDefaultYouTubeVideoSettingsDocument(emojiTitle, "ja-JP");
+    expect(defaultDoc.title).toBe("😀".repeat(100));
   });
 
   it("rejects unknown fields on update request schema", () => {
@@ -94,17 +106,29 @@ describe("YouTubeVideoSettings contracts", () => {
     expect(youtubeVideoSettingsDocumentSchema.safeParse(docKidsDisabled).success).toBe(true);
   });
 
-  it("validates publishAt ISO datetime string format", () => {
+  it("validates publishAt ISO datetime string format and rejects non-Z, non-ISO, or non-existent dates", () => {
+    // Valid Z ISO 8601 strings
+    expect(isValidIsoDateTime("2026-12-31T12:00:00.000Z")).toBe(true);
+    expect(isValidIsoDateTime("2026-12-31T12:00:00Z")).toBe(true);
+
+    // Invalid non-existent date
+    expect(isValidIsoDateTime("2026-02-31T12:00:00Z")).toBe(false);
+
+    // Invalid non-Z timezone offsets or formats
+    expect(isValidIsoDateTime("2026-12-31T12:00:00+09:00")).toBe(false);
+    expect(isValidIsoDateTime("2026-12-31")).toBe(false);
+    expect(isValidIsoDateTime("not-a-datetime")).toBe(false);
+
     const docValidIso = {
       ...createDefaultYouTubeVideoSettingsDocument("Title", "ja-JP"),
       publishAt: "2026-12-31T12:00:00.000Z",
     };
     expect(youtubeVideoSettingsDocumentSchema.safeParse(docValidIso).success).toBe(true);
 
-    const docInvalidIso = {
+    const docInvalidOffset = {
       ...createDefaultYouTubeVideoSettingsDocument("Title", "ja-JP"),
-      publishAt: "invalid-datetime-string",
+      publishAt: "2026-12-31T12:00:00+09:00",
     };
-    expect(youtubeVideoSettingsDocumentSchema.safeParse(docInvalidIso).success).toBe(false);
+    expect(youtubeVideoSettingsDocumentSchema.safeParse(docInvalidOffset).success).toBe(false);
   });
 });

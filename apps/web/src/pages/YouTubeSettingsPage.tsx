@@ -2,9 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   countCodePoints,
+  youtubeAgeRestrictionDeclarationSchema,
+  youtubeAudienceDeclarationSchema,
   youtubeCategorySchema,
+  youtubeCommentModeSchema,
+  youtubeLicenseSchema,
+  youtubePaidPromotionDeclarationSchema,
+  youtubeShortsRemixSchema,
+  youtubeSyntheticContentDeclarationSchema,
+  youtubeVisibilitySchema,
   type YouTubeCategory,
-  type YouTubeCommentMode,
+  type YouTubeChapterWarning,
   type YouTubeVideoSettingsDocument,
 } from "@kakeai/contracts";
 import { ApiError } from "../api/client";
@@ -16,6 +24,11 @@ import {
   useYouTubeVideoSettings,
 } from "../api/hooks";
 import { YouTubeSettingsTemplatePanel } from "../components/YouTubeSettingsTemplatePanel";
+import {
+  insertChaptersIntoDescription,
+  localDatetimeInputToUtcIso,
+  utcIsoToLocalDatetimeInput,
+} from "../lib/youtubeSettings";
 import {
   badgeInfoClass,
   buttonNeutralClass,
@@ -29,33 +42,6 @@ import {
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiError ? error.message : "操作に失敗しました。";
-}
-
-function utcIsoToLocalDatetimeInput(utcIso: string | null): string {
-  if (utcIso === null || utcIso === "") {
-    return "";
-  }
-  const date = new Date(utcIso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function localDatetimeInputToUtcIso(localStr: string): string | null {
-  if (localStr === "") {
-    return null;
-  }
-  const date = new Date(localStr);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toISOString();
 }
 
 const YOUTUBE_CATEGORY_LABELS: Record<YouTubeCategory, string> = {
@@ -89,7 +75,7 @@ export function YouTubeSettingsPage() {
   const [tagsInput, setTagsInput] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [chapterInsertionWarnings, setChapterInsertionWarnings] = useState<
-    { code: string; message: string }[] | null
+    YouTubeChapterWarning[] | null
   >(null);
 
   const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -137,26 +123,19 @@ export function YouTubeSettingsPage() {
     setChapterInsertionWarnings(warnings.length > 0 ? warnings : null);
 
     const textarea = descriptionTextareaRef.current;
-    const trimmedChapters = chaptersText.trim();
-
+    let newDesc: string;
     if (textarea !== null) {
       const start = textarea.selectionStart ?? draft.description.length;
       const end = textarea.selectionEnd ?? draft.description.length;
-      const before = draft.description.slice(0, start);
-      const after = draft.description.slice(end);
-      const newDesc = before + (before.length > 0 && !before.endsWith("\n") ? "\n" : "") + trimmedChapters + (after.length > 0 && !after.startsWith("\n") ? "\n" : "") + after;
-
-      updateDraft((prev) => ({
-        ...prev,
-        description: newDesc,
-      }));
+      newDesc = insertChaptersIntoDescription(draft.description, chaptersText, start, end);
     } else {
-      const newDesc = draft.description.length > 0 ? `${draft.description}\n\n${trimmedChapters}` : trimmedChapters;
-      updateDraft((prev) => ({
-        ...prev,
-        description: newDesc,
-      }));
+      newDesc = insertChaptersIntoDescription(draft.description, chaptersText);
     }
+
+    updateDraft((prev) => ({
+      ...prev,
+      description: newDesc,
+    }));
   };
 
   const handleSave = () => {
@@ -248,6 +227,9 @@ export function YouTubeSettingsPage() {
                 {chaptersQuery.isLoading ? "チャプター取得中…" : "Sceneチャプターを挿入"}
               </button>
             </div>
+            {chaptersQuery.isError && (
+              <p className={errorTextClass}>{errorMessage(chaptersQuery.error)}</p>
+            )}
             {chapterInsertionWarnings !== null && (
               <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
                 <p className="font-semibold">YouTubeチャプターの警告:</p>
@@ -297,7 +279,7 @@ export function YouTubeSettingsPage() {
                     category:
                       e.target.value === ""
                         ? null
-                        : (youtubeCategorySchema.parse(e.target.value) as YouTubeCategory),
+                        : youtubeCategorySchema.parse(e.target.value),
                   }))
                 }
               >
@@ -340,7 +322,7 @@ export function YouTubeSettingsPage() {
               onChange={(e) =>
                 updateDraft((prev) => ({
                   ...prev,
-                  visibility: e.target.value as "public" | "unlisted" | "private",
+                  visibility: youtubeVisibilitySchema.parse(e.target.value),
                 }))
               }
             >
@@ -394,13 +376,13 @@ export function YouTubeSettingsPage() {
               className={`${textFieldClass} mt-1 block w-full`}
               value={draft.declarations.audience}
               onChange={(e) => {
-                const val = e.target.value as "not_applicable" | "made_for_kids" | "not_made_for_kids";
+                const val = youtubeAudienceDeclarationSchema.parse(e.target.value);
                 updateDraft((prev) => ({
                   ...prev,
                   declarations: { ...prev.declarations, audience: val },
                   comments:
                     val === "made_for_kids" && prev.comments.mode === "allow_all"
-                      ? { mode: "disabled" as YouTubeCommentMode }
+                      ? { mode: youtubeCommentModeSchema.parse("disabled") }
                       : prev.comments,
                 }));
               }}
@@ -421,7 +403,7 @@ export function YouTubeSettingsPage() {
                   ...prev,
                   declarations: {
                     ...prev.declarations,
-                    ageRestriction: e.target.value as "not_applicable" | "restrict_over_18" | "do_not_restrict",
+                    ageRestriction: youtubeAgeRestrictionDeclarationSchema.parse(e.target.value),
                   },
                 }))
               }
@@ -442,7 +424,7 @@ export function YouTubeSettingsPage() {
                   ...prev,
                   declarations: {
                     ...prev.declarations,
-                    paidPromotion: e.target.value as "not_applicable" | "contains_paid_promotion" | "no_paid_promotion",
+                    paidPromotion: youtubePaidPromotionDeclarationSchema.parse(e.target.value),
                   },
                 }))
               }
@@ -463,7 +445,7 @@ export function YouTubeSettingsPage() {
                   ...prev,
                   declarations: {
                     ...prev.declarations,
-                    syntheticContent: e.target.value as "not_applicable" | "altered_or_synthetic" | "none",
+                    syntheticContent: youtubeSyntheticContentDeclarationSchema.parse(e.target.value),
                   },
                 }))
               }
@@ -488,7 +470,7 @@ export function YouTubeSettingsPage() {
               onChange={(e) =>
                 updateDraft((prev) => ({
                   ...prev,
-                  comments: { mode: e.target.value as YouTubeCommentMode },
+                  comments: { mode: youtubeCommentModeSchema.parse(e.target.value) },
                 }))
               }
             >
@@ -516,7 +498,7 @@ export function YouTubeSettingsPage() {
               onChange={(e) =>
                 updateDraft((prev) => ({
                   ...prev,
-                  shortsRemix: e.target.value as "allow_video_and_audio" | "allow_audio_only" | "dont_allow",
+                  shortsRemix: youtubeShortsRemixSchema.parse(e.target.value),
                 }))
               }
             >
@@ -534,7 +516,7 @@ export function YouTubeSettingsPage() {
               onChange={(e) =>
                 updateDraft((prev) => ({
                   ...prev,
-                  license: e.target.value as "youtube" | "creative_commons",
+                  license: youtubeLicenseSchema.parse(e.target.value),
                 }))
               }
             >
