@@ -34,6 +34,7 @@ model LanguageEdition {
   thumbnails             Thumbnail[]     @relation("EditionThumbnails")
   primaryThumbnailId     String?         @unique
   primaryThumbnail       Thumbnail?      @relation("EditionPrimaryThumbnail", fields: [primaryThumbnailId], references: [id], onDelete: SetNull)
+  youtubeVideoSettings   YouTubeVideoSettings?
   jobs                   Job[]
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
@@ -383,6 +384,26 @@ model ThumbnailAppearancePreset {
   appearanceJson String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model YouTubeVideoSettings {
+  id                String          @id @default(cuid())
+  languageEditionId String          @unique
+  languageEdition   LanguageEdition @relation(fields: [languageEditionId], references: [id], onDelete: Cascade)
+  schemaVersion     Int             @default(1)
+  settingsJson      String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model YouTubeSettingsTemplate {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  settingsJson String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([updatedAt])
 }

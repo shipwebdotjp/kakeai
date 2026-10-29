@@ -187,6 +187,12 @@ const operationDescriptions: Record<AgentOperationName, string> = {
     "Voice Profile を新規作成して返す。`adapterId`・実在する `voiceId`（voiceProfile.listVoices で確認）・`locale`（台本の locale と一致させる）・`settings`（`openai-compatible` は `model` 必須、参照音声を使う場合は `refAudioAssetId`（取り込み済み音声 Asset の ID）・`langCode`（Japanese / English / Chinese / Korean / German / French / Russian / Portuguese / Spanish / Italian のいずれか）も必須、`refText`（付けると ICL 方式、省略すると x-vector 方式）・`maxTokens` は任意）を指定する。タイムアウト後は voiceProfile.list で確認してから再実行する。",
   "voiceProfile.update":
     "Voice Profile を部分更新して返す。`voiceProfileId` に加えて変更する項目（`name`・`voiceId`・`locale`・`settings`）だけを指定し、省略した項目は不変。`settings` を指定した場合はアダプター設定オブジェクト全体を置換する。`adapterId` は変更できない。存在しない ID は RESOURCE_NOT_FOUND。反映は以後の TTS だけに影響し、既存の Audio Take は変えない。",
+  "youtubeSettings.get":
+    "指定した Edition の YouTube 投稿設定を取得する。`languageEditionId` が必要。",
+  "youtubeSettings.update":
+    "指定した Edition の YouTube 投稿設定（タイトル・説明・タグ・公開設定等）を更新して返す。`languageEditionId` と `settings` が必要。",
+  "script.youtubeChapters":
+    "保存済み Script Version のタイムラインから YouTube 動画チャプター本文と診断/警告を生成して返す。`scriptVersionId` が必要。",
 };
 
 function describeOperation(

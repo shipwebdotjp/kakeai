@@ -8,6 +8,7 @@ export * from "./scriptVersions";
 export * from "./themes";
 export * from "./thumbnailAppearance";
 export * from "./thumbnails";
+export * from "./youtubePublication";
 export * from "./tts";
 export * from "./voices";
 export * from "./works";

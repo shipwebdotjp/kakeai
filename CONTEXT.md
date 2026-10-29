@@ -341,6 +341,14 @@ _Avoid_: background removal result, character image, main visual
 A thumbnail text input that carries inline emphasis in a small plain-text syntax, mapped to the resolved Thumbnail Appearance and the owning Thumbnail Template rather than raw user CSS. It stays an ordinary string in the saved document.
 _Avoid_: HTML, Markdown document, rich text editor state
 
+**YouTube Video Settings**:
+A set of mutable, edition-scoped YouTube publication metadata (title, description, tags, category, visibility, declarations, and interactive settings) stored independently of Script Versions.
+_Avoid_: Upload job, OAuth config, video ID
+
+**YouTube Scene Chapters**:
+A generated list of timestamped lines (`MM:SS Label` or `HH:MM:SS Label`) derived from the narration scenes of a saved Script Version, formatted for YouTube description text.
+_Avoid_: Video chapter track, VTT cue, auto chapter
+
 **Set Operation**:
 An Agent/Script operation whose name indicates full replacement of the named value; other values are unchanged.
 

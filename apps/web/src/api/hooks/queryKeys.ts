@@ -13,4 +13,6 @@ export const queryKeys = {
   adapterVoices: (adapterId: string | undefined, model: string) =>
     ["adapter-voices", adapterId, model] as const,
   thumbnails: (editionId: string | undefined) => ["thumbnails", editionId] as const,
+  youtubeVideoSettings: (editionId: string | undefined) => ["youtube-video-settings", editionId] as const,
+  youtubeSettingsTemplates: () => ["youtube-settings-templates"] as const,
 } as const;

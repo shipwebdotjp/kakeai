@@ -130,6 +130,7 @@ export type AgentScriptSubtitlesOutput = z.infer<
 
 export * from "./thumbnail-schemas";
 export * from "./face-set-schemas";
+export * from "./youtube-schemas";
 
 export const agentSchemaGetInputSchema = agentEmptyInputSchema;
 export const agentSchemaGetOutputSchema = agentSchemaGetResultSchema;

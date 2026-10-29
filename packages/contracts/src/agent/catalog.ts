@@ -106,6 +106,9 @@ export const agentOperationNames = [
   "thumbnail.update",
   "thumbnail.setPrimary",
   "thumbnail.image",
+  "youtubeSettings.get",
+  "youtubeSettings.update",
+  "script.youtubeChapters",
 ] as const;
 export type AgentOperationName = (typeof agentOperationNames)[number];
 
@@ -153,6 +156,8 @@ export const agentReadOperationNames = [
   "thumbnail.get",
   "thumbnail.appearance",
   "thumbnail.image",
+  "youtubeSettings.get",
+  "script.youtubeChapters",
 ] as const satisfies readonly AgentOperationName[];
 
 export const agentMutationOperationNames = [
@@ -189,6 +194,7 @@ export const agentMutationOperationNames = [
   "thumbnail.create",
   "thumbnail.update",
   "thumbnail.setPrimary",
+  "youtubeSettings.update",
 ] as const satisfies readonly AgentOperationName[];
 
 /**
@@ -366,6 +372,9 @@ export const agentWarningCodes = [
   "table_columns_overflow",
   "table_rows_overflow",
   "text_overflow",
+  "less_than_3_chapters",
+  "first_chapter_not_zero",
+  "scene_under_10_seconds",
 ] as const;
 export type AgentWarningCode = (typeof agentWarningCodes)[number];
 export const agentWarningCodeSchema = z.enum(agentWarningCodes);

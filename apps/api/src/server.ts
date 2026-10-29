@@ -21,6 +21,7 @@ import { createCompositionAuthoringRouter } from "./http/routes/composition-auth
 import { createThemesRouter } from "./http/routes/themes.ts";
 import { createFontsRouter } from "./http/routes/fonts.ts";
 import { createThumbnailsRouter } from "./http/routes/thumbnails.ts";
+import { createYouTubeTemplatesRouter } from "./http/routes/youtube-templates.ts";
 import type { Rasterizer } from "./media/rasterize.ts";
 import { CompositionService } from "./services/compositions.ts";
 import { CompositionAuthoringService } from "./services/authoring-context.ts";
@@ -176,6 +177,7 @@ export function createApp(dependencies: AppDependencies): Express {
       rasterizer: dependencies.rasterizer,
     }),
   );
+  api.use(createYouTubeTemplatesRouter(dependencies.prisma));
   api.use(
     createVoiceProfilesRouter({
       prisma: dependencies.prisma,

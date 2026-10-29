@@ -12,6 +12,7 @@ import { parseBody, pathParam } from "../validation.ts";
 import * as renderJobs from "../../services/render-jobs.ts";
 import * as scriptVersions from "../../services/script-versions.ts";
 import * as ttsJobs from "../../services/tts-jobs.ts";
+import * as youtubeSettings from "../../services/youtube-settings.ts";
 import type { FontCatalogService } from "../../services/font-catalog.ts";
 
 export interface ScriptVersionsRouterDependencies {
@@ -41,6 +42,20 @@ export function createScriptVersionsRouter(dependencies: ScriptVersionsRouterDep
         await scriptVersions.getScriptVersionPreview(
           prisma,
           directories,
+          pathParam(req, "scriptVersionId"),
+        ),
+      );
+    }),
+  );
+
+  router.get(
+    "/script-versions/:scriptVersionId/youtube-chapters",
+    asyncHandler(async (req, res) => {
+      sendData(
+        res,
+        200,
+        await youtubeSettings.getYouTubeChaptersForScriptVersion(
+          prisma,
           pathParam(req, "scriptVersionId"),
         ),
       );

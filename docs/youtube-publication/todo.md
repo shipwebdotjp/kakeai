@@ -1,0 +1,33 @@
+# YouTube Publication Implementation TODO
+
+- [x] Create docs and spec (`spec.md`, `todo.md`, ADR 0061)
+- [ ] Define Contracts in `packages/contracts`
+  - [ ] `YouTubeVideoSettingsDocument v1` Zod schema and defaults builder
+  - [ ] Strict update request schema (rejects unknown fields)
+  - [ ] YouTube settings template DTOs and schemas
+  - [ ] Agent operation contracts for settings GET/UPDATE and chapters GET
+  - [ ] Unit tests for contracts
+- [ ] Implement Chapter Generation in `packages/video`
+  - [ ] `buildYouTubeChapterList` function
+  - [ ] Chapter timing formatting and scene filtering (`intro`, `point`, `outro`)
+  - [ ] Chapter rules warnings
+  - [ ] Unit tests for chapter generation
+- [ ] Implement DB Models & Migration in `apps/api`
+  - [ ] Prisma schema additions: `YouTubeVideoSettings`, `YouTubeSettingsTemplate`
+  - [ ] Migration with backfill SQL for existing `LanguageEdition` records
+  - [ ] Work service logic updates (`createWork`, `cloneWork`, `createLanguageEdition`)
+- [ ] Implement API Routes and Agent Handlers in `apps/api`
+  - [ ] `/language-editions/:editionId/youtube-settings` GET/PUT
+  - [ ] `/script-versions/:scriptVersionId/youtube-chapters` GET
+  - [ ] `/youtube-settings-templates` CRUD
+  - [ ] Agent handlers for `youtubeSettings.get`, `youtubeSettings.update`, `script.youtubeChapters`
+  - [ ] API & Agent integration tests
+- [ ] Implement Web UI in `apps/web`
+  - [ ] API client and TanStack Query hooks
+  - [ ] YouTube settings route and page (`/works/:workId/editions/:editionId/youtube-settings`)
+  - [ ] Navigation link in editor
+  - [ ] Description field with "Insert Scene chapters" button and warnings
+  - [ ] Datetime picker for local display / UTC ISO 8601 persistence
+  - [ ] Template management UI
+  - [ ] Web UI tests
+- [ ] Pre-commit steps and verification

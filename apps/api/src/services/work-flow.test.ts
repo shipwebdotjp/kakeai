@@ -77,7 +77,7 @@ async function createJobWithArtifact(
 }
 
 describe("work and script version flow", () => {
-  it("creates a work with an initial v1 script version", async () => {
+  it("creates a work with an initial v1 script version and default YouTube settings", async () => {
     const work = await works.createWork(prisma, "テスト作品", "ja-JP");
     expect(work.languageEditions).toHaveLength(1);
     const edition = work.languageEditions[0]!;
@@ -95,6 +95,99 @@ describe("work and script version flow", () => {
       "要点 1",
       "結び",
     ]);
+
+    const settingsRow = await prisma.youTubeVideoSettings.findUnique({
+      where: { languageEditionId: edition.id },
+    });
+    expect(settingsRow).not.toBeNull();
+    const settingsDoc = JSON.parse(settingsRow!.settingsJson);
+    expect(settingsDoc.title).toBe("テスト作品");
+    expect(settingsDoc.language).toBe("ja");
+    expect(settingsDoc.visibility).toBe("public");
+  });
+
+  it("duplicates YouTube settings on clone and overwrites title with new Work name", async () => {
+    const parentWork = await works.createWork(prisma, "親YouTube作品", "ja-JP");
+    const parentEdition = parentWork.languageEditions[0]!;
+
+    // Customise parent settings
+    await prisma.youTubeVideoSettings.update({
+      where: { languageEditionId: parentEdition.id },
+      data: {
+        settingsJson: JSON.stringify({
+          schemaVersion: 1,
+          title: "親YouTube作品",
+          description: "カスタム説明文",
+          tags: ["タグ1", "タグ2"],
+          category: "education",
+          language: "ja",
+          captionCertification: "none",
+          recordingDetails: null,
+          educationDetails: null,
+          shortsRelatedVideo: null,
+          declarations: {
+            audience: "not_applicable",
+            ageRestriction: "not_applicable",
+            paidPromotion: "not_applicable",
+            syntheticContent: "not_applicable",
+          },
+          visibility: "unlisted",
+          publishAt: null,
+          premiere: false,
+          license: "youtube",
+          embeddable: true,
+          notifySubscribers: true,
+          statisticsVisibility: true,
+          comments: { mode: "hold_potentially_inappropriate" },
+          ratings: true,
+          chapters: { automaticChapters: true, automaticKeyMoments: true },
+          location: null,
+          shortsRemix: "allow_video_and_audio",
+        }),
+      },
+    });
+
+    // Clone work
+    const clonedWork = await works.cloneWork(
+      prisma,
+      parentWork.id,
+      "複製後の新しいタイトル",
+      parentEdition.id,
+    );
+    const clonedEdition = clonedWork.languageEditions[0]!;
+
+    const clonedSettingsRow = await prisma.youTubeVideoSettings.findUnique({
+      where: { languageEditionId: clonedEdition.id },
+    });
+    expect(clonedSettingsRow).not.toBeNull();
+    const clonedDoc = JSON.parse(clonedSettingsRow!.settingsJson);
+
+    // Overwritten title
+    expect(clonedDoc.title).toBe("複製後の新しいタイトル");
+    // Preserved other settings
+    expect(clonedDoc.description).toBe("カスタム説明文");
+    expect(clonedDoc.tags).toEqual(["タグ1", "タグ2"]);
+    expect(clonedDoc.visibility).toBe("unlisted");
+
+    // Renaming Work does not touch YouTubeVideoSettings
+    await works.updateWork(prisma, clonedWork.id, "Work改名後のタイトル");
+    const settingsAfterWorkRename = await prisma.youTubeVideoSettings.findUnique({
+      where: { languageEditionId: clonedEdition.id },
+    });
+    const docAfterWorkRename = JSON.parse(settingsAfterWorkRename!.settingsJson);
+    expect(docAfterWorkRename.title).toBe("複製後の新しいタイトル");
+
+    // Saving script version does not touch YouTubeVideoSettings
+    const currentScript = await scriptVersions.getCurrentScriptVersion(prisma, clonedEdition.id);
+    await scriptVersions.saveScriptVersion(prisma, clonedEdition.id, {
+      sourceScriptVersionId: currentScript.id,
+      content: currentScript.content,
+    });
+    const settingsAfterScriptSave = await prisma.youTubeVideoSettings.findUnique({
+      where: { languageEditionId: clonedEdition.id },
+    });
+    const docAfterScriptSave = JSON.parse(settingsAfterScriptSave!.settingsJson);
+    expect(docAfterScriptSave.title).toBe("複製後の新しいタイトル");
   });
 
   it("seeds the initial v1 script version with the work locale", async () => {

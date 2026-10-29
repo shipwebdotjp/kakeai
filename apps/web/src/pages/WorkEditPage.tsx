@@ -36,7 +36,7 @@ import {
   type LayoutStorage,
 } from "../lib/editorLayout";
 import { EDITOR_WIDE_MEDIA_QUERY, useMediaQuery } from "../lib/useMediaQuery";
-import { thumbnailsRoute, workEditionRoute } from "../lib/routes";
+import { thumbnailsRoute, workEditionRoute, youtubeSettingsRoute } from "../lib/routes";
 import { isAgentAuthored } from "../lib/versionHistory";
 import {
   badgeInfoClass,
@@ -716,9 +716,12 @@ function WorkEditPanesContent({
           {current.data && editionId !== undefined && workId !== undefined && (
             <>
               <PreviewSection sceneLabels={sceneLabels} />
-              <p className="px-1">
+              <p className="flex flex-wrap items-center gap-2 px-1">
                 <Link className={buttonNeutralClass} to={thumbnailsRoute(workId, editionId)}>
                   サムネイル
+                </Link>
+                <Link className={buttonNeutralClass} to={youtubeSettingsRoute(workId, editionId)}>
+                  YouTube投稿設定
                 </Link>
               </p>
               <RenderSection

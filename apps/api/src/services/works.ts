@@ -1,10 +1,12 @@
 import {
   CONTENT_SCHEMA_VERSION,
+  createDefaultYouTubeVideoSettingsDocument,
   createInitialContentDocument,
   resolveCharacterName,
   type ContentDocument,
   type ScriptVersionAuthor,
   type Work,
+  type YouTubeVideoSettingsDocument,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent, serializeContent } from "../domain/content-json.ts";
@@ -96,6 +98,14 @@ export async function createWork(
       where: { id: edition.id },
       data: { currentScriptVersionId: script.id },
     });
+    const defaultSettings = createDefaultYouTubeVideoSettingsDocument(title, originalLocale);
+    await tx.youTubeVideoSettings.create({
+      data: {
+        languageEditionId: edition.id,
+        schemaVersion: defaultSettings.schemaVersion,
+        settingsJson: JSON.stringify(defaultSettings),
+      },
+    });
     return work.id;
   });
   return getWork(prisma, workId);
@@ -140,6 +150,21 @@ export async function cloneWork(
   const authorAgentId =
     author === "agent" ? normalizeAgentId(attribution?.authorAgentId) : null;
 
+  const sourceSettingsRow = await prisma.youTubeVideoSettings.findUnique({
+    where: { languageEditionId: sourceEditionId },
+  });
+  let settingsDoc: YouTubeVideoSettingsDocument;
+  if (sourceSettingsRow !== null) {
+    try {
+      settingsDoc = JSON.parse(sourceSettingsRow.settingsJson) as YouTubeVideoSettingsDocument;
+    } catch {
+      settingsDoc = createDefaultYouTubeVideoSettingsDocument(title, sourceEdition.locale);
+    }
+  } else {
+    settingsDoc = createDefaultYouTubeVideoSettingsDocument(title, sourceEdition.locale);
+  }
+  settingsDoc.title = title.slice(0, 100);
+
   const newWorkId = await prisma.$transaction(async (tx) => {
     const newWork = await tx.work.create({
       data: {
@@ -168,6 +193,13 @@ export async function cloneWork(
     await tx.languageEdition.update({
       where: { id: newEdition.id },
       data: { currentScriptVersionId: newScript.id },
+    });
+    await tx.youTubeVideoSettings.create({
+      data: {
+        languageEditionId: newEdition.id,
+        schemaVersion: settingsDoc.schemaVersion ?? 1,
+        settingsJson: JSON.stringify(settingsDoc),
+      },
     });
     return newWork.id;
   });
@@ -253,6 +285,14 @@ export async function createLanguageEdition(
       await tx.languageEdition.update({
         where: { id: edition.id },
         data: { currentScriptVersionId: script.id },
+      });
+      const defaultSettings = createDefaultYouTubeVideoSettingsDocument(work.title, locale);
+      await tx.youTubeVideoSettings.create({
+        data: {
+          languageEditionId: edition.id,
+          schemaVersion: defaultSettings.schemaVersion,
+          settingsJson: JSON.stringify(defaultSettings),
+        },
       });
     });
   } catch (error) {

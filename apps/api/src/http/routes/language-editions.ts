@@ -3,6 +3,7 @@ import {
   bulkDeleteScriptVersionsRequestSchema,
   draftPreviewRequestSchema,
   saveScriptVersionRequestSchema,
+  updateYouTubeVideoSettingsRequestSchema,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import type { DataDirectories } from "../../storage/paths.ts";
@@ -10,6 +11,7 @@ import { asyncHandler, sendData } from "../envelope.ts";
 import { parseBody, pathParam } from "../validation.ts";
 import * as scriptVersions from "../../services/script-versions.ts";
 import * as works from "../../services/works.ts";
+import * as youtubeSettings from "../../services/youtube-settings.ts";
 
 export interface LanguageEditionsRouterDependencies {
   prisma: PrismaClient;
@@ -21,6 +23,33 @@ export function createLanguageEditionsRouter(
 ): Router {
   const { prisma, directories } = dependencies;
   const router = Router();
+
+  router.get(
+    "/language-editions/:editionId/youtube-settings",
+    asyncHandler(async (req, res) => {
+      sendData(
+        res,
+        200,
+        await youtubeSettings.getYouTubeVideoSettings(prisma, pathParam(req, "editionId")),
+      );
+    }),
+  );
+
+  router.put(
+    "/language-editions/:editionId/youtube-settings",
+    asyncHandler(async (req, res) => {
+      const input = parseBody(updateYouTubeVideoSettingsRequestSchema, req.body);
+      sendData(
+        res,
+        200,
+        await youtubeSettings.updateYouTubeVideoSettings(
+          prisma,
+          pathParam(req, "editionId"),
+          input,
+        ),
+      );
+    }),
+  );
 
   router.get(
     "/language-editions/:editionId/current-script-version",
