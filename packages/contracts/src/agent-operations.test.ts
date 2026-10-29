@@ -267,6 +267,7 @@ describe("work.update operation contract", () => {
     id: "work-1",
     title: "作品",
     originalLocale: "ja-JP" as const,
+    outputProfile: "landscape" as const,
     updatedAt: "2026-10-21T00:00:00.000Z",
     createdAt: "2026-10-21T00:00:00.000Z",
     parentWorkId: null,

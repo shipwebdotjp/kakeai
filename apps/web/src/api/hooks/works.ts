@@ -56,15 +56,17 @@ export function useCloneWork() {
       workId,
       title,
       sourceEditionId,
+      outputProfile,
     }: {
       workId: string;
       title: string;
       sourceEditionId: string;
+      outputProfile?: "landscape" | "portrait";
     }) =>
       (
         await apiRequest<Work>(`/works/${encodeURIComponent(workId)}/clone`, {
           method: "POST",
-          body: { title, sourceEditionId },
+          body: { title, sourceEditionId, outputProfile },
         })
       ).data,
     onSuccess: (newWork) => {
