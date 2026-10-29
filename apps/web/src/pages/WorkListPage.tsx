@@ -59,9 +59,10 @@ interface CloneModalProps {
   onClose: () => void;
   work: WorkSummary | null;
   edition: LanguageEditionSummary | null;
+  isShort?: boolean;
 }
 
-function CloneModal({ open, onClose, work, edition }: CloneModalProps) {
+function CloneModal({ open, onClose, work, edition, isShort = false }: CloneModalProps) {
   const navigate = useNavigate();
   const cloneWork = useCloneWork();
   const [title, setTitle] = useState("");
@@ -69,10 +70,14 @@ function CloneModal({ open, onClose, work, edition }: CloneModalProps) {
   const resetMutation = cloneWork.reset;
   useEffect(() => {
     if (open && work !== null) {
-      setTitle(`「${work.title}」のコピー`);
+      if (isShort) {
+        setTitle(`${work.title}（ショート）`);
+      } else {
+        setTitle(`「${work.title}」のコピー`);
+      }
       resetMutation();
     }
-  }, [open, work, resetMutation]);
+  }, [open, work, isShort, resetMutation]);
 
   if (work === null || edition === null) {
     return null;
@@ -85,7 +90,12 @@ function CloneModal({ open, onClose, work, edition }: CloneModalProps) {
       return;
     }
     cloneWork.mutate(
-      { workId: work.id, title: trimmed, sourceEditionId: edition.id },
+      {
+        workId: work.id,
+        title: trimmed,
+        sourceEditionId: edition.id,
+        ...(isShort ? { outputProfile: "portrait" as const } : {}),
+      },
       {
         onSuccess: (newWork) => {
           onClose();
@@ -102,12 +112,15 @@ function CloneModal({ open, onClose, work, edition }: CloneModalProps) {
     );
   };
 
+  const modalTitle = isShort ? "ショート版（縦型 1080×1920）を作成" : "言語版の複製";
+
   return (
-    <Modal open={open} onClose={onClose} title="言語版の複製">
+    <Modal open={open} onClose={onClose} title={modalTitle}>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <p className="text-sm">
           「{work.title}」の {edition.locale} 版（v
-          {edition.currentScriptVersion.versionNumber}）の現在内容を引き継いだ新しい作品を作成します。
+          {edition.currentScriptVersion.versionNumber}）の現在内容を引き継いだ
+          {isShort ? "縦型（1080×1920）の新しいショート作品" : "新しい作品"}を作成します。
           複製先には {edition.locale} 版だけが作られます。
         </p>
         <div>
@@ -136,7 +149,7 @@ function CloneModal({ open, onClose, work, edition }: CloneModalProps) {
             className={buttonPrimaryClass}
             disabled={cloneWork.isPending || title.trim().length === 0}
           >
-            {cloneWork.isPending ? "複製中…" : "複製"}
+            {cloneWork.isPending ? "作成中…" : isShort ? "ショート版を作成" : "複製"}
           </button>
         </div>
       </form>
@@ -488,10 +501,22 @@ export function WorkListPage() {
   const [title, setTitle] = useState("");
   const [expandedWorkIds, setExpandedWorkIds] = useState<Set<string>>(() => new Set());
   const [cloneTarget, setCloneTarget] = useState<EditionTarget | null>(null);
+  const [shortTarget, setShortTarget] = useState<EditionTarget | null>(null);
   const [historyTarget, setHistoryTarget] = useState<EditionTarget | null>(null);
 
   const resolvedClone = resolveTarget(works.data, cloneTarget);
+  const resolvedShort = resolveTarget(works.data, shortTarget);
   const resolvedHistory = resolveTarget(works.data, historyTarget);
+
+  const parentWorkMap = useMemo(() => {
+    const map = new Map<string, WorkSummary>();
+    if (works.data !== undefined) {
+      for (const item of works.data) {
+        map.set(item.id, item);
+      }
+    }
+    return map;
+  }, [works.data]);
 
   const toggleExpanded = (workId: string) => {
     setExpandedWorkIds((previous) => {
@@ -554,16 +579,34 @@ export function WorkListPage() {
                 >
                   {isExpanded ? "▾" : "▸"}
                 </button>
-                <Link
-                  to={
-                    firstEdition === undefined
-                      ? workRoute(work.id)
-                      : workEditionRoute(work.id, firstEdition.id)
-                  }
-                  className="min-w-0 flex-1 font-semibold text-inherit"
-                >
-                  {work.title}
-                </Link>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  <Link
+                    to={
+                      firstEdition === undefined
+                        ? workRoute(work.id)
+                        : workEditionRoute(work.id, firstEdition.id)
+                    }
+                    className="font-semibold text-inherit"
+                  >
+                    {work.title}
+                  </Link>
+                  <span
+                    className={
+                      work.outputProfile === "portrait"
+                        ? badgeInfoClass
+                        : badgeNeutralClass
+                    }
+                  >
+                    {work.outputProfile === "portrait"
+                      ? "縦型 1080×1920"
+                      : "横型 1920×1080"}
+                  </span>
+                  {work.parentWorkId !== null && parentWorkMap.has(work.parentWorkId) && (
+                    <span className={badgeNeutralClass}>
+                      親作品: {parentWorkMap.get(work.parentWorkId)!.title}
+                    </span>
+                  )}
+                </div>
                 <span className={metaTextClass}>
                   最終更新 {new Date(work.updatedAt).toLocaleString("ja-JP")} ・ 言語版{" "}
                   {work.languageEditions.length}件
@@ -621,6 +664,15 @@ export function WorkListPage() {
                           type="button"
                           className={buttonNeutralClass}
                           onClick={() =>
+                            setShortTarget({ workId: work.id, editionId: edition.id })
+                          }
+                        >
+                          ショート版を作成
+                        </button>
+                        <button
+                          type="button"
+                          className={buttonNeutralClass}
+                          onClick={() =>
                             setHistoryTarget({ workId: work.id, editionId: edition.id })
                           }
                         >
@@ -668,6 +720,14 @@ export function WorkListPage() {
         onClose={() => setCloneTarget(null)}
         work={resolvedClone?.work ?? null}
         edition={resolvedClone?.edition ?? null}
+      />
+
+      <CloneModal
+        open={resolvedShort !== null}
+        onClose={() => setShortTarget(null)}
+        work={resolvedShort?.work ?? null}
+        edition={resolvedShort?.edition ?? null}
+        isShort
       />
 
       <HistoryModal

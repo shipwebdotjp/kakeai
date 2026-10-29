@@ -13,11 +13,15 @@ export const FIXTURE_WORK_ID = "work-1";
 export const FIXTURE_EDITION_ID = "led-1";
 export const FIXTURE_SCRIPT_VERSION_ID = "scr-1";
 
-export function fixtureWork(title = "テスト作品"): Work {
+export function fixtureWork(
+  title = "テスト作品",
+  outputProfile: Work["outputProfile"] = "landscape",
+): Work {
   return {
     id: FIXTURE_WORK_ID,
     title,
     originalLocale: "ja-JP",
+    outputProfile,
     createdAt: FIXTURE_TIMESTAMP,
     updatedAt: FIXTURE_TIMESTAMP,
     parentWorkId: null,
