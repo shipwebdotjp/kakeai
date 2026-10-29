@@ -149,6 +149,12 @@ import {
   agentWorkListOutputSchema,
   agentWorkUpdateInputSchema,
   agentWorkUpdateOutputSchema,
+  agentYoutubeSettingsGetInputSchema,
+  agentYoutubeSettingsGetOutputSchema,
+  agentYoutubeSettingsUpdateInputSchema,
+  agentYoutubeSettingsUpdateOutputSchema,
+  agentScriptYoutubeChaptersInputSchema,
+  agentScriptYoutubeChaptersOutputSchema,
 } from "./operations";
 import type { AgentOperationName } from "./catalog";
 import { z } from "zod";
@@ -232,6 +238,9 @@ export const agentOperationInputSchemas = {
   "voiceProfile.listModels": agentVoiceProfileListModelsInputSchema,
   "voiceProfile.create": agentVoiceProfileCreateInputSchema,
   "voiceProfile.update": agentVoiceProfileUpdateInputSchema,
+  "youtubeSettings.get": agentYoutubeSettingsGetInputSchema,
+  "youtubeSettings.update": agentYoutubeSettingsUpdateInputSchema,
+  "script.youtubeChapters": agentScriptYoutubeChaptersInputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export const agentOperationOutputSchemas = {
@@ -311,6 +320,9 @@ export const agentOperationOutputSchemas = {
   "voiceProfile.listModels": agentVoiceProfileListModelsOutputSchema,
   "voiceProfile.create": agentVoiceProfileCreateOutputSchema,
   "voiceProfile.update": agentVoiceProfileUpdateOutputSchema,
+  "youtubeSettings.get": agentYoutubeSettingsGetOutputSchema,
+  "youtubeSettings.update": agentYoutubeSettingsUpdateOutputSchema,
+  "script.youtubeChapters": agentScriptYoutubeChaptersOutputSchema,
 } as const satisfies Record<AgentOperationName, z.ZodType>;
 
 export type AgentOperationInputMap = {

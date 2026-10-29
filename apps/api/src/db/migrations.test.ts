@@ -101,4 +101,44 @@ describe("Work thumbnail appearance migration", () => {
       db.close();
     }
   });
+
+  it("backfills YouTubeVideoSettings for existing LanguageEdition rows", () => {
+    const db = new Database(":memory:");
+    try {
+      const YOUTUBE_MIGRATION = "20261029120000_add_youtube_video_settings";
+      for (const name of migrationNames().filter((name) => name < YOUTUBE_MIGRATION)) {
+        execMigration(db, name);
+      }
+
+      db.exec(`
+        INSERT INTO "Work" ("id", "title", "originalLocale", "createdAt", "updatedAt")
+        VALUES ('wrk_test', 'テスト動画作品名', 'ja-JP', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+        INSERT INTO "LanguageEdition" ("id", "workId", "locale", "createdAt", "updatedAt")
+        VALUES ('led_test', 'wrk_test', 'ja-JP', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+      `);
+
+      execMigration(db, YOUTUBE_MIGRATION);
+
+      const rows = db.prepare('SELECT * FROM "YouTubeVideoSettings" WHERE "languageEditionId" = ?').all("led_test") as {
+        id: string;
+        languageEditionId: string;
+        schemaVersion: number;
+        settingsJson: string;
+      }[];
+
+      expect(rows).toHaveLength(1);
+      const row = rows[0]!;
+      expect(row.languageEditionId).toBe("led_test");
+      expect(row.schemaVersion).toBe(1);
+
+      const parsed = JSON.parse(row.settingsJson);
+      expect(parsed.title).toBe("テスト動画作品名");
+      expect(parsed.language).toBe("ja");
+      expect(parsed.visibility).toBe("public");
+      expect(parsed.description).toBe("");
+    } finally {
+      db.close();
+    }
+  });
 });

@@ -23,6 +23,7 @@ export * from "./content/asset-refs";
 export * from "./content/line-refs";
 export * from "./templates";
 export * from "./thumbnail";
+export * from "./youtube/settings";
 export * from "./voice-profile";
 export * from "./character-library";
 export * from "./face-set";

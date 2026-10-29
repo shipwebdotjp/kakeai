@@ -17,6 +17,7 @@ import { VoiceProfilesPage } from "./pages/VoiceProfilesPage";
 import { WorkEditPage } from "./pages/WorkEditPage";
 import { WorkListPage } from "./pages/WorkListPage";
 import { ThumbnailsPage } from "./pages/ThumbnailsPage";
+import { YouTubeSettingsPage } from "./pages/YouTubeSettingsPage";
 
 function RootLayout() {
   return (
@@ -98,6 +99,10 @@ export const router = createBrowserRouter([
       {
         path: "works/:workId/editions/:editionId/thumbnails",
         element: <ThumbnailsPage />,
+      },
+      {
+        path: "works/:workId/editions/:editionId/youtube-settings",
+        element: <YouTubeSettingsPage />,
       },
       {
         path: `${THEMES_ROUTE_PATH}/:themeId`,

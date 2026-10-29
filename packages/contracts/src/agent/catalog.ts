@@ -106,6 +106,9 @@ export const agentOperationNames = [
   "thumbnail.update",
   "thumbnail.setPrimary",
   "thumbnail.image",
+  "youtubeSettings.get",
+  "youtubeSettings.update",
+  "script.youtubeChapters",
 ] as const;
 export type AgentOperationName = (typeof agentOperationNames)[number];
 
@@ -153,6 +156,8 @@ export const agentReadOperationNames = [
   "thumbnail.get",
   "thumbnail.appearance",
   "thumbnail.image",
+  "youtubeSettings.get",
+  "script.youtubeChapters",
 ] as const satisfies readonly AgentOperationName[];
 
 export const agentMutationOperationNames = [
@@ -189,6 +194,7 @@ export const agentMutationOperationNames = [
   "thumbnail.create",
   "thumbnail.update",
   "thumbnail.setPrimary",
+  "youtubeSettings.update",
 ] as const satisfies readonly AgentOperationName[];
 
 /**

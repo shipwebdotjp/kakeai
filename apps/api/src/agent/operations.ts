@@ -126,6 +126,7 @@ import { runWithAgentRequest } from "./idempotency.ts";
 import { imageOperationDefinitions } from "./image-operations.ts";
 import { libraryOperationDefinitions } from "./library-operations.ts";
 import { thumbnailOperationDefinitions } from "./thumbnail-operations.ts";
+import { youtubeOperationDefinitions } from "./youtube-operations.ts";
 
 export type AgentOperationKind = "read" | "mutation";
 
@@ -585,6 +586,7 @@ const definitions: AgentOperationDefinitions = {
     run: async (input, context) => attachBulkTts(context.prisma, input, context.agentId),
   },
   ...libraryOperationDefinitions,
+  ...youtubeOperationDefinitions,
 };
 
 function unknownOperation(): AgentOperationError {
