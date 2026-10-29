@@ -3,6 +3,7 @@ import { SUPPORTED_LOCALES, idSchema, localeSchema } from "./content/primitives"
 import { contentDocumentSchema } from "./content/document";
 import { templateRefSchema } from "./content/nested";
 import { canvasProfileSchema } from "./composition";
+import { workOutputProfileSchema } from "./dto";
 import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 import { voiceIdSchema } from "./voice-profile";
 import { assetTagsSchema } from "./asset";
@@ -23,6 +24,7 @@ export const updateWorkRequestSchema = z.strictObject({
 export const cloneWorkRequestSchema = z.strictObject({
   title: z.string().trim().min(1),
   sourceEditionId: idSchema,
+  outputProfile: workOutputProfileSchema.optional(),
 });
 
 export const createLanguageEditionRequestSchema = z.strictObject({

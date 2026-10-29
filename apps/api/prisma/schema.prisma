@@ -12,6 +12,8 @@ model Work {
   id            String            @id @default(cuid())
   title         String
   originalLocale String
+  /// Output canvas profile for the Work: "landscape" (1920x1080) or "portrait" (1080x1920).
+  outputProfile String            @default("landscape")
   parentWorkId  String?
   parentWork    Work?             @relation("WorkParent", fields: [parentWorkId], references: [id], onDelete: Restrict)
   childWorks    Work[]            @relation("WorkParent")

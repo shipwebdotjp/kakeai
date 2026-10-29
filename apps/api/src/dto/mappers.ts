@@ -34,6 +34,7 @@ import {
   type TtsJobResult,
   type VoiceProfile,
   type Work,
+  type WorkOutputProfile,
   type WorkSummary,
 } from "@kakeai/contracts";
 import type {
@@ -169,7 +170,7 @@ export function toWorkSummary(
     id: work.id,
     title: work.title,
     originalLocale: localeSchema.parse(work.originalLocale),
-    outputProfile: workOutputProfileSchema.parse((work as WorkRow & { outputProfile?: string }).outputProfile ?? "landscape"),
+    outputProfile: toOutputProfile(work.outputProfile),
     createdAt: toIso(work.createdAt),
     parentWorkId: work.parentWorkId,
     updatedAt: toIso(work.updatedAt),
@@ -177,6 +178,11 @@ export function toWorkSummary(
       toLanguageEditionSummary(edition, latestJobs.get(edition.id)),
     ),
   };
+}
+
+function toOutputProfile(value: string): WorkOutputProfile {
+  const parsed = workOutputProfileSchema.safeParse(value);
+  return parsed.success ? parsed.data : "landscape";
 }
 
 export function toWork(

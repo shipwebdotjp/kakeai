@@ -63,6 +63,8 @@ export function createWorksRouter(dependencies: WorksRouterDependencies): Router
           pathParam(req, "workId"),
           input.title,
           input.sourceEditionId,
+          undefined,
+          input.outputProfile,
         ),
       );
     }),

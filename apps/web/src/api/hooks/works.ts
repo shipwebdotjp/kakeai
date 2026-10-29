@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Work, WorkSummary } from "@kakeai/contracts";
+import type { Work, WorkOutputProfile, WorkSummary } from "@kakeai/contracts";
 import { apiRequest } from "../client";
 import { queryKeys } from "./queryKeys";
 
@@ -61,7 +61,7 @@ export function useCloneWork() {
       workId: string;
       title: string;
       sourceEditionId: string;
-      outputProfile?: "landscape" | "portrait";
+      outputProfile?: WorkOutputProfile;
     }) =>
       (
         await apiRequest<Work>(`/works/${encodeURIComponent(workId)}/clone`, {

@@ -431,6 +431,26 @@ describe("work and script version flow", () => {
     await works.deleteWork(prisma, directories, parentWork.id);
   });
 
+  it("creates a portrait short work from the selected edition", async () => {
+    const parentWork = await works.createWork(prisma, "横型の元作品", "ja-JP");
+    const parentEdition = parentWork.languageEditions[0]!;
+
+    const shortWork = await works.cloneWork(
+      prisma,
+      parentWork.id,
+      "横型の元作品（ショート）",
+      parentEdition.id,
+      undefined,
+      "portrait",
+    );
+    expect(shortWork.outputProfile).toBe("portrait");
+    expect(shortWork.parentWorkId).toBe(parentWork.id);
+
+    const listed = await works.listWorks(prisma);
+    expect(listed.find((entry) => entry.id === shortWork.id)?.outputProfile).toBe("portrait");
+    expect(listed.find((entry) => entry.id === parentWork.id)?.outputProfile).toBe("landscape");
+  });
+
   it("records agent attribution on a clone", async () => {
     const parentWork = await works.createWork(prisma, "Agent複製元", "ja-JP");
     const parentEdition = parentWork.languageEditions[0]!;

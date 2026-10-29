@@ -8,6 +8,7 @@ import {
   type ContentDocument,
   type ScriptVersionAuthor,
   type Work,
+  type WorkOutputProfile,
   type YouTubeVideoSettingsDocument,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
@@ -124,6 +125,7 @@ export async function cloneWork(
   title: string,
   sourceEditionId: string,
   attribution?: CloneWorkAttribution,
+  outputProfile: WorkOutputProfile = "landscape",
 ): Promise<Work> {
   const work = await prisma.work.findUnique({
     where: { id: workId },
@@ -178,6 +180,7 @@ export async function cloneWork(
         title,
         originalLocale: sourceEdition.locale,
         parentWorkId: workId,
+        outputProfile,
       },
     });
     const newEdition = await tx.languageEdition.create({

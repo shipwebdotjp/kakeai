@@ -13,7 +13,8 @@
    - 作品全体の削除 (`DELETE /works/:workId`) とEdition削除 (`DELETE /language-editions/:editionId`) は別の操作として提示する。
 
 2. 言語版の複製 (`POST /works/:workId/clone`)
-   - リクエストは厳密な `{ title, sourceEditionId }` を受ける。`sourceEditionId` は必須。
+   - リクエストは厳密な `{ title, sourceEditionId, outputProfile? }` を受ける。`sourceEditionId` は必須。
+   - `outputProfile` は任意で `landscape` / `portrait` のいずれか。省略時は `landscape`。子Workの `Work.outputProfile` に保存し、以後変更しない。
    - `sourceEditionId` が対象Workに属することを検証する。存在しない、または他WorkのEditionは404 `RESOURCE_NOT_FOUND`。
    - 指定Editionの `currentScriptVersionId` が示す現在版だけを基に、同じlocaleのLanguageEditionと初期 `ScriptVersion v1` を単一トランザクションで作成する。
    - 新Workの `originalLocale` は複製元Editionのlocaleとし、新Workにはその言語版だけを作成する。
@@ -50,12 +51,14 @@
 
 6. UI
    - 履歴・復元は作品全体ではなくEdition行から開く。現在の履歴モーダルを使い、新しいURLルートは作らない。
+   - 作品行には出力形式（`landscape` / `portrait`）のバッジと、一覧内にある親作品のタイトルを表示する。
+   - Edition行の「ショート版を作成」は複製Modalを再利用し、タイトルを「〈作品名〉（ショート）」で初期化して `outputProfile: "portrait"` を送る。通常の複製は `outputProfile` を送らない。
    - モーダルには現在版以外の各版の選択チェックボックスを置き、「選択した版を削除」で一括削除を呼ぶ。現在版は選択不可。
    - 複製Modalは選択Editionのlocaleと現在版番号を示し、成功後は新しい作品の同じlocaleのEdition編集画面へ遷移する。
    - 実行中は重複操作を無効化し、エラー時は既存のエラー表示を行う。
 
 ## Web API hooks
 
-- `useCloneWork` は `sourceEditionId` を送る。
+- `useCloneWork` は `sourceEditionId` と任意の `outputProfile` を送る。
 - `useDeleteLanguageEdition` と `useDeleteScriptVersions` を追加する。
 - 複製・復元・削除の完了後に `works`, `work`, `current-script-version`, `script-versions` のキャッシュを適切に更新・無効化する。

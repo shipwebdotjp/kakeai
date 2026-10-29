@@ -603,7 +603,7 @@ export function WorkListPage() {
                   </span>
                   {work.parentWorkId !== null && parentWorkMap.has(work.parentWorkId) && (
                     <span className={badgeNeutralClass}>
-                      親作品: {parentWorkMap.get(work.parentWorkId)!.title}
+                      親作品: {parentWorkMap.get(work.parentWorkId)?.title ?? work.parentWorkId}
                     </span>
                   )}
                 </div>
