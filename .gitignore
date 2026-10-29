@@ -23,3 +23,5 @@ apps/api/prisma/*.db-shm
 
 # Playwright CLI scratch output
 .playwright-cli/
+
+.jules-agent/
