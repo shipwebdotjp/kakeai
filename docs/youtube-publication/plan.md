@@ -11,13 +11,15 @@
 - `YouTubeVideoSettings` をEditionに1件だけ持つPrismaモデルとして追加する。`schemaVersion`、検証済み`settingsJson`、作成・更新日時を持ち、既存Editionも初期設定を作成する。Work複製では設定を複製し、作品名変更・台本保存では変更しない。
 - `packages/contracts` に `YouTubeVideoSettingsDocument v1`、DTO、厳密な更新リクエストを追加する。`GET` / `PUT /language-editions/:editionId/youtube-settings` で明示保存・last-write-winsとする。
 - 保存対象は、タイトル・説明・タグ・カテゴリ・言語・字幕認証・撮影情報・教育詳細・Shorts関連動画、視聴者／年齢／案件／合成コンテンツ申告、公開／予約／Premiere、ライセンス・埋込・通知・統計、コメント・高評価、チャプター・場所・Shortsリミックスとする。
-- 初期値は、タイトル＝Work名、説明＝空、タグ＝空、カテゴリ＝未選択、公開＝`public`、予約・Premiere＝なし、子ども向け／年齢制限／案件／現実的な合成・改変＝すべて「該当しない」とする。
+- 初期値は、タイトル＝Work名、説明＝空、タグ＝空、カテゴリ＝未選択、言語=言語版から最適なものを導出、公開＝`public`、予約・Premiere＝なし、子ども向け／年齢制限／案件／現実的な合成・改変＝すべて「該当しない」とする。
 - タイトル100文字、説明5,000 UTF-8 bytes、タグ上限・重複、予約日時、案件制限、子ども向け動画のコメント不可などを保存時に検証する。
 - `buildYouTubeChapterList` を `packages/video` に追加し、保存済み`ScriptVersion`の`resolveTimeline`と全Sceneの`label`から `00:00 導入` 形式の本文候補・診断を生成する。未保存ドラフトは使わない。
 - `GET /script-versions/:scriptVersionId/youtube-chapters` を追加する。固定尺超過などタイムラインを解決できない入力は既存レンダーと同じエラー、YouTube章の条件未達は本文候補と警告を返す。
 - 投稿設定画面の説明欄に「Sceneチャプターを挿入」ボタンを置く。空行を整えて現在のカーソル／選択範囲に本文を挿入し、保存前に利用者が自由に編集できる。再クリック時の自動置換や不可視マーカーは持たない。
 - 章が3件未満、先頭が`00:00`でない、または各Sceneが10秒未満なら、挿入は行いつつYouTubeで章として認識されない可能性を警告する。手動チャプターは自動チャプターより優先される。 [YouTubeの動画チャプター要件](<https://support.google.com/youtube/answer/9884579>)
 - サムネイルとSRT字幕は投稿設定JSONに複製せず、既存のThumbnail仕様と保存済みScriptVersion由来のSRTを将来の投稿処理で参照する。
+- 設定した項目をテンプレートとして保存できるようにし、次回読み込んで最利用できる形にする
+- AIエージェントにもこれらの機能を公開する
 
 ## Documentation and tests
 
