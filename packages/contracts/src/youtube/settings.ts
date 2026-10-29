@@ -147,7 +147,10 @@ export function isValidIsoDateTime(str: string): boolean {
 export const youtubeVideoSettingsDocumentSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
-    title: z.string().min(1, "タイトルは必須です").max(100, "タイトルは最大100文字です"),
+    title: z
+      .string()
+      .min(1, "タイトルは必須です")
+      .refine((v) => countCodePoints(v) <= 100, { message: "タイトルは最大100文字です" }),
     description: z
       .string()
       .refine((val) => countCodePoints(val) <= 5000, {
@@ -240,8 +243,8 @@ export function createDefaultYouTubeVideoSettingsDocument(
   workTitle: string,
   locale: string,
 ): YouTubeVideoSettingsDocument {
-  const derivedLanguage = locale.split("-")[0] ?? "ja";
-  const title = safeTruncateTitle(workTitle, 100);
+  const derivedLanguage = locale.split("-")[0] || "ja";
+  const title = safeTruncateTitle(workTitle || "Untitled", 100);
   return {
     schemaVersion: 1,
     title,

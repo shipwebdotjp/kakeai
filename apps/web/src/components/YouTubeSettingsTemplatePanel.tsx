@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import type { YouTubeVideoSettingsDocument } from "@kakeai/contracts";
+import {
+  youtubeVideoSettingsDocumentSchema,
+  type YouTubeVideoSettingsDocument,
+} from "@kakeai/contracts";
 import { ApiError } from "../api/client";
 import {
   useCreateYouTubeSettingsTemplate,
@@ -83,7 +86,12 @@ export function YouTubeSettingsTemplatePanel({
       return;
     }
     setError(null);
-    onApply(JSON.parse(JSON.stringify(detail.document)) as YouTubeVideoSettingsDocument);
+    const validated = youtubeVideoSettingsDocumentSchema.safeParse(structuredClone(detail.document));
+    if (!validated.success) {
+      setError("テンプレートの内容が無効です。");
+      return;
+    }
+    onApply(validated.data);
   };
 
   const saveNewTemplate = () => {
@@ -149,7 +157,7 @@ export function YouTubeSettingsTemplatePanel({
     });
   };
 
-  const loadPending = templateDetailQuery.isFetching;
+  const loadPending = templateDetailQuery.isLoading || templateDetailQuery.isPending;
 
   return (
     <details className="mt-4 rounded border border-border p-3">

@@ -372,9 +372,6 @@ export const agentWarningCodes = [
   "table_columns_overflow",
   "table_rows_overflow",
   "text_overflow",
-  "less_than_3_chapters",
-  "first_chapter_not_zero",
-  "scene_under_10_seconds",
 ] as const;
 export type AgentWarningCode = (typeof agentWarningCodes)[number];
 export const agentWarningCodeSchema = z.enum(agentWarningCodes);

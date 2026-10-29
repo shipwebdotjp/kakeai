@@ -1,8 +1,9 @@
 import {
   createDefaultYouTubeVideoSettingsDocument,
+  createYouTubeSettingsTemplateRequestSchema,
   updateYouTubeSettingsTemplateRequestSchema,
   updateYouTubeVideoSettingsRequestSchema,
-  createYouTubeSettingsTemplateRequestSchema,
+  youtubeVideoSettingsDocumentSchema,
   type CreateYouTubeSettingsTemplateRequest,
   type UpdateYouTubeSettingsTemplateRequest,
   type UpdateYouTubeVideoSettingsRequest,
@@ -15,8 +16,16 @@ import {
 import { buildYouTubeChapterList, CompositionCompileError } from "@kakeai/video";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { ApiError } from "../http/errors.ts";
-import { resourceNotFound } from "../http/validation.ts";
+import { resourceNotFound, validationError } from "../http/validation.ts";
 import { deserializeContent } from "../domain/content-json.ts";
+
+function isPrismaCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === code
+  );
+}
 
 export async function getYouTubeVideoSettings(
   prisma: PrismaClient,
@@ -30,28 +39,44 @@ export async function getYouTubeVideoSettings(
     throw resourceNotFound("language_edition", languageEditionId);
   }
 
-  let settingsRow = await prisma.youTubeVideoSettings.findUnique({
+  const defaultDoc = createDefaultYouTubeVideoSettingsDocument(
+    edition.work.title,
+    edition.locale,
+  );
+
+  const settingsRow = await prisma.youTubeVideoSettings.upsert({
     where: { languageEditionId },
+    create: {
+      languageEditionId,
+      schemaVersion: defaultDoc.schemaVersion,
+      settingsJson: JSON.stringify(defaultDoc),
+    },
+    update: {},
   });
 
-  if (settingsRow === null) {
-    const defaultDoc = createDefaultYouTubeVideoSettingsDocument(
-      edition.work.title,
-      edition.locale,
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(settingsRow.settingsJson);
+  } catch {
+    throw new ApiError(
+      500,
+      "INTERNAL_ERROR",
+      `保存済みのYouTube投稿設定を解釈できません: ${languageEditionId}`,
     );
-    settingsRow = await prisma.youTubeVideoSettings.create({
-      data: {
-        languageEditionId,
-        schemaVersion: defaultDoc.schemaVersion,
-        settingsJson: JSON.stringify(defaultDoc),
-      },
-    });
   }
 
-  const document = JSON.parse(settingsRow.settingsJson) as YouTubeVideoSettingsDocument;
+  const parsed = youtubeVideoSettingsDocumentSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    throw new ApiError(
+      500,
+      "INTERNAL_ERROR",
+      `保存済みのYouTube投稿設定がスキーマを満たしていません: ${languageEditionId}`,
+    );
+  }
+
   return {
     languageEditionId,
-    document,
+    document: parsed.data,
     updatedAt: settingsRow.updatedAt.toISOString(),
   };
 }
@@ -69,7 +94,17 @@ export async function updateYouTubeVideoSettings(
     throw resourceNotFound("language_edition", languageEditionId);
   }
 
-  const validatedDoc = updateYouTubeVideoSettingsRequestSchema.parse(input);
+  const validated = updateYouTubeVideoSettingsRequestSchema.safeParse(input);
+  if (!validated.success) {
+    throw validationError(
+      validated.error.issues.map((i) => ({
+        path: i.path as (string | number)[],
+        code: i.code,
+        message: i.message,
+      })),
+    );
+  }
+  const validatedDoc = validated.data;
 
   const updatedRow = await prisma.youTubeVideoSettings.upsert({
     where: { languageEditionId },
@@ -166,7 +201,17 @@ export async function createYouTubeSettingsTemplate(
   prisma: PrismaClient,
   input: CreateYouTubeSettingsTemplateRequest,
 ): Promise<YouTubeSettingsTemplate> {
-  const parsed = createYouTubeSettingsTemplateRequestSchema.parse(input);
+  const validated = createYouTubeSettingsTemplateRequestSchema.safeParse(input);
+  if (!validated.success) {
+    throw validationError(
+      validated.error.issues.map((i) => ({
+        path: i.path as (string | number)[],
+        code: i.code,
+        message: i.message,
+      })),
+    );
+  }
+  const parsed = validated.data;
 
   const existing = await prisma.youTubeSettingsTemplate.findUnique({
     where: { name: parsed.name },
@@ -175,20 +220,27 @@ export async function createYouTubeSettingsTemplate(
     throw new ApiError(409, "VALIDATION_ERROR", "同名のテンプレートが既に存在します。");
   }
 
-  const row = await prisma.youTubeSettingsTemplate.create({
-    data: {
-      name: parsed.name,
-      settingsJson: JSON.stringify(parsed.document),
-    },
-  });
+  try {
+    const row = await prisma.youTubeSettingsTemplate.create({
+      data: {
+        name: parsed.name,
+        settingsJson: JSON.stringify(parsed.document),
+      },
+    });
 
-  return {
-    id: row.id,
-    name: row.name,
-    document: JSON.parse(row.settingsJson) as YouTubeVideoSettingsDocument,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
+    return {
+      id: row.id,
+      name: row.name,
+      document: JSON.parse(row.settingsJson) as YouTubeVideoSettingsDocument,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  } catch (error) {
+    if (isPrismaCode(error, "P2002")) {
+      throw new ApiError(409, "VALIDATION_ERROR", "同名のテンプレートが既に存在します。");
+    }
+    throw error;
+  }
 }
 
 export async function updateYouTubeSettingsTemplate(
@@ -203,7 +255,17 @@ export async function updateYouTubeSettingsTemplate(
     throw resourceNotFound("youtube_settings_template", templateId);
   }
 
-  const parsed = updateYouTubeSettingsTemplateRequestSchema.parse(input);
+  const validated = updateYouTubeSettingsTemplateRequestSchema.safeParse(input);
+  if (!validated.success) {
+    throw validationError(
+      validated.error.issues.map((i) => ({
+        path: i.path as (string | number)[],
+        code: i.code,
+        message: i.message,
+      })),
+    );
+  }
+  const parsed = validated.data;
 
   if (parsed.name !== existingTemplate.name) {
     const nameConflict = await prisma.youTubeSettingsTemplate.findUnique({
@@ -214,21 +276,28 @@ export async function updateYouTubeSettingsTemplate(
     }
   }
 
-  const updatedRow = await prisma.youTubeSettingsTemplate.update({
-    where: { id: templateId },
-    data: {
-      name: parsed.name,
-      settingsJson: JSON.stringify(parsed.document),
-    },
-  });
+  try {
+    const updatedRow = await prisma.youTubeSettingsTemplate.update({
+      where: { id: templateId },
+      data: {
+        name: parsed.name,
+        settingsJson: JSON.stringify(parsed.document),
+      },
+    });
 
-  return {
-    id: updatedRow.id,
-    name: updatedRow.name,
-    document: JSON.parse(updatedRow.settingsJson) as YouTubeVideoSettingsDocument,
-    createdAt: updatedRow.createdAt.toISOString(),
-    updatedAt: updatedRow.updatedAt.toISOString(),
-  };
+    return {
+      id: updatedRow.id,
+      name: updatedRow.name,
+      document: JSON.parse(updatedRow.settingsJson) as YouTubeVideoSettingsDocument,
+      createdAt: updatedRow.createdAt.toISOString(),
+      updatedAt: updatedRow.updatedAt.toISOString(),
+    };
+  } catch (error) {
+    if (isPrismaCode(error, "P2002")) {
+      throw new ApiError(409, "VALIDATION_ERROR", "同名のテンプレートが既に存在します。");
+    }
+    throw error;
+  }
 }
 
 export async function deleteYouTubeSettingsTemplate(

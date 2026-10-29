@@ -15,4 +15,6 @@ export const queryKeys = {
   thumbnails: (editionId: string | undefined) => ["thumbnails", editionId] as const,
   youtubeVideoSettings: (editionId: string | undefined) => ["youtube-video-settings", editionId] as const,
   youtubeSettingsTemplates: () => ["youtube-settings-templates"] as const,
+  youtubeChapters: (scriptVersionId: string | undefined) => ["youtube-chapters", scriptVersionId] as const,
+  youtubeSettingsTemplate: (templateId: string | undefined) => ["youtube-settings-template", templateId] as const,
 } as const;

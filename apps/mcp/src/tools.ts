@@ -190,7 +190,7 @@ const operationDescriptions: Record<AgentOperationName, string> = {
   "youtubeSettings.get":
     "指定した Edition の YouTube 投稿設定を取得する。`languageEditionId` が必要。",
   "youtubeSettings.update":
-    "指定した Edition の YouTube 投稿設定（タイトル・説明・タグ・公開設定等）を更新して返す。`languageEditionId` と `settings` が必要。",
+    "指定した Edition の YouTube 投稿設定を完全上書き（last-write-wins）して返す。`settings` は部分更新ではなく `youtubeSettings.get` の `document` を元にした完全なドキュメントを送る。`languageEditionId` と `settings` が必要。`requestId` は持たないため、タイムアウト後は `youtubeSettings.get` で確認してから再実行する。存在しない Edition は RESOURCE_NOT_FOUND。",
   "script.youtubeChapters":
     "保存済み Script Version のタイムラインから YouTube 動画チャプター本文と診断/警告を生成して返す。`scriptVersionId` が必要。",
 };

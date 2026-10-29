@@ -53,7 +53,7 @@ export function useSaveYouTubeVideoSettings(editionId: string | undefined) {
 
 export function useYouTubeChapters(scriptVersionId: string | undefined) {
   return useQuery({
-    queryKey: ["youtube-chapters", scriptVersionId],
+    queryKey: queryKeys.youtubeChapters(scriptVersionId),
     queryFn: async () => {
       if (scriptVersionId === undefined || scriptVersionId === "") {
         return null;
@@ -78,7 +78,7 @@ export function useYouTubeSettingsTemplates() {
 
 export function useYouTubeSettingsTemplate(templateId: string | undefined) {
   return useQuery({
-    queryKey: ["youtube-settings-template", templateId],
+    queryKey: queryKeys.youtubeSettingsTemplate(templateId),
     queryFn: async () => {
       if (templateId === undefined || templateId === "") {
         return null;
@@ -135,7 +135,7 @@ export function useUpdateYouTubeSettingsTemplate() {
         queryKey: queryKeys.youtubeSettingsTemplates(),
       });
       void queryClient.invalidateQueries({
-        queryKey: ["youtube-settings-template", variables.templateId],
+        queryKey: queryKeys.youtubeSettingsTemplate(variables.templateId),
       });
     },
   });
@@ -152,9 +152,12 @@ export function useDeleteYouTubeSettingsTemplate() {
         },
       );
     },
-    onSuccess: () => {
+    onSuccess: (_, templateId) => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.youtubeSettingsTemplates(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.youtubeSettingsTemplate(templateId),
       });
     },
   });
