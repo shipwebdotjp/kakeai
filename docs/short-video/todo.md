@@ -39,11 +39,11 @@
 - [x] `flow-diagram`（プロット寸法をキャンバスへ、縦型は top-to-bottom 既定）
 - [x] `table-simple` / `table-format`（幅をコンテンツ幅へ。列数の警告は P6）
 - [x] `quote` / `stat`
-- [ ] `chat-thread` / `site-mockup`（幅・高さはコンテナ相対のため現状のまま。縦型での見え方を確認する）
+- [x] `chat-thread` / `site-mockup`（実ブラウザ描画で縦型を確認。サイトモックアップの画面高を縦型 440px にし、固定高によるクロップを修正）
 - [x] `device-frame` / `device-chrome`（現行の 9:16 画面を維持）
 - [x] `composition-full-bleed` の判定を「常に landscape」から「Work の Output Profile と一致」に変更
 - [x] `scene.card` / シーン全体の余白・配置の縦型調整
-- [ ] 縦型での見え方をテンプレートごとに目視確認し、初期値を調整する
+- [x] 縦型での見え方をテンプレートごとに目視確認し、初期値を調整する（チャット・サイトモックアップを実ブラウザで確認）
 
 ## P5. プレビュー UI と API
 

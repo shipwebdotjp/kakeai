@@ -30,6 +30,8 @@ export interface CanvasMetrics {
   wideSidePadding: number;
   /** Padding of the flow-diagram wrapper. */
   flowPadding: { x: number; y: number };
+  /** Height of the browser/app screen inside `scene.site-mockup@1`. */
+  mockupScreenHeight: number;
 }
 
 const LANDSCAPE_LAYOUT = outputProfileLayout("landscape");
@@ -50,6 +52,7 @@ export const LANDSCAPE_CANVAS: CanvasMetrics = {
   cardPadding: { x: 160, y: 90 },
   wideSidePadding: 200,
   flowPadding: { x: 100, y: 70 },
+  mockupScreenHeight: 600,
 };
 
 export const PORTRAIT_CANVAS: CanvasMetrics = {
@@ -67,6 +70,8 @@ export const PORTRAIT_CANVAS: CanvasMetrics = {
   cardPadding: { x: 72, y: 96 },
   wideSidePadding: 72,
   flowPadding: { x: 56, y: 48 },
+  // 16:9 at 440px is 782px wide, inside the 828px mockup content box.
+  mockupScreenHeight: 440,
 };
 
 export function canvasMetricsFor(profile: WorkOutputProfile | undefined): CanvasMetrics {
@@ -109,6 +114,7 @@ export function canvasRootStyle(canvas: CanvasMetrics): string {
     `--kakeai-wide-side-padding:${canvas.wideSidePadding}px`,
     `--kakeai-flow-pad-x:${canvas.flowPadding.x}px`,
     `--kakeai-flow-pad-y:${canvas.flowPadding.y}px`,
+    `--kakeai-mockup-screen-h:${canvas.mockupScreenHeight}px`,
   ].join(";");
 }
 

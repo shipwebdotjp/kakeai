@@ -37,6 +37,7 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("--kakeai-content-width:936px");
     expect(compiled.html).toContain("--kakeai-caption-offset:340px");
     expect(compiled.html).toContain("--kakeai-type-scale:0.75");
+    expect(compiled.html).toContain("--kakeai-mockup-screen-h:440px");
     expect(compiled.html).toContain('content="width=1080, height=1920"');
   });
 

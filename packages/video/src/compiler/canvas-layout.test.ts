@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
-import type { VisualCue } from "@kakeai/contracts";
+import { getVisualTheme, type VisualCue } from "@kakeai/contracts";
 import { compileDocument } from "../compiler";
 import { LANDSCAPE_CANVAS, PORTRAIT_CANVAS } from "../canvas";
+import { captionSafeAreaPx } from "../caption-layout";
 import { resolver } from "./test-helpers";
 
 function cue(
@@ -103,5 +104,35 @@ describe("canvas layout audit", () => {
       outputProfile: "portrait",
     });
     expect(oversizedInlineWidths(compiled.html, PORTRAIT_CANVAS.width)).toEqual([]);
+  });
+});
+
+
+describe("portrait fitting geometry", () => {
+  const theme = getVisualTheme("soft-editorial", 1)!;
+
+  it("keeps the site mockup screen inside the chrome width", () => {
+    // `.kakeai-mockup` uses 80px padding and the chrome is capped at 90%.
+    // The screen is height-driven, so a tall screen would be clipped.
+    for (const canvas of [LANDSCAPE_CANVAS, PORTRAIT_CANVAS]) {
+      const available = (canvas.width - 160) * 0.9;
+      for (const [width, height] of [
+        [16, 9],
+        [1, 1],
+        [9, 16],
+      ]) {
+        expect(canvas.mockupScreenHeight * (width / height)).toBeLessThanOrEqual(
+          available,
+        );
+      }
+    }
+  });
+
+  it("keeps the phone chat panel inside the canvas above the caption", () => {
+    for (const canvas of [LANDSCAPE_CANVAS, PORTRAIT_CANVAS]) {
+      const safe = captionSafeAreaPx(theme, "frame", canvas);
+      const panelHeight = (canvas.height - safe) * 0.94;
+      expect((panelHeight * 9) / 16).toBeLessThanOrEqual(canvas.width);
+    }
   });
 });
