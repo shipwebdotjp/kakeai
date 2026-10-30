@@ -1,5 +1,12 @@
 import type { Warning } from "../error";
 import type { ContentDocument } from "./document";
+import type { WorkOutputProfile } from "../dto";
+import {
+  OUTPUT_PROFILE_LAYOUT,
+  charsPerLineFor,
+  outputProfileLayout,
+  type OutputProfileLayout,
+} from "../output-profile";
 import {
   chartBarInputSchema,
   chartBarV1,
@@ -114,6 +121,22 @@ export const TEXT_CONSTRAINTS: Record<TextRole, TextConstraint> = {
   label: { maxLines: 1, charsPerLine: 24 },
 };
 
+function textConstraintsFor(
+  layout: OutputProfileLayout,
+): Record<TextRole, TextConstraint> {
+  if (layout === OUTPUT_PROFILE_LAYOUT.landscape) {
+    return TEXT_CONSTRAINTS;
+  }
+  const entries = (Object.keys(TEXT_CONSTRAINTS) as TextRole[]).map((role) => [
+    role,
+    {
+      ...TEXT_CONSTRAINTS[role],
+      charsPerLine: charsPerLineFor(TEXT_CONSTRAINTS[role].charsPerLine, layout),
+    },
+  ]);
+  return Object.fromEntries(entries) as Record<TextRole, TextConstraint>;
+}
+
 export const CAPTION_CONSTRAINT: TextConstraint = { maxLines: 2, charsPerLine: 38 };
 
 export const CHAT_MESSAGE_CONSTRAINT: TextConstraint = { maxLines: 4, charsPerLine: 16 };
@@ -128,22 +151,23 @@ export const CHART_SERIES_GUIDELINE = 3;
 function chartWarnings(
   data: ChartData,
   basePath: (string | number)[],
+  layout: OutputProfileLayout,
 ): Warning[] {
   const warnings: Warning[] = [];
   const categories = data.rows.length;
   const series = Math.max(0, data.columns.length - 1);
-  if (categories > CHART_CATEGORY_GUIDELINE) {
+  if (categories > layout.chartCategoryLimit) {
     warnings.push({
       path: [...basePath, "data", "rows"],
       code: "chart_categories_overflow",
-      message: `グラフのカテゴリ数が目安（最大${CHART_CATEGORY_GUIDELINE}件）を超えています。プレビューで確認してください。`,
+      message: `グラフのカテゴリ数が目安（最大${layout.chartCategoryLimit}件）を超えています。プレビューで確認してください。`,
     });
   }
-  if (series > CHART_SERIES_GUIDELINE) {
+  if (series > layout.chartSeriesLimit) {
     warnings.push({
       path: [...basePath, "data", "columns"],
       code: "chart_series_overflow",
-      message: `グラフの系列数が目安（最大${CHART_SERIES_GUIDELINE}本）を超えています。プレビューで確認してください。`,
+      message: `グラフの系列数が目安（最大${layout.chartSeriesLimit}本）を超えています。プレビューで確認してください。`,
     });
   }
   data.columns.slice(1).forEach((column) => {
@@ -165,32 +189,33 @@ function chartWarnings(
 function tableWarnings(
   data: TableData,
   basePath: (string | number)[],
+  layout: OutputProfileLayout,
 ): Warning[] {
   const warnings: Warning[] = [];
-  if (data.columns.length > TABLE_COLUMN_GUIDELINE) {
+  if (data.columns.length > layout.tableColumnLimit) {
     warnings.push({
       path: [...basePath, "data", "columns"],
       code: "table_columns_overflow",
-      message: `表の列数が目安（最大${TABLE_COLUMN_GUIDELINE}列）を超えています。プレビューで確認してください。`,
+      message: `表の列数が目安（最大${layout.tableColumnLimit}列）を超えています。プレビューで確認してください。`,
     });
   }
-  if (data.rows.length > TABLE_ROW_GUIDELINE) {
+  if (data.rows.length > layout.tableRowLimit) {
     warnings.push({
       path: [...basePath, "data", "rows"],
       code: "table_rows_overflow",
-      message: `表の行数が目安（最大${TABLE_ROW_GUIDELINE}行）を超えています。プレビューで確認してください。`,
+      message: `表の行数が目安（最大${layout.tableRowLimit}行）を超えています。プレビューで確認してください。`,
     });
   }
   data.rows.forEach((row, rowIndex) => {
     for (const [key, value] of Object.entries(row)) {
       if (
         textWidthUnits(String(value)) >
-        TABLE_CELL_CHAR_GUIDELINE * UNITS_PER_FULLWIDTH_CHAR
+        layout.tableCellCharLimit * UNITS_PER_FULLWIDTH_CHAR
       ) {
         warnings.push({
           path: [...basePath, "data", "rows", rowIndex, key],
           code: "table_cell_overflow",
-          message: `表のセルが目安（最大${TABLE_CELL_CHAR_GUIDELINE}文字相当）を超えています。プレビューで確認してください。`,
+          message: `表のセルが目安（最大${layout.tableCellCharLimit}文字相当）を超えています。プレビューで確認してください。`,
         });
       }
     }
@@ -238,7 +263,20 @@ function overflowWarning(
   };
 }
 
-export function computeContentWarnings(document: ContentDocument): Warning[] {
+export function computeContentWarnings(
+  document: ContentDocument,
+  options: { outputProfile?: WorkOutputProfile } = {},
+): Warning[] {
+  const layout = outputProfileLayout(options.outputProfile);
+  const textConstraints = textConstraintsFor(layout);
+  const captionConstraint = {
+    maxLines: layout.captionMaxLines,
+    charsPerLine: layout.captionCharsPerLine,
+  };
+  const chatConstraint = {
+    ...CHAT_MESSAGE_CONSTRAINT,
+    charsPerLine: charsPerLineFor(CHAT_MESSAGE_CONSTRAINT.charsPerLine, layout),
+  };
   const warnings: Warning[] = [];
   document.scenes.forEach((scene, sceneIndex) => {
     scene.visualCues.forEach((cue, cueIndex) => {
@@ -249,6 +287,7 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
             ...chartWarnings(
               parsed.data.data,
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
+              layout,
             ),
           );
         }
@@ -261,6 +300,7 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
             ...tableWarnings(
               parsed.data.data,
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
+              layout,
             ),
           );
         }
@@ -283,7 +323,7 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
               ],
               "チャット本文",
               message.body,
-              CHAT_MESSAGE_CONSTRAINT,
+              chatConstraint,
             );
             if (warning) {
               warnings.push(warning);
@@ -304,7 +344,7 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
         ["scenes", sceneIndex, "visualCues", cueIndex, "input", "text"],
         ROLE_LABELS[role],
         text,
-        TEXT_CONSTRAINTS[role],
+        textConstraints[role],
       );
       if (warning) {
         warnings.push(warning);
@@ -316,7 +356,7 @@ export function computeContentWarnings(document: ContentDocument): Warning[] {
         ["scenes", sceneIndex, "lines", lineIndex, "captionText"],
         "字幕",
         line.captionText,
-        CAPTION_CONSTRAINT,
+        captionConstraint,
       );
       if (caption) {
         warnings.push(caption);

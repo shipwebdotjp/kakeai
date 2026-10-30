@@ -31,7 +31,7 @@ import {
   deserializeContent,
   serializeContent,
 } from "../../domain/content-json.ts";
-import { toScriptVersion } from "../../dto/mappers.ts";
+import { toOutputProfile, toScriptVersion } from "../../dto/mappers.ts";
 import {
   resourceNotFound,
   validationError,
@@ -334,7 +334,9 @@ export async function saveScriptVersion(
     throwIfFatalTimelineError(error);
   }
   const warnings = [
-    ...computeContentWarnings(content),
+    ...computeContentWarnings(content, {
+      outputProfile: toOutputProfile(edition.work.outputProfile),
+    }),
     ...offsetWarnings,
     ...(await collectInsertWarnings(prisma, content)),
   ];

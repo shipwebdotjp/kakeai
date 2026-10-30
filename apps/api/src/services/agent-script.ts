@@ -17,6 +17,7 @@ import {
   type ScriptValidateRequest,
   type ScriptValidateResult,
   type Warning,
+  type WorkOutputProfile,
 } from "@kakeai/contracts";
 import {
   createIdGenerator,
@@ -27,7 +28,7 @@ import {
 import { CompositionCompileError, collectOffsetRangeWarnings } from "@kakeai/video";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { deserializeContent } from "../domain/content-json.ts";
-import { toScriptVersion } from "../dto/mappers.ts";
+import { toOutputProfile, toScriptVersion } from "../dto/mappers.ts";
 import { validationError, type ValidationIssue } from "../http/validation.ts";
 import {
   getCompositionCanvasProfilesByVersionId,
@@ -335,8 +336,24 @@ function timelineOf(content: ContentDocument): PreviewTimeline {
 async function warningsForContent(
   prisma: PrismaClient,
   content: ContentDocument,
+  languageEditionId?: string,
 ): Promise<Warning[]> {
-  let warnings: Warning[] = [...computeContentWarnings(content)];
+  // The profile only shapes advisory warnings; a failed lookup must not turn a
+  // replay into an error.
+  let outputProfile: WorkOutputProfile | undefined;
+  if (languageEditionId !== undefined) {
+    try {
+      const edition = await prisma.languageEdition.findUnique({
+        where: { id: languageEditionId },
+        select: { work: { select: { outputProfile: true } } },
+      });
+      outputProfile =
+        edition === null ? undefined : toOutputProfile(edition.work.outputProfile);
+    } catch {
+      outputProfile = undefined;
+    }
+  }
+  let warnings: Warning[] = [...computeContentWarnings(content, { outputProfile })];
   try {
     warnings = mergeWarnings(warnings, collectOffsetRangeWarnings(content));
   } catch (error) {
@@ -384,7 +401,7 @@ async function replayRequestVersion<T>(
     throw idempotencyConflictError();
   }
   const content = deserializeContent(row.contentJson);
-  const warnings = await warningsForContent(prisma, content);
+  const warnings = await warningsForContent(prisma, content, row.languageEditionId);
   return build(content, warnings, toScriptVersion(row, content));
 }
 
@@ -489,7 +506,13 @@ export async function editAgentScript(
   const base = await prisma.scriptVersion.findUnique({
     where: { id: request.baseScriptVersionId },
     include: {
-      languageEdition: { select: { id: true, currentScriptVersionId: true } },
+      languageEdition: {
+        select: {
+          id: true,
+          currentScriptVersionId: true,
+          work: { select: { outputProfile: true } },
+        },
+      },
     },
   });
   if (base === null) {
@@ -516,6 +539,7 @@ export async function editAgentScript(
     request.operations,
     resources.context,
     resources.references,
+    { outputProfile: toOutputProfile(base.languageEdition.work.outputProfile) },
   );
   const timeline = timelineOf(edited.document);
 
@@ -570,6 +594,11 @@ export async function validateAgentScript(
   } else {
     const base = await prisma.scriptVersion.findUnique({
       where: { id: request.baseScriptVersionId },
+      include: {
+        languageEdition: {
+          select: { work: { select: { outputProfile: true } } },
+        },
+      },
     });
     if (base === null) {
       throw new AgentOperationError(AGENT_ERROR_CODES.WORK_NOT_FOUND, [
@@ -583,6 +612,9 @@ export async function validateAgentScript(
       request.operations,
       resources.context,
       resources.references,
+      {
+        outputProfile: toOutputProfile(base.languageEdition.work.outputProfile),
+      },
     );
     content = edited.document;
     warnings = mergeWarnings(

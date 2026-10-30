@@ -460,6 +460,41 @@ describe("work and script version flow", () => {
     expect(inherited.outputProfile).toBe("portrait");
   });
 
+  it("applies the portrait warning budget to a short Work", async () => {
+    const work = await works.createWork(prisma, "縦型警告テスト", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const intro = content.scenes[0]!;
+    const titleCue = intro.visualCues.find(
+      (cue) => (cue.input as { role?: string }).role === "title",
+    )!;
+    // 30 full-width characters: two landscape title lines, three portrait lines.
+    (titleCue.input as { text: string }).text = "あ".repeat(30);
+
+    const landscape = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    expect(landscape.warnings.map((warning) => warning.code)).not.toContain(
+      "text_overflow",
+    );
+
+    const short = await works.cloneWork(
+      prisma,
+      work.id,
+      "縦型警告テスト（ショート）",
+      edition.id,
+      undefined,
+      "portrait",
+    );
+    const saved = await scriptVersions.saveScriptVersion(
+      prisma,
+      short.languageEditions[0]!.id,
+      { sourceScriptVersionId: null, content: landscape.scriptVersion.content },
+    );
+    expect(saved.warnings.map((warning) => warning.code)).toContain("text_overflow");
+  });
+
   it("records agent attribution on a clone", async () => {
     const parentWork = await works.createWork(prisma, "Agent複製元", "ja-JP");
     const parentEdition = parentWork.languageEditions[0]!;

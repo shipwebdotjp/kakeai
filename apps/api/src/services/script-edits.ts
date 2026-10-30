@@ -7,6 +7,7 @@ import {
   type ContentDocument,
   type ScriptOperation,
   type Warning,
+  type WorkOutputProfile,
 } from "@kakeai/contracts";
 import {
   applyScriptOperations,
@@ -62,9 +63,14 @@ export function mergeWarnings(first: Warning[], second: Warning[]): Warning[] {
   return merged;
 }
 
+export interface ScriptWarningOptions {
+  outputProfile?: WorkOutputProfile;
+}
+
 export function validateEditedScriptContent(
   content: ContentDocument,
   references: ScriptValidationReferences,
+  options: ScriptWarningOptions = {},
 ): Warning[] {
   const parsed = contentDocumentSchema.safeParse(content);
   if (!parsed.success) {
@@ -202,7 +208,7 @@ export function validateEditedScriptContent(
   } catch (error) {
     throwIfFatalTimelineError(error);
   }
-  return [...computeContentWarnings(document), ...offsetWarnings];
+  return [...computeContentWarnings(document, options), ...offsetWarnings];
 }
 
 export function applyAndValidateScriptOperations(
@@ -210,9 +216,10 @@ export function applyAndValidateScriptOperations(
   operations: readonly ScriptOperation[],
   scriptContext: ScriptContext,
   references: ScriptValidationReferences,
+  options: ScriptWarningOptions = {},
 ): ValidatedScriptEditResult {
   const result = applyScriptOperations(content, operations, scriptContext);
-  const warnings = validateEditedScriptContent(result.document, references);
+  const warnings = validateEditedScriptContent(result.document, references, options);
   const derivedCodes = new Set([
     OFFSET_RANGE_CLAMPED_CODE,
     OFFSET_RANGE_OUT_OF_SCENE_CODE,

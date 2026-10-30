@@ -1,5 +1,8 @@
-import type { VisualThemeDefinition, WorkOutputProfile } from "@kakeai/contracts";
-import { OUTPUT_HEIGHT, OUTPUT_WIDTH } from "./meta";
+import {
+  outputProfileLayout,
+  type VisualThemeDefinition,
+  type WorkOutputProfile,
+} from "@kakeai/contracts";
 
 /**
  * Canvas-derived layout values shared by the compiler, caption layer, and
@@ -29,42 +32,41 @@ export interface CanvasMetrics {
   flowPadding: { x: number; y: number };
 }
 
+const LANDSCAPE_LAYOUT = outputProfileLayout("landscape");
+const PORTRAIT_LAYOUT = outputProfileLayout("portrait");
+
 export const LANDSCAPE_CANVAS: CanvasMetrics = {
   profile: "landscape",
-  width: OUTPUT_WIDTH,
-  height: OUTPUT_HEIGHT,
-  contentWidth: 1600,
+  width: LANDSCAPE_LAYOUT.width,
+  height: LANDSCAPE_LAYOUT.height,
+  contentWidth: LANDSCAPE_LAYOUT.contentWidth,
   safeTop: 0,
   safeBottom: 0,
   safeRight: 0,
-  typeScale: 1,
+  typeScale: LANDSCAPE_LAYOUT.typeScale,
   captionBottomOffset: 72,
-  captionMaxLines: 2,
+  captionMaxLines: LANDSCAPE_LAYOUT.captionMaxLines,
   textPadding: { x: 140, y: 120 },
   cardPadding: { x: 160, y: 90 },
   wideSidePadding: 200,
   flowPadding: { x: 100, y: 70 },
 };
 
-const PORTRAIT_BASE: Omit<CanvasMetrics, "profile"> = {
-  width: 1080,
-  height: 1920,
-  contentWidth: 936,
+export const PORTRAIT_CANVAS: CanvasMetrics = {
+  profile: "portrait",
+  width: PORTRAIT_LAYOUT.width,
+  height: PORTRAIT_LAYOUT.height,
+  contentWidth: PORTRAIT_LAYOUT.contentWidth,
   safeTop: 120,
   safeBottom: 320,
   safeRight: 120,
-  typeScale: 0.75,
+  typeScale: PORTRAIT_LAYOUT.typeScale,
   captionBottomOffset: 340,
-  captionMaxLines: 3,
+  captionMaxLines: PORTRAIT_LAYOUT.captionMaxLines,
   textPadding: { x: 72, y: 120 },
   cardPadding: { x: 72, y: 96 },
   wideSidePadding: 72,
   flowPadding: { x: 56, y: 48 },
-};
-
-export const PORTRAIT_CANVAS: CanvasMetrics = {
-  profile: "portrait",
-  ...PORTRAIT_BASE,
 };
 
 export function canvasMetricsFor(profile: WorkOutputProfile | undefined): CanvasMetrics {

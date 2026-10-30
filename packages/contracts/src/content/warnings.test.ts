@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { VisualCue } from "./visual";
 import { validContentDocument } from "../testing/fixtures";
+import { outputProfileLayout } from "../output-profile";
 import {
   CAPTION_CONSTRAINT,
   CHART_CATEGORY_GUIDELINE,
@@ -282,5 +283,92 @@ describe("computeContentWarnings", () => {
     const codes = computeContentWarnings(document).map((warning) => warning.code);
     expect(codes).toContain("chart_categories_overflow");
     expect(codes).toContain("chart_series_overflow");
+  });
+});
+
+describe("computeContentWarnings for the portrait layout", () => {
+  it("allows three caption lines and warns from four", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    if (scene.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    const layout = outputProfileLayout("portrait");
+    scene.lines[0]!.captionText = "い".repeat(
+      layout.captionCharsPerLine * layout.captionMaxLines,
+    );
+    expect(computeContentWarnings(document, { outputProfile: "portrait" })).toEqual([]);
+
+    scene.lines[0]!.captionText = "い".repeat(
+      layout.captionCharsPerLine * layout.captionMaxLines + 1,
+    );
+    expect(
+      computeContentWarnings(document, { outputProfile: "portrait" }).map(
+        (warning) => warning.code,
+      ),
+    ).toContain("text_overflow");
+  });
+
+  it("warns for text that fits the landscape budget", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[0]!;
+    const titleCue = scene.visualCues.find(
+      (cue) => (cue.input as { role?: string }).role === "title",
+    )!;
+    // 30 full-width characters: two lines on landscape, three on portrait.
+    (titleCue.input as { text: string }).text = "あ".repeat(30);
+    expect(computeContentWarnings(document)).toEqual([]);
+    expect(
+      computeContentWarnings(document, { outputProfile: "portrait" }).map(
+        (warning) => warning.code,
+      ),
+    ).toContain("text_overflow");
+  });
+
+  it("warns for a chart that fits the landscape guidelines", () => {
+    const document = validContentDocument();
+    const rows = Array.from({ length: 5 }, (_, index) => ({
+      name: `項目${index + 1}`,
+      value: index + 1,
+    }));
+    document.scenes[1]!.visualCues.push(
+      chartCue({
+        data: {
+          columns: [
+            { key: "name", label: "項目", type: "text" },
+            { key: "value", label: "値", type: "number" },
+          ],
+          rows,
+        },
+      }),
+    );
+    expect(
+      computeContentWarnings(document).map((warning) => warning.code),
+    ).not.toContain("chart_categories_overflow");
+    expect(
+      computeContentWarnings(document, { outputProfile: "portrait" }).map(
+        (warning) => warning.code,
+      ),
+    ).toContain("chart_categories_overflow");
+  });
+
+  it("warns for a table that fits the landscape guidelines", () => {
+    const document = validContentDocument();
+    const columns = Array.from({ length: 4 }, (_, index) => ({
+      key: `col${index + 1}`,
+      label: `列${index + 1}`,
+      type: "text",
+    }));
+    document.scenes[1]!.visualCues.push(
+      tableCue({ data: { columns, rows: [{ col1: "a" }] } }),
+    );
+    expect(
+      computeContentWarnings(document).map((warning) => warning.code),
+    ).not.toContain("table_columns_overflow");
+    expect(
+      computeContentWarnings(document, { outputProfile: "portrait" }).map(
+        (warning) => warning.code,
+      ),
+    ).toContain("table_columns_overflow");
   });
 });
