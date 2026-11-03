@@ -4,10 +4,10 @@ Kakeai のスキルは、本リポジトリの GitHub Release と対になる不
 
 操作の入出力スキーマ、VisualTemplate の契約、`schemaDigest` / `operationDigest` の値はここへ複製しない。実行時の正は `schema.get`、`template.get`、MCP の `inputSchema`、CLI の検証である。
 
-## v0.1.0
+## v0.2.0
 
-- 対応リリース: [`v0.1.0`](https://github.com/shipwebdotjp/kakeai/releases/tag/v0.1.0)（初回公開版）
-- 導入元: `shipwebdotjp/kakeai#v0.1.0`
+- 対応リリース: [`v0.2.0`](https://github.com/shipwebdotjp/kakeai/releases/tag/v0.2.0)（初回公開版）
+- 導入元: `shipwebdotjp/kakeai#v0.2.0`
 - Agent Access プロトコル: `1`（`minProtocolVersion` / `protocolVersion` とも `1`）
 - 含まれるスキル: `kakeai-production`、`kakeai-composition`
 
@@ -38,7 +38,7 @@ Kakeai のスキルは、本リポジトリの GitHub Release と対になる不
 
 ### 互換性上の注意
 
-- スキルと Kakeai アプリは同じ公開タグに揃える。`v0.1.0` の制作スキルは `tts.attachBulk` を使うため、この操作を公開していないアプリでは `AGENT_OPERATION_UNKNOWN` になる。
+- スキルと Kakeai アプリは同じ公開タグに揃える。`v0.2.0` の制作スキルは `tts.attachBulk` を使うため、この操作を公開していないアプリでは `AGENT_OPERATION_UNKNOWN` になる。
 - `kakeai-composition` は Composition authoring（`composition.*`）を必要とする。Composition Library を持たない版では使えない。
 - `skills@1.7.4` のロックからの復元コマンドは `experimental_install` である。`install` というコマンドはこの版にない。
 - `skills update` はロックの `ref` を新しい Kakeai タグへ進めない。更新は新しいタグを指定して `add` を再実行する。
