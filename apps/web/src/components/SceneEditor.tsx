@@ -131,6 +131,7 @@ const SCENE_PICKER_COPY: Record<
     description: string;
     mode: "single" | "multiple";
     confirmLabel: string;
+    sourceLabel: string;
   }
 > = {
   "move-cue": {
@@ -139,6 +140,7 @@ const SCENE_PICKER_COPY: Record<
       "移動すると表示区間はシーン全体に戻り、セリフ同期のトリガーはシーン全体に変わります。移動先で選び直してください。",
     mode: "single",
     confirmLabel: "移動する",
+    sourceLabel: "移動元",
   },
   "copy-cue": {
     title: "別のシーンへ複製",
@@ -146,6 +148,7 @@ const SCENE_PICKER_COPY: Record<
       "複製すると表示区間はシーン全体に戻り、セリフ同期のトリガーはシーン全体に変わります。複製先で選び直してください。",
     mode: "multiple",
     confirmLabel: "別のシーンへ複製",
+    sourceLabel: "複製元",
   },
   "move-standing": {
     title: "立ち絵を別のシーンへ移動",
@@ -153,6 +156,7 @@ const SCENE_PICKER_COPY: Record<
       "移動先の立ち絵（左・右）はこのシーンの設定で置き換わり、このシーンの立ち絵は削除されます。",
     mode: "single",
     confirmLabel: "移動する",
+    sourceLabel: "移動元",
   },
   "copy-standing": {
     title: "立ち絵を別のシーンへ複製",
@@ -160,12 +164,14 @@ const SCENE_PICKER_COPY: Record<
       "複製先の立ち絵（左・右）はこのシーンの設定で置き換わります。このシーンの立ち絵はそのまま残ります。",
     mode: "multiple",
     confirmLabel: "別のシーンへ複製",
+    sourceLabel: "複製元",
   },
   "swap-standing": {
     title: "立ち絵を別のシーンと入れ替え",
     description: "2つのシーンの立ち絵（左・右）を丸ごと入れ替えます。",
     mode: "single",
     confirmLabel: "入れ替え",
+    sourceLabel: "入れ替え元",
   },
 };
 
@@ -182,10 +188,9 @@ function standingTransferModeOf(
 
 function pickerTargets(
   scenes: readonly SceneFormValue[],
-  excludeSceneId: string,
 ): ScenePickerTarget[] {
   return scenes
-    .filter((scene) => scene.id !== excludeSceneId && scene.kind !== "insert")
+    .filter((scene) => scene.kind !== "insert")
     .map((scene) => ({
       id: scene.id,
       label: scene.label,
@@ -1471,10 +1476,10 @@ export function SceneEditor({
         mode={pickerCopy?.mode ?? "single"}
         confirmLabel={pickerCopy?.confirmLabel ?? ""}
         scenes={
-          pickerRequest === null
-            ? []
-            : pickerTargets(watchedScenes, pickerRequest.sceneId)
+          pickerRequest === null ? [] : pickerTargets(watchedScenes)
         }
+        sourceSceneId={pickerRequest?.sceneId ?? null}
+        sourceLabel={pickerCopy?.sourceLabel ?? ""}
         onClose={() => setPickerRequest(null)}
         onSelect={onPickerSelect}
       />

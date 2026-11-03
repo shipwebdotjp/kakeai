@@ -26,17 +26,32 @@ interface ScenePickerModalProps {
   mode: "single" | "multiple";
   confirmLabel: string;
   scenes: readonly ScenePickerTarget[];
+  /** 操作元のシーン。一覧の文書順の位置に読み取り専用で表示し、選択肢にはしない。 */
+  sourceSceneId?: string | null;
+  /** 操作元の行に付けるバッジ文言（例: 複製元）。 */
+  sourceLabel?: string;
   onClose: () => void;
   onSelect: (sceneIds: string[]) => void;
 }
 
-function SceneRowContent({ scene }: { scene: ScenePickerTarget }) {
+function SceneRowContent({
+  scene,
+  sourceLabel,
+}: {
+  scene: ScenePickerTarget;
+  sourceLabel: string | null;
+}) {
   return (
     <>
       <span className={scene.kind === "point" ? badgeInfoClass : badgeNeutralClass}>
         {SCENE_LABELS[scene.kind]}
       </span>
       <span className="min-w-0 flex-1 truncate font-medium">{scene.label}</span>
+      {sourceLabel !== null && (
+        <span className={badgeNeutralClass} title={sourceLabel}>
+          {sourceLabel}
+        </span>
+      )}
       <span className={metaTextClass}>
         セリフ{scene.lineCount}件・映像演出{scene.cueCount}件
         {scene.standingCount > 0 ? `・立ち絵${scene.standingCount}件` : ""}
@@ -52,6 +67,8 @@ export function ScenePickerModal({
   mode,
   confirmLabel,
   scenes,
+  sourceSceneId = null,
+  sourceLabel = "",
   onClose,
   onSelect,
 }: ScenePickerModalProps) {
@@ -71,9 +88,14 @@ export function ScenePickerModal({
       return scenes;
     }
     return scenes.filter(
-      (scene) => scene.label.includes(query) || scene.id.includes(query),
+      (scene) =>
+        scene.id === sourceSceneId ||
+        scene.label.includes(query) ||
+        scene.id.includes(query),
     );
-  }, [scenes, filter]);
+  }, [scenes, filter, sourceSceneId]);
+
+  const hasSelectable = visible.some((scene) => scene.id !== sourceSceneId);
 
   const toggle = (sceneId: string) => {
     setSelected((previous) =>
@@ -111,34 +133,52 @@ export function ScenePickerModal({
         </label>
       </div>
       <ul className="mt-2 flex flex-col gap-1">
-        {visible.map((scene) => (
-          <li key={scene.id}>
-            {mode === "single" ? (
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded border border-border px-2 py-1 text-left text-sm hover:bg-surface-muted"
-                onClick={() => {
-                  onSelect([scene.id]);
-                  setSelected([]);
-                  setFilter("");
-                }}
-              >
-                <SceneRowContent scene={scene} />
-              </button>
-            ) : (
-              <label className="flex w-full cursor-pointer items-center gap-2 rounded border border-border px-2 py-1 text-sm hover:bg-surface-muted">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(scene.id)}
-                  onChange={() => toggle(scene.id)}
-                />
-                <SceneRowContent scene={scene} />
-              </label>
-            )}
-          </li>
-        ))}
+        {visible.map((scene) => {
+          const isSource = scene.id === sourceSceneId;
+          if (isSource) {
+            return (
+              <li key={scene.id}>
+                <div
+                  aria-disabled="true"
+                  className="flex w-full items-center gap-2 rounded border border-dashed border-border bg-surface-muted px-2 py-1 text-left text-sm text-muted-foreground"
+                >
+                  <SceneRowContent
+                    scene={scene}
+                    sourceLabel={sourceLabel.length > 0 ? sourceLabel : null}
+                  />
+                </div>
+              </li>
+            );
+          }
+          return (
+            <li key={scene.id}>
+              {mode === "single" ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded border border-border px-2 py-1 text-left text-sm hover:bg-surface-muted"
+                  onClick={() => {
+                    onSelect([scene.id]);
+                    setSelected([]);
+                    setFilter("");
+                  }}
+                >
+                  <SceneRowContent scene={scene} sourceLabel={null} />
+                </button>
+              ) : (
+                <label className="flex w-full cursor-pointer items-center gap-2 rounded border border-border px-2 py-1 text-sm hover:bg-surface-muted">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(scene.id)}
+                    onChange={() => toggle(scene.id)}
+                  />
+                  <SceneRowContent scene={scene} sourceLabel={null} />
+                </label>
+              )}
+            </li>
+          );
+        })}
       </ul>
-      {visible.length === 0 && (
+      {!hasSelectable && (
         <p className={metaTextClass}>該当するシーンがありません。</p>
       )}
       {mode === "multiple" && (
