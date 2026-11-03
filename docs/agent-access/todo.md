@@ -199,7 +199,7 @@
 ### [x] B14 Character ライブラリ作成・更新の公開（ADR 0099）
 
 - [x] [ADR 0099](../adr/0099-agent-character-library-writes.md) を追加し、Character の作成・部分更新の公開と削除の人専用維持を決定する
-- [x] 契約に `character.create` / `character.update`（mutation）を追加する。`create` は `{ name, names?, voices?, appearances? }`、`update` は `{ characterId, name?, names?, voices?, appearances? }` を受け、どちらも `{ character }` を返す。外観は `id` を持たず、サーバーが生成する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
+- [x] 契約に `character.create` / `character.update`（mutation）を追加する。`create` は `{ name, names?, voices?, appearances? }`、`update` は `{ characterId, name?, names?, voices? }` を受け、どちらも `{ character }` を返す（当初は `update` も `appearances` を受けていたが、ADR 0109 で `addAppearance` / `updateAppearance` に分離した）。外観は `id` を持たず、サーバーが生成する。`AGENT_PROTOCOL_VERSION` は `1` のままにする
 - [x] Agent サービスに 2 操作を追加し、既存の `services/character-library.ts`（作成・更新）をそのまま呼ぶ。`update` は現在値を読んで指定項目だけを重ね、1 項目も指定しない呼び出しを `VALIDATION_ERROR` とする。削除は公開しない
 - [x] MCP の説明文を 2 操作分追加し、`character.list` / `character.setVoices` の「作成・外観変更は公開しない」を改める。CLI はカタログ導出のため変更しない
 - [x] 操作ディスパッチャの肥大化を避けるため、Character / Face Set / Voice Profile / Theme の操作定義を `apps/api/src/agent/library-operations.ts` へ分割し、`scripts/check-file-size.mjs` の baseline から `operations.ts` を外す

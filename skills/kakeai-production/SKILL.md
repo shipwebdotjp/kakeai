@@ -68,7 +68,7 @@ files.
 | 2 | Work and script | `work.create`, `work.update`, `script.get`, `script.save` or `script.edit` | Full import vs. structural edits |
 | 3 | Characters and voices | `voiceAdapter.list`, `voiceProfile.list`, `voiceProfile.listVoices`, `voiceProfile.listModels`, `voiceProfile.create`, `voiceProfile.update`, `character.list`, `character.get`, `character.create`, `character.update`, `character.addAppearance`, `character.updateAppearance`, `character.setVoices`, `script.edit` + `speaker.add` / `speaker.setVoiceProfile` / `character.addFromLibrary` | A locale-matching voice exists (create a Profile or attach it to a Character when missing); create a library Character when none fits; use `character.addFromLibrary` when an on-screen Character is needed |
 | 4 | Assets | `asset.list`, `asset.import`, `job.get` / `job.wait`, `asset.get`, `asset.update`, `asset.update` | Reuse a ready asset or import one; tidy with favorite/archive |
-| 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.upsert` / `audio.add`) | Template and asset chosen from the catalog |
+| 5 | Visuals and audio | `script.edit` (`cue.add` / `cue.setInput` / `standing.upsert` / `standing.state.upsert` / `audio.add`) | Template and asset chosen from the catalog |
 | 6 | TTS | `tts.create` (+ `line.assignTake`) or `tts.createBulk` + `tts.attachBulk` | Which lines actually need a voice |
 | 7 | Validate | `script.validate` | No errors, warnings understood |
 | 8 | Optional pre-render visual check | `preview.scriptFrame`, `preview.assetFrame` | Layout, text overflow, overlap, missing media |
@@ -151,8 +151,8 @@ a second copy of that contract.
   - `script.save` has no `requestId`. After a timeout, confirm with `script.get`
     before saving again (§9).
 - **Structural edits** — `script.edit` with `baseScriptVersionId`, a unique
-  `requestId`, and the operation array. Use it for scenes, lines, cues, standing,
-  audio and takes.
+  `requestId`, and the operation array. Use it for scenes, lines, cues, standing
+  states, audio and takes.
 - Batch related operations into one `script.edit` call. One call = one new
   ScriptVersion; do not create a version per field change. Creation operations
   can carry a `key`, and later operations in the same call can reference that
@@ -245,21 +245,27 @@ version, then `script.get` the new version to find the Speaker.
    and optional `appearances`. Appearance images must already be ready image
    Assets: search with `asset.list` (`kind: image`, ready) or import one with
    `asset.import`. The server assigns appearance ids; read them from the
-   returned `character.appearances[].id`. A Character with no appearance is
-   valid and copies into a voice-only speaker.
-3. `character.update` is partial for top-level fields: send only the members you change
-   and leave the rest out. If you send `appearances`, it replaces the whole array.
-   To add or update a single appearance without sending the full array, use
+   returned `character.appearances[].id`. An appearance may include
+   `standing: { scale, edge, vertical }`, its default placement when shown as a
+   standing image; omit it for `{ scale: 1, edge: "margin", vertical: "standard" }`.
+   A Character with no appearance is valid and copies into a voice-only speaker.
+3. `character.update` is partial for top-level fields: send only `name`, `names`
+   or `voices` that change and leave the rest out. Appearances are not part of
+   `character.update`; add or update a single appearance with
    `character.addAppearance` (`characterId`, `assetId`, `expression`, `pose`, optional
-   `label`, `faceSetId`) or `character.updateAppearance` (`characterId`, `appearanceId`,
-   optional `assetId`, `expression`, `pose`, `label`, `faceSetId`). Omitted fields
+   `label`, `faceSetId`, `standing`) or `character.updateAppearance` (`characterId`, `appearanceId`,
+   optional `assetId`, `expression`, `pose`, `label`, `faceSetId`, `standing`). Omitted fields
    in `character.updateAppearance` remain unchanged; `label: null` and
-   `faceSetId: null` clear those references. Re-sending or modifying single
+   `faceSetId: null` clear those references. `standing` replaces the whole
+   `{ scale, edge, vertical }` object; omit it to keep the current placement.
+   Re-sending or modifying single
    appearances with `character.updateAppearance` preserves existing
    `libraryAppearanceId` links on work copies. Sending only `characterId` in
    `character.update` or `character.updateAppearance` with 0 fields is `VALIDATION_ERROR`.
 4. Validation: `assetId` must be a ready image Asset, `faceSetId` must exist,
-   and each `voiceProfileId` must exist with the same `locale`. Unknown ids or
+   `standing.scale` must be a finite positive number, `standing.edge` must be
+   `tight` / `margin` / `center`, `standing.vertical` must be `up` / `standard` /
+   `down`, and each `voiceProfileId` must exist with the same `locale`. Unknown ids or
    a locale mismatch are `VALIDATION_ERROR`.
 5. There is no `requestId`. After a timeout, `character.list` / `character.get`
    to see whether the change landed before retrying. A create retried by
@@ -274,8 +280,9 @@ local IDs and requires reassigning the lines.
 
 1. `character.list` returns all library entries; `character.get` returns one by
    `characterId`. Each entry carries `name`, locale-keyed `voices`, and
-   appearances (`assetId`, `expression`, `pose`, optional `label`, `faceSetId`).
-   The copy pins each referenced Face Set's latest version; read the pinned
+   appearances (`assetId`, `expression`, `pose`, optional `label`, `faceSetId`,
+   optional `standing`). The copy pins each referenced Face Set's latest version
+   and carries the appearance's `standing`; read the pinned
    `faceSetVersion` from `script.get` when choosing expressions later.
 2. Choose an entry that has a voice for the edition's locale. If the entry you
    need has none, attach one with `character.setVoices` before copying (pick
@@ -289,7 +296,8 @@ local IDs and requires reassigning the lines.
 4. Read `created.characterIds`, `created.appearanceIds`, `created.speakerIds`
    from the result.
 5. In a **second** `script.edit`, use those IDs with `line.setSpeaker` and
-   `standing.upsert`. Same-call `{ "key": ... }` references cannot point at a
+   `standing.upsert` (opening state) or `standing.state.upsert` (line-boundary
+   change). Same-call `{ "key": ... }` references cannot point at a
    `character.addFromLibrary` result.
 6. When you switch a line to a voice-only speaker, omit `expressionId`.
    `line.setSpeaker` clears it automatically, but `line.add` rejects an explicit
@@ -415,7 +423,9 @@ speaker.
     call `template.get` again for that nested template. Do not stop at one
     level.
 - Add with `cue.add`; adjust later with `cue.setInput` (partial merge) or
-  `cue.setRange`. Put left/right characters on screen with `standing.upsert`.
+  `cue.setRange`. Put left/right characters on screen with `standing.upsert`
+  for the scene-opening state, and use `standing.state.upsert` for changes at
+  a line boundary (see §6.1).
 - Add scene or work BGM with `audio.add`: `role: "bgm"`, a ready audio asset,
   `range: { kind: "scene", sceneId }` or `{ kind: "work" }`. A work may have at
   most one work-range BGM.
@@ -425,6 +435,29 @@ speaker.
 - Validate incrementally. `script.validate` accepts either
   `{ content }` (validate a document you already have) or
   `{ baseScriptVersionId, operations }` (dry-run the next edit without saving).
+
+### 6.1 Standing states
+
+- `standing.upsert` (`{ sceneId, side, characterId, appearanceId }`) sets the
+  scene-opening standing for the left or right side. A scene-range standing Cue
+  represents it.
+- `standing.state.upsert` (`{ op, sceneId, side, fromLineId, characterId,
+  appearanceId }`) changes the standing at the start of a line. Both
+  `characterId` and `appearanceId` must be `null` (hidden) or both non-null.
+  The state continues until the next state for that side or the scene end.
+- `standing.state.remove` (`{ op, sceneId, side, fromLineId }`) removes the
+  change; the previous state applies again.
+- Placement comes from the appearance's `standing`; do not send `scale`,
+  `edge` or `vertical` on a state. `standing.upsert` accepts those only as
+  explicit overrides. To clear a legacy override, send `null` for each field.
+- Switches are cuts. Per-state enter/exit transitions do not exist; only the
+  scene-opening Cue keeps its enter/exit.
+- A line's `expressionId` is validated against the appearance visible on that
+  line. If the character is hidden on that line, the expression is not rendered
+  and validation is skipped.
+- Line removal moves or drops affected states, and `scene.splitAtLine` carries
+  the effective state into the new scene. Re-read the script after structural
+  edits instead of assuming state ids or ranges.
 
 ## 7. TTS
 

@@ -140,7 +140,7 @@ C1〜C8 は B15〜B18 として実装し、C8 の書き出しを B19 で拡張�
 
 ### B14 Character ライブラリ作成・更新の公開
 
-- 状態: 完了。`character.create` / `character.update`（mutation）を追加した。`character.create` は `{ name, names?, voices?, appearances? }`、`character.update` は `{ characterId, name?, names?, voices?, appearances? }` を受け、どちらも `{ character }` を返す。既存の `createCharacter` / `updateCharacter` をそのまま呼び、外観の画像・Face Set・Voice Profile の検証を複製しない。外観 ID は作成時にサーバーが生成し、更新では既存の外観に `id` を付けると維持される。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0099](../adr/0099-agent-character-library-writes.md) を参照。
+- 状態: 完了。`character.create` / `character.update`（mutation）を追加した。`character.create` は `{ name, names?, voices?, appearances? }`、`character.update` は `{ characterId, name?, names?, voices? }` を受け、どちらも `{ character }` を返す（`appearances` は ADR 0109 で `character.update` の対象外にし、`character.addAppearance` / `character.updateAppearance` に分けた）。既存の `createCharacter` / `updateCharacter` をそのまま呼び、外観の画像・Face Set・Voice Profile の検証を複製しない。外観 ID は作成時にサーバーが生成する。`AGENT_PROTOCOL_VERSION` は `1` のまま据え置く。仕様は [spec.md](./spec.md)、実施項目は [todo.md](./todo.md)、決定記録は [ADR 0099](../adr/0099-agent-character-library-writes.md) を参照。
 - `update` は省略した項目を変更せず、指定した配列だけを置き換える。既存の外観は `id` を付けて送ることで ID を維持できる。現在値の読み取りとマージは書き込みと同じトランザクション内で行う。1 項目も指定しない呼び出しは `VALIDATION_ERROR`。未知の Character は `RESOURCE_NOT_FOUND`、Asset・Face Set・Profile の参照欠落や locale 不一致は `VALIDATION_ERROR`。`requestId` は持たず、タイムアウト後は `character.list` / `character.get` で確認してから再実行する。
 - `character.delete` は人専用のまま残す。ライブラリの編集は既存台本のコピーへ波及しない。外観の画像は取り込み済みの ready な画像 Asset に限る。
 - 完了条件: ソケット・MCP・CLI から作成 → 取得 → 名前/別名/声/外観の更新 → `character.addFromLibrary` → TTS → 確定 → レンダーが通り、外観ゼロの声だけ Character もコピーでき、削除が `AGENT_OPERATION_UNKNOWN` のままである。`operationDigest` と `schemaDigest` が変わり、`AGENT_PROTOCOL_VERSION` は上がらない。
@@ -246,7 +246,7 @@ C9〜C11 は次のとおり決めた。決定は [ADR 0105](../adr/0105-agent-fa
 | タグの索引化（`AssetTag` リレーション＋インデックス） | 個人ライブラリの規模では走査コストが支配的でない。検索の留下来よさの拡張を優先した |
 | 実行中操作の取消（AbortSignal の伝播） | B3-b として保留。Job 投入済み操作では取り消しの意味が薄い。長期実行の Job は `job.cancel` を使う |
 | ネイティブによる接続元 UID 検証 | ファイル権限が既に同一ユーザー性を担保している |
-| 既存 `character.update` の `appearances` 配列における `faceSetId` 省略時 null 解除 | 既存契約の維持と互換性を優先。MCP 説明文で警告し、将来の修正候補とする |
+| 既存 `character.update` の `appearances` 配列における `faceSetId` 省略時 null 解除 | 解消済み。ADR 0109 で `character.update` から `appearances` を外し、`character.addAppearance` / `character.updateAppearance` を使う契約にした |
 | `requestId` の必須化 | 必須化は破壊的変更。版上げの判断が必要な段階で行う |
 | `work.create` / `work.clone` / `asset.import` への台帳適用 | 高コスト操作に絞り、台帳の汎用性を先に検証する |
 | エラーカタログの公開（R1-4） | 契約の可読性提高であり、緊急度が低い |
