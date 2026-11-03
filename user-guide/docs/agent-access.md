@@ -409,7 +409,7 @@ Kakeai は、エージェントが制作手順をたどるためのスキル（�
 ### プロジェクトへ導入する
 
 ```sh
-npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.0 \
+npx skills@1.7.4 add shipwebdotjp/kakeai#v0.2.0 \
   --skill kakeai-production --skill kakeai-composition
 ```
 
@@ -418,7 +418,7 @@ npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.0 \
 ### すべてのプロジェクトで使う
 
 ```sh
-npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.0 \
+npx skills@1.7.4 add shipwebdotjp/kakeai#v0.2.0 \
   --skill kakeai-production --skill kakeai-composition -g
 ```
 
@@ -427,7 +427,7 @@ npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.0 \
 ### 新しいタグへ更新する
 
 ```sh
-npx skills@1.7.4 add shipwebdotjp/kakeai#v0.1.1 \
+npx skills@1.7.4 add shipwebdotjp/kakeai#v0.2.1 \
   --skill kakeai-production --skill kakeai-composition
 ```
 
