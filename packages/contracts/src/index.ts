@@ -31,6 +31,7 @@ export * from "./tts";
 export * from "./asset";
 export * from "./asset-list";
 export * from "./dto";
+export * from "./output-profile";
 export * from "./error";
 export * from "./job";
 export * from "./health";

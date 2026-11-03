@@ -23,6 +23,7 @@ import {
   previewTimelineSchema,
   scriptVersionSchema,
   scriptVersionSummarySchema,
+  workOutputProfileSchema,
   workSchema,
 } from "../dto";
 import { assetTagsSchema } from "../asset";
@@ -174,6 +175,7 @@ export const agentWorkCloneInputSchema = z.strictObject({
   workId: idSchema,
   title: z.string().trim().min(1),
   sourceEditionId: idSchema,
+  outputProfile: workOutputProfileSchema.optional(),
 });
 export const agentWorkCloneOutputSchema = z.strictObject({ work: workSchema });
 

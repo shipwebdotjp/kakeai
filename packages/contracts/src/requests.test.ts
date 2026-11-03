@@ -28,6 +28,26 @@ describe("cloneWorkRequestSchema", () => {
     expect(cloneWorkRequestSchema.safeParse({ title: "作品のコピー" }).success).toBe(false);
   });
 
+  it("accepts an optional output profile", () => {
+    expect(
+      cloneWorkRequestSchema.safeParse({
+        title: "作品のコピー",
+        sourceEditionId: "led_1",
+        outputProfile: "portrait",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unknown output profile", () => {
+    expect(
+      cloneWorkRequestSchema.safeParse({
+        title: "作品のコピー",
+        sourceEditionId: "led_1",
+        outputProfile: "square",
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects unknown fields", () => {
     expect(
       cloneWorkRequestSchema.safeParse({

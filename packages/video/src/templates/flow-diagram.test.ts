@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getVisualTheme } from "@kakeai/contracts";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import type { RenderContext } from "../render-context";
+import { LANDSCAPE_CANVAS, PORTRAIT_CANVAS } from "../canvas";
 import { neutralVisualSkin } from "../skins/neutral";
 import { cueScope } from "../scope";
 import type { AssetResolver } from "../resolver";
@@ -12,11 +13,12 @@ const theme = getVisualTheme("soft-editorial", 1)!;
 
 const assetResolver: AssetResolver = (assetId) => ({ url: `/preview/${assetId}`, kind: "image" });
 
-function context(): RenderContext {
+function context(canvas = LANDSCAPE_CANVAS): RenderContext {
   return {
     document: validContentDocument(),
     theme,
     skin: neutralVisualSkin,
+    canvas,
     assetResolver,
     scope: cueScope("visual-flow-1"),
     path: ["scenes", 1, "visualCues", 2, "input"],
@@ -232,5 +234,16 @@ describe("renderFlowDiagram effects", () => {
     });
     expect(rendered.html).toContain(`id="${overlayId}"`);
     expect(rendered.html).toContain("kakeai-onset-sweep");
+  });
+});
+
+
+describe("renderFlowDiagram portrait", () => {
+  it("defaults to top-to-bottom when no orientation is given", () => {
+    const rendered = renderFlowDiagram(
+      { diagram: baseInput.diagram },
+      context(PORTRAIT_CANVAS),
+    );
+    expect(rendered.html).toContain("kakeai-flow-vertical");
   });
 });

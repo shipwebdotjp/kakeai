@@ -8,6 +8,7 @@ import {
   type ContentDocument,
   type ScriptVersionAuthor,
   type Work,
+  type WorkOutputProfile,
   type YouTubeVideoSettingsDocument,
 } from "@kakeai/contracts";
 import type { PrismaClient } from "../generated/prisma/client.ts";
@@ -15,6 +16,7 @@ import { deserializeContent, serializeContent } from "../domain/content-json.ts"
 import type { DataDirectories } from "../storage/paths.ts";
 import { deleteJobsAndArtifacts, removeArtifactFiles } from "./job-cleanup.ts";
 import {
+  toOutputProfile,
   toWork,
   type EditionWithCurrent,
   type RenderJobRefRow,
@@ -124,6 +126,7 @@ export async function cloneWork(
   title: string,
   sourceEditionId: string,
   attribution?: CloneWorkAttribution,
+  outputProfile?: WorkOutputProfile,
 ): Promise<Work> {
   const work = await prisma.work.findUnique({
     where: { id: workId },
@@ -151,6 +154,10 @@ export async function cloneWork(
   const author = attribution?.author ?? "human";
   const authorAgentId =
     author === "agent" ? normalizeAgentId(attribution?.authorAgentId) : null;
+  // A derived Work keeps the parent's output profile unless the caller asks
+  // for another one, so duplicating a portrait short stays portrait.
+  const resolvedOutputProfile: WorkOutputProfile =
+    outputProfile ?? toOutputProfile(work.outputProfile);
 
   const sourceSettingsRow = await prisma.youTubeVideoSettings.findUnique({
     where: { languageEditionId: sourceEditionId },
@@ -178,6 +185,7 @@ export async function cloneWork(
         title,
         originalLocale: sourceEdition.locale,
         parentWorkId: workId,
+        outputProfile: resolvedOutputProfile,
       },
     });
     const newEdition = await tx.languageEdition.create({

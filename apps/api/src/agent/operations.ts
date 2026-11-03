@@ -261,7 +261,7 @@ const definitions: AgentOperationDefinitions = {
         cloneWork(context.prisma, input.workId, input.title, input.sourceEditionId, {
           author: "agent",
           authorAgentId: context.agentId,
-        }),
+        }, input.outputProfile),
       ),
     }),
   },

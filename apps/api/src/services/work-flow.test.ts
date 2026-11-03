@@ -431,6 +431,70 @@ describe("work and script version flow", () => {
     await works.deleteWork(prisma, directories, parentWork.id);
   });
 
+  it("creates a portrait short work from the selected edition", async () => {
+    const parentWork = await works.createWork(prisma, "横型の元作品", "ja-JP");
+    const parentEdition = parentWork.languageEditions[0]!;
+
+    const shortWork = await works.cloneWork(
+      prisma,
+      parentWork.id,
+      "横型の元作品（ショート）",
+      parentEdition.id,
+      undefined,
+      "portrait",
+    );
+    expect(shortWork.outputProfile).toBe("portrait");
+    expect(shortWork.parentWorkId).toBe(parentWork.id);
+
+    const listed = await works.listWorks(prisma);
+    expect(listed.find((entry) => entry.id === shortWork.id)?.outputProfile).toBe("portrait");
+    expect(listed.find((entry) => entry.id === parentWork.id)?.outputProfile).toBe("landscape");
+
+    // A derived Work keeps the parent profile unless another one is requested.
+    const inherited = await works.cloneWork(
+      prisma,
+      shortWork.id,
+      "縦型のコピー",
+      shortWork.languageEditions[0]!.id,
+    );
+    expect(inherited.outputProfile).toBe("portrait");
+  });
+
+  it("applies the portrait warning budget to a short Work", async () => {
+    const work = await works.createWork(prisma, "縦型警告テスト", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const content = createInitialContentDocument();
+    const intro = content.scenes[0]!;
+    const titleCue = intro.visualCues.find(
+      (cue) => (cue.input as { role?: string }).role === "title",
+    )!;
+    // 30 full-width characters: two landscape title lines, three portrait lines.
+    (titleCue.input as { text: string }).text = "あ".repeat(30);
+
+    const landscape = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+      sourceScriptVersionId: null,
+      content,
+    });
+    expect(landscape.warnings.map((warning) => warning.code)).not.toContain(
+      "text_overflow",
+    );
+
+    const short = await works.cloneWork(
+      prisma,
+      work.id,
+      "縦型警告テスト（ショート）",
+      edition.id,
+      undefined,
+      "portrait",
+    );
+    const saved = await scriptVersions.saveScriptVersion(
+      prisma,
+      short.languageEditions[0]!.id,
+      { sourceScriptVersionId: null, content: landscape.scriptVersion.content },
+    );
+    expect(saved.warnings.map((warning) => warning.code)).toContain("text_overflow");
+  });
+
   it("records agent attribution on a clone", async () => {
     const parentWork = await works.createWork(prisma, "Agent複製元", "ja-JP");
     const parentEdition = parentWork.languageEditions[0]!;

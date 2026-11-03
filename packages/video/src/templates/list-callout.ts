@@ -142,13 +142,15 @@ export function listCalloutLayoutStyle(
   width: ListCalloutWidth | undefined,
   align: ListCalloutAlign | undefined,
 ): string {
+  const limitedWidth = (px: number): string =>
+    `min(${px}px,var(--kakeai-content-width,1600px))`;
   const parts: string[] = [];
   if (width !== undefined) {
     parts.push("width:100%");
-    parts.push(`max-width:${LIST_CALLOUT_WIDTH_PX[width]}px`);
+    parts.push(`max-width:${limitedWidth(LIST_CALLOUT_WIDTH_PX[width])}`);
   } else if (align !== undefined) {
     parts.push("width:100%");
-    parts.push(`max-width:${LIST_CALLOUT_WIDTH_PX.long}px`);
+    parts.push(`max-width:${limitedWidth(LIST_CALLOUT_WIDTH_PX.long)}`);
   }
   if (align !== undefined) {
     parts.push(`text-align:${align}`);

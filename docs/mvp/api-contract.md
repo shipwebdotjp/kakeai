@@ -58,7 +58,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 
 | DTO | 主なフィールド | 備考 |
 | --- | --- | --- |
-| WorkSummary | id, title, originalLocale, createdAt, parentWorkId, updatedAt, languageEditions | 作品一覧用。各Editionには現在の台本版と最新Render Jobの要約を含める。`createdAt` と `parentWorkId` は複製元との関係と作成時刻を示す。 |
+| WorkSummary | id, title, originalLocale, outputProfile, createdAt, parentWorkId, updatedAt, languageEditions | 作品一覧用。各Editionには現在の台本版と最新Render Jobの要約を含める。`outputProfile` は出力キャンバスで `landscape`（1920×1080、既定）または `portrait`（1080×1920）。`createdAt` と `parentWorkId` は複製元との関係と作成時刻を示す。 |
 | Work | WorkSummaryと同じ | 一覧と管理に使う作品名 `title` を持つ。動画内に表示するタイトルはContentDocument側のSceneスロットであり、こちらとは別である。 |
 | LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。`locale` は有効な `localeSchema` の値（`ja-JP`・`en-US`・`zh-Hans`・`zh-Hant`）。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt, author, authorAgentId, agentRequestId, agentRequestHash, sourceScriptVersionId | contentはContentDocumentそのもの。保存後に更新しない。`author` は `human` / `agent` で作成時に確定し、以後変更しない。`authorAgentId`・`agentRequestId`・`agentRequestHash`・`sourceScriptVersionId` は該当しない場合null。履歴一覧では `content` を除いた要約を返す。詳細は [Agent Access 仕様](../agent-access/spec.md) の帰属を正とする。 |
@@ -92,7 +92,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | POST | /works | 201 | Work、初期言語 Edition、ContentDocument v8の初期ScriptVersionを作成 |
 | GET | /works/:workId | 200 | 作品とEditionの取得 |
 | PATCH | /works/:workId | 200 | 管理上の作品名を変更 |
-| POST | /works/:workId/clone | 201 | 指定Editionの現在版だけを複製した新しい子Workを作成。初期版は複製元を `sourceScriptVersionId` に記録する |
+| POST | /works/:workId/clone | 201 | 指定Editionの現在版だけを複製した新しい子Workを作成。任意の `outputProfile` で出力キャンバスを指定する。初期版は複製元を `sourceScriptVersionId` に記録する |
 | DELETE | /works/:workId | 204 | 作品、全Edition、版、Job、Artifactを明示削除 |
 | GET | /language-editions/:editionId/current-script-version | 200 | 現在の完全な台本を取得 |
 | GET | /language-editions/:editionId/script-versions | 200 | 台本版のメタデータ履歴を取得 |
@@ -201,7 +201,7 @@ GET /health は起動確認とUIの初期診断に使う。レンダーワーカ
 
 ### 作品一覧
 
-GET /works は更新日時の降順でWorkSummaryの配列を返す。各Workは `createdAt` と `parentWorkId` を含む。MVPではページネーションや検索条件は追加しない。
+GET /works は更新日時の降順でWorkSummaryの配列を返す。各Workは `outputProfile`、`createdAt`、`parentWorkId` を含む。MVPではページネーションや検索条件は追加しない。
 
 ~~~json
 {
@@ -210,6 +210,7 @@ GET /works は更新日時の降順でWorkSummaryの配列を返す。各Workは
       "id": "wrk_abc123",
       "title": "テンプレート解説",
       "originalLocale": "ja-JP",
+      "outputProfile": "landscape",
       "createdAt": "2026-10-08T03:00:00.000Z",
       "parentWorkId": null,
       "updatedAt": "2026-10-08T03:20:00.000Z",
@@ -260,6 +261,7 @@ originalLocaleは必須とし、受け付ける値は `ja-JP`・`en-US`・`zh-Ha
     "id": "wrk_abc123",
     "title": "テンプレート解説",
     "originalLocale": "ja-JP",
+    "outputProfile": "landscape",
     "parentWorkId": null,
     "createdAt": "2026-10-08T03:00:00.000Z",
     "updatedAt": "2026-10-08T03:00:00.000Z",
@@ -294,7 +296,7 @@ Content-Type: application/json
 
 この操作はContentDocumentのSceneスロット（導入タイトル等）、ScriptVersion、既存Artifactを変更しない。動画に表示する文言は台本保存で変更する。
 
-POST /works/:workId/clone は `{ title, sourceEditionId }` を受け取る。`sourceEditionId` は必須で、対象 Work に属する Edition でなければ 404 `RESOURCE_NOT_FOUND` とする。指定 Edition の current ScriptVersion だけを、同じ locale の単一 Edition として新しい子 Work に複製する。新 Work の `originalLocale` は複製元 Edition の locale とし、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。[../work-history/spec.md](../work-history/spec.md) を正とする。
+POST /works/:workId/clone は `{ title, sourceEditionId, outputProfile? }` を受け取る。`sourceEditionId` は必須で、対象 Work に属する Edition でなければ 404 `RESOURCE_NOT_FOUND` とする。`outputProfile` は任意で `landscape` / `portrait` のいずれかであり、省略時は複製元 Work の出力形式を継承する。子 Work の `outputProfile` に保存する。指定 Edition の current ScriptVersion だけを、同じ locale の単一 Edition として新しい子 Work に複製する。新 Work の `originalLocale` は複製元 Edition の locale とし、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。[../work-history/spec.md](../work-history/spec.md) を正とする。
 
 DELETE /works/:workId は確認済みの破壊的操作である。子Workがあるときは409 `WORK_HAS_CHILDREN` を返す。子がなければ、当該Workの全Edition、ScriptVersion、Job、ArtifactのDB行と実体を削除する。共有Assetは削除しない。削除済みWorkの出力・履歴は復元できない。
 

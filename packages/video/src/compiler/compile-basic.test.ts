@@ -26,6 +26,28 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('window.__timelines["kakeai-main"]');
   });
 
+  it("renders the portrait canvas when the Work output profile is portrait", () => {
+    const compiled = compileDocument({
+      document: validContentDocument(),
+      assetResolver: resolver,
+      outputProfile: "portrait",
+    });
+    expect(compiled.html).toContain('data-width="1080"');
+    expect(compiled.html).toContain('data-height="1920"');
+    expect(compiled.html).toContain("--kakeai-content-width:936px");
+    expect(compiled.html).toContain("--kakeai-caption-offset:340px");
+    expect(compiled.html).toContain("--kakeai-type-scale:0.75");
+    expect(compiled.html).toContain("--kakeai-mockup-screen-h:440px");
+    expect(compiled.html).toContain('content="width=1080, height=1920"');
+  });
+
+  it("keeps the landscape canvas values unchanged", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain("--kakeai-content-width:1600px");
+    expect(compiled.html).toContain("--kakeai-caption-offset:72px");
+    expect(compiled.html).toContain("--kakeai-type-scale:1");
+  });
+
   it("uses the document locale for the html lang and locale font stacks", () => {
     const document = validContentDocument();
     document.locale = "zh-Hans";

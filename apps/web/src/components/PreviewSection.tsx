@@ -1,5 +1,6 @@
 import "@hyperframes/player";
 import { memo, useState, type KeyboardEvent } from "react";
+import type { WorkOutputProfile } from "@kakeai/contracts";
 import { usePreviewActions, usePreviewTime } from "../lib/PreviewController";
 import { errorMessage } from "../lib/errorMessage";
 import { formatTime } from "../lib/player";
@@ -10,8 +11,10 @@ const TIME_PRESETS = [1, 5, 10] as const;
 
 export const PreviewSection = memo(function PreviewSection({
   sceneLabels,
+  outputProfile = "landscape",
 }: {
   sceneLabels?: ReadonlyMap<string, string>;
+  outputProfile?: WorkOutputProfile;
 }) {
   const actions = usePreviewActions();
   const time = usePreviewTime();
@@ -97,7 +100,11 @@ export const PreviewSection = memo(function PreviewSection({
           onKeyDown={onPreviewKeyDown}
           className="rounded focus:outline-2 focus:outline-brand-500"
         >
-          <div className="mt-3 aspect-video w-full overflow-hidden rounded border border-border bg-black">
+          <div
+            className={`mt-3 w-full overflow-hidden rounded border border-border bg-black ${
+              outputProfile === "portrait" ? "aspect-[9/16] max-h-[70vh] w-full max-w-[calc(70vh*9/16)] mx-auto" : "aspect-video"
+            }`}
+          >
             <hyperframes-player
               key={active.identity}
               ref={actions.playerRef}

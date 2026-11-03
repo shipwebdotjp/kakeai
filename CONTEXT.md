@@ -142,8 +142,12 @@ An immutable published bundle of one Composition that a Script Version may refer
 _Avoid_: Composition Draft, Asset Rendition
 
 **Canvas Profile**:
-The fixed internal canvas a Composition Version renders into, chosen from a small set: `landscape` (1920×1080) or `portrait` (1080×1920). It is immutable per Composition Version and does not change the fixed 1920×1080 size of the surrounding render.
+The fixed internal canvas a Composition Version renders into, chosen from a small set: `landscape` (1920×1080) or `portrait` (1080×1920). It is immutable per Composition Version and belongs to the Composition, not to the Work.
 _Avoid_: Output size, resolution, aspect ratio
+
+**Output Profile**:
+The canvas a Work and all of its Language Editions, Script Versions, previews, and renders use: `landscape` (1920×1080) or `portrait` (1080×1920). It is fixed when the Work is created and never changes; a different profile requires a derived Work.
+_Avoid_: Canvas Profile, resolution, orientation, aspect ratio
 
 **Job**:
 A durable record of one asynchronous operation on a Work or its edition.

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Work, WorkSummary } from "@kakeai/contracts";
+import type { Work, WorkOutputProfile, WorkSummary } from "@kakeai/contracts";
 import { apiRequest } from "../client";
 import { queryKeys } from "./queryKeys";
 
@@ -56,15 +56,17 @@ export function useCloneWork() {
       workId,
       title,
       sourceEditionId,
+      outputProfile,
     }: {
       workId: string;
       title: string;
       sourceEditionId: string;
+      outputProfile?: WorkOutputProfile;
     }) =>
       (
         await apiRequest<Work>(`/works/${encodeURIComponent(workId)}/clone`, {
           method: "POST",
-          body: { title, sourceEditionId },
+          body: { title, sourceEditionId, outputProfile },
         })
       ).data,
     onSuccess: (newWork) => {

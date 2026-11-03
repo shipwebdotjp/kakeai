@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LANDSCAPE_CANVAS } from "./canvas";
 import { getVisualTheme } from "@kakeai/contracts";
 import { CAPTION_SAFE_AREA_FALLBACK_PX, captionLayoutStyle, captionSafeAreaPx } from "./caption-layout";
 
@@ -7,7 +8,7 @@ const theme = getVisualTheme("soft-editorial", 1)!;
 describe("captionSafeAreaPx", () => {
   it("reserves two caption lines plus the caption surface padding", () => {
     // 72 bottom offset + 2 * (40px * 1.5) lines + 2 * 12px padding
-    expect(captionSafeAreaPx(theme)).toBe(216);
+    expect(captionSafeAreaPx(theme, "frame", LANDSCAPE_CANVAS)).toBe(216);
   });
 
   it("follows the caption style of the theme", () => {
@@ -15,7 +16,7 @@ describe("captionSafeAreaPx", () => {
       ...theme,
       textRoles: { ...theme.textRoles, caption: { ...theme.textRoles.caption, fontSize: 60 } },
     };
-    expect(captionSafeAreaPx(larger)).toBe(276);
+    expect(captionSafeAreaPx(larger, "frame", LANDSCAPE_CANVAS)).toBe(276);
   });
 
   it("keeps the CSS padding fallback when the caption surface is disabled", () => {
@@ -24,24 +25,24 @@ describe("captionSafeAreaPx", () => {
       ...theme,
       surfaces: { ...theme.surfaces, caption: { ...caption, enabled: false } },
     };
-    expect(captionSafeAreaPx(disabled)).toBe(216);
+    expect(captionSafeAreaPx(disabled, "frame", LANDSCAPE_CANVAS)).toBe(216);
   });
 
   it("emits the caption geometry as root custom properties", () => {
-    expect(captionLayoutStyle(theme)).toBe(
+    expect(captionLayoutStyle(theme, "frame", LANDSCAPE_CANVAS)).toBe(
       "--kakeai-caption-offset:72px;--kakeai-caption-safe:216px",
     );
   });
 
   it("reserves three lines for the band layout", () => {
     // 20 top + 3 * (40px * 1.5) lines + 24 bottom (no 72px offset, no surface padding)
-    expect(captionSafeAreaPx(theme, "band")).toBe(224);
-    expect(captionLayoutStyle(theme, "band")).toBe(
+    expect(captionSafeAreaPx(theme, "band", LANDSCAPE_CANVAS)).toBe(224);
+    expect(captionLayoutStyle(theme, "band", LANDSCAPE_CANVAS)).toBe(
       "--kakeai-caption-offset:72px;--kakeai-caption-safe:224px",
     );
   });
 
   it("keeps the fragment fallback in sync with the default theme", () => {
-    expect(CAPTION_SAFE_AREA_FALLBACK_PX).toBe(captionSafeAreaPx(theme));
+    expect(CAPTION_SAFE_AREA_FALLBACK_PX).toBe(captionSafeAreaPx(theme, "frame", LANDSCAPE_CANVAS));
   });
 });

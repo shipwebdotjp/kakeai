@@ -9,6 +9,7 @@ import type {
 } from "../composition-resolver";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
+import { LANDSCAPE_CANVAS, type CanvasMetrics } from "../canvas";
 import type {
   AssetResolver,
   FaceSetResolver,
@@ -105,6 +106,9 @@ export function makeContext(
   collectComposition?: (resolved: CompositionVersionResolved) => void,
   videoPlaybackPlans?: ReadonlyMap<string, VideoPlaybackPlan>,
   stillResolver?: StillResolver,
+  // Optional only because it follows optional parameters; the compiler always
+  // passes the canvas from SceneRenderContext.
+  canvas: CanvasMetrics = LANDSCAPE_CANVAS,
 ): RenderContext {
   const context: RenderContext = {
     document,
@@ -120,6 +124,7 @@ export function makeContext(
     lineIntervals,
     videoPlaybackPlans,
     stillResolver,
+    canvas,
     renderNested: (node, nestedScope, nestedPath) =>
       renderNestedVisual(
         node,
@@ -137,6 +142,7 @@ export function makeContext(
           collectComposition,
           videoPlaybackPlans,
           stillResolver,
+          canvas,
         ),
       ),
   };

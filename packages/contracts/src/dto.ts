@@ -56,10 +56,14 @@ export const languageEditionSummarySchema = z.object({
   latestRenderJob: renderJobRefSchema.nullable(),
 });
 
+export const workOutputProfileSchema = z.enum(["landscape", "portrait"]);
+export type WorkOutputProfile = z.infer<typeof workOutputProfileSchema>;
+
 export const workSummarySchema = z.object({
   id: idSchema,
   title: z.string(),
   originalLocale: localeSchema,
+  outputProfile: workOutputProfileSchema,
   createdAt: timestampSchema,
   parentWorkId: idSchema.nullable(),
   updatedAt: timestampSchema,

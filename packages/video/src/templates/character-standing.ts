@@ -12,7 +12,7 @@ import {
 import type { AssetResolver } from "../resolver";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
-import { OUTPUT_WIDTH } from "../meta";
+import { LANDSCAPE_CANVAS } from "../canvas";
 import type { ExpressionTarget, RenderedCue, RenderContext } from "../render-context";
 import { resolveCueMedia } from "./shared";
 
@@ -33,8 +33,12 @@ export function standingPosition(
   scale: number,
   edge: StandingEdge = DEFAULT_STANDING_EDGE,
   vertical: StandingVertical = DEFAULT_STANDING_VERTICAL,
+  canvas: { width: number; typeScale: number } = {
+    width: LANDSCAPE_CANVAS.width,
+    typeScale: LANDSCAPE_CANVAS.typeScale,
+  },
 ): { x: number; y: number } {
-  const halfWidth = (STANDING_BASE_WIDTH_PX * scale) / 2 / OUTPUT_WIDTH;
+  const halfWidth = (STANDING_BASE_WIDTH_PX * scale * canvas.typeScale) / 2 / canvas.width;
   const margin = STANDING_EDGE_MARGIN[edge];
   const x =
     side === "left"
@@ -110,8 +114,8 @@ export function renderCharacterStanding(input: unknown, context: RenderContext):
     context.path,
     context.assetResolver,
   );
-  const layout = standingPosition(side, scale, edge, vertical);
-  const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale);
+  const layout = standingPosition(side, scale, edge, vertical, context.canvas);
+  const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale * context.canvas.typeScale);
   const leftPercent = Math.round(layout.x * 10000) / 100;
   const topPercent = Math.round(layout.y * 10000) / 100;
   const character = context.document.characters.find((entry) => entry.id === characterId);

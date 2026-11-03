@@ -12,6 +12,7 @@ import {
 } from "./script-versions.ts";
 import type { CompiledPreview } from "./script-versions/preview.ts";
 import { requireEdition } from "./script-versions/common.ts";
+import { toOutputProfile } from "../dto/mappers.ts";
 import type { DataDirectories } from "../storage/paths.ts";
 import { rasterizePreviewFrame } from "./preview-frame-raster.ts";
 
@@ -38,20 +39,25 @@ export async function getScriptVersionFrame(
     );
     scriptVersionId = input.scriptVersionId;
   } else {
-    if (input.languageEditionId !== undefined) {
-      const edition = await requireEdition(prisma, input.languageEditionId);
-      if (input.content.locale !== edition.locale) {
-        throw validationError([
-          {
-            path: ["content", "locale"],
-            code: "invalid_value",
-            message: `言語版のロケール(${edition.locale})と一致しません。`,
-          },
-        ]);
-      }
+    const edition =
+      input.languageEditionId === undefined
+        ? null
+        : await requireEdition(prisma, input.languageEditionId);
+    if (edition !== null && input.content.locale !== edition.locale) {
+      throw validationError([
+        {
+          path: ["content", "locale"],
+          code: "invalid_value",
+          message: `言語版のロケール(${edition.locale})と一致しません。`,
+        },
+      ]);
     }
     preview = await compilePreview(prisma, directories, input.content, {
       strictTakeDurations: true,
+      outputProfile:
+        edition === null
+          ? undefined
+          : toOutputProfile(edition.work.outputProfile),
     });
   }
 

@@ -3,7 +3,7 @@ import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { voiceAdapterIdSchema, voiceIdSchema, voiceProfileExtrasSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
-import { compositionManifestSchema } from "./composition";
+import { compositionManifestSchema, CANVAS_PROFILE_DIMENSIONS } from "./composition";
 import { expressionPresetSchema, faceLayerSchema } from "./face-set";
 import { visualSkinRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 
@@ -36,12 +36,30 @@ export const snapshotAssetRefSchema = z.object({
   heightPx: positiveInt.nullable(),
 });
 
-export const outputSettingsSchema = z.object({
-  width: z.literal(1920),
-  height: z.literal(1080),
-  fps: z.literal(30),
-  format: z.literal("mp4"),
-});
+/**
+ * Output canvas recorded in a render snapshot. The Work's Output Profile
+ * decides the size; only the two supported profiles are accepted so a corrupt
+ * snapshot cannot silently render an unexpected canvas.
+ */
+export const outputSettingsSchema = z
+  .object({
+    width: positiveInt,
+    height: positiveInt,
+    fps: z.literal(30),
+    format: z.literal("mp4"),
+  })
+  .refine(
+    (value) =>
+      Object.values(CANVAS_PROFILE_DIMENSIONS).some(
+        (size) => size.width === value.width && size.height === value.height,
+      ),
+    {
+      message: `出力寸法は ${Object.values(CANVAS_PROFILE_DIMENSIONS)
+        .map((size) => `${size.width}×${size.height}`)
+        .join(" / ")} のいずれかです。`,
+      path: ["width"],
+    },
+  );
 
 export const rendererVersionsSchema = z.object({
   engine: z.literal("hyperframes"),

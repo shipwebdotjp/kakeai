@@ -1,4 +1,22 @@
-export { COMPOSITION_ENGINE, COMPILER_VERSION, HYPERFRAMES_PLAYER_VERSION, OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH, THUMBNAIL_OUTPUT_HEIGHT, THUMBNAIL_OUTPUT_WIDTH } from "./meta";
+export {
+  COMPOSITION_ENGINE,
+  COMPILER_VERSION,
+  HYPERFRAMES_PLAYER_VERSION,
+  OUTPUT_FPS,
+  OUTPUT_HEIGHT,
+  OUTPUT_WIDTH,
+  THUMBNAIL_OUTPUT_HEIGHT,
+  THUMBNAIL_OUTPUT_WIDTH,
+} from "./meta";
+export {
+  LANDSCAPE_CANVAS,
+  PORTRAIT_CANVAS,
+  canvasMetricsFor,
+  canvasRootStyle,
+  outputProfileForDimensions,
+  scaleThemeForCanvas,
+  type CanvasMetrics,
+} from "./canvas";
 export { CompositionCompileError } from "./compile-error";
 export type { AssetResolver, FaceSetResolver, ResolvedAsset, ResolvedAssetKind, StillResolver } from "./resolver";
 export {

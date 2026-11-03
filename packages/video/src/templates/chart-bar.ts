@@ -158,6 +158,7 @@ function horizontalValueGutter(
 
 interface RenderArgs {
   context: RenderContext;
+  plotWidth: number;
   rows: TableRow[];
   values: number[][];
   stats: Scale;
@@ -197,7 +198,7 @@ function renderVertical(args: RenderArgs): string {
   const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, labelId, valueLabels, axisUnit, axisFormat } = args;
   const locale = context.document.locale;
   const available = PLOT_HEIGHT_PX - CATEGORY_BAND_PX;
-  const availableWidth = PLOT_WIDTH_PX - ROW_LABEL_WIDTH_PX;
+  const availableWidth = args.plotWidth - ROW_LABEL_WIDTH_PX;
   const bandWidth = rows.length === 0 ? availableWidth : availableWidth / rows.length;
   const width = barThickness(bandWidth - CATEGORY_GAP_PX, seriesColumns.length, MAX_BAR_THICKNESS_PX);
   const lines = stats.ticks
@@ -224,14 +225,14 @@ function renderVertical(args: RenderArgs): string {
       return `<div class="kakeai-chartcol"><div class="kakeai-chartbars">${bars}</div><div class="kakeai-chartcat">${escapeHtmlText(categoryLabel(row, categoryColumn))}</div></div>`;
     })
     .join("");
-  return `<div class="kakeai-chartplot" style="height:${PLOT_HEIGHT_PX}px;--kakeai-chart-label-w:${ROW_LABEL_WIDTH_PX}px"><div class="kakeai-chartlines" style="bottom:${CATEGORY_BAND_PX}px">${lines}</div><div class="kakeai-chartcols" style="left:${ROW_LABEL_WIDTH_PX}px">${cols}</div></div>`;
+  return `<div class="kakeai-chartplot" style="width:${args.plotWidth}px;height:${PLOT_HEIGHT_PX}px;--kakeai-chart-label-w:${ROW_LABEL_WIDTH_PX}px"><div class="kakeai-chartlines" style="bottom:${CATEGORY_BAND_PX}px">${lines}</div><div class="kakeai-chartcols" style="left:${ROW_LABEL_WIDTH_PX}px">${cols}</div></div>`;
 }
 
 function renderHorizontal(args: RenderArgs): string {
   const { context, rows, values, stats, seriesColumns, categoryColumn, colorFor, onsetFor, labelId, valueLabels, axisUnit, axisFormat } = args;
   const locale = context.document.locale;
   const available =
-    PLOT_WIDTH_PX -
+    args.plotWidth -
     HORIZONTAL_BAR_LEFT_PX -
     horizontalValueGutter(values, seriesColumns, valueLabels, locale);
   const availableHeight = PLOT_HEIGHT_PX;
@@ -264,7 +265,7 @@ function renderHorizontal(args: RenderArgs): string {
     })
     .join("");
   const linesOffset = HORIZONTAL_BAR_LEFT_PX - ROW_LABEL_WIDTH_PX;
-  return `<div class="kakeai-chartplot kakeai-chartplot-h" style="width:${PLOT_WIDTH_PX}px;--kakeai-chart-label-w:${ROW_LABEL_WIDTH_PX}px"><div class="kakeai-chartlines-h" style="left:calc(var(--kakeai-chart-label-w) + ${linesOffset}px)">${lines}</div><div class="kakeai-chartrows">${rowsHtml}</div></div>`;
+  return `<div class="kakeai-chartplot kakeai-chartplot-h" style="width:${args.plotWidth}px;--kakeai-chart-label-w:${ROW_LABEL_WIDTH_PX}px"><div class="kakeai-chartlines-h" style="left:calc(var(--kakeai-chart-label-w) + ${linesOffset}px)">${lines}</div><div class="kakeai-chartrows">${rowsHtml}</div></div>`;
 }
 
 function buildLegend(
@@ -354,6 +355,7 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
 
   const args: RenderArgs = {
     context,
+    plotWidth: Math.min(PLOT_WIDTH_PX, context.canvas.contentWidth),
     rows,
     values,
     stats,

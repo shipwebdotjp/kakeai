@@ -11,6 +11,7 @@ import {
   type CaptionLayout,
   type ContentDocument,
   type VisualThemeDefinition,
+  type WorkOutputProfile,
 } from "@kakeai/contracts";
 import type {
   CompositionVersionResolver,
@@ -18,9 +19,10 @@ import type {
 } from "../composition-resolver";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
+import { canvasMetricsFor, canvasRootStyle, scaleThemeForCanvas } from "../canvas";
 import { captionLayoutStyle } from "../caption-layout";
 import { getGsapBundleSource } from "../gsap-bundle";
-import { OUTPUT_FPS, OUTPUT_HEIGHT, OUTPUT_WIDTH } from "../meta";
+import { OUTPUT_FPS } from "../meta";
 import type {
   AssetResolver,
   FaceSetResolver,
@@ -44,6 +46,8 @@ export const COMPOSITION_ID = "kakeai-main";
 export interface CompileDocumentOptions {
   document: ContentDocument;
   assetResolver: AssetResolver;
+  /** Output canvas. Defaults to the existing 1920x1080 landscape layout. */
+  outputProfile?: WorkOutputProfile;
   compositionResolver?: CompositionVersionResolver;
   faceSetResolver?: FaceSetResolver;
   themeResolver?: (
@@ -72,7 +76,7 @@ export function compileDocument(
     options;
   const videoPlaybackPlans = options.videoPlaybackPlans;
   const stillResolver = options.stillResolver;
-  const theme =
+  const baseTheme =
     options.resolvedTheme ??
     (options.themeResolver
       ? options.themeResolver(
@@ -81,8 +85,10 @@ export function compileDocument(
         )
       : undefined) ??
     resolveVisualTheme(document);
+  const canvas = canvasMetricsFor(options.outputProfile);
+  const theme = scaleThemeForCanvas(baseTheme, canvas);
   const skin =
-    options.resolvedSkin ?? resolveVisualSkin(resolveVisualThemeSkin(theme));
+    options.resolvedSkin ?? resolveVisualSkin(resolveVisualThemeSkin(baseTheme));
   const timeline = resolveTimeline(document);
   const sceneById = new Map(document.scenes.map((scene) => [scene.id, scene]));
 
@@ -156,6 +162,7 @@ export function compileDocument(
     document,
     theme,
     skin,
+    canvas,
     timeline,
     sceneById,
     assetResolver,
@@ -250,12 +257,12 @@ export function compileDocument(
     `<html lang="${escapeHtmlAttribute(document.locale)}">`,
     "<head>",
     `<meta charset="UTF-8">`,
-    `<meta name="viewport" content="width=${OUTPUT_WIDTH}, height=${OUTPUT_HEIGHT}">`,
+    `<meta name="viewport" content="width=${canvas.width}, height=${canvas.height}">`,
     `<title>プレビュー</title>`,
     `<style>${STYLES}</style>`,
     "</head>",
     "<body>",
-    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${OUTPUT_WIDTH}" data-height="${OUTPUT_HEIGHT}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme, document.locale)};${captionLayoutStyle(theme, captionLayout)}">`,
+    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${canvas.width}" data-height="${canvas.height}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme, document.locale)};${canvasRootStyle(canvas)};${captionLayoutStyle(theme, captionLayout, canvas)}">`,
     ...clips,
     ...audios,
     "</div>",
