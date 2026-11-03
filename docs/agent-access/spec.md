@@ -36,6 +36,7 @@
 - 公式の `@modelcontextprotocol/sdk`（`^1.32.1`）を使い、低レベルの stdio サーバーとして `initialize` / `tools/list` / `tools/call` を実装する。stdout は JSON-RPC 専用とし、ログは stderr にだけ書く。起動失敗や内部エラーでもスタックトレースを stdout に出さない。
 - 設定は `KAKEAI_DATA_DIR`（未指定ならプラットフォーム既定のデータルート）からソケットを解決し、`KAKEAI_SOCKET` または `--socket` で明示パスを指定できる。`--data-dir` も受け付ける。`KAKEAI_AGENT_ID` または `--agent-id` をハンドシェイクの `agentId` に使い、既定は `mcp` とする。`--help` と `--version` をサポートする。ソケット接続時の `protocolVersion` は `2` である。
 - ツール名は MCP の命名制約に合わせて `kakeai_<domain>_<verb>` の snake_case とし、説明文に正規の `domain.verb` を必ず含める。`inputSchema` と `outputSchema` は `packages/contracts` の Zod スキーマから `z.toJSONSchema` で生成し、束縛側に JSON Schema を手書きしない。成功時は JSON を `content[].text` と `structuredContent` の両方で返す。画像を返す操作（`agentImagePreviewOperationNames`）に限り、`content[0].text` は `pngBase64` / `imageBase64` を除いたメタ情報の要約 JSON とし、全出力は `structuredContent`、画像バイトは標準の image コンテントブロックで返す（[ADR 0079](../adr/0079-mcp-preview-frame-text-summary.md)）。
+- ツールの `description` とサーバーの `instructions` は英語で書く。主な読み手は AI エージェントであり、英語の方が操作選択・解釈が安定し、トークンも抑えやすい。加えて `skills/kakeai-production` と `schema.get` が返すテンプレート契約が英語のため、用語を揃えられる。操作名・JSON キー・エラーコードは翻訳せず、用語は同スキルと `schema.get` の英語表現に合わせる。CLI のヘルプとユーザーガイドは人間向けなので日本語のままとする。
 - ツール一覧は次のとおり。読み取り・変更の区分と長尺かどうかは `schema.get` の `agentOperations` と同じ分類を使う。
 
 | 操作 | 種別 | 長尺（Job） | MCP ツール名 |

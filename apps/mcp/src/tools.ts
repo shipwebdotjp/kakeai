@@ -48,151 +48,155 @@ export const MCP_TOOL_NAME_PATTERN = /^[a-z][a-z0-9_]{0,127}$/u;
 
 const operationDescriptions: Record<AgentOperationName, string> = {
   "schema.get":
-    "現在の Content Schema、VisualTemplate の入力フィールドと制約、警告コード、全操作カタログを返す。最初に呼ぶ。",
+    "Returns the current Content Schema, VisualTemplate input fields and constraints, warning codes, and the full operation catalog. Call this first.",
   "template.get":
-    "VisualTemplate 1件の入力契約を返す。`inputSchema`（保存時検証と同じスキーマから導出した JSON Schema）と、そのまま使える入力例 `example` を含む。表・グラフ・フロー・セリフ同期の効果・入れ子など、`schema.get` の `inputFields` だけでは形が分からない入力を組み立てるときに呼ぶ。`example` の `<...>` は実在する ID に置き換える。",
-  "work.list": "作品の一覧を返す。",
-  "work.get": "作品 1 件を、言語版と現在の台本版の概要付きで返す。",
-  "work.create": "作品、`ja-JP` 既定の言語版、初期台本版を作成する。",
+    "Returns the input contract for one VisualTemplate. Includes `inputSchema` (JSON Schema derived from the same schema used for save-time validation) and a ready-to-use input `example`. Call it when `schema.get`'s `inputFields` do not reveal the shape, such as tables, charts, flows, line-triggered effects, or nesting. Replace each `<...>` in `example` with a real ID.",
+  "work.list": "Returns the list of Works.",
+  "work.get": "Returns one Work with its language editions and current Script Version summaries.",
+  "work.create":
+    "Creates a Work, its `ja-JP` language edition by default, and the initial Script Version.",
   "work.update":
-    "作品の管理上の作品名（`title`）を変更する。動画内に表示するタイトルは台本側の Scene スロットで、これとは別。",
+    "Renames the Work's management title (`title`). The title shown inside the video is a Scene slot in the script and is separate from this field.",
   "work.clone":
-    "指定した Edition（`sourceEditionId`）の現在版から子 Work を作る。`sourceEditionId` は必須で、元作品に属する Edition を指定する。元作品は変更せず、子 Work には `parentWorkId` が付き、`originalLocale` と唯一の Edition は複製元の locale になる。複製されるのは指定 Edition の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しない。`requestId` は持たないため、タイムアウト後は work.list で `parentWorkId` と `title`、`createdAt` を確認してから再実行する。不明な作品・Edition は WORK_NOT_FOUND。",
+    "Creates a child Work from the current version of the given Edition (`sourceEditionId`). `sourceEditionId` is required and must be an Edition that belongs to the source Work. The source Work is unchanged; the child Work gets `parentWorkId`, and its `originalLocale` and only Edition use the source locale. Only the current version of the given Edition is copied; other language editions, version history, Jobs, and thumbnails are not. There is no `requestId`, so after a timeout check `work.list` for `parentWorkId`, `title`, and `createdAt` before retrying. An unknown Work or Edition is WORK_NOT_FOUND.",
   "edition.create":
-    "既存作品に言語版を追加する。シード元の現行台本をコピーし、声と音声を取り除いた初期版を作る。翻訳は script.save で別途保存する。",
+    "Adds a language edition to an existing Work. It copies the seed edition's current script and creates an initial version with voices and audio removed. Save the translation separately with script.save.",
   "script.get":
-    "台本版を取得する。`scriptVersionId` または `languageEditionId`（その Edition の current）のどちらか一方を指定する。",
+    "Returns a Script Version. Specify either `scriptVersionId` or `languageEditionId` (that Edition's current version), not both.",
   "script.listVersions":
-    "Edition の台本版履歴を新しい順に全件返す（Edition の版数は通常小さい）。`languageEditionId` が必要で、`currentScriptVersionId` と各版の要約（版番号・作成者・要求ID・復元元・作成日時）を含む。ContentDocument は含まない。過去版を選んで script.restore するときに使う。",
+    "Returns the Edition's full Script Version history, newest first (editions are expected to stay small). Requires `languageEditionId` and includes `currentScriptVersionId` plus a summary per version (version number, author, request ID, restore source, and createdAt). Does not include the ContentDocument. Use it to pick a past version for script.restore.",
   "script.validate":
-    "保存せずに台本を検証し、警告と解決済み timeline を返す。`content` または `baseScriptVersionId` + `operations` を渡す。",
+    "Validates a script without saving and returns warnings and the resolved timeline. Pass either `content` or `baseScriptVersionId` + `operations`.",
   "script.subtitles":
-    "保存済み Script Version の SRT 字幕を返す。応答は `{ scriptVersionId, filename, mimeType, byteSize, srt }`。レンダー不要で、タイミングは焼き込み字幕と同じ `resolveTimeline` を使う。Artifact や Job は作らない。タイムラインを解決できない場合は RENDER_INPUT_INVALID。",
+    "Returns SRT subtitles for a saved Script Version. The response is `{ scriptVersionId, filename, mimeType, byteSize, srt }`. No render is needed; timing uses the same `resolveTimeline` as burned-in subtitles. Creates no Artifact or Job. If the timeline cannot be resolved, RENDER_INPUT_INVALID.",
   "script.save":
-    "ContentDocument 全体を検証して新しい台本版として保存する。取り込み向けで、通常の編集は script.edit を使う。任意の `baseScriptVersionId` を渡すと現在の版と一致する場合だけ保存し、`sourceScriptVersionId` には同じ Edition の復元元の版を指定できる。",
+    "Validates a complete ContentDocument and saves it as a new Script Version. Intended for imports; use script.edit for normal editing. Optionally pass `baseScriptVersionId` to save only when it matches the current version, and `sourceScriptVersionId` to record a restore source from the same Edition.",
   "script.edit":
-    "操作コアの ScriptOperation 配列を適用し、新しい台本版を作成する。`baseScriptVersionId` が current と一致している必要があり、`requestId` は再送を冪等にする。",
+    "Applies an array of operation-core ScriptOperations and creates a new Script Version. `baseScriptVersionId` must match the current version, and `requestId` makes retries idempotent.",
   "script.restore":
-    "過去の台本版（`scriptVersionId`）を新しい版として復元する。ContentDocument は送らず、サーバーが復元元の内容を保存する。`requestId` は必須で、同じ ID の再送は既存の版を返す。任意の `baseScriptVersionId` を渡すと、その版が current のときだけ復元する。復元元が current の場合は VALIDATION_ERROR。",
+    "Restores a past Script Version (`scriptVersionId`) as a new version. The ContentDocument is not sent; the server saves the source content. `requestId` is required, and a retry with the same ID returns the existing version. Optionally pass `baseScriptVersionId` to restore only when that version is current. Restoring the current version is VALIDATION_ERROR.",
   "asset.list":
-    "素材を検索して `{ assets, nextCursor, total }` の1ページを返す。`kind`・`status`・`filename`（部分一致）・`tags`（`tagMode` で AND / OR、既定 `and`）・`favorite`・`archived`（既定 `exclude`）・`hasAudio`・`durationMinMs` / `durationMaxMs`・`widthPx` / `heightPx`（寸法の完全一致）・`widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む寸法範囲）を組み合わせ、`sort`（既定 `createdAt_desc`）で `limit`（最大100）件ずつページングする。寸法を持たない素材（音声など）は寸法条件に一致しない。範囲が逆転している、または完全一致が指定範囲の外にある場合は VALIDATION_ERROR。`total` は絞り込み条件に一致する件数。続きを取得するときは受け取った `nextCursor` を `cursor` に渡す（`nextCursor` が null なら最終ページ）。`sort` を変えると `cursor` は無効になるので、並べ替えたら先頭から取得し直す。",
-  "asset.get": "素材 1 件を返す。",
+    "Searches Assets and returns one page of `{ assets, nextCursor, total }`. Combine `kind`, `status`, `filename` (substring), `tags` (`tagMode` AND / OR, default `and`), `favorite`, `archived` (default `exclude`), `hasAudio`, `durationMinMs` / `durationMaxMs`, `widthPx` / `heightPx` (exact dimensions), and `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx` (inclusive dimension ranges), and page with `sort` (default `createdAt_desc`) and `limit` (max 100). Assets without dimensions (such as audio) never match dimension filters. An inverted range, or an exact dimension outside the specified range, is VALIDATION_ERROR. `total` is the number of Assets matching the filters. To fetch the next page, pass the received `nextCursor` as `cursor` (a null `nextCursor` means the last page). Changing `sort` invalidates the `cursor`, so start over from the first page after reordering.",
+  "asset.get": "Returns one Asset.",
   "asset.import":
-    "ローカルパスの素材を取り込み、jobId を返す。完了状態は job_wait または job.get で確認する。",
+    "Imports an Asset from a local path and returns a jobId. Check completion with kakeai_job_wait or kakeai_job_get.",
   "asset.update":
-    "素材のタグ・お気に入り・アーカイブを更新し、更新後の素材を返す。`assetId` に加えて `tags` / `favorited` / `archived` の少なくとも1つを指定する。`tags` を指定した場合は配列全体を置き換える（空配列で全解除）。`archived: true` は素材を削除せず、既定の `asset.list` とピッカーから隠すだけなので、台本の参照やレンダーは壊れない。`requestId` は持たないため、タイムアウト後は `asset.get` で状態を確認してから再実行する。存在しない ID は RESOURCE_NOT_FOUND、項目を指定しない呼び出しは VALIDATION_ERROR。",
+    "Updates an Asset's tags, favorite, or archive flag and returns the updated Asset. Besides `assetId`, specify at least one of `tags` / `favorited` / `archived`. Supplying `tags` replaces the whole array (an empty array clears all). `archived: true` does not delete the Asset; it only hides it from the default `asset.list` and pickers, so script references and renders keep working. There is no `requestId`, so after a timeout check `asset.get` before retrying. An unknown ID is RESOURCE_NOT_FOUND; a call with no fields is VALIDATION_ERROR.",
   "render.start":
-    "指定した台本版のレンダー Job を投入し、Job を返す。完了は job_wait または job.get で確認する。",
-  "job.get": "Job 1 件の状態を返す。",
+    "Queues a render Job for the given Script Version and returns the Job. Check completion with kakeai_job_wait or kakeai_job_get.",
+  "job.get": "Returns the state of one Job.",
   "job.list":
-    "作品の Job 一覧を返す。`kind` で種別を選ぶ（既定 `render`、`render` / `tts`）。`asset_ingest` は作品に紐づかないため指定できない。",
-  "job.cancel": "queued の Job、または実行中の render Job をキャンセルする。",
+    "Returns a Work's Jobs. Select the kind with `kind` (default `render`; `render` / `tts`). `asset_ingest` is not tied to a Work and cannot be selected.",
+  "job.cancel": "Cancels a queued Job, or a running render Job.",
   "preview.frame":
-    "render 成果物（MP4）の指定時刻（`timeMs` ミリ秒）の静止画を原寸 PNG で返す。絵は image ブロック、解決時刻と寸法は JSON で返る。JSON にも原寸 PNG の base64（`pngBase64`）が入るため転記せず、絵が必要なときは image ブロックを使う。",
+    "Returns a full-resolution PNG still at `timeMs` (milliseconds) from a render Artifact (MP4). The picture is returned as an image block; the resolved time and dimensions are returned as JSON. The JSON also carries the full-size PNG base64 (`pngBase64`); do not transcribe it, and use the image block when you need the picture.",
   "preview.scriptFrame":
-    "保存済みの台本版（`scriptVersionId`）を、指定時刻（`timeMs` ミリ秒）のプレビュー PNG にする。レンダー Job・台本版・Artifact は作らない。render 前に表・グラフ・フロー・立ち絵・字幕の配置を確認したいときに使う。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。プレビューは構図確認用で、最終的な色・動き・音の判断は render 後に人が行う。",
+    "Renders a saved Script Version (`scriptVersionId`) to a preview PNG at `timeMs` (milliseconds). Creates no render Job, Script Version, or Artifact. Use it before rendering to check the layout of tables, charts, flows, standing images, and subtitles. The picture is returned as an image block; do not transcribe `imageBase64` from the JSON. The preview is for composition checks, and the human judges final color, motion, and audio after rendering.",
   "preview.assetFrame":
-    "素材 1 件の絵を返す。画像は保存されている画像そのもの（MIME は `mimeType`）、動画は指定時刻（`timeMs`、既定 0）の PNG 静止画を返す。音声素材は指定できない。絵は image ブロックで返り、JSON の `imageBase64` は転記しない。素材の見た目を確認したいときに使う。",
+    "Returns the picture of one Asset. For images, the stored image itself (MIME type in `mimeType`); for videos, a PNG still at `timeMs` (default 0). Audio Assets are not supported. The picture is returned as an image block; do not transcribe `imageBase64` from the JSON. Use it to check how an Asset looks.",
   "preview.thumbnail":
-    "未保存のサムネイル下書き（`languageEditionId`・`template`・`input`・任意の `appearanceOverride`・任意の Work 共通 `appearance`）を 1280x720 の PNG にする。DB へは書かない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。保存前に見出しの折り返しと前景の透過を確認するときに使う。`appearance` を省略すると保存済みの Work 共通 Appearance を使い、null なら使わない。",
+    "Renders an unsaved thumbnail draft (`languageEditionId`, `template`, `input`, optional `appearanceOverride`, and optional Work-wide `appearance`) as a 1280x720 PNG. Writes nothing to the database. The picture is returned as an image block; do not transcribe `pngBase64` from the JSON. Use it before saving to check heading wrapping and foreground transparency. Omitting `appearance` uses the saved Work-wide Appearance; `null` disables it.",
   "preview.faceSet":
-    "未保存の Face Set 下書き（`layers`・`expressions`・任意の `expressionId`（既定 `normal`）・ベースになる ready な画像 Asset の `baseAssetId`）を合成し、PNG を返す。ベース画像の寸法で、眉・目・口と foreground を重ねる。DB・Face Set・改訂版・Job・Artifact は作らない。Face Set を作成・更新する前に、表情の見た目と位置ずれを確認するときに使う。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。`--out` で PNG を書き出せる。",
+    "Composites an unsaved Face Set draft (`layers`, `expressions`, optional `expressionId` defaulting to `normal`, and `baseAssetId` of the ready image Asset to use as the base) and returns a PNG at the base image's dimensions, with brows, eyes, mouth, and foreground overlaid. Creates no database rows, Face Set, revision, Job, or Artifact. Use it before creating or updating a Face Set to check expression looks and alignment. The picture is returned as an image block; do not transcribe `pngBase64` from the JSON. CLI `--out` can write the PNG to a file.",
   "thumbnail.listTemplates":
-    "同梱サムネイルテンプレートの一覧を、入力契約付きで返す。`inputSchema`（保存時検証と同じスキーマから導出した JSON Schema）と、そのまま使える `example` を含む。`example` の `<...>` は実在する画像 Asset の ID に置き換える。契約を推測しない。",
+    "Returns the bundled thumbnail templates with their input contracts. Each includes `inputSchema` (JSON Schema derived from the same schema used for save-time validation) and a ready-to-use `example`. Replace each `<...>` in `example` with a real image Asset ID. Do not guess the contract.",
   "thumbnail.list":
-    "言語版のサムネイル候補を一覧で返す。各候補に `isPrimary` と `appearanceOverride` を含む。存在しない言語版は WORK_NOT_FOUND。",
-  "thumbnail.get": "サムネイル候補 1 件を返す。存在しない ID は RESOURCE_NOT_FOUND。",
+    "Lists the language edition's thumbnail candidates. Each candidate includes `isPrimary` and `appearanceOverride`. An unknown language edition is WORK_NOT_FOUND.",
+  "thumbnail.get":
+    "Returns one thumbnail candidate. An unknown ID is RESOURCE_NOT_FOUND.",
   "thumbnail.appearance":
-    "その言語版の文脈で解決した Work 共通サムネイル Appearance を、Theme 由来の既定値と解決済みの値付きで返す。共通 Appearance の保存はアプリ UI に限る。",
+    "Returns the Work-wide thumbnail Appearance resolved in that language edition's context, with Theme-derived defaults and resolved values. Saving the shared Appearance is limited to the app UI.",
   "thumbnail.create":
-    "言語版にサムネイル候補を作成して返す。`label`・`template`・`input` と任意の `appearanceOverride` を指定する。`input` は thumbnail.listTemplates の `inputSchema` に従い、背景と前景は ready な画像 Asset の ID にする。最初の候補は自動で primary になる。`requestId` は持たないため、タイムアウト後は thumbnail.list で `label` と `createdAt` を確認してから再実行する。",
+    "Creates a thumbnail candidate on the language edition and returns it. Specify `label`, `template`, `input`, and optional `appearanceOverride`. `input` follows thumbnail.listTemplates' `inputSchema`; background and foreground must be ready image Asset IDs. The first candidate automatically becomes primary. There is no `requestId`, so after a timeout check thumbnail.list for `label` and `createdAt` before retrying.",
   "thumbnail.update":
-    "サムネイル候補を部分更新して返す。`thumbnailId` に加えて変更する項目（`label`・`template`・`input`・`appearanceOverride`）だけを指定し、省略した項目は不変。`appearanceOverride: null` で解除。`template` だけを変える場合は現在の `input` を補って検証する。`input` は thumbnail.listTemplates の `inputSchema` に従う。存在しない ID は RESOURCE_NOT_FOUND。",
+    "Partially updates a thumbnail candidate and returns it. Besides `thumbnailId`, send only the fields to change (`label`, `template`, `input`, `appearanceOverride`); omitted fields stay unchanged. `appearanceOverride: null` clears it. When changing only `template`, validation fills in the current `input`. `input` follows thumbnail.listTemplates' `inputSchema`. An unknown ID is RESOURCE_NOT_FOUND.",
   "thumbnail.setPrimary":
-    "言語版の投稿用サムネイル（primary）を選ぶ。`thumbnailId` は同じ言語版の候補で、null で解除する。存在しない候補は RESOURCE_NOT_FOUND。",
+    "Selects the language edition's publishing thumbnail (primary). `thumbnailId` must be a candidate in the same language edition; `null` clears it. An unknown candidate is RESOURCE_NOT_FOUND.",
   "thumbnail.image":
-    "保存済みサムネイル候補の PNG（1280x720）をオンデマンドで生成して返す。Job・Artifact は作らない。絵は image ブロックで返り、JSON の `pngBase64` は転記しない。CLI では `--out` に PNG を書き出せる。存在しない ID は RESOURCE_NOT_FOUND。",
+    "Generates and returns the PNG (1280x720) of a saved thumbnail candidate on demand. Creates no Job or Artifact. The picture is returned as an image block; do not transcribe `pngBase64` from the JSON. In the CLI, `--out` can write the PNG to a file. An unknown ID is RESOURCE_NOT_FOUND.",
   "artifact.get":
-    "Artifact 1件のメタデータと、実ファイルの絶対パス `filePath` を返す。レンダー MP4 は `role: \"render\"` / `format: \"mp4\"`。バイトは返さないため、大きな動画でも安全。`artifact.contentUrl` はブラウザ用で media session Cookie が必要なので、エージェントは `filePath` を使ってコピー・投稿する。ファイルが欠損、またはサイズが記録と一致しない場合は RESOURCE_NOT_FOUND。",
+    "Returns one Artifact's metadata and the absolute `filePath` of the actual file. A render MP4 has `role: \"render\"` / `format: \"mp4\"`. Bytes are not returned, so large videos are safe. `artifact.contentUrl` is for browsers and requires the media session cookie, so agents should copy or upload using `filePath`. If the file is missing or its size does not match the record, RESOURCE_NOT_FOUND.",
   "artifact.export":
-    "Artifact を指定ディレクトリへ書き出し、`{ artifact, sourcePath, exportedPath }` を返す。`outputDir` は存在する絶対ディレクトリ、`filename` は任意（パス区切りを含まない、Artifact の拡張子に一致する名前）。正本はアプリのデータルートに残り、既存ファイルは上書きしない（同名があれば EXPORT_TARGET_EXISTS）。大きなファイルは copy-on-write の複製を使い、失敗時は EXPORT_FAILED。タイムアウト後は `outputDir` 内に `-{artifactId}.{拡張子}` で終わる既定名ファイルがないか確認し、無ければ再実行する。EXPORT_FAILED 後の再実行は、同名の部分ファイルが残っていれば EXPORT_TARGET_EXISTS になる。",
-  "composition.list": "Composition の一覧を返す。",
-  "composition.get": "Composition 1 件を返す。",
-  "composition.draft.get": "Composition の draft ファイルと manifest を返す。",
+    "Exports an Artifact to the given directory and returns `{ artifact, sourcePath, exportedPath }`. `outputDir` must be an existing absolute directory; `filename` is optional (no path separators, matching the Artifact's extension). The canonical file stays in the app's data root, and existing files are not overwritten (a name collision is EXPORT_TARGET_EXISTS). Large files use copy-on-write clones; failure is EXPORT_FAILED. After a timeout, check `outputDir` for a default-named file ending in `-{artifactId}.{extension}` and retry only if there is none. After EXPORT_FAILED, a retry becomes EXPORT_TARGET_EXISTS if a partial file with the same name remains.",
+  "composition.list": "Returns the list of Compositions.",
+  "composition.get": "Returns one Composition.",
+  "composition.draft.get": "Returns a Composition's draft files and manifest.",
   "composition.authoringContext":
-    "Composition 作成用の authoring context を返す。HTTP と同じ入力（`visualTheme` と任意の `canvasProfile`）を受け取る。",
-  "composition.create": "Composition の draft を作成する。任意で authoring style を指定できる。",
-  "composition.draft.update": "Composition draft のファイルと manifest を部分更新する。",
+    "Returns the authoring context for creating a Composition. Accepts the same input as HTTP (`visualTheme` and optional `canvasProfile`).",
+  "composition.create":
+    "Creates a Composition draft. Optionally specify an authoring style.",
+  "composition.draft.update":
+    "Partially updates a Composition draft's files and manifest.",
   "composition.publish":
-    "Composition を publish して不変 version を作る。`dryRun: true` なら検証だけを行い version を作らない。",
+    "Publishes a Composition and creates an immutable version. With `dryRun: true`, only validates and creates no version.",
   "tts.create":
-    "保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter（voicevox / aivisspeech / openai-compatible）へ合成 Job を投入し、Job を返す。`speedScale` の既定は 1.0。完了は job_wait または job.get で確認し、`ttsResult` を `script.edit` の `line.assignTake` で Take にする。",
+    "Queues a synthesis Job for one line of a saved Script Version on the user's configured TTS Adapter (voicevox / aivisspeech / openai-compatible) and returns the Job. `speedScale` defaults to 1.0. Check completion with kakeai_job_wait or kakeai_job_get, then turn `ttsResult` into a Take with `line.assignTake` in `script.edit`.",
   "tts.createBulk":
-    "保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する。投入した Job と、生成できなかったセリフ（コードと理由）を返す。完了は各 Job を job_wait または job.get で確認する。",
+    "Queues synthesis Jobs in bulk for lines that have no selected audio in the saved Script Version's point scenes. Returns the queued Jobs and the lines that could not be generated (code and reason). Check each Job with kakeai_job_wait or kakeai_job_get.",
   "tts.attachBulk":
-    "requestId付きで開始した tts.createBulk の結果を確定し、成功 Job だけを1つの台本版へ添付する。入力は元の台本版（`scriptVersionId`）、元の一括要求の `bulkRequestId`、添付自身の `requestId`（必須）。Jobが1件でも未完了なら台本を変更せず `pending` を返し、全Jobが終端状態になったら成功分だけを添付して `finalized` を返す。件数・対象外・失敗理由と、添付後の台本版（添付0件なら null）を返す。同じ `requestId` の再送は既存の版を返す。確定前に台本を書き換えると `SCRIPT_BASE_STALE` になる。",
+    "Finalizes the result of a tts.createBulk started with a requestId and attaches only the successful Jobs to one Script Version. Inputs are the original Script Version (`scriptVersionId`), the original bulk request's `bulkRequestId`, and this attach's own required `requestId`. If any Job is unfinished, returns `pending` without changing the script; once all Jobs are terminal, attaches the successful ones and returns `finalized`. Returns counts, exclusions, failure reasons, and the resulting Script Version (null when nothing was attached). A retry with the same `requestId` returns the existing version. If the script changed before finalization, `SCRIPT_BASE_STALE`.",
   "character.list":
-    "キャラクターライブラリの一覧を返す。台本へ入れるときは script.edit の character.addFromLibrary でコピーする。ライブラリの削除は公開しない。",
+    "Returns the Character library. To use one in a script, copy it with script.edit's character.addFromLibrary. Deleting library entries is not exposed.",
   "character.get":
-    "キャラクターライブラリの 1 件を、locale 別の声と外観（Face Set 参照と立ち絵の標準配置 `standing` を含む）付きで返す。存在しない ID は RESOURCE_NOT_FOUND。",
+    "Returns one Character library entry with its locale-keyed voices and appearances (including Face Set references and the default standing placement `standing`). An unknown ID is RESOURCE_NOT_FOUND.",
   "character.create":
-    "キャラクターライブラリに 1 件作成して返す。`name` と任意の `names`（locale 別の名前）・`voices`（locale 別の Voice Profile）・`appearances`（外観。`assetId` は取り込み済みの ready な画像 Asset、`faceSetId` は実在し、ベース画像と寸法が一致する Face Set、`standing` は任意の `{ scale, edge, vertical }` で立ち絵の標準配置）を指定する。外観の ID はサーバーが付ける。タイムアウト後は character.list で確認してから再実行する。",
+    "Creates one Character library entry and returns it. Specify `name`, optional locale-keyed `names`, `voices` (Voice Profiles per locale), and `appearances` (each with `assetId` of an imported ready image Asset, an existing `faceSetId` matching the base image's dimensions, and optional `standing` `{ scale, edge, vertical }` for the default standing placement). The server assigns appearance IDs. After a timeout, check character.list before retrying.",
   "character.update":
-    "キャラクターライブラリの 1 件を部分更新して返す。`characterId` に加えて `name` / `names` / `voices` の変更する項目だけを指定し、省略した項目は変更しない。指定した `names` / `voices` は配列全体を置き換える。外観の追加・変更は `character.addAppearance` / `character.updateAppearance` を使う。存在しない ID は RESOURCE_NOT_FOUND、参照・寸法・locale の不整合は VALIDATION_ERROR。",
+    "Partially updates one Character library entry and returns it. Besides `characterId`, send only the changed `name` / `names` / `voices`; omitted fields stay unchanged. A supplied `names` / `voices` replaces the whole array. Use `character.addAppearance` / `character.updateAppearance` to add or change appearances. An unknown ID is RESOURCE_NOT_FOUND; a reference, dimension, or locale mismatch is VALIDATION_ERROR.",
   "character.addAppearance":
-    "キャラクターライブラリに外観を 1 件追加して返す。`characterId`・`assetId`（ready な画像 Asset）・`expression`・`pose` と任意の `label`・`faceSetId`（実在しベース画像と寸法が一致する Face Set）・`standing`（任意の `{ scale, edge, vertical }` で立ち絵の標準配置）を指定する。ID はサーバーが自動で付け、配列の末尾に追加する。登録上限は 50 件。存在しないキャラクターは RESOURCE_NOT_FOUND、参照・寸法不整合は VALIDATION_ERROR。",
+    "Adds one appearance to a Character library entry and returns it. Specify `characterId`, `assetId` (a ready image Asset), `expression`, `pose`, and optional `label`, `faceSetId` (an existing Face Set matching the base image's dimensions), and `standing` (optional `{ scale, edge, vertical }` default standing placement). The server assigns the ID and appends it to the array. The limit is 50 appearances. An unknown Character is RESOURCE_NOT_FOUND; a reference or dimension mismatch is VALIDATION_ERROR.",
   "character.updateAppearance":
-    "キャラクターライブラリの外観 1 件を部分更新して返す。`characterId` と `appearanceId` に加えて変更する項目（`assetId`・`expression`・`pose`・`label`・`faceSetId`・`standing`）だけを指定し、省略した項目は不変、`label: null` および `faceSetId: null` は明示的に解除する。`standing` は `{ scale, edge, vertical }` をまとめて置き換える。`assetId` のみを更新して Face Set と寸法が不一致になる場合は先に `faceSetId: null` で解除するか両方を指定する。存在しないキャラクター・外観は RESOURCE_NOT_FOUND、参照・寸法不整合・更新項目ゼロは VALIDATION_ERROR。",
+    "Partially updates one appearance of a Character library entry and returns it. Besides `characterId` and `appearanceId`, send only the fields to change (`assetId`, `expression`, `pose`, `label`, `faceSetId`, `standing`); omitted fields stay unchanged, while `label: null` and `faceSetId: null` explicitly clear. `standing` replaces the whole `{ scale, edge, vertical }`. If updating only `assetId` would make it inconsistent with the Face Set's dimensions, first clear it with `faceSetId: null` or send both. An unknown Character or appearance is RESOURCE_NOT_FOUND; a reference or dimension mismatch, or zero update fields, is VALIDATION_ERROR.",
   "character.setVoices":
-    "キャラクターの声（locale 別の Voice Profile 割り当て）を置き換えて返す。`voices` は `{ locale, voiceProfileId }` の配列で、Profile は実在し `locale` が一致すること。空配列で全解除もできる。外観は変更しない。存在しない ID は RESOURCE_NOT_FOUND。",
+    "Replaces a Character's voices (Voice Profile assignments per locale) and returns it. `voices` is an array of `{ locale, voiceProfileId }`; each Profile must exist and its `locale` must match. An empty array clears all voices. Appearances are unchanged. An unknown ID is RESOURCE_NOT_FOUND.",
   "theme.list":
-    "選択できる Visual Theme の一覧を返す。組み込み Theme と、アーカイブされていないユーザー Theme の最新 Revision だけを含む。Theme Draft・アーカイブ済み Theme・古い Revision は含まない。",
+    "Returns the selectable Visual Themes. Includes built-in Themes and only the latest Revision of each unarchived user Theme. Theme Drafts, archived Themes, and older Revisions are excluded.",
   "theme.get":
-    "Visual Theme 1件の定義を返す。`version` を省略すると、`theme.list` に載る最新公開 Revision を返す。`version` を指定すると、その公開 Revision を返し、アーカイブ済み Theme の Revision も読める（既存作品が参照している場合がある）。Theme Draft や存在しない Revision は RESOURCE_NOT_FOUND。",
+    "Returns one Visual Theme definition. Omitting `version` returns the latest published Revision listed by `theme.list`. Passing `version` returns that published Revision and can also read an archived Theme's Revision (existing Works may still reference it). A Theme Draft or unknown Revision is RESOURCE_NOT_FOUND.",
   "theme.diagnose":
-    "Theme Revision のフォント診断を返す。`themeId` と任意の `version`（省略時は最新公開 Revision で、アーカイブ済み Theme は RESOURCE_NOT_FOUND。`version` 指定時のみアーカイブ済み Theme の Revision も読める）・`locale`（既定 ja-JP）・`verify`（既定 true）を受ける。`roles` に文字 role ごとの解決済み local face とフォールバック有無、`missingFonts` に解決できなかった family、`diagnostics` に人が読める説明を返す。`verify: true` はレンダーと同じく Chromium で local face の解決可否を確認するため、初回は時間がかかる。`verify: false` はカタログ照合だけの速い診断になる。",
+    "Returns the font diagnosis for a Theme Revision. Accepts `themeId`, optional `version` (latest published Revision when omitted; an archived Theme is RESOURCE_NOT_FOUND unless you pass `version`), `locale` (default ja-JP), and `verify` (default true). `roles` gives the resolved local face and fallback status per text role, `missingFonts` lists families that could not be resolved, and `diagnostics` gives human-readable explanations. `verify: true` checks local face resolution in Chromium just like rendering, so the first call is slow. `verify: false` does a fast catalog-only check.",
   "theme.create":
-    "Visual Theme を作成し、初期 Draft を返す。`name` と任意の `sourceThemeRef`（複製元。省略時は組み込み Soft Editorial）を指定する。新しい Theme は公開 Revision を持たないため、`draft` を編集して `theme.draft.save` → `preview.theme` → `theme.publish` の順に進める。Theme の削除・アーカイブは公開しない。タイムアウト後は theme.list で名前を確認してから再実行する。",
+    "Creates a Visual Theme and returns its initial Draft. Specify `name` and optional `sourceThemeRef` (the copy source; defaults to the built-in Soft Editorial). A new Theme has no published Revision, so edit `draft` and proceed through `theme.draft.save` → `preview.theme` → `theme.publish`. Deleting or archiving Themes is not exposed. After a timeout, check theme.list for the name before retrying.",
   "theme.draft.get":
-    "Theme の編集 Draft を返す。Draft が無ければ `draft: null`。組み込み Theme も `draft: null`。未知の Theme は RESOURCE_NOT_FOUND。",
+    "Returns the Theme's editing Draft, or `draft: null` when there is none. Built-in Themes also return `draft: null`. An unknown Theme is RESOURCE_NOT_FOUND.",
   "theme.draft.save":
-    "Theme Draft を保存する（無ければ作る）。`definition` は `theme.draft.get` で読んだ定義を元にし、変更したい項目だけを変えた完全な定義を送る。公開 Revision は変えず、版も消費しない。組み込み・未知・アーカイブ済み Theme は RESOURCE_NOT_FOUND。",
+    "Saves the Theme Draft (creating one if absent). Base `definition` on the definition read from `theme.draft.get` and send the complete definition with only the intended fields changed. Does not change the published Revision and does not consume a version. Built-in, unknown, and archived Themes are RESOURCE_NOT_FOUND.",
   "theme.publish":
-    "Theme Draft を新しい公開 Revision として公開し、その Revision を返す。公開後 Draft は破棄される。Draft が無い場合は INVALID_STATE。タイムアウト後は theme.get で最新 Revision を確認し、二重に公開しない。",
+    "Publishes the Theme Draft as a new published Revision and returns it. The Draft is discarded after publishing. No Draft is INVALID_STATE. After a timeout, check theme.get for the latest Revision and do not publish twice.",
   "preview.theme":
-    "未保存の Theme 定義を代表サンプルでレンダーし、PNG を返す。`definition`・任意の `locale`（既定 ja-JP）・`timeMs`（既定 4500ms）を指定する。DB・Theme Draft・Revision・Job・Artifact は作らない。既定時刻は見出し・本文・ラベル・字幕が同時に見える要点シーン。色・余白・フォントの見え方を確認し、フォントの解決可否は theme.diagnose で確認する。",
+    "Renders an unsaved Theme definition with the representative sample and returns a PNG. Specify `definition`, optional `locale` (default ja-JP), and `timeMs` (default 4500ms). Creates no database rows, Theme Draft, Revision, Job, or Artifact. The default time is a key scene where heading, body, label, and caption are visible at once. Use it to check colors, spacing, and fonts; check font resolution with theme.diagnose.",
   "font.list":
-    "インストール済みフォントの一覧を、検索とページング付きで返す。`query` は family・表示名・PostScript 名の部分一致、`style`・`minWeight`・`maxWeight`・`available` で絞れる。`limit` は既定50・最大200、`offset` で次ページを取得する。応答の `total` は絞り込み後の件数、`nextOffset` は次ページの offset（無ければ null）、`catalog` はカタログの対応状況と更新時刻。Theme の `fontFace` を組み立てるときに使う。",
+    "Returns installed fonts with search and paging. `query` matches family, display name, or PostScript name as a substring; filter with `style`, `minWeight`, `maxWeight`, and `available`. `limit` defaults to 50 and is capped at 200; use `offset` for the next page. The response's `total` is the filtered count, `nextOffset` is the next page's offset (or null), and `catalog` is the catalog's support status and updated time. Use it to build a Theme's `fontFace`.",
   "faceSet.list":
-    "Face Set の一覧を、最新の version と Face Layer・Expression Preset 付きで返す。作品の台詞の表情は、script.get の外観にある `faceSetId` と `faceSetVersion` を `faceSet.get` に渡して、その固定版の `expressions[].id` から選ぶ。Face Set の作成・更新は公開するが、削除は公開しない。",
+    "Lists Face Sets with their latest version, Face Layers, and Expression Presets. To choose a line's expression for a Work, pass the `faceSetId` and `faceSetVersion` from script.get's appearances to `faceSet.get`, then pick from that pinned revision's `expressions[].id`. Creating and updating Face Sets is exposed; deleting is not.",
   "faceSet.get":
-    "Face Set 1件を、Face Layer と Expression Preset 付きで返す。`version` を指定するとその改訂版を返し、省略すると最新版を返す。作品の表情を編集するときは、script.get の外観にある `faceSetVersion` を指定する。存在しない ID や版は RESOURCE_NOT_FOUND。",
+    "Returns one Face Set with its Face Layers and Expression Presets. Passing `version` returns that revision; omitting it returns the latest. When editing a Work's expressions, pass the `faceSetVersion` from script.get's appearances. An unknown ID or version is RESOURCE_NOT_FOUND.",
   "faceSet.create":
-    "Face Set を新規作成して返す。`name`・`layers`（Face Layer。`part` は brow / eye / mouth / foreground、`assetId` は同寸で ready な画像 Asset）・`expressions`（Expression Preset。`normal` が必須）を指定する。作成前に preview.faceSet で合成を確認できる。`requestId` は持たないため、タイムアウト後は faceSet.list で名前と createdAt を確認してから再実行する。",
+    "Creates a Face Set and returns it. Specify `name`, `layers` (Face Layers; `part` is brow / eye / mouth / foreground, and `assetId` is a same-size ready image Asset), and `expressions` (Expression Presets; `normal` is required). Check the composite with preview.faceSet before creating. There is no `requestId`, so after a timeout check faceSet.list for the name and createdAt before retrying.",
   "faceSet.update":
-    "Face Set を部分更新して返す。`faceSetId` に加えて変更する項目（`name`・`layers`・`expressions`）だけを指定し、省略した項目は変更しない。指定した配列は全体を置き換える。内容が変わると新しい改訂版（version）を作り、ライブラリの Character は最新版に即時追従する。作品は固定した `faceSetVersion` を使い続ける。名前だけの変更や同一内容では版を増やさない。既存の `expressionId` を維持して改訂版を作ると、固定版をまたいで同じ意図を引き継げる。寸法がライブラリ外観と一致しない内容は VALIDATION_ERROR。未知 ID は RESOURCE_NOT_FOUND。タイムアウト後は faceSet.get で最新版を確認してから再実行する。",
+    "Partially updates a Face Set and returns it. Besides `faceSetId`, send only the fields to change (`name`, `layers`, `expressions`); omitted fields stay unchanged. A supplied array replaces the whole array. Changed content creates a new revision (version), and library Characters follow the latest revision immediately. Works keep using their pinned `faceSetVersion`. A name-only change or identical content does not increase the version. Keeping existing `expressionId`s when creating a revision carries the same intent across pinned versions. Content whose dimensions do not match the library appearance is VALIDATION_ERROR. An unknown ID is RESOURCE_NOT_FOUND. After a timeout, check faceSet.get for the latest version before retrying.",
   "faceSet.usages":
-    "Face Set を参照しているライブラリ Character の外観一覧を返す。各要素は characterId・characterName・appearanceId・label・assetId・widthPx・heightPx。改訂版を作る前に、ベース画像の寸法と影響範囲を確認するのに使う。未知 ID は RESOURCE_NOT_FOUND。",
+    "Returns the library Character appearances that reference a Face Set. Each element has characterId, characterName, appearanceId, label, assetId, widthPx, and heightPx. Use it before creating a revision to check base image dimensions and the blast radius. An unknown ID is RESOURCE_NOT_FOUND.",
   "voiceAdapter.list":
-    "利用可能な TTS Adapter の種別を返す。各要素は `id`・`label`・`defaultLocale`・`voiceSelection`（`list` / `list-or-manual`）・`modelSelection` を持ち、`voiceProfile.listVoices` / `voiceProfile.listModels` / `voiceProfile.create` の `adapterId` 選びに使う。接続先 URL・環境変数・認証情報は返さない。",
+    "Returns the available TTS Adapter kinds. Each element has `id`, `label`, `defaultLocale`, `voiceSelection` (`list` / `list-or-manual`), and `modelSelection`; use it to pick `adapterId` for `voiceProfile.listVoices` / `voiceProfile.listModels` / `voiceProfile.create`. Connection URLs, environment variables, and credentials are not returned.",
   "voiceProfile.list":
-    "Voice Profile の一覧を、Adapter・voice ID・locale・設定付きで返す。声の割当て前に、台本の locale と一致する Profile を選ぶ。無ければ voiceProfile.listVoices で声候補を探して voiceProfile.create で作る。Profile の削除は公開しない。",
+    "Lists Voice Profiles with their Adapter, voice ID, locale, and settings. Before assigning a voice, choose a Profile whose locale matches the script's. If none exists, find a voice with voiceProfile.listVoices and create one with voiceProfile.create. Deleting Profiles is not exposed.",
   "voiceProfile.get":
-    "Voice Profile 1件を返す。存在しない ID は RESOURCE_NOT_FOUND。",
+    "Returns one Voice Profile. An unknown ID is RESOURCE_NOT_FOUND.",
   "voiceProfile.listVoices":
-    "TTS Adapter の声候補一覧を返す。voiceProfile.create の `voiceId` 選びに使う。接続できない Adapter は TTS_ENGINE_UNAVAILABLE。",
+    "Returns a TTS Adapter's voice candidates. Use it to pick `voiceId` for voiceProfile.create. An unreachable Adapter is TTS_ENGINE_UNAVAILABLE.",
   "voiceProfile.listModels":
-    "TTS Adapter のモデル候補一覧を返す。`openai-compatible` の voiceProfile.create の `settings.model` 選びに使う。接続できない Adapter は TTS_ENGINE_UNAVAILABLE。",
+    "Returns a TTS Adapter's model candidates. Use it to pick `settings.model` for an `openai-compatible` voiceProfile.create. An unreachable Adapter is TTS_ENGINE_UNAVAILABLE.",
   "voiceProfile.create":
-    "Voice Profile を新規作成して返す。`adapterId`・実在する `voiceId`（voiceProfile.listVoices で確認）・`locale`（台本の locale と一致させる）・`settings`（`openai-compatible` は `model` 必須、参照音声を使う場合は `refAudioAssetId`（取り込み済み音声 Asset の ID）・`langCode`（Japanese / English / Chinese / Korean / German / French / Russian / Portuguese / Spanish / Italian のいずれか）も必須、`refText`（付けると ICL 方式、省略すると x-vector 方式）・`maxTokens` は任意）を指定する。タイムアウト後は voiceProfile.list で確認してから再実行する。",
+    "Creates a Voice Profile and returns it. Specify `adapterId`, an existing `voiceId` (confirm with voiceProfile.listVoices), `locale` (match the script's locale), and `settings` (`openai-compatible` requires `model`; when using reference audio, also requires `refAudioAssetId` (an imported audio Asset ID) and `langCode` (one of Japanese / English / Chinese / Korean / German / French / Russian / Portuguese / Spanish / Italian); `refText` (ICL mode when present, x-vector mode when omitted) and `maxTokens` are optional). After a timeout, check voiceProfile.list before retrying.",
   "voiceProfile.update":
-    "Voice Profile を部分更新して返す。`voiceProfileId` に加えて変更する項目（`name`・`voiceId`・`locale`・`settings`）だけを指定し、省略した項目は不変。`settings` を指定した場合はアダプター設定オブジェクト全体を置換する。`adapterId` は変更できない。存在しない ID は RESOURCE_NOT_FOUND。反映は以後の TTS だけに影響し、既存の Audio Take は変えない。",
+    "Partially updates a Voice Profile and returns it. Besides `voiceProfileId`, send only the fields to change (`name`, `voiceId`, `locale`, `settings`); omitted fields stay unchanged. Supplying `settings` replaces the whole adapter settings object. `adapterId` cannot be changed. An unknown ID is RESOURCE_NOT_FOUND. Changes affect only future TTS and do not alter existing Audio Takes.",
   "youtubeSettings.get":
-    "指定した Edition の YouTube 投稿設定を取得する。`languageEditionId` が必要。",
+    "Returns the YouTube publishing settings for the given Edition. Requires `languageEditionId`.",
   "youtubeSettings.update":
-    "指定した Edition の YouTube 投稿設定を完全上書き（last-write-wins）して返す。`settings` は部分更新ではなく `youtubeSettings.get` の `document` を元にした完全なドキュメントを送る。`languageEditionId` と `settings` が必要。`requestId` は持たないため、タイムアウト後は `youtubeSettings.get` で確認してから再実行する。存在しない Edition は RESOURCE_NOT_FOUND。",
+    "Fully overwrites (last-write-wins) the YouTube publishing settings for the given Edition and returns them. `settings` is not a partial update; send the complete document based on `youtubeSettings.get`'s `document`. Requires `languageEditionId` and `settings`. There is no `requestId`, so after a timeout check `youtubeSettings.get` before retrying. An unknown Edition is RESOURCE_NOT_FOUND.",
   "script.youtubeChapters":
-    "保存済み Script Version のタイムラインから YouTube 動画チャプター本文と診断/警告を生成して返す。`scriptVersionId` が必要。",
+    "Generates YouTube video chapter text plus diagnostics and warnings from a saved Script Version's timeline and returns them. Requires `scriptVersionId`.",
 };
 
 function describeOperation(
@@ -200,11 +204,11 @@ function describeOperation(
   kind: "read" | "mutation",
   longRunning: boolean,
 ): string {
-  const kindText = kind === "read" ? "読み取り" : "変更";
+  const kindText = kind === "read" ? "read" : "mutation";
   const jobText = longRunning
-    ? " Job を投入し、完了は kakeai_job_wait または kakeai_job_get で確認する。"
+    ? " Queues a Job; check completion with kakeai_job_wait or kakeai_job_get."
     : "";
-  return `${operationDescriptions[operation]} 操作名: \`${operation}\`（${kindText}）。${jobText}`;
+  return `${operationDescriptions[operation]} Operation: \`${operation}\` (${kindText}).${jobText}`;
 }
 
 function operationAnnotations(
@@ -253,7 +257,7 @@ export const jobWaitToolEntry: JobWaitToolEntry = {
   toolName: "kakeai_job_wait",
   title: "kakeai_job_wait",
   description:
-    "Job が終端状態（succeeded / failed / cancelled）になるまで job.get を有界にポーリングする。budget 超過時は timedOut: true と最後の Job を返す。asset.import / render.start / tts.create / tts.createBulk の後に使う。MCP 束縛の便宜ツールで、Agent 操作ではない。",
+    "Polls job.get with a bounded budget until the Job reaches a terminal state (succeeded / failed / cancelled). On budget exhaustion it returns `timedOut: true` and the last Job. Use it after asset.import / render.start / tts.create / tts.createBulk. This is an MCP binding convenience tool, not an Agent operation.",
   inputSchema: toAgentJsonSchema(jobWaitInputSchema, "input") as unknown as ToolInputSchema,
   outputSchema: toAgentJsonSchema(jobWaitResultSchema, "output") as unknown as ToolOutputSchema,
   annotations: {
