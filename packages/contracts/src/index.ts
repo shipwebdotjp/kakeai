@@ -19,6 +19,15 @@ export * from "./content/document";
 export * from "./content/defaults";
 
 export * from "./content/warnings";
+// `content/warnings` keeps re-exporting these for existing deep imports. List
+// them explicitly in the barrel so the two wildcard exports cannot make the
+// names ambiguous under ESM `export *` resolution.
+export {
+  UNITS_PER_FULLWIDTH_CHAR,
+  createTextWidthCounter,
+  textWidthUnits,
+  type TextWidthCounter,
+} from "./text-width";
 export * from "./content/asset-refs";
 export * from "./content/line-refs";
 export * from "./templates";

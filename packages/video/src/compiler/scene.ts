@@ -14,7 +14,8 @@ import type {
   CompositionVersionResolved,
 } from "../composition-resolver";
 import { CompositionCompileError } from "../compile-error";
-import { escapeHtmlText } from "../escape";
+import { captionContentWidthPx } from "../caption-layout";
+import { escapeHtmlAttribute, escapeHtmlText } from "../escape";
 import type {
   AssetResolver,
   FaceSetResolver,
@@ -427,6 +428,19 @@ export function renderScenes(context: SceneRenderContext): void {
       }
     }
 
+    const captionWrapWidth = Math.round(
+      captionContentWidthPx(theme, captionLayout, canvas),
+    );
+    // The profile attribute is diagnostic metadata (and a place for future
+    // runtime branches); the runtime only reads units/lines/width.
+    const captionWrapAttributes = [
+      `data-kakeai-caption-wrap="1"`,
+      `data-kakeai-caption-wrap-profile="${escapeHtmlAttribute(canvas.profile)}"`,
+      `data-kakeai-caption-wrap-units="${canvas.captionWrapUnitsPerLine}"`,
+      `data-kakeai-caption-wrap-lines="${canvas.captionMaxLines}"`,
+      `data-kakeai-caption-wrap-width="${captionWrapWidth}"`,
+    ].join(" ");
+
     placement.lines.forEach((linePlacement, lineIndex) => {
       const line = lineById.get(linePlacement.lineId);
       if (line === undefined) {
@@ -473,7 +487,7 @@ export function renderScenes(context: SceneRenderContext): void {
           }
         }
         sceneClips.push(
-          `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="${captionOuterClass}"${captionOuterStyle.length > 0 ? ` style="${captionOuterStyle}"` : ""}><div class="kakeai-captionwrap">${speakerLabelHtml}<p class="kakeai-captiontext" style="${captionInnerStyle}">${escapeHtmlText(captionText)}</p></div></div></div>`,
+          `<div id="kakeai-caption-${placement.sceneIndex}-${lineIndex}" class="clip" data-start="${toSecondsText(linePlacement.startMs)}" data-duration="${toSecondsText(linePlacement.durationMs)}"><div class="${captionOuterClass}"${captionOuterStyle.length > 0 ? ` style="${captionOuterStyle}"` : ""}><div class="kakeai-captionwrap">${speakerLabelHtml}<p class="kakeai-captiontext" ${captionWrapAttributes} style="${captionInnerStyle}">${escapeHtmlText(captionText)}</p></div></div></div>`,
         );
       }
       if (line.selectedAudioTakeId === null) {

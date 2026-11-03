@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { LANDSCAPE_CANVAS } from "./canvas";
+import { LANDSCAPE_CANVAS, PORTRAIT_CANVAS } from "./canvas";
 import { getVisualTheme } from "@kakeai/contracts";
-import { CAPTION_SAFE_AREA_FALLBACK_PX, captionLayoutStyle, captionSafeAreaPx } from "./caption-layout";
+import {
+  CAPTION_SAFE_AREA_FALLBACK_PX,
+  captionContentWidthPx,
+  captionLayoutStyle,
+  captionSafeAreaPx,
+} from "./caption-layout";
 
 const theme = getVisualTheme("soft-editorial", 1)!;
 
@@ -44,5 +49,26 @@ describe("captionSafeAreaPx", () => {
 
   it("keeps the fragment fallback in sync with the default theme", () => {
     expect(CAPTION_SAFE_AREA_FALLBACK_PX).toBe(captionSafeAreaPx(theme, "frame", LANDSCAPE_CANVAS));
+  });
+});
+
+describe("captionContentWidthPx", () => {
+  it("subtracts the caption surface padding from the wrap width", () => {
+    expect(captionContentWidthPx(theme, "frame", LANDSCAPE_CANVAS)).toBe(1528);
+    expect(captionContentWidthPx(theme, "frame", PORTRAIT_CANVAS)).toBe(864);
+  });
+
+  it("subtracts the band side padding and the paragraph padding", () => {
+    expect(captionContentWidthPx(theme, "band", LANDSCAPE_CANVAS)).toBe(1528);
+    expect(captionContentWidthPx(theme, "band", PORTRAIT_CANVAS)).toBe(688);
+  });
+
+  it("falls back to the CSS padding when the caption surface is disabled", () => {
+    const caption = theme.surfaces!.caption!;
+    const disabled = {
+      ...theme,
+      surfaces: { ...theme.surfaces, caption: { ...caption, enabled: false } },
+    };
+    expect(captionContentWidthPx(disabled, "frame", LANDSCAPE_CANVAS)).toBe(1528);
   });
 });

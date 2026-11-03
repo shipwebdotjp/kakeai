@@ -171,6 +171,44 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain('data-start="4.5" data-duration="3"');
   });
 
+  it("marks captions for browser-side measured auto wrapping", () => {
+    const compiled = compileDocument({ document: validContentDocument(), assetResolver: resolver });
+    expect(compiled.html).toContain('data-kakeai-caption-wrap="1"');
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-profile="landscape"');
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-units="56"');
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-lines="2"');
+    // 1600px wrap width minus the caption surface's 36px padding on both sides.
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-width="1528"');
+    expect(compiled.html).toContain("data-kakeai-caption-wrap-script");
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-version="1"');
+    expect(compiled.html).toContain("__kakeaiCaptionWrapReady");
+  });
+
+  it("uses the portrait wrap threshold and width", () => {
+    const compiled = compileDocument({
+      document: validContentDocument(),
+      assetResolver: resolver,
+      outputProfile: "portrait",
+    });
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-profile="portrait"');
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-units="44"');
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-lines="3"');
+    // 936px content width minus the 36px caption padding on both sides.
+    expect(compiled.html).toContain('data-kakeai-caption-wrap-width="864"');
+  });
+
+  it("does not interpolate caption text into the wrapping script", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    if (scene.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    scene.lines[0]!.captionText = '<script>alert("x")</script>自動折り返し';
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html).not.toContain('<script>alert("x")</script>');
+    expect(compiled.html).toContain('&lt;script&gt;alert("x")&lt;/script&gt;');
+  });
+
   it("schedules looping background music across the composition", () => {
     const document = validContentDocument();
     document.audioCues = [

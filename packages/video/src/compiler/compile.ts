@@ -21,6 +21,10 @@ import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlAttribute } from "../escape";
 import { canvasMetricsFor, canvasRootStyle, scaleThemeForCanvas } from "../canvas";
 import { captionLayoutStyle } from "../caption-layout";
+import {
+  CAPTION_WRAP_SCRIPT_MARKER,
+  getCaptionWrapRuntimeSource,
+} from "../caption-wrap-runtime";
 import { getGsapBundleSource } from "../gsap-bundle";
 import { OUTPUT_FPS } from "../meta";
 import type {
@@ -262,16 +266,19 @@ export function compileDocument(
     `<style>${STYLES}</style>`,
     "</head>",
     "<body>",
-    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${canvas.width}" data-height="${canvas.height}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" style="${themeRootStyle(theme, document.locale)};${canvasRootStyle(canvas)};${captionLayoutStyle(theme, captionLayout, canvas)}">`,
+    `<div id="kakeai-root" data-composition-id="${COMPOSITION_ID}" data-width="${canvas.width}" data-height="${canvas.height}" data-duration="${toSecondsText(timeline.totalDurationMs)}" data-fps="${OUTPUT_FPS}" data-kakeai-caption-wrap-version="1" style="${themeRootStyle(theme, document.locale)};${canvasRootStyle(canvas)};${captionLayoutStyle(theme, captionLayout, canvas)}">`,
     ...clips,
     ...audios,
     "</div>",
+    `<script ${CAPTION_WRAP_SCRIPT_MARKER}>${getCaptionWrapRuntimeSource()}</script>`,
     `<script>${getGsapBundleSource()}</script>`,
     "<script>",
     "const tl = gsap.timeline({ paused: true });",
     ...tweenLines,
     ...bounceLines,
-    `window.__timelines["${COMPOSITION_ID}"] = tl;`,
+    `const __kakeaiRegisterTimeline = () => { window.__timelines["${COMPOSITION_ID}"] = tl; window.dispatchEvent(new Event("hf-timelines-built")); };`,
+    "const __kakeaiCaptionWrapReady = window.__kakeaiCaptionWrapReady;",
+    "if (__kakeaiCaptionWrapReady && typeof __kakeaiCaptionWrapReady.then === \"function\") { __kakeaiCaptionWrapReady.then(__kakeaiRegisterTimeline, __kakeaiRegisterTimeline); } else { __kakeaiRegisterTimeline(); }",
     "</script>",
     "</body>",
     "</html>",

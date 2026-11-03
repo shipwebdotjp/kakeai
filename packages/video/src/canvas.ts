@@ -1,4 +1,5 @@
 import {
+  UNITS_PER_FULLWIDTH_CHAR,
   outputProfileLayout,
   type VisualThemeDefinition,
   type WorkOutputProfile,
@@ -23,6 +24,8 @@ export interface CanvasMetrics {
   typeScale: number;
   captionBottomOffset: number;
   captionMaxLines: number;
+  /** 字幕を1行に保つ上限の幅（半角単位）。全角28/22文字相当。 */
+  captionWrapUnitsPerLine: number;
   /** Padding of `text.block@1` and table wrappers. */
   textPadding: { x: number; y: number };
   cardPadding: { x: number; y: number };
@@ -48,6 +51,8 @@ export const LANDSCAPE_CANVAS: CanvasMetrics = {
   typeScale: LANDSCAPE_LAYOUT.typeScale,
   captionBottomOffset: 72,
   captionMaxLines: LANDSCAPE_LAYOUT.captionMaxLines,
+  captionWrapUnitsPerLine:
+    LANDSCAPE_LAYOUT.captionWrapCharsPerLine * UNITS_PER_FULLWIDTH_CHAR,
   textPadding: { x: 140, y: 120 },
   cardPadding: { x: 160, y: 90 },
   wideSidePadding: 200,
@@ -66,6 +71,8 @@ export const PORTRAIT_CANVAS: CanvasMetrics = {
   typeScale: PORTRAIT_LAYOUT.typeScale,
   captionBottomOffset: 340,
   captionMaxLines: PORTRAIT_LAYOUT.captionMaxLines,
+  captionWrapUnitsPerLine:
+    PORTRAIT_LAYOUT.captionWrapCharsPerLine * UNITS_PER_FULLWIDTH_CHAR,
   textPadding: { x: 72, y: 120 },
   cardPadding: { x: 72, y: 96 },
   wideSidePadding: 72,

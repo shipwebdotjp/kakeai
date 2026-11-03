@@ -131,6 +131,17 @@ describe("computeContentWarnings", () => {
     ]);
   });
 
+  it("does not warn for captions above the auto-wrap threshold but inside the capacity", () => {
+    const document = validContentDocument();
+    const scene = document.scenes[1]!;
+    if (scene.kind !== "point") {
+      throw new Error("expected a point scene");
+    }
+    const layout = outputProfileLayout("landscape");
+    scene.lines[0]!.captionText = "い".repeat(layout.captionWrapCharsPerLine + 1);
+    expect(computeContentWarnings(document)).toEqual([]);
+  });
+
   it("estimates English captions by halfwidth units", () => {
     const document = validContentDocument();
     const scene = document.scenes[1]!;

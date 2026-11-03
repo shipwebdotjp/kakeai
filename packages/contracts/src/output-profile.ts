@@ -19,7 +19,14 @@ export interface OutputProfileLayout {
   /** Multiplier for theme text role sizes. Captions are not scaled. */
   typeScale: number;
   captionMaxLines: number;
+  /** 警告を出さずに収まる1行あたりの最大文字数（全角換算）。 */
   captionCharsPerLine: number;
+  /**
+   * 焼き込み字幕を1行に保つ上限の文字数（全角換算）。これを超えた段落は、
+   * 表示可能幅に収まるなら2行へ自動改行する。`captionCharsPerLine` は警告用の
+   * 最大収容目安であり、自動折り返しのしきい値ではない。
+   */
+  captionWrapCharsPerLine: number;
   chartCategoryLimit: number;
   chartSeriesLimit: number;
   tableColumnLimit: number;
@@ -35,6 +42,7 @@ export const OUTPUT_PROFILE_LAYOUT: Record<WorkOutputProfile, OutputProfileLayou
     typeScale: 1,
     captionMaxLines: 2,
     captionCharsPerLine: 38,
+    captionWrapCharsPerLine: 28,
     chartCategoryLimit: 6,
     chartSeriesLimit: 3,
     tableColumnLimit: 6,
@@ -49,6 +57,9 @@ export const OUTPUT_PROFILE_LAYOUT: Record<WorkOutputProfile, OutputProfileLayou
     captionMaxLines: 3,
     // Captions keep their font size and only lose width: 936px / 40px.
     captionCharsPerLine: 22,
+    // The physical line width is already 22 full-width characters, so the
+    // wrap threshold matches the warning capacity.
+    captionWrapCharsPerLine: 22,
     // 936px plot with ~213px per category (the landscape guideline density).
     chartCategoryLimit: 4,
     chartSeriesLimit: 3,

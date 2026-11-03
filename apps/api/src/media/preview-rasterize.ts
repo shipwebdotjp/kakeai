@@ -18,9 +18,12 @@ export interface PreviewRasterizer {
 }
 
 const PAGE_TIMEOUT_MS = 15_000;
-const RUNTIME_READY_TIMEOUT_MS = 5_000;
+const GOTO_TIMEOUT_MS = 5_000;
+const RUNTIME_READY_TIMEOUT_MS = 10_000;
+/** The composition registers its timeline only after captions are wrapped. */
+const CAPTION_WRAP_TIMEOUT_MS = 10_000;
 /** Overall cap for goto + setContent + ready + seek + screenshot. */
-const RENDER_FRAME_TIMEOUT_MS = 30_000;
+const RENDER_FRAME_TIMEOUT_MS = 60_000;
 /** Bounds cleanup so one wedged page or browser cannot stall the shared queue. */
 const CLEANUP_TIMEOUT_MS = 5_000;
 
@@ -60,6 +63,29 @@ export function injectPreviewRuntime(html: string): string {
 const WAIT_FOR_READY_SCRIPT = `
 (async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Wrapping waits for fonts, so resolve fonts before checking either marker.
+  // Bound the wait like the in-page runtime: a hung font request must not
+  // consume the whole outer render budget.
+  await Promise.race([
+    document.fonts?.ready?.catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, 8000)),
+  ]);
+
+  const root = document.getElementById("kakeai-root");
+  if (root !== null && root.hasAttribute("data-kakeai-caption-wrap-version")) {
+    const captionDeadline = Date.now() + ${CAPTION_WRAP_TIMEOUT_MS};
+    while (
+      Date.now() < captionDeadline &&
+      root.getAttribute("data-kakeai-caption-wrap-ready") !== "1"
+    ) {
+      await sleep(25);
+    }
+    if (root.getAttribute("data-kakeai-caption-wrap-ready") !== "1") {
+      return false;
+    }
+  }
+
   const deadline = Date.now() + ${RUNTIME_READY_TIMEOUT_MS};
   while (Date.now() < deadline) {
     const player = window.__player;
@@ -72,8 +98,6 @@ const WAIT_FOR_READY_SCRIPT = `
   if (!player || typeof player.getDuration !== "function" || player.getDuration() <= 0) {
     return false;
   }
-
-  await document.fonts.ready.catch(() => {});
 
   await Promise.all([...document.images].map((img) => {
     if (img.complete) return Promise.resolve();
@@ -241,7 +265,7 @@ async function renderFrame(request: PreviewFrameRequest): Promise<Buffer> {
       // setContent on a JSON document would not execute the composition scripts.
       await currentPage.goto(previewHostUrl(origin), {
         waitUntil: "domcontentloaded",
-        timeout: RUNTIME_READY_TIMEOUT_MS,
+        timeout: GOTO_TIMEOUT_MS,
       });
       await currentPage.setContent(injectPreviewRuntime(request.html), {
         waitUntil: "load",

@@ -39,6 +39,46 @@ export const CAPTION_SAFE_AREA_FALLBACK_PX = 216;
 export const CAPTION_FALLBACK_PADDING_VERTICAL_PX = 12;
 export const CAPTION_FALLBACK_PADDING_HORIZONTAL_PX = 36;
 
+/** `.kakeai-captionwrap` and `.kakeai-captiontext` share this max width. */
+export const CAPTION_MAX_WIDTH_PX = 1600;
+
+/** `.kakeai-caption-band` keeps this horizontal padding on both sides. */
+export const CAPTION_BAND_SIDE_PADDING_PX = 160;
+
+/**
+ * Width actually available to one caption line, in CSS pixels.
+ *
+ * The frame layout caps the caption at 1600px and the paragraph's own padding
+ * sits inside that box. The band layout stretches the paragraph to the band's
+ * content width; the band's side padding and the paragraph's CSS fallback
+ * padding both sit inside it. The browser runtime measures candidate lines
+ * against this value; the compiler passes it as data.
+ */
+export function captionContentWidthPx(
+  theme: VisualThemeDefinition,
+  layout: CaptionLayout = "frame",
+  canvas: CanvasMetrics,
+): number {
+  if (layout === "band") {
+    // The band's own side padding plus the paragraph's CSS fallback padding;
+    // the band only moves the surface background to the outer element.
+    return Math.max(
+      0,
+      canvas.width -
+        2 * CAPTION_BAND_SIDE_PADDING_PX -
+        2 * CAPTION_FALLBACK_PADDING_HORIZONTAL_PX,
+    );
+  }
+  const wrapWidth = Math.min(canvas.contentWidth, CAPTION_MAX_WIDTH_PX);
+  const surface = theme.surfaces?.caption;
+  const surfaceEnabled = surface?.enabled === true;
+  const padding = surfaceEnabled
+    ? surface.paddingHorizontal
+    : CAPTION_FALLBACK_PADDING_HORIZONTAL_PX;
+  const border = surfaceEnabled && surface.border !== undefined ? surface.border.width : 0;
+  return Math.max(0, wrapWidth - 2 * (padding + border));
+}
+
 /**
  * Height from the canvas bottom that must stay free of template content so
  * that a caption of up to `CAPTION_SAFE_LINES` lines does not overlap it.
