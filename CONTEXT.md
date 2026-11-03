@@ -102,8 +102,20 @@ A person or avatar that may, but need not, have standing appearances, and may, b
 _Avoid_: Speaker, voice
 
 **Character Appearance**:
-A particular visual form of a Character, such as a standing image with an expression and pose. It may optionally reference one Face Set for per-line expression switching.
+A particular visual form of a Character, such as a standing image with an expression and pose. It may optionally reference one Face Set for per-line expression switching, and it carries its own Standing Layout.
 _Avoid_: Character, asset
+
+**Standing Layout**:
+The default scale, edge margin, and vertical position of a Character Appearance when it is shown as a standing image. A standing Cue may override it; a Standing State never does.
+_Avoid_: Cue input, coordinates
+
+**Standing State**:
+A line-boundary state for one side of a Scene that selects a Character Appearance or hides the standing. It stays in effect until the next Standing State for that side or the Scene end.
+_Avoid_: Character appearance, cue
+
+**Scene Opening State**:
+The left and right standing at the start of a Scene, before any line. It is stored as scene-range standing Cues and remains the fallback when no Standing State applies.
+_Avoid_: Default state, base cue
 
 **Face Set**:
 An app-wide library of compatible face materials (Face Layers and Expression Presets) shared across appearances, referenced by id and not copied into a Script Version. It holds one required normal Expression Preset.

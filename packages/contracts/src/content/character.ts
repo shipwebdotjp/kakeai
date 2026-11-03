@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SUPPORTED_LOCALES, idSchema, localeSchema, positiveInt } from "./primitives";
+import { standingLayoutSchema } from "./standing-layout";
 
 /**
  * The fields shared by a library Character Appearance and a work-local copy.
@@ -13,6 +14,7 @@ export const characterAppearanceCoreSchema = z.strictObject({
   pose: z.string(),
   label: z.string().trim().min(1).optional(),
   faceSetId: idSchema.nullable().default(null),
+  standing: standingLayoutSchema.optional(),
 });
 
 /**
@@ -30,6 +32,7 @@ export const characterAppearanceSchema = z.strictObject({
   faceSetId: idSchema.nullable().default(null),
   faceSetVersion: positiveInt.nullable().default(null),
   libraryAppearanceId: idSchema.nullable().default(null),
+  standing: standingLayoutSchema.optional(),
 });
 
 export const characterVoiceSchema = z.strictObject({

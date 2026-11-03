@@ -98,7 +98,7 @@ type ScriptOperation =
 | --- | --- | --- |
 | `line.add` | `sceneId`、任意の挿入位置、任意の初期値 | `point` のみ。ID は `<sceneの短縮トークン>` を含む。`speakerId` は ID または `{ key }`（ScriptIdRef）、`null` も可。存在しない Speaker は `EDIT_TARGET_NOT_FOUND`。`speakerId: null` なら `expressionId: null`。`characterId: null` の Speaker に明示的な `expressionId` を指定すると拒否する。`scene.add` の `lines[].speakerId` は ID のみで `{ key }` を取らないが、Speaker の実在と声だけ話者の表情検査は同じ規則を使う。空の行も作れる |
 | `line.remove` | `sceneId`、`lineId` | Cue 範囲の端点を詰め、単一行の Cue を削除し、効果トリガーと `videoPlayback.gates` から当該行への参照を外す。当該行の Audio Take を削除する |
-| `line.move` | `sceneId`、`lineId`、移動先 | 同一 Scene 内。`range: lines` の開始・終了が逆転したら入れ替える |
+| `line.move` | `sceneId`、`lineId`、移動先 | 同一 Scene 内。`range: lines` の開始・終了が逆転したら入れ替える。`standingStates` は行IDに追従し、保存時に配列を行順へ正規化する |
 | `line.split` | `sceneId`、`lineId`、前半と後半の `captionText`/`speechText` | 後述の解決規則に従う |
 | `line.updateText` | `sceneId`、`lineId`、`captionText` / `speechText` | 選択済み Audio Take は変更しない。空文字を許す |
 | `line.setSpeaker` | `sceneId`、`lineId`、`speakerId` | `speakerId` は ID / `{ key }` / `null`。存在しない Speaker は `EDIT_TARGET_NOT_FOUND`。`null` または `characterId: null` の Speaker へ変えると `expressionId` を `null` にする |
@@ -125,10 +125,12 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `standing.upsert` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `edge`（端からの位置3段階）・`vertical`（高さ3段階）、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` 省略時は既存値、なければ 1。`edge` 省略時は既存値、なければ `margin`。`vertical` 省略時は既存値、なければ `standard`。`transition` は enter/exit をまとめて置き換える |
+| `standing.upsert` | `sceneId`、`side`、`characterId`、`appearanceId`、任意の倍率、任意の `edge`（端からの位置3段階）・`vertical`（高さ3段階）、任意の `transition` | 同一 `side` に 1 体だけ。`characterId` と `appearanceId` は `characters` に実在する。`scale` / `edge` / `vertical` は省略時は既存の明示値を維持し、既存値が無ければ書かない（外観の `standing` から解決する）。`null` を渡すと明示値を消す。`transition` は enter/exit をまとめて置き換える |
 | `standing.remove` | `sceneId`、`side` | 対応する `character.standing@1` Cue を削除する |
+| `standing.state.upsert` | `sceneId`、`side`、`fromLineId`、`characterId` / `appearanceId`（両方nullで非表示） | `fromLineId` は同一Sceneのセリフ。`characterId` と `appearanceId` は両方nullか、両方実在する組。同じ `(side, fromLineId)` は置き換える。状態は行順に並べる |
+| `standing.state.remove` | `sceneId`、`side`、`fromLineId` | 該当する状態を削除する。存在しない場合は対象なしエラー |
 
-立ち絵の Scene 間転送は操作コアに新しい操作を足さず、`standing.upsert` と `standing.remove` の組み合わせで表す。単位は左右まとめて（1体ずつの転送はしない）。移動は転送先を転送元の設定で置き換えたうえで転送元を削除する。複製は転送先の置換だけを行い、複数の転送先へ一括適用できる。入れ替えは両方向の置換を行う。転送元に立ち絵がない場合の移動・複製は行わない。
+立ち絵の Scene 間転送は操作コアに新しい操作を足さず、`standing.upsert` と `standing.remove` の組み合わせで表す。単位は左右まとめて（1体ずつの転送はしない）。移動は転送先を転送元の設定で置き換えたうえで転送元を削除する。複製は転送先の置換だけを行い、複数の転送先へ一括適用できる。入れ替えは両方向の置換を行う。転送元に立ち絵がない場合の移動・複製は行わない。`standingStates` は開始時状態と一緒に転送しない（変更点はScene固有の行IDを持つため）。
 
 ### Cue操作の補足
 
@@ -187,6 +189,7 @@ type ScriptOperation =
 - `range: scene` の Cue は前半に残す。`range: lines` の Cue は、範囲全体が前半なら前半、全体が後半なら後半へ移す。分割点をまたぐ場合は両方へ複製し、前半は分割直前の行まで、後半は分割行からに切り詰める。複製した後半の Cue には新しい Cue ID を振る。
 - `range: offset` の Cue は、分割点の解決済みミリ秒で切る。分割点をまたぐ場合は両方へ複製し、後半の `startMs`/`endMs` を分割点からの相対値へ再基準化する。
 - 効果トリガーと `videoPlayback.gates` が、移動先の Scene に存在しない行を参照する場合は、その参照だけを外す。参照先が存在する側では維持する。剪定の結果、テンプレートの必須入力を満たさなくなった Cue は、その Scene から削除し、`cue_removed_after_split` 警告を返す。
+- `standingStates` は、前半に分割点より前の変更点を残し、分割点以降の変更点を後半へ移す。後半には分割点で有効な状態を開始時状態として引き継ぐ。分割点ちょうどの変更点が引き継いだ開始時状態と同じ場合は、後半で重複する変更点を落とす。元の Scene に変更点が無い場合は、開始時状態を後半へコピーしない。
 - 後半の `transition` は `cut`、`accent` は元 Scene を継承、`timing` は `auto` とする。ラベルは連番を既定とする。
 - 分割点のミリ秒は `resolveTimeline(document)` の行開始位置から求める。プレビュー応答の値を要求しない。
 
@@ -199,6 +202,7 @@ type ScriptOperation =
 - 元の行の Audio Take は削除し、両方の `selectedAudioTakeId` を `null` にする。分割前の音声はどちらの文章にも対応しないため再利用しない。
 - `range: lines` の Cue は、開始行が元の行なら前半、終了行が元の行なら後半を指す。開始と終了がともに元の行なら、前半から後半までを指す。行順が逆転する範囲は、分割後の並び順に正規化する。
 - 行トリガーの効果と `videoPlayback.gates` は前半に残す。後半へ複製しない。
+- `standingStates` の `fromLineId` が元の行を指す場合、状態は前半に残り、後半にも引き継がれる（行IDは前半に残るため）。後半の先頭から別状態にしたい場合は、後半の先頭行に状態を追加する。
 - 前後の文章が空、または両方が元の文章と同じ場合は拒否する。前半・後半それぞれに字幕か読みを必須とし、両方が元の文章と同じ（複製）場合は拒否する。`speechText` は呼び出し側が指定する（読みの自動分割はしない）。
 
 ### 行の削除と Cue
@@ -209,6 +213,7 @@ type ScriptOperation =
 - 範囲の端がその行なら、隣接する行へ端点を詰める。
 - 範囲の内側なら、範囲を維持する（行 ID は変わらない）。
 - 効果トリガーと `videoPlayback.gates` から当該行への参照を外す。剪定の結果、テンプレートの必須入力を満たさなくなった Cue は削除し、`cue_removed_after_line_removal` 警告を返す。
+- `standingStates` の `fromLineId` が削除された行を指す場合、次の行へ移す。次の行に同じ side の状態が既にある場合は、移した状態を捨てる。次の行が無ければ状態を削除する。
 
 ### 変更しないもの
 

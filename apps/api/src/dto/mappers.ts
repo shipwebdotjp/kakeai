@@ -12,6 +12,8 @@ import {
   jobStatusSchema,
   localeSchema,
   scriptVersionAuthorSchema,
+  standingEdgeSchema,
+  standingVerticalSchema,
   thumbnailAppearanceOverrideOf,
   thumbnailDocumentSchema,
   ttsJobResultSchema,
@@ -354,6 +356,19 @@ export function toCharacterLibraryEntry(row: CharacterWithAppearances): Characte
       pose: appearance.pose,
       ...(appearance.label === null ? {} : { label: appearance.label }),
       faceSetId: appearance.faceSetId,
+      standing: {
+        scale: appearance.standingScale,
+        edge: parseEnum(
+          standingEdgeSchema,
+          appearance.standingEdge,
+          "CharacterAppearance.standingEdge",
+        ),
+        vertical: parseEnum(
+          standingVerticalSchema,
+          appearance.standingVertical,
+          "CharacterAppearance.standingVertical",
+        ),
+      },
     })),
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),

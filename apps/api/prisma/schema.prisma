@@ -190,6 +190,9 @@ model CharacterAppearance {
   pose        String
   label       String?
   faceSetId   String?
+  standingScale    Float  @default(1)
+  standingEdge     String @default("margin")
+  standingVertical String @default("standard")
   position    Int       @default(0)
   createdAt   DateTime  @default(now())
 

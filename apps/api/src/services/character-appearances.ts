@@ -8,7 +8,7 @@ import {
   newCharacterAppearanceId,
   type AppearanceInput,
 } from "./character-library.ts";
-import type { CharacterLibraryEntry } from "@kakeai/contracts";
+import type { CharacterLibraryEntry, StandingLayout } from "@kakeai/contracts";
 
 export type AddCharacterAppearanceInput = {
   assetId: string;
@@ -16,6 +16,7 @@ export type AddCharacterAppearanceInput = {
   pose: string;
   label?: string;
   faceSetId?: string | null;
+  standing?: StandingLayout;
 };
 
 export type UpdateCharacterAppearancePatch = {
@@ -24,6 +25,7 @@ export type UpdateCharacterAppearancePatch = {
   pose?: string;
   label?: string | null;
   faceSetId?: string | null;
+  standing?: StandingLayout;
 };
 
 export async function addCharacterAppearance(
@@ -58,6 +60,7 @@ export async function addCharacterAppearance(
       pose: input.pose,
       label: input.label,
       faceSetId: input.faceSetId ?? null,
+      ...(input.standing === undefined ? {} : { standing: input.standing }),
     };
 
     await assertAppearancesUsable(transaction, [newAppearance]);
@@ -77,6 +80,9 @@ export async function addCharacterAppearance(
                 ? null
                 : input.label.trim(),
             faceSetId: input.faceSetId ?? null,
+            standingScale: input.standing?.scale ?? 1,
+            standingEdge: input.standing?.edge ?? "margin",
+            standingVertical: input.standing?.vertical ?? "standard",
             position: current.appearances.length,
           },
         },
@@ -133,6 +139,9 @@ export async function updateCharacterAppearance(
       pose?: string;
       label?: string | null;
       faceSetId?: string | null;
+      standingScale?: number;
+      standingEdge?: string;
+      standingVertical?: string;
     } = {};
     if (patch.assetId !== undefined) {
       appearanceUpdateData.assetId = patch.assetId;
@@ -151,6 +160,11 @@ export async function updateCharacterAppearance(
     }
     if (patch.faceSetId !== undefined) {
       appearanceUpdateData.faceSetId = patch.faceSetId;
+    }
+    if (patch.standing !== undefined) {
+      appearanceUpdateData.standingScale = patch.standing.scale;
+      appearanceUpdateData.standingEdge = patch.standing.edge;
+      appearanceUpdateData.standingVertical = patch.standing.vertical;
     }
 
     const row = await transaction.character.update({

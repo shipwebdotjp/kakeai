@@ -41,6 +41,14 @@ export {
 export { parseVideoPlayback, serializeVideoPlayback } from "./form/cue-read";
 export { emptyStandingSlots, toFormValues } from "./form/read";
 export {
+  activeStandingAppearanceIds,
+  resolveStandingStateFormAtLine,
+  resolveStandingStatesByLine,
+  resolveStandingStatesForLine,
+  sortStandingStateFormValues,
+} from "./form/standing";
+export type { ResolvedStandingFormState } from "./form/standing";
+export {
   DEFAULT_NEW_LINE_GAP_BEFORE_MS,
   DEFAULT_OFFSET_RANGE_MS,
   bulkTtsCandidateLineIds,

@@ -2,6 +2,7 @@ import { LEGACY_FACE_SET_VERSION } from "@kakeai/contracts";
 import type {
   CharacterFormValue,
   DocumentFormValues,
+  SceneFormValue,
   SpeakerFormValue,
   StandingCueInput,
   StandingFormValue,
@@ -21,8 +22,10 @@ import { toCueFormValue } from "./cue-read";
 import {
   DEFAULT_SCENE_ACCENT,
   characterStandingV1,
+  resolveStandingLayout,
   DEFAULT_STANDING_EDGE,
   DEFAULT_STANDING_VERTICAL,
+  type Character,
   type ContentDocument,
   type Scene,
   type StandingSide,
@@ -51,6 +54,10 @@ export function readStanding(
     scale: data.scale,
     edge: data.edge,
     vertical: data.vertical,
+    layoutOverridden:
+      data.scale !== undefined ||
+      data.edge !== undefined ||
+      data.vertical !== undefined,
   };
 }
 
@@ -92,6 +99,7 @@ export function emptyStandingSlots(): StandingFormValue[] {
     scale: DEFAULT_STANDING_SCALE,
     edge: DEFAULT_STANDING_EDGE,
     vertical: DEFAULT_STANDING_VERTICAL,
+    layoutOverridden: false,
     enterPreset: STANDING_TRANSITION_POLICY.defaultEnter.preset,
     enterDurationMs: STANDING_TRANSITION_POLICY.defaultEnter.durationMs,
     exitPreset: STANDING_TRANSITION_POLICY.defaultExit.preset,
@@ -99,17 +107,25 @@ export function emptyStandingSlots(): StandingFormValue[] {
   }));
 }
 
-function readStandings(scene: Scene): StandingFormValue[] {
+function readStandings(
+  scene: Scene,
+  characters: readonly Character[],
+): StandingFormValue[] {
   const bySide = new Map<StandingSide, StandingFormValue>();
   for (const { cue, standing } of selectManagedStandingCues(scene)) {
+    const appearance = characters
+      .find((character) => character.id === standing.characterId)
+      ?.appearances.find((entry) => entry.id === standing.appearanceId);
+    const layout = resolveStandingLayout(appearance);
     bySide.set(standing.side, {
       cueId: cue.id,
       characterId: standing.characterId,
       appearanceId: standing.appearanceId,
       side: standing.side,
-      scale: standing.scale,
-      edge: standing.edge,
-      vertical: standing.vertical,
+      scale: standing.scale ?? layout.scale,
+      edge: standing.edge ?? layout.edge,
+      vertical: standing.vertical ?? layout.vertical,
+      layoutOverridden: standing.layoutOverridden,
       enterPreset: cue.transition.enter.preset,
       enterDurationMs: cue.transition.enter.durationMs,
       exitPreset: cue.transition.exit.preset,
@@ -117,6 +133,12 @@ function readStandings(scene: Scene): StandingFormValue[] {
     });
   }
   return emptyStandingSlots().map((slot) => bySide.get(slot.side) ?? slot);
+}
+
+function readStandingStates(
+  scene: Scene,
+): SceneFormValue["standingStates"] {
+  return (scene.standingStates ?? []).map((state) => ({ ...state }));
 }
 
 function readCharacters(content: ContentDocument): CharacterFormValue[] {
@@ -147,6 +169,7 @@ function readCharacters(content: ContentDocument): CharacterFormValue[] {
             ? null
             : (appearance.faceSetVersion ?? LEGACY_FACE_SET_VERSION),
         libraryAppearanceId: appearance.libraryAppearanceId,
+        standing: resolveStandingLayout(appearance),
       })),
     };
   });
@@ -209,7 +232,8 @@ export function toFormValues(content: ContentDocument): DocumentFormValues {
           takes: takesByLine.get(line.id) ?? [],
         })),
         cues,
-        standings: readStandings(scene),
+        standings: readStandings(scene, content.characters),
+        standingStates: readStandingStates(scene),
         audioCues: content.audioCues
           .filter(
             (cue) =>

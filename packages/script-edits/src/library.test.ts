@@ -85,9 +85,6 @@ describe("standing operations", () => {
       characterId: "char-1",
       appearanceId: "app-1",
       side: "left",
-      scale: 1,
-      edge: "margin",
-      vertical: "standard",
     });
     expect(leftCue?.transition.enter).toEqual({
       preset: "fade",
@@ -120,8 +117,6 @@ describe("standing operations", () => {
     expect(updatedCues[0]?.input).toMatchObject({
       appearanceId: "app-2",
       scale: 1.5,
-      edge: "margin",
-      vertical: "standard",
     });
     expect(updatedCues[0]?.transition.enter).toEqual({
       preset: "fade",
@@ -182,7 +177,7 @@ describe("standing operations", () => {
     const cue = scene.visualCues.find(
       (entry) => entry.template.id === "character.standing",
     );
-    expect(cue?.input).toMatchObject({ edge: "tight", vertical: "up", scale: 1 });
+    expect(cue?.input).toMatchObject({ edge: "tight", vertical: "up" });
 
     const kept = applyScriptOperation(
       created.document,

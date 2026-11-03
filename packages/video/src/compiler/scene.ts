@@ -38,6 +38,7 @@ import {
   resolveCueWindow,
   type ResolvedTimeline,
 } from "../timeline";
+import { expandStandingStateCues } from "./standing-states";
 import { gainToVolume } from "../templates/shared";
 import {
   FADE_START_EPSILON_MS,
@@ -413,7 +414,7 @@ export function renderScenes(context: SceneRenderContext): void {
       }
     };
 
-    const orderedCues = scene.visualCues
+    const orderedCues = expandStandingStateCues(scene, placement)
       .map((cue, cueIndex) => ({ cue, cueIndex }))
       .sort(
         (a, b) =>

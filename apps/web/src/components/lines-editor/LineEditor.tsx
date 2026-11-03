@@ -11,7 +11,6 @@ import {
 } from "@kakeai/contracts";
 import type {
   LineFormValue,
-  StandingFormValue,
   TakeFormValue,
 } from "../../content/form";
 import {
@@ -54,7 +53,8 @@ interface LineEditorProps extends Omit<
 > {
   lineIndex: number;
   line: LineFormValue;
-  standings: StandingFormValue[];
+  standingAppearanceIds: ReadonlySet<string>;
+  standingStateLabel: string | null;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMove: (direction: -1 | 1) => void;
@@ -172,6 +172,8 @@ export function LineEditor({
   sceneId,
   lineIndex,
   line,
+  standingAppearanceIds,
+  standingStateLabel,
   canMoveUp,
   canMoveDown,
   onMove,
@@ -182,7 +184,6 @@ export function LineEditor({
   onCommitLineFields,
   speakers,
   characters,
-  standings,
   voiceProfiles,
   adapterVoices,
   savedVoiceByLineId,
@@ -200,11 +201,6 @@ export function LineEditor({
   const speaker = speakers.find((entry) => entry.id === line.speakerId);
   const characterId = speaker?.characterId ?? null;
   const character = characters.find((entry) => entry.id === characterId);
-  const standingAppearanceIds = new Set(
-    (standings ?? [])
-      .filter((standing) => standing?.characterId === characterId)
-      .map((standing) => standing?.appearanceId),
-  );
   const {
     presets,
     ready: pinnedFaceSetsReady,
@@ -507,6 +503,9 @@ export function LineEditor({
           />
         </span>
       </div>
+      {standingStateLabel !== null && (
+        <p className={metaTextClass}>立ち絵: {standingStateLabel}</p>
+      )}
       <textarea
         rows={2}
         placeholder="字幕テキスト"

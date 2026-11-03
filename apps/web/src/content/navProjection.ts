@@ -38,6 +38,12 @@ export function sceneNavProjection(
         characterId: standing.characterId,
         appearanceId: standing.appearanceId,
       })),
+      standingStates: (scene.standingStates ?? []).map((state) => ({
+        side: state.side,
+        fromLineId: state.fromLineId,
+        characterId: state.characterId,
+        appearanceId: state.appearanceId,
+      })),
     })),
     speakers: speakers.map((speaker) => ({
       id: speaker.id,
@@ -49,6 +55,10 @@ export function sceneNavProjection(
       appearances: (character.appearances ?? []).map((appearance) => ({
         id: appearance.id,
         assetId: appearance.assetId,
+        label: appearance.label,
+        expression: appearance.expression,
+        pose: appearance.pose,
+        standing: appearance.standing,
       })),
     })),
   });

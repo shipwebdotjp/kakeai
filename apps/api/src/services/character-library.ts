@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type CharacterLibraryEntry,
   type CreateCharacterRequest,
+  type StandingLayout,
   type UpdateCharacterRequest,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
@@ -15,6 +16,7 @@ export type AppearanceInput = {
   pose: string;
   label?: string;
   faceSetId: string | null;
+  standing?: StandingLayout;
 };
 
 type VoiceInput = {
@@ -302,6 +304,9 @@ function toAppearanceData(appearance: AppearanceInput, position: number) {
     pose: appearance.pose,
     label: appearance.label === undefined || appearance.label.length === 0 ? null : appearance.label,
     faceSetId: appearance.faceSetId,
+    standingScale: appearance.standing?.scale ?? 1,
+    standingEdge: appearance.standing?.edge ?? "margin",
+    standingVertical: appearance.standing?.vertical ?? "standard",
     position,
   };
 }

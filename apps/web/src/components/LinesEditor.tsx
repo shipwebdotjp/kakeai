@@ -1,4 +1,5 @@
 import { MessageSquarePlus } from "lucide-react";
+import { useMemo } from "react";
 import {
   useFieldArray,
   useWatch,
@@ -22,6 +23,9 @@ import type {
 import {
   countLineCueReferences,
   DEFAULT_NEW_LINE_GAP_BEFORE_MS,
+  appearanceDisplayName,
+  resolveStandingStatesByLine,
+  type ResolvedStandingFormState,
 } from "../content/form";
 import {
   applyStructuralOperation,
@@ -81,8 +85,16 @@ export function LinesEditor({
   });
   const watchedLines =
     useWatch({ control, name: `scenes.${sceneIndex}.lines` }) ?? [];
-  const watchedStandings =
-    useWatch({ control, name: `scenes.${sceneIndex}.standings` }) ?? [];
+  const watchedScene = useWatch({ control, name: `scenes.${sceneIndex}` });
+  const standingStatesByLine = useMemo<
+    Map<string, ResolvedStandingFormState[]>
+  >(
+    () =>
+      watchedScene === undefined
+        ? new Map()
+        : resolveStandingStatesByLine(watchedScene),
+    [watchedScene],
+  );
 
   const runStructural = (operation: ScriptOperation): void => {
     try {
@@ -100,6 +112,11 @@ export function LinesEditor({
       }
       replace(scene.lines);
       setValue(`scenes.${sceneIndex}.cues`, scene.cues, { shouldDirty: true });
+      setValue(
+        `scenes.${sceneIndex}.standingStates`,
+        scene.standingStates ?? [],
+        { shouldDirty: true },
+      );
       onWarnings(next.result.warnings);
     } catch (error) {
       onError(
@@ -186,6 +203,45 @@ export function LinesEditor({
         if (line === undefined) {
           return null;
         }
+        const speaker = speakers.find((entry) => entry.id === line.speakerId);
+        const characterId = speaker?.characterId ?? null;
+        const standingStates = standingStatesByLine.get(line.id) ?? [];
+        const standingAppearanceIds = new Set(
+          standingStates
+            .filter(
+              (state) =>
+                state.characterId === characterId &&
+                state.appearanceId !== null,
+            )
+            .map((state) => state.appearanceId as string),
+        );
+        const standingStateLabel =
+          standingStates.length === 0
+            ? null
+            : standingStates
+                .map((state) => {
+                  const side = state.side === "left" ? "左" : "右";
+                  if (
+                    state.characterId === null ||
+                    state.appearanceId === null
+                  ) {
+                    return `${side}: 非表示${state.isChange ? "（この行から）" : ""}`;
+                  }
+                  const character = characters.find(
+                    (entry) => entry.id === state.characterId,
+                  );
+                  const appearance = character?.appearances.find(
+                    (entry) => entry.id === state.appearanceId,
+                  );
+                  const name =
+                    character?.name.trim() || state.characterId;
+                  const look =
+                    appearance === undefined
+                      ? state.appearanceId
+                      : appearanceDisplayName(appearance);
+                  return `${side}: ${name}（${look}）${state.isChange ? "（この行から）" : ""}`;
+                })
+                .join(" / ");
         return (
           <LineEditor
             key={field.id}
@@ -195,6 +251,8 @@ export function LinesEditor({
             sceneIndex={sceneIndex}
             lineIndex={lineIndex}
             line={line}
+            standingAppearanceIds={standingAppearanceIds}
+            standingStateLabel={standingStateLabel}
             canMoveUp={lineIndex > 0}
             canMoveDown={lineIndex < fields.length - 1}
             onMove={(direction) => moveLine(lineIndex, lineIndex + direction)}
@@ -207,7 +265,6 @@ export function LinesEditor({
             scriptVersionId={scriptVersionId}
             speakers={speakers}
             characters={characters}
-            standings={watchedStandings}
             voiceProfiles={voiceProfiles}
             adapterVoices={adapterVoices}
             savedVoiceByLineId={savedVoiceByLineId}

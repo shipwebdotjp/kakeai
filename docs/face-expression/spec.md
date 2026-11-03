@@ -83,11 +83,12 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 
 ## 台詞、AI、編集
 
-- 台詞（`NarrationSegment`）の話者紐付けの隣に `expressionId` を置く。`expressionId` は Character ID 単体ではなく、当該Sceneで有効な Character Appearance が参照する Face Set に対して検証する。
+- 台詞（`NarrationSegment`）の話者紐付けの隣に `expressionId` を置く。`expressionId` は Character ID 単体ではなく、その台詞で有効な Standing State の Character Appearance が参照する Face Set に対して検証する（[../standing-states/spec.md](../standing-states/spec.md)）。
 - 表情はその台詞の発話区間だけ適用し、発話外は `normal` に戻す。直前の台詞から暗黙に引き継がない。
 - 話者のないナレーション等には `expressionId` を持たせない。`speakerId` が `null` のラインは `expressionId` を `null` に限る。
 - AI に提案させる場合、AI は話者ごとの利用可能な `expressionId` と表示名の allowlist を入力として受け、構造化出力はその allowlist 内の ID または未指定だけを許す。AI が提案した表情は人が台詞一覧で変更できる。AI の台本・台詞生成 Job は v1 の対象外であり、この入力契約は将来接続する（[../mvp/roadmap.md](../mvp/roadmap.md) Phase 2/3）。
-- 話者（`Speaker.characterId`）に対応する立ち絵がSceneに無い場合、その台詞の `expressionId` は描画に影響しない。
+- 話者（`Speaker.characterId`）に対応する立ち絵がその台詞で表示されていない場合、その台詞の `expressionId` は描画に影響しない。検証もスキップする。
+- 状態変更で同じキャラクターが複数の外観で表示される場合、その台詞で表示されているすべての外観の Face Set に `expressionId` が存在することを要求する。
 - 外観や固定版の変更によって既存台詞の表情が無効になる場合、保存・レンダー時に暗黙の代替をしない。先に `normal` または有効な preset へ編集して解消する。唯一の例外は「ライブラリから更新」で、確認画面に影響台詞を列挙したうえで、新しい固定版に存在しない表情を `null`（normal）へ戻す。
 
 ## 改訂版と作品への取り込み

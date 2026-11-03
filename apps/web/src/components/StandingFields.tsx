@@ -1,5 +1,5 @@
-import { ArrowRightLeft, CopyPlus, Repeat } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { ArrowRightLeft, CopyPlus, Plus, Repeat, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   useWatch,
   type Control,
@@ -11,22 +11,30 @@ import {
   DEFAULT_STANDING_EDGE,
   DEFAULT_STANDING_SCALE,
   DEFAULT_STANDING_VERTICAL,
-  MAX_STANDING_SCALE,
-  MIN_STANDING_SCALE,
   STANDING_EDGE_OPTIONS,
-  STANDING_SCALE_STEP,
   STANDING_SIDES,
   STANDING_TRANSITION_POLICY,
   STANDING_VERTICAL_OPTIONS,
   appearanceDisplayName,
   emptyStandingSlots,
+  resolveStandingStateFormAtLine,
+  sortStandingStateFormValues,
   type CharacterFormValue,
   type DocumentFormValues,
+  type LineFormValue,
   type StandingFormValue,
   type StandingSide,
 } from "../content/form";
 import {
+  resolveStandingLayout,
+  type ContentDocument,
+  type Warning,
+} from "@kakeai/contracts";
+import { commitStandingStateStructural } from "../content/structural";
+import {
   PRESET_LABELS,
+  buttonDangerClass,
+  buttonNeutralClass,
   editAreaClass,
   formLabelClass,
   itemCardClass,
@@ -43,7 +51,11 @@ interface StandingFieldsProps {
   setValue: UseFormSetValue<DocumentFormValues>;
   sceneIndex: number;
   sceneId: string;
+  lines: readonly LineFormValue[];
   characters: CharacterFormValue[];
+  base: ContentDocument;
+  onWarnings: (warnings: Warning[]) => void;
+  onError: (message: string) => void;
   onCommitStanding: (side: StandingSide) => void;
   onMoveStandings: (() => void) | null;
   onCopyStandings: (() => void) | null;
@@ -52,6 +64,15 @@ interface StandingFieldsProps {
 
 const SIDE_LABELS: Record<StandingSide, string> = { left: "左", right: "右" };
 
+function lineLabel(lines: readonly LineFormValue[], lineId: string): string {
+  const index = lines.findIndex((line) => line.id === lineId);
+  if (index === -1) {
+    return lineId;
+  }
+  const caption = ((lines[index]?.captionText ?? "").split("\n")[0] ?? "").trim();
+  return `${index + 1}. ${caption.length > 0 ? caption : "（字幕なし）"}`;
+}
+
 export function StandingFields({
   control,
   register,
@@ -59,18 +80,56 @@ export function StandingFields({
   setValue,
   sceneIndex,
   sceneId,
+  lines,
   characters,
+  base,
+  onWarnings,
+  onError,
   onCommitStanding,
   onMoveStandings,
   onCopyStandings,
   onSwapStandings,
 }: StandingFieldsProps) {
   const watched = useWatch({ control, name: `scenes.${sceneIndex}.standings` });
+  const watchedStates =
+    useWatch({ control, name: `scenes.${sceneIndex}.standingStates` }) ?? [];
+  const [addLineId, setAddLineId] = useState(lines[0]?.id ?? "");
+  const [addSide, setAddSide] = useState<StandingSide>("left");
   const snapshotRef = useRef(new Map<StandingSide, string>());
   const readSlot = (side: StandingSide): StandingFormValue | undefined =>
     (getValues(`scenes.${sceneIndex}.standings`) ?? []).find(
       (entry) => entry.side === side,
     );
+  const commitState = (side: StandingSide, fromLineId: string): void => {
+    try {
+      const next = commitStandingStateStructural(
+        base,
+        getValues(),
+        sceneId,
+        side,
+        fromLineId,
+        [],
+      );
+      if (next === null) {
+        return;
+      }
+      const nextScene = next.values.scenes.find((entry) => entry.id === sceneId);
+      if (nextScene !== undefined) {
+        setValue(
+          `scenes.${sceneIndex}.standingStates`,
+          nextScene.standingStates,
+          { shouldDirty: true },
+        );
+      }
+      onWarnings(next.result.warnings);
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : "立ち絵状態の更新に失敗しました。",
+      );
+    }
+  };
   const isOrdered =
     watched !== undefined &&
     watched.length === STANDING_SIDES.length &&
@@ -93,12 +152,119 @@ export function StandingFields({
     );
   }, [isOrdered, watched, sceneIndex, setValue]);
 
+  useEffect(() => {
+    if (lines.length === 0) {
+      setAddLineId("");
+      return;
+    }
+    if (lines.some((line) => line.id === addLineId)) {
+      return;
+    }
+    const used = new Set(
+      watchedStates
+        .filter((state) => state.side === addSide)
+        .map((state) => state.fromLineId),
+    );
+    const free = lines.find((line) => !used.has(line.id));
+    const fallback = free ?? lines[0];
+    if (fallback !== undefined) {
+      setAddLineId(fallback.id);
+    }
+  }, [addLineId, addSide, lines, watchedStates]);
+
   const slots = isOrdered
     ? watched ?? emptyStandingSlots()
     : emptyStandingSlots().map((slot) => {
         const found = (watched ?? []).find((entry) => entry?.side === slot.side);
         return { ...(found ?? slot), side: slot.side };
       });
+
+  const seenStateKeys = new Set<string>();
+  const sortedStates = sortStandingStateFormValues({
+    lines,
+    standings: slots,
+    standingStates: watchedStates,
+  })
+    .filter((state) => {
+      const key = `${state.side}|${state.fromLineId}`;
+      if (seenStateKeys.has(key)) {
+        return false;
+      }
+      seenStateKeys.add(key);
+      return true;
+    })
+    .map((state) => ({
+      state,
+      index: watchedStates.findIndex(
+        (entry) => entry.side === state.side && entry.fromLineId === state.fromLineId,
+      ),
+    }));
+  const addDuplicate = watchedStates.some(
+    (state) => state.side === addSide && state.fromLineId === addLineId,
+  );
+
+  const applyAppearanceLayout = (
+    index: number,
+    appearance: CharacterFormValue["appearances"][number] | undefined,
+  ): void => {
+    const layout = resolveStandingLayout(appearance);
+    setValue(
+      `scenes.${sceneIndex}.standings.${index}.appearanceId`,
+      appearance?.id ?? null,
+      { shouldDirty: true },
+    );
+    setValue(
+      `scenes.${sceneIndex}.standings.${index}.scale`,
+      layout.scale,
+      { shouldDirty: true },
+    );
+    setValue(
+      `scenes.${sceneIndex}.standings.${index}.edge`,
+      layout.edge,
+      { shouldDirty: true },
+    );
+    setValue(
+      `scenes.${sceneIndex}.standings.${index}.vertical`,
+      layout.vertical,
+      { shouldDirty: true },
+    );
+    setValue(
+      `scenes.${sceneIndex}.standings.${index}.layoutOverridden`,
+      false,
+      { shouldDirty: true },
+    );
+  };
+
+  const addState = () => {
+    if (lines.length === 0 || addDuplicate || addLineId.length === 0) {
+      return;
+    }
+    setValue(
+      `scenes.${sceneIndex}.standingStates`,
+      [
+        ...watchedStates,
+        {
+          side: addSide,
+          fromLineId: addLineId,
+          characterId: null,
+          appearanceId: null,
+        },
+      ],
+      { shouldDirty: true },
+    );
+    commitState(addSide, addLineId);
+  };
+
+  const removeState = (side: StandingSide, fromLineId: string) => {
+    setValue(
+      `scenes.${sceneIndex}.standingStates`,
+      watchedStates.filter(
+        (state) => !(state.side === side && state.fromLineId === fromLineId),
+      ),
+      { shouldDirty: true },
+    );
+    commitState(side, fromLineId);
+  };
 
   return (
     <div className={editAreaClass}>
@@ -157,6 +323,7 @@ export function StandingFields({
           </span>
         )}
       </div>
+      <p className={metaTextClass}>シーン開始時</p>
       {characters.length === 0 && (
         <p className={metaTextClass}>
           この作品にキャラクターがありません。上の「キャラクター」から追加してください。
@@ -224,11 +391,8 @@ export function StandingFields({
                     setValueAs: (value) => (value === "" ? null : value),
                     onChange: (event) => {
                       const next = characters.find((entry) => entry.id === event.target.value);
-                      setValue(
-                        `scenes.${sceneIndex}.standings.${index}.appearanceId`,
-                        next?.appearances[0]?.id ?? null,
-                        { shouldDirty: true },
-                      );
+                      applyAppearanceLayout(index, next?.appearances[0]);
+                      onCommitStanding(side);
                     },
                   })}
                 >
@@ -248,6 +412,13 @@ export function StandingFields({
                     disabled={appearances.length === 0}
                     {...register(`scenes.${sceneIndex}.standings.${index}.appearanceId`, {
                       setValueAs: (value) => (value === "" ? null : value),
+                      onChange: (event) => {
+                        const nextAppearance = appearances.find(
+                          (entry) => entry.id === event.target.value,
+                        );
+                        applyAppearanceLayout(index, nextAppearance);
+                        onCommitStanding(side);
+                      },
                     })}
                   >
                     <option value="">未指定</option>
@@ -266,50 +437,28 @@ export function StandingFields({
                 summary={`倍率 ${scale} / 端 ${edgeLabel} / 高さ ${verticalLabel} / 入場 ${PRESET_LABELS[enterPreset] ?? enterPreset} / 退場 ${PRESET_LABELS[exitPreset] ?? exitPreset}`}
                 storageKey={`standing-${sceneId}-${side}`}
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className={formLabelClass}>
-                    倍率
-                    <input
-                      type="number"
-                      min={MIN_STANDING_SCALE}
-                      max={MAX_STANDING_SCALE}
-                      step={STANDING_SCALE_STEP}
-                      className={`w-24 ${textFieldClass}`}
-                      {...register(`scenes.${sceneIndex}.standings.${index}.scale`, {
-                        setValueAs: (value) =>
-                          value === "" || Number.isNaN(Number(value))
-                            ? DEFAULT_STANDING_SCALE
-                            : Number(value),
-                      })}
-                    />
-                  </label>
-                  <label className={formLabelClass}>
-                    端からの位置
-                    <select
-                      className={textFieldClass}
-                      {...register(`scenes.${sceneIndex}.standings.${index}.edge`)}
-                    >
-                      {STANDING_EDGE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={formLabelClass}>
-                    高さ
-                    <select
-                      className={textFieldClass}
-                      {...register(`scenes.${sceneIndex}.standings.${index}.vertical`)}
-                    >
-                      {STANDING_VERTICAL_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                <p className={metaTextClass}>
+                  配置は外観の標準を使います（倍率 {scale} / 端 {edgeLabel} / 高さ {verticalLabel}）。
+                  {standing?.layoutOverridden === true
+                    ? " このシーンには旧形式の明示値があります。"
+                    : ""}
+                </p>
+                {standing?.layoutOverridden === true && (
+                  <button
+                    type="button"
+                    className={buttonNeutralClass}
+                    onClick={() => {
+                      setValue(
+                        `scenes.${sceneIndex}.standings.${index}.layoutOverridden`,
+                        false,
+                        { shouldDirty: true },
+                      );
+                      onCommitStanding(side);
+                    }}
+                  >
+                    外観の標準に戻す
+                  </button>
+                )}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <label className={formLabelClass}>
                     入場
@@ -382,6 +531,172 @@ export function StandingFields({
           </div>
         );
       })}
+
+      <div className="mt-3 flex items-center gap-2">
+        <p className="text-sm font-semibold text-foreground">セリフごとの変更</p>
+      </div>
+      {lines.length === 0 ? (
+        <p className={metaTextClass}>
+          セリフがあるシーンで使えます。セリフを追加すると、その先頭から立ち絵を切り替えられます。
+        </p>
+      ) : (
+        <>
+          <div className={`${itemCardClass} flex flex-wrap items-end gap-2`}>
+            <label className={formLabelClass}>
+              対象セリフ
+              <select
+                className={textFieldClass}
+                value={addLineId}
+                onChange={(event) => setAddLineId(event.target.value)}
+              >
+                {lines.map((line) => (
+                  <option key={line.id} value={line.id}>
+                    {lineLabel(lines, line.id)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={formLabelClass}>
+              側
+              <select
+                className={textFieldClass}
+                value={addSide}
+                onChange={(event) =>
+                  setAddSide(event.target.value as StandingSide)
+                }
+              >
+                {STANDING_SIDES.map((side) => (
+                  <option key={side} value={side}>
+                    {SIDE_LABELS[side]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className={buttonNeutralClass}
+              disabled={addDuplicate || addLineId.length === 0}
+              onClick={addState}
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              変更を追加
+            </button>
+            {addDuplicate && (
+              <span className={metaTextClass}>
+                このセリフと側には既に変更があります。
+              </span>
+            )}
+          </div>
+          {sortedStates.length === 0 && (
+            <p className={metaTextClass}>
+              変更はありません。開始時状態がシーン全体で使われます。
+            </p>
+          )}
+          {sortedStates.map(({ state, index }) => {
+            const character = characters.find(
+              (entry) => entry.id === state.characterId,
+            );
+            const appearances = character?.appearances ?? [];
+            const effective = resolveStandingStateFormAtLine(
+              {
+                lines,
+                standings: slots,
+                standingStates: watchedStates,
+              },
+              state.side,
+              state.fromLineId,
+            );
+            const hidden =
+              state.characterId === null || state.appearanceId === null;
+            return (
+              <div key={`${state.side}-${state.fromLineId}`} className={itemCardClass}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">
+                    {SIDE_LABELS[state.side]} / {lineLabel(lines, state.fromLineId)}
+                  </span>
+                  {effective?.isChange === true && (
+                    <span className={metaTextClass}>この行から</span>
+                  )}
+                  <button
+                    type="button"
+                    className={`ml-auto ${buttonDangerClass}`}
+                    onClick={() => removeState(state.side, state.fromLineId)}
+                  >
+                    <Trash2 aria-hidden="true" className="h-4 w-4" />
+                    変更を削除
+                  </button>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <label className={formLabelClass}>
+                    キャラクター
+                    <select
+                      className={textFieldClass}
+                      value={state.characterId ?? ""}
+                      onChange={(event) => {
+                        const nextId =
+                          event.target.value === "" ? null : event.target.value;
+                        const next = characters.find(
+                          (entry) => entry.id === nextId,
+                        );
+                        const nextAppearance = next?.appearances[0]?.id ?? null;
+                        setValue(
+                          `scenes.${sceneIndex}.standingStates.${index}.characterId`,
+                          nextId,
+                          { shouldDirty: true },
+                        );
+                        setValue(
+                          `scenes.${sceneIndex}.standingStates.${index}.appearanceId`,
+                          nextAppearance,
+                          { shouldDirty: true },
+                        );
+                        commitState(state.side, state.fromLineId);
+                      }}
+                    >
+                      <option value="">非表示</option>
+                      {characters.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.name.length > 0 ? entry.name : entry.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {!hidden && (
+                    <label className={formLabelClass}>
+                      外観
+                      <select
+                        className={textFieldClass}
+                        value={state.appearanceId ?? ""}
+                        onChange={(event) => {
+                          setValue(
+                            `scenes.${sceneIndex}.standingStates.${index}.appearanceId`,
+                            event.target.value === ""
+                              ? null
+                              : event.target.value,
+                            { shouldDirty: true },
+                          );
+                          commitState(state.side, state.fromLineId);
+                        }}
+                      >
+                        <option value="">未指定</option>
+                        {appearances.map((appearance) => (
+                          <option key={appearance.id} value={appearance.id}>
+                            {appearanceDisplayName(appearance)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {!hidden && appearances.length === 0 && (
+                    <span className={metaTextClass}>
+                      このキャラクターには外観がありません。
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

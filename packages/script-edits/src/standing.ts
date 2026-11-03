@@ -1,11 +1,11 @@
 import {
   characterStandingV1,
   characterStandingV1InputSchema,
-  DEFAULT_STANDING_EDGE,
-  DEFAULT_STANDING_VERTICAL,
+  sortStandingStates,
   type ContentDocument,
   type StandingEdge,
   type StandingSide,
+  type StandingState,
   type StandingVertical,
   type VisualCue,
   type Warning,
@@ -49,11 +49,11 @@ export function upsertStanding(
   side: StandingSide,
   characterId: string,
   appearanceId: string,
-  scale: number | undefined,
+  scale: number | null | undefined,
   transition: VisualCue["transition"] | undefined,
   context: ScriptContext,
-  edge?: StandingEdge,
-  vertical?: StandingVertical,
+  edge?: StandingEdge | null,
+  vertical?: StandingVertical | null,
 ): StandingEditResult {
   const { scene, sceneIndex, cueIndex } = findStandingIndex(
     document,
@@ -76,23 +76,27 @@ export function upsertStanding(
     existing === undefined
       ? undefined
       : characterStandingV1InputSchema.safeParse(existing.input);
-  const resolvedScale =
-    scale ??
-    (existingInput?.success ? existingInput.data.scale : 1);
-  const resolvedEdge =
-    edge ??
-    (existingInput?.success ? existingInput.data.edge : DEFAULT_STANDING_EDGE);
-  const resolvedVertical =
-    vertical ??
-    (existingInput?.success ? existingInput.data.vertical : DEFAULT_STANDING_VERTICAL);
-  const input = {
+  const existingData = existingInput?.success ? existingInput.data : undefined;
+  const input: Record<string, unknown> = {
     characterId,
     appearanceId,
     side,
-    scale: resolvedScale,
-    edge: resolvedEdge,
-    vertical: resolvedVertical,
   };
+  const resolvedScale =
+    scale === null ? undefined : (scale ?? existingData?.scale);
+  if (resolvedScale !== undefined) {
+    input.scale = resolvedScale;
+  }
+  const resolvedEdge =
+    edge === null ? undefined : (edge ?? existingData?.edge);
+  if (resolvedEdge !== undefined) {
+    input.edge = resolvedEdge;
+  }
+  const resolvedVertical =
+    vertical === null ? undefined : (vertical ?? existingData?.vertical);
+  if (resolvedVertical !== undefined) {
+    input.vertical = resolvedVertical;
+  }
 
   if (existing !== undefined) {
     const cue = parseCue({
@@ -176,5 +180,108 @@ export function removeStanding(
     lineIds: [],
     cueIds: [],
     primaryId: cue.id,
+  };
+}
+
+export function upsertStandingState(
+  document: ContentDocument,
+  sceneId: string,
+  side: StandingSide,
+  fromLineId: string,
+  characterId: string | null,
+  appearanceId: string | null,
+): StandingEditResult {
+  const { scene, sceneIndex } = findEditableScene(document, sceneId);
+  if (!scene.lines.some((line) => line.id === fromLineId)) {
+    throw targetNotFound(
+      ["fromLineId"],
+      `立ち絵状態の対象セリフが見つかりません: ${fromLineId}`,
+    );
+  }
+  if (characterId === null && appearanceId === null) {
+    // A hidden state is valid.
+  } else if (characterId === null || appearanceId === null) {
+    throw targetNotFound(
+      [characterId === null ? "characterId" : "appearanceId"],
+      "立ち絵状態は characterId と appearanceId を両方nullにするか、両方指定してください",
+    );
+  } else {
+    const character = document.characters.find(
+      (entry) => entry.id === characterId,
+    );
+    if (character === undefined) {
+      throw targetNotFound(
+        ["characterId"],
+        `キャラクターが見つかりません: ${characterId}`,
+      );
+    }
+    if (!character.appearances.some((entry) => entry.id === appearanceId)) {
+      throw targetNotFound(
+        ["appearanceId"],
+        `キャラクター ${characterId} の立ち絵が見つかりません: ${appearanceId}`,
+      );
+    }
+  }
+  const nextState: StandingState = {
+    side,
+    fromLineId,
+    characterId,
+    appearanceId,
+  };
+  const nextStates = sortStandingStates({
+    ...scene,
+    standingStates: [
+      ...(scene.standingStates ?? []).filter(
+        (state) => !(state.side === side && state.fromLineId === fromLineId),
+      ),
+      nextState,
+    ],
+  });
+  return {
+    document: withScene(document, sceneIndex, {
+      ...scene,
+      standingStates: nextStates,
+    }),
+    sceneIds: [],
+    lineIds: [],
+    cueIds: [],
+    primaryId: fromLineId,
+  };
+}
+
+export function removeStandingState(
+  document: ContentDocument,
+  sceneId: string,
+  side: StandingSide,
+  fromLineId: string,
+): StandingEditResult {
+  const { scene, sceneIndex } = findEditableScene(document, sceneId);
+  const states = scene.standingStates ?? [];
+  const exists = states.some(
+    (state) => state.side === side && state.fromLineId === fromLineId,
+  );
+  if (!exists) {
+    throw targetNotFound(
+      ["fromLineId"],
+      `立ち絵状態が見つかりません: ${side} / ${fromLineId}`,
+    );
+  }
+  const nextStates = sortStandingStates({
+    ...scene,
+    standingStates: states.filter(
+      (state) => !(state.side === side && state.fromLineId === fromLineId),
+    ),
+  });
+  return {
+    document: withScene(document, sceneIndex, {
+      ...scene,
+      ...(nextStates.length === 0
+        ? { standingStates: undefined }
+        : { standingStates: nextStates }),
+    }),
+    sceneIds: [],
+    lineIds: [],
+    cueIds: [],
+    primaryId: fromLineId,
   };
 }

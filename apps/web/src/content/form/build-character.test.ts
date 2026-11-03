@@ -26,6 +26,7 @@ import {
   initialVideoGateLineId,
   newSceneId,
   pruneDraftCueForLines,
+  resolveStandingStatesForLine,
   toFormValues,
   NESTED_COMPOSITION_FIT_SUFFIX,
   NESTED_COMPOSITION_POS_X_SUFFIX,
@@ -74,6 +75,7 @@ describe("buildContentDocument", () => {
             pose: "front",
             label: "",
             faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
+            standing: { scale: 1, edge: "margin", vertical: "standard" },
           },
         ],
       },
@@ -89,6 +91,7 @@ describe("buildContentDocument", () => {
         scale: 1,
         edge: "margin",
         vertical: "standard",
+        layoutOverridden: false,
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",
@@ -102,6 +105,7 @@ describe("buildContentDocument", () => {
         scale: 1,
         edge: "margin",
         vertical: "standard",
+        layoutOverridden: true,
         enterPreset: "fade",
         enterDurationMs: 350,
         exitPreset: "none",
@@ -181,13 +185,95 @@ describe("buildContentDocument", () => {
       characterId: "character-rin",
       appearanceId: "appearance-smile",
       side: "left",
-      scale: 1,
-      edge: "margin",
-      vertical: "standard",
     });
     expect(cue.transition).toEqual({
       enter: { preset: "none", durationMs: 0 },
       exit: { preset: "none", durationMs: 0 },
+    });
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("writes line-boundary standing states and resolves them per line", () => {
+    const base = createInitialContentDocument();
+    base.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        names: [],
+        voices: [],
+        libraryCharacterId: null,
+        appearances: [
+          { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
+          { id: "appearance-face", assetId: "asset-face", expression: "normal", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
+        ],
+      },
+    ];
+    const point = base.scenes[1]!;
+    point.lines = [
+      {
+        id: "line-p1-1",
+        speakerId: null,
+        captionText: "一番目",
+        speechText: "いちばんめ",
+        selectedAudioTakeId: null,
+        expressionId: null,
+      },
+      {
+        id: "line-p1-2",
+        speakerId: null,
+        captionText: "二番目",
+        speechText: "にばんめ",
+        selectedAudioTakeId: null,
+        expressionId: null,
+      },
+    ];
+    const values = toFormValues(base);
+    values.scenes[1]!.standings = [
+      {
+        cueId: null,
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        side: "left",
+        scale: 1,
+        edge: "margin",
+        vertical: "standard",
+        layoutOverridden: false,
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
+      },
+    ];
+    values.scenes[1]!.standingStates = [
+      {
+        side: "left",
+        fromLineId: "line-p1-2",
+        characterId: "character-rin",
+        appearanceId: "appearance-face",
+      },
+    ];
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.standingStates).toEqual([
+      {
+        side: "left",
+        fromLineId: "line-p1-2",
+        characterId: "character-rin",
+        appearanceId: "appearance-face",
+      },
+    ]);
+    const form = toFormValues(rebuilt);
+    const first = resolveStandingStatesForLine(form.scenes[1]!, point.lines[0]!.id);
+    const second = resolveStandingStatesForLine(form.scenes[1]!, "line-p1-2");
+    expect(first[0]).toMatchObject({
+      characterId: "character-rin",
+      appearanceId: "appearance-smile",
+      isChange: false,
+    });
+    expect(second[0]).toMatchObject({
+      characterId: "character-rin",
+      appearanceId: "appearance-face",
+      isChange: true,
     });
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
@@ -217,6 +303,7 @@ describe("buildContentDocument", () => {
         scale: 1,
         edge: "margin",
         vertical: "standard",
+        layoutOverridden: true,
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",
@@ -230,6 +317,7 @@ describe("buildContentDocument", () => {
         scale: 0.8,
         edge: "margin",
         vertical: "standard",
+        layoutOverridden: true,
         enterPreset: "none",
         enterDurationMs: 0,
         exitPreset: "none",
@@ -467,6 +555,7 @@ describe("buildContentDocument", () => {
       expression: "normal",
       pose: "front",
       faceSetId: null, faceSetVersion: null, libraryAppearanceId: null,
+      standing: { scale: 1, edge: "margin", vertical: "standard" },
     });
   });
 

@@ -39,6 +39,10 @@ export function LibraryUpdateDialog({
   );
 }
 
+function layoutText(appearance: LibraryUpdateAppearance): string {
+  return `倍率 ${appearance.standing.scale} / 端 ${appearance.standing.edge} / 高さ ${appearance.standing.vertical}`;
+}
+
 function appearanceLabel(appearance: LibraryUpdateAppearance): string {
   const tags = `${appearance.expression || "-"} / ${appearance.pose || "-"}`;
   return appearance.label === undefined || appearance.label.length === 0
@@ -85,7 +89,7 @@ export function LibraryUpdateModal({
       className="max-w-2xl"
     >
         <p className={`mb-3 ${metaTextClass}`}>
-          作品内のキャラクターID・話者ID・立ち絵の配置は維持したまま、ライブラリの内容と最新の表情セット版を取り込みます。
+          作品内のキャラクターID・話者ID・立ち絵のIDは維持したまま、ライブラリの内容と最新の表情セット版を取り込みます。外観の標準配置もライブラリの値で更新されます。
         </p>
 
         {!changes && <p className={metaTextClass}>変更はありません。</p>}
@@ -158,6 +162,12 @@ export function LibraryUpdateModal({
                           {" "}
                           （表情セット v{entry.before.faceSetVersion ?? 1} → v
                           {entry.after.faceSetVersion ?? 1}）
+                        </span>
+                      )}
+                      {layoutText(entry.before) !== layoutText(entry.after) && (
+                        <span className={metaTextClass}>
+                          {" "}
+                          （配置 {layoutText(entry.before)} → {layoutText(entry.after)}）
                         </span>
                       )}
                     </li>

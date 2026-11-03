@@ -6,7 +6,6 @@ import type {
   LineFormValue,
   SceneFormValue,
   SpeakerFormValue,
-  StandingCueInput,
 } from "./types";
 import {
   DEFAULT_APPEARANCE_EXPRESSION,
@@ -14,6 +13,7 @@ import {
   STANDING_TEMPLATE_ID,
   VIDEO_PLAYBACK_SUFFIX,
 } from "./constants";
+import { DEFAULT_STANDING_LAYOUT } from "@kakeai/contracts";
 import { randomId } from "./factories";
 import { readStanding } from "./read";
 import { parseVideoPlayback, serializeVideoPlayback } from "./cue-read";
@@ -117,6 +117,7 @@ export function createEmptyAppearance(): AppearanceFormValue {
     faceSetId: null,
     faceSetVersion: null,
     libraryAppearanceId: null,
+    standing: { ...DEFAULT_STANDING_LAYOUT },
   };
 }
 
@@ -154,6 +155,12 @@ export function countCharacterFormUsage(
   for (const scene of values.scenes) {
     for (const entry of scene.standings) {
       if (entry.characterId === characterId) {
+        standing += 1;
+        sceneIds.add(scene.id);
+      }
+    }
+    for (const entry of scene.standingStates ?? []) {
+      if (entry.characterId === characterId && entry.appearanceId !== null) {
         standing += 1;
         sceneIds.add(scene.id);
       }
@@ -203,7 +210,10 @@ export function countAppearanceReferences(
 
 function countStandingReferences(
   content: ContentDocument,
-  matches: (standing: StandingCueInput) => boolean,
+  matches: (standing: {
+    characterId: string;
+    appearanceId: string;
+  }) => boolean,
   options: { countSpeakers: boolean; speakerCharacterId: string | null },
 ): ReferenceUsage {
   let cues = 0;
@@ -216,6 +226,21 @@ function countStandingReferences(
       }
       const standing = readStanding(cue);
       if (standing === null || !matches(standing)) {
+        continue;
+      }
+      cues += 1;
+      sceneIds.add(scene.id);
+    }
+    for (const state of scene.standingStates ?? []) {
+      if (state.characterId === null || state.appearanceId === null) {
+        continue;
+      }
+      if (
+        !matches({
+          characterId: state.characterId,
+          appearanceId: state.appearanceId,
+        })
+      ) {
         continue;
       }
       cues += 1;

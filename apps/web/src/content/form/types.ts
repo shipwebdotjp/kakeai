@@ -8,6 +8,7 @@ import {
   type StandingSide,
   type StandingEdge,
   type StandingVertical,
+  type StandingLayout,
   type ThemeAccentToken,
   type TransitionPreset,
   type VisualCue,
@@ -57,6 +58,8 @@ export interface AppearanceFormValue {
   faceSetVersion: number | null;
   /** Library source appearance; null for work-local additions. */
   libraryAppearanceId: string | null;
+  /** Default standing placement for this appearance. */
+  standing?: StandingLayout;
 }
 
 export interface CharacterFormValue {
@@ -96,10 +99,19 @@ export interface StandingFormValue {
   scale: number;
   edge: StandingEdge;
   vertical: StandingVertical;
+  /** True when the Cue still carries an explicit legacy layout. */
+  layoutOverridden?: boolean;
   enterPreset: TransitionPreset;
   enterDurationMs: number;
   exitPreset: TransitionPreset;
   exitDurationMs: number;
+}
+
+export interface StandingStateFormValue {
+  side: StandingSide;
+  fromLineId: string;
+  characterId: string | null;
+  appearanceId: string | null;
 }
 
 export interface CueFormValue {
@@ -137,6 +149,7 @@ export interface SceneFormValue {
   lines: LineFormValue[];
   cues: CueFormValue[];
   standings: StandingFormValue[];
+  standingStates?: StandingStateFormValue[];
   audioCues: SceneAudioCueFormValue[];
   mainVisualCueId: string;
   embeddedAudio: boolean;
@@ -156,7 +169,8 @@ export interface StandingCueInput {
   characterId: string;
   appearanceId: string;
   side: StandingSide;
-  scale: number;
-  edge: StandingEdge;
-  vertical: StandingVertical;
+  scale?: number;
+  edge?: StandingEdge;
+  vertical?: StandingVertical;
+  layoutOverridden: boolean;
 }

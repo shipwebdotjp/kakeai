@@ -1,8 +1,10 @@
 import {
   LEGACY_FACE_SET_VERSION,
   characterStandingV1InputSchema,
+  resolveStandingLayout,
   DEFAULT_STANDING_EDGE,
   DEFAULT_STANDING_VERTICAL,
+  type CharacterAppearance,
   type ContentDocument,
   type SnapshotFaceSet,
   type StandingEdge,
@@ -53,7 +55,7 @@ function resolveStandingAppearance(
   document: ContentDocument,
   path: (string | number)[],
   assetResolver: AssetResolver,
-): { src: string; assetId: string } {
+): { src: string; assetId: string; appearance: CharacterAppearance } {
   const character = document.characters.find((entry) => entry.id === characterId);
   const appearance = character?.appearances.find((entry) => entry.id === appearanceId);
   if (appearance === undefined) {
@@ -67,7 +69,11 @@ function resolveStandingAppearance(
       { path, code: "invalid_asset_kind", message: "立ち絵には画像素材を指定してください。" },
     ]);
   }
-  return { src: escapeHtmlAttribute(media.url), assetId: appearance.assetId };
+  return {
+    src: escapeHtmlAttribute(media.url),
+    assetId: appearance.assetId,
+    appearance,
+  };
 }
 
 
@@ -107,20 +113,30 @@ export function renderCharacterStanding(input: unknown, context: RenderContext):
     ]);
   }
   const { characterId, appearanceId, side, scale, edge, vertical } = parsed.data;
-  const { src, assetId } = resolveStandingAppearance(
+  const { src, assetId, appearance } = resolveStandingAppearance(
     characterId,
     appearanceId,
     context.document,
     context.path,
     context.assetResolver,
   );
-  const layout = standingPosition(side, scale, edge, vertical, context.canvas);
-  const widthPx = Math.round(STANDING_BASE_WIDTH_PX * scale * context.canvas.typeScale);
+  const standingLayout = resolveStandingLayout(appearance);
+  const resolvedScale = scale ?? standingLayout.scale;
+  const resolvedEdge = edge ?? standingLayout.edge;
+  const resolvedVertical = vertical ?? standingLayout.vertical;
+  const layout = standingPosition(
+    side,
+    resolvedScale,
+    resolvedEdge,
+    resolvedVertical,
+    context.canvas,
+  );
+  const widthPx = Math.round(
+    STANDING_BASE_WIDTH_PX * resolvedScale * context.canvas.typeScale,
+  );
   const leftPercent = Math.round(layout.x * 10000) / 100;
   const topPercent = Math.round(layout.y * 10000) / 100;
-  const character = context.document.characters.find((entry) => entry.id === characterId);
-  const appearance = character?.appearances.find((entry) => entry.id === appearanceId);
-  const faceSetId = appearance?.faceSetId ?? null;
+  const faceSetId = appearance.faceSetId;
   if (faceSetId === null) {
     const id = context.scope.id("img");
     return {

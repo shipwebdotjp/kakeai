@@ -1,13 +1,15 @@
 import {
   LEGACY_FACE_SET_VERSION,
-  characterStandingV1InputSchema,
+  collectStandingAppearanceRefs,
   resolveCharacterName,
+  resolveStandingLayout,
   type Character,
   type CharacterAddFromLibraryOperation,
   type CharacterAppearance,
   type CharacterVoice,
   type ContentDocument,
   type Speaker,
+  type StandingLayout,
   type Warning,
 } from "@kakeai/contracts";
 import type { ScriptContext, ScriptLibraryCharacter } from "./context.ts";
@@ -34,6 +36,7 @@ export interface LibraryUpdateAppearance {
   label?: string;
   faceSetId: string | null;
   faceSetVersion: number | null;
+  standing: StandingLayout;
 }
 
 export interface LibraryUpdateExpressionReset {
@@ -90,6 +93,7 @@ function libraryAppearanceToNext(
       appearance.faceSetId === null
         ? null
         : latestFaceSetVersion(appearance.faceSetId, context),
+    standing: resolveStandingLayout(appearance),
   };
 }
 
@@ -103,7 +107,10 @@ function sameAppearance(
     left.pose === right.pose &&
     left.label === right.label &&
     left.faceSetId === right.faceSetId &&
-    left.faceSetVersion === right.faceSetVersion
+    left.faceSetVersion === right.faceSetVersion &&
+    left.standing.scale === right.standing.scale &&
+    left.standing.edge === right.standing.edge &&
+    left.standing.vertical === right.standing.vertical
   );
 }
 
@@ -115,6 +122,7 @@ function comparableAppearance(appearance: CharacterAppearance): LibraryUpdateApp
     ...(appearance.label === undefined ? {} : { label: appearance.label }),
     faceSetId: appearance.faceSetId,
     faceSetVersion: appearance.faceSetVersion,
+    standing: resolveStandingLayout(appearance),
   };
 }
 
@@ -133,21 +141,13 @@ function standingAppearanceIds(
   scene: ContentDocument["scenes"][number],
   characterId: string,
 ): string[] {
-  const ids = new Set<string>();
-  for (const cue of scene.visualCues) {
-    if (cue.template.id !== "character.standing") {
-      continue;
-    }
-    const parsed = characterStandingV1InputSchema.safeParse(cue.input);
-    if (!parsed.success) {
-      continue;
-    }
-    const input = parsed.data as { characterId: string; appearanceId: string };
-    if (input.characterId === characterId) {
-      ids.add(input.appearanceId);
-    }
-  }
-  return [...ids];
+  return [
+    ...new Set(
+      collectStandingAppearanceRefs(scene)
+        .filter((reference) => reference.characterId === characterId)
+        .map((reference) => reference.appearanceId),
+    ),
+  ];
 }
 
 function localeValues<T>(

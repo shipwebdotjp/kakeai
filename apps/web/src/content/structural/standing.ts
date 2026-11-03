@@ -15,6 +15,7 @@ import type {
 import {
   characterStandingV1,
   characterStandingV1InputSchema,
+  sortStandingStates,
 } from "@kakeai/contracts";
 import {
   toFormValues,
@@ -110,9 +111,9 @@ export function commitStandingStructural(
         side,
         characterId: standing.characterId,
         appearanceId: standing.appearanceId,
-        scale,
-        edge,
-        vertical,
+        scale: standing.layoutOverridden === true ? scale : null,
+        edge: standing.layoutOverridden === true ? edge : null,
+        vertical: standing.layoutOverridden === true ? vertical : null,
         transition: {
           enter: normalizeTransitionEdge(
             standing.enterPreset,
@@ -123,6 +124,76 @@ export function commitStandingStructural(
             standing.exitDurationMs,
           ),
         },
+      },
+    ],
+    assets,
+  );
+}
+
+export function commitStandingStateStructural(
+  base: ContentDocument,
+  values: DocumentFormValues,
+  sceneId: string,
+  side: StandingSide,
+  fromLineId: string,
+  assets: readonly StructuralAsset[] = [],
+): StructuralEditResult | null {
+  const document = buildStructuralDocument(base, values);
+  const formScene = values.scenes.find((entry) => entry.id === sceneId);
+  const state = (formScene?.standingStates ?? []).find(
+    (entry) => entry.side === side && entry.fromLineId === fromLineId,
+  );
+  const baseScene = base.scenes.find((entry) => entry.id === sceneId);
+  const baseState = baseScene?.standingStates?.find(
+    (entry) => entry.side === side && entry.fromLineId === fromLineId,
+  );
+  if (state === undefined) {
+    if (baseState === undefined) {
+      return null;
+    }
+    const documentScene = document.scenes.find(
+      (entry) => entry.id === sceneId,
+    );
+    if (documentScene === undefined) {
+      return null;
+    }
+    // The form already removed the state, so the rebuilt document lacks it.
+    // Re-add the persisted entry before applying the remove operation, so the
+    // operation core sees the state it is removing.
+    const withState = {
+      ...documentScene,
+      standingStates: sortStandingStates({
+        ...documentScene,
+        standingStates: [
+          ...(documentScene.standingStates ?? []),
+          baseState,
+        ],
+      }),
+    };
+    const nextDocument: ContentDocument = {
+      ...document,
+      scenes: document.scenes.map((entry) =>
+        entry.id === sceneId ? withState : entry,
+      ),
+    };
+    return applyToDocument(
+      nextDocument,
+      values,
+      [{ op: "standing.state.remove", sceneId, side, fromLineId }],
+      assets,
+    );
+  }
+  return applyToDocument(
+    document,
+    values,
+    [
+      {
+        op: "standing.state.upsert",
+        sceneId,
+        side,
+        fromLineId,
+        characterId: state.characterId,
+        appearanceId: state.appearanceId,
       },
     ],
     assets,
@@ -236,9 +307,9 @@ function standingSlotOperation(
       side: slot.side,
       characterId: slot.characterId,
       appearanceId: slot.appearanceId,
-      scale,
-      edge,
-      vertical,
+      scale: slot.layoutOverridden === true ? scale : null,
+      edge: slot.layoutOverridden === true ? edge : null,
+      vertical: slot.layoutOverridden === true ? vertical : null,
       transition: {
         enter: normalizeTransitionEdge(slot.enterPreset, slot.enterDurationMs),
         exit: normalizeTransitionEdge(slot.exitPreset, slot.exitDurationMs),

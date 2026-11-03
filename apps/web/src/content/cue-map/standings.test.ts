@@ -69,9 +69,94 @@ describe("buildCueMap standings and representative media", () => {
       cueId: "standing-cue-1",
       layer: "standing",
       isStanding: true,
-      characterName: "リン",
+      characterName: "リン（normal / front）",
       representativeAssetId: "asset-image-1",
       jumpTargetId: "scene-p1",
+    });
+  });
+
+  it("splits standing bands at line-boundary state changes", () => {
+    const scenes = [
+      makeScene("p1", "point", [
+        makeLine("l1", "one"),
+        makeLine("l2", "two"),
+        makeLine("l3", "three"),
+      ]),
+    ];
+    scenes[0]!.standings = [
+      {
+        cueId: "standing-cue-1",
+        characterId: "char-1",
+        appearanceId: "app-1",
+        side: "left",
+        scale: 1,
+        edge: "margin",
+        vertical: "standard",
+        enterPreset: "none",
+        enterDurationMs: 0,
+        exitPreset: "none",
+        exitDurationMs: 0,
+      },
+    ];
+    scenes[0]!.standingStates = [
+      {
+        side: "left",
+        fromLineId: "l2",
+        characterId: "char-1",
+        appearanceId: "app-2",
+      },
+      {
+        side: "left",
+        fromLineId: "l3",
+        characterId: null,
+        appearanceId: null,
+      },
+    ];
+    const model = buildCueMap({
+      ...baseInput(scenes),
+      characters: [
+        {
+          id: "char-1",
+          name: "リン",
+          names: [],
+          voiceProfileId: null,
+          voices: [],
+          libraryCharacterId: null,
+          appearances: [
+            {
+              id: "app-1",
+              assetId: "asset-1",
+              expression: "normal",
+              pose: "front",
+              label: "夏服",
+              faceSetId: null,
+              faceSetVersion: null,
+              libraryAppearanceId: null,
+            },
+            {
+              id: "app-2",
+              assetId: "asset-2",
+              expression: "normal",
+              pose: "front",
+              label: "冬服",
+              faceSetId: null,
+              faceSetVersion: null,
+              libraryAppearanceId: null,
+            },
+          ],
+        },
+      ],
+      assets: [makeAsset("asset-1", "image"), makeAsset("asset-2", "image")],
+    });
+    const standing = model.bands.filter((band) => band.isStanding);
+    expect(standing).toHaveLength(2);
+    expect(standing[0]).toMatchObject({
+      cueId: "standing-cue-1",
+      rangeDetail: { kind: "lines", startNumber: "1.1", endNumber: "1.1" },
+    });
+    expect(standing[1]).toMatchObject({
+      rangeDetail: { kind: "lines", startNumber: "1.2", endNumber: "1.2" },
+      characterName: "リン / 冬服（normal / front）",
     });
   });
 

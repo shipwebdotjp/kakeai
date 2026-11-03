@@ -342,7 +342,11 @@ export function SceneBlock(props: SceneBlockProps) {
             setValue={props.setValue}
             sceneIndex={sceneIndex}
             sceneId={scene.id}
+            lines={scene.lines}
             characters={props.characters}
+            base={props.base}
+            onWarnings={props.onWarnings}
+            onError={props.onError}
             onCommitStanding={(side) =>
               props.onCommitStanding(sceneIndex, side)
             }

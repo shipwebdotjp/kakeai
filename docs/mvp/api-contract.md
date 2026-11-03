@@ -78,7 +78,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | ThumbnailAppearancePresetSummary | id, name, createdAt, updatedAt | アプリ全体で再利用する名前付きサムネイル外観プリセットの一覧用要約。詳細は [../thumbnail/spec.md](../thumbnail/spec.md)。 |
 | ThumbnailAppearancePreset | id, name, appearance, createdAt, updatedAt | 名前付きサムネイル外観プリセット。`appearance` は疎な上書き。適用はWorkの共通Appearanceへのスナップショットコピーで、プリセットへの参照は保存しない。 |
 | ThumbnailPreview | html, width, height | 未保存のサムネイル入力をコンパイルした静止画HTML（1280x720）。DBへ書かない。 |
-| CharacterLibraryEntry | id, name, names, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`names` は locale 別の名前の対応（`locale` 重複・空名を拒否、無ければ既定名）。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
+| CharacterLibraryEntry | id, name, names, voices, appearances, createdAt, updatedAt | アプリ共通のキャラクター。`names` は locale 別の名前の対応（`locale` 重複・空名を拒否、無ければ既定名）。`voices` は locale 別の声の対応（`locale` 重複拒否）。`appearances` は画像 Asset と表情・ポーズ・任意の表示名 `label`・任意の `faceSetId`・任意の `standing`（倍率・端・高さ）。詳細は [../character-library/spec.md](../character-library/spec.md)。 |
 | FaceSet | id, name, version, layers, expressions, createdAt, updatedAt | アプリ共通の顔素材。`layers` は `{ id, part: brow\|eye\|mouth\|foreground, assetId, blinkLayerId, speakingLayerId }`、`expressions` は `{ id, name, browLayerId, eyeLayerId, mouthLayerId }` で、`normal` の preset を必ず含む。`assetId` は ready な画像 Asset。詳細は [../face-expression/spec.md](../face-expression/spec.md)。 |
 
 値がないDTOフィールドは省略せずnullを返す。これにはdurationMs、workId、assetId、languageEditionId、scriptVersionId、startedAt、finishedAt、errorが含まれる。`artifacts` は値がないとき空配列とする。

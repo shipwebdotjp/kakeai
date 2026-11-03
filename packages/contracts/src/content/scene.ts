@@ -4,6 +4,7 @@ import { themeAccentTokenSchema } from "./theme";
 import { sceneTimingSchema } from "./timing";
 import { narrationSegmentSchema } from "./narration";
 import { visualCueSchema } from "./visual";
+import { standingSideSchema } from "./standing-layout";
 
 export const sceneTransitionPresetSchema = z.enum(["cut", "fade", "crossfade"]);
 export type SceneTransitionPreset = z.infer<typeof sceneTransitionPresetSchema>;
@@ -54,6 +55,25 @@ export const sceneAccentSchema = z.discriminatedUnion("kind", [
 ]);
 export type SceneAccent = z.infer<typeof sceneAccentSchema>;
 
+export const standingStateSchema = z
+  .strictObject({
+    side: standingSideSchema,
+    fromLineId: idSchema,
+    characterId: idSchema.nullable(),
+    appearanceId: idSchema.nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.characterId === null) !== (value.appearanceId === null)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "立ち絵状態は characterId と appearanceId を両方nullにするか、両方指定してください",
+        path: [value.characterId === null ? "characterId" : "appearanceId"],
+      });
+    }
+  });
+
+export type StandingState = z.infer<typeof standingStateSchema>;
+
 const sceneBaseShape = {
   id: idSchema,
   label: sceneLabelSchema,
@@ -62,6 +82,7 @@ const sceneBaseShape = {
   transition: sceneTransitionSchema.optional(),
   lines: z.array(narrationSegmentSchema),
   visualCues: z.array(visualCueSchema),
+  standingStates: z.array(standingStateSchema).optional(),
 };
 
 export const introSceneSchema = z.strictObject({

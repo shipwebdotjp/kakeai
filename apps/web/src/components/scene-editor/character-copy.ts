@@ -1,5 +1,6 @@
 import {
   resolveCharacterName,
+  resolveStandingLayout,
   type CharacterLibraryEntry,
   type ContentDocument,
   type FaceSet,
@@ -59,6 +60,7 @@ export function buildLibraryCharacterCopy(
             ? null
             : (faceSetById.get(appearance.faceSetId)?.version ?? 1),
         libraryAppearanceId: appearance.id,
+        standing: resolveStandingLayout(appearance),
       })),
       libraryCharacterId: entry.id,
     },

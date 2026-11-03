@@ -15,6 +15,131 @@ describe("contentDocumentSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts line-boundary standing states and a standing cue without layout overrides", () => {
+    const doc = validContentDocument();
+    doc.characters = [
+      {
+        id: "character-rin",
+        name: "リン",
+        names: [],
+        voices: [],
+        appearances: [
+          {
+            id: "appearance-smile",
+            assetId: "asset-rin",
+            expression: "smile",
+            pose: "front",
+            faceSetId: null,
+            faceSetVersion: null,
+            libraryAppearanceId: null,
+            standing: { scale: 0.5, edge: "margin", vertical: "standard" },
+          },
+        ],
+        libraryCharacterId: null,
+      },
+    ];
+    const scene = doc.scenes[1]!;
+    scene.lines.push({
+      ...scene.lines[0]!,
+      id: "line-p1-2",
+      selectedAudioTakeId: null,
+    });
+    scene.standingStates = [
+      {
+        side: "left",
+        fromLineId: "line-p1-1",
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+      },
+      {
+        side: "left",
+        fromLineId: "line-p1-2",
+        characterId: null,
+        appearanceId: null,
+      },
+    ];
+    scene.visualCues.push({
+      id: "vc-standing",
+      template: { id: "character.standing", version: 1 },
+      range: { kind: "scene" },
+      layer: "standing",
+      order: 0,
+      transition,
+      input: {
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+        side: "left",
+      },
+    });
+    expect(contentDocumentSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("rejects standing states with an unknown line, duplicate key or mismatched pair", () => {
+    const make = () => {
+      const doc = validContentDocument();
+      doc.characters = [
+        {
+          id: "character-rin",
+          name: "リン",
+          names: [],
+          voices: [],
+          appearances: [
+            {
+              id: "appearance-smile",
+              assetId: "asset-rin",
+              expression: "smile",
+              pose: "front",
+              faceSetId: null,
+              faceSetVersion: null,
+              libraryAppearanceId: null,
+            },
+          ],
+          libraryCharacterId: null,
+        },
+      ];
+      return doc;
+    };
+
+    const unknownLine = make();
+    unknownLine.scenes[1]!.standingStates = [
+      {
+        side: "left",
+        fromLineId: "line-missing",
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(unknownLine).success).toBe(false);
+
+    const duplicate = make();
+    duplicate.scenes[1]!.standingStates = [
+      {
+        side: "left",
+        fromLineId: duplicate.scenes[1]!.lines[0]!.id,
+        characterId: "character-rin",
+        appearanceId: "appearance-smile",
+      },
+      {
+        side: "left",
+        fromLineId: duplicate.scenes[1]!.lines[0]!.id,
+        characterId: null,
+        appearanceId: null,
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(duplicate).success).toBe(false);
+
+    const mismatched = make();
+    mismatched.scenes[1]!.standingStates = [
+      {
+        side: "left",
+        fromLineId: mismatched.scenes[1]!.lines[0]!.id,
+        characterId: "character-rin",
+        appearanceId: null,
+      },
+    ];
+    expect(contentDocumentSchema.safeParse(mismatched).success).toBe(false);
+  });
+
   it("accepts a scene audio cue with the program role", () => {
     const doc = validContentDocument();
     doc.audioCues.push({

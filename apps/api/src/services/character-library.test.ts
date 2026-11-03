@@ -68,12 +68,16 @@ describe("character library", () => {
       names: [],
       voices: [{ locale: "ja-JP", voiceProfileId: profile.id }],
       appearances: [
-        { id: "appearance-1", assetId: image.id, expression: "smile", pose: "front", label: "夏服", faceSetId: null },
+        { id: "appearance-1", assetId: image.id, expression: "smile", pose: "front", label: "夏服", faceSetId: null, standing: { scale: 0.5, edge: "tight", vertical: "up" } },
       ],
     });
     expect(created.name).toBe("リン");
     expect(created.voices).toEqual([{ locale: "ja-JP", voiceProfileId: profile.id }]);
-    expect(created.appearances[0]).toMatchObject({ id: "appearance-1", label: "夏服" });
+    expect(created.appearances[0]).toMatchObject({
+      id: "appearance-1",
+      label: "夏服",
+      standing: { scale: 0.5, edge: "tight", vertical: "up" },
+    });
 
     const listed = await characters.listCharacters(prisma);
     expect(listed.map((entry) => entry.id)).toContain(created.id);
@@ -90,6 +94,11 @@ describe("character library", () => {
     expect(updated.voices).toEqual([]);
     expect(updated.appearances.map((appearance) => appearance.id)).toEqual(["appearance-2"]);
     expect(updated.appearances[0]!.label).toBeUndefined();
+    expect(updated.appearances[0]!.standing).toEqual({
+      scale: 1,
+      edge: "margin",
+      vertical: "standard",
+    });
 
     await characters.deleteCharacter(prisma, created.id);
     await expect(characters.getCharacter(prisma, created.id)).rejects.toMatchObject({

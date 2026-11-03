@@ -169,17 +169,21 @@ export function buildStandingCues(
         characterId: standing.characterId,
         appearanceId: standing.appearanceId,
         side: standing.side,
-        scale: normalizeScale(standing.scale, DEFAULT_STANDING_SCALE),
-        edge: normalizeStandingEnum(
-          standing.edge,
-          STANDING_EDGE_VALUES,
-          DEFAULT_STANDING_EDGE,
-        ),
-        vertical: normalizeStandingEnum(
-          standing.vertical,
-          STANDING_VERTICAL_VALUES,
-          DEFAULT_STANDING_VERTICAL,
-        ),
+        ...(standing.layoutOverridden === true
+          ? {
+              scale: normalizeScale(standing.scale, DEFAULT_STANDING_SCALE),
+              edge: normalizeStandingEnum(
+                standing.edge,
+                STANDING_EDGE_VALUES,
+                DEFAULT_STANDING_EDGE,
+              ),
+              vertical: normalizeStandingEnum(
+                standing.vertical,
+                STANDING_VERTICAL_VALUES,
+                DEFAULT_STANDING_VERTICAL,
+              ),
+            }
+          : {}),
       },
     });
     order += 1;

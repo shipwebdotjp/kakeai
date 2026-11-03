@@ -59,7 +59,7 @@ import { Collapsible } from "./Collapsible";
 import { sceneFoldKey } from "../lib/collapseState";
 import { ScriptSkinProvider } from "./CueList";
 import { MediaPicker } from "./MediaPicker";
-import { ScenePickerModal, type ScenePickerTarget } from "./ScenePickerModal";
+import { ScenePickerModal } from "./ScenePickerModal";
 import { LibraryUpdateDialog } from "./LibraryUpdateModal";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { SceneBlock } from "./scene-editor/SceneBlock";
@@ -74,7 +74,7 @@ import {
   libraryCopyFailureMessage,
 } from "./scene-editor/character-copy";
 import { useSceneEditorSave } from "./scene-editor/useSceneEditorSave";
-import { hasConfiguredStanding, isMiddleScene } from "./scene-editor/shared";
+import { isMiddleScene, pickerTargets } from "./scene-editor/shared";
 
 function resolveInsertionTargetId(
   scenes: readonly Pick<SceneFormValue, "id" | "kind">[],
@@ -156,20 +156,7 @@ function standingTransferModeOf(
   return modeMap[kind];
 }
 
-function pickerTargets(
-  scenes: readonly SceneFormValue[],
-): ScenePickerTarget[] {
-  return scenes
-    .filter((scene) => scene.kind !== "insert")
-    .map((scene) => ({
-      id: scene.id,
-      label: scene.label,
-      kind: scene.kind,
-      lineCount: scene.lines.length,
-      cueCount: scene.cues.length,
-      standingCount: scene.standings.filter(hasConfiguredStanding).length,
-    }));
-}
+
 
 export function SceneEditor({
   base,
@@ -812,6 +799,14 @@ export function SceneEditor({
           },
         );
       });
+      const remainingStates = (scene?.standingStates ?? []).filter(
+        (state) => state.characterId !== character.id,
+      );
+      if (remainingStates.length !== (scene?.standingStates ?? []).length) {
+        setValue(`scenes.${sceneIndex}.standingStates`, remainingStates, {
+          shouldDirty: true,
+        });
+      }
     });
   };
 

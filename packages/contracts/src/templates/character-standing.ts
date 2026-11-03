@@ -2,27 +2,23 @@ import { z } from "zod";
 import { idSchema } from "../content/primitives";
 import { DEFAULT_TRANSITION_POLICY } from "../content/layers";
 import { DEFAULT_ANIMATION_POLICY } from "../content/animation";
+import {
+  DEFAULT_STANDING_EDGE,
+  DEFAULT_STANDING_VERTICAL,
+  standingEdgeSchema,
+  standingSideSchema,
+  standingVerticalSchema,
+} from "../content/standing-layout";
 import type { VisualTemplateDefinition } from "./shared";
-
-export const standingSideSchema = z.enum(["left", "right"]);
-export type StandingSide = z.infer<typeof standingSideSchema>;
-
-export const standingEdgeSchema = z.enum(["tight", "margin", "center"]);
-export type StandingEdge = z.infer<typeof standingEdgeSchema>;
-
-export const standingVerticalSchema = z.enum(["up", "standard", "down"]);
-export type StandingVertical = z.infer<typeof standingVerticalSchema>;
-
-export const DEFAULT_STANDING_EDGE: StandingEdge = "margin";
-export const DEFAULT_STANDING_VERTICAL: StandingVertical = "standard";
 
 export const characterStandingV1InputSchema = z.strictObject({
   characterId: idSchema,
   appearanceId: idSchema,
   side: standingSideSchema,
-  scale: z.number().positive(),
-  edge: standingEdgeSchema.default(DEFAULT_STANDING_EDGE),
-  vertical: standingVerticalSchema.default(DEFAULT_STANDING_VERTICAL),
+  /** Optional legacy/composition override; resolved from the Appearance. */
+  scale: z.number().finite().positive().optional(),
+  edge: standingEdgeSchema.optional(),
+  vertical: standingVerticalSchema.optional(),
 });
 
 export const characterStandingV1: VisualTemplateDefinition = {

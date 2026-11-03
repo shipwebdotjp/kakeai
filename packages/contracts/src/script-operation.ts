@@ -4,7 +4,7 @@ import { audioTakeSourceSchema } from "./content/narration";
 import { audioCueRangeSchema, audioCueRoleSchema } from "./content/audio";
 import { cueLayerSchema, cueTransitionSchema, transitionEdgeSchema } from "./content/layers";
 import { templateRefSchema } from "./content/nested";
-import { standingEdgeSchema, standingSideSchema, standingVerticalSchema } from "./templates";
+import { standingEdgeSchema, standingSideSchema, standingVerticalSchema } from "./content/standing-layout";
 import { sceneAccentSchema, sceneTransitionEdgeSchema } from "./content/scene";
 import { sceneTimingSchema } from "./content/timing";
 
@@ -314,9 +314,9 @@ export const standingUpsertOperationSchema = z.strictObject({
   side: standingSideSchema,
   characterId: idSchema,
   appearanceId: idSchema,
-  scale: z.number().finite().positive().optional(),
-  edge: standingEdgeSchema.optional(),
-  vertical: standingVerticalSchema.optional(),
+  scale: z.number().finite().positive().nullable().optional(),
+  edge: standingEdgeSchema.nullable().optional(),
+  vertical: standingVerticalSchema.nullable().optional(),
   transition: cueTransitionSchema.optional(),
 });
 
@@ -324,6 +324,32 @@ export const standingRemoveOperationSchema = z.strictObject({
   op: z.literal("standing.remove"),
   sceneId: scriptIdRefSchema,
   side: standingSideSchema,
+});
+
+export const standingStateUpsertOperationSchema = z
+  .strictObject({
+    op: z.literal("standing.state.upsert"),
+    sceneId: scriptIdRefSchema,
+    side: standingSideSchema,
+    fromLineId: scriptIdRefSchema,
+    characterId: idSchema.nullable(),
+    appearanceId: idSchema.nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.characterId === null) !== (value.appearanceId === null)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "characterId と appearanceId は両方nullか、両方指定してください",
+        path: [value.characterId === null ? "characterId" : "appearanceId"],
+      });
+    }
+  });
+
+export const standingStateRemoveOperationSchema = z.strictObject({
+  op: z.literal("standing.state.remove"),
+  sceneId: scriptIdRefSchema,
+  side: standingSideSchema,
+  fromLineId: scriptIdRefSchema,
 });
 
 export const audioAddOperationSchema = z.strictObject({
@@ -422,6 +448,8 @@ const scriptOperationSchemas = [
   cueCopyOperationSchema,
   standingUpsertOperationSchema,
   standingRemoveOperationSchema,
+  standingStateUpsertOperationSchema,
+  standingStateRemoveOperationSchema,
   audioAddOperationSchema,
   audioUpdateOperationSchema,
   audioRemoveOperationSchema,
@@ -474,6 +502,12 @@ export type CueMoveOperation = z.infer<typeof cueMoveOperationSchema>;
 export type CueCopyOperation = z.infer<typeof cueCopyOperationSchema>;
 export type StandingUpsertOperation = z.infer<typeof standingUpsertOperationSchema>;
 export type StandingRemoveOperation = z.infer<typeof standingRemoveOperationSchema>;
+export type StandingStateUpsertOperation = z.infer<
+  typeof standingStateUpsertOperationSchema
+>;
+export type StandingStateRemoveOperation = z.infer<
+  typeof standingStateRemoveOperationSchema
+>;
 export type AudioAddOperation = z.infer<typeof audioAddOperationSchema>;
 export type AudioUpdateOperation = z.infer<typeof audioUpdateOperationSchema>;
 export type AudioRemoveOperation = z.infer<typeof audioRemoveOperationSchema>;

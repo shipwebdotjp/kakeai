@@ -203,6 +203,7 @@ export const libraryOperationDefinitions = {
           pose: input.pose,
           ...(input.label === undefined ? {} : { label: input.label }),
           faceSetId: input.faceSetId,
+          ...(input.standing === undefined ? {} : { standing: input.standing }),
         },
       ),
     }),
@@ -216,7 +217,8 @@ export const libraryOperationDefinitions = {
         input.expression === undefined &&
         input.pose === undefined &&
         input.label === undefined &&
-        input.faceSetId === undefined
+        input.faceSetId === undefined &&
+        input.standing === undefined
       ) {
         throw new AgentOperationError("VALIDATION_ERROR", [
           agentIssue(
@@ -241,6 +243,9 @@ export const libraryOperationDefinitions = {
             ...(input.faceSetId === undefined
               ? {}
               : { faceSetId: input.faceSetId }),
+            ...(input.standing === undefined
+              ? {}
+              : { standing: input.standing }),
           },
         ),
       };

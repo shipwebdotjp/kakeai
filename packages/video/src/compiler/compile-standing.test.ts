@@ -107,6 +107,49 @@ describe("compileDocument", () => {
     expect(bPosition).toBeGreaterThan(aPosition);
   });
 
+  it("renders line-boundary standing states as separate clips", () => {
+    const document = validContentDocument();
+    const point = document.scenes[1]!;
+    point.lines.push({
+      ...point.lines[0]!,
+      id: "line-p1-2",
+      captionText: "二番目",
+      selectedAudioTakeId: null,
+    });
+    document.characters.push({
+      id: "character-rin",
+      name: "リン",
+      names: [],
+      voices: [],
+      libraryCharacterId: null,
+      appearances: [
+        { id: "appearance-smile", assetId: "asset-rin", expression: "smile", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null },
+        { id: "appearance-face", assetId: "asset-face", expression: "normal", pose: "front", faceSetId: null, faceSetVersion: null, libraryAppearanceId: null, standing: { scale: 0.5, edge: "margin", vertical: "standard" } },
+      ],
+    });
+    point.visualCues.push(
+      cue({
+        id: "vc-standing",
+        template: { id: "character.standing", version: 1 },
+        layer: "standing",
+        input: { characterId: "character-rin", appearanceId: "appearance-smile", side: "left" },
+      }),
+    );
+    point.standingStates = [
+      {
+        side: "left",
+        fromLineId: "line-p1-2",
+        characterId: "character-rin",
+        appearanceId: "appearance-face",
+      },
+    ];
+
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    expect(compiled.html.match(/class="kakeai-standingv2"/g)).toHaveLength(2);
+    expect(compiled.html).toContain("/preview/asset-rin");
+    expect(compiled.html).toContain("/preview/asset-face");
+  });
+
   it("renders character.standing@1 at the selected side", () => {
     const document = validContentDocument();
     document.characters.push({

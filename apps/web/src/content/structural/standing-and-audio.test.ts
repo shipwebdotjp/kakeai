@@ -54,6 +54,7 @@ describe("structural operation adapter", () => {
     slot.characterId = "char-1";
     slot.appearanceId = "app-1";
     slot.scale = 1.5;
+    slot.layoutOverridden = true;
     slot.enterPreset = "fade";
     slot.enterDurationMs = 200;
 

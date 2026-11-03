@@ -171,6 +171,8 @@ TTS は、利用者が事前に設定したループバックの TTS アダプ�
 
 台本へ入れるときは、`kakeai_script_edit` の操作 `character.addFromLibrary`（`libraryCharacterId`）で新しいローカル Character・Appearance・Speaker としてコピーします。結果の `created.characterIds` / `created.appearanceIds` / `created.speakerIds` を読み、次の `kakeai_script_edit` で `line.setSpeaker` と `standing.upsert` に使います。`character.addFromLibrary` は `key` を持たないため、同じ呼び出し内で `{ "key": ... }` として参照することはできません。
 
+立ち絵をセリフの先頭で切り替えるときは、`standing.state.upsert`（`{ sceneId, side, fromLineId, characterId, appearanceId }`。両方 `null` で非表示）と `standing.state.remove` を使います。開始時状態は `standing.upsert` / `standing.remove` です。倍率・端・高さは外観の `standing` から解決されるため、状態には指定しません。旧作品の立ち絵 Cue が持つ明示値を解除するときだけ、`standing.upsert` に `scale` / `edge` / `vertical` の `null` を渡します。詳細は [セリフ境界の立ち絵状態](../standing-states/spec.md) を参照してください。
+
 ### Face Set
 
 立ち絵の表情を切り替えるときは、`kakeai_script_get` で作品の外観（`appearances[]`）から `faceSetId` と `faceSetVersion` を読み、`kakeai_face_set_get` にその `version` を渡して固定版の `expressions[].id` を確認し、`line.setExpression` に渡します。作品は追加した時点の Face Set 改訂版を固定しているため、最新版の ID をそのまま使うと保存に失敗することがあります。表情を使うのは Character を持つ話者の行です。声だけの話者には顔がないため使いません。

@@ -45,7 +45,12 @@ import {
   setCueRange,
   updateCueTransition,
 } from "./cue.ts";
-import { removeStanding, upsertStanding } from "./standing.ts";
+import {
+  removeStanding,
+  removeStandingState,
+  upsertStanding,
+  upsertStandingState,
+} from "./standing.ts";
 import { addAudio, removeAudio, updateAudio } from "./audio.ts";
 import { addCharacterFromLibrary } from "./character.ts";
 import { addSpeaker, setSpeakerVoiceProfile } from "./speaker.ts";
@@ -430,6 +435,32 @@ export function applyScriptOperation(
     case "standing.remove": {
       const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
       return toResult(removeStanding(document, sceneId, operation.side));
+    }
+    case "standing.state.upsert": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const fromLineId = resolveId(operation.fromLineId, keys, ["fromLineId"]);
+      return toResult(
+        upsertStandingState(
+          document,
+          sceneId,
+          operation.side,
+          fromLineId,
+          operation.characterId,
+          operation.appearanceId,
+        ),
+      );
+    }
+    case "standing.state.remove": {
+      const sceneId = resolveId(operation.sceneId, keys, ["sceneId"]);
+      const fromLineId = resolveId(operation.fromLineId, keys, ["fromLineId"]);
+      return toResult(
+        removeStandingState(
+          document,
+          sceneId,
+          operation.side,
+          fromLineId,
+        ),
+      );
     }
     case "audio.add": {
       const result = addAudio(

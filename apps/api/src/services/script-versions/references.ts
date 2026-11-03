@@ -1,13 +1,12 @@
 import {
   LEGACY_FACE_SET_VERSION,
   RENDITION_PURPOSE,
-  characterStandingV1InputSchema,
   collectAssetReferences,
+  standingAppearancesAtLine,
   type AssetKindName,
   type AssetReference,
   type ContentDocument,
   type SnapshotFaceSet,
-  type VisualCue,
 } from "@kakeai/contracts";
 import type { Prisma, PrismaClient } from "../../generated/prisma/client.ts";
 import { ApiError } from "../../http/errors.ts";
@@ -233,22 +232,6 @@ export async function loadAllReferences(
   };
 }
 
-function standingCueTarget(
-  cue: VisualCue,
-): { characterId: string; appearanceId: string } | undefined {
-  if (cue.template.id !== "character.standing") {
-    return undefined;
-  }
-  const parsed = characterStandingV1InputSchema.safeParse(cue.input);
-  if (parsed.success) {
-    return {
-      characterId: parsed.data.characterId,
-      appearanceId: parsed.data.appearanceId,
-    };
-  }
-  return undefined;
-}
-
 function readyDimensions(
   asset: AssetWithRenditions | undefined,
 ): { widthPx: number; heightPx: number } | undefined {
@@ -356,13 +339,9 @@ export function assertFaceSetReferences(
         });
         return;
       }
-      const appearanceIds = scene.visualCues
-        .map(standingCueTarget)
-        .filter(
-          (target): target is { characterId: string; appearanceId: string } =>
-            target !== undefined && target.characterId === character.id,
-        )
-        .map((target) => target.appearanceId);
+      const appearanceIds = standingAppearancesAtLine(scene, line.id)
+        .filter((reference) => reference.characterId === character.id)
+        .map((reference) => reference.appearanceId);
       if (appearanceIds.length === 0) {
         return;
       }

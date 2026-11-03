@@ -159,6 +159,7 @@ describe("character.addFromLibrary", () => {
         faceSetId: "face-set-1",
         faceSetVersion: 2,
         libraryAppearanceId: "lib-appearance-1",
+        standing: { scale: 1, edge: "margin", vertical: "standard" },
       },
       {
         id: "appearance-2",
@@ -168,6 +169,7 @@ describe("character.addFromLibrary", () => {
         faceSetId: null,
         faceSetVersion: null,
         libraryAppearanceId: "lib-appearance-2",
+        standing: { scale: 1, edge: "margin", vertical: "standard" },
       },
     ]);
     expect(character.libraryCharacterId).toBe("lib-1");

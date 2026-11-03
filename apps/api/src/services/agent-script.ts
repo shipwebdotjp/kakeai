@@ -313,6 +313,9 @@ function toScriptLibraryCharacter(entry: CharacterLibraryEntry): ScriptLibraryCh
       pose: appearance.pose,
       ...(appearance.label === undefined ? {} : { label: appearance.label }),
       faceSetId: appearance.faceSetId,
+      ...(appearance.standing === undefined
+        ? {}
+        : { standing: appearance.standing }),
     })),
   };
 }

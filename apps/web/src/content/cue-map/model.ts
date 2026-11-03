@@ -24,6 +24,7 @@ import {
 } from "@kakeai/contracts";
 import {
   lineCaptionText,
+  sortStandingStateFormValues,
   type CharacterFormValue,
   type CueFormValue,
   type CueRangeKind,
@@ -137,6 +138,192 @@ function formCueRangeDetail(
   };
 }
 
+function standingSpanLabel(
+  character: CharacterFormValue,
+  appearance: { label: string; expression: string; pose: string },
+): string {
+  const name = character.name.trim() || character.id;
+  const tags = `${appearance.expression || "-"} / ${appearance.pose || "-"}`;
+  const label = appearance.label.trim();
+  return label.length > 0 ? `${name} / ${label}（${tags}）` : `${name}（${tags}）`;
+}
+
+function appendStandingSpans(
+  inputs: CueSpanInput[],
+  scene: SceneFormValue,
+  sceneIndex: number,
+  characters: CharacterFormValue[],
+  assetById: ReadonlyMap<string, Asset>,
+  pointOrdinal: number,
+): void {
+  const lineIndexById = new Map(
+    scene.lines.map((line, index) => [line.id, index]),
+  );
+  const push = (
+    side: "left" | "right",
+    characterId: string,
+    appearanceId: string,
+    startIndex: number,
+    endIndex: number,
+    cueId: string,
+    fromLineId: string | null,
+  ): void => {
+    const character = characters.find((entry) => entry.id === characterId);
+    const appearance = character?.appearances.find(
+      (entry) => entry.id === appearanceId,
+    );
+    if (character === undefined || appearance === undefined) {
+      return;
+    }
+    const startLine = scene.lines[startIndex];
+    const endLine = scene.lines[endIndex];
+    if (startLine === undefined || endLine === undefined) {
+      return;
+    }
+    const assetId = appearance.assetId;
+    const assetIds = assetId === null || assetId.length === 0 ? [] : [assetId];
+    inputs.push({
+      inputIndex: inputs.length,
+      cueId,
+      sceneId: scene.id,
+      sceneIndex,
+      templateId: characterStandingV1.id,
+      templateVersion: characterStandingV1.version,
+      templateLabel: characterStandingV1.display.label,
+      layer: "standing",
+      order: side === "left" ? 0 : 1,
+      rangeKind: "lines",
+      rangeDetail: {
+        kind: "lines",
+        startNumber: lineDisplayNumber(scene, pointOrdinal, startIndex),
+        endNumber: lineDisplayNumber(scene, pointOrdinal, endIndex),
+      },
+      spanFallback: false,
+      isStanding: true,
+      characterName: standingSpanLabel(character, appearance),
+      representativeAssetId: representativeOf(assetIds, assetById),
+      assetIds,
+      jumpTargetId:
+        fromLineId === null ? `scene-${scene.id}` : `line-${fromLineId}`,
+      jumpSeek:
+        fromLineId === null
+          ? { kind: "scene", id: scene.id }
+          : { kind: "line", id: fromLineId },
+      startLineId: startLine.id,
+      endLineId: endLine.id,
+      startMs: 0,
+      endMs: 0,
+    });
+  };
+
+  for (const side of ["left", "right"] as const) {
+    const opening = scene.standings.find(
+      (standing) => standing.side === side,
+    );
+    const openingVisible =
+      opening !== undefined &&
+      opening.characterId !== null &&
+      opening.appearanceId !== null;
+    const seenChangeKeys = new Set<string>();
+    const changes = sortStandingStateFormValues({
+      lines: scene.lines,
+      standings: scene.standings,
+      standingStates: scene.standingStates,
+    })
+      .filter((state) => {
+        if (state.side !== side) {
+          return false;
+        }
+        const key = `${state.side}|${state.fromLineId}`;
+        if (seenChangeKeys.has(key)) {
+          return false;
+        }
+        seenChangeKeys.add(key);
+        return true;
+      })
+      .map((state) => ({
+        state,
+        index: lineIndexById.get(state.fromLineId) as number,
+      }));
+
+    if (changes.length === 0) {
+      if (openingVisible) {
+        const character = characters.find(
+          (entry) => entry.id === opening.characterId,
+        );
+        const appearance = character?.appearances.find(
+          (entry) => entry.id === opening.appearanceId,
+        );
+        if (character !== undefined && appearance !== undefined) {
+          const assetIds = appearance.assetId === null || appearance.assetId.length === 0 ? [] : [appearance.assetId];
+          inputs.push({
+            inputIndex: inputs.length,
+            cueId:
+              opening.cueId ?? `standing-${scene.id}-${opening.side}`,
+            sceneId: scene.id,
+            sceneIndex,
+            templateId: characterStandingV1.id,
+            templateVersion: characterStandingV1.version,
+            templateLabel: characterStandingV1.display.label,
+            layer: "standing",
+            order: opening.side === "left" ? 0 : 1,
+            rangeKind: "scene",
+            rangeDetail: { kind: "scene" },
+            spanFallback: false,
+            isStanding: true,
+            characterName: standingSpanLabel(character, appearance),
+            representativeAssetId: representativeOf(assetIds, assetById),
+            assetIds,
+            jumpTargetId: `scene-${scene.id}`,
+            jumpSeek: { kind: "scene", id: scene.id },
+            startLineId: "",
+            endLineId: "",
+            startMs: 0,
+            endMs: 0,
+          });
+        }
+      }
+      continue;
+    }
+
+    const firstChangeIndex = changes[0]!.index;
+    if (openingVisible && opening.characterId !== null && opening.appearanceId !== null) {
+      if (firstChangeIndex > 0) {
+        push(
+          side,
+          opening.characterId,
+          opening.appearanceId,
+          0,
+          firstChangeIndex - 1,
+          opening.cueId ?? `standing-${scene.id}-${side}`,
+          null,
+        );
+      }
+    }
+    changes.forEach((change, index) => {
+      if (change.state.characterId === null || change.state.appearanceId === null) {
+        return;
+      }
+      const endIndex =
+        index + 1 < changes.length
+          ? changes[index + 1]!.index - 1
+          : scene.lines.length - 1;
+      if (endIndex < change.index) {
+        return;
+      }
+      push(
+        side,
+        change.state.characterId,
+        change.state.appearanceId,
+        change.index,
+        endIndex,
+        `standing-state-${scene.id}-${side}-${change.state.fromLineId}`,
+        change.state.fromLineId,
+      );
+    });
+  }
+}
+
 function collectSpanInputs(
   scenes: SceneFormValue[],
   characters: CharacterFormValue[],
@@ -177,45 +364,14 @@ function collectSpanInputs(
         endMs: cue.endMs,
       });
     });
-    scene.standings.forEach((standing) => {
-      if (standing.characterId === null) {
-        return;
-      }
-      const character = characters.find(
-        (entry) => entry.id === standing.characterId,
-      );
-      const appearance = character?.appearances.find(
-        (entry) => entry.id === standing.appearanceId,
-      );
-      const assetId = appearance?.assetId ?? null;
-      const assetIds =
-        assetId === null || assetId.length === 0 ? [] : [assetId];
-      const cueId = standing.cueId ?? `standing-${scene.id}-${standing.side}`;
-      inputs.push({
-        inputIndex: inputs.length,
-        cueId,
-        sceneId: scene.id,
-        sceneIndex,
-        templateId: characterStandingV1.id,
-        templateVersion: characterStandingV1.version,
-        templateLabel: characterStandingV1.display.label,
-        layer: "standing",
-        order: sceneIndex,
-        rangeKind: "scene",
-        rangeDetail: { kind: "scene" },
-        spanFallback: false,
-        isStanding: true,
-        characterName: character?.name?.trim() ? character.name.trim() : null,
-        representativeAssetId: representativeOf(assetIds, assetById),
-        assetIds,
-        jumpTargetId: `scene-${scene.id}`,
-        jumpSeek: { kind: "scene", id: scene.id },
-        startLineId: "",
-        endLineId: "",
-        startMs: 0,
-        endMs: 0,
-      });
-    });
+    appendStandingSpans(
+      inputs,
+      scene,
+      sceneIndex,
+      characters,
+      assetById,
+      pointOrdinalBySceneId.get(scene.id) ?? 0,
+    );
   });
   return inputs;
 }

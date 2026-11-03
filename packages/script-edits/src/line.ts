@@ -7,6 +7,7 @@ import type {
   PointScene,
   Warning,
 } from "@kakeai/contracts";
+import { sortStandingStates } from "@kakeai/contracts";
 import type { ScriptContext } from "./context.ts";
 import { invalidOperation, preconditionFailed, targetNotFound } from "./errors.ts";
 import type { SceneEditResult } from "./scene.ts";
@@ -247,9 +248,39 @@ export function removeLine(
     return keepCue(cue.id, pruneCueForLines(adjusted, allowedLineIds));
   });
 
+  const nextLine = scene.lines[lineIndex + 1];
+  const nextStates = sortStandingStates({
+    ...scene,
+    lines: nextLines,
+    standingStates: (scene.standingStates ?? []).flatMap((state) => {
+      if (state.fromLineId !== deletedId) {
+        return [state];
+      }
+      if (nextLine === undefined) {
+        return [];
+      }
+      if (
+        (scene.standingStates ?? []).some(
+          (other) =>
+            other.side === state.side && other.fromLineId === nextLine.id,
+        )
+      ) {
+        return [];
+      }
+      return [{ ...state, fromLineId: nextLine.id }];
+    }),
+  });
+
   return {
     document: {
-      ...withScene(document, sceneIndex, { ...scene, lines: nextLines, visualCues }),
+      ...withScene(document, sceneIndex, {
+        ...scene,
+        lines: nextLines,
+        visualCues,
+        ...(nextStates.length === 0
+          ? { standingStates: undefined }
+          : { standingStates: nextStates }),
+      }),
       audioTakes: document.audioTakes.filter(
         (take) => take.narrationSegmentId !== deletedId,
       ),
@@ -305,7 +336,19 @@ export function moveLine(
       },
     };
   });
-  const next = withScene(document, sceneIndex, { ...scene, lines, visualCues });
+  const sortedStates = sortStandingStates({
+    ...scene,
+    lines,
+    standingStates: scene.standingStates ?? [],
+  });
+  const next = withScene(document, sceneIndex, {
+    ...scene,
+    lines,
+    visualCues,
+    ...(sortedStates.length === 0
+      ? { standingStates: undefined }
+      : { standingStates: sortedStates }),
+  });
   assertFixedSceneCapacity(next, sceneId);
   return {
     document: next,

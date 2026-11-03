@@ -185,6 +185,56 @@ function validateContentDocument(doc: ContentDocumentBase, ctx: z.RefinementCtx)
       });
     }
     const localLineIds = scene.lines.map((line) => line.id);
+    const localLineIdSet = new Set(localLineIds);
+
+    if (scene.standingStates !== undefined && scene.standingStates.length > 0) {
+      if (scene.kind === "insert") {
+        ctx.addIssue({
+          code: "custom",
+          message: `insert Scene ${scene.id} は standingStates を持てません`,
+          path: ["scenes", index, "standingStates"],
+        });
+      }
+      const seenStates = new Set<string>();
+      scene.standingStates.forEach((state, stateIndex) => {
+        const path = ["scenes", index, "standingStates", stateIndex];
+        if (!localLineIdSet.has(state.fromLineId)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `standingState の fromLineId が同一Scene内に存在しません: ${state.fromLineId}`,
+            path: [...path, "fromLineId"],
+          });
+        }
+        const key = `${state.side}|${state.fromLineId}`;
+        if (seenStates.has(key)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `同じ side と fromLineId の standingState が重複しています: ${state.side} / ${state.fromLineId}`,
+            path,
+          });
+        }
+        seenStates.add(key);
+        if (state.characterId === null || state.appearanceId === null) {
+          // Both-null is the hidden state; half-null is already flagged by
+          // standingStateSchema.superRefine.
+          return;
+        }
+        const appearanceIds = appearanceIdsByCharacter.get(state.characterId);
+        if (appearanceIds === undefined) {
+          ctx.addIssue({
+            code: "custom",
+            message: `standingState の characterId が存在しません: ${state.characterId}`,
+            path: [...path, "characterId"],
+          });
+        } else if (!appearanceIds.has(state.appearanceId)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `standingState の appearanceId が存在しません: ${state.appearanceId}`,
+            path: [...path, "appearanceId"],
+          });
+        }
+      });
+    }
 
     if (scene.kind === "insert") {
       const mainCueIndex = scene.visualCues.findIndex(

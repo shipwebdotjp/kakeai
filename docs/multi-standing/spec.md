@@ -7,12 +7,12 @@
 - 1シーンに最大2体、左右に1体ずつ立ち絵を置ける。
 - 左右は離散の `side`（`left` | `right`）で保持し、自由座標は編集しない。
 - セリフを話している立ち絵だけが、そのセリフ区間でゆっくり上下にバウンドする。話者と対応しない立ち絵は静止する。
-- シーン内での立ち絵切替、口パクは対象外。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) で `character.standing@1` に統合し、編集UIは `@1` を書き出す。
+- シーン内での立ち絵切替は [../standing-states/spec.md](../standing-states/spec.md) の `Scene.standingStates` で行い、切替はセリフ境界に限る。台詞ごとの表情切替は [../face-expression/spec.md](../face-expression/spec.md) で `character.standing@1` に統合し、編集UIは `@1` を書き出す。
 - 契約は `character.standing@1`。Face Set を持つ外観の表情合成を含む（[ADR-0061](../adr/0061-template-version-as-reinterpretation-boundary.md) で `@2`/`@3` から `@1` へ再基準化）。
 
 ## データ
 
-立ち絵1体は `character.standing@1` のVisualCueとして、`{ kind: "scene" }` の範囲で保存する。
+立ち絵1体は `character.standing@1` のVisualCueとして、`{ kind: "scene" }` の範囲で保存する。シーン開始時状態はこのCueで表し、セリフ境界の変更点は `Scene.standingStates` で表す（[../standing-states/spec.md](../standing-states/spec.md)）。
 
 ```json
 {
@@ -22,16 +22,15 @@
   "input": {
     "characterId": "character-rin",
     "appearanceId": "appearance-rin-smile",
-    "side": "left",
-    "scale": 1,
-    "edge": "margin",
-    "vertical": "standard"
+    "side": "left"
   }
 }
 ```
 
+- `scale`・`edge`・`vertical` は任意の上書きで、省略時は外観の `standing`（標準配置）から解決する。既存の保存済みCueは明示値を持ち、上書きとして描画される（[../standing-states/spec.md](../standing-states/spec.md)）。
+
 - `side` は `left` / `right`。位置はテンプレートが `side`・倍率・プリセットから正規化座標へ写像する。外端の余白は `edge` で3段階（`tight` 0、`margin` 2%・既定、`center` 8%）から選び、高さは `vertical` で3段階（`up` 0.78、`standard` 0.86・既定、`down` 0.92）から選ぶ。半幅 `0.15×scale`（基準幅576px / フレーム幅1920px）を用い、左 `x=margin+0.15×scale` / 右 `x=1−margin−0.15×scale` / `y=vertical` とする（外端の余白を一定に保つ）。
-- `scale` は幅576px基準の倍率（従来の1が1.2に相当する新しい基準の1倍）。`edge` / `vertical` 省略時は既定値（`margin` / `standard`）で解釈する。
+- `scale` は幅576px基準の倍率（従来の1が1.2に相当する新しい基準の1倍）。`scale` / `edge` / `vertical` を省略した場合は、外観の `standing` の値を使い、外観にも無ければ既定値（`1` / `margin` / `standard`）で解釈する。
 - 描画順は従来どおり背景、カード、立ち絵、Scene本文・字幕。複数の立ち絵は同じ立ち絵レイヤーに置く。
 - ContentDocument は複数Cueと任意 `side` を検証・保持する。UI範囲外のCueは保存時に削除・変更しない。
 

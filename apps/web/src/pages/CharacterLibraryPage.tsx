@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { SUPPORTED_LOCALES } from "@kakeai/contracts";
+import { SUPPORTED_LOCALES, resolveStandingLayout } from "@kakeai/contracts";
 import type {
   CharacterLibraryEntry,
   CharacterName,
@@ -49,6 +49,7 @@ function toDraft(entry: CharacterLibraryEntry): CharacterDraft {
       faceSetId: appearance.faceSetId,
       faceSetVersion: null,
       libraryAppearanceId: null,
+      standing: resolveStandingLayout(appearance),
     })),
   };
 }
@@ -227,6 +228,7 @@ function CharacterForm({ entry, voiceProfiles, faceSets }: CharacterFormProps) {
       pose: appearance.pose.trim() || DEFAULT_APPEARANCE_POSE,
       ...(appearance.label.trim().length === 0 ? {} : { label: appearance.label.trim() }),
       faceSetId: appearance.faceSetId,
+      standing: resolveStandingLayout(appearance),
     }));
     const payload = {
       name,

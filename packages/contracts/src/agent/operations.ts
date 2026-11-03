@@ -31,6 +31,7 @@ import { assetListInputSchema, assetListPageSchema } from "../asset-list";
 import { assetMetadataPatchSchema } from "../requests";
 import { characterLibraryEntrySchema } from "../character-library";
 import { characterNamesSchema, characterVoicesSchema } from "../content/character";
+import { standingLayoutSchema } from "../content/standing-layout";
 import {
   createVoiceProfileRequestSchema,
   modelListSchema,
@@ -671,6 +672,7 @@ export const agentCharacterCreateAppearanceInputSchema = z.strictObject({
   pose: z.string(),
   label: z.string().trim().min(1).optional(),
   faceSetId: idSchema.nullable().default(null),
+  standing: standingLayoutSchema.optional(),
 });
 
 export const agentCharacterAddAppearanceInputSchema =
@@ -689,6 +691,7 @@ export const agentCharacterUpdateOneAppearanceInputSchema = z.strictObject({
   pose: z.string().optional(),
   label: z.string().trim().min(1).nullable().optional(),
   faceSetId: idSchema.nullable().optional(),
+  standing: standingLayoutSchema.optional(),
 });
 export const agentCharacterUpdateOneAppearanceOutputSchema = z.strictObject({
   character: characterLibraryEntrySchema,

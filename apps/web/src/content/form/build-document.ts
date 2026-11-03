@@ -16,15 +16,18 @@ import {
   buildVisualCues,
   type BuildCueOptions,
 } from "./build-cue";
+import { sortStandingStateFormValues } from "./standing";
 import { buildSceneAccent, intOrZero } from "./build-common";
 import { randomId } from "./factories";
 import {
   TEMPLATE_ID,
   TEMPLATE_VERSION,
+  resolveStandingLayout,
   type Character,
   type CharacterVoice,
   type ContentDocument,
   type Scene,
+  type StandingState,
   type Speaker,
 } from "@kakeai/contracts";
 
@@ -150,6 +153,7 @@ function buildCharacters(
         faceSetVersion:
           appearance.faceSetId === null ? null : appearance.faceSetVersion,
         libraryAppearanceId: appearance.libraryAppearanceId,
+        standing: resolveStandingLayout(appearance),
       };
     }),
   }));
@@ -157,6 +161,50 @@ function buildCharacters(
 
 function normalizeProfileId(value: string | null): string | null {
   return value !== null && value.length > 0 ? value : null;
+}
+
+function buildStandingStates(
+  sceneValue: SceneFormValue,
+  characterIds: ReadonlySet<string>,
+  appearanceIdsByCharacter: ReadonlyMap<string, ReadonlySet<string>>,
+): StandingState[] {
+  const lineIds = new Set(sceneValue.lines.map((line) => line.id));
+  const seen = new Set<string>();
+  const states: StandingState[] = [];
+  for (const state of sceneValue.standingStates ?? []) {
+    if (!lineIds.has(state.fromLineId)) {
+      continue;
+    }
+    const key = `${state.side}|${state.fromLineId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    // First entry wins for the same side and line, matching the Cue map
+    // projection. A half-null entry is invalid and is dropped without letting
+    // a later duplicate replace it.
+    seen.add(key);
+    if (state.characterId === null && state.appearanceId === null) {
+      states.push({ ...state });
+      continue;
+    }
+    if (state.characterId === null || state.appearanceId === null) {
+      continue;
+    }
+    const appearanceIds = appearanceIdsByCharacter.get(state.characterId);
+    if (
+      !characterIds.has(state.characterId) ||
+      appearanceIds === undefined ||
+      !appearanceIds.has(state.appearanceId)
+    ) {
+      continue;
+    }
+    states.push({ ...state });
+  }
+  return sortStandingStateFormValues({
+    lines: sceneValue.lines,
+    standings: [],
+    standingStates: states,
+  });
 }
 
 function buildSpeakers(
@@ -257,6 +305,11 @@ export function buildContentDocument(
         appearanceIdsByCharacter,
       ),
     ];
+    const standingStates = buildStandingStates(
+      sceneValue,
+      characterIds,
+      appearanceIdsByCharacter,
+    );
     const transitionPreset = sceneValue.transitionPreset;
     const transitionPresetIsValid =
       transitionPreset === "fade" || transitionPreset === "crossfade";
@@ -279,6 +332,7 @@ export function buildContentDocument(
       ...(transition === undefined ? {} : { transition }),
       lines: buildLines(sceneValue, speakerIds),
       visualCues,
+      ...(standingStates.length === 0 ? {} : { standingStates }),
     };
     if (sceneValue.kind === "intro") {
       return { ...common, kind: "intro" };

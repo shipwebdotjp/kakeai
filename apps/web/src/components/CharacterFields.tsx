@@ -82,6 +82,15 @@ export function CharacterFields({
           );
         }
       });
+      const remainingStates = (scene?.standingStates ?? []).filter(
+        (state) =>
+          !(state.characterId === characterId && state.appearanceId === id),
+      );
+      if (remainingStates.length !== (scene?.standingStates ?? []).length) {
+        setValue(`scenes.${sceneIndex}.standingStates`, remainingStates, {
+          shouldDirty: true,
+        });
+      }
     });
   };
 

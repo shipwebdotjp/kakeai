@@ -1,8 +1,13 @@
 import {
+  characterStandingV1,
+  characterStandingV1InputSchema,
   createPointScene,
   defaultPointLabel,
   type ContentDocument,
   type PointScene,
+  type StandingLayout,
+  type StandingSide,
+  type StandingState,
   type VisualCue,
   type Warning,
 } from "@kakeai/contracts";
@@ -46,6 +51,159 @@ function cueIdSuffix(cue: VisualCue): string {
   return cue.template.id.replace(/\W/g, "-");
 }
 
+interface CarriedStanding {
+  side: StandingSide;
+  characterId: string;
+  appearanceId: string;
+  layout: Partial<StandingLayout>;
+}
+
+function sceneStandingCue(
+  scene: ContentDocument["scenes"][number],
+  side: StandingSide,
+): { cue: VisualCue; input: Record<string, unknown> } | null {
+  for (const cue of scene.visualCues) {
+    if (
+      cue.template.id !== characterStandingV1.id ||
+      cue.template.version !== characterStandingV1.version ||
+      cue.range.kind !== "scene"
+    ) {
+      continue;
+    }
+    const parsed = characterStandingV1InputSchema.safeParse(cue.input);
+    if (parsed.success && parsed.data.side === side) {
+      return { cue, input: parsed.data as Record<string, unknown> };
+    }
+  }
+  return null;
+}
+
+/**
+ * The state that must become the new scene's opening state at the split.
+ * Returns the carried states per side plus the cue that represents them.
+ * Only called when the original scene has explicit standing states, so a scene
+ * without them keeps the historical "do not copy standings" split behavior.
+ */
+function carryStandingStates(
+  scene: ContentDocument["scenes"][number],
+  splitAt: number,
+  secondSceneId: string,
+  context: ScriptContext,
+  existingCueIds: Set<string>,
+): {
+  cues: VisualCue[];
+  carried: Map<StandingSide, { characterId: string | null; appearanceId: string | null }>;
+} {
+  const states = scene.standingStates ?? [];
+  if (states.length === 0) {
+    return { cues: [], carried: new Map() };
+  }
+  const indexById = new Map(scene.lines.map((line, index) => [line.id, index]));
+  const cues: VisualCue[] = [];
+  const carried = new Map<
+    StandingSide,
+    { characterId: string | null; appearanceId: string | null }
+  >();
+  for (const side of ["left", "right"] as const) {
+    const lastState = states
+      .filter(
+        (state) =>
+          state.side === side &&
+          (indexById.get(state.fromLineId) ?? Number.POSITIVE_INFINITY) <=
+            splitAt,
+      )
+      .sort(
+        (left, right) =>
+          (indexById.get(left.fromLineId) ?? 0) -
+          (indexById.get(right.fromLineId) ?? 0),
+      )
+      .at(-1);
+    let resolved: CarriedStanding | null = null;
+    if (lastState !== undefined) {
+      if (lastState.characterId !== null && lastState.appearanceId !== null) {
+        resolved = {
+          side,
+          characterId: lastState.characterId,
+          appearanceId: lastState.appearanceId,
+          // A state segment never carries a layout override; the look comes
+          // from the appearance's Standing Layout, so the new scene's opening
+          // state must use the same defaults rather than the old base override.
+          layout: {},
+        };
+      }
+    } else {
+      const base = sceneStandingCue(scene, side);
+      if (base !== null) {
+        const characterId = base.input.characterId;
+        const appearanceId = base.input.appearanceId;
+        if (typeof characterId === "string" && typeof appearanceId === "string") {
+          resolved = {
+            side,
+            characterId,
+            appearanceId,
+            layout: {
+              ...(typeof base.input.scale === "number"
+                ? { scale: base.input.scale }
+                : {}),
+              ...(base.input.edge === "tight" ||
+              base.input.edge === "margin" ||
+              base.input.edge === "center"
+                ? { edge: base.input.edge }
+                : {}),
+              ...(base.input.vertical === "up" ||
+              base.input.vertical === "standard" ||
+              base.input.vertical === "down"
+                ? { vertical: base.input.vertical }
+                : {}),
+            },
+          };
+        }
+      }
+    }
+    carried.set(side, {
+      characterId: resolved?.characterId ?? null,
+      appearanceId: resolved?.appearanceId ?? null,
+    });
+    if (resolved === null) {
+      continue;
+    }
+    const id = context.ids.cue(secondSceneId, `standing-${side}`, existingCueIds);
+    existingCueIds.add(id);
+    cues.push({
+      id,
+      template: {
+        id: characterStandingV1.id,
+        version: characterStandingV1.version,
+      },
+      range: { kind: "scene" },
+      layer: "standing",
+      order: cues.length,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: {
+        characterId: resolved.characterId,
+        appearanceId: resolved.appearanceId,
+        side,
+        ...resolved.layout,
+      },
+    });
+  }
+  return { cues, carried };
+}
+
+function sameCarriedState(
+  state: StandingState,
+  carried: { characterId: string | null; appearanceId: string | null } | undefined,
+): boolean {
+  return (
+    carried !== undefined &&
+    state.characterId === carried.characterId &&
+    state.appearanceId === carried.appearanceId
+  );
+}
+
 export function splitPointSceneAtLine(
   document: ContentDocument,
   sceneId: string,
@@ -83,6 +241,27 @@ export function splitPointSceneAtLine(
     existingCueIds.add(cue.id);
   }
   const splitOffsetMs = resolveSplitOffsetMs(document, sceneId, lineId);
+  const splitLineId = lines[splitAt]!.id;
+  const { cues: carriedCues, carried } = carryStandingStates(
+    scene,
+    splitAt,
+    secondSceneId,
+    context,
+    existingCueIds,
+  );
+  const allStates = scene.standingStates ?? [];
+  const firstStates = allStates.filter(
+    (state) => (lineIndexById.get(state.fromLineId) ?? Number.POSITIVE_INFINITY) < splitAt,
+  );
+  const secondStates = allStates.filter(
+    (state) =>
+      (lineIndexById.get(state.fromLineId) ?? Number.NEGATIVE_INFINITY) >=
+        splitAt &&
+      !(
+        state.fromLineId === splitLineId &&
+        sameCarriedState(state, carried.get(state.side))
+      ),
+  );
 
   const firstCues: VisualCue[] = [];
   const secondCues: VisualCue[] = [...secondBase.visualCues];
@@ -207,12 +386,18 @@ export function splitPointSceneAtLine(
     ...scene,
     lines: lines.slice(0, splitAt),
     visualCues: firstVisualCues,
+    ...(firstStates.length === 0
+      ? { standingStates: undefined }
+      : { standingStates: firstStates }),
   };
   const secondScene: PointScene = {
     ...secondBase,
     accent: { ...scene.accent },
     lines: lines.slice(splitAt),
-    visualCues: secondVisualCues,
+    visualCues: [...secondVisualCues, ...carriedCues],
+    ...(secondStates.length === 0
+      ? { standingStates: undefined }
+      : { standingStates: secondStates }),
   };
 
   const scenes = [...document.scenes];
