@@ -177,6 +177,10 @@ _Avoid_: Thumbnail, Asset content URL
 A trusted reusable visual expression with a defined input contract.
 _Avoid_: Visual cue, scene
 
+**Text Inset** (テキストの端余白):
+The preset distance kept between a text block and the canvas edge when the text is anchored to that edge. It is chosen per cue, not as free coordinates, and platform safe areas take precedence.
+_Avoid_: padding value, margin config, offset
+
 **Container-Relative Layout**:
 A Visual Template layout whose dimensions follow the size of its containing element through container queries, instead of fixed canvas pixels, so one template renders at different widths without duplication.
 _Avoid_: responsive breakpoint, media query, scaling

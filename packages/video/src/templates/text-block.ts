@@ -2,10 +2,12 @@ import {
   textBlockInputSchema,
   type TextRole,
   type ThemeFontCategory,
+  type TextInsetPreset,
   type VisualThemeTextToken,
   type TextSurface,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
+import { textBlockPadding, type CanvasMetrics } from "../canvas";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 import { hexToRgb, resolveFontFamilyCss, resolveTextStyleFontFamilyCss } from "../theme";
@@ -154,6 +156,7 @@ export interface TextBlockRenderSpec {
   role: string;
   anchor: TextAnchor;
   verticalAlign: VerticalAlign;
+  inset: TextInsetPreset | undefined;
   fontFamilyCss: string;
   fontSize: number;
   color: string;
@@ -182,6 +185,7 @@ export function resolveTextBlockSpec(
     role: string;
     anchor?: TextAnchor;
     verticalAlign?: VerticalAlign;
+    inset?: TextInsetPreset;
     font?: ThemeFontCategory;
     fontSize?: number;
     color?: string;
@@ -229,6 +233,7 @@ export function resolveTextBlockSpec(
     role,
     anchor,
     verticalAlign,
+    inset: data.inset,
     fontFamilyCss,
     fontSize,
     color,
@@ -244,6 +249,7 @@ export function renderTextBlock(
   path: (string | number)[],
   theme: VisualThemeDefinition,
   locale: string | undefined,
+  canvas: CanvasMetrics,
 ): string {
   const spec = resolveTextBlockSpec(input, path, theme, locale);
   if (spec === null) {
@@ -251,6 +257,7 @@ export function renderTextBlock(
   }
 
   const surfaceCss = textSurfaceCss(spec.cueSurface ?? spec.themeSurface);
+  const padding = textBlockPadding(canvas, spec.inset);
 
   const wrapperStyle = [
     "position:absolute",
@@ -258,7 +265,7 @@ export function renderTextBlock(
     "display:flex",
     `justify-content:${JUSTIFY[spec.anchor]}`,
     `align-items:${ALIGN_ITEMS[spec.verticalAlign]}`,
-    "padding:max(var(--kakeai-text-pad-y,120px),var(--kakeai-safe-top,0px)) max(var(--kakeai-text-pad-x,140px),var(--kakeai-safe-right,0px)) max(var(--kakeai-text-pad-y,120px),var(--kakeai-safe-bottom,0px)) var(--kakeai-text-pad-x,140px)",
+    `padding:${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px`,
     "box-sizing:border-box",
   ].join(";");
 

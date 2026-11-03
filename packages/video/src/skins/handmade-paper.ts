@@ -10,6 +10,7 @@ import {
   type VisualThemeDefinition,
   type VisualThemeTextRole,
 } from "@kakeai/contracts";
+import { textBlockPadding } from "../canvas";
 import { CompositionCompileError } from "../compile-error";
 import { escapeHtmlText } from "../escape";
 import type {
@@ -188,13 +189,14 @@ function renderHandmadeTextBlock(input: unknown, context: RenderContext): Render
     return { html: "", assetIds: [], animation: [] };
   }
   const palette = paperPalette(context.theme);
+  const padding = textBlockPadding(context.canvas, spec.inset);
   const wrapperStyle = [
     "position:absolute",
     "inset:0",
     "display:flex",
     `justify-content:${JUSTIFY[spec.anchor]}`,
     `align-items:${ALIGN_ITEMS[spec.verticalAlign]}`,
-    "padding:120px 140px",
+    `padding:${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px`,
     "box-sizing:border-box",
   ].join(";");
 

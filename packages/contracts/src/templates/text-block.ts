@@ -11,12 +11,15 @@ export type TextRole = z.infer<typeof textRoleSchema>;
 
 export const textVerticalAlignSchema = z.enum(["top", "middle", "bottom"]);
 export const textFontSchema = z.enum(["sans", "serif", "mono"]);
+export const textInsetPresetSchema = z.enum(["tight", "normal", "wide"]);
+export type TextInsetPreset = z.infer<typeof textInsetPresetSchema>;
 
 export const textBlockInputSchema = z.strictObject({
   text: z.string(),
   role: textRoleSchema,
   anchor: textAnchorSchema.optional(),
   verticalAlign: textVerticalAlignSchema.optional(),
+  inset: textInsetPresetSchema.optional(),
   font: textFontSchema.optional(),
   fontSize: z.number().int().min(8).max(240).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
@@ -55,6 +58,12 @@ const VERTICAL_ALIGN_OPTIONS = [
   { value: "bottom", label: "下" },
 ] as const;
 
+const INSET_OPTIONS = [
+  { value: "tight", label: "ギリギリ" },
+  { value: "normal", label: "標準" },
+  { value: "wide", label: "広め" },
+] as const;
+
 const FONT_OPTIONS = [
   { value: "sans", label: "ゴシック" },
   { value: "serif", label: "明朝" },
@@ -80,6 +89,7 @@ export const textBlockV1: VisualTemplateDefinition = {
       options: VERTICAL_ALIGN_OPTIONS,
       optional: true,
     },
+    { kind: "select", key: "inset", label: "端からの距離", options: INSET_OPTIONS, optional: true },
     { kind: "select", key: "font", label: "フォント", options: FONT_OPTIONS, optional: true },
     { kind: "number", key: "fontSize", label: "フォントサイズ(px)", min: 8, max: 240, step: 1, optional: true },
     { kind: "color", key: "color", label: "色", optional: true },

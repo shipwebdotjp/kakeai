@@ -44,7 +44,13 @@ const templateRenderers: [string, VisualSkinTemplateRenderer][] = [
   [
     `${textBlockV1.id}@${textBlockV1.version}`,
     (input, context) => ({
-      html: renderTextBlock(input, context.path, context.theme, context.document.locale),
+      html: renderTextBlock(
+        input,
+        context.path,
+        context.theme,
+        context.document.locale,
+        context.canvas,
+      ),
       assetIds: [],
       animation: [],
     }),

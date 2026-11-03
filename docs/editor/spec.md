@@ -34,6 +34,7 @@ Scene の `accent`、`timing`、`lines`、`visualCues` は維持する。字幕�
     "role": "heading",                   // title | subtitle | heading | body | closing
     "anchor": "center",                  // 左右: left | center | right
     "verticalAlign": "middle",           // 上下: top | middle | bottom
+    "inset": "tight",                    // 任意。端からの距離: tight | normal | wide
     "font": "sans",                      // 非同梱システムフォント: sans | serif | mono
     "fontSize": 40,                      // 1080p基準の px（整数）
     "color": "#FFFFFF",                  // #RRGGBB（大文字正規化）
@@ -43,6 +44,7 @@ Scene の `accent`、`timing`、`lines`、`visualCues` は維持する。字幕�
 ```
 
 - `role` は意味付け（翻訳・既定生成・role別の既定スタイルと警告上限の導出）に使う。字幕は `lines.captionText` のままとし、`role` には含めない。
+- `inset` は端からの距離のプリセット。`tight`（32px）・`normal`（80px）・`wide`（従来の余白）で、省略時は横型 `tight`、縦型 `wide`。上・右・下はセーフエリアが優先する。
 - `font` は**非同梱のシステムフォント**の有限enum（`sans`/`serif`/`mono`）とし、レンダー側で固定のフォントスタック名へマップする。Webフォントの同梱と任意のフォント名・CSSは持ち込まない。
 - `fontSize` は1080p基準の px とする。9:16など別解像度は将来の版で扱う。
 - `decoration` は真偽のみ。任意CSS・keyframe・easingは受け付けない（[ADR-0031](../adr/0031-cue-transition-and-animation-ownership.md) の方針）。

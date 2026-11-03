@@ -57,6 +57,7 @@ describe("buildContentDocument", () => {
     expect(cue.fields.anchor).toBe("center");
     cue.fields.text = "新しいタイトル";
     cue.fields.fontSize = "72";
+    cue.fields.inset = "wide";
     cue.fields["decoration.bold"] = "true";
 
     const rebuilt = buildContentDocument(base, values);
@@ -64,11 +65,13 @@ describe("buildContentDocument", () => {
       text: string;
       role: string;
       anchor?: string;
+      inset?: string;
       fontSize?: number;
       decoration?: { bold?: boolean };
     };
     expect(input.text).toBe("新しいタイトル");
     expect(input.anchor).toBe("center");
+    expect(input.inset).toBe("wide");
     expect(input.fontSize).toBe(72);
     expect(input.decoration?.bold).toBe(true);
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);

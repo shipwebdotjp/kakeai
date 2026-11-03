@@ -16,6 +16,7 @@ import {
   quoteInputSchema,
   statInputSchema,
   tableSimpleInputSchema,
+  textBlockInputSchema,
 } from "./index";
 
 describe("visual template metadata", () => {
@@ -56,6 +57,24 @@ describe("visual template metadata", () => {
     const fields = getTemplateInputFields("text.block", 1);
     expect(fields?.some((field) => field.kind === "number")).toBe(true);
     expect(fields?.some((field) => field.kind === "boolean")).toBe(true);
+    expect(fields?.some((field) => field.key === "inset" && field.kind === "select")).toBe(
+      true,
+    );
+  });
+
+  it("accepts only the defined text edge inset presets", () => {
+    expect(
+      textBlockInputSchema.safeParse({ text: "", role: "body", inset: "tight" }).success,
+    ).toBe(true);
+    expect(
+      textBlockInputSchema.safeParse({ text: "", role: "body", inset: "normal" }).success,
+    ).toBe(true);
+    expect(
+      textBlockInputSchema.safeParse({ text: "", role: "body", inset: "wide" }).success,
+    ).toBe(true);
+    expect(
+      textBlockInputSchema.safeParse({ text: "", role: "body", inset: "edge" }).success,
+    ).toBe(false);
   });
 
   it("registers scene.site-mockup@1 as an editable card/overlay template", () => {
