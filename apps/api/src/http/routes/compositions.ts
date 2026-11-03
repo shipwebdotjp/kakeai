@@ -3,7 +3,9 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { existsSync, statSync } from "node:fs";
 import {
   createCompositionRequestSchema,
+  listCompositionsQuerySchema,
   updateCompositionDraftRequestSchema,
+  updateCompositionRequestSchema,
   publishCompositionRequestSchema,
 } from "@kakeai/contracts";
 import type { CompositionService } from "../../services/compositions.ts";
@@ -12,6 +14,11 @@ import { publishOrValidateComposition } from "../../services/composition-publish
 import { sendData } from "../envelope.ts";
 import { parseBody } from "../validation.ts";
 import { ApiError } from "../errors.ts";
+
+function firstQueryValue(value: unknown): string | undefined {
+  const first = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" ? first : undefined;
+}
 
 export function isPathInside(baseDir: string, target: string): boolean {
   const base = resolve(baseDir);
@@ -30,10 +37,31 @@ export function createCompositionsRouter(
 ): Router {
   const router = Router();
 
-  router.get("/", async (_req: Request, res: Response, next: NextFunction) => {
+  router.get("/", async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const list = await compositionService.listCompositions();
+      const raw: Record<string, unknown> = {};
+      for (const key of ["workId", "scope", "archived"] as const) {
+        const value = firstQueryValue(req.query[key]);
+        if (value !== undefined) {
+          raw[key] = value;
+        }
+      }
+      const query = parseBody(listCompositionsQuerySchema, raw);
+      const list = await compositionService.listCompositions(query);
       sendData(res, 200, list);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.patch("/:compositionId", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = parseBody(updateCompositionRequestSchema, req.body);
+      const composition = await compositionService.setCompositionArchived(
+        req.params.compositionId as string,
+        body.archived,
+      );
+      sendData(res, 200, composition);
     } catch (err) {
       next(err);
     }

@@ -122,8 +122,8 @@ afterAll(async () => {
 describe("agent socket integration", () => {
   it("exposes the schema and work reads", async () => {
     const schema = await client.request("schema.get", {});
-    expect(schema.protocolVersion).toBe(1);
-    expect(schema.minProtocolVersion).toBe(1);
+    expect(schema.protocolVersion).toBe(2);
+    expect(schema.minProtocolVersion).toBe(2);
     expect(schema.operations.length).toBeGreaterThan(0);
     expect(schema.schemaDigest).toMatch(/^fnv1a64:/u);
     expect(schema.operationDigest).toMatch(/^fnv1a64:/u);

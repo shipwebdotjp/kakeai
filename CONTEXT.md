@@ -141,6 +141,14 @@ _Avoid_: Composition Version, Script Version
 An immutable published bundle of one Composition that a Script Version may reference.
 _Avoid_: Composition Draft, Asset Rendition
 
+**Composition Scope**:
+Whether a Composition is owned by one Work (`work`), available to every Work (`shared`), or left unclassified by the legacy migration (`unclassified`). It limits discovery, not whether a Script Version may reference the Composition.
+_Avoid_: visibility, permission, tag
+
+**Composition Archive**:
+A reversible mark that hides a Composition from default library and picker views without deleting it or invalidating references.
+_Avoid_: deletion, unpublish
+
 **Canvas Profile**:
 The fixed internal canvas a Composition Version renders into, chosen from a small set: `landscape` (1920×1080) or `portrait` (1080×1920). It is immutable per Composition Version and belongs to the Composition, not to the Work.
 _Avoid_: Output size, resolution, aspect ratio

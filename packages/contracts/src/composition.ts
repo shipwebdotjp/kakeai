@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idSchema } from "./content/primitives.ts";
+import { idSchema, timestampSchema } from "./content/primitives.ts";
 import {
   visualSkinRefSchema,
   visualThemeRefSchema,
@@ -9,6 +9,40 @@ import {
 export const canvasProfileSchema = z.enum(["landscape", "portrait"]);
 
 export type CanvasProfile = z.infer<typeof canvasProfileSchema>;
+
+export const compositionScopeSchema = z.enum(["work", "shared", "unclassified"]);
+
+export type CompositionScope = z.infer<typeof compositionScopeSchema>;
+
+/** Scopes a caller may choose when creating a Composition. */
+export const compositionScopeInputSchema = z.enum(["work", "shared"]);
+
+export type CompositionScopeInput = z.infer<typeof compositionScopeInputSchema>;
+
+export interface CompositionScopeIssue {
+  code: string;
+  message: string;
+}
+
+export function compositionScopeWorkIdIssue(
+  scope: CompositionScope,
+  workId: string | null | undefined,
+): CompositionScopeIssue | null {
+  const hasWorkId = workId !== null && workId !== undefined;
+  if (scope === "work" && !hasWorkId) {
+    return {
+      code: "required",
+      message: "作品専用のCompositionにはworkIdが必要です。",
+    };
+  }
+  if (scope !== "work" && hasWorkId) {
+    return {
+      code: "forbidden",
+      message: "作品専用以外のCompositionはworkIdを持てません。",
+    };
+  }
+  return null;
+}
 
 export const DEFAULT_CANVAS_PROFILE: CanvasProfile = "landscape";
 
@@ -164,14 +198,27 @@ export const compositionVersionSchema = z.strictObject({
 
 export type CompositionVersion = z.infer<typeof compositionVersionSchema>;
 
-export const compositionSchema = z.strictObject({
-  id: idSchema,
-  name: z.string().min(1),
-  runtimeCompositionId: z.string().min(1),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  draft: compositionDraftSchema.nullable().optional(),
-  versions: z.array(compositionVersionSchema).optional(),
-});
+export const compositionSchema = z
+  .strictObject({
+    id: idSchema,
+    name: z.string().min(1),
+    runtimeCompositionId: z.string().min(1),
+    scope: compositionScopeSchema,
+    workId: idSchema.nullable(),
+    archivedAt: timestampSchema.nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    draft: compositionDraftSchema.nullable().optional(),
+    versions: z.array(compositionVersionSchema).optional(),
+  })
+  .superRefine((composition, ctx) => {
+    const issue = compositionScopeWorkIdIssue(
+      composition.scope,
+      composition.workId,
+    );
+    if (issue !== null) {
+      ctx.addIssue({ ...issue, code: "custom", path: ["workId"] });
+    }
+  });
 
 export type Composition = z.infer<typeof compositionSchema>;

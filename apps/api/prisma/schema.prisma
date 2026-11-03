@@ -19,6 +19,7 @@ model Work {
   childWorks    Work[]            @relation("WorkParent")
   languageEditions LanguageEdition[]
   jobs          Job[]
+  compositions  Composition[] @relation("WorkCompositions")
   /// Work-wide sparse thumbnail appearance, shared by every Language Edition.
   thumbnailAppearanceJson String?
   createdAt     DateTime          @default(now())
@@ -302,10 +303,19 @@ model Composition {
   id                   String               @id @default(cuid())
   name                 String
   runtimeCompositionId String               @unique
+  /// "work" (owned by one Work), "shared" (all Works), or "unclassified"
+  /// (legacy rows whose owner the migration could not infer).
+  scope                String               @default("unclassified")
+  workId               String?
+  work                 Work?                @relation("WorkCompositions", fields: [workId], references: [id], onDelete: Restrict)
+  archivedAt           DateTime?
   draft                CompositionDraft?
   versions             CompositionVersion[]
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
+
+  @@index([workId])
+  @@index([scope])
 }
 
 model CompositionDraft {

@@ -26,3 +26,7 @@ Composition 内の短い SFX、BGM、音量、ducking を既存 AudioCue と統�
 ## R5: 外部 project と手動編集
 
 外部 HyperFrames project の import、利用者による編集、任意 source の実行を検討する。この段階で初めて、import manifest、権利・来歴、隔離された実行環境、ネットワークとローカル API の分離、リソース上限を設計する。v1 の信頼済み AI source の限定例外を、任意 source へ拡張しない。
+
+## R6: 所属の昇格とAssetへのスコープ拡張
+
+作品専用 Composition を全作品共通へ移す「昇格」と、シリーズ（親 Work）単位の共有を検討する。あわせて、Asset にも同じ「作品専用／共通」の概念を広げるか、既存のタグ・お気に入り・アーカイブで足りるかを判断する。R6 の前提は、複数作品での Composition の使い回しが実際に増え、作品専用のままでは運用できない場面が確認できることとする。昇格は既存の ScriptVersion の参照を変えず、Composition の所属だけを変える操作にする。

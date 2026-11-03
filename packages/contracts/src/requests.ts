@@ -2,7 +2,12 @@ import { z } from "zod";
 import { SUPPORTED_LOCALES, idSchema, localeSchema } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
 import { templateRefSchema } from "./content/nested";
-import { canvasProfileSchema } from "./composition";
+import {
+  canvasProfileSchema,
+  compositionScopeInputSchema,
+  compositionScopeSchema,
+  compositionScopeWorkIdIssue,
+} from "./composition";
 import { workOutputProfileSchema } from "./dto";
 import { visualThemeRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 import { voiceIdSchema } from "./voice-profile";
@@ -115,19 +120,56 @@ export const bundleRelativePathSchema = z
     { message: "バンドル内の相対パスを指定してください" },
   );
 
-export const createCompositionRequestSchema = z.strictObject({
-  name: z.string().trim().min(1),
-  runtimeCompositionId: z.string().trim().min(1),
-  entrypoint: bundleRelativePathSchema.optional(),
-  canvasProfile: canvasProfileSchema.optional(),
-  authoringStyle: z
-    .strictObject({
-      visualTheme: visualThemeRefSchema,
-    })
-    .optional(),
-});
+export const createCompositionRequestSchema = z
+  .strictObject({
+    name: z.string().trim().min(1),
+    runtimeCompositionId: z.string().trim().min(1),
+    scope: compositionScopeInputSchema,
+    workId: idSchema.optional(),
+    entrypoint: bundleRelativePathSchema.optional(),
+    canvasProfile: canvasProfileSchema.optional(),
+    authoringStyle: z
+      .strictObject({
+        visualTheme: visualThemeRefSchema,
+      })
+      .optional(),
+  })
+  .superRefine((request, ctx) => {
+    const issue = compositionScopeWorkIdIssue(request.scope, request.workId);
+    if (issue !== null) {
+      ctx.addIssue({ ...issue, code: "custom", path: ["workId"] });
+    }
+  });
 
 export type CreateCompositionRequest = z.infer<typeof createCompositionRequestSchema>;
+
+export const compositionArchivedFilterSchema = z.enum(["exclude", "include", "only"]);
+
+export type CompositionArchivedFilter = z.infer<typeof compositionArchivedFilterSchema>;
+
+export const listCompositionsQuerySchema = z
+  .strictObject({
+    workId: idSchema.optional(),
+    scope: compositionScopeSchema.optional(),
+    archived: compositionArchivedFilterSchema.optional(),
+  })
+  .superRefine((query, ctx) => {
+    if (query.scope === undefined) {
+      return;
+    }
+    const issue = compositionScopeWorkIdIssue(query.scope, query.workId);
+    if (issue !== null) {
+      ctx.addIssue({ ...issue, code: "custom", path: ["workId"] });
+    }
+  });
+
+export type ListCompositionsQuery = z.infer<typeof listCompositionsQuerySchema>;
+
+export const updateCompositionRequestSchema = z.strictObject({
+  archived: z.boolean(),
+});
+
+export type UpdateCompositionRequest = z.infer<typeof updateCompositionRequestSchema>;
 
 export const compositionAuthoringContextRequestSchema = z.strictObject({
   visualTheme: visualThemeRefSchema,

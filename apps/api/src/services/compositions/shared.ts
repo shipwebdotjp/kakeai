@@ -3,12 +3,15 @@ import { join, isAbsolute, relative, resolve, sep } from "node:path";
 import { OUTPUT_FPS, escapeHtmlAttribute, toSecondsText } from "@kakeai/video";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import {
+  type Composition,
   type CompositionDraft,
+  type CompositionScope,
   type CompositionVersion,
   type CompositionManifest,
   type CompositionAuthoredStyleProvenance,
   type CompositionStyleProvenance,
   compositionManifestSchema,
+  compositionScopeSchema,
   compositionStyleProvenanceSchema,
 } from "@kakeai/contracts";
 import { ApiError } from "../../http/errors.ts";
@@ -160,6 +163,48 @@ export function toCompositionVersionDto(
       version.styleProvenanceJson,
     ),
     createdAt: version.createdAt.toISOString(),
+  };
+}
+
+export interface CompositionRow {
+  id: string;
+  name: string;
+  runtimeCompositionId: string;
+  scope: string;
+  workId: string | null;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  draft: CompositionDraftRow | null;
+  versions: CompositionVersionRow[];
+}
+
+export function parseCompositionScope(value: string): CompositionScope {
+  const parsed = compositionScopeSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError(
+      500,
+      "INTERNAL_ERROR",
+      "Compositionのスコープを解釈できません。",
+    );
+  }
+  return parsed.data;
+}
+
+export function toCompositionDto(composition: CompositionRow): Composition {
+  return {
+    id: composition.id,
+    name: composition.name,
+    runtimeCompositionId: composition.runtimeCompositionId,
+    scope: parseCompositionScope(composition.scope),
+    workId: composition.workId,
+    archivedAt: composition.archivedAt?.toISOString() ?? null,
+    createdAt: composition.createdAt.toISOString(),
+    updatedAt: composition.updatedAt.toISOString(),
+    draft: composition.draft
+      ? toCompositionDraftDto(composition.draft)
+      : null,
+    versions: composition.versions.map(toCompositionVersionDto),
   };
 }
 

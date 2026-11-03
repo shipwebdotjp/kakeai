@@ -80,3 +80,18 @@
 - [x] テスト: manifest 互換・検証、portrait の draft seed、entry/manifest 寸法不一致拒否、phone の既定 fit 描画、full-bleed portrait 拒否、selector フィルタ、preview／render snapshot の一致
 - [x] [ADR-0066](../adr/0066-canvas-profile-as-version-property.md) を追加し、仕様・ロードマップ・API契約・content-schema・CONTEXT・作者スキル・ユーザーガイドを同期する
 - [x] 完了条件: landscape と portrait の版を publish し、portrait を端末画面へ埋め込んで保存・プレビュー・MP4出力でき、full-bleed の誤用は拒否される
+
+## C8 作品スコープと候補表示
+
+- [x] `Composition` に `scope`（`work` / `shared` / `unclassified`）・`workId`・`archivedAt` を追加し、`work` と `workId` の対応を検証する
+- [x] `POST /compositions` の `scope` を必須にし、`work` の `workId` 必須・`shared` の `workId` 禁止・`unclassified` 拒否を実装する
+- [x] 既存 Composition を `unclassified` で追加し、ScriptVersion と render Job snapshot の `compositionVersionId` 参照を走査して1作品なら `work`、複数作品なら `shared`、未参照なら `unclassified` にする
+- [x] `GET /compositions` に `workId`・`scope`・`archived` を追加し、Work の候補（作品専用・共通・未分類）とアーカイブの除外を実装する
+- [x] `PATCH /compositions/:compositionId` でアーカイブを切り替えられるようにする。台本・Job・プレビュー・レンダーへ影響させない
+- [x] Work 削除で所有する Composition と draft・bundle を削除し、他作品の ScriptVersion／Job snapshot から参照されている場合は 409 `WORK_HAS_REFERENCED_COMPOSITIONS` で拒否する
+- [x] `composition.create` の `scope` を必須にし、`composition.list` に `workId`・`scope`・`archived` を追加する。`AGENT_PROTOCOL_VERSION` を `2` へ上げ、MCP・CLI・スキルを同期する
+- [x] 台本の Composition 候補を Work 文脈で絞り、Composition ごとの最新版既定・全 version 表示・検索・所属順・現在値の保持を実装する
+- [x] Composition Library に所属バッジ（作品専用・共通・未分類）・作品フィルタ・検索・アーカイブ切り替えを追加する
+- [x] テスト: スコープの必須検証、移行の所属推定、候補の絞り込み、アーカイブの非破壊性、Work削除の参照ガード、ピッカーの最新版畳み込みと現在値保持
+- [x] [仕様](./spec.md)、[ロードマップ](./roadmap.md)、[ADR-0115](../adr/0115-work-scoped-compositions.md)、MVP契約、Agent Access、CONTEXT、作者スキル、ユーザーガイドを同期する
+- [x] 完了条件: 作品専用 Composition はその作品の候補にだけ現れ、共通 Composition は全作品に現れ、未分類はバッジ付きで整理でき、Work削除が参照を壊さない

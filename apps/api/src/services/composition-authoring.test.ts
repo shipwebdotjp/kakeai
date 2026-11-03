@@ -100,6 +100,7 @@ describe("Composition Authoring Context and Style Kit", () => {
       visualTheme: { id: themeId, version },
     });
     const composition = await compositionService.createComposition({
+      scope: "shared",
       name: "Skinned Motion",
       runtimeCompositionId: "cmp.skin.paper",
       authoringStyle: { provenance: resolved.provenance, kitFiles: resolved.kitFiles },
@@ -250,6 +251,7 @@ describe("Composition Authoring Context and Style Kit", () => {
   it("normalizes protected paths and fails closed on corrupt provenance", async () => {
     await expect(
       compositionService.createComposition({
+      scope: "shared",
         name: "Protected Entry",
         runtimeCompositionId: "cmp.skin.protected",
         entrypoint: "./kakeai-style/index.html",
@@ -264,6 +266,7 @@ describe("Composition Authoring Context and Style Kit", () => {
     ).rejects.toMatchObject({ code: "STYLE_KIT_MODIFIED" });
 
     const corrupt = await compositionService.createComposition({
+      scope: "shared",
       name: "Corrupt Provenance",
       runtimeCompositionId: "cmp.skin.corrupt",
     });
@@ -311,6 +314,7 @@ describe("Composition Authoring Context and Style Kit", () => {
 
   it("stores neutral provenance for new compositions and reads legacy rows as legacy", async () => {
     const neutral = await compositionService.createComposition({
+      scope: "shared",
       name: "Neutral Motion",
       runtimeCompositionId: "cmp.skin.neutral",
     });

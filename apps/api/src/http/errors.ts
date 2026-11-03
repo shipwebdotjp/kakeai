@@ -9,6 +9,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   ASSET_PROCESSING: "素材を取り込み中です。完了後に再試行してください。",
   ASSET_IN_USE: "この素材は使用中のため削除できません。",
   WORK_HAS_CHILDREN: "子作品があるため削除できません。",
+  WORK_HAS_REFERENCED_COMPOSITIONS: "他の作品が参照しているCompositionがあるため削除できません。",
   LANGUAGE_EDITION_EXISTS: "この言語版は既に存在します。",
   LAST_LANGUAGE_EDITION: "作品には少なくとも1つの言語版が必要です。",
   LANGUAGE_EDITION_JOB_RUNNING: "実行中のジョブがあるため言語版を削除できません。",

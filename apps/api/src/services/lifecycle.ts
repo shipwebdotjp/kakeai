@@ -3,6 +3,7 @@ import { join, relative, sep } from "node:path";
 import type { PrismaClient } from "../generated/prisma/client.ts";
 import { logger } from "../logger.ts";
 import type { DataDirectories } from "../storage/paths.ts";
+import { backfillCompositionScopes } from "./compositions/backfill-scope.ts";
 
 const WORKER_INTERRUPTED_MESSAGE = "アプリの中断により処理が停止しました。再実行してください。";
 
@@ -113,6 +114,14 @@ export async function runStartupMaintenance(
   directories: DataDirectories,
 ): Promise<void> {
   const interruptedJobs = await recoverInterruptedJobs(prisma);
+  let compositionScopesBackfilled = 0;
+  try {
+    compositionScopesBackfilled = await backfillCompositionScopes(prisma);
+  } catch (error) {
+    logger.warn("composition_scope_backfill_failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   let tmpEntriesRemoved = 0;
   let orphanFilesRemoved = 0;
   try {
@@ -125,6 +134,7 @@ export async function runStartupMaintenance(
   }
   logger.info("startup_maintenance", {
     interruptedJobs,
+    compositionScopesBackfilled,
     tmpEntriesRemoved,
     orphanFilesRemoved,
   });

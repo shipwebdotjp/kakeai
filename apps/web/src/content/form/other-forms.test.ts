@@ -548,6 +548,9 @@ describe("compositionVersionOptions", () => {
     id: "cmp-1",
     name: "Landscape",
     runtimeCompositionId: "cmp.landscape",
+    scope: "work",
+    workId: "work-1",
+    archivedAt: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     versions: [
@@ -574,6 +577,9 @@ describe("compositionVersionOptions", () => {
     id: "cmp-2",
     name: "Portrait",
     runtimeCompositionId: "cmp.portrait",
+    scope: "shared",
+    workId: null,
+    archivedAt: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     versions: [
@@ -612,6 +618,26 @@ describe("compositionVersionOptions", () => {
   it("treats a legacy manifest without a profile as landscape", () => {
     const options = compositionVersionOptions([landscape], ["landscape"]);
     expect(options).toHaveLength(1);
+  });
+
+  it("folds to the latest version and marks shared compositions", () => {
+    const multi = {
+      ...landscape,
+      versions: [
+        ...landscape.versions,
+        {
+          ...landscape.versions[0]!,
+          id: "ver-landscape-2",
+          versionNumber: 2,
+        },
+      ],
+    };
+    expect(
+      compositionVersionOptions([multi], ["landscape"], "latest").map(
+        (option) => option.value,
+      ),
+    ).toEqual(["ver-landscape-2"]);
+    expect(compositionVersionOptions([portrait])[0]!.label).toContain("共通");
   });
 });
 

@@ -190,7 +190,11 @@ describe("MCP against the real agent dispatcher", () => {
 
     const composition = await mcpClient.callTool({
       name: "kakeai_composition_create",
-      arguments: { name: "MCP Real", runtimeCompositionId: "cmp.mcp.real" },
+      arguments: {
+        name: "MCP Real",
+        runtimeCompositionId: "cmp.mcp.real",
+        scope: "shared",
+      },
     });
     expect(composition.isError).toBeUndefined();
     const compositionId = structured<{ composition: { id: string } }>(composition).composition.id;

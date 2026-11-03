@@ -4,7 +4,7 @@ import { SCRIPT_EDIT_ERROR_CODES } from "../script-operation";
 
 /** Version of the local socket request/response envelope. */
 
-export const AGENT_PROTOCOL_VERSION = 1 as const;
+export const AGENT_PROTOCOL_VERSION = 2 as const;
 
 /**
  * The shared empty input of read/list operations. It lives in this leaf module
@@ -19,7 +19,7 @@ export const agentEmptyInputSchema = z.strictObject({});
  * raise the maximum while old clients are still told which minimum they need;
  * a compatible addition never moves either bound.
  */
-export const AGENT_PROTOCOL_MIN_VERSION = 1 as const;
+export const AGENT_PROTOCOL_MIN_VERSION = 2 as const;
 
 /**
  * True when `version` is a protocol version this build can talk. Used by the

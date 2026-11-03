@@ -63,7 +63,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | LanguageEditionSummary | id, workId, locale, updatedAt, currentScriptVersion | currentScriptVersionは `currentScriptVersionId` が指すID、版番号、作成日時の要約。`locale` は有効な `localeSchema` の値（`ja-JP`・`en-US`・`zh-Hans`・`zh-Hant`）。 |
 | ScriptVersion | id, languageEditionId, versionNumber, contentSchemaVersion, content, createdAt, author, authorAgentId, agentRequestId, agentRequestHash, sourceScriptVersionId | contentはContentDocumentそのもの。保存後に更新しない。`author` は `human` / `agent` で作成時に確定し、以後変更しない。`authorAgentId`・`agentRequestId`・`agentRequestHash`・`sourceScriptVersionId` は該当しない場合null。履歴一覧では `content` を除いた要約を返す。詳細は [Agent Access 仕様](../agent-access/spec.md) の帰属を正とする。 |
 | Asset | id, kind, origin, status, originalFilename, mediaType, byteSize, sha256, durationMs, widthPx, heightPx, hasAudio, createdAt, contentUrl | statusは `processing` / `ready` / `failed`。durationMsはreadyなrender Renditionの尺（imageではnull）、widthPxとheightPxはaudioではnull。hasAudioは音声ストリームの有無（imageは常にfalse）。contentUrlは原本へのURLであり、編集・レンダーにはreadyなAssetだけを選択できる。 |
-| Composition | id, runtimeCompositionId, name, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`, `styleProvenance`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
+| Composition | id, runtimeCompositionId, name, scope, workId, archivedAt, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`scope` は `work`（作品専用）・`shared`（全作品共通）・`unclassified`（移行時のみ）で、`work` のときだけ `workId` を持つ。`archivedAt` は既定の一覧・ピッカーから隠すアーカイブで、nullなら未設定。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`, `styleProvenance`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
 | CompositionVersion | id, compositionId, versionNumber, bundleHash, storageKey, manifest, styleProvenance, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、Canvas Profile、その固定寸法、既定尺、依存一覧を持つ。`canvasProfile` は `landscape`（1920×1080、既定）または `portrait`（1080×1920）で、versionごとに不変。`contentHash` は任意。`storageKey` はアプリデータルート相対の内部キーであり、参照やURL生成に使わない（絶対パスは返さない）。`styleProvenance` はauthoring元Theme/Skin/Style Kit hashとFont診断の不変記録で、`authored` / `neutral` / `legacy` の判別union（[../visual-skins/spec.md](../visual-skins/spec.md)）。 |
 | CompositionDraftFiles | entrypoint, files, binaryFiles | draftのentrypointと、bundle相対パスをキーにしたファイル内容のマップ。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列（存在する場合のみ）。seedとAIの更新内容を含む。 |
 | Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
@@ -108,8 +108,9 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /assets/:assetId/render-content | 200 / 206 | readyなrender Renditionを配信 |
 | GET | /assets/:assetId/frame | 200 | セリフゲート保持用の静止フレームPNGを配信 |
 | DELETE | /assets/:assetId | 204 | 未参照の素材を明示削除 |
-| GET | /compositions | 200 | Composition Libraryの一覧を取得 |
-| POST | /compositions | 201 | Compositionとactive draftを作成（AI authoring。任意の `authoringStyle` でStyle Kitをseed） |
+| GET | /compositions | 200 | Composition Libraryの一覧を取得（`workId`・`scope`・`archived` で絞り込み） |
+| POST | /compositions | 201 | Compositionとactive draftを作成（AI authoring。必須の `scope`、任意の `authoringStyle` でStyle Kitをseed） |
+| PATCH | /compositions/:compositionId | 200 | Compositionのアーカイブを切り替え |
 | POST | /composition-authoring-contexts | 200 | 公開Theme RevisionとCanvas Profileから非永続のComposition Authoring Contextを返す（AI authoring） |
 | GET | /compositions/:compositionId | 200 | Compositionとpublish済みversionのメタデータを取得 |
 | GET | /compositions/:compositionId/draft/files | 200 | draftのentrypointとファイル内容を取得（AI authoring） |
@@ -298,7 +299,7 @@ Content-Type: application/json
 
 POST /works/:workId/clone は `{ title, sourceEditionId, outputProfile? }` を受け取る。`sourceEditionId` は必須で、対象 Work に属する Edition でなければ 404 `RESOURCE_NOT_FOUND` とする。`outputProfile` は任意で `landscape` / `portrait` のいずれかであり、省略時は複製元 Work の出力形式を継承する。子 Work の `outputProfile` に保存する。指定 Edition の current ScriptVersion だけを、同じ locale の単一 Edition として新しい子 Work に複製する。新 Work の `originalLocale` は複製元 Edition の locale とし、初期版は `sourceScriptVersionId` に複製元を記録する。他の Edition、版履歴、Job、Artifact、サムネイルは複製しない。[../work-history/spec.md](../work-history/spec.md) を正とする。
 
-DELETE /works/:workId は確認済みの破壊的操作である。子Workがあるときは409 `WORK_HAS_CHILDREN` を返す。子がなければ、当該Workの全Edition、ScriptVersion、Job、ArtifactのDB行と実体を削除する。共有Assetは削除しない。削除済みWorkの出力・履歴は復元できない。
+DELETE /works/:workId は確認済みの破壊的操作である。子Workがあるときは409 `WORK_HAS_CHILDREN` を返す。子がなければ、当該Workの全Edition、ScriptVersion、Job、Artifact、および当該Workが所有するComposition（draft・bundleを含む）のDB行と実体を削除する。共有Assetと `shared`・`unclassified` のCompositionは削除しない。他のWorkのScriptVersionまたはJobの入力スナップショットから参照されている作品専用Compositionがあるときは409 `WORK_HAS_REFERENCED_COMPOSITIONS` を返し、何も削除しない。削除済みWorkの出力・履歴は復元できない。
 
 POST /works/:workId/language-editions は、既存 Work に言語版を追加する。リクエストは `{ locale, sourceEditionId }`（[../multilingual-editions/spec.md](../multilingual-editions/spec.md)）とし、同一トランザクションで Edition と初期 ScriptVersion v1 を作って `currentScriptVersionId` を設定する。初期版はシード元 Edition の current の深いコピーに置き換え規則（`document.locale` 変換、話者 `voiceProfileId` の null 化、`audioTakes` の空化と `selectedAudioTakeId` の null 化）を適用したものとし、`sourceScriptVersionId` にシード元を記録する。当該 Work に既にある locale は 409 `LANGUAGE_EDITION_EXISTS`、他 Work の Edition や存在しない Work/Edition は 404 `RESOURCE_NOT_FOUND` とする。
 
@@ -542,15 +543,16 @@ Face Set は、眉・目・口・前景の Face Layer と Expression Preset を�
 
 ## Composition Library
 
-Compositionは再利用するHyperFrames projectの論理単位で、draftを編集してpublishすると不変のCompositionVersionになる。詳細は [../composition-library/spec.md](../composition-library/spec.md) を正とする。AI authoringは次のエンドポイントを使う。入力はZodで検証し、draft・bundleのパスはアプリデータルート相対で解決する。絶対パスと `..` を含むパスは拒否する。
+Compositionは再利用するHyperFrames projectの論理単位で、draftを編集してpublishすると不変のCompositionVersionになる。Compositionは作品専用（`work`）か全作品共通（`shared`）のスコープを持ち、作成時に必須で指定する。詳細は [../composition-library/spec.md](../composition-library/spec.md) を正とする。AI authoringは次のエンドポイントを使う。入力はZodで検証し、draft・bundleのパスはアプリデータルート相対で解決する。絶対パスと `..` を含むパスは拒否する。
 
 - `POST /composition-authoring-contexts` は `{ visualTheme: { id, version }, canvasProfile? }` を受け、公開Theme Revision（組み込みまたはpublish済みの利用者revision）からSkin、token、Style Kit hash、Font診断を解決した非永続のComposition Authoring Contextを返す。書込みは行わない。draftのみのTheme、未知のTheme、archive済みのみのThemeは422 `VALIDATION_ERROR` で拒否する。同じ入力は同じ `kit.hash` を返す。
-- `POST /compositions` は `{ name, runtimeCompositionId, entrypoint?, canvasProfile?, authoringStyle? }` を受け取り、Compositionとactive draftをdefault `index.html`・`manifest.json` 付きで作成する。`canvasProfile` は `landscape`（既定）または `portrait` で、seed HTMLとmanifestの寸法に反映する。`runtimeCompositionId` はComposition間で一意。`authoringStyle: { visualTheme: { id, version } }` を指定すると、同じContextを再解決し、`kakeai-style/`（`STYLE.md`、`tokens.css`、`fonts.css`、`components.css`、`kit-lock.json`）をseedへ加え、`styleProvenance` を記録する。未指定の新規draftは `neutral` として記録する。
+- `POST /compositions` は `{ name, runtimeCompositionId, scope, workId?, entrypoint?, canvasProfile?, authoringStyle? }` を受け取り、Compositionとactive draftをdefault `index.html`・`manifest.json` 付きで作成する。`scope` は必須で `work` または `shared`。`work` は存在する Work の `workId` を必須とし、`shared` は `workId` を持てない。`unclassified` は指定できない。`canvasProfile` は `landscape`（既定）または `portrait` で、seed HTMLとmanifestの寸法に反映する。`runtimeCompositionId` はComposition間で一意。`authoringStyle: { visualTheme: { id, version } }` を指定すると、同じContextを再解決し、`kakeai-style/`（`STYLE.md`、`tokens.css`、`fonts.css`、`components.css`、`kit-lock.json`）をseedへ加え、`styleProvenance` を記録する。未指定の新規draftは `neutral` として記録する。
 - `GET /compositions/:compositionId/draft/files` は `{ entrypoint, files, binaryFiles? }` を返し、seedを含むdraftを読み戻せる。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列。
 - `POST /compositions/:compositionId/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取り、指定したファイルだけを上書きする（部分更新、削除なし）。`files` はテキスト、`filesBase64` はbase64文字列のバイナリファイル（画像など）で、同じ正規化パスを両方に含めることはできない。親ディレクトリは自動作成する。`kakeai-style/` は予約された保護パスであり、そこへの更新とentrypoint指定は422 `STYLE_KIT_MODIFIED` で拒否する。`manifest`（`{ durationMs?, dependencies?, canvasProfile? }`）を渡すとサーバが `manifest.json` を生成する。`canvasProfile` 省略時は現在のdraftのプロファイル、無ければ `landscape` を使う。
 - `POST /compositions/:compositionId/publish` は任意の `{ entrypoint? }` でdraftを検証し、CompositionVersionを作る。検証はentrypointの存在、manifestのruntime composition ID・Canvas Profileと一致する寸法・有限尺・依存の実在、外部URLの不在、entryの `data-composition-id` 一致、entry rootの `data-width`／`data-height` とmanifest寸法の一致、音声要素の不在、HyperFrames lintのerror不在（warningは許容）を確認する。`styleProvenance` が `authored` のdraftでは、さらに `kakeai-style/` の各保護ファイルと `kit-lock.json` をseed時のhashと照合し、変更・欠落・余分なファイルを422 `STYLE_KIT_MODIFIED`（`details.issues` に該当path）で拒否する。publishはkitをbundleへコピーし、解決済みの `styleProvenance` をversionへ固定する。`?dryRun=true` ではversionを作らず同じ検証だけを行い、成功時200 `{ manifest }` と `meta.fontDiagnostics` を返す。publish成功時も `meta.fontDiagnostics` に診断結果を返す。同じdraftを再publishすると新しいversionNumberの不変versionが作られる。
 - 検証失敗は422 `VALIDATION_ERROR` と `details.issues`（`path`・`code`・`message`）で返す。`manifest` の `contentHash` は任意で、publish時にサーバが計算した `bundleHash` を保存・返却するmanifestの `contentHash` に設定する。
-- `GET /compositions`、`GET /compositions/:compositionId` は一覧・メタデータを返す。published bundleは `GET /compositions/versions/:compositionVersionId/content/*bundlePath` で配信し、path traversalは403 `LOCAL_ACCESS_DENIED` で拒否する。
+- `GET /compositions` は `workId`・`scope`・`archived` で絞り込める。`workId` だけを指定すると、その Work の候補（その Work の `work`、`shared`、`unclassified`）を返す。`scope=work` は `workId` 必須で、その Work の作品専用だけを返す。`scope=shared` は共通だけ、`scope=unclassified` は未分類だけを返す。`archived` は `exclude`（既定）・`include`・`only` で、`only` はアーカイブ済みだけを返す。`GET /compositions/:compositionId` は所属にかかわらず1件を返す。published bundleは `GET /compositions/versions/:compositionVersionId/content/*bundlePath` で配信し、path traversalは403 `LOCAL_ACCESS_DENIED` で拒否する。
+- `PATCH /compositions/:compositionId` は `{ archived: boolean }` を受け取り、`archivedAt` を現在時刻またはnullへ更新して更新後のCompositionを返す。アーカイブは既定の一覧・ピッカーから隠すだけで、台本の参照・Jobの入力スナップショット・プレビュー・レンダーを壊さない。解除は `archived: false` で行う。存在しないCompositionは404 `RESOURCE_NOT_FOUND`、`archived` を指定しない呼び出しは422 `VALIDATION_ERROR` とする。
 
 台本は `composition.full-bleed@1` の `input.compositionVersionId` としてversion IDだけを参照する。参照はpublish済みversionに限り、同一ContentDocument内で同じversionを複数回参照できない。`composition.full-bleed@1` はCanvas Profileが `landscape` のversionだけをbackgroundに置ける。`portrait` は `scene.device-frame@1` の画面に置き、保存・draft preview・preview・renderはいずれもfull-bleedのportrait参照を422で拒否する。
 
@@ -793,7 +795,7 @@ GET /api/v1/script-versions/scr_003/subtitles
 | --- | --- | --- | --- |
 | 400 | MALFORMED_JSON | JSON構文が不正、空でないべきbodyが空 | 任意 |
 | 403 | LOCAL_ACCESS_DENIED | loopback以外のHost、許可しないOrigin／Fetch Site、または必要なメディアCookieがない | 任意 |
-| 404 | RESOURCE_NOT_FOUND | 指定IDのWork、Edition、ScriptVersion、Asset、Job、Artifactがない | resource, id |
+| 404 | RESOURCE_NOT_FOUND | 指定IDのWork、Edition、ScriptVersion、Asset、Composition、Job、Artifactがない | resource, id |
 | 409 | ASSET_PROCESSING | 参照Assetの取り込みJobが完了していない | assetIds |
 | 409 | ASSET_IN_USE | Asset削除時に残存する版またはJobが参照している | assetId, references |
 | 409 | FACE_SET_IN_USE | Face Set削除時に外観（ライブラリまたは保存済み版）が参照している | faceSetId, references |
@@ -801,6 +803,7 @@ GET /api/v1/script-versions/scr_003/subtitles
 
 Face Set の改訂版が存在しない場合や、固定版に `expressionId` が存在しない場合は、保存・プレビュー・レンダーで422 `VALIDATION_ERROR` または `*_INVALID` を返す。
 | 409 | WORK_HAS_CHILDREN | 子Workを持つWorkの削除 | workId, childWorkIds |
+| 409 | WORK_HAS_REFERENCED_COMPOSITIONS | 他作品から参照中の作品専用Compositionを持つWorkの削除 | workId, compositionIds |
 | 409 | LANGUAGE_EDITION_EXISTS | 同一 Work に既にある locale の言語版を追加しようとした | workId, locale |
 | 409 | LAST_LANGUAGE_EDITION | 作品の最後の言語版を削除しようとした | workId, editionId |
 | 409 | LANGUAGE_EDITION_JOB_RUNNING | 実行中Jobを持つ言語版を削除しようとした | editionId, jobIds |

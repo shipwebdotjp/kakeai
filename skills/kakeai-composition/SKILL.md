@@ -54,8 +54,11 @@ MCP `inputSchema` or the CLI's validation rather than from memory.
 
 ## 1. Inspect existing state
 
-- `composition.list` lists Compositions with their draft status and published
-  versions.
+- `composition.list` lists Compositions with their scope, draft status and
+  published versions. For a Work you are authoring for, pass
+  `{"workId":"<workId>"}` to get that Work's candidates (work-owned, shared, and
+  unclassified); archived Compositions are excluded by default. Use
+  `{"scope":"shared"}` or `{"archived":"only"}` when you need those.
 - `composition.get` shows one Composition, its draft, and every version
   (`id`, `versionNumber`, `bundleHash`, `manifest`, `styleProvenance`).
 - `composition.draft.get` returns `{ draft }` with `entrypoint`, `files`
@@ -73,8 +76,17 @@ the new version ID.
 ## 2. Create a Composition
 
 Call `composition.create` with `name`, a stable unique `runtimeCompositionId`,
-and optional `entrypoint`, `canvasProfile`, and `authoringStyle`.
+a required `scope`, and optional `entrypoint`, `canvasProfile`, and
+`authoringStyle`.
 
+- `scope` is required and has no default. Use
+  `{"scope":"work","workId":"<workId>"}` for a Composition authored for one
+  Work, or `{"scope":"shared"}` only for an intro/outro or another motion that
+  every Work should see. If you do not know the Work, resolve it first with
+  `work.list` / `work.get`; do not fall back to `shared`.
+- `workId` is required with `scope: "work"` and forbidden with
+  `scope: "shared"`. The Work must exist. `unclassified` is reserved for the
+  one-time migration of older Compositions and cannot be created.
 - `runtimeCompositionId` is stable and unique across Compositions. It must match
   the manifest and the entry root.
 - Optional `canvasProfile` (`"landscape"` default, or `"portrait"`): the fixed
@@ -119,9 +131,15 @@ Style Kit:
 {
   "name": "Paper notes intro",
   "runtimeCompositionId": "cmp.motion.paper-notes",
+  "scope": "work",
+  "workId": "work_...",
   "authoringStyle": { "visualTheme": { "id": "theme_...", "version": 3 } }
 }
 ```
+
+For a motion every Work should see, create it once with
+`{"scope":"shared"}` and omit `workId`. Shared Compositions are rare; most
+Compositions belong to the Work whose script they were made for.
 
 `authoringStyle` carries only the theme ref. Set the top-level `canvasProfile` as
 well if the composition should use a non-default profile; the server resolves the

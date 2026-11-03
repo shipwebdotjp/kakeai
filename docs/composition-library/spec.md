@@ -2,7 +2,7 @@
 
 ## 目的と境界
 
-この文書は、AI が作成・更新する HyperFrames project を Kakeai 内で再利用する Composition Library の正とする。Composition は `Asset` ではない。画像・動画・音声の原本を表す Asset と異なり、Composition は編集可能な HyperFrames project の論理単位であり、`CompositionVersion` はその不変の公開版である。
+この文書は、AI が作成・更新する HyperFrames project を Kakeai 内で再利用する Composition Library の正とする。Composition は `Asset` ではない。画像・動画・音声の原本を表す Asset と異なり、Composition は編集可能な HyperFrames project の論理単位であり、`CompositionVersion` はその不変の公開版である。Composition は作品専用か全作品共通のスコープを持ち、台本の候補表示はそのスコープで絞る（[ADR-0115](../adr/0115-work-scoped-compositions.md)）。
 
 ScriptVersion の正本は引き続き ContentDocument であり、HyperFrames HTML を台本 JSON へ保存しない。台本は `composition.full-bleed@1` の入力として CompositionVersion の ID だけを参照する。詳細な ContentDocument 契約は [../mvp/content-schema.md](../mvp/content-schema.md)、HTTP 契約は [../mvp/api-contract.md](../mvp/api-contract.md) を正とする。
 
@@ -16,6 +16,35 @@ v1 の対象は、Kakeai の Composition Library に保存され、HyperFrames s
 - AI への修正指示は、使用中の CompositionVersion を変更せず draft を更新する。publish は新しい CompositionVersion を作り、利用したい VisualCue を含む新しい ScriptVersion がその版を参照する。
 
 bundle と draft はアプリデータ領域の `compositions/` 配下に置く。保存するキーはアプリデータルート相対とし、正本に絶対パスを埋め込まない。published bundle は内容ハッシュで識別し、version の作成後に書き換えない。
+
+## 所属スコープ
+
+Composition は `scope` を持つ。
+
+- `work`: 1つの Work に所有される作品専用の Composition。`workId` を必須で持つ。
+- `shared`: 全 Work から利用できる共通の Composition。`workId` を持たない。
+- `unclassified`: 移行時に所属を決められなかった既存 Composition だけが持つ。新規作成では作らない。
+
+スコープは Composition の属性で、CompositionVersion は所属を継承する。version の publish はスコープを変えない。スコープは候補の発見範囲を決めるもので、参照の可否を決めない。ScriptVersion の保存・プレビュー・レンダーは、参照先が publish 済みで bundle が完全であることだけを検証し、スコープ一致は要求しない。候補外の version を参照する既存台本はそのまま有効とし、ピッカーは現在値を候補外として保持する。
+
+作品専用から共通への昇格は、必要が生じた時点で別に設計する。この段階では所属を変更する API を持たない。
+
+### 移行
+
+既存の Composition は `unclassified` で追加し、ScriptVersion と render Job の入力スナップショットを走査して所属を決める。
+
+- その CompositionVersion を参照している Work が1つだけなら `work` とし、その Work を `workId` にする。
+- 複数の Work から参照されているなら `shared` とする。
+- どの ScriptVersion からも render Job からも参照されていないなら `unclassified` のまま残す。
+
+render Job の Work は `Job.workId` を使い、無ければその Job の Language Edition の Work を使う。`unclassified` は全 Work の候補に「未分類」として表示し、アーカイブで片付けられる。
+
+### アーカイブと削除
+
+- `Composition` は `archivedAt` を持つ。アーカイブは行と版を残したまま、既定の一覧とピッカーから隠す。台本の参照、Job の入力スナップショット、プレビュー、レンダーには影響しない。解除できる。
+- Composition の単体削除 API は提供しない。不要な Composition はアーカイブする。
+- Work の明示削除では、その Work が所有する Composition と draft・bundle を一緒に削除する。`shared` と `unclassified` は削除しない。
+- 他の Work の ScriptVersion または Job の入力スナップショットから参照されている作品専用 Composition がある場合、Work 削除は 409 `WORK_HAS_REFERENCED_COMPOSITIONS` で拒否する。参照を壊さないためである。同じ Work の参照は Work と一緒に消えるため、拒否しない。
 
 ## v1 の Composition 契約
 
@@ -61,6 +90,9 @@ Canvas Profile は CompositionVersion が描画する内部キャンバスの固
 
 ### authoring API
 
+- `POST /compositions` は `{ name, runtimeCompositionId, scope, workId?, entrypoint?, canvasProfile?, authoringStyle? }` を受け取り、Composition と active draft を default `index.html`・`manifest.json` 付きで作成する。`scope` は必須で `work` または `shared`。`work` は `workId` を必須とし、存在する Work を指す。`shared` は `workId` を持てない。`unclassified` は指定できない。
+- `GET /compositions` は `workId`・`scope`・`archived` で絞れる。`workId` だけを指定すると、その Work の候補（`scope=work` かつ `workId` 一致、`shared`、`unclassified`）を返す。`scope=work` は `workId` を必須とし、その Work の作品専用だけを返す。`scope=shared` は共通だけ、`scope=unclassified` は未分類だけを返す。`archived` は `exclude`（既定）・`include`・`only` で、`only` はアーカイブ済みだけを返す。`GET /compositions/:id` は所属にかかわらず1件を返す。
+- `PATCH /compositions/:compositionId` は `{ archived: boolean }` を受け取り、`archivedAt` を現在時刻または null に更新して更新後の Composition を返す。アーカイブの切り替え以外の項目は受け付けない。存在しない Composition は 404 `RESOURCE_NOT_FOUND`。
 - `POST /compositions/:id/draft` は `{ entrypoint?, files?, filesBase64?, manifest? }` を受け取る。`files` はテキストファイル、`filesBase64` は base64 文字列で表したバイナリファイル（画像など）で、指定したファイルだけを上書きする部分更新（削除はしない）。同じ正規化パスを両方に含めることはできない。`manifest` を渡すとサーバが `manifest.json` を生成する（`entrypoint`・`runtimeCompositionId`・`width`・`height`・`contentHash` はサーバが設定し、`canvasProfile`・`durationMs`・`dependencies` を上書きする）。`canvasProfile` 省略時は現在の draft のプロファイル、無ければ `landscape` を使う。`files["manifest.json"]` の直書きも引き続き可能。
 - `GET /compositions/:id/draft/files` は `{ entrypoint, files, binaryFiles? }` を返し、seed を含む draft の内容を読み戻せる。`files` は UTF-8 テキスト、`binaryFiles` は base64 文字列で表したバイナリ（存在する場合のみ）。
 - `POST /compositions/:id/publish?dryRun=true` は version を作らずに publish と同じ検証だけを行い、成功時 `{ manifest }` を返す。失敗は常に 422 `VALIDATION_ERROR` と `details.issues`（`path`・`code`・`message`）で返し、manifest・依存・entry・外部 URL・entry id・lint の各問題を列挙する。
@@ -117,7 +149,17 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 - 配置は frame ごとの px 定数を持たず、**slot 要素を CSS `container-type: size` にする**ことで成立する。コンパイラは `cqw`/`cqh` と `tan(atan2())` から無単位の倍率を求め、固定 1920×1080 の子を `transform: scale()` で拡縮する。trusted template が Composition slot を設けるときは、その要素を `container-type: size` にする（独自ベゼル・将来の TV／site mockup も同じ契約）。
 - 現行 canvas は `landscape`（1920×1080）と `portrait`（1080×1920）の2プロファイル。slot のスケーリングは解決済み manifest の寸法から導出し、`portrait` は phone screen（9:16）にそのまま収まる。`contain` の余白または `cover` の crop を選べる。
 
-ScriptVersion の保存、プレビュー、Render Job の作成時に CompositionVersion の存在と bundle 完全性を確認する。draft、削除済み version、破損した bundle は参照できない。
+ScriptVersion の保存、プレビュー、Render Job の作成時に CompositionVersion の存在と bundle 完全性を確認する。draft、削除済み version、破損した bundle は参照できない。所属スコープは参照の可否に使わない。
+
+## 台本の候補表示
+
+台本の Composition 背景（`composition.full-bleed@1`）と端末画面（`scene.device-frame@1`）の version 選択は、編集中の Work を文脈にする。
+
+- 候補は、その Work が所有する `work`、`shared`、`unclassified` とし、アーカイブ済みを既定で除く。Canvas Profile が選択先の要件に合わない version は候補にしない。
+- 既定では Composition ごとに、要件を満たす最新の `versionNumber` だけを1項目として表示する。同じ Composition の全 version は明示操作で表示する。
+- 現在の Cue が参照する version は、それが候補外・アーカイブ済み・最新版でなくても選択肢に残し、その旨を表示する。保存済みの参照を暗黙に別の version へ置き換えない。
+- 候補は Composition 名と runtime composition ID で検索できる。並び順は `work`、`shared`、`unclassified` の順とし、同一グループ内は名前順、同じ Composition 内は版番号順とする。
+- 新しい Cue で version を選ぶと、その時点の version ID を保存する。以後の publish で最新版が変わっても、既存の Cue は選んだ version を参照し続ける。
 
 ## プレビューとレンダー
 

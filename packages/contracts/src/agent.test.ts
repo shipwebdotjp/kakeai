@@ -301,12 +301,14 @@ describe("composition operations", () => {
       agentCompositionCreateInputSchema.safeParse({
         name: "Motion",
         runtimeCompositionId: "cmp.motion.test",
+        scope: "shared",
       }).success,
     ).toBe(true);
     expect(
       agentCompositionCreateInputSchema.safeParse({
         name: "Motion",
         runtimeCompositionId: "cmp.motion.test",
+        scope: "shared",
         canvasProfile: "portrait",
         authoringStyle: { visualTheme: { id: "soft-editorial", version: 1 } },
       }).success,
@@ -318,6 +320,7 @@ describe("composition operations", () => {
       agentCompositionCreateInputSchema.safeParse({
         name: "Motion",
         runtimeCompositionId: "cmp.motion.test",
+        scope: "shared",
         entrypoint: "../escape.html",
       }).success,
     ).toBe(false);

@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowRightLeft, Clapperboard, Copy, CopyPlus, Trash2 } from "lucide-react";
 import {
   useFieldArray,
@@ -19,17 +12,13 @@ import {
   ANIMATION_PRESETS,
   DEFAULT_ANIMATION_POLICY,
   DEFAULT_VISUAL_THEME_REF,
-  compositionSkinRelation,
   getVisualTemplate,
   listVisualTemplateCatalog,
   resolveVisualThemeSkin,
   textBlockV1,
   type AnimationPreset,
-  type CanvasProfile,
-  type CompositionStyleProvenance,
   type CueLayer,
   type TemplateFieldSpec,
-  type VisualSkinRef,
 } from "@kakeai/contracts";
 import {
   CROP_CENTER_PERCENT,
@@ -49,7 +38,6 @@ import {
   NESTED_MODE_SUFFIX,
   STANDING_TEMPLATE_ID,
   VIDEO_PLAYBACK_SUFFIX,
-  compositionVersionOptions,
   createCueFormValue,
   defaultOffsetEndMs,
   duplicateCueFormValue,
@@ -81,7 +69,9 @@ import {
   textFieldClass,
   warningTextClass,
 } from "../ui";
-import { useCompositions, useTheme } from "../api/hooks";
+import { useTheme } from "../api/hooks";
+import { CompositionVersionField } from "./CompositionVersionField";
+import { ScriptSkinContext } from "./composition-context";
 import { IconMenu, iconMenuDangerItemClass, iconMenuItemClass } from "./IconMenu";
 import { Collapsible } from "./Collapsible";
 import { MediaPicker } from "./MediaPicker";
@@ -166,8 +156,6 @@ function offsetRangeStatus(
 
 const TEXT_BLOCK_PRIMARY_KEYS: ReadonlySet<string> = new Set(["text", "role"]);
 
-const ScriptSkinContext = createContext<VisualSkinRef | null>(null);
-
 export function ScriptSkinProvider({
   control,
   children,
@@ -186,24 +174,6 @@ export function ScriptSkinProvider({
     return revision === undefined ? null : resolveVisualThemeSkin(revision.definition);
   }, [themeQuery.data, visualThemeRef]);
   return <ScriptSkinContext.Provider value={scriptSkin}>{children}</ScriptSkinContext.Provider>;
-}
-
-function skinMismatchMessage(
-  relation: ReturnType<typeof compositionSkinRelation>,
-  scriptSkin: VisualSkinRef,
-  provenance: CompositionStyleProvenance | undefined,
-): string | undefined {
-  const scriptLabel = `${scriptSkin.id}@${scriptSkin.version}`;
-  if (relation === "neutral") {
-    return `このCompositionはスキン未指定（neutral）で作られています。台本のスキン ${scriptLabel} と調和しない可能性があります。`;
-  }
-  if (relation === "legacy") {
-    return `このCompositionの作風情報がありません（legacy）。台本のスキン ${scriptLabel} と調和しない可能性があります。`;
-  }
-  if (relation === "different" && provenance?.kind === "authored") {
-    return `このCompositionは ${provenance.skin.id}@${provenance.skin.version} で作られています。台本のスキン ${scriptLabel} と異なります。`;
-  }
-  return undefined;
 }
 
 interface AddableTemplate {
@@ -664,70 +634,6 @@ interface CueFieldProps {
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
   rangeStartLineId: string | null;
-}
-
-interface CompositionVersionFieldProps {
-  label: string;
-  value: string;
-  setField: (key: string, value: string) => void;
-  fieldKey: string;
-  profiles?: readonly CanvasProfile[];
-}
-
-function CompositionVersionField({ label, value, setField, fieldKey, profiles }: CompositionVersionFieldProps) {
-  const compositions = useCompositions();
-  const scriptSkin = useContext(ScriptSkinContext);
-  const options = compositionVersionOptions(compositions.data ?? [], profiles);
-  const knowsCurrent = value.length === 0 || options.some((option) => option.value === value);
-  const provenanceByVersionId = useMemo(() => {
-    const map = new Map<string, CompositionStyleProvenance | undefined>();
-    for (const composition of compositions.data ?? []) {
-      for (const version of composition.versions ?? []) {
-        map.set(version.id, version.styleProvenance);
-      }
-    }
-    return map;
-  }, [compositions.data]);
-  const provenance = provenanceByVersionId.get(value);
-  const knownInLibrary = provenanceByVersionId.has(value);
-  const mismatch =
-    scriptSkin !== null && value.length > 0 && knownInLibrary
-      ? skinMismatchMessage(
-          compositionSkinRelation(scriptSkin, provenance),
-          scriptSkin,
-          provenance,
-        )
-      : undefined;
-  return (
-    <div className="my-2">
-      <label className={formLabelClass}>
-        {label}
-        <select
-          className={textFieldClass}
-          value={value}
-          onChange={(event) => setField(fieldKey, event.target.value)}
-        >
-          <option value="">未指定</option>
-          {!knowsCurrent && <option value={value}>{value}（未公開または不明）</option>}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {compositions.isLoading && <p className={metaTextClass}>公開バージョンを読み込み中…</p>}
-      {compositions.isError && (
-        <p className={errorTextClass}>公開バージョンを取得できませんでした。</p>
-      )}
-      {!compositions.isLoading && compositions.data !== undefined && options.length === 0 && (
-        <p className={metaTextClass}>公開済みのCompositionVersionがありません。</p>
-      )}
-      {mismatch !== undefined && (
-        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{mismatch}</p>
-      )}
-    </div>
-  );
 }
 
 function PositionZoomControls({

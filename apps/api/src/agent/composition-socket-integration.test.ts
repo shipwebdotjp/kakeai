@@ -95,6 +95,7 @@ describe("agent composition authoring over the local socket", () => {
     const created = await client.request("composition.create", {
       name: "Agent Round Trip",
       runtimeCompositionId: RUNTIME_COMPOSITION_ID,
+      scope: "shared",
       canvasProfile: "landscape",
       authoringStyle: {
         visualTheme: { id: SOFT_EDITORIAL_THEME_ID, version: SOFT_EDITORIAL_THEME_VERSION },
@@ -229,6 +230,7 @@ describe("agent composition authoring over the local socket", () => {
     const composition = await client.request("composition.create", {
       name: "Not Deletable",
       runtimeCompositionId: "cmp.agent.not-deletable",
+      scope: "shared",
     });
     await expectAgentError(
       rawRequest("composition.delete", { compositionId: composition.composition.id }),

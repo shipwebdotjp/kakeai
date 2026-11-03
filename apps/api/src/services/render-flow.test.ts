@@ -914,6 +914,7 @@ describe("render worker", () => {
     }
     const compositionService = new CompositionService({ db: prisma, dataDir });
     const composition = await compositionService.createComposition({
+      scope: "shared",
       name: "Nested Render",
       runtimeCompositionId: "cmp.render.nested",
     });

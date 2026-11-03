@@ -9,6 +9,7 @@ import { PaneDivider } from "../components/PaneDivider";
 import { PreviewSection } from "../components/PreviewSection";
 import { RenderSection } from "../components/RenderSection";
 import { SceneEditor } from "../components/SceneEditor";
+import { WorkIdProvider } from "../components/composition-context";
 import { CollapsibleStateProvider, useCollapsibleStore } from "../components/Collapsible";
 import {
   foldStorageKey,
@@ -681,19 +682,21 @@ function WorkEditPanesContent({
           {current.isError && <p className={errorTextClass}>{errorMessage(current.error)}</p>}
           {editionId === undefined && <p>この作品には言語版がありません。</p>}
           {current.data && editionId !== undefined && (
-            <SceneEditor
-              key={editionId}
-              base={current.data.content}
-              editionId={editionId}
-              scriptVersionId={scriptVersionId ?? current.data.id}
-              onSaved={onSaved}
-              onValuesChange={onValuesChange}
-              onJumpToLine={onJumpToLine}
-              onJumpToTarget={jump}
-              onDocumentChange={onDocumentChange}
-              onDirtyChange={onDirtyChange}
-              scrollContainerRef={centerRef}
-            />
+            <WorkIdProvider workId={workId ?? null}>
+              <SceneEditor
+                key={editionId}
+                base={current.data.content}
+                editionId={editionId}
+                scriptVersionId={scriptVersionId ?? current.data.id}
+                onSaved={onSaved}
+                onValuesChange={onValuesChange}
+                onJumpToLine={onJumpToLine}
+                onJumpToTarget={jump}
+                onDocumentChange={onDocumentChange}
+                onDirtyChange={onDirtyChange}
+                scrollContainerRef={centerRef}
+              />
+            </WorkIdProvider>
           )}
         </div>
 

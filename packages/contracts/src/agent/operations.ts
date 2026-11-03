@@ -54,6 +54,7 @@ import {
   compositionAuthoringContextRequestSchema,
   createCompositionRequestSchema,
   createTtsJobRequestSchema,
+  listCompositionsQuerySchema,
   publishCompositionRequestSchema,
   saveScriptVersionRequestSchema,
   updateCompositionDraftRequestSchema,
@@ -464,7 +465,7 @@ export type AgentPreviewAssetFrameOutput = z.infer<
   typeof agentPreviewAssetFrameOutputSchema
 >;
 
-export const agentCompositionListInputSchema = agentEmptyInputSchema;
+export const agentCompositionListInputSchema = listCompositionsQuerySchema;
 export const agentCompositionListOutputSchema = z.strictObject({
   compositions: z.array(compositionSchema),
 });

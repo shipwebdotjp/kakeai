@@ -154,7 +154,7 @@ describe("CLI against the real agent dispatcher", () => {
     expect(schemaData.agentOperations).toHaveLength(agentOperationNames.length);
     expect(schemaData.schemaDigest).toMatch(/^fnv1a64:/u);
     expect(schemaData.operationDigest).toMatch(/^fnv1a64:/u);
-    expect(schemaData.minProtocolVersion).toBe(1);
+    expect(schemaData.minProtocolVersion).toBe(2);
 
     const created = await cli(["work.create", "--input", '{"title":"CLI 実連携作品"}']);
     expect(created.exitCode).toBe(0);
@@ -252,7 +252,7 @@ describe("CLI against the real agent dispatcher", () => {
     const composition = await cli([
       "composition.create",
       "--input",
-      '{"name":"CLI Real","runtimeCompositionId":"cmp.cli.real"}',
+      '{"name":"CLI Real","runtimeCompositionId":"cmp.cli.real","scope":"shared"}',
     ]);
     expect(composition.exitCode).toBe(0);
     const compositionId = (json(composition.stdout) as { composition: { id: string } })
@@ -408,7 +408,7 @@ describe("CLI against the real agent dispatcher", () => {
     const schema = await runBin(["schema.get", "--socket", socketPath, "--pretty"]);
     expect(schema.exitCode).toBe(0);
     expect(schema.stderr).toBe("");
-    expect(JSON.parse(schema.stdout)).toMatchObject({ protocolVersion: 1 });
+    expect(JSON.parse(schema.stdout)).toMatchObject({ protocolVersion: 2 });
 
     const unknown = await runBin(["work.delete", "--socket", socketPath]);
     expect(unknown.exitCode).toBe(2);

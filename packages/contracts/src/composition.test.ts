@@ -3,10 +3,15 @@ import {
   CANVAS_PROFILE_DIMENSIONS,
   canvasProfileOf,
   compositionManifestSchema,
+  compositionSchema,
   compositionSkinRelation,
   type CompositionStyleProvenance,
 } from "./composition";
-import { createCompositionRequestSchema, compositionDraftManifestInputSchema } from "./requests";
+import {
+  createCompositionRequestSchema,
+  compositionDraftManifestInputSchema,
+  listCompositionsQuerySchema,
+} from "./requests";
 
 function landscapeManifest(overrides: Record<string, unknown> = {}) {
   return {
@@ -68,6 +73,7 @@ describe("canvas profile request fields", () => {
     const parsed = createCompositionRequestSchema.safeParse({
       name: "Motion",
       runtimeCompositionId: "cmp.test",
+      scope: "shared",
     });
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -80,6 +86,7 @@ describe("canvas profile request fields", () => {
       createCompositionRequestSchema.safeParse({
         name: "Motion",
         runtimeCompositionId: "cmp.test",
+        scope: "shared",
         canvasProfile: "portrait",
       }).success,
     ).toBe(true);
@@ -93,6 +100,7 @@ describe("canvas profile request fields", () => {
       createCompositionRequestSchema.safeParse({
         name: "Motion",
         runtimeCompositionId: "cmp.test",
+        scope: "shared",
         canvasProfile: "square",
       }).success,
     ).toBe(false);
@@ -125,5 +133,78 @@ describe("compositionSkinRelation", () => {
     expect(compositionSkinRelation(scriptSkin, { kind: "neutral" })).toBe("neutral");
     expect(compositionSkinRelation(scriptSkin, { kind: "legacy" })).toBe("legacy");
     expect(compositionSkinRelation(scriptSkin, undefined)).toBe("legacy");
+  });
+});
+
+describe("composition scope", () => {
+  function createRequest(overrides: Record<string, unknown> = {}) {
+    return {
+      name: "Motion",
+      runtimeCompositionId: "cmp.test",
+      scope: "shared",
+      ...overrides,
+    };
+  }
+
+  it("requires a scope and binds workId to the work scope", () => {
+    expect(
+      createCompositionRequestSchema.safeParse({
+        name: "Motion",
+        runtimeCompositionId: "cmp.test",
+      }).success,
+    ).toBe(false);
+    expect(createCompositionRequestSchema.safeParse(createRequest()).success).toBe(true);
+    expect(
+      createCompositionRequestSchema.safeParse(
+        createRequest({ scope: "work", workId: "work-1" }),
+      ).success,
+    ).toBe(true);
+    expect(
+      createCompositionRequestSchema.safeParse(createRequest({ scope: "work" })).success,
+    ).toBe(false);
+    expect(
+      createCompositionRequestSchema.safeParse(
+        createRequest({ scope: "shared", workId: "work-1" }),
+      ).success,
+    ).toBe(false);
+    expect(
+      createCompositionRequestSchema.safeParse(
+        createRequest({ scope: "unclassified" }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("keeps the DTO scope and workId consistent", () => {
+    const base = {
+      id: "cmp-1",
+      name: "Motion",
+      runtimeCompositionId: "cmp.test",
+      archivedAt: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    expect(
+      compositionSchema.safeParse({ ...base, scope: "work", workId: "work-1" }).success,
+    ).toBe(true);
+    expect(compositionSchema.safeParse({ ...base, scope: "work", workId: null }).success).toBe(
+      false,
+    );
+    expect(
+      compositionSchema.safeParse({ ...base, scope: "shared", workId: null }).success,
+    ).toBe(true);
+    expect(
+      compositionSchema.safeParse({ ...base, scope: "shared", workId: "work-1" }).success,
+    ).toBe(false);
+  });
+
+  it("requires workId when the list query filters to work scope", () => {
+    expect(listCompositionsQuerySchema.safeParse({}).success).toBe(true);
+    expect(listCompositionsQuerySchema.safeParse({ scope: "work" }).success).toBe(false);
+    expect(
+      listCompositionsQuerySchema.safeParse({ scope: "work", workId: "work-1" }).success,
+    ).toBe(true);
+    expect(
+      listCompositionsQuerySchema.safeParse({ scope: "shared", workId: "work-1" }).success,
+    ).toBe(false);
   });
 });

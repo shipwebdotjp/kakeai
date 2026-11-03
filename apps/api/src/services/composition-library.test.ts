@@ -9,6 +9,7 @@ import {
 import { compileDocument } from "@kakeai/video";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import { CompositionService } from "./compositions.ts";
+import { backfillCompositionScopes } from "./compositions/backfill-scope.ts";
 import { resolvePreviewCompositions } from "./script-versions.ts";
 import * as jobs from "./jobs.ts";
 import { FakeFontCatalogAdapter, FontCatalogService } from "./font-catalog.ts";
@@ -49,6 +50,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 1: Version immutability & publish workflow", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Test Motion",
       runtimeCompositionId: "cmp.test.motion",
     });
@@ -79,6 +81,7 @@ describe("Composition Library Integration Tests", () => {
     ).rejects.toThrow();
     await expect(
       service.createComposition({
+      scope: "shared",
         name: "Bad Entrypoint",
         runtimeCompositionId: "cmp.test.bad-entrypoint",
         entrypoint: "../escape.html",
@@ -88,6 +91,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 1b: publish rejects lint errors", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Lint Gate",
       runtimeCompositionId: "cmp.test.lint-gate",
     });
@@ -147,6 +151,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 2b: save rejects a composition background starved by scene crossfade", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Crossfade Window",
       runtimeCompositionId: "cmp.test.crossfade-window",
     });
@@ -296,6 +301,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 4: preview composition resolution and availability errors", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Preview Resolve",
       runtimeCompositionId: "cmp.test.preview-resolve",
     });
@@ -344,6 +350,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 5: saved and draft previews seek a composition, render snapshot pins it", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Preview E2E",
       runtimeCompositionId: "cmp.test.preview-e2e",
     });
@@ -397,6 +404,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 5b: nested Composition in device screens resolves, previews and pins (R2)", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Nested Screen",
       runtimeCompositionId: "cmp.test.nested-screen",
     });
@@ -467,6 +475,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 6: draft read-back, partial update, and manifest generation", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Draft API",
       runtimeCompositionId: "cmp.test.draft-api",
     });
@@ -493,6 +502,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 7: publish returns structured issues for an invalid manifest", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Bad Manifest",
       runtimeCompositionId: "cmp.test.bad-manifest",
     });
@@ -511,6 +521,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 8: publish rejects external URLs and a mismatched composition id", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "External",
       runtimeCompositionId: "cmp.test.external",
     });
@@ -548,6 +559,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 9: publish dry-run validates without creating a version", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Dry Run",
       runtimeCompositionId: "cmp.test.dry-run",
     });
@@ -567,6 +579,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 10: manifest without contentHash is accepted", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "No Hash",
       runtimeCompositionId: "cmp.test.no-hash",
     });
@@ -588,6 +601,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 11: rejects manifest and files['manifest.json'] together", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Conflict",
       runtimeCompositionId: "cmp.test.conflict",
     });
@@ -607,6 +621,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 12: rejects an external URL in a declared dependency", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Dep URL",
       runtimeCompositionId: "cmp.test.dep-url",
     });
@@ -627,6 +642,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 13: accepts binary draft files as base64 and sets contentHash on publish", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Binary",
       runtimeCompositionId: "cmp.test.binary",
     });
@@ -648,6 +664,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 14: rejects the same path in files and filesBase64", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Duplicate",
       runtimeCompositionId: "cmp.test.duplicate",
     });
@@ -667,6 +684,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 15: rejects invalid base64", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Bad Base64",
       runtimeCompositionId: "cmp.test.bad-base64",
     });
@@ -683,6 +701,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 16: portrait profile seeds 1080x1920 and publishes", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Portrait",
       runtimeCompositionId: "cmp.test.portrait",
       canvasProfile: "portrait",
@@ -704,6 +723,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 17: publish rejects entry and manifest dimension mismatch", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Dim Mismatch",
       runtimeCompositionId: "cmp.test.dim-mismatch",
     });
@@ -726,6 +746,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 18: save rejects a portrait composition in composition.full-bleed", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Portrait Full Bleed",
       runtimeCompositionId: "cmp.test.portrait-full-bleed",
       canvasProfile: "portrait",
@@ -763,6 +784,7 @@ describe("Composition Library Integration Tests", () => {
 
   it("test 19: nested portrait composition previews and pins in a device screen", async () => {
     const comp = await service.createComposition({
+      scope: "shared",
       name: "Portrait Screen",
       runtimeCompositionId: "cmp.test.portrait-screen",
       canvasProfile: "portrait",
@@ -808,5 +830,218 @@ describe("Composition Library Integration Tests", () => {
     expect(snapshot.compositionVersions).toHaveLength(1);
     expect(snapshot.compositionVersions[0]!.manifest.canvasProfile).toBe("portrait");
     await jobs.cancelJob(db, job.id);
+  });
+
+  it("lists the candidates for a Work and keeps shared Compositions in every Work", async () => {
+    const workA = await works.createWork(db, "Scope A", "ja-JP");
+    const workB = await works.createWork(db, "Scope B", "ja-JP");
+    const ownA = await service.createComposition({
+      scope: "work",
+      workId: workA.id,
+      name: "Own A",
+      runtimeCompositionId: "cmp.scope.own-a",
+    });
+    const shared = await service.createComposition({
+      scope: "shared",
+      name: "Shared",
+      runtimeCompositionId: "cmp.scope.shared",
+    });
+    const ownB = await service.createComposition({
+      scope: "work",
+      workId: workB.id,
+      name: "Own B",
+      runtimeCompositionId: "cmp.scope.own-b",
+    });
+
+    const candidatesA = await service.listCompositions({ workId: workA.id });
+    expect(candidatesA.map((composition) => composition.id).sort()).toEqual(
+      [ownA.id, shared.id].sort(),
+    );
+    expect(candidatesA.find((composition) => composition.id === shared.id)?.scope).toBe(
+      "shared",
+    );
+
+    const exactA = await service.listCompositions({
+      workId: workA.id,
+      scope: "work",
+    });
+    expect(exactA.map((composition) => composition.id)).toEqual([ownA.id]);
+
+    const sharedOnly = await service.listCompositions({ scope: "shared" });
+    expect(sharedOnly.map((composition) => composition.id)).toEqual([shared.id]);
+
+    const candidatesB = await service.listCompositions({ workId: workB.id });
+    expect(candidatesB.map((composition) => composition.id).sort()).toEqual(
+      [ownB.id, shared.id].sort(),
+    );
+  });
+
+  it("rejects a work-scoped creation without an existing Work", async () => {
+    await expect(
+      service.createComposition({
+        scope: "work",
+        workId: "work-missing",
+        name: "Missing Work",
+        runtimeCompositionId: "cmp.scope.missing-work",
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+    });
+  });
+
+  it("archives without invalidating the published version", async () => {
+    const composition = await service.createComposition({
+      scope: "shared",
+      name: "Archived",
+      runtimeCompositionId: "cmp.scope.archived",
+    });
+    const version = await service.publish(composition.id, {});
+
+    await service.setCompositionArchived(composition.id, true);
+    expect(
+      (await service.listCompositions()).some((entry) => entry.id === composition.id),
+    ).toBe(false);
+    expect(
+      (await service.listCompositions({ archived: "only" })).map((entry) => entry.id),
+    ).toContain(composition.id);
+    expect((await service.getVersionById(version.id)).bundleHash).toBe(version.bundleHash);
+
+    await service.setCompositionArchived(composition.id, false);
+    expect(
+      (await service.listCompositions()).find((entry) => entry.id === composition.id)
+        ?.archivedAt,
+    ).toBeNull();
+  });
+
+  it("deletes work-owned Compositions with the Work and refuses cross-Work references", async () => {
+    const directories = dataDirectories(tmpDir);
+    const workA = await works.createWork(db, "Delete A", "ja-JP");
+    const workB = await works.createWork(db, "Delete B", "ja-JP");
+    const composition = await service.createComposition({
+      scope: "work",
+      workId: workA.id,
+      name: "Delete Me",
+      runtimeCompositionId: "cmp.scope.delete-me",
+    });
+    const version = await service.publish(composition.id, {});
+
+    const content = validContentDocument();
+    content.scenes[0]!.visualCues.push({
+      id: "cue-cross-work",
+      template: { id: "composition.full-bleed", version: 1 },
+      range: { kind: "scene" },
+      layer: "background",
+      order: 99,
+      transition: {
+        enter: { preset: "none", durationMs: 0 },
+        exit: { preset: "none", durationMs: 0 },
+      },
+      input: { compositionVersionId: version.id },
+    });
+    const editionB = workB.languageEditions[0]!;
+    const currentB = await scriptVersions.getCurrentScriptVersion(db, editionB.id);
+    await db.scriptVersion.create({
+      data: {
+        languageEditionId: editionB.id,
+        versionNumber: currentB.versionNumber + 1,
+        contentSchemaVersion: currentB.contentSchemaVersion,
+        contentJson: JSON.stringify(content),
+        author: "human",
+      },
+    });
+
+    await expect(works.deleteWork(db, directories, workA.id)).rejects.toMatchObject({
+      code: "WORK_HAS_REFERENCED_COMPOSITIONS",
+    });
+    expect(await db.composition.findUnique({ where: { id: composition.id } })).not.toBeNull();
+
+    await works.deleteWork(db, directories, workB.id);
+    await works.deleteWork(db, directories, workA.id);
+    expect(await db.composition.findUnique({ where: { id: composition.id } })).toBeNull();
+  });
+
+  it("backfills legacy ownership from ScriptVersion references", async () => {
+    const workA = await works.createWork(db, "Backfill A", "ja-JP");
+    const workB = await works.createWork(db, "Backfill B", "ja-JP");
+    const single = await service.createComposition({
+      scope: "shared",
+      name: "Single Owner",
+      runtimeCompositionId: "cmp.scope.single",
+    });
+    const multiple = await service.createComposition({
+      scope: "shared",
+      name: "Multiple Owners",
+      runtimeCompositionId: "cmp.scope.multiple",
+    });
+    const orphan = await service.createComposition({
+      scope: "shared",
+      name: "Orphan",
+      runtimeCompositionId: "cmp.scope.orphan",
+    });
+    const singleVersion = await service.publish(single.id, {});
+    const multipleVersion = await service.publish(multiple.id, {});
+
+    await db.composition.updateMany({
+      where: { id: { in: [single.id, multiple.id, orphan.id] } },
+      data: { scope: "unclassified", workId: null },
+    });
+
+    const addReference = async (
+      workId: string,
+      cueId: string,
+      compositionVersionId: string,
+    ) => {
+      const work = await db.work.findUniqueOrThrow({
+        where: { id: workId },
+        include: { languageEditions: true },
+      });
+      const edition = work.languageEditions[0]!;
+      const current = await scriptVersions.getCurrentScriptVersion(db, edition.id);
+      const content = validContentDocument();
+      content.scenes[0]!.visualCues.push({
+        id: cueId,
+        template: { id: "composition.full-bleed", version: 1 },
+        range: { kind: "scene" },
+        layer: "background",
+        order: 99,
+        transition: {
+          enter: { preset: "none", durationMs: 0 },
+          exit: { preset: "none", durationMs: 0 },
+        },
+        input: { compositionVersionId },
+      });
+      const latest = await db.scriptVersion.aggregate({
+        where: { languageEditionId: edition.id },
+        _max: { versionNumber: true },
+      });
+      await db.scriptVersion.create({
+        data: {
+          languageEditionId: edition.id,
+          versionNumber: (latest._max.versionNumber ?? current.versionNumber) + 1,
+          contentSchemaVersion: current.contentSchemaVersion,
+          contentJson: JSON.stringify(content),
+          author: "human",
+        },
+      });
+    };
+
+    await addReference(workA.id, "cue-single", singleVersion.id);
+    await addReference(workA.id, "cue-multiple-a", multipleVersion.id);
+    await addReference(workB.id, "cue-multiple-b", multipleVersion.id);
+
+    expect(await backfillCompositionScopes(db)).toBe(2);
+
+    const singleRow = await db.composition.findUniqueOrThrow({ where: { id: single.id } });
+    expect(singleRow.scope).toBe("work");
+    expect(singleRow.workId).toBe(workA.id);
+    const multipleRow = await db.composition.findUniqueOrThrow({
+      where: { id: multiple.id },
+    });
+    expect(multipleRow.scope).toBe("shared");
+    expect(multipleRow.workId).toBeNull();
+    const orphanRow = await db.composition.findUniqueOrThrow({ where: { id: orphan.id } });
+    expect(orphanRow.scope).toBe("unclassified");
+    expect(orphanRow.workId).toBeNull();
   });
 });

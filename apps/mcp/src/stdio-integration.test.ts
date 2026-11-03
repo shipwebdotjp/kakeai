@@ -332,7 +332,11 @@ describe("MCP stdio server against a real local socket", () => {
 
     const composition = await client.callTool({
       name: mcpToolName("composition.create"),
-      arguments: { name: "MCP Composition", runtimeCompositionId: "cmp.mcp.test" },
+      arguments: {
+        name: "MCP Composition",
+        runtimeCompositionId: "cmp.mcp.test",
+        scope: "shared",
+      },
     });
     expect(composition.isError).toBeUndefined();
     const compositionId = (composition.structuredContent as { composition: { id: string } })

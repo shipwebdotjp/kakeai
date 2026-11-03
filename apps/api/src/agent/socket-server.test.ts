@@ -111,7 +111,7 @@ describe("agent socket lifecycle", () => {
   });
 
   it("keeps the configured protocol version", () => {
-    expect(AGENT_PROTOCOL_VERSION).toBe(1);
+    expect(AGENT_PROTOCOL_VERSION).toBe(2);
   });
 
   it("closes connections above the cap and keeps the ones within it", async () => {

@@ -112,6 +112,7 @@ async function createPublishableComposition(): Promise<string> {
   const created = await client.request("composition.create", {
     name: "Idempotent Publish",
     runtimeCompositionId,
+    scope: "shared",
     canvasProfile: "landscape",
     authoringStyle: {
       visualTheme: {

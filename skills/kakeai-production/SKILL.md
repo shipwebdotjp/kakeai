@@ -680,7 +680,9 @@ to the user when the fix is on their side.
 - `kakeai-composition` — author and publish the reusable CompositionVersion that
   a background or device-screen cue references. Call it from this flow when the
   video needs a new motion composition, then reference the published version in
-  a `script.edit`.
+  a `script.edit`. When creating it, pass the current Work as
+  `scope: "work"` + `workId`; use `scope: "shared"` only for an intro/outro
+  motion that every Work should see.
 - `schema.get` — always the authority for templates, fields, warning codes, the
   operation catalog and the contract digests (`schemaDigest`, `operationDigest`).
 - `template.get` — the authority for one template's input JSON (`inputSchema`)

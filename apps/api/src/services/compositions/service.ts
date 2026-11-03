@@ -15,23 +15,25 @@ import {
   measureDraft,
   parseManifestIssues,
   resolveWithin,
-  toCompositionDraftDto,
+  toCompositionDto,
   toCompositionVersionDto,
-  type CompositionDraftRow,
+  type CompositionRow,
   type CompositionServiceDependencies,
-  type CompositionVersionRow,
 } from "./shared";
 import { getCompositionDurationsByVersionId } from "./queries";
 import { validateCompositionBundle } from "./validate";
 import { mkdir, readFile, rm, stat, writeFile, cp } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join, dirname, relative, sep } from "node:path";
-import type { PrismaClient } from "../../generated/prisma/client.ts";
+import { Prisma, type PrismaClient } from "../../generated/prisma/client.ts";
 import {
   type CanvasProfile,
   type Composition,
+  type CompositionArchivedFilter,
   type CompositionDraft,
   type CompositionDraftFiles,
+  type CompositionScope,
+  type CompositionScopeInput,
   type CompositionVersion,
   type CompositionManifest,
   type CompositionAuthoredStyleProvenance,
@@ -40,6 +42,7 @@ import {
   DEFAULT_CANVAS_PROFILE,
   canvasProfileOf,
   compositionDraftFilesSchema,
+  compositionScopeWorkIdIssue,
 } from "@kakeai/contracts";
 import { dataDirectories } from "../../storage/paths.ts";
 import { computeDirectoryHashAndFiles } from "../../storage/composition-store.ts";
@@ -55,9 +58,37 @@ export class CompositionService {
     this.dataDir = deps.dataDir;
   }
 
+  private async assertCreateScope(
+    scope: CompositionScopeInput,
+    workId: string | undefined,
+  ): Promise<void> {
+    const issue = compositionScopeWorkIdIssue(scope, workId);
+    if (issue !== null) {
+      throw compositionValidationError([{ path: ["workId"], ...issue }]);
+    }
+    if (scope !== "work" || workId === undefined) {
+      return;
+    }
+    const work = await this.db.work.findUnique({
+      where: { id: workId },
+      select: { id: true },
+    });
+    if (work === null) {
+      throw compositionValidationError([
+        {
+          path: ["workId"],
+          code: "not_found",
+          message: `Work '${workId}' が見つかりません。`,
+        },
+      ]);
+    }
+  }
+
   async createComposition(input: {
     name: string;
     runtimeCompositionId: string;
+    scope: CompositionScopeInput;
+    workId?: string;
     entrypoint?: string;
     canvasProfile?: CanvasProfile;
     authoringStyle?: {
@@ -65,6 +96,7 @@ export class CompositionService {
       kitFiles: Record<string, string>;
     };
   }): Promise<Composition> {
+    await this.assertCreateScope(input.scope, input.workId);
     const entrypoint = input.entrypoint ?? "index.html";
     assertSafeRelativePath(entrypoint, "entrypoint");
     assertNotProtectedStylePath(entrypoint);
@@ -83,6 +115,8 @@ export class CompositionService {
       data: {
         name: input.name,
         runtimeCompositionId: input.runtimeCompositionId,
+        scope: input.scope,
+        workId: input.scope === "work" ? (input.workId ?? null) : null,
       },
     });
 
@@ -156,17 +190,7 @@ export class CompositionService {
       });
     }
 
-    return {
-      id: composition.id,
-      name: composition.name,
-      runtimeCompositionId: composition.runtimeCompositionId,
-      createdAt: composition.createdAt.toISOString(),
-      updatedAt: composition.updatedAt.toISOString(),
-      draft: composition.draft
-        ? toCompositionDraftDto(composition.draft)
-        : null,
-      versions: composition.versions.map(toCompositionVersionDto),
-    };
+    return toCompositionDto(composition);
   }
 
   async resolvePublishedBundle(
@@ -193,8 +217,48 @@ export class CompositionService {
     return { version, bundleDir };
   }
 
-  async listCompositions(): Promise<Composition[]> {
+  async listCompositions(
+    filter: {
+      workId?: string;
+      scope?: CompositionScope;
+      archived?: CompositionArchivedFilter;
+    } = {},
+  ): Promise<Composition[]> {
+    const where: Prisma.CompositionWhereInput = {};
+    if (filter.archived === "only") {
+      where.archivedAt = { not: null };
+    } else if (filter.archived !== "include") {
+      where.archivedAt = null;
+    }
+
+    if (filter.scope === "work") {
+      if (filter.workId === undefined) {
+        throw compositionValidationError([
+          {
+            path: ["workId"],
+            code: "required",
+            message: "scope=work には workId が必要です。",
+          },
+        ]);
+      }
+      where.scope = "work";
+      where.workId = filter.workId;
+    } else if (filter.scope !== undefined) {
+      const issue = compositionScopeWorkIdIssue(filter.scope, filter.workId);
+      if (issue !== null) {
+        throw compositionValidationError([{ path: ["workId"], ...issue }]);
+      }
+      where.scope = filter.scope;
+    } else if (filter.workId !== undefined) {
+      where.OR = [
+        { scope: "work", workId: filter.workId },
+        { scope: "shared" },
+        { scope: "unclassified" },
+      ];
+    }
+
     const compositions = await this.db.composition.findMany({
+      where,
       include: {
         draft: true,
         versions: { orderBy: { versionNumber: "asc" } },
@@ -202,27 +266,37 @@ export class CompositionService {
       orderBy: { updatedAt: "desc" },
     });
 
-    return compositions.map(
-      (composition: {
-        id: string;
-        name: string;
-        runtimeCompositionId: string;
-        createdAt: Date;
-        updatedAt: Date;
-        draft: CompositionDraftRow | null;
-        versions: CompositionVersionRow[];
-      }) => ({
-        id: composition.id,
-        name: composition.name,
-        runtimeCompositionId: composition.runtimeCompositionId,
-        createdAt: composition.createdAt.toISOString(),
-        updatedAt: composition.updatedAt.toISOString(),
-        draft: composition.draft
-          ? toCompositionDraftDto(composition.draft)
-          : null,
-        versions: composition.versions.map(toCompositionVersionDto),
-      }),
+    return compositions.map((composition: CompositionRow) =>
+      toCompositionDto(composition),
     );
+  }
+
+  async setCompositionArchived(
+    compositionId: string,
+    archived: boolean,
+  ): Promise<Composition> {
+    try {
+      const composition = await this.db.composition.update({
+        where: { id: compositionId },
+        data: { archivedAt: archived ? new Date() : null },
+        include: {
+          draft: true,
+          versions: { orderBy: { versionNumber: "asc" } },
+        },
+      });
+      return toCompositionDto(composition);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      ) {
+        throw new ApiError(404, "RESOURCE_NOT_FOUND", undefined, {
+          resource: "composition",
+          id: compositionId,
+        });
+      }
+      throw error;
+    }
   }
 
   async updateDraft(

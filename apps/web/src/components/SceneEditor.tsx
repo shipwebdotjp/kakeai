@@ -1,16 +1,11 @@
-import { useMemo, useState, type RefObject } from "react";
+import { useMemo, useState } from "react";
 import { OctagonAlert, Plus, Save, TriangleAlert, Video } from "lucide-react";
 import {
   resolveCharacterName,
   type CharacterLibraryEntry,
-  type ContentDocument,
   type ScriptOperation,
-  type ScriptVersion,
 } from "@kakeai/contracts";
-import {
-  diagnosticTarget,
-  type DiagnosticTarget,
-} from "../content/diagnostics";
+import { diagnosticTarget } from "../content/diagnostics";
 import { resolveTimeline } from "@kakeai/video/timeline";
 import {
   useAdapterVoicesMap,
@@ -31,7 +26,6 @@ import {
   DEFAULT_BGM_GAIN_DB,
   type CharacterFormValue,
   type SceneFormValue,
-  type SpeakerFormValue,
 } from "../content/form";
 import {
   applyStructuralOperation,
@@ -49,7 +43,6 @@ import {
 } from "../content/structural";
 import { sceneDisplayName } from "../content/labels";
 import { errorMessage } from "../lib/errorMessage";
-import type { UnsavedDocumentState } from "../lib/useDraftPreview";
 import {
   buttonNeutralClass,
   buttonPrimaryClass,
@@ -70,6 +63,7 @@ import { ScenePickerModal, type ScenePickerTarget } from "./ScenePickerModal";
 import { LibraryUpdateDialog } from "./LibraryUpdateModal";
 import { ScriptImportModal } from "./ScriptImportModal";
 import { SceneBlock } from "./scene-editor/SceneBlock";
+import type { SceneEditorProps, ScenePickerRequest } from "./scene-editor/types";
 import { useSceneEditorForm } from "./scene-editor/useSceneEditorForm";
 import { useSceneEditorBulkTts } from "./scene-editor/useSceneEditorBulkTts";
 import { useLibraryUpdate } from "./scene-editor/useLibraryUpdate";
@@ -99,30 +93,6 @@ function resolveInsertionTargetId(
   const outro = candidates.find((scene) => scene.kind === "outro");
   return outro?.id ?? candidates[candidates.length - 1]?.id ?? null;
 }
-
-interface SceneEditorProps {
-  base: ContentDocument;
-  editionId: string;
-  scriptVersionId: string;
-  onSaved?: (scriptVersion: ScriptVersion) => void;
-  onValuesChange?: (
-    scenes: SceneFormValue[],
-    speakers: SpeakerFormValue[],
-    characters: CharacterFormValue[],
-  ) => void;
-  onJumpToLine?: (lineId: string) => void;
-  onJumpToTarget?: (targetId: string, seek: DiagnosticTarget["seek"]) => void;
-  onDocumentChange?: (state: UnsavedDocumentState) => void;
-  onDirtyChange?: (dirty: boolean) => void;
-  scrollContainerRef?: RefObject<HTMLDivElement | null>;
-}
-
-type ScenePickerRequest =
-  | { kind: "move-cue" | "copy-cue"; sceneId: string; cueId: string }
-  | {
-      kind: "move-standing" | "copy-standing" | "swap-standing";
-      sceneId: string;
-    };
 
 const SCENE_PICKER_COPY: Record<
   ScenePickerRequest["kind"],

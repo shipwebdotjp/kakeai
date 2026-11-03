@@ -16,6 +16,10 @@ import { deserializeContent, serializeContent } from "../domain/content-json.ts"
 import type { DataDirectories } from "../storage/paths.ts";
 import { deleteJobsAndArtifacts, removeArtifactFiles } from "./job-cleanup.ts";
 import {
+  deleteWorkOwnedCompositions,
+  removeCompositionStorageDirs,
+} from "./compositions/work-cleanup.ts";
+import {
   toOutputProfile,
   toWork,
   type EditionWithCurrent,
@@ -360,7 +364,8 @@ export async function deleteWork(
     });
   }
 
-  const artifactKeys = await prisma.$transaction(async (tx) => {
+  const cleanup = await prisma.$transaction(async (tx) => {
+    const compositionStorageKeys = await deleteWorkOwnedCompositions(tx, workId);
     const editions = await tx.languageEdition.findMany({
       where: { workId },
       select: { id: true },
@@ -404,10 +409,11 @@ export async function deleteWork(
     await tx.thumbnail.deleteMany({ where: { languageEditionId: { in: editionIds } } });
     await tx.languageEdition.deleteMany({ where: { workId } });
     await tx.work.delete({ where: { id: workId } });
-    return removedArtifactKeys;
+    return { artifactKeys: removedArtifactKeys, compositionStorageKeys };
   });
 
-  await removeArtifactFiles(directories, artifactKeys);
+  await removeArtifactFiles(directories, cleanup.artifactKeys);
+  await removeCompositionStorageDirs(directories, cleanup.compositionStorageKeys);
 }
 
 /**

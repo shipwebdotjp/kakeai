@@ -34,7 +34,7 @@
 
 - 実体は `apps/mcp`（`@kakeai/mcp`、bin `kakeai-mcp`）の stdio サーバーである。`@kakeai/agent-client` でローカル制御ソケットへ接続する薄いクライアントであり、Prisma・DB・ファイル書込み・業務ロジックを持たない。MCP は操作を選び、入力と出力を契約スキーマで検証して転送するだけである。
 - 公式の `@modelcontextprotocol/sdk`（`^1.32.1`）を使い、低レベルの stdio サーバーとして `initialize` / `tools/list` / `tools/call` を実装する。stdout は JSON-RPC 専用とし、ログは stderr にだけ書く。起動失敗や内部エラーでもスタックトレースを stdout に出さない。
-- 設定は `KAKEAI_DATA_DIR`（未指定ならプラットフォーム既定のデータルート）からソケットを解決し、`KAKEAI_SOCKET` または `--socket` で明示パスを指定できる。`--data-dir` も受け付ける。`KAKEAI_AGENT_ID` または `--agent-id` をハンドシェイクの `agentId` に使い、既定は `mcp` とする。`--help` と `--version` をサポートする。ソケット接続時の `protocolVersion` は `1` である。
+- 設定は `KAKEAI_DATA_DIR`（未指定ならプラットフォーム既定のデータルート）からソケットを解決し、`KAKEAI_SOCKET` または `--socket` で明示パスを指定できる。`--data-dir` も受け付ける。`KAKEAI_AGENT_ID` または `--agent-id` をハンドシェイクの `agentId` に使い、既定は `mcp` とする。`--help` と `--version` をサポートする。ソケット接続時の `protocolVersion` は `2` である。
 - ツール名は MCP の命名制約に合わせて `kakeai_<domain>_<verb>` の snake_case とし、説明文に正規の `domain.verb` を必ず含める。`inputSchema` と `outputSchema` は `packages/contracts` の Zod スキーマから `z.toJSONSchema` で生成し、束縛側に JSON Schema を手書きしない。成功時は JSON を `content[].text` と `structuredContent` の両方で返す。画像を返す操作（`agentImagePreviewOperationNames`）に限り、`content[0].text` は `pngBase64` / `imageBase64` を除いたメタ情報の要約 JSON とし、全出力は `structuredContent`、画像バイトは標準の image コンテントブロックで返す（[ADR 0079](../adr/0079-mcp-preview-frame-text-summary.md)）。
 - ツール一覧は次のとおり。読み取り・変更の区分と長尺かどうかは `schema.get` の `agentOperations` と同じ分類を使う。
 
@@ -157,7 +157,7 @@
 - アプリプロセスが単一の SQLite ライターかつ単一の worker であり続ける。エージェントは Job を投入するだけで、worker を起動しない。
 - v1 はアプリが起動していないとき、接続に失敗する安定したエラーを返す。エージェントによるアプリの自動起動は対象外とする。
 - 起動時、ソケットファイルが既にある場合はアプリプロセスだけが後始末する。接続できるソケットは稼働中として残し、接続できないソケットだけを削除してから listen する。ソケットでないファイルは削除しない。終了時は自分が作ったソケットを unlink する。
-- 接続時に `{ "protocolVersion": 1, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
+- 接続時に `{ "protocolVersion": 2, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
 - フレームは 1 行 1 JSON（NDJSON）とし、要求は `{ "requestId": "<呼び出し内で一意>", "operation": "<name>", "input": <object> }`、応答は `{ "requestId": "...", "ok": true, "data": ... }` または `{ "requestId": "...", "ok": false, "error": { "code": "...", "issues": [...] } }` とする。`issues` は `{ path, code, message }` の配列で、スタックトレースや自由文の詳細は返さない。
 - 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは原則 10 秒、画像を返すプレビューとサムネイル（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame` / `preview.theme` / `preview.thumbnail` / `preview.faceSet` / `thumbnail.image`）と `font.list` は 30 秒、`theme.diagnose` は 60 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。`theme.diagnose` が長いのは、既定の `verify: true` が Chromium で local face の解決可否を確認するためである。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
 - サーバーは応答を返した後も同じ接続で次の要求を受け付けるが、5 分間何も受信しない接続は閉じる。
@@ -199,7 +199,8 @@
   - `cursor` は前ページの `nextCursor` をそのまま渡す不透明値で、ソート列と `id` を含む。別の `sort` で使うと `VALIDATION_ERROR`（issue path は `["cursor"]`）となり、黙って別の並び順として解釈することはない。壊れた cursor も同じ `VALIDATION_ERROR` とする。`limit` は既定50、最大100。
   - HTTP、ソケット、MCP、CLIは同じ契約を使う。
 - `asset.get` — Asset 1件を返す。
-- `composition.list` / `composition.get` / `composition.draft.get` / `composition.authoringContext`
+- `composition.list` — `{}` または `{ workId?, scope?, archived? }` を受け、Composition の一覧を返す。`workId` だけを指定すると、その Work の候補（作品専用・共通・未分類）を返す。`scope` は `work`・`shared`・`unclassified` で絞り、`scope=work` は `workId` を必須とする。`archived` は `exclude`（既定）・`include`・`only`。`composition.get` は所属にかかわらず1件を返す。
+- `composition.draft.get` / `composition.authoringContext`
 - `character.list` / `character.get` — キャラクターライブラリの読み取り（後述）。
 - `theme.list` / `theme.get` — Visual Theme の読み取り。`theme.list` は `{}` を受け、`{ themes: [{ id, name, isBuiltIn, version }] }` を返す。利用者 Theme はアーカイブされておらず公開済み Revision を持つものだけを対象とし、各 Theme の最新公開 Revision だけを返す。組み込み Theme も含む。`theme.get` は `{ themeId, version? }` を受け、`{ theme: { id, name, isBuiltIn, version, definition } }` を返す。`version` を省略すると `theme.list` に載る最新公開 Revision を返す。`version` を指定すると、その公開 Revision を返す。このときはアーカイブ済み Theme の Revision も読める（既存の Script Version が参照している場合があり、レンダーでも解決されるため）。Theme Draft と存在しない Revision は `RESOURCE_NOT_FOUND` とする。一覧はページングしない。
 - `theme.diagnose` — Theme Revision のフォント診断を返す。`{ themeId, version?, locale?, verify? }` を受け、`{ diagnosis: { themeId, version, locale, catalogSupported, verificationSupported, verificationReason, roles, missingFonts, diagnostics } }` を返す。`version` の解決規則は `theme.get` と同じ。`locale` は既定 `ja-JP` で、`fontFaceByLocale` の解決に使う。`verify` は既定 `true` で、レンダー投入時と同じく Chromium が local face を解決できるかまで確認する。`false` なら Font Catalog との照合だけを行う。`roles` は文字 role ごとの解決済み local face と `usesFallback`、`missingFonts` は解決できなかった family、`diagnostics` は人が読める説明である。カタログが使えない platform でもエラーにせず `catalogSupported: false` と理由を返す。存在しない Theme Revision は `RESOURCE_NOT_FOUND`。
@@ -246,7 +247,7 @@
 - `asset.import` — 後述の手順で Asset を取り込む。
 - `asset.update` — Asset のタグを更新する。
 - `asset.update` — Asset のお気に入り・アーカイブを切り替える（[ADR 0107](../adr/0107-agent-asset-organization.md)）。`{ assetId, favorited?, archived? }` を受け、少なくとも1つを必須とし、`{ asset }` を返す。存在しない ID は `RESOURCE_NOT_FOUND`、項目を指定しない呼び出しは `VALIDATION_ERROR`。タグは `asset.update` が担う。アーカイブは行を残して既定の `asset.list` とピッカーから隠すだけで、台本の参照・Job・レンダーを壊さない。解除は `archived: false` で行い、アーカイブ済みは `asset.list` の `archived: "only"` で見つけられる。`requestId` は持たず、タイムアウト後は `asset.get` で状態を確認してから再実行する。実体削除は公開しない。
-- `composition.create` / `composition.draft.update` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。publish は `dryRun` を受け付ける。
+- `composition.create` / `composition.draft.update` / `composition.publish` — Composition Library の authoring（[../composition-library/spec.md](../composition-library/spec.md)、[../visual-skins/spec.md](../visual-skins/spec.md)）。`composition.create` は必須の `scope`（`work` / `shared`）と、`work` のときの `workId` を受け取る。publish は `dryRun` を受け付ける。Composition のアーカイブは操作面に公開しない。
 - `render.start` — 対象版と ready な素材から render Job を投入する。
 - `tts.create` — 保存済み台本版の 1 セリフについて、利用者が設定済みの TTS Adapter へ合成 Job を投入する（後述）。
 - `tts.createBulk` — 保存済み台本版の要点シーンで音声が未選択のセリフへ、まとめて合成 Job を投入する（後述）。
@@ -336,16 +337,17 @@
 
 ### Composition authoring の契約
 
-- 読み取りは `composition.list` / `composition.get` / `composition.draft.get` / `composition.authoringContext`。`composition.authoringContext` は HTTP の `POST /composition-authoring-contexts` と同じ入力（`visualTheme` と任意の `canvasProfile`）を受け、`context` を返す。
-- 変更は `composition.create` / `composition.draft.update` / `composition.publish`。入出力は [../composition-library/spec.md](../composition-library/spec.md) の HTTP authoring API と同じ `packages/contracts` のスキーマを使う。`authoringStyle` 付きの作成は HTTP と同じ authoring context の解決を通す。
+- 読み取りは `composition.list` / `composition.get` / `composition.draft.get` / `composition.authoringContext`。`composition.list` は `workId`・`scope`・`archived` で絞れる（前述）。`composition.authoringContext` は HTTP の `POST /composition-authoring-contexts` と同じ入力（`visualTheme` と任意の `canvasProfile`）を受け、`context` を返す。
+- 変更は `composition.create` / `composition.draft.update` / `composition.publish`。入出力は [../composition-library/spec.md](../composition-library/spec.md) の HTTP authoring API と同じ `packages/contracts` のスキーマを使う。`composition.create` は `scope` を必須とし、`work` のときは `workId` を必須、`shared` のときは `workId` を持てない。`authoringStyle` 付きの作成は HTTP と同じ authoring context の解決を通す。
 - `composition.publish` は任意の `dryRun` を受け付ける。`true` なら version を作らずに publish と同じ検証だけを行い `{ dryRun: true, manifest, fontDiagnostics }` を返し、`false` または省略時は publish して `{ dryRun: false, version, fontDiagnostics }` を返す。検証失敗は `VALIDATION_ERROR` と `issues`、Style Kit の改変は `STYLE_KIT_MODIFIED` とする。
 - 存在しない Composition は、束縛に依存しない HTTP の安定コード `RESOURCE_NOT_FOUND` で返す。
-- Composition の実体削除は操作面に公開しない（HTTP の削除系も従来どおり人専用）。
+- Composition の実体削除とアーカイブは操作面に公開しない（HTTP の削除系も従来どおり人専用）。
 
 ## プロトコル版と契約ダイジェスト
 
 - 互換性は「追加は自由、破壊は版を上げる」で扱う。操作の入出力への任意フィールドの追加や列挙値の追加では `AGENT_PROTOCOL_VERSION` を上げない。必須化・フィールドの削除・意味変更のときだけ上げる。
-- 対応版は範囲として扱う。`AGENT_PROTOCOL_MIN_VERSION` が下限、`AGENT_PROTOCOL_VERSION` が上限であり、handshake はこの範囲の版だけを受け入れる。範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` で拒否する。現在の版は下限も上限も `1` であり、機構的出现で挙動は変わらない。
+- 対応版は範囲として扱う。`AGENT_PROTOCOL_MIN_VERSION` が下限、`AGENT_PROTOCOL_VERSION` が上限であり、handshake はこの範囲の版だけを受け入れる。範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` で拒否する。現在の版は下限も上限も `2` である。
+- Composition のスコープ必須化（[ADR 0115](../adr/0115-work-scoped-compositions.md)）で `composition.create` の入力が破壊的に変わったため、`AGENT_PROTOCOL_VERSION` と `AGENT_PROTOCOL_MIN_VERSION` を `2` に上げた。旧版の束縛は接続できない。MCP・CLI・アプリ・スキルを同じビルドで揃える。
 - `schema.get` は `minProtocolVersion`（下限）と `protocolVersion`（上限）を返す。エージェントはどちらの版でも接続できるかを確かめられる。
 - `schema.get` の `operationDigest` は、全 Agent 操作の入出力スキーマを JSON Schema に正規化して摘要した値である。JSON Schema への変換は `packages/contracts` の `toAgentJsonSchema` に一本化し、MCP のツールスキーマ生成と同じ正規形を使う。摘要対象のキーの並び順には依存しない。
 - `schemaDigest` は Template・警告・操作カタログ・操作契約をまとめた摘要である。`operationDigest` を含むため、操作の入力・出力が変われば `schemaDigest` も必ず変化する。エージェントは保存した `schemaDigest` と `operationDigest` を比較して契約ドリフトを検知できる。

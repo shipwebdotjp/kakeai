@@ -425,8 +425,8 @@ const definitions: AgentOperationDefinitions = {
   "composition.list": {
     input: agentCompositionListInputSchema,
     output: agentCompositionListOutputSchema,
-    run: async (_input, context) => ({
-      compositions: await context.compositions.listCompositions(),
+    run: async (input, context) => ({
+      compositions: await context.compositions.listCompositions(input),
     }),
   },
   "composition.get": {

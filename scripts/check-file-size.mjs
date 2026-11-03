@@ -18,8 +18,8 @@ const FAIL_LINES = 800;
 
 /** Recorded line-count ceilings; re-record (or remove) an entry after splitting a file. */
 const BASELINE = new Map([
-  ["apps/web/src/components/SceneEditor.tsx", 1506],
-  ["apps/web/src/components/CueList.tsx", 1425],
+  ["apps/web/src/components/SceneEditor.tsx", 1482],
+  ["apps/web/src/components/CueList.tsx", 1332],
   ["apps/web/src/pages/ThemeDetailPage.tsx", 1041],
   ["apps/web/src/components/lines-editor/LineEditor.tsx", 860],
 ]);

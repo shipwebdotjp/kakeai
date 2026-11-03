@@ -29,22 +29,58 @@ import {
   type VideoGate,
 } from "@kakeai/contracts";
 
+export interface CompositionVersionOption {
+  value: string;
+  label: string;
+  compositionId: string;
+  compositionName: string;
+  runtimeCompositionId: string;
+  scope: Composition["scope"];
+  versionNumber: number;
+}
+
+function compositionScopePrefix(scope: Composition["scope"]): string {
+  if (scope === "shared") {
+    return "共通: ";
+  }
+  if (scope === "unclassified") {
+    return "未分類: ";
+  }
+  return "";
+}
+
 export function compositionVersionOptions(
   compositions: readonly Composition[],
   profiles?: readonly CanvasProfile[],
-): { value: string; label: string }[] {
-  return compositions.flatMap((composition) =>
-    (composition.versions ?? [])
-      .filter(
-        (version) =>
-          profiles === undefined ||
-          profiles.includes(canvasProfileOf(version.manifest)),
-      )
-      .map((version) => ({
-        value: version.id,
-        label: `${composition.name} v${version.versionNumber}・${CANVAS_PROFILE_LABELS[canvasProfileOf(version.manifest)]}`,
-      })),
-  );
+  mode: "latest" | "all" = "all",
+): CompositionVersionOption[] {
+  return compositions.flatMap((composition) => {
+    const versions = (composition.versions ?? []).filter(
+      (version) =>
+        profiles === undefined ||
+        profiles.includes(canvasProfileOf(version.manifest)),
+    );
+    if (versions.length === 0) {
+      return [];
+    }
+    const selected =
+      mode === "latest"
+        ? [
+            versions.reduce((latest, version) =>
+              version.versionNumber > latest.versionNumber ? version : latest,
+            ),
+          ]
+        : versions;
+    return selected.map((version) => ({
+      value: version.id,
+      label: `${compositionScopePrefix(composition.scope)}${composition.name} v${version.versionNumber}・${CANVAS_PROFILE_LABELS[canvasProfileOf(version.manifest)]}`,
+      compositionId: composition.id,
+      compositionName: composition.name,
+      runtimeCompositionId: composition.runtimeCompositionId,
+      scope: composition.scope,
+      versionNumber: version.versionNumber,
+    }));
+  });
 }
 
 export function newCharacterId(): string {
