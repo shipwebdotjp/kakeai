@@ -70,7 +70,7 @@ Canvas Profile は CompositionVersion が描画する内部キャンバスの固
 
 bundle と draft はアプリデータ領域の `compositions/` 配下に置く。`Composition` 作成時に `drafts/<compositionId>/`（seed の entry と `manifest.json`）が即時作成され、draft 更新のたびに指定ファイルが上書きされる。publish 時に `bundles/<contentHash>/<versionId>/` が作られ、以後書き換えない。`drafts/` と `bundles/` はサーバ管理であり、利用者や AI が直接編集しない。
 
-同一 CompositionVersion は一つの ScriptVersion 内で複数回参照できる。HyperFrames の native nested composition が、重複した sub-composition ホストへ instance ごとの runtime composition ID を割り当て、CSS・DOM 参照・timeline 登録・SVG id を instance ごとにスコープする。この仕組みにより、AI が生成した project を書き換えずに複数配置の ID 衝突を防ぐ。異なる Composition には異なる runtime composition ID を割り当てる。
+同一 CompositionVersion は一つの ScriptVersion 内で複数回参照できる。HyperFrames の native nested composition が、重複した sub-composition ホストへ instance ごとの runtime composition ID を割り当て、CSS・DOM 参照・timeline 登録・SVG id を instance ごとにスコープする。この仕組みにより、AI が生成した project を書き換えずに複数配置の ID 衝突を防ぐ。異なる Composition には異なる runtime composition ID を割り当てる。ただし HyperFrames runtime は現在、裸の `*` セレクタをスコープせず親ドキュメント全体へ適用するため、Composition 側では `*` を使わず、root 配下のセレクタ（例: `.stage, .stage *`）に限定する。
 
 ## ContentDocument と表示
 

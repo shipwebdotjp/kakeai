@@ -79,7 +79,10 @@ export const STYLES = [
   ".kakeai-compzoom{position:absolute;left:0;top:0;width:var(--kakeai-cw,1920px);height:var(--kakeai-ch,1080px);transform-origin:top left;transform:translate(calc((100cqw - var(--kakeai-cw,1920px) * var(--kakeai-s,1)) * var(--kakeai-posx,0.5)),calc((100cqh - var(--kakeai-ch,1080px) * var(--kakeai-s,1)) * var(--kakeai-posy,0.5))) scale(var(--kakeai-s,1));}",
   ".kakeai-compchild{position:absolute;inset:0;width:100%;height:100%;}",
   ".kakeai-deviceframe{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px;box-sizing:border-box;}",
-  ".kakeai-deviceframe-screen{position:relative;overflow:hidden;background:#000;box-shadow:0 24px 60px var(--kakeai-shadow);container-type:size;}",
+  // A nested Composition's bare `*` rule is not scoped by the runtime and can
+  // reach this document. Keep the screen's 24px bezel outside its width so the
+  // keyboard (width + 48px) stays aligned even under a leaked border-box reset.
+  ".kakeai-deviceframe-screen{position:relative;overflow:hidden;background:#000;box-shadow:0 24px 60px var(--kakeai-shadow);container-type:size;box-sizing:content-box;}",
   ".kakeai-deviceframe-laptop .kakeai-deviceframe-screen{width:72%;aspect-ratio:16/9;border-radius:18px;border:24px solid var(--kakeai-ink);}",
   ".kakeai-deviceframe-phone .kakeai-deviceframe-screen{width:30%;aspect-ratio:9/16;border-radius:36px;border:18px solid var(--kakeai-ink);}",
   ".kakeai-deviceframe-body{display:flex;flex-direction:column;align-items:center;}",

@@ -256,6 +256,11 @@ only worth using for genuinely nested assets. The root's `data-composition-id`
 - Prefer an external `<script src>` over inlining library source: inline
   `<script>` bodies are wrapped by the scoped-composition runtime, which can
   break a big minified library.
+- **Do not use a bare `*` selector.** When a nested Composition's `<style>` is
+  injected, HyperFrames currently scopes regular selectors but leaves `*`
+  global, so a reset such as `* { box-sizing: border-box }` also changes the
+  parent document and other scenes. Scope resets to your own root instead
+  (`.stage, .stage *`).
 - **Fonts must be `@hyperframes` auto-resolved families** (e.g. `Noto Sans JP`,
   `Inter`) or declared with an in-bundle `@font-face`. Unknown named fonts
   (`Hiragino Sans`, `Yu Gothic`, …) hard-fail lint with
