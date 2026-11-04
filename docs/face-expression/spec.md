@@ -79,6 +79,7 @@ Character Appearance のベース画像（`appearance.assetId`）と、その Fa
 - 対応先がないレイヤーは静止のままとする。汎用の別表情、別キャラクター、または別 Face Set のレイヤーで代用しない。
 - 同じ目・口レイヤーを複数の Expression preset が共有してよい。表情 × 目の開閉 × 口の開閉の全組合せを強制しない。
 - 動作時刻は `cue.id` と `characterId` から導いた固定シードの疑似乱数で決定する。プレビュー・再レンダー・再試行で動きが変わらないことを必須とする。既存の発話中バウンドと同じ決定性の方針に従い、1回の Render Job 内ではスナップショットに固定した Face Set を使う（[ADR-0102](../adr/0102-face-set-revisions-and-pinned-works.md)）。瞬き・口パクの間隔・長さなどの動作パラメータは内部定数とし、正本JSONに保存しない。
+- Face Set 編集画面の使用中キャラクター合成プレビューには「瞬き・口パクを確認」のトグルを置く。表示中の Expression Preset の目・口に `blinkLayerId` / `speakingLayerId` があれば、閉眼・開口レイヤーを短時間だけ重ねて動きを確認できる。動きは固定シードの確認用スケジュールで、表示中の全プレビューを同時に動かす。対応先がない表情ではトグルを選べない。
 - 決定は [ADR-0048](../adr/0048-deterministic-blink-and-speaking-mouth.md) を参照する。
 
 ## 台詞、AI、編集

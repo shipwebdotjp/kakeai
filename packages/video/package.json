@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./face-events": "./src/face-events.ts",
     "./timeline": "./src/timeline.ts"
   },
   "scripts": {

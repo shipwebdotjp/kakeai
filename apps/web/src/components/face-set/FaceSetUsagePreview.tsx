@@ -1,23 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FaceSetUsageAppearance } from "@kakeai/contracts";
 import { assetContentUrl } from "../../api/client";
 import { errorTextClass, metaTextClass, textFieldClass } from "../../ui";
-
-type PreviewPart = "brow" | "eye" | "mouth" | "foreground";
-
-export interface FaceSetPreviewLayer {
-  id: string;
-  part: PreviewPart;
-  assetId: string | null;
-}
-
-export interface FaceSetPreviewExpression {
-  id: string;
-  name: string;
-  browLayerId: string | null;
-  eyeLayerId: string | null;
-  mouthLayerId: string | null;
-}
+import {
+  FACE_PREVIEW_STILL,
+  buildFacePreviewSchedule,
+  buildFacePreviewStack,
+  facePreviewMotionAt,
+  isMotionVisible,
+  resolveFacePreviewVariants,
+  type FacePreviewMotion,
+  type FaceSetPreviewExpression,
+  type FaceSetPreviewLayer,
+} from "./facePreviewAnimation";
 
 interface FaceSetUsagePreviewProps {
   usages: FaceSetUsageAppearance[] | undefined;
@@ -26,26 +21,6 @@ interface FaceSetUsagePreviewProps {
   layers: readonly FaceSetPreviewLayer[];
   expressions: readonly FaceSetPreviewExpression[];
   assetsById: ReadonlyMap<string, { widthPx: number | null; heightPx: number | null }>;
-}
-
-const PART_ORDER: PreviewPart[] = ["brow", "eye", "mouth", "foreground"];
-
-function layerIdsFor(
-  expression: FaceSetPreviewExpression | undefined,
-  layers: readonly FaceSetPreviewLayer[],
-): string[] {
-  const foreground = layers
-    .filter((layer) => layer.part === "foreground" && layer.assetId !== null)
-    .map((layer) => layer.id);
-  if (expression === undefined) {
-    return foreground;
-  }
-  return [
-    expression.browLayerId,
-    expression.eyeLayerId,
-    expression.mouthLayerId,
-    ...foreground,
-  ].filter((id): id is string => id !== null);
 }
 
 export function faceSetDimensionIssue(
@@ -92,11 +67,52 @@ export function FaceSetUsagePreview({
     expressions.find((entry) => entry.id === expressionId) ??
     expressions.find((entry) => entry.id === "normal") ??
     expressions[0];
-  const orderedLayers = [...layers].sort(
-    (left, right) =>
-      PART_ORDER.indexOf(left.part) - PART_ORDER.indexOf(right.part),
+  const layerById = useMemo(
+    () => new Map(layers.map((layer) => [layer.id, layer])),
+    [layers],
   );
-  const layerById = new Map(orderedLayers.map((layer) => [layer.id, layer]));
+  const variants = useMemo(
+    () => resolveFacePreviewVariants(expression, layers),
+    [expression, layers],
+  );
+  const stack = useMemo(
+    () => buildFacePreviewStack(expression, layers),
+    [expression, layers],
+  );
+  const schedule = useMemo(() => buildFacePreviewSchedule(), []);
+  const canAnimate =
+    variants.eyeVariantId !== null || variants.mouthVariantId !== null;
+  const [animate, setAnimate] = useState(false);
+  const [motion, setMotion] = useState<FacePreviewMotion>(FACE_PREVIEW_STILL);
+
+  useEffect(() => {
+    if (!canAnimate) {
+      setAnimate(false);
+    }
+  }, [canAnimate]);
+
+  useEffect(() => {
+    if (!animate || !canAnimate) {
+      setMotion(FACE_PREVIEW_STILL);
+      return;
+    }
+    const startedAt = performance.now();
+    const tick = () => {
+      const next = facePreviewMotionAt(
+        schedule,
+        performance.now() - startedAt,
+      );
+      setMotion((current) =>
+        current.eyesClosed === next.eyesClosed &&
+        current.mouthOpen === next.mouthOpen
+          ? current
+          : next,
+      );
+    };
+    tick();
+    const timer = window.setInterval(tick, 40);
+    return () => window.clearInterval(timer);
+  }, [animate, canAnimate, schedule]);
 
   if (usagesLoading) {
     return <p className={metaTextClass}>使用中のキャラクターを読み込み中…</p>;
@@ -114,7 +130,7 @@ export function FaceSetUsagePreview({
 
   return (
     <div className="mb-3 rounded border border-border p-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium">使用中のキャラクター</span>
         <label className="inline-flex items-center gap-1.5 text-sm">
           表情
@@ -130,11 +146,24 @@ export function FaceSetUsagePreview({
             ))}
           </select>
         </label>
+        <label className="inline-flex items-center gap-1.5 text-sm">
+          <input
+            type="checkbox"
+            checked={animate}
+            disabled={!canAnimate}
+            onChange={(event) => setAnimate(event.target.checked)}
+          />
+          瞬き・口パクを確認
+        </label>
+        {!canAnimate && (
+          <span className={metaTextClass}>
+            閉眼・開口を登録すると動きを確認できます。
+          </span>
+        )}
       </div>
       <ul className="flex flex-wrap gap-3">
         {usages.map((usage) => {
           const issue = faceSetDimensionIssue(usage, layers, assetsById);
-          const compositeIds = layerIdsFor(expression, orderedLayers);
           return (
             <li key={usage.appearanceId} className="w-52">
               <div
@@ -148,18 +177,21 @@ export function FaceSetUsagePreview({
                   className="relative block w-full"
                   loading="lazy"
                 />
-                {compositeIds.map((layerId) => {
-                  const layer = layerById.get(layerId);
+                {stack.map((item) => {
+                  const layer = layerById.get(item.layerId);
                   if (layer === undefined || layer.assetId === null) {
                     return null;
                   }
                   return (
                     <img
-                      key={layerId}
+                      key={item.key}
                       src={assetContentUrl(layer.assetId)}
                       alt=""
                       className="absolute inset-0 h-full w-full object-contain"
                       loading="lazy"
+                      style={{
+                        opacity: isMotionVisible(item, motion) ? 1 : 0,
+                      }}
                     />
                   );
                 })}

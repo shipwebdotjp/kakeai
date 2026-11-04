@@ -52,16 +52,14 @@ import {
   valueTweenLine,
 } from "./animation";
 import {
-  blinkSchedule,
   expressionIntervalsForCharacter,
   expressionTweenLines,
   faceVariantTweenLines,
   mergeIntervals,
-  mouthSchedule,
   type BounceUnit,
-  type FaceEvent,
   type SpeakingInterval,
 } from "./characters";
+import { blinkSchedule, mouthSchedule, type FaceEvent } from "../face-events";
 import { dispatchTemplate, makeContext } from "./nested";
 import { audioElement } from "./audio";
 import { surfaceBackgroundCss, surfaceStyleCss, textStyleCss } from "./styles";
