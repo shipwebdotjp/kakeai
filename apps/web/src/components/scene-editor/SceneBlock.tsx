@@ -344,6 +344,7 @@ export function SceneBlock(props: SceneBlockProps) {
             sceneId={scene.id}
             lines={scene.lines}
             characters={props.characters}
+            speakers={props.speakers}
             base={props.base}
             onWarnings={props.onWarnings}
             onError={props.onError}

@@ -17,11 +17,13 @@ import {
   STANDING_VERTICAL_OPTIONS,
   appearanceDisplayName,
   emptyStandingSlots,
+  lineOptionLabel,
   resolveStandingStateFormAtLine,
   sortStandingStateFormValues,
   type CharacterFormValue,
   type DocumentFormValues,
   type LineFormValue,
+  type SpeakerFormValue,
   type StandingFormValue,
   type StandingSide,
 } from "../content/form";
@@ -53,6 +55,7 @@ interface StandingFieldsProps {
   sceneId: string;
   lines: readonly LineFormValue[];
   characters: CharacterFormValue[];
+  speakers: readonly SpeakerFormValue[];
   base: ContentDocument;
   onWarnings: (warnings: Warning[]) => void;
   onError: (message: string) => void;
@@ -64,13 +67,16 @@ interface StandingFieldsProps {
 
 const SIDE_LABELS: Record<StandingSide, string> = { left: "左", right: "右" };
 
-function lineLabel(lines: readonly LineFormValue[], lineId: string): string {
+function lineLabel(
+  lines: readonly LineFormValue[],
+  speakers: readonly SpeakerFormValue[],
+  lineId: string,
+): string {
   const index = lines.findIndex((line) => line.id === lineId);
   if (index === -1) {
     return lineId;
   }
-  const caption = ((lines[index]?.captionText ?? "").split("\n")[0] ?? "").trim();
-  return `${index + 1}. ${caption.length > 0 ? caption : "（字幕なし）"}`;
+  return lineOptionLabel(lines, index, speakers);
 }
 
 export function StandingFields({
@@ -82,6 +88,7 @@ export function StandingFields({
   sceneId,
   lines,
   characters,
+  speakers,
   base,
   onWarnings,
   onError,
@@ -551,7 +558,7 @@ export function StandingFields({
               >
                 {lines.map((line) => (
                   <option key={line.id} value={line.id}>
-                    {lineLabel(lines, line.id)}
+                    {lineLabel(lines, speakers, line.id)}
                   </option>
                 ))}
               </select>
@@ -612,7 +619,7 @@ export function StandingFields({
               <div key={`${state.side}-${state.fromLineId}`} className={itemCardClass}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">
-                    {SIDE_LABELS[state.side]} / {lineLabel(lines, state.fromLineId)}
+                    {SIDE_LABELS[state.side]} / {lineLabel(lines, speakers, state.fromLineId)}
                   </span>
                   {effective?.isChange === true && (
                     <span className={metaTextClass}>この行から</span>
