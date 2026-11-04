@@ -4,6 +4,49 @@ Kakeai のスキルは、本リポジトリの GitHub Release と対になる不
 
 操作の入出力スキーマ、VisualTemplate の契約、`schemaDigest` / `operationDigest` の値はここへ複製しない。実行時の正は `schema.get`、`template.get`、MCP の `inputSchema`、CLI の検証である。
 
+## v0.3.0
+
+- 対応リリース: [`v0.3.0`](https://github.com/shipwebdotjp/kakeai/releases/tag/v0.3.0)
+- 導入元: `shipwebdotjp/kakeai#v0.3.0`
+- Agent Access プロトコル: `2`（`minProtocolVersion` / `protocolVersion` とも `2`）
+- 含まれるスキル: `kakeai-production`、`kakeai-composition`
+
+### 必須の正規操作
+
+`kakeai-production`:
+
+- 基盤: `schema.get`、`template.get`
+- 作品と台本: `work.create`、`work.update`、`work.clone`、`work.list`、`edition.create`、`script.get`、`script.save`、`script.edit`、`script.validate`、`script.listVersions`、`script.restore`、`script.subtitles`
+- 素材: `asset.list`、`asset.get`、`asset.import`、`asset.update`
+- キャラクターと声: `character.list`、`character.get`、`character.create`、`character.update`、`character.addAppearance`、`character.updateAppearance`、`character.setVoices`、`voiceAdapter.list`、`voiceProfile.list`、`voiceProfile.get`、`voiceProfile.listVoices`、`voiceProfile.listModels`、`voiceProfile.create`、`voiceProfile.update`
+- 表情とテーマ: `faceSet.get`、`theme.list`、`theme.get`
+- 音声合成: `tts.create`、`tts.createBulk`、`tts.attachBulk`
+- レンダーと納品: `render.start`、`job.get`、`job.list`、`artifact.get`、`artifact.export`
+
+`kakeai-production` の任意操作:
+
+- 表情・テーマの編集: `faceSet.list`、`faceSet.create`、`faceSet.update`、`faceSet.usages`、`theme.create`、`theme.draft.get`、`theme.draft.save`、`theme.diagnose`、`theme.publish`、`font.list`
+- レンダー前後の確認: `preview.scriptFrame`、`preview.assetFrame`、`preview.frame`、`preview.faceSet`、`preview.theme`
+- サムネイル: `thumbnail.listTemplates`、`thumbnail.list`、`thumbnail.create`、`thumbnail.update`、`thumbnail.setPrimary`、`thumbnail.image`、`preview.thumbnail`
+
+`kakeai-composition`:
+
+- 基盤: `schema.get`、`template.get`
+- 作品と Composition: `work.list`、`work.get`、`composition.list`、`composition.get`、`composition.draft.get`、`composition.authoringContext`、`composition.create`、`composition.draft.update`、`composition.publish`
+- 台本からの参照: `script.edit`、`script.validate`
+- レンダー: `render.start`、`job.get`
+
+`job.wait`（MCP の `kakeai_job_wait`）は束縛の便宜ツールであり、Agent 操作ではないため含めない。`standing.state.upsert` / `standing.state.remove`、`character.addFromLibrary`、`line.assignTake`、`speaker.add` などは Script Operation であり、Agent 操作名ではない。制作スキルはこれらを `script.edit` の中で使う。
+
+### 互換性上の注意
+
+- `v0.3.0` のアプリは Agent Access プロトコル `2` のため、`v0.2.0` 以前の MCP/CLI 束縛（プロトコル `1`）は接続時の handshake で `PROTOCOL_MISMATCH` になる。アプリと束縛は同じ公開タグに揃える。
+- スキルはアプリと別に配布される。`v0.2.0` のスキルを `v0.3.0` のアプリで使うことはできるが、立ち絵状態や外観の標準配置などの新機能は使えない。逆に `v0.3.0` のスキルを `v0.2.0` のアプリで使うと、`script.edit` の `standing.state.upsert` / `standing.state.remove` や `CharacterAppearance.standing` を必要とする操作が失敗する。
+- 制作スキルは、セリフ境界の立ち絵状態を `script.edit` の `standing.state.upsert` / `standing.state.remove` で、外観の標準配置を `CharacterAppearance.standing` で扱う。アプリの Script Operation 契約がこれらに対応している必要がある。
+- `character.update` は `name` / `names` / `voices` の部分更新だけを扱い、外観は `character.addAppearance` / `character.updateAppearance` で変更する。`label: null` と `faceSetId: null` は解除、`standing` は `{ scale, edge, vertical }` をまとめて置き換える。
+- MCP のツール説明と `instructions` は英語に統一した。ツール名・入力スキーマ・操作名は変えていないため、互換性への影響はない。
+- 公開済みの `v*` タグは更新も削除もしない。スキル本文の修正は新しいパッチ版タグで行う。
+
 ## v0.2.0
 
 - 対応リリース: [`v0.2.0`](https://github.com/shipwebdotjp/kakeai/releases/tag/v0.2.0)（初回公開版）
