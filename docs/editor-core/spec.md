@@ -58,7 +58,7 @@ interface ScriptOperationResult {
 
 - 同一の入力・文脈・ID生成器に対して同一の結果を返す。
 - 操作対象でない Cue、未知の `template.id@version`、UI が解釈しない入力は保持する。削除・再生成しない。
-- 操作は 1 件ずつ適用できる。複数操作の一括適用と原子性は束縛が担う（[../agent-access/spec.md](../agent-access/spec.md)）。
+- 操作は 1 件ずつ適用できる。複数操作の一括適用と原子性は束縛が担う（[../agent-access/spec.md](../agent-access/spec.md)）。一括適用では操作を順に適用するため、`index` を取る操作の位置は「その操作を適用する時点の配列」を基準にする。複数の Scene を追加するときは `index` を省略して語順どおりに並べ、`index` は既存の Scene の間に 1 件挿すときだけ使う。
 
 ### 操作の識別子と一括適用
 
@@ -84,7 +84,7 @@ type ScriptOperation =
 
 | 操作 | 入力 | 不変条件 |
 | --- | --- | --- |
-| `scene.add` | `kind` (`point` / `insert`)、挿入位置、任意の `label`、`point` の任意の初期 `lines`、`insert` の `assetId`・`durationMs`・`embeddedAudio` | 導入は先頭、結びは末尾、`point`/`insert` はその間。挿入位置は文書全体の 0 始まり位置（導入の直後が 1、結びの直前が末尾）。`label` 省略時は連番。`accent` は `theme.primary`、`timing` は `point` が `auto`、`insert` が `fixed`、`transition` は `cut`。`point` は既定のテキスト Cue を持つ。`insert` は ready な `video` Asset を参照し、主動画 Cue を 1 件だけ持つ。音声のない Asset では `embeddedAudio: true` を拒否する |
+| `scene.add` | `kind` (`point` / `insert`)、挿入位置、任意の `label`、`point` の任意の初期 `lines`、`insert` の `assetId`・`durationMs`・`embeddedAudio` | 導入は先頭、結びは末尾、`point`/`insert` はその間。挿入位置は文書全体の 0 始まり位置（導入の直後が 1、結びの直前が末尾）。`label` 省略時は連番。`accent` は `theme.primary`、`timing` は `point` が `auto`、`insert` が `fixed`、`transition` は `cut`。`point` は既定のテキスト Cue を持たず、呼び出し側が `cue.add` で追加する。`insert` は ready な `video` Asset を参照し、主動画 Cue を 1 件だけ持つ。音声のない Asset では `embeddedAudio: true` を拒否する |
 | `scene.remove` | `sceneId` | 導入・結びは削除できない。参照する AudioCue も削除する |
 | `scene.move` | `sceneId`、移動先 | 導入・結びの位置は変えられない。`point`/`insert` のみ移動できる |
 | `scene.splitAtLine` | `sceneId`、分割する行、任意の `label` | 後述の解決規則に従う。`point` のみ |
@@ -135,7 +135,7 @@ type ScriptOperation =
 ### Cue操作の補足
 
 - `cue.*` は insert Scene の主動画 Cue を対象外とする。insert Scene は `scene.add` で作り、主動画は固定である。
-- `cue.add` の `order` 省略時は同一 layer の末尾へ置く。`order` は layer 内で一意でなければならない。
+- `cue.add` の `order` 省略時は同一 layer の末尾へ置く。`order` は layer 内で一意でなければならない。明示した `order` が衝突した場合はエラーとし、その layer で使用中の `order` の一覧を返す。`cue.setPlacement` も同じ規則で衝突を拒否する。
 - `cue.add` と `cue.setInput` は、入力の効果トリガーと `videoPlayback.gates` が同じ Scene の実在行を指すことを検証する。
 - `cue.add` と `cue.setRange` の範囲は、行範囲なら開始行が終了行以前、offset なら `startMs < endMs` でなければならない。逆転した範囲は自動補正しない。
 - `cue.setInput` は入力の部分更新である。plain object は深くマージし、配列・プリミティブ・`null` は置換する。`replace: true` のときは入力全体を置換する。マージ後の入力をテンプレートの入力スキーマで検証する。
@@ -187,6 +187,7 @@ type ScriptOperation =
 - 前半は元の Scene ID・行 ID・Cue ID を維持する。後半は新しい Scene ID と、既定のテキスト Cue を持つ。
 - 行 ID は移動しても変更しない。
 - `range: scene` の Cue は前半に残す。`range: lines` の Cue は、範囲全体が前半なら前半、全体が後半なら後半へ移す。分割点をまたぐ場合は両方へ複製し、前半は分割直前の行まで、後半は分割行からに切り詰める。複製した後半の Cue には新しい Cue ID を振る。
+- `character.standing@1` は前半に残し、分割点で有効な立ち絵を後半の開始状態として複製する。Cue ID は新規に振る。`standingStates` がある場合は分割点で有効な状態を開始状態とし、無い場合は元の Scene の開始立ち絵を引き継ぐ。
 - `range: offset` の Cue は、分割点の解決済みミリ秒で切る。分割点をまたぐ場合は両方へ複製し、後半の `startMs`/`endMs` を分割点からの相対値へ再基準化する。
 - 効果トリガーと `videoPlayback.gates` が、移動先の Scene に存在しない行を参照する場合は、その参照だけを外す。参照先が存在する側では維持する。剪定の結果、テンプレートの必須入力を満たさなくなった Cue は、その Scene から削除し、`cue_removed_after_split` 警告を返す。
 - `standingStates` は、前半に分割点より前の変更点を残し、分割点以降の変更点を後半へ移す。後半には分割点で有効な状態を開始時状態として引き継ぐ。分割点ちょうどの変更点が引き継いだ開始時状態と同じ場合は、後半で重複する変更点を落とす。元の Scene に変更点が無い場合は、開始時状態を後半へコピーしない。

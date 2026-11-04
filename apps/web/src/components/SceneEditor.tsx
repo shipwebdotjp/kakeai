@@ -28,6 +28,7 @@ import {
   type SceneFormValue,
 } from "../content/form";
 import {
+  addPointSceneStructural,
   applyStructuralOperation,
   commitBgmStructural,
   commitCueStructural,
@@ -606,15 +607,23 @@ export function SceneEditor({
   };
 
   const onAddPoint = () => {
-    const next = runStructural({
-      op: "scene.add",
-      kind: "point",
-      index: resolveInsertIndex(),
-    });
-    const newSceneId = next?.result.created.sceneIds[0];
-    if (newSceneId !== undefined) {
-      openScene(newSceneId);
-      revealTarget(`scene-${newSceneId}`);
+    try {
+      const next = addPointSceneStructural(
+        base,
+        getValues(),
+        resolveInsertIndex(),
+        assetsQuery.data ?? [],
+      );
+      replaceScenes(next.values.scenes);
+      showWarnings(next.result.warnings);
+      const newSceneId = next.result.created.sceneIds[0];
+      if (newSceneId !== undefined) {
+        openScene(newSceneId);
+        revealTarget(`scene-${newSceneId}`);
+      }
+    } catch (error) {
+      pendingScrollRef.current = null;
+      showError(error);
     }
   };
 

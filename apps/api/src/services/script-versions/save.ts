@@ -11,6 +11,7 @@ import { assertInsertScenes, assertVideoPlayback } from "./validation";
 import { throwIfFatalTimelineError } from "./errors";
 import { requireEdition } from "./common";
 import {
+  collectCompositionDurationWarnings,
   collectCompositionWindowIssues,
   collectOffsetRangeWarnings,
   collectTimelineIssues,
@@ -333,11 +334,21 @@ export async function saveScriptVersion(
   } catch (error) {
     throwIfFatalTimelineError(error);
   }
+  let compositionWarnings: Warning[] = [];
+  try {
+    compositionWarnings = collectCompositionDurationWarnings(
+      content,
+      compositionDurations,
+    );
+  } catch (error) {
+    throwIfFatalTimelineError(error);
+  }
   const warnings = [
     ...computeContentWarnings(content, {
       outputProfile: toOutputProfile(edition.work.outputProfile),
     }),
     ...offsetWarnings,
+    ...compositionWarnings,
     ...(await collectInsertWarnings(prisma, content)),
   ];
   const contentJson = serializeContent(content);

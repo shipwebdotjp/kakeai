@@ -3,6 +3,7 @@ import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import { createInsertScene, type ContentDocument, type VisualCue } from "@kakeai/contracts";
 import { CompositionCompileError } from "./compile-error";
 import {
+  collectCompositionDurationWarnings,
   collectCompositionWindowIssues,
   collectOffsetRangeWarnings,
   collectSceneTransitionIssues,
@@ -346,5 +347,25 @@ describe("collectCompositionWindowIssues", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [compositionCue("vc-comp", { kind: "scene" })];
     expect(collectCompositionWindowIssues(document, new Map())).toEqual([]);
+  });
+
+  it("warns when the child duration is shorter than the cue range", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [compositionCue("vc-comp", { kind: "scene" })];
+    const warnings = collectCompositionDurationWarnings(
+      document,
+      new Map([["ver-1", 1000]]),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]!.code).toBe("composition_shorter_than_range");
+    expect(warnings[0]!.path).toEqual(["scenes", 0, "visualCues", 0]);
+  });
+
+  it("does not warn when the child covers the cue range", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [compositionCue("vc-comp", { kind: "scene" })];
+    expect(
+      collectCompositionDurationWarnings(document, new Map([["ver-1", 5000]])),
+    ).toEqual([]);
   });
 });

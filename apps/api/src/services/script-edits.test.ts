@@ -219,7 +219,7 @@ describe("script edit validation service", () => {
 
     expect(result.created.sceneIds).toHaveLength(1);
     expect(result.created.lineIds).toHaveLength(2);
-    expect(result.created.cueIds).toHaveLength(4);
+    expect(result.created.cueIds).toHaveLength(2);
     expect(result.created.audioTakeIds).toHaveLength(1);
     expect(result.created.audioCueIds).toHaveLength(1);
     expect(result.warnings).toEqual(expect.any(Array));
@@ -239,7 +239,7 @@ describe("script edit validation service", () => {
       gapBeforeMs: 100,
       selectedAudioTakeId: result.created.audioTakeIds[0],
     });
-    expect(edited.visualCues).toHaveLength(4);
+    expect(edited.visualCues).toHaveLength(2);
     const textCue = edited.visualCues.find(
       (cue) => (cue.input as { text?: string }).text === "U",
     );
@@ -420,5 +420,31 @@ describe("script edit validation service", () => {
       }
     })();
     expect(messages.join("\n")).toMatch(/尺/);
+  });
+
+  it("returns a warning when a composition background is shorter than its range", () => {
+    const document = createInitialContentDocument();
+    document.scenes[0]!.visualCues = [
+      {
+        id: "vc-comp",
+        template: { id: "composition.full-bleed", version: 1 },
+        range: { kind: "scene" },
+        layer: "background",
+        order: 0,
+        transition: {
+          enter: { preset: "none", durationMs: 0 },
+          exit: { preset: "none", durationMs: 0 },
+        },
+        input: { compositionVersionId: "ver-1" },
+      },
+    ];
+    const refs = references();
+    refs.compositionDurations.set("ver-1", 1000);
+    refs.compositionProfiles.set("ver-1", "landscape");
+
+    const warnings = validateEditedScriptContent(document, refs);
+    expect(warnings.map((warning) => warning.code)).toContain(
+      "composition_shorter_than_range",
+    );
   });
 });

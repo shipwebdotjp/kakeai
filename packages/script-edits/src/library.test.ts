@@ -144,7 +144,7 @@ describe("standing operations", () => {
     if (removedScene.kind !== "point") {
       throw new Error("要点Sceneではありません。");
     }
-    expect(removedScene.visualCues).toHaveLength(3);
+    expect(removedScene.visualCues).toHaveLength(1);
     expect(
       removedScene.visualCues.some(
         (cue) =>

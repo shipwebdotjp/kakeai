@@ -259,6 +259,7 @@ describe("buildContentDocument", () => {
 
   it("clones a previous point scene's visuals without lines or audio", () => {
     const base = createInitialContentDocument();
+    base.scenes[1] = createPointScene(base.scenes[1]!.id, base.scenes[1]!.label);
     const values = toFormValues(base);
     const source = values.scenes[1]!;
     if (source.kind !== "point") {
@@ -311,6 +312,7 @@ describe("buildContentDocument", () => {
 
   it("duplicates a saved cue at the end of the same layer", () => {
     const base = createInitialContentDocument();
+    base.scenes[1] = createPointScene(base.scenes[1]!.id, base.scenes[1]!.label);
     const values = toFormValues(base);
     const scene = values.scenes[1]!;
     const source = scene.cues[0]!;

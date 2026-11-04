@@ -163,6 +163,15 @@ a second copy of that contract.
   `scene.add` (`point` for narration, `insert` for a source video), split long
   ones with `scene.splitAtLine` or `line.split`, and add narration with
   `line.add`.
+- `scene.add` creates an empty point scene: it does not add text cues. Add the
+  cues you need with `cue.add`; an empty scene still renders captions and the
+  theme background.
+- `index` is resolved against the array as it exists when that operation runs.
+  When adding several scenes, omit `index` and list them in script order; use
+  `index` only to insert one scene between existing scenes.
+- `scene.splitAtLine` keeps scene-range cues in the first scene and moves or
+  splits line-range cues. It also copies the effective standing characters into
+  the new scene as its opening state, with new cue ids.
 
 ## 4. Characters, voices and libraries
 
@@ -426,12 +435,18 @@ speaker.
   `cue.setRange`. Put left/right characters on screen with `standing.upsert`
   for the scene-opening state, and use `standing.state.upsert` for changes at
   a line boundary (see §6.1).
+- `order` is unique within a scene and layer. Omit it to append to the end of
+  the layer; when you send an explicit `order`, the error lists the orders
+  already in use.
 - Add scene or work BGM with `audio.add`: `role: "bgm"`, a ready audio asset,
   `range: { kind: "scene", sceneId }` or `{ kind: "work" }`. A work may have at
   most one work-range BGM.
 - Use a ready asset for every media field. A published CompositionVersion goes
   in a background cue only; authoring that version is the `kakeai-composition`
-  skill's job.
+  skill's job. A composition background is visible for
+  `min(cue range, manifest durationMs)` and disappears at the child end. Match
+  the cue range to the composition duration, or expect
+  `composition_shorter_than_range` from `script.validate`.
 - Validate incrementally. `script.validate` accepts either
   `{ content }` (validate a document you already have) or
   `{ baseScriptVersionId, operations }` (dry-run the next edit without saving).
@@ -456,8 +471,9 @@ speaker.
   line. If the character is hidden on that line, the expression is not rendered
   and validation is skipped.
 - Line removal moves or drops affected states, and `scene.splitAtLine` carries
-  the effective state into the new scene. Re-read the script after structural
-  edits instead of assuming state ids or ranges.
+  the effective state into the new scene. Without states it copies the base
+  standing cue. Re-read the script after structural edits instead of assuming
+  state ids or ranges.
 
 ## 7. TTS
 

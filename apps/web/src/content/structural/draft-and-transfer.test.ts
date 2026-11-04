@@ -29,6 +29,7 @@ import { pointScene, textCue, lines } from "./test-helpers";
 describe("structural operation adapter", () => {
   it("未確定Cueは構造操作後も元の行位置に戻る", () => {
     const base = createInitialContentDocument();
+    pointScene(base).visualCues.push(textCue({ kind: "scene" }, "既存"));
     const values = toFormValues(base);
     const draft = createCueFormValue({
       sceneId: DEFAULT_SCENE_IDS.point1,
@@ -169,6 +170,7 @@ describe("structural operation adapter", () => {
 
   it("Cueを複数Sceneへ複製するとIDが採番し直される", () => {
     const base = createInitialContentDocument();
+    pointScene(base).visualCues.push(textCue({ kind: "scene" }, "T"));
     const values = toFormValues(base);
     const cueId = values.scenes[1]!.cues[0]!.id;
 

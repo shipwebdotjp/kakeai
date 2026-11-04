@@ -148,10 +148,23 @@ describe("cue operations", () => {
         ),
       "EDIT_UNSUPPORTED_TEMPLATE",
     );
+    const withExisting = applyScriptOperation(
+      document,
+      {
+        op: "cue.add",
+        sceneId: point.id,
+        template: TEXT_BLOCK,
+        range: { kind: "scene" },
+        layer: "overlay",
+        order: 0,
+        input: { text: "既存", role: "heading" },
+      },
+      createTestContext(),
+    ).document;
     expectEditError(
       () =>
         applyScriptOperation(
-          document,
+          withExisting,
           {
             op: "cue.add",
             sceneId: point.id,
@@ -306,11 +319,24 @@ describe("cue operations", () => {
       createTestContext(),
     );
     const cueId = added.created.cueIds[0]!;
+    const occupied = applyScriptOperation(
+      added.document,
+      {
+        op: "cue.add",
+        sceneId: point.id,
+        template: TEXT_BLOCK,
+        range: { kind: "scene" },
+        layer: "overlay",
+        order: 0,
+        input: { text: "既存", role: "heading" },
+      },
+      createTestContext(),
+    ).document;
 
     expectEditError(
       () =>
         applyScriptOperation(
-          added.document,
+          occupied,
           {
             op: "cue.setPlacement",
             sceneId: point.id,

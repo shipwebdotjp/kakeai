@@ -26,7 +26,6 @@ import {
   defaultPointLabel,
   getTemplateInputFields,
   getVisualTemplate,
-  pointSceneTextCues,
   type ContentDocument,
   type CueLayer,
 } from "@kakeai/contracts";
@@ -432,7 +431,7 @@ export function createPointSceneFormValue(
     transitionPreset: "cut",
     transitionDurationMs: 0,
     lines: [],
-    cues: pointSceneTextCues(id).map(toCueFormValue),
+    cues: [],
     standings: emptyStandingSlots(),
     standingStates: [],
     audioCues: [],

@@ -119,9 +119,13 @@ function assertOrderAvailable(
       cue.layer === layer && cue.order === order && cue.id !== exceptCueId,
   );
   if (collision !== undefined) {
+    const used = scene.visualCues
+      .filter((cue) => cue.layer === layer && cue.id !== exceptCueId)
+      .map((cue) => cue.order)
+      .sort((left, right) => left - right);
     throw preconditionFailed(
       ["order"],
-      `${layer}レイヤーのorder ${order}は既に使われています。`,
+      `${layer}レイヤーのorder ${order}は既に使われています。使用中: ${used.join(", ")}。orderを省略すると同一レイヤーの末尾へ自動採番されます。`,
     );
   }
 }

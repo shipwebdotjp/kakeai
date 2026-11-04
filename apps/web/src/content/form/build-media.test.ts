@@ -42,6 +42,7 @@ import { transition, vc, pointScenes, sceneTextCue, setSceneText, readSceneText,
 describe("buildContentDocument", () => {
   it("maps scene values to base scenes by id, not position", () => {
     const base = createInitialContentDocument();
+    base.scenes[1] = createPointScene(base.scenes[1]!.id, base.scenes[1]!.label);
     base.scenes.splice(
       base.scenes.length - 1,
       0,

@@ -88,6 +88,7 @@ describe("scene accent", () => {
 
   it("keeps explicit text cue styles through a form round-trip", () => {
     const base = createInitialContentDocument();
+    base.scenes[1] = createPointScene(base.scenes[1]!.id, base.scenes[1]!.label);
     const values = toFormValues(base);
     const cue = values.scenes[1]!.cues[0]!;
     cue.fields.text = "見出し";

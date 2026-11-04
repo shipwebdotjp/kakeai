@@ -118,7 +118,7 @@ bundle と draft はアプリデータ領域の `compositions/` 配下に置く�
 ```
 
 - `layer` は `background` とし、`range` は `scene` / `lines` / `offset` の全てを許可する（共通 Cue range 解決を使う）。`background` 以外のレイヤーへの配置は ContentDocument 検証が拒否する。同一 version の複数配置は許可する（R2）。
-- **尺**: Composition host の実効表示窓は `min(range 尺, manifest.durationMs)` とする。range 尺より child が短い Cue は child 終端で非表示にし、末フレーム保持・ループはしない。Cue transition は実効表示窓内に収まることを検証する。Scene crossfade により必要となる表示窓が child 尺を超える Composition 背景は、保存時とレンダー投入時に明示エラーにする。
+- **尺**: Composition host の実効表示窓は `min(range 尺, manifest.durationMs)` とする。range 尺より child が短い Cue は child 終端で非表示にし、末フレーム保持・ループはしない。Cue transition は実効表示窓内に収まることを検証する。Scene crossfade により必要となる表示窓が child 尺を超える Composition 背景は、保存時とレンダー投入時に明示エラーにする。child が range 尺より短いだけの場合は保存を許可し、`script.validate` と保存の警告に `composition_shorter_than_range` を返す。
 - 音声、利用時の text/color/media slot は持たない。
 
 ### 端末画面への埋め込み（R3）

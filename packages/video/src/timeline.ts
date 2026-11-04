@@ -473,3 +473,49 @@ export function collectCompositionWindowIssues(
   }
   return issues;
 }
+
+export const COMPOSITION_SHORTER_THAN_RANGE_CODE = "composition_shorter_than_range";
+
+export function collectCompositionDurationWarnings(
+  document: ContentDocument,
+  durationByCompositionVersionId: ReadonlyMap<string, number>,
+  timeline: ResolvedTimeline = resolveTimeline(document),
+): Warning[] {
+  const warnings: Warning[] = [];
+  for (const placement of timeline.scenes) {
+    const scene = document.scenes[placement.sceneIndex];
+    if (scene === undefined) {
+      continue;
+    }
+    scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.template.id !== compositionFullBleedV1.id) {
+        return;
+      }
+      const cuePath: (string | number)[] = ["scenes", placement.sceneIndex, "visualCues", cueIndex];
+      const parsedInput = compositionFullBleedInputSchema.safeParse(cue.input);
+      if (!parsedInput.success) {
+        return;
+      }
+      const childDurationMs = durationByCompositionVersionId.get(
+        parsedInput.data.compositionVersionId,
+      );
+      if (childDurationMs === undefined) {
+        return;
+      }
+      const window = resolveCueWindow(placement, cue, cuePath);
+      if (window === null) {
+        return;
+      }
+      const rangeMs = window.endMs - window.startMs;
+      if (rangeMs <= childDurationMs) {
+        return;
+      }
+      warnings.push({
+        path: cuePath,
+        code: COMPOSITION_SHORTER_THAN_RANGE_CODE,
+        message: `Composition背景の尺（${childDurationMs}ms）が表示区間（${rangeMs}ms）より短いため、Compositionの終端で背景が消えます。Compositionを長くするか表示区間を短くしてください。`,
+      });
+    });
+  }
+  return warnings;
+}

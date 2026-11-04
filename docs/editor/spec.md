@@ -53,7 +53,7 @@ Scene の `accent`、`timing`、`lines`、`visualCues` は維持する。字幕�
 
 ### 既定生成
 
-新規作品は、導入1・要点1・結び1のSceneに対し、`role` に応じた既定の統合テキストCueを空テキスト（`text: ""`）で生成する。利用者がCue一覧で入力する。新規に追加した要点Sceneにも同様に既定Cueを生成する。
+新規作品は、導入と結びに `role` に応じた既定の統合テキストCueを空テキスト（`text: ""`）で生成する。要点1はCueを持たずに開始する。Web UIで要点Sceneを追加したときは、見出し・本文の統合テキストCueを空テキストで生成し、利用者がCue一覧で入力する。Agent Accessの `scene.add` は空の要点Sceneを作り、呼び出し側が `cue.add` でCueを追加する。
 
 各Sceneは編集用の名称 `label` を必須で持つ。`label` は映像に描画せず、左ペインの構成・中央ペインのScene見出し・右ペインのプレビューSceneジャンプに表示する。見出しを映像に出すかは `heading` テキストCueで別途決める。詳細は [../scene-labels/spec.md](../scene-labels/spec.md) を正とする。
 

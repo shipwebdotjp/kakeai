@@ -12,6 +12,7 @@ import {
   toFormValues,
 } from "../form";
 import {
+  addPointSceneStructural,
   applyStructuralOperation,
   applyStructuralOperations,
   commitBgmStructural,
@@ -27,16 +28,11 @@ import {
 import { pointScene, textCue, lines } from "./test-helpers";
 
 describe("structural operation adapter", () => {
-  it("要点Sceneを既定の形で追加する", () => {
+  it("要点SceneとUI既定のテキストCueをまとめて追加する", () => {
     const base = createInitialContentDocument();
     const values = toFormValues(base);
     const outroIndex = values.scenes.findIndex((scene) => scene.kind === "outro");
-    const { document } = applyStructuralOperation(
-      base,
-      values,
-      { op: "scene.add", kind: "point", index: outroIndex },
-      [],
-    );
+    const { document } = addPointSceneStructural(base, values, outroIndex, []);
 
     expect(document.scenes.map((scene) => scene.kind)).toEqual([
       "intro",
@@ -46,7 +42,14 @@ describe("structural operation adapter", () => {
     ]);
     const added = document.scenes[outroIndex]!;
     expect(added.label).toBe("要点 2");
+    if (added.kind !== "point") {
+      throw new Error("要点Sceneではありません。");
+    }
     expect(added.visualCues).toHaveLength(2);
+    expect(added.visualCues.map((cue) => (cue.input as { role?: string }).role)).toEqual([
+      "heading",
+      "body",
+    ]);
   });
 
   it("行の移動・削除でCue範囲を更新する", () => {
@@ -199,6 +202,7 @@ describe("structural operation adapter", () => {
 
   it("Cueの入力・配置変更を操作コア経由で確定できる", () => {
     const base = createInitialContentDocument();
+    pointScene(base).visualCues.push(textCue({ kind: "scene" }, "元"));
     const values = toFormValues(base);
     const cue = values.scenes[1]!.cues[0]!;
     cue.fields = { ...cue.fields, text: "更新後", role: "heading" };

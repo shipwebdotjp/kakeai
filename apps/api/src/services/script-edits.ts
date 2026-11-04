@@ -17,6 +17,7 @@ import {
 import {
   OFFSET_RANGE_CLAMPED_CODE,
   OFFSET_RANGE_OUT_OF_SCENE_CODE,
+  collectCompositionDurationWarnings,
   collectCompositionWindowIssues,
   collectOffsetRangeWarnings,
   collectTimelineIssues,
@@ -208,7 +209,20 @@ export function validateEditedScriptContent(
   } catch (error) {
     throwIfFatalTimelineError(error);
   }
-  return [...computeContentWarnings(document, options), ...offsetWarnings];
+  let compositionWarnings: Warning[] = [];
+  try {
+    compositionWarnings = collectCompositionDurationWarnings(
+      document,
+      references.compositionDurations,
+    );
+  } catch (error) {
+    throwIfFatalTimelineError(error);
+  }
+  return [
+    ...computeContentWarnings(document, options),
+    ...offsetWarnings,
+    ...compositionWarnings,
+  ];
 }
 
 export function applyAndValidateScriptOperations(

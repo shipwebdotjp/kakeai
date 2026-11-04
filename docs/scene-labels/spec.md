@@ -28,7 +28,7 @@
 
 ## 台本インポート
 
-`## 章タイトル` は、生成するpoint Sceneの `label` に設定する。`heading` テキストCueの `text` は変更しない。通常のpoint Sceneにある空の `heading` / `body` Cueはそのまま残し、映像に見出しを出すかは利用者がCueで明示的に決める。
+`## 章タイトル` は、生成するpoint Sceneの `label` に設定する。`heading` テキストCueは生成しない。映像に見出しを出すかは利用者がCueで明示的に決める。
 
 ## schemaVersion と移行
 

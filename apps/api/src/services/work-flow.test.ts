@@ -242,7 +242,8 @@ describe("work and script version flow", () => {
     const work = await works.createWork(prisma, "保存テスト", "ja-JP");
     const edition = work.languageEditions[0]!;
     const content = createInitialContentDocument();
-    const point = content.scenes[1]!;
+    const point = createPointScene(content.scenes[1]!.id, content.scenes[1]!.label);
+    content.scenes[1] = point;
     const headingCue = point.visualCues.find(
       (cue) => (cue.input as { role?: string }).role === "heading",
     )!;
@@ -335,7 +336,8 @@ describe("work and script version flow", () => {
     const work = await works.createWork(prisma, "警告テスト", "ja-JP");
     const edition = work.languageEditions[0]!;
     const content = createInitialContentDocument();
-    const point = content.scenes[1]!;
+    const point = createPointScene(content.scenes[1]!.id, content.scenes[1]!.label);
+    content.scenes[1] = point;
     const bodyCue = point.visualCues.find(
       (cue) => (cue.input as { role?: string }).role === "body",
     )!;

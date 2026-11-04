@@ -195,16 +195,34 @@ describe("standing.state operations", () => {
     expect(contentDocumentSchema.safeParse(split.document).success).toBe(true);
   });
 
-  it("does not copy standings at a split when the scene has no states", () => {
+  it("copies the opening standing at a split when the scene has no states", () => {
     const { document, point } = fixture();
-    const split = applyScriptOperation(
+    const withStanding = applyScriptOperation(
       document,
+      {
+        op: "standing.upsert",
+        sceneId: point.id,
+        side: "left",
+        characterId: "char-1",
+        appearanceId: "app-1",
+      },
+      createTestContext(),
+    );
+    const split = applyScriptOperation(
+      withStanding.document,
       { op: "scene.splitAtLine", sceneId: point.id, lineId: "line-3" },
       createTestContext(),
     );
     const second = split.document.scenes[2]!;
-    expect(second.visualCues.some((cue) => cue.template.id === "character.standing")).toBe(
-      false,
+    const carried = second.visualCues.find(
+      (cue) => cue.template.id === "character.standing",
     );
+    expect(carried).toBeDefined();
+    expect(carried?.input).toMatchObject({
+      characterId: "char-1",
+      appearanceId: "app-1",
+      side: "left",
+    });
+    expect(contentDocumentSchema.safeParse(split.document).success).toBe(true);
   });
 });

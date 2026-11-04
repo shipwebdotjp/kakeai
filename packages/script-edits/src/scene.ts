@@ -1,6 +1,6 @@
 import {
+  createEmptyPointScene,
   createInsertScene,
-  createPointScene,
   defaultInsertLabel,
   defaultPointLabel,
   type ContentDocument,
@@ -132,7 +132,7 @@ export function addPointScene(
   );
   const sceneId = context.ids.scene(sceneIds);
   const label = operation.label?.trim() || nextLabel(document, operation.index, "point");
-  const scene: PointScene = createPointScene(sceneId, label);
+  const scene: PointScene = createEmptyPointScene(sceneId, label);
   const lines = (operation.lines ?? []).map((input) => {
     assertNewLineSpeaker(document, input);
     return createLine(sceneId, input, context, existingLines);

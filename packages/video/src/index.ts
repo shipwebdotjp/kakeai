@@ -37,7 +37,7 @@ export type {
   VideoPlaybackPlansResult,
   VideoPlaybackPlanHold,
 } from "./video-playback";
-export { resolveTimeline, resolveCueWindow, narrationGapBeforeMs, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE, OFFSET_RANGE_OUT_OF_SCENE_CODE, OFFSET_RANGE_CLAMPED_CODE, collectCompositionWindowIssues, collectCueTransitionIssues, collectOffsetRangeWarnings, collectSceneTransitionIssues, collectTimelineIssues, compositionClipReachesSceneEnd, compositionCrossfadeExceedsChild, compositionTransitionOverflowMessage, sceneTransitionOf } from "./timeline";
+export { resolveTimeline, resolveCueWindow, narrationGapBeforeMs, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_CODE, COMPOSITION_CROSSFADE_WINDOW_INSUFFICIENT_MESSAGE, COMPOSITION_SHORTER_THAN_RANGE_CODE, OFFSET_RANGE_OUT_OF_SCENE_CODE, OFFSET_RANGE_CLAMPED_CODE, collectCompositionWindowIssues, collectCompositionDurationWarnings, collectCueTransitionIssues, collectOffsetRangeWarnings, collectSceneTransitionIssues, collectTimelineIssues, compositionClipReachesSceneEnd, compositionCrossfadeExceedsChild, compositionTransitionOverflowMessage, sceneTransitionOf } from "./timeline";
 export type { ResolvedSceneTransition } from "./timeline";
 export type {
   CueWindow,

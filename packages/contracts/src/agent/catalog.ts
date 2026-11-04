@@ -364,6 +364,7 @@ export const agentWarningCodes = [
   "cue_removed_after_line_removal",
   "cue_removed_after_split",
   "cue_line_refs_reset",
+  "composition_shorter_than_range",
   "draft_cue_range_reset",
   "insert_video_without_audio",
   "offset_range_clamped",

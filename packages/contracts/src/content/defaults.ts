@@ -71,6 +71,19 @@ export function createPointScene(sceneId: string, label: string): PointScene {
   };
 }
 
+/**
+ * A point scene with no default text cues. Used by scene creation paths where
+ * the caller decides which cues to add (Agent Access and the Web editor's
+ * explicit cue creation). Splitting keeps `createPointScene` so the new scene
+ * still starts with empty heading/body fields.
+ */
+export function createEmptyPointScene(sceneId: string, label: string): PointScene {
+  return {
+    ...createPointScene(sceneId, label),
+    visualCues: [],
+  };
+}
+
 export function insertMainCueId(sceneId: string): string {
   return `visual-${sceneId}-main-video`;
 }
@@ -140,7 +153,7 @@ export function createInitialContentDocument(
         accent: { ...DEFAULT_SCENE_ACCENT },
         timing: { mode: "auto" },
         lines: [],
-        visualCues: pointSceneTextCues(DEFAULT_SCENE_IDS.point1),
+        visualCues: [],
       },
       {
         id: DEFAULT_SCENE_IDS.outro,

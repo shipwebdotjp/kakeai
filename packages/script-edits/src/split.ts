@@ -79,10 +79,10 @@ function sceneStandingCue(
 }
 
 /**
- * The state that must become the new scene's opening state at the split.
- * Returns the carried states per side plus the cue that represents them.
- * Only called when the original scene has explicit standing states, so a scene
- * without them keeps the historical "do not copy standings" split behavior.
+ * The state that becomes the new scene's opening state at the split.
+ * Returns the carried states per side plus a standing cue for each side that
+ * is visible at the split. A scene without standing states still carries the
+ * base standing cue, so splitting does not silently hide a character.
  */
 function carryStandingStates(
   scene: ContentDocument["scenes"][number],
@@ -95,9 +95,6 @@ function carryStandingStates(
   carried: Map<StandingSide, { characterId: string | null; appearanceId: string | null }>;
 } {
   const states = scene.standingStates ?? [];
-  if (states.length === 0) {
-    return { cues: [], carried: new Map() };
-  }
   const indexById = new Map(scene.lines.map((line, index) => [line.id, index]));
   const cues: VisualCue[] = [];
   const carried = new Map<

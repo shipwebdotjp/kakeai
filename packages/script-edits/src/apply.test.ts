@@ -48,7 +48,7 @@ function expectEditError(
 }
 
 describe("applyScriptOperations", () => {
-  it("要点Sceneを末尾へ追加し、既定のCueとラベルを付ける", () => {
+  it("要点Sceneを末尾へ追加し、既定のラベルを付ける", () => {
     const document = createInitialContentDocument();
     const result = applyScriptOperations(
       document,
@@ -72,7 +72,7 @@ describe("applyScriptOperations", () => {
     const added = result.document.scenes[2]!;
     expect(added.label).toBe("要点 2");
     expect(added.kind).toBe("point");
-    expect(added.visualCues).toHaveLength(2);
+    expect(added.visualCues).toHaveLength(0);
     expect(added.lines).toEqual([
       {
         id: "line-scene-point-new-1-1",
@@ -85,7 +85,7 @@ describe("applyScriptOperations", () => {
     ]);
     expect(result.created.sceneIds).toEqual(["scene-point-new-1"]);
     expect(result.created.lineIds).toEqual(["line-scene-point-new-1-1"]);
-    expect(result.created.cueIds).toHaveLength(2);
+    expect(result.created.cueIds).toHaveLength(0);
   });
 
   it("同じ呼び出し内のkey参照で作成したSceneを操作できる", () => {
