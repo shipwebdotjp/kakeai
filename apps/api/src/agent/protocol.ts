@@ -5,12 +5,15 @@ import {
   AGENT_MAX_PENDING_FRAMES_PER_CONNECTION,
   AGENT_MAX_REQUEST_BYTES,
   AGENT_MUTATION_TIMEOUT_MS,
+  AGENT_PROTOCOL_MIN_VERSION,
+  AGENT_PROTOCOL_VERSION,
   agentHandshakeSchema,
   agentRequestEnvelopeSchema,
   agentSuccessResponseSchema,
   isAgentProtocolVersionSupported,
   resolveAgentReadTimeoutMs,
   type AgentErrorCode,
+  type AgentErrorIssue,
   type AgentResponse,
 } from "@kakeai/contracts";
 import { logger } from "../logger.ts";
@@ -132,13 +135,42 @@ export function attachAgentProtocol(socket: Socket, options: AgentProtocolOption
     });
   }
 
-  function protocolFailure(code: AgentErrorCode): void {
+  function protocolFailure(
+    code: AgentErrorCode,
+    issues?: AgentErrorIssue[],
+  ): void {
     if (closing) {
       return;
     }
-    writeError("", code);
+    write({
+      requestId: "",
+      ok: false,
+      error: issues === undefined ? { code } : { code, issues },
+    });
     closing = true;
     socket.end();
+  }
+
+  /**
+   * A parsed handshake whose protocol version is outside the supported range
+   * is the only protocol failure that can safely explain itself: the frame is
+   * valid JSON of the expected shape, so the received version is trustworthy.
+   * Malformed JSON, a malformed handshake and a malformed request envelope
+   * keep the bare mismatch code.
+   */
+  function unsupportedProtocolVersion(version: number): void {
+    protocolFailure(AGENT_ERROR_CODES.PROTOCOL_MISMATCH, [
+      {
+        path: ["protocolVersion"],
+        code: "unsupported_protocol_version",
+        message:
+          `The resident Kakeai app accepts protocol versions ` +
+          `${AGENT_PROTOCOL_MIN_VERSION} through ${AGENT_PROTOCOL_VERSION}; ` +
+          `this client sent ${version}. Update the Kakeai app and its MCP or ` +
+          `CLI binding to compatible releases, then restart the MCP host or ` +
+          `CLI process.`,
+      },
+    ]);
   }
 
   function parseFrame(line: string): unknown {
@@ -370,11 +402,12 @@ export function attachAgentProtocol(socket: Socket, options: AgentProtocolOption
         return;
       }
       const handshake = agentHandshakeSchema.safeParse(parsed);
-      if (
-        !handshake.success ||
-        !isAgentProtocolVersionSupported(handshake.data.protocolVersion)
-      ) {
+      if (!handshake.success) {
         protocolFailure(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+        return;
+      }
+      if (!isAgentProtocolVersionSupported(handshake.data.protocolVersion)) {
+        unsupportedProtocolVersion(handshake.data.protocolVersion);
         return;
       }
       handshakeDone = true;

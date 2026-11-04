@@ -53,6 +53,7 @@
 | `script.listVersions` | read | no | `kakeai_script_list_versions` |
 | `script.validate` | read | no | `kakeai_script_validate` |
 | `script.subtitles` | read | no | `kakeai_script_subtitles` |
+| `script.diff` | read | no | `kakeai_script_diff` |
 | `script.save` | mutation | no | `kakeai_script_save` |
 | `script.edit` | mutation | no | `kakeai_script_edit` |
 | `script.restore` | mutation | no | `kakeai_script_restore` |
@@ -159,6 +160,7 @@
 - v1 はアプリが起動していないとき、接続に失敗する安定したエラーを返す。エージェントによるアプリの自動起動は対象外とする。
 - 起動時、ソケットファイルが既にある場合はアプリプロセスだけが後始末する。接続できるソケットは稼働中として残し、接続できないソケットだけを削除してから listen する。ソケットでないファイルは削除しない。終了時は自分が作ったソケットを unlink する。
 - 接続時に `{ "protocolVersion": 2, "agentId": "<任意>" }` を送る。対応するプロトコル版は `minProtocolVersion`..`protocolVersion` の範囲であり、この範囲外の版は `AGENT_PROTOCOL_MISMATCH` で拒否して接続を閉じる。
+- 範囲外の版でも、handshake として正常に解析できた場合は `issues` に `protocolVersion` を path とする `unsupported_protocol_version` を付ける。メッセージは、サーバーが受け入れる版の範囲、受信した版、アプリと MCP/CLI binding を互換な release に揃えてプロセスを再起動するという復旧方針を示す。特定の更新コマンドや package version は示さない。JSON 不正、handshake の形が不正、handshake 後の不正フレームは従来どおり `issues` を付けない。詳細は [Agent Experience 仕様](../agent-experience/spec.md) を正とする。
 - フレームは 1 行 1 JSON（NDJSON）とし、要求は `{ "requestId": "<呼び出し内で一意>", "operation": "<name>", "input": <object> }`、応答は `{ "requestId": "...", "ok": true, "data": ... }` または `{ "requestId": "...", "ok": false, "error": { "code": "...", "issues": [...] } }` とする。`issues` は `{ path, code, message }` の配列で、スタックトレースや自由文の詳細は返さない。
 - 1 要求の最大ペイロードは 32 MiB（改行を含むバッファ長）とし、超えた場合は `AGENT_PAYLOAD_TOO_LARGE` を返して接続を閉じる。読み取り操作のタイムアウトは原則 10 秒、画像を返すプレビューとサムネイル（`preview.frame` / `preview.scriptFrame` / `preview.assetFrame` / `preview.theme` / `preview.thumbnail` / `preview.faceSet` / `thumbnail.image`）と `font.list` は 30 秒、`theme.diagnose` は 60 秒、変更操作は 120 秒とし、サーバー側でも `AGENT_REQUEST_TIMEOUT` を返して接続を閉じる。`theme.diagnose` が長いのは、既定の `verify: true` が Chromium で local face の解決可否を確認するためである。クライアントも同じ時間で打ち切る。タイムアウトは処理の中断を保証しない。`script.edit` は `requestId` で冪等に再送できる。高コスト操作（`tts.create` / `tts.createBulk` / `render.start` / `composition.publish`）も任意の `requestId` で冪等化され、再送しても Job や Version が増えない。それ以外の変更操作は自動再送せず、`job.list`・`script.get`・`composition.get` などで結果を確認してから必要なら再実行する。
 - サーバーは応答を返した後も同じ接続で次の要求を受け付けるが、5 分間何も受信しない接続は閉じる。
@@ -192,6 +194,7 @@
 - `script.listVersions` — `{ languageEditionId }` を受け、Edition の Script Version 履歴を `versionNumber` の降順で返す。応答は `{ languageEditionId, currentScriptVersionId, scriptVersions }` で、各要素は版番号・作成者・要求 ID・復元元（`sourceScriptVersionId`）・作成日時を持つ要約であり、`ContentDocument` は含めない。Edition が存在しなければ `WORK_NOT_FOUND`。件数は全件で、ページングは履歴が大きくなった時点で追加する。
 - `script.validate` — 保存せずに検証する。`{ content }` または `{ baseScriptVersionId, operations }` を受け、`warnings` と解決済み `timeline` を返す。書込みを行わない。
 - `script.subtitles` — 保存済み Script Version の SRT 字幕を返す（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。`{ scriptVersionId }` を受け、`{ scriptVersionId, filename, mimeType, byteSize, srt }` を返す。生成は HTTP の `GET /script-versions/:id/subtitles` と同じ `buildSrt` で、タイミングは焼き込み字幕と同じ `resolveTimeline` を使う。Artifact・Job・版を作らない。タイムラインを解決できない場合は `RENDER_INPUT_INVALID`、版が存在しない場合は `RESOURCE_NOT_FOUND`。`byteSize` は `srt` の UTF-8 バイト長である。
+- `script.diff` — 同一 Language Edition に属する二つの保存済み Script Version（`{ fromScriptVersionId, toScriptVersionId }`）を要素 ID で構造比較する読み取り操作（[Agent Experience 仕様](../agent-experience/spec.md)）。Scene、Narration Segment（line）、Visual Cue の `added`、`removed`、`updated`、`moved` を返す。`updated` は安定したトップレベル `changedFields` だけを返し、値・全文・JSON Patch は返さない。位置と親の変更は `moved` にだけ表す。追加・削除された Scene の子は重複して列挙せず、Scene の要約に line と cue の件数を含める。比較対象外の文書トップレベル変更は `outsideScopeChangedFields` にフィールド名で列挙する。版が存在しない場合は `RESOURCE_NOT_FOUND`、Edition が異なる場合は `VALIDATION_ERROR`。Script Version、Job、Artifact は作らない。`added` は最終状態の構造差分であり、`script.edit.created` の代替ではない。
 - `asset.list` — 素材を検索し、`{ assets, nextCursor, total }` の1ページを返す。`total` は同じ絞り込み条件に一致する素材の総数で、同一条件のどのページでも同じ値になる。
   - 絞り込みは `kind`・`status`・`filename`（大文字小文字を区別しない部分一致）・`tags`（`tagMode` で AND / OR を明示）・`favorite`・`archived`（既定は除外）・`hasAudio`・`durationMinMs` / `durationMaxMs` を組み合わせる。`durationMinMs` / `durationMaxMs` は0以上のミリ秒で、長さを持たない素材（`durationMs` がnull）は範囲に一致しない。下限が上限より大きい場合は `VALIDATION_ERROR` とする。
   - 寸法は `widthPx` / `heightPx`（完全一致）と `widthMinPx` / `widthMaxPx` / `heightMinPx` / `heightMaxPx`（両端を含む範囲）で絞り込む。完全一致と範囲は併用でき、すべて AND で評価する。寸法を持たない素材（音声など）は完全一致にも範囲にも一致しない。範囲の逆転、または完全一致が指定範囲の外にある指定は、一致0件ではなく `VALIDATION_ERROR` とする。Face Set の顔レイヤーと同じ寸法の画像を探す用途に使う（[ADR 0106](../adr/0106-agent-asset-dimension-filters.md)）。
@@ -218,7 +221,7 @@
 - `artifact.get` — `{ artifactId }` を受け、`{ artifact, filePath }` を返す（[ADR 0103](../adr/0103-agent-subtitles-and-artifact-path.md)）。`filePath` はアプリのデータルート内にある実ファイルの絶対パスで、`resolveArtifactContent` が実在と記録済み `byteSize` の一致を検証する。MP4 は `role: "render"` / `format: "mp4"` の Artifact で、ID は `job.get` / `job.list` から取る。バイトは返さない。`artifact.contentUrl` はブラウザ用で media session Cookie が必要なため、エージェントは `filePath` を使う。Artifact 行が無い、ファイルが欠損している、またはサイズが記録と一致しない場合は `RESOURCE_NOT_FOUND`。
 - `artifact.export` — `{ artifactId, outputDir, filename? }` を受け、`{ artifact, sourcePath, exportedPath }` を返す（[ADR 0104](../adr/0104-agent-artifact-export.md)）。正本はデータルートに残したまま、`outputDir`（存在する絶対ディレクトリ）へコピーする。`filename` はパス区切りを含まない basename で、Artifact の拡張子（mp4 / png / jpg / jpeg / vtt）に一致しなければならない。省略時は Work タイトルと Artifact ID から `<title>-<artifactId>.<ext>` を生成する。既存ファイルは上書きせず `EXPORT_TARGET_EXISTS` を返す。コピーは copy-on-write の複製を使い、同一ディレクトリ内の一時ファイルからハードリンクして原子的に公開する（ハードリンクを持たないファイルシステムでは排他的コピーにフォールバックする）。`outputDir` が相対パス・非ディレクトリ・不存在なら `VALIDATION_ERROR`、コピーに失敗したら `EXPORT_FAILED`。`outputDir` は同一ユーザー信頼モデルのもとで任意の絶対パスを許可し、アプリの許可リストは設けない。書き出したコピーはアプリの管理外で、Artifact の削除や保持期間の掃除では消えない。大きなファイルのコピーは変更操作の120秒を超えることがある。タイムアウトしても処理は中断されないため、`exportedPath` の有無を確認し、無ければ同じ入力で再実行する。
 - `preview.frame` — render 成果物（`role: "render"`・`format: "mp4"` の Artifact）の指定時刻（`timeMs`）の静止画を原寸 PNG（base64）で返す。時刻解決とキャッシュは既存の静止画抽出の規則を再利用する。詳細は [../visual-confirmation/spec.md](../visual-confirmation/spec.md) を正とする。
-- `preview.scriptFrame` — 保存済み ScriptVersion（`{ scriptVersionId, timeMs }`）または未保存の ContentDocument（`{ content, languageEditionId?, timeMs }`）を、Web UI と同じコンパイラの HTML から headless でシークし、指定時刻（`timeMs`）の原寸 PNG（base64）で返す。版・Job・Artifact は作らない。未保存下書きの返却時 `scriptVersionId` は `null` になる。`languageEditionId` を指定した場合はロケールの一致（不一致は `VALIDATION_ERROR`）と存在（不在は `RESOURCE_NOT_FOUND`）を検証する。`timeMs` は解決済み尺以下（超過は `VALIDATION_ERROR`）。コンパイル不能は `PREVIEW_INPUT_INVALID`、描画失敗は `INTERNAL_ERROR`。render 前の構図確認用で、最終的な品質判断は人に残す。
+- `preview.scriptFrame` — 保存済み ScriptVersion を `{ scriptVersionId, timeMs }`、`{ scriptVersionId, lineId, offsetMs? }`、または未保存の ContentDocument を `{ content, languageEditionId?, timeMs }` で受け、Web UI と同じコンパイラの HTML から headless でシークし、解決済み時刻の原寸 PNG（base64）で返す。版・Job・Artifact は作らない。未保存下書きの返却時 `scriptVersionId` は `null` になる。`languageEditionId` を指定した場合はロケールの一致（不一致は `VALIDATION_ERROR`）と存在（不在は `RESOURCE_NOT_FOUND`）を検証する。`timeMs` は解決済み尺以下（超過は `VALIDATION_ERROR`）。`lineId` 形式は保存済み版だけに許可し、`timeMs` と同時に指定できない。行は指定した版の解決済み timeline から引き、`offsetMs`（既定 0）は行頭からのミリ秒で `0`〜行の尺の整数とする。行が無い場合は `lineId`、行尺を超える場合は `offsetMs` を path とする `VALIDATION_ERROR`。行指定時は `requestedTimeMs` を解決後の絶対時刻とし、`resolvedLineId` と `resolvedTimeMs` も返す。絶対時刻形式と下書き形式はこの 2 フィールドを返さない。コンパイル不能は `PREVIEW_INPUT_INVALID`、描画失敗は `INTERNAL_ERROR`。render 前の構図確認用で、最終的な品質判断は人に残す。
 - `preview.assetFrame` — Asset 1件の絵を返す。画像は原本（正規化 rendition があればそれ）のバイトと MIME、動画は指定時刻（`timeMs`、既定0）の PNG 静止画、音声は `VALIDATION_ERROR`。画像は `timeMs` を指定できない。巨大な画像は `VALIDATION_ERROR`。
 - `preview.theme` — 未保存の Theme 定義を代表サンプルでレンダーし、PNG（base64）を返す。`{ definition, locale?, timeMs? }` を受け、`{ themeId, version, locale, requestedTimeMs, durationMs, width, height, mimeType, imageBase64 }` を返す。`locale` は既定 `ja-JP`、`timeMs` は既定 4500（4秒の導入に続く要点シーンで、見出し・本文・ラベル・字幕が同時に見える時刻）。`timeMs` が代表サンプルの解決済み尺を超える場合は `VALIDATION_ERROR`。DB・Theme Draft・Revision・Job・Artifact は作らない。色・余白・フォントの見え方の確認用で、フォントの解決可否は `theme.diagnose` を使う。
 
@@ -349,6 +352,7 @@
 
 - 互換性は「追加は自由、破壊は版を上げる」で扱う。操作の入出力への任意フィールドの追加や列挙値の追加では `AGENT_PROTOCOL_VERSION` を上げない。必須化・フィールドの削除・意味変更のときだけ上げる。
 - 対応版は範囲として扱う。`AGENT_PROTOCOL_MIN_VERSION` が下限、`AGENT_PROTOCOL_VERSION` が上限であり、handshake はこの範囲の版だけを受け入れる。範囲外の handshake は `AGENT_PROTOCOL_MISMATCH` で拒否する。現在の版は下限も上限も `2` である。
+- `preview.scriptFrame` の行指定入力と `script.diff` は加算的変更であり、`AGENT_PROTOCOL_VERSION` は `2` のまま据え置く。DB migration と HTTP API の変更はない。ただし `operationDigest` と `schemaDigest` は変わるため、束縛（MCP / CLI）とアプリは同じビルドで揃える。
 - Composition のスコープ必須化（[ADR 0115](../adr/0115-work-scoped-compositions.md)）で `composition.create` の入力が破壊的に変わったため、`AGENT_PROTOCOL_VERSION` と `AGENT_PROTOCOL_MIN_VERSION` を `2` に上げた。旧版の束縛は接続できない。MCP・CLI・アプリ・スキルを同じビルドで揃える。
 - `schema.get` は `minProtocolVersion`（下限）と `protocolVersion`（上限）を返す。エージェントはどちらの版でも接続できるかを確かめられる。
 - `schema.get` の `operationDigest` は、全 Agent 操作の入出力スキーマを JSON Schema に正規化して摘要した値である。JSON Schema への変換は `packages/contracts` の `toAgentJsonSchema` に一本化し、MCP のツールスキーマ生成と同じ正規形を使う。摘要対象のキーの並び順には依存しない。
@@ -446,7 +450,7 @@
 | code | 発生条件 |
 | --- | --- |
 | `AGENT_APP_UNAVAILABLE` | アプリプロセスが起動しておらずソケットへ接続できない |
-| `AGENT_PROTOCOL_MISMATCH` | `protocolVersion` が未知、またはフレームが不正 |
+| `AGENT_PROTOCOL_MISMATCH` | `protocolVersion` が未知、またはフレームが不正。解析できた handshake の版が対応範囲外のときだけ、`protocolVersion` を path とする `unsupported_protocol_version` issue を伴う |
 | `AGENT_OPERATION_UNKNOWN` | 未登録の操作名 |
 | `AGENT_PAYLOAD_TOO_LARGE` | 1 要求が 32 MiB を超えた |
 | `AGENT_REQUEST_TIMEOUT` | 読み取り 10 秒／変更 120 秒を超えた |

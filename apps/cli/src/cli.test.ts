@@ -660,6 +660,24 @@ describe("CLI invocation", () => {
     expect(stderrPayload(captured.stderr()).code).toBe("AGENT_APP_UNAVAILABLE");
   });
 
+  it("prints the handshake diagnosis carried by a protocol mismatch error", async () => {
+    const issues = [
+      {
+        path: ["protocolVersion"],
+        code: "unsupported_protocol_version",
+        message: "The resident Kakeai app accepts protocol versions 2 through 2.",
+      },
+    ];
+    const captured = capture(() => {
+      throw new AgentClientError(AGENT_ERROR_CODES.PROTOCOL_MISMATCH, issues);
+    });
+    expect(await runCli(["work.list"], captured.io)).toBe(1);
+    expect(captured.stdout()).toBe("");
+    const payload = stderrPayload(captured.stderr());
+    expect(payload.code).toBe("AGENT_PROTOCOL_MISMATCH");
+    expect(payload.issues).toEqual(issues);
+  });
+
   it("does not leak unexpected errors", async () => {
     const captured = capture(() => {
       throw new Error("secret detail");

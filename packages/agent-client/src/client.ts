@@ -129,7 +129,23 @@ export function createAgentClient(options: AgentClientOptions = {}): AgentClient
           return;
         }
         const response = agentResponseSchema.safeParse(parsedLine);
-        if (!response.success || response.data.requestId !== requestId) {
+        if (!response.success) {
+          finish(() => reject(protocolFailure()));
+          return;
+        }
+        if (response.data.requestId !== requestId) {
+          // A handshake failure has no request to answer, so the server uses
+          // the empty request id. Keep its diagnosis (the supported protocol
+          // range and the recovery advice) instead of dropping it as an
+          // unrelated request id.
+          if (!response.data.ok && response.data.requestId === "") {
+            const error = new AgentClientError(
+              response.data.error.code,
+              response.data.error.issues ?? [],
+            );
+            finish(() => reject(error));
+            return;
+          }
           finish(() => reject(protocolFailure()));
           return;
         }

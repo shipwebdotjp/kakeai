@@ -135,6 +135,39 @@ describe("agent client", () => {
     }
   });
 
+  it("keeps the handshake diagnosis carried by an empty-request-id error", async () => {
+    const socketPath = join(tempDir, "handshake-mismatch.sock");
+    const issues = [
+      {
+        path: ["protocolVersion"],
+        code: "unsupported_protocol_version",
+        message:
+          "The resident Kakeai app accepts protocol versions 2 through 2; " +
+          "this client sent 1. Update the Kakeai app and its MCP or CLI " +
+          "binding to compatible releases, then restart the MCP host or CLI " +
+          "process.",
+      },
+    ];
+    const server = await startServer(socketPath, async (socket) => {
+      socket.write(
+        `${JSON.stringify({
+          requestId: "",
+          ok: false,
+          error: { code: "AGENT_PROTOCOL_MISMATCH", issues },
+        })}\n`,
+      );
+    });
+    try {
+      const client = createAgentClient({ socketPath });
+      await expect(client.request("work.list", {})).rejects.toMatchObject({
+        code: "AGENT_PROTOCOL_MISMATCH",
+        issues,
+      });
+    } finally {
+      await stopServer(server);
+    }
+  });
+
   it("returns AGENT_APP_UNAVAILABLE when the app is not running", async () => {
     const client = createAgentClient({
       socketPath: join(tempDir, "missing", "agent.sock"),

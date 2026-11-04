@@ -541,6 +541,131 @@ describe("agent socket integration", () => {
     }).toEqual(before);
   });
 
+  it("addresses a preview by line and diffs two saved versions", async () => {
+    const work = await createWork("行基準プレビュー統合テスト作品");
+    const edition = firstEdition(work);
+    const edited = await client.request("script.edit", {
+      baseScriptVersionId: edition.currentScriptVersion.id,
+      requestId: `line-preview-${randomUUID()}`,
+      operations: [
+        {
+          op: "line.add",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          captionText: "行で指定するプレビューです。",
+          speechText: "ぎょうでしていするぷれびゅーです。",
+        },
+      ],
+    });
+    const lineId = edited.created.lineIds[0]!;
+    const lineTiming = edited.timeline.scenes
+      .flatMap((scene) => scene.lines)
+      .find((line) => line.lineId === lineId)!;
+
+    const start = await client.request("preview.scriptFrame", {
+      scriptVersionId: edited.scriptVersion.id,
+      lineId,
+    });
+    expect(start.requestedTimeMs).toBe(lineTiming.startMs);
+    expect(start.resolvedLineId).toBe(lineId);
+    expect(start.resolvedTimeMs).toBe(lineTiming.startMs);
+
+    const end = await client.request("preview.scriptFrame", {
+      scriptVersionId: edited.scriptVersion.id,
+      lineId,
+      offsetMs: lineTiming.durationMs,
+    });
+    expect(end.requestedTimeMs).toBe(lineTiming.startMs + lineTiming.durationMs);
+
+    await expectAgentError(
+      client.request("preview.scriptFrame", {
+        scriptVersionId: edited.scriptVersion.id,
+        lineId: "line_missing",
+      }),
+      "VALIDATION_ERROR",
+    );
+    await expectAgentError(
+      client.request("preview.scriptFrame", {
+        scriptVersionId: edited.scriptVersion.id,
+        lineId,
+        offsetMs: lineTiming.durationMs + 1,
+      }),
+      "VALIDATION_ERROR",
+    );
+
+    // Creating the other Edition's Work adds its initial version, so read the
+    // counts after that setup and before the read-only diff calls.
+    const other = await createWork("別言語版の差分テスト作品");
+    const before = {
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    };
+    const diff = await client.request("script.diff", {
+      fromScriptVersionId: edition.currentScriptVersion.id,
+      toScriptVersionId: edited.scriptVersion.id,
+    });
+    expect(diff.fromScriptVersion).toEqual({
+      id: edition.currentScriptVersion.id,
+      versionNumber: edition.currentScriptVersion.versionNumber,
+    });
+    expect(diff.toScriptVersion).toEqual({
+      id: edited.scriptVersion.id,
+      versionNumber: edited.scriptVersion.versionNumber,
+    });
+    expect(diff.lines.added).toEqual([
+      { id: lineId, sceneId: DEFAULT_SCENE_IDS.point1, index: 0 },
+    ]);
+    expect(diff.scenes).toEqual({
+      added: [],
+      removed: [],
+      updated: [],
+      moved: [],
+    });
+    expect(diff.outsideScopeChangedFields).toEqual([]);
+
+    const reversed = await client.request("script.diff", {
+      fromScriptVersionId: edited.scriptVersion.id,
+      toScriptVersionId: edition.currentScriptVersion.id,
+    });
+    expect(reversed.lines.removed).toEqual([
+      { id: lineId, sceneId: DEFAULT_SCENE_IDS.point1, index: 0 },
+    ]);
+
+    const same = await client.request("script.diff", {
+      fromScriptVersionId: edited.scriptVersion.id,
+      toScriptVersionId: edited.scriptVersion.id,
+    });
+    expect(same.lines).toEqual({
+      added: [],
+      removed: [],
+      updated: [],
+      moved: [],
+    });
+    expect(same.outsideScopeChangedFields).toEqual([]);
+
+    await expectAgentError(
+      client.request("script.diff", {
+        fromScriptVersionId: "scr_missing",
+        toScriptVersionId: edited.scriptVersion.id,
+      }),
+      "RESOURCE_NOT_FOUND",
+    );
+
+    await expectAgentError(
+      client.request("script.diff", {
+        fromScriptVersionId: firstEdition(other).currentScriptVersion.id,
+        toScriptVersionId: edited.scriptVersion.id,
+      }),
+      "VALIDATION_ERROR",
+    );
+
+    expect({
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    }).toEqual(before);
+  });
+
   it("rasterizes an unsaved content document without creating a version or render", async () => {
     const work = await createWork("下書きソケットテスト作品");
     const edition = firstEdition(work);

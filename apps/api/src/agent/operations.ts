@@ -40,6 +40,8 @@ import {
   agentRenderStartOutputSchema,
   agentSchemaGetInputSchema,
   agentSchemaGetOutputSchema,
+  agentScriptDiffInputSchema,
+  agentScriptDiffOutputSchema,
   agentScriptEditInputSchema,
   agentScriptEditOutputSchema,
   agentScriptGetInputSchema,
@@ -92,7 +94,10 @@ import type { DataDirectories } from "../storage/paths.ts";
 import { exportArtifact } from "../services/artifact-export.ts";
 import { getArtifact, resolveArtifactContent } from "../services/artifacts.ts";
 import { getAsset, searchAssets, updateAsset } from "../services/assets.ts";
-import { getScriptVersionSubtitles } from "../services/script-versions.ts";
+import {
+  diffScriptVersions,
+  getScriptVersionSubtitles,
+} from "../services/script-versions.ts";
 import {
   editAgentScript,
   getAgentScript,
@@ -310,6 +315,18 @@ const definitions: AgentOperationDefinitions = {
         srt: result.srt,
       };
     },
+  },
+  // Structural read of two saved versions of the same Edition. It never
+  // rebuilds `script.edit.created` and never returns values or a JSON Patch.
+  "script.diff": {
+    input: agentScriptDiffInputSchema,
+    output: agentScriptDiffOutputSchema,
+    run: async (input, context) =>
+      diffScriptVersions(
+        context.prisma,
+        input.fromScriptVersionId,
+        input.toScriptVersionId,
+      ),
   },
   "script.save": {
     input: agentScriptSaveInputSchema,

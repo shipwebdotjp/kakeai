@@ -131,6 +131,10 @@ export type AgentScriptSubtitlesOutput = z.infer<
   typeof agentScriptSubtitlesOutputSchema
 >;
 
+
+
+export * from "./script-diff-schemas";
+export * from "./preview-script-frame-schemas";
 export * from "./thumbnail-schemas";
 export * from "./face-set-schemas";
 export * from "./youtube-schemas";
@@ -408,37 +412,7 @@ export const agentPreviewImageMimeTypeSchema = z.enum([
   "image/avif",
 ]);
 
-/**
- * `preview.scriptFrame` rasterizes a saved ScriptVersion or an unsaved draft
- * ContentDocument with the same HTML compiler as the Web UI and render worker,
- * seeking to `timeMs` without creating a render Job, ScriptVersion, or Artifact.
- */
-export const agentPreviewScriptFrameInputSchema = z.union([
-  z.strictObject({
-    scriptVersionId: idSchema,
-    timeMs: nonNegativeInt,
-  }),
-  z.strictObject({
-    content: contentDocumentSchema,
-    languageEditionId: idSchema.optional(),
-    timeMs: nonNegativeInt,
-  }),
-]);
-export const agentPreviewScriptFrameOutputSchema = z.strictObject({
-  scriptVersionId: idSchema.nullable(),
-  requestedTimeMs: nonNegativeInt,
-  durationMs: nonNegativeInt,
-  width: positiveInt,
-  height: positiveInt,
-  mimeType: z.literal("image/png"),
-  imageBase64: z.string().min(1).max(AGENT_PREVIEW_IMAGE_BASE64_MAX),
-});
-export type AgentPreviewScriptFrameInput = z.output<
-  typeof agentPreviewScriptFrameInputSchema
->;
-export type AgentPreviewScriptFrameOutput = z.infer<
-  typeof agentPreviewScriptFrameOutputSchema
->;
+
 
 /**
  * `preview.assetFrame` returns the visual content of one Asset. Images keep

@@ -119,6 +119,47 @@ describe("MCP server over an in-memory transport", () => {
     }
   });
 
+  it("forwards script.diff and returns structural summaries", async () => {
+    const diff = {
+      fromScriptVersion: { id: "scr-1", versionNumber: 1 },
+      toScriptVersion: { id: "scr-2", versionNumber: 2 },
+      scenes: {
+        added: [],
+        removed: [],
+        updated: [{ id: "scene-1", changedFields: ["label"] }],
+        moved: [],
+      },
+      lines: {
+        added: [],
+        removed: [],
+        updated: [{ id: "line-1", sceneId: "scene-1", changedFields: ["captionText"] }],
+        moved: [],
+      },
+      cues: { added: [], removed: [], updated: [], moved: [] },
+      outsideScopeChangedFields: ["speakers"],
+    };
+    const harness = await connectHarness((operation) => {
+      if (operation === "script.diff") {
+        return diff;
+      }
+      throw new Error(`unexpected operation: ${operation}`);
+    });
+    try {
+      const result = await harness.client.callTool({
+        name: "kakeai_script_diff",
+        arguments: {
+          fromScriptVersionId: "scr-1",
+          toScriptVersionId: "scr-2",
+        },
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual(diff);
+      expect(harness.operations).toEqual(["script.diff"]);
+    } finally {
+      await harness.close();
+    }
+  });
+
   it("forwards reads and mutations with JSON content and structured content", async () => {
     const harness = await connectHarness((operation) => {
       switch (operation) {

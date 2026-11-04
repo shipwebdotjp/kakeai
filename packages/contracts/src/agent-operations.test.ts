@@ -49,6 +49,8 @@ import {
   agentPreviewThemeInputSchema,
   agentPreviewThemeOutputSchema,
   agentSchemaDigestInputOf,
+  agentScriptDiffInputSchema,
+  agentScriptDiffOutputSchema,
   agentScriptListVersionsInputSchema,
   agentScriptListVersionsOutputSchema,
   agentScriptRestoreInputSchema,
@@ -438,6 +440,61 @@ describe("preview.scriptFrame operation contract", () => {
     expect(
       agentPreviewScriptFrameOutputSchema.safeParse({ ...frame, imageBase64: "" }).success,
     ).toBe(false);
+  });
+
+  it("accepts a saved version addressed by line and offset", () => {
+    expect(
+      agentPreviewScriptFrameInputSchema.parse({
+        scriptVersionId: "scr-1",
+        lineId: "line-1",
+      }),
+    ).toEqual({ scriptVersionId: "scr-1", lineId: "line-1" });
+    expect(
+      agentPreviewScriptFrameInputSchema.parse({
+        scriptVersionId: "scr-1",
+        lineId: "line-1",
+        offsetMs: 500,
+      }),
+    ).toEqual({ scriptVersionId: "scr-1", lineId: "line-1", offsetMs: 500 });
+
+    // The line form is saved-version only.
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({
+        content: validContentDocument(),
+        lineId: "line-1",
+      }).success,
+    ).toBe(false);
+    // timeMs and lineId are exclusive, and one of them is required.
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({
+        scriptVersionId: "scr-1",
+        timeMs: 0,
+        lineId: "line-1",
+      }).success,
+    ).toBe(false);
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({ scriptVersionId: "scr-1" }).success,
+    ).toBe(false);
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({
+        scriptVersionId: "scr-1",
+        offsetMs: 10,
+      }).success,
+    ).toBe(false);
+    expect(
+      agentPreviewScriptFrameInputSchema.safeParse({
+        scriptVersionId: "scr-1",
+        lineId: "line-1",
+        offsetMs: -1,
+      }).success,
+    ).toBe(false);
+
+    const resolved = {
+      ...frame,
+      resolvedLineId: "line-1",
+      resolvedTimeMs: 1500,
+    };
+    expect(agentPreviewScriptFrameOutputSchema.safeParse(resolved).success).toBe(true);
   });
 
   it("registers preview.scriptFrame as a sync read", () => {
@@ -1328,6 +1385,83 @@ describe("character.addAppearance and character.updateAppearance operation contr
       expect(Object.keys(agentOperationInputSchemas)).toContain(name);
       expect(Object.keys(agentOperationOutputSchemas)).toContain(name);
     }
+  });
+});
+
+describe("script.diff operation contract", () => {
+  const output = {
+    fromScriptVersion: { id: "scr-1", versionNumber: 1 },
+    toScriptVersion: { id: "scr-2", versionNumber: 2 },
+    scenes: {
+      added: [{ id: "scene-new", index: 2, lineCount: 1, cueCount: 2 }],
+      removed: [],
+      updated: [{ id: "scene-1", changedFields: ["label"] }],
+      moved: [{ id: "scene-2", fromIndex: 2, toIndex: 1 }],
+    },
+    lines: {
+      added: [{ id: "line-new", sceneId: "scene-new", index: 0 }],
+      removed: [],
+      updated: [{ id: "line-1", sceneId: "scene-1", changedFields: ["captionText"] }],
+      moved: [
+        {
+          id: "line-2",
+          fromSceneId: "scene-1",
+          toSceneId: "scene-2",
+          fromIndex: 0,
+          toIndex: 1,
+        },
+      ],
+    },
+    cues: {
+      added: [],
+      removed: [],
+      updated: [{ id: "cue-1", sceneId: "scene-1", changedFields: ["input", "range"] }],
+      moved: [],
+    },
+    outsideScopeChangedFields: ["speakers"],
+  };
+
+  it("takes two saved versions and returns structural summaries", () => {
+    expect(
+      agentScriptDiffInputSchema.parse({
+        fromScriptVersionId: "scr-1",
+        toScriptVersionId: "scr-2",
+      }),
+    ).toEqual({ fromScriptVersionId: "scr-1", toScriptVersionId: "scr-2" });
+    expect(agentScriptDiffInputSchema.safeParse({ fromScriptVersionId: "scr-1" }).success).toBe(
+      false,
+    );
+    expect(
+      agentScriptDiffInputSchema.safeParse({
+        fromScriptVersionId: "scr-1",
+        toScriptVersionId: "scr-2",
+        extra: true,
+      }).success,
+    ).toBe(false);
+    expect(agentScriptDiffOutputSchema.parse(output)).toEqual(output);
+    expect(
+      agentScriptDiffOutputSchema.safeParse({
+        ...output,
+        lines: {
+          ...output.lines,
+          updated: [{ id: "line-1", sceneId: "scene-1" }],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("registers script.diff as a read", () => {
+    const schema = buildAgentSchemaGetResult();
+    expect(agentOperationNames).toContain("script.diff");
+    expect(isAgentMutationOperation("script.diff")).toBe(false);
+    expect(isAgentLongRunningOperation("script.diff")).toBe(false);
+    expect(schema.agentOperations).toContainEqual({
+      name: "script.diff",
+      kind: "read",
+      longRunning: false,
+    });
+    expect(Object.keys(agentOperationInputSchemas)).toContain("script.diff");
+    expect(Object.keys(agentOperationOutputSchemas)).toContain("script.diff");
   });
 });
 

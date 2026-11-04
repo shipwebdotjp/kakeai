@@ -1,5 +1,6 @@
 export * from "./script-versions/references";
 export * from "./script-versions/history";
+export * from "./script-versions/diff";
 export * from "./script-versions/validation";
 export * from "./script-versions/preview";
 export * from "./script-versions/errors";

@@ -186,8 +186,12 @@ A full-resolution still PNG extracted from a render Artifact at a requested time
 _Avoid_: Thumbnail, preview video
 
 **Script Preview Frame**:
-A full-resolution still PNG rasterized from a saved ScriptVersion's compiled preview HTML at a requested time, before any render Job exists. It reads the same HTML compiler as the Web UI preview.
+A full-resolution still PNG rasterized from a saved ScriptVersion's compiled preview HTML at a requested absolute time, or at an offset from a specified Narration Segment, before any render Job exists. It reads the same HTML compiler as the Web UI preview.
 _Avoid_: Render, draft preview
+
+**Script Difference**:
+A structural comparison of two saved Script Versions in one Language Edition, using stable Scene, Narration Segment, and Visual Cue identifiers to summarize additions, removals, content changes, and moves. It is not an edit history or a reconstruction of operation-created identifiers.
+_Avoid_: edit log, JSON patch, created result
 
 **Asset Preview Frame**:
 The visual content of one Asset returned to an Agent: the stored image bytes for an image, or a still PNG at a requested time for a video. Audio has no visual content.

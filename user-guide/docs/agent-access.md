@@ -77,6 +77,7 @@ stdout は MCP の通信専用です。ログは stderr に出るため、エー
 ### 制作履歴・復元
 
 - `kakeai_script_list_versions` は Edition の版履歴を新しい順に全件返します（Edition の版数は通常小さい想定です）。`currentScriptVersionId` と各版の要約（版番号・作成者・要求ID・復元元・作成日時）を含み、ContentDocument は含みません。過去版を選ぶときや、復元の基準版を決めるときに使います。
+- `kakeai_script_diff` は同じ Edition の二つの保存済み版（`fromScriptVersionId` と `toScriptVersionId`）を要素 ID で構造比較し、Scene・セリフ・Visual Cue の追加・削除・内容変更・移動を返します。内容変更は `changedFields`（トップレベルのフィールド名）だけで、値や JSON Patch は返しません。追加・削除された Scene の子は重複して数えません。Speaker・Character・Audio Take・Audio Cue・Theme など比較対象外のトップレベル変更は `outsideScopeChangedFields` にフィールド名で入ります。引き継ぎ時はまずこの操作で再読込が必要な範囲を絞り、詳細が必要な版だけ `kakeai_script_get` で読んでください。版が無ければ `RESOURCE_NOT_FOUND`、別の Edition なら `VALIDATION_ERROR` です。
 - `kakeai_script_restore` は過去版の `scriptVersionId` を指定して、その内容を新しい版として復元します。ContentDocument を取得して送り直す必要はありません。`requestId` は必須で、同じ ID・同じ復元元の再送は既存の版を返します。任意の `baseScriptVersionId` を渡すと、その版が current のときだけ復元し、一致しなければ `SCRIPT_BASE_STALE` になります。復元元が current の場合は `VALIDATION_ERROR` です。
 - `kakeai_work_clone` は `workId`・`title`・`sourceEditionId` を受け取り、指定した言語版の現在版から子 Work を作ります。`sourceEditionId` は元 Work に属する言語版を指定してください。元の Work は変更せず、子には `parentWorkId` が付き、`originalLocale` と唯一の言語版は複製元の locale になり、初期版には `sourceScriptVersionId` が記録されます。複製されるのは指定した言語版の現在版だけで、他の言語版・版履歴・Job・サムネイルは複製しません。`requestId` はありません。タイムアウト後は `kakeai_work_list` で `parentWorkId`・`title`・`createdAt` を確認してから再実行してください。
 
@@ -248,6 +249,7 @@ kakeai-agent --help
 | `kakeai_work_update` | `kakeai-agent work.update --input ...` |
 | `kakeai_script_edit` | `kakeai-agent script.edit --input ...` |
 | `kakeai_script_subtitles` | `kakeai-agent script.subtitles --input '{"scriptVersionId":"..."}'` |
+| `kakeai_script_diff` | `kakeai-agent script.diff --input '{"fromScriptVersionId":"...","toScriptVersionId":"..."}'` |
 | `kakeai_asset_list` | `kakeai-agent asset.list --input '{"tags":["bgm"],"status":"ready"}'` |
 | `kakeai_asset_import` | `kakeai-agent asset.import --input ...` |
 | `kakeai_asset_update` | `kakeai-agent asset.update --input '{"assetId":"ast-123","archived":true}'` |
@@ -306,11 +308,15 @@ MCP ツール名は `kakeai_<domain>_<verb>` の snake_case、CLI のサブコ�
 # 保存版の 5 秒時点を PNG で確認する
 kakeai-agent preview.scriptFrame --input '{"scriptVersionId":"scr-123","timeMs":5000}' --out script-frame.png
 
+# 保存版の行頭から 500ms の時点を PNG で確認する（時刻を自分で計算しない）
+kakeai-agent preview.scriptFrame --input '{"scriptVersionId":"scr-123","lineId":"line-456","offsetMs":500}' --out line-frame.png
+
 # 素材（画像は原本、動画は指定時刻の PNG）を確認する
 kakeai-agent preview.assetFrame --input '{"assetId":"ast-123","timeMs":1500}' --out asset-frame.png
 ```
 
 - `preview.scriptFrame` は `script.get` / `script.edit` が返す `scriptVersionId` と、`script.validate` の解決済み `timeline` から時刻を選びます。シーンの開始直後はトランジション中なので、開始から 500ms ほど後にすると構図を確認しやすくなります。
+- 行を基準にする場合は、`timeMs` の代わりに `lineId` と任意の `offsetMs`（既定 0）を渡します。開始は `offsetMs: 0`、途中は任意のミリ秒、終端はその行の `durationMs` です。行の開始時刻と尺は指定した保存版の timeline から解決されるため、別の版で計算した秒数を再利用する必要はありません。行指定時は応答の `requestedTimeMs` が解決後の絶対時刻になり、`resolvedLineId` と `resolvedTimeMs` も返ります。`timeMs` と `lineId` は同時に指定できません。存在しない行は `lineId`、行尺を超える `offsetMs` は `offsetMs` を path とする `VALIDATION_ERROR` です。
 - 保存前の下書きを確認する場合は、`scriptVersionId` の代わりに `{ content, languageEditionId?, timeMs }` を渡します。`content` は ContentDocument、`languageEditionId` はロケール一致と存在を検証する任意項目です。この経路では版・Job・Artifact を作りません。
 - 文字切れ、要素の重なり、画像の欠落、表の見切れ、立ち絵の位置を確認します。問題があれば `script.edit` で直し、新しい版で再度プレビューします。
 - `preview.assetFrame` の画像は保存されている画像そのもの（正規化された画像があればそれ）で、`mimeType` が実際の形式です。動画は指定時刻の PNG、音声は `VALIDATION_ERROR` になります。画像に `timeMs` は指定できません。MCP の image ブロックは PNG / JPEG の素材だけに付き、WebP / GIF / BMP / AVIF は `structuredContent` または CLI の `--out` で取得します。
@@ -456,7 +462,7 @@ npx skills@1.7.4 experimental_install
 | code | 意味 |
 | --- | --- |
 | `AGENT_APP_UNAVAILABLE` | Kakeai が起動していない、またはソケットに接続できない |
-| `AGENT_PROTOCOL_MISMATCH` | ソケットのプロトコル版が一致しない |
+| `AGENT_PROTOCOL_MISMATCH` | ソケットのプロトコル版が一致しない。handshake の版が対応範囲外なら `issues` に `protocolVersion` を path とする `unsupported_protocol_version` が付き、受け入れる版の範囲と受信した版、アプリと MCP/CLI binding を互換な release に揃えてプロセスを再起動する方針を示す。JSON 不正や不正な形のフレームでは `issues` は付かない |
 | `AGENT_OPERATION_UNKNOWN` | 操作名が未登録。`schema.get` / `operations` で正規名を確認する |
 | `AGENT_REQUEST_TIMEOUT` | 操作がタイムアウトした。`script.edit`・`script.restore`・`kakeai_tts_attach_bulk` は同じ `requestId` で再送してよい（既存の版が返る）。`tts.create` / `tts.createBulk` / `render.start` / `composition.publish` も任意の `requestId` を付けて再送すると既存の Job／Version が返る。`work.create` / `work.clone` / `script.save` は operation の `requestId` を持たないため、`work.list`（`createdAt` / `parentWorkId`）/ `script.get` / `script.listVersions` で反映を確認してから再実行する。それ以外の変更操作は `script.get`・`job.list`・`asset.list` などで結果を確認してから再実行する |
 | `SCRIPT_BASE_STALE` | `baseScriptVersionId` が現在の版と異なる。`kakeai_script_get` で取り直し、同じ意図を適用し直す。`kakeai_tts_attach_bulk` では一括生成の後に台本を保存した場合、`kakeai_script_save` / `kakeai_script_restore` では基準版ガードに指定した版が古い場合に返る |

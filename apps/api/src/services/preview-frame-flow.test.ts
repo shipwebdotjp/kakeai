@@ -20,7 +20,10 @@ import { ensureDataDirectories } from "../storage/paths.ts";
 import { deserializeContent } from "../domain/content-json.ts";
 import { getAssetFrame } from "./preview-asset-frames.ts";
 import { getScriptVersionFrame } from "./preview-script-frames.ts";
+import { editAgentScript } from "./agent-script.ts";
+import { getScriptVersionPreview } from "./script-versions.ts";
 import * as works from "./works.ts";
+import { DEFAULT_SCENE_IDS } from "@kakeai/contracts";
 
 const execFileAsync = promisify(execFile);
 
@@ -156,6 +159,115 @@ describe("preview.scriptFrame", () => {
       origin: "http://127.0.0.1:4317",
     });
     expect(lastRequest?.html).toContain("kakeai-main");
+    expect({
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    }).toEqual(before);
+  });
+
+  it("resolves a line start, middle and end from the saved version timeline", async () => {
+    const work = await works.createWork(prisma, "行基準プレビュー作品", "ja-JP");
+    const edition = work.languageEditions[0]!;
+    const edited = await editAgentScript(prisma, {
+      baseScriptVersionId: edition.currentScriptVersion.id,
+      requestId: `line-preview-${randomUUID()}`,
+      operations: [
+        {
+          op: "line.add",
+          sceneId: DEFAULT_SCENE_IDS.point1,
+          captionText: "行基準のプレビューです。",
+          speechText: "ぎょうきじゅんのぷれびゅーです。",
+        },
+      ],
+    });
+    const lineId = edited.created.lineIds[0];
+    expect(lineId).toBeDefined();
+    const scriptVersionId = edited.scriptVersion.id;
+    const timeline = (
+      await getScriptVersionPreview(prisma, config.directories, scriptVersionId)
+    ).timeline;
+    const lineTiming = timeline.scenes
+      .flatMap((scene) => scene.lines)
+      .find((line) => line.lineId === lineId)!;
+    const before = {
+      versions: await prisma.scriptVersion.count(),
+      jobs: await prisma.job.count(),
+      artifacts: await prisma.artifact.count(),
+    };
+
+    const start = await getScriptVersionFrame(
+      prisma,
+      config.directories,
+      fakeRasterizer,
+      "http://127.0.0.1:4317",
+      { scriptVersionId, lineId: lineId! },
+    );
+    expect(start.requestedTimeMs).toBe(lineTiming.startMs);
+    expect(start.resolvedLineId).toBe(lineId);
+    expect(start.resolvedTimeMs).toBe(lineTiming.startMs);
+
+    const middle = await getScriptVersionFrame(
+      prisma,
+      config.directories,
+      fakeRasterizer,
+      "http://127.0.0.1:4317",
+      { scriptVersionId, lineId: lineId!, offsetMs: 500 },
+    );
+    expect(middle.requestedTimeMs).toBe(lineTiming.startMs + 500);
+    expect(lastRequest?.timeMs).toBe(lineTiming.startMs + 500);
+
+    const end = await getScriptVersionFrame(
+      prisma,
+      config.directories,
+      fakeRasterizer,
+      "http://127.0.0.1:4317",
+      { scriptVersionId, lineId: lineId!, offsetMs: lineTiming.durationMs },
+    );
+    expect(end.requestedTimeMs).toBe(
+      lineTiming.startMs + lineTiming.durationMs,
+    );
+    expect(end.resolvedTimeMs).toBe(end.requestedTimeMs);
+
+    await expect(
+      getScriptVersionFrame(
+        prisma,
+        config.directories,
+        fakeRasterizer,
+        "http://127.0.0.1:4317",
+        { scriptVersionId, lineId: "line_missing" },
+      ),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: { issues: [{ path: ["lineId"] }] },
+    });
+    await expect(
+      getScriptVersionFrame(
+        prisma,
+        config.directories,
+        fakeRasterizer,
+        "http://127.0.0.1:4317",
+        {
+          scriptVersionId,
+          lineId: lineId!,
+          offsetMs: lineTiming.durationMs + 1,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      details: { issues: [{ path: ["offsetMs"] }] },
+    });
+
+    const absolute = await getScriptVersionFrame(
+      prisma,
+      config.directories,
+      fakeRasterizer,
+      "http://127.0.0.1:4317",
+      { scriptVersionId, timeMs: 1000 },
+    );
+    expect(absolute.resolvedLineId).toBeUndefined();
+    expect(absolute.resolvedTimeMs).toBeUndefined();
+
     expect({
       versions: await prisma.scriptVersion.count(),
       jobs: await prisma.job.count(),

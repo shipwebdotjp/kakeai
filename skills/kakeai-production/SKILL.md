@@ -126,6 +126,16 @@ a second copy of that contract.
   createdAt). The ContentDocument is not included; use `script.get` for one
   version. The response is the full history; editions are expected to stay
   small, so pagination is not part of this surface.
+- `script.diff` (`fromScriptVersionId`, `toScriptVersionId`) compares two saved
+  versions of the same Edition by element ID and returns `added` / `removed` /
+  `updated` / `moved` for scenes, lines and visual cues. `updated` carries only
+  stable top-level `changedFields`, never values or a JSON Patch, and a scene's
+  children are not repeated when the scene itself was added or removed.
+  `outsideScopeChangedFields` names changed top-level fields the operation does
+  not compare (speakers, characters, audio takes, audio cues, theme, caption).
+  On handoff, call it before re-reading: then `script.get` only the versions
+  whose changed scenes or lines you actually need. Different Editions are
+  `VALIDATION_ERROR`; an unknown version is `RESOURCE_NOT_FOUND`.
 - `script.restore` (`scriptVersionId`, optional `baseScriptVersionId`, required
   `requestId`) restores an earlier version as a new version. You never send the
   ContentDocument: the server reads the source, validates it, records
@@ -550,6 +560,12 @@ tools and bring in through `asset.import`.
      a full-resolution PNG without creating a version, Job, or Artifact. In MCP
      the picture is an image block; in the CLI use `--out frame.png` to write
      the file and keep stdout small.
+   - When you know the line but not its absolute time, use
+     `{ scriptVersionId, lineId, offsetMs? }` instead of computing seconds from
+     an older version. `offsetMs` defaults to 0 (line start); the line's
+     `durationMs` is its end. The response sets `requestedTimeMs` to the
+     resolved absolute time and adds `resolvedLineId` / `resolvedTimeMs`.
+     Combine `timeMs` and `lineId` only by mistake: it is invalid.
    - For an unsaved draft, call `preview.scriptFrame` with
      `{ content, languageEditionId?, timeMs }` instead. This also creates no
      version, Job, or Artifact; `scriptVersionId` is `null` in the response.
@@ -699,7 +715,7 @@ to the user when the fix is on their side.
 | `AGENT_PAYLOAD_TOO_LARGE` | One request exceeded 32 MiB. Split the work; never inline large media in a script. |
 | `JOB_NOT_CANCELLABLE` | Only queued Jobs can be cancelled. A running or terminal Job must be waited for, not cancelled. |
 | `RENDER_FAILED` / `RENDER_INPUT_INVALID` | The render Job failed. Report `job.error`; check assets, duration and template inputs. Do not retry identical input indefinitely. |
-| `AGENT_PROTOCOL_MISMATCH` | Client/server protocol mismatch. Update the MCP/CLI package; do not work around it. |
+| `AGENT_PROTOCOL_MISMATCH` | Client/server protocol mismatch. If `issues` contains `unsupported_protocol_version` on `protocolVersion`, align the app and the MCP/CLI binding to compatible releases and restart the MCP host or CLI process; do not guess a command or work around it. Malformed frames carry no such issue. |
 
 ## 11. Non-goals
 

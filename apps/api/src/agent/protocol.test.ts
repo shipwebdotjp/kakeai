@@ -192,46 +192,75 @@ describe("agent NDJSON protocol", () => {
     });
   });
 
-  it("rejects a protocol version below the supported range", async () => {
+  it("explains a protocol version below the supported range", async () => {
     await withServer(echoDispatch, async (socketPath) => {
       const connection = await TestConnection.open(socketPath);
-      connection.send({ protocolVersion: AGENT_PROTOCOL_MIN_VERSION - 1 });
+      const sent = AGENT_PROTOCOL_MIN_VERSION - 1;
+      connection.send({ protocolVersion: sent });
       const response = await connection.nextError();
       expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+      expect(response.error.issues).toHaveLength(1);
+      expect(response.error.issues?.[0]).toMatchObject({
+        path: ["protocolVersion"],
+        code: "unsupported_protocol_version",
+      });
+      expect(response.error.issues?.[0]?.message).toContain(
+        `${AGENT_PROTOCOL_MIN_VERSION} through ${AGENT_PROTOCOL_VERSION}`,
+      );
+      expect(response.error.issues?.[0]?.message).toContain(`sent ${sent}`);
       await connection.closed;
       connection.close();
     });
   });
 
-  it("rejects a protocol version above the supported range", async () => {
+  it("explains a protocol version above the supported range", async () => {
     await withServer(echoDispatch, async (socketPath) => {
       const connection = await TestConnection.open(socketPath);
-      connection.send({ protocolVersion: AGENT_PROTOCOL_VERSION + 1 });
+      const sent = AGENT_PROTOCOL_VERSION + 1;
+      connection.send({ protocolVersion: sent });
       const response = await connection.nextError();
       expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+      expect(response.error.issues?.[0]).toMatchObject({
+        path: ["protocolVersion"],
+        code: "unsupported_protocol_version",
+      });
       await connection.closed;
       connection.close();
     });
   });
 
-  it("rejects a malformed frame and closes", async () => {
+  it("rejects a malformed frame and closes without an update diagnosis", async () => {
     await withServer(echoDispatch, async (socketPath) => {
       const connection = await TestConnection.open(socketPath);
       connection.sendRaw("{not json\n");
       const response = await connection.nextError();
       expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+      expect(response.error.issues).toBeUndefined();
       await connection.closed;
       connection.close();
     });
   });
 
-  it("rejects a malformed request envelope", async () => {
+  it("rejects a malformed request envelope without an update diagnosis", async () => {
     await withServer(echoDispatch, async (socketPath) => {
       const connection = await TestConnection.open(socketPath);
       connection.send({ protocolVersion: AGENT_PROTOCOL_VERSION });
       connection.send({ operation: "work.list", input: {} });
       const response = await connection.nextError();
       expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+      expect(response.error.issues).toBeUndefined();
+      await connection.closed;
+      connection.close();
+    });
+  });
+
+  it("rejects a malformed handshake without an update diagnosis", async () => {
+    await withServer(echoDispatch, async (socketPath) => {
+      const connection = await TestConnection.open(socketPath);
+      connection.send({ agentId: "missing-version" });
+      const response = await connection.nextError();
+      expect(response.error.code).toBe(AGENT_ERROR_CODES.PROTOCOL_MISMATCH);
+      expect(response.error.issues).toBeUndefined();
       await connection.closed;
       connection.close();
     });
