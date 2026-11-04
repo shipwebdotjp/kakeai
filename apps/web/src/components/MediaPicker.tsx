@@ -11,6 +11,7 @@ interface MediaPickerProps {
   kinds: readonly AssetKindName[];
   selectedAssetId: string | null;
   onSelect: (assetId: string | null) => void;
+  optional?: boolean;
   variant?: "select" | "add";
   inline?: boolean;
   icon?: LucideIcon;
@@ -21,6 +22,7 @@ export function MediaPicker({
   kinds,
   selectedAssetId,
   onSelect,
+  optional = false,
   variant = "select",
   inline = false,
   icon: Icon,
@@ -44,6 +46,7 @@ export function MediaPicker({
           <span className={`${formLabelClass} font-medium`}>
             {Icon !== undefined && <Icon aria-hidden="true" className="h-4 w-4" />}
             {label}
+            {optional && <span className={metaTextClass}>（任意）</span>}
           </span>
           <button type="button" className={buttonNeutralClass} onClick={() => setOpen(true)}>
             {hasSelection ? "変更" : "選択"}

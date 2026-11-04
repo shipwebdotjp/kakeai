@@ -104,7 +104,7 @@ Work 共通 Appearance を、作品・言語版をまたいで再利用するた
 
 ## テンプレート
 
-- サムネイルテンプレートは VisualTemplate とは別のレジストリとし、`packages/contracts` に置く。`template.id@version` の意味を不変に保ち、変更は新版で行う（[ADR 0009](../adr/0009-template-version-immutability.md) と同じ規律）。
+- サムネイルテンプレートは VisualTemplate とは別のレジストリとし、`packages/contracts` に置く。`template.id@version` の意味を不変に保ち、変更は新版で行う（[ADR 0009](../adr/0009-template-version-immutability.md) と同じ規律）。既存入力を壊さず描画も変えない後方互換の緩和（入力の任意化など）は同版で行い、`schemaVersion` も据え置く。
 - 定義は VisualTemplate より薄い。`id`、`version`、`inputSchema`（Zod）、`inputFields`（`TemplateFieldSpec`）、`display`、`collectAssetRefs` を持ち、`layers`・`transitionPolicy`・`animationPolicy` は持たない（静止画のため）。
 - フォームは既存の `TemplateFieldSpec` を再利用し、汎用フォームエンジンで描画する。テンプレート追加にエディタコードを書かせない（[ADR 0032](../adr/0032-template-input-fields-and-animation-presets.md) と同じ方針）。
 - 同梱テンプレートは `thumbnail.cutout-hero@1` のみとする。旧4テンプレート（`headline-photo` / `photo-cover` / `text` / `layered`）は削除し、保存済み候補が存在しない前提で移行しない。
@@ -118,10 +118,10 @@ Work 共通 Appearance を、作品・言語版をまたいで再利用するた
 | --- | --- | --- | --- |
 | `headline` | richText | 必須 | 大見出し。4種の部分装飾を許可する。 |
 | `subline` | richText | 任意 | 見出し上の補足文。4種の部分装飾を許可する。 |
-| `backgroundAssetId` | image Asset | 必須 | 全面の背景写真。 |
+| `backgroundAssetId` | image Asset | 任意 | 全面の背景写真。未設定なら描画しない。 |
 | `backgroundFocalPoint` | `{x,y}` | 中央 | 背景の切り出し位置。 |
 | `backgroundZoom` | number | 1 | 背景の拡大率。 |
-| `foregroundAssetId` | image Asset | 必須 | 透過PNG/WebPの前景切り抜き。 |
+| `foregroundAssetId` | image Asset | 任意 | 透過PNG/WebPの前景切り抜き。未設定なら描画しない。 |
 | `subjectSide` | `left` / `right` | `right` | 被写体を置く側。見出しは反対側へ置く。 |
 | `flipForeground` | boolean | `false` | 前景を左右反転する。 |
 | `subjectAnchor` | 6択 | `bottom-center` | 拡大・縮小の基準点。`bottom-center` / `center` / `top-left` / `top-right` / `bottom-left` / `bottom-right`。 |
@@ -130,12 +130,14 @@ Work 共通 Appearance を、作品・言語版をまたいで再利用するた
 | `wrapText` | boolean | `true` | 文字の自動折り返し。`false` では `white-space: pre` で被写体側へはみ出す。 |
 
 - 被写体は高さ78%の基準サイズで、被写体側の下端中央（右側はX=75%、左側はX=25%）に置き、`transform: scale(subjectScale)` で拡大・縮小する。幅は画像の縦横比から決まり、旧実装のような50%幅の頭打ちはない。
+- `backgroundAssetId` と `foregroundAssetId` は独立に任意。未設定の要素はエラーにせず、HTML自体を出力しない。両方未設定なら文字だけ、片方だけならその写真と文字のサムネイルになる。
+- 背景なしでは背景画像と scrim を描画せず、Theme の `canvas.ink` を単色の地にする。文字の可読性解決（アクセント色・常時影）は、背景ありでは scrim 色、背景なしでは `canvas.ink` を基準にする。
 - `subjectAnchor` は `transform-origin` として被写体の基準点を決める。既定の `bottom-center` は現行の下端基準を維持する。上側・四隅の基準点を選ぶと、拡大時にキャンバス外へ出る場合がある。
 - 見出し・補足文は反対側の幅 `textWidth`%、下padding 48pxの領域に置く。被写体が右なら左寄せ、左なら右寄せにする。
 - `wrapText: false` では自動折り返しを止める。文字はブロック幅を超えて被写体側へはみ出し、テキストは被写体より手前（z-index上）に描画されるため重なる。明示的な改行は保持する。
 - 折り返しOFFでもキャンバス外は出力されないため、長い文字列は左右端でクリップされ得る。プレビューで確認し、必要なら文字サイズや `textWidth` を調整する。
 - 文字の自動サイズ補正は `wrapText` の値にかかわらず適用する。
-- 背景の下端42%から100%へ scrim グラデーションを敷く。被写体は scrim より上に描画し、暗幕で暗くしない。
+- 背景を設定したときは、下端42%から100%へ scrim グラデーションを敷く。被写体は scrim より上に描画し、暗幕で暗くしない。
 - 見出し・補足文には scrim 色由来の淡い常時影を付ける。
 - 見出しの文字サイズは、記法・空白を除く可視文字数で自動補正する。10文字以下は1.7倍、18文字以下は1.45倍、26文字以下は1.2倍、それ以上は1.0倍。補足文は1.0倍。最終サイズは16–200pxにクランプする。
 - 前景の透過性メタデータは検査しない。非透過画像を選ぶと四角い背景ごと表示されるため、プレビューで確認する利用者責任とする。
@@ -188,7 +190,7 @@ Work 共通 Appearance を、作品・言語版をまたいで再利用するた
 - プレビューは、未保存の編集中入力に対するコンパイル済み HTML をデバウンスして取得し、同一origin の `srcDoc` iframe で表示する。iframe は `sandbox="allow-same-origin"`（スクリプトは実行しない）とし、不透明originになる sandbox で実行しない。これにより HTML 内の写真（`/api/v1/assets/:id/render-content`）のリクエストが同一originとなり、メディアセッション Cookie で認可される（[../mvp/api-contract.md](../mvp/api-contract.md)）。
 - プレビューAPIは未保存の Work 共通 Appearance を受け取れるため、保存前の見た目を確認できる。
 - PNG（1280x720）は保存済み候補からオンデマンド生成する。管理下の Chrome とフォントでコンパイル済み HTML をラスタライズして返す。Job を作らない。
-- 描画に使う背景・前景の両 Asset は、保存前とPNG生成時に ready な画像として検証する。
+- 描画に使う背景・前景 Asset のうち、指定されたものだけを保存前とPNG生成時に ready な画像として検証する。未設定の側は検証も描画もしない。
 - コンパイルや PNG 生成は、テンプレート未対応・入力不正・素材欠損・Theme未解決などの理由で失敗しうる。失敗は JSON エラー契約で返す。
 
 ## HTTP
@@ -234,10 +236,10 @@ Work 共通 Appearance を、作品・言語版をまたいで再利用するた
 - 候補フォームでは、必要な項目だけ候補単位の上書きを有効化できる。Font Face は既存の Font Catalog から locale 別に選ぶ。
 - 新規候補フォームから、同じ Work の他言語版とその候補を選んで取り込める。取り込みは候補名・文言・テンプレート・素材参照・切り出し／配置設定をフォームへ複製し、元候補の外観上書きは引き継がない。保存するまで候補は作成されず、「取り込みをやめる」でフォームを破棄できる。
 - 未保存の共通 Appearance は、候補フォームのプレビューに反映される。
-- テンプレートを選び、文字・背景・前景を入力する。プレビューを表示し、明示保存で候補を保存する。
+- テンプレートを選び、文字・背景・前景を入力する。背景と前景は任意で、未設定のままプレビュー・保存できる。プレビューを表示し、明示保存で候補を保存する。
 - 候補一覧を表示し、追加・選択（投稿用の1枚）・削除ができる。
 - 選択中または任意の候補の PNG をダウンロードできる。
-- 背景・前景の素材は既存のメディアライブラリから選ぶ。
+- 背景・前景の素材は既存のメディアライブラリから選ぶ。どちらも「解除」で未設定に戻せる。
 - 透過でない前景画像は四角く表示される。アプリは透過性を検査しない。
 
 ## 対象外
@@ -255,7 +257,7 @@ Work 共通 Appearance を、作品・言語版をまたいで再利用するた
 ## 検証
 
 - 契約テスト: サムネイル文書v3の検証と旧版拒否、テンプレート参照、未知テンプレート拒否、素材種別の検証、Appearanceのプロパティ単位マージと正規化、locale別 Font Face の解決、縁取り色・太さの範囲。部分装飾記法の解析（入れ子・エスケープ・対になっていない記号・未許可装飾）とフィールド宣言との一致。
-- コンパイラテスト: Theme トークンの適用、Appearance の継承順、背景クロップ、前景の左右・反転・倍率（0.5–1.8）・拡大基準点、文字ブロック幅・折り返しON/OFF、1280x720 の確定性、文字量による自動サイズ、アクセント色のコントラスト解決と明示色の保持、縁取り色・太さ（全体と `%%`）、HTMLエスケープ、改行保持。
-- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、Work 共通 Appearance の取得・保存・解除、Edition の Work 所属検証、Work 外観変更の既存候補へのライブ反映、locale 別 Font Face、未保存 Appearance のプレビュー、背景・前景両 Asset の検証、PNGのオンデマンド生成、Work削除での連鎖削除、旧文書の拒否。外観プリセットの CRUD、空パッチの拒否、プリセット更新・削除が適用済み Work へ波及しないこと。Agent Access の 9 操作（テンプレート取得、作成・更新・選択、未保存 PNG、保存済み PNG、削除・Work 共通 Appearance 保存・プリセットが未公開であること）。
+- コンパイラテスト: Theme トークンの適用、Appearance の継承順、背景クロップ、前景の左右・反転・倍率（0.5–1.8）・拡大基準点、背景・前景の未設定時に該当要素を描画しないこと、文字ブロック幅・折り返しON/OFF、1280x720 の確定性、文字量による自動サイズ、アクセント色のコントラスト解決と明示色の保持、縁取り色・太さ（全体と `%%`）、HTMLエスケープ、改行保持。
+- API/統合テスト: 候補の CRUD、選択ポインタ、明示保存の上書き、選択中削除の付け替え、Work 共通 Appearance の取得・保存・解除、Edition の Work 所属検証、Work 外観変更の既存候補へのライブ反映、locale 別 Font Face、未保存 Appearance のプレビュー、指定された背景・前景 Asset の検証、背景・前景なしの候補作成、PNGのオンデマンド生成、Work削除での連鎖削除、旧文書の拒否。外観プリセットの CRUD、空パッチの拒否、プリセット更新・削除が適用済み Work へ波及しないこと。Agent Access の 9 操作（テンプレート取得、作成・更新・選択、未保存 PNG、保存済み PNG、削除・Work 共通 Appearance 保存・プリセットが未公開であること）。
 - DB更新テスト: 旧 Thumbnail 候補・Edition 外観値・旧形式プリセットを破棄し、Work・Edition・ScriptVersion・Asset を保持すること。
 - Webテスト: テンプレ選択・入力の往復、候補の追加・選択・削除、選択範囲への装飾適用、Appearance の set/clear と継承シード、現在 locale の表示、他言語候補の取り込みと破棄、取り込み後の文言編集が元候補を変えないこと。

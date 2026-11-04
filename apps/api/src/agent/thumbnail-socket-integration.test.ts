@@ -231,7 +231,7 @@ describe("agent thumbnail operations over the socket", () => {
     expect(template?.display.label).toBeTruthy();
     expect(template?.inputSchema).toMatchObject({
       type: "object",
-      required: ["headline", "backgroundAssetId", "foregroundAssetId"],
+      required: ["headline"],
     });
     expect(template?.example).toMatchObject({
       headline: expect.any(String),

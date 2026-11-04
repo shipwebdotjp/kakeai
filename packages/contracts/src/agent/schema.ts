@@ -78,6 +78,7 @@ function toTemplateField(field: TemplateFieldSpec): AgentTemplateField {
         key: field.key,
         label: field.label,
         assetKinds: [...field.assetKinds],
+        ...optional("optional", field.optional),
         ...optional("videoPlayback", field.videoPlayback),
       };
     case "nestedMedia":

@@ -326,6 +326,15 @@ function resolvePhoto(context: ThumbnailRenderContext, assetId: string, key: str
   return escapeHtmlAttribute(media.url);
 }
 
+/** Optional photos are simply omitted from the render, never an error. */
+function resolveOptionalPhoto(
+  context: ThumbnailRenderContext,
+  assetId: string | undefined,
+  key: string,
+): string | null {
+  return assetId === undefined ? null : resolvePhoto(context, assetId, key);
+}
+
 /**
  * Automatic headline sizing by visible character count. The factor is applied
  * to the resolved appearance font size; explicit appearance sizes still scale
@@ -361,16 +370,18 @@ export function renderCutoutHero(
   data: ThumbnailCutoutHeroInput,
   context: ThumbnailRenderContext,
 ): RenderedThumbnail {
-  const background = resolvePhoto(context, data.backgroundAssetId, "backgroundAssetId");
-  const foreground = resolvePhoto(context, data.foregroundAssetId, "foregroundAssetId");
+  const background = resolveOptionalPhoto(context, data.backgroundAssetId, "backgroundAssetId");
+  const foreground = resolveOptionalPhoto(context, data.foregroundAssetId, "foregroundAssetId");
   const crop = mediaCropStyle(data.backgroundFocalPoint, data.backgroundZoom);
   const appearance = context.appearance;
   const scrim = overlayToRgba(appearance.scrim);
   const scrimTransparent = overlayToRgba({ color: appearance.scrim.color, opacity: 0 });
-  const baseShadow = baseTextShadow(context.theme, appearance.scrim.color);
+  // Text sits on the photo when one exists, otherwise on the flat Theme canvas.
+  const textBackground = background === null ? context.theme.canvas.ink : appearance.scrim.color;
+  const baseShadow = baseTextShadow(context.theme, textBackground);
   const colors = richTextColors(
     context.theme,
-    appearance.scrim.color,
+    textBackground,
     appearance.accent,
     context.accentOverridden,
   );
@@ -436,15 +447,28 @@ export function renderCutoutHero(
   const headlineCss = textCss(appearance.headline, headlineFitFactor(data.headline), context.locale);
   const sublineCss = textCss(appearance.subline, 1, context.locale);
 
+  const backgroundHtml =
+    background === null
+      ? ""
+      : [
+          `<img class="kakeai-thumb-bg" src="${background}" alt="" style="${backgroundStyle}">`,
+          `<div class="kakeai-thumb-scrim" style="${scrimStyle}"></div>`,
+        ].join("");
+  const foregroundHtml =
+    foreground === null
+      ? ""
+      : [
+          `<div class="kakeai-thumb-foreground" style="${subjectPositionStyle}">`,
+          `<div class="kakeai-thumb-foreground-scale" style="${subjectScaleStyle}">`,
+          `<img class="kakeai-thumb-foreground-image" src="${foreground}" alt="" style="${subjectImageStyle}">`,
+          "</div>",
+          "</div>",
+        ].join("");
+
   const html = [
     `<div class="kakeai-thumb" style="position:absolute;inset:0;overflow:hidden;background:${context.theme.canvas.ink}">`,
-    `<img class="kakeai-thumb-bg" src="${background}" alt="" style="${backgroundStyle}">`,
-    `<div class="kakeai-thumb-scrim" style="${scrimStyle}"></div>`,
-    `<div class="kakeai-thumb-foreground" style="${subjectPositionStyle}">`,
-    `<div class="kakeai-thumb-foreground-scale" style="${subjectScaleStyle}">`,
-    `<img class="kakeai-thumb-foreground-image" src="${foreground}" alt="" style="${subjectImageStyle}">`,
-    "</div>",
-    "</div>",
+    backgroundHtml,
+    foregroundHtml,
     `<div class="kakeai-thumb-text" style="${textWrapper}">`,
     data.subline !== undefined && hasVisibleText(data.subline)
       ? richParagraph({
@@ -472,5 +496,8 @@ export function renderCutoutHero(
     "</div>",
   ].join("");
 
-  return { html, assetIds: [data.backgroundAssetId, data.foregroundAssetId] };
+  const assetIds = [data.backgroundAssetId, data.foregroundAssetId].filter(
+    (assetId): assetId is string => assetId !== undefined,
+  );
+  return { html, assetIds };
 }

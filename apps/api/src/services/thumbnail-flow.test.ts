@@ -137,9 +137,20 @@ describe("thumbnail flow", () => {
       thumbnails.createThumbnail(prisma, editionId, {
         label: "不正",
         template: { id: "thumbnail.cutout-hero", version: 1 },
-        input: { headline: "x", backgroundAssetId },
+        input: { backgroundAssetId, foregroundAssetId },
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+  });
+
+  it("accepts a candidate without background or foreground images", async () => {
+    const { editionId } = await createEdition();
+    const created = await thumbnails.createThumbnail(prisma, editionId, {
+      label: "文字だけ",
+      template: { id: "thumbnail.cutout-hero", version: 1 },
+      input: { headline: "文字だけの候補" },
+    });
+    expect(created.id).toBeTruthy();
+    expect(created.input).toEqual({ headline: "文字だけの候補" });
   });
 
   it("accepts inline text marks", async () => {

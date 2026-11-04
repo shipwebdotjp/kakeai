@@ -66,10 +66,10 @@ export const THUMBNAIL_CUTOUT_HERO_DEFAULTS = {
 export const thumbnailCutoutHeroInputSchema = z.strictObject({
   headline: headlineTextSchema(),
   subline: headlineTextSchema().optional(),
-  backgroundAssetId: idSchema,
+  backgroundAssetId: idSchema.optional(),
   backgroundFocalPoint: focalPointSchema.optional(),
   backgroundZoom: mediaZoomSchema.optional(),
-  foregroundAssetId: idSchema,
+  foregroundAssetId: idSchema.optional(),
   subjectSide: z.enum(["left", "right"]).default(THUMBNAIL_CUTOUT_HERO_DEFAULTS.subjectSide),
   flipForeground: z.boolean().default(THUMBNAIL_CUTOUT_HERO_DEFAULTS.flipForeground),
   subjectAnchor: thumbnailSubjectAnchorSchema.default(
@@ -111,7 +111,13 @@ const cutoutHeroV1: ThumbnailTemplateDefinition = {
   inputFields: [
     { kind: "richText", key: "headline", label: "見出し", marks: HEADLINE_MARKS },
     { kind: "richText", key: "subline", label: "補足文", marks: HEADLINE_MARKS, optional: true },
-    { kind: "media", key: "backgroundAssetId", label: "背景写真", assetKinds: THUMBNAIL_MEDIA_KINDS },
+    {
+      kind: "media",
+      key: "backgroundAssetId",
+      label: "背景写真",
+      assetKinds: THUMBNAIL_MEDIA_KINDS,
+      optional: true,
+    },
     {
       kind: "mediaCrop",
       key: "backgroundFocalPoint",
@@ -123,6 +129,7 @@ const cutoutHeroV1: ThumbnailTemplateDefinition = {
       key: "foregroundAssetId",
       label: "前景の切り抜き画像（透過PNG・WebP）",
       assetKinds: THUMBNAIL_MEDIA_KINDS,
+      optional: true,
     },
     { kind: "select", key: "subjectSide", label: "被写体の位置", options: SUBJECT_SIDE_OPTIONS },
     { kind: "boolean", key: "flipForeground", label: "被写体を左右反転" },
@@ -157,18 +164,22 @@ const cutoutHeroV1: ThumbnailTemplateDefinition = {
     if (!parsed.success) {
       return [];
     }
-    return [
-      {
+    const references: AssetReference[] = [];
+    if (parsed.data.backgroundAssetId !== undefined) {
+      references.push({
         assetId: parsed.data.backgroundAssetId,
         allowedKinds: THUMBNAIL_MEDIA_KINDS,
         path: [...path, "backgroundAssetId"],
-      },
-      {
+      });
+    }
+    if (parsed.data.foregroundAssetId !== undefined) {
+      references.push({
         assetId: parsed.data.foregroundAssetId,
         allowedKinds: THUMBNAIL_MEDIA_KINDS,
         path: [...path, "foregroundAssetId"],
-      },
-    ];
+      });
+    }
+    return references;
   },
 };
 

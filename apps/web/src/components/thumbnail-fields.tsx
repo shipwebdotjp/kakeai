@@ -238,8 +238,15 @@ export function ThumbnailField({ field, input, setValue, clearValue }: FieldProp
       <MediaPicker
         label={field.label}
         kinds={field.assetKinds}
+        optional={field.optional === true}
         selectedAssetId={typeof value === "string" ? value : null}
-        onSelect={(assetId) => setValue(field.key, assetId)}
+        onSelect={(assetId) => {
+          if (assetId === null) {
+            clearValue(field.key);
+          } else {
+            setValue(field.key, assetId);
+          }
+        }}
       />
     );
   }

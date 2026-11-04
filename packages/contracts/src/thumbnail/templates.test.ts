@@ -84,15 +84,26 @@ describe("thumbnail templates", () => {
     ).toBe(false);
   });
 
-  it("requires both background and foreground images", () => {
+  it("treats both images as optional", () => {
+    expect(thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, foregroundAssetId: undefined }).success).toBe(
+      true,
+    );
+    expect(thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, backgroundAssetId: undefined }).success).toBe(
+      true,
+    );
     expect(
-      thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, foregroundAssetId: undefined })
-        .success,
-    ).toBe(false);
-    expect(
-      thumbnailCutoutHeroInputSchema.safeParse({ ...VALID_INPUT, backgroundAssetId: undefined })
-        .success,
-    ).toBe(false);
+      thumbnailCutoutHeroInputSchema.safeParse({
+        headline: "文字だけ",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("marks the image fields as optional for the editor", () => {
+    const definition = getThumbnailTemplate("thumbnail.cutout-hero", 1);
+    for (const key of ["backgroundAssetId", "foregroundAssetId"]) {
+      const field = definition?.inputFields?.find((entry) => entry.key === key);
+      expect(field?.kind === "media" && field.optional).toBe(true);
+    }
   });
 
   it("collects both image asset references", () => {
@@ -105,6 +116,33 @@ describe("thumbnail templates", () => {
       { assetId: "ast_bg", allowedKinds: ["image"], path: ["input", "backgroundAssetId"] },
       { assetId: "ast_fg", allowedKinds: ["image"], path: ["input", "foregroundAssetId"] },
     ]);
+  });
+
+  it("collects only the images that are set", () => {
+    const backgroundOnly = collectThumbnailAssetRefs({
+      schemaVersion: 3,
+      template: { id: "thumbnail.cutout-hero", version: 1 },
+      input: { headline: "背景だけ", backgroundAssetId: "ast_bg" },
+    });
+    expect(backgroundOnly).toEqual([
+      { assetId: "ast_bg", allowedKinds: ["image"], path: ["input", "backgroundAssetId"] },
+    ]);
+
+    const foregroundOnly = collectThumbnailAssetRefs({
+      schemaVersion: 3,
+      template: { id: "thumbnail.cutout-hero", version: 1 },
+      input: { headline: "前景だけ", foregroundAssetId: "ast_fg" },
+    });
+    expect(foregroundOnly).toEqual([
+      { assetId: "ast_fg", allowedKinds: ["image"], path: ["input", "foregroundAssetId"] },
+    ]);
+
+    const textOnly = collectThumbnailAssetRefs({
+      schemaVersion: 3,
+      template: { id: "thumbnail.cutout-hero", version: 1 },
+      input: { headline: "文字だけ" },
+    });
+    expect(textOnly).toEqual([]);
   });
 
   it("parses v3 documents and rejects old or unknown versions", () => {

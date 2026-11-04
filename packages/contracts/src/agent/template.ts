@@ -30,6 +30,7 @@ export const agentTemplateFieldSchema = z.discriminatedUnion("kind", [
     kind: z.literal("media"),
     ...fieldKeyShape,
     assetKinds: z.array(assetKindSchema).min(1),
+    optional: z.boolean().optional(),
     videoPlayback: z.boolean().optional(),
   }),
   z.strictObject({

@@ -250,6 +250,32 @@ describe("compileThumbnail", () => {
     expect(compile(input).html).toBe(compile(input).html);
   });
 
+  it("renders text only when neither image is set", () => {
+    const compiled = compile({ headline: "文字だけのサムネイル" });
+    expect(compiled.html).toContain("文字だけのサムネイル");
+    expect(compiled.html).not.toContain("kakeai-thumb-bg");
+    expect(compiled.html).not.toContain("kakeai-thumb-scrim");
+    expect(compiled.html).not.toContain("kakeai-thumb-foreground");
+    expect(compiled.html).not.toContain("/preview/");
+    expect(compiled.assetIds).toEqual([]);
+  });
+
+  it("omits the foreground when only the background is set", () => {
+    const compiled = compile({ headline: "背景だけ", backgroundAssetId: "ast_bg" });
+    expect(compiled.html).toContain("/preview/ast_bg");
+    expect(compiled.html).toContain("kakeai-thumb-scrim");
+    expect(compiled.html).not.toContain("kakeai-thumb-foreground");
+    expect(compiled.assetIds).toEqual(["ast_bg"]);
+  });
+
+  it("omits the background and scrim when only the foreground is set", () => {
+    const compiled = compile({ headline: "前景だけ", foregroundAssetId: "ast_fg" });
+    expect(compiled.html).toContain("/preview/ast_fg");
+    expect(compiled.html).not.toContain("kakeai-thumb-bg");
+    expect(compiled.html).not.toContain("kakeai-thumb-scrim");
+    expect(compiled.assetIds).toEqual(["ast_fg"]);
+  });
+
   it("fails on an unknown template", () => {
     expect(() =>
       compileThumbnail({
@@ -266,9 +292,7 @@ describe("compileThumbnail", () => {
   });
 
   it("fails on invalid input", () => {
-    expect(() => compile({ ...BASE_INPUT, foregroundAssetId: undefined })).toThrow(
-      CompositionCompileError,
-    );
+    expect(() => compile({ ...BASE_INPUT, textWidth: 10 })).toThrow(CompositionCompileError);
   });
 });
 

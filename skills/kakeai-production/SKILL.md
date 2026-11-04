@@ -614,10 +614,11 @@ two images.
 
 1. `thumbnail.listTemplates` and take the template's `inputSchema` and
    `example`. Replace every `<...>` placeholder with a real ID. Do not guess
-   the input shape. `backgroundAssetId` and `foregroundAssetId` must be `ready`
-   image Assets (`asset.list` / `asset.get`). The foreground is expected to be a
-   transparent PNG/WebP; the app does not check transparency, so look at the
-   preview.
+   the input shape. `backgroundAssetId` and `foregroundAssetId` are optional,
+   but any ID you do send must be a `ready` image Asset (`asset.list` /
+   `asset.get`). Omit either key to render without that image. The foreground
+   is expected to be a transparent PNG/WebP; the app does not check
+   transparency, so look at the preview.
 2. `thumbnail.list` the edition first, then `thumbnail.create` with a short
    `label`, the `template`, the `input` and an optional `appearanceOverride`
    (for example `{ "headline": { "color": "#FFE066" } }`). The first candidate

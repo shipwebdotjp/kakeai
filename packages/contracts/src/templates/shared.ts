@@ -12,7 +12,14 @@ export interface TemplateDisplay {
 }
 
 export type TemplateFieldSpec =
-  | { kind: "media"; key: string; label: string; assetKinds: readonly AssetKindName[]; videoPlayback?: boolean }
+  | {
+      kind: "media";
+      key: string;
+      label: string;
+      assetKinds: readonly AssetKindName[];
+      optional?: boolean;
+      videoPlayback?: boolean;
+    }
   | { kind: "nestedMedia"; key: string; label: string; assetKinds: readonly AssetKindName[]; optional?: boolean; allowComposition?: boolean; videoPlayback?: boolean }
   | { kind: "text"; key: string; label: string }
   | { kind: "optionalText"; key: string; label: string }
