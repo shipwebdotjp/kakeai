@@ -7,6 +7,7 @@ import { lineTriggerSchema, numericEffectSchema } from "../content/cue-effect";
 import type { VisualTemplateDefinition } from "./shared";
 import { EXAMPLE_LINE_TRIGGER } from "./common";
 import { refineFigureData } from "./figure";
+import { FIGURE_WIDTH_OPTIONS, figureWidthSchema } from "./figure-width";
 import { createEffectsLineRefCollector } from "./line-refs";
 
 export const TABLE_MAX_COLUMNS = 8;
@@ -55,6 +56,7 @@ export type TableData = z.infer<typeof tableDataSchema>;
 
 export const tableStyleSchema = z.strictObject({
   preset: tableStylePresetSchema.default("clean"),
+  width: figureWidthSchema.optional(),
   zebra: z.boolean().optional(),
   headerAccent: themeAccentTokenSchema.optional(),
 });
@@ -167,6 +169,13 @@ export const tableSimpleV1: VisualTemplateDefinition = {
       dataKind: "table",
     },
     { kind: "select", key: "style.preset", label: "スタイル", options: TABLE_STYLE_PRESET_OPTIONS },
+    {
+      kind: "select",
+      key: "style.width",
+      label: "幅",
+      options: FIGURE_WIDTH_OPTIONS,
+      defaultValue: "wide",
+    },
     {
       kind: "select",
       key: "style.headerAccent",

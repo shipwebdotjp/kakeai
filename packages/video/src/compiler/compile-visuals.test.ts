@@ -71,6 +71,49 @@ describe("compileDocument", () => {
     expect(laptopOff.html).not.toContain('class="kakeai-laptopbase"');
   });
 
+  it("scales the whole device and anchors it by placement", () => {
+    const compileDevice = (id: string, input: Record<string, unknown>) => {
+      const document = validContentDocument();
+      document.scenes[0]!.visualCues = [
+        cue({ id, template: { id: "scene.device-frame", version: 1 }, layer: "background", input }),
+      ];
+      return compileDocument({ document, assetResolver: resolver });
+    };
+    const screen = { kind: "media", assetId: "asset-screen-image", fit: "cover" } as const;
+
+    const left = compileDevice("vc-device-left", {
+      frame: "laptop",
+      screen,
+      scale: 0.8,
+      placement: "left",
+    });
+    expect(left.html).toContain("kakeai-deviceframe-place-left");
+    expect(left.html).toContain("--kakeai-device-scale:0.8");
+    expect(left.html).toContain("--kakeai-device-origin:left center");
+    expect(left.html).toContain(
+      'class="kakeai-deviceframe-body kakeai-deviceframe-scalable"',
+    );
+
+    const right = compileDevice("vc-device-right", {
+      frame: "laptop",
+      screen,
+      scale: 0.6,
+      placement: "right",
+    });
+    expect(right.html).toContain("kakeai-deviceframe-place-right");
+    expect(right.html).toContain("--kakeai-device-origin:right center");
+
+    const center = compileDevice("vc-device-center", {
+      frame: "laptop",
+      screen,
+      scale: 1,
+      placement: "center",
+    });
+    expect(center.html).not.toContain('kakeai-deviceframe-place-left"');
+    expect(center.html).not.toContain('kakeai-deviceframe-place-right"');
+    expect(center.html).not.toContain("--kakeai-device-scale:");
+  });
+
   it("renders a nested composition in a device-frame screen with contain fit", () => {
     const document = validContentDocument();
     document.scenes[0]!.visualCues = [

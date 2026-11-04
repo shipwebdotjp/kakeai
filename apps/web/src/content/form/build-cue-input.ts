@@ -251,8 +251,12 @@ export function buildCueInput(
       case "select": {
         const allowed = field.options.map((option) => option.value);
         if (allowed.includes(raw)) {
-          setAtPath(input, field.key, raw);
-        } else if (field.optional) {
+          if (field.defaultValue !== undefined && raw === field.defaultValue) {
+            deleteAtPath(input, field.key);
+          } else {
+            setAtPath(input, field.key, raw);
+          }
+        } else if (field.optional || field.defaultValue !== undefined) {
           deleteAtPath(input, field.key);
         } else {
           setAtPath(input, field.key, field.options[0]?.value ?? "");
@@ -427,7 +431,15 @@ export function buildCueInput(
               `${field.label}は ${field.min ?? ""}〜${field.max ?? ""} の範囲で入力してください`,
             );
           }
-          setAtPath(input, field.key, value);
+          if (
+            field.optional &&
+            field.defaultValue !== undefined &&
+            value === field.defaultValue
+          ) {
+            deleteAtPath(input, field.key);
+          } else {
+            setAtPath(input, field.key, value);
+          }
         }
         break;
       }

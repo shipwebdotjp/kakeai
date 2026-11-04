@@ -210,9 +210,9 @@ function defaultCueFields(
     []) {
     switch (field.kind) {
       case "select":
-        fields[field.key] = field.optional
-          ? ""
-          : (field.options[0]?.value ?? "");
+        fields[field.key] =
+          field.defaultValue ??
+          (field.optional ? "" : (field.options[0]?.value ?? ""));
         break;
       case "nestedMedia":
         fields[field.key] = "";

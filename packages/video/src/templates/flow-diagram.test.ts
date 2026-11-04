@@ -144,6 +144,42 @@ describe("renderFlowDiagram", () => {
   });
 });
 
+describe("renderFlowDiagram node label sizing", () => {
+  const nodes = [
+    { label: "データ" },
+    ...Array.from({ length: 6 }, () => ({ label: "受付" })),
+    { label: "とても長いノードラベル" },
+  ];
+
+  it("shrinks a label that does not fit the node at the base size", () => {
+    const rendered = renderFlowDiagram(
+      { diagram: { nodes, edges: [] }, style: { orientation: "horizontal" } },
+      context(),
+    );
+    const match = rendered.html.match(
+      /<span class="kakeai-flownode-label" style="font-size:([0-9.]+)px;white-space:nowrap">データ<\/span>/,
+    );
+    expect(match).not.toBeNull();
+    const size = Number(match![1]);
+    expect(size).toBeLessThan(30);
+    expect(size).toBeGreaterThanOrEqual(18);
+    expect(rendered.html).toContain(
+      '<span class="kakeai-flownode-label">受付</span>',
+    );
+  });
+
+  it("keeps wrapping at the minimum size instead of truncating the label", () => {
+    const rendered = renderFlowDiagram(
+      { diagram: { nodes, edges: [] }, style: { orientation: "horizontal" } },
+      context(),
+    );
+    expect(rendered.html).toContain(
+      '<span class="kakeai-flownode-label" style="font-size:18px;white-space:normal">とても長いノードラベル</span>',
+    );
+    expect(rendered.html).toContain("kakeai-flownode-overflow");
+  });
+});
+
 describe("renderFlowDiagram effects", () => {
   it("appears all nodes with a stagger and hides later ones until their turn", () => {
     const scope = cueScope("visual-flow-1");

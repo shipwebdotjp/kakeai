@@ -27,6 +27,7 @@
   },
   "style": {
     "preset": "clean",          // clean | grid
+    "width": "wide",            // wide | medium | narrow（省略時 wide）
     "orientation": "vertical",  // vertical | horizontal
     "valueLabels": true,
     "colorBy": "series",        // series | category（省略時: 系列1本なら category、複数なら series）
@@ -46,6 +47,7 @@
 - 値ラベルは系列の `format`（`integer | decimal | percent | currency`）で整形する。目盛りは、全系列の `format` が同じときはその `format`、異なるときはそのまま表示し、`axisUnit` を末尾に付ける。
 - `colorBy` が `series` のとき系列ごと、`category` のときカテゴリごとに `VisualTheme.categoryColors` を巡回して割り当てる。
 - 負値は0として描画し、警告（`chart_negative_value`）を返す。保存は拒否しない。
+- `style.width` は占有幅のプリセットで、`wide`（現行の最大幅）・`medium`（`wide` の75%）・`narrow`（60%）を取る。省略時は `wide`。文字・棒・軸を `transform: scale()` で縮小せず、フレームとプロットの最大幅だけを変える。出力形式のコンテンツ幅を超えて広げない。狭い幅でカテゴリ名が折り返されることはあるが、`width` 自体は保存エラーや警告にしない。
 - `effects` は行トリガー付きの `appear`（`grow`／`bounce`／`fade`）と `emphasize`（`frame`／`spotlight`、任意の `onset`）、`value`（値ラベルのカウント）を持つ。target は `category`（カテゴリ番号）・`series`（系列番号）・`bars`（全棒）を指す。`durationMs` は `animationPolicy.maxDurationMs` でクランプし、ずらしはカテゴリ単位とする。棒の色を上書きしないよう `emphasize.style: background` は保存時に拒否する。`spotlight` の兄弟は同じ棒グラフ内の他の棒。`value` は値ラベルが有効なときだけ効果を出し、書式は系列の `format` を使う。共通単位の契約は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 
 ## 図形アクション
@@ -71,6 +73,7 @@
 - 最大値の値ラベルが凡例に重ならないよう、プロットの上に余白を確保する。横棒では値ラベルのぶんを右側のガターとして確保する。
 - 横棒の目盛り線も 0 をバーの左端（カテゴリ名ガターの右）に置き、目盛り線と数値ラベルを重ねない。
 - タイトルはテーマの `heading`、目盛り・凡例・カテゴリ名・値ラベルは `body` のフォントを使う。
+- 幅プリセットはプロットとフレームの最大幅へ適用する。`wide` と未指定は従来の `min(1280px, コンテンツ幅)` を保ち、`medium` はその75%、`narrow` は60%を上限にする。文字サイズ・目盛り・バーの太さの計算は変えない。
 
 ## テンプレート定義
 
@@ -90,6 +93,7 @@
 | `title` | optionalText | タイトル |
 | `data` | grid | カテゴリ＋系列のグリッド。CSV貼り付け対応 |
 | `style.preset` | select | clean / grid |
+| `style.width` | select | 幅。wide / medium / narrow。未指定は wide として表示し、wide のまま保存すると値を省略する |
 | `style.orientation` | select | vertical / horizontal |
 | `style.colorBy` | select（任意） | series / category |
 | `style.axisUnit` | optionalText | 軸の単位 |
@@ -106,4 +110,5 @@
 - `value` の値ラベルカウントが、プレビューのシークとMP4で一致する。
 - `emphasize`（`frame`／`spotlight`）と `onset` が、プレビューのシークとMP4で一致する。`background` 強調は保存時に拒否する。
 - 先頭列がカテゴリでない、系列が数値でない、範囲外の効果 target、上限超過の場合を拒否する。
+- `style.width` の3段階を保存・復元・プレビュー・MP4レンダーでき、`wide` または未指定は現行と同じ最大幅になる。
 - 負値・カテゴリ/系列の目安超過を `meta.warnings` で返す（拒否しない）。

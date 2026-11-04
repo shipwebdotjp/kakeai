@@ -1,4 +1,6 @@
 import {
+  figureWidthScale,
+  TABLE_FRAME_MAX_WIDTH_PX,
   tableSimpleInputSchema,
   type EmphasizeEffect,
   type OnsetPreset,
@@ -130,8 +132,12 @@ export function renderTableSimple(input: unknown, context: RenderContext): Rende
     caption === undefined || caption.trim().length === 0
       ? ""
       : `<figcaption class="kakeai-tablecaption" style="${themeRoleFontStyle(theme, "heading", context.document.locale)}">${escapeHtmlText(caption)}</figcaption>`;
+  const frameMaxWidth = Math.round(
+    Math.min(TABLE_FRAME_MAX_WIDTH_PX, context.canvas.contentWidth) *
+      figureWidthScale(style?.width),
+  );
   return {
-    html: `<figure class="kakeai-tablewrap" style="${themeRoleFontStyle(theme, "body", context.document.locale)}"><div class="kakeai-tableframe kakeai-table-${preset}${zebra ? " kakeai-table-zebra" : ""}">${captionHtml}<table class="kakeai-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div></figure>`,
+    html: `<figure class="kakeai-tablewrap" style="${themeRoleFontStyle(theme, "body", context.document.locale)}"><div class="kakeai-tableframe kakeai-table-${preset}${zebra ? " kakeai-table-zebra" : ""}" style="--kakeai-figure-max-w:${frameMaxWidth}px">${captionHtml}<table class="kakeai-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

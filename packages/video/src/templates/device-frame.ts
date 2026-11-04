@@ -6,6 +6,12 @@ import { laptopBaseHtml, statusBarHtml } from "./device-chrome";
 
 type DeviceFrameInput = z.infer<typeof deviceFrameInputSchema>;
 
+const DEVICE_PLACEMENT_CLASS: Record<DeviceFrameInput["placement"] & string, string> = {
+  left: " kakeai-deviceframe-place-left",
+  center: "",
+  right: " kakeai-deviceframe-place-right",
+};
+
 export function renderDeviceFrame(
   input: unknown,
   context: RenderContext,
@@ -17,8 +23,10 @@ export function renderDeviceFrame(
       { path: context.path, code: "invalid_input", message: "scene.device-frame の入力が不正です。" },
     ]);
   }
-  const { screen, frame, backgroundColor, animation, statusBar, keyboard } =
+  const { screen, frame, scale, placement, backgroundColor, animation, statusBar, keyboard } =
     parsed.data as DeviceFrameInput;
+  const deviceScale = scale ?? 1;
+  const devicePlacement = placement ?? "center";
   const screenRendered = context.renderNested(
     screen,
     context.scope.child("screen"),
@@ -44,13 +52,21 @@ export function renderDeviceFrame(
           },
         ]
       : [];
-  const screenHtml = `<div id="${screenId}" class="kakeai-deviceframe-screen">${screenRendered.html}${statusHtml}</div>`;
+  const screenHtml = `<div id="${screenId}" class="kakeai-deviceframe-screen${showKeyboard ? "" : " kakeai-deviceframe-scalable"}">${screenRendered.html}${statusHtml}</div>`;
   const content = showKeyboard
-    ? `<div class="kakeai-deviceframe-body">${screenHtml}${laptopBaseHtml()}</div>`
+    ? `<div class="kakeai-deviceframe-body kakeai-deviceframe-scalable">${screenHtml}${laptopBaseHtml()}</div>`
     : screenHtml;
-  const frameClass = `kakeai-deviceframe kakeai-deviceframe-${frame}${showKeyboard ? " kakeai-deviceframe-keyboard" : ""}`;
+  const placementClass = DEVICE_PLACEMENT_CLASS[devicePlacement] ?? "";
+  const frameClass = `kakeai-deviceframe kakeai-deviceframe-${frame}${showKeyboard ? " kakeai-deviceframe-keyboard" : ""}${placementClass}`;
+  const styleParts = [`background:${background}`];
+  if (deviceScale !== 1) {
+    styleParts.push(
+      `--kakeai-device-scale:${deviceScale}`,
+      `--kakeai-device-origin:${devicePlacement} center`,
+    );
+  }
   return {
-    html: `<div class="${frameClass}" style="background:${background}">${content}</div>`,
+    html: `<div class="${frameClass}" style="${styleParts.join(";")}">${content}</div>`,
     assetIds: screenRendered.assetIds,
     animation: [...screenRendered.animation, ...animationItems],
     nestedCompositionWindows: screenRendered.nestedCompositionWindows,

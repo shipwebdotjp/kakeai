@@ -10,6 +10,7 @@ import {
 import type { VisualTemplateDefinition } from "./shared";
 import { EXAMPLE_LINE_TRIGGER } from "./common";
 import { refineFigureData } from "./figure";
+import { FIGURE_WIDTH_OPTIONS, figureWidthSchema } from "./figure-width";
 import { tableColumnSchema, tableRowSchema } from "./table";
 import { createEffectsLineRefCollector } from "./line-refs";
 
@@ -73,6 +74,7 @@ export type ChartData = z.infer<typeof chartDataSchema>;
 
 export const chartStyleSchema = z.strictObject({
   preset: chartStylePresetSchema.default("clean"),
+  width: figureWidthSchema.optional(),
   orientation: chartOrientationSchema.default("vertical"),
   valueLabels: z.boolean().default(true),
   colorBy: chartColorBySchema.optional(),
@@ -190,6 +192,13 @@ export const chartBarV1: VisualTemplateDefinition = {
       dataKind: "chart",
     },
     { kind: "select", key: "style.preset", label: "目盛り線", options: CHART_STYLE_PRESET_OPTIONS },
+    {
+      kind: "select",
+      key: "style.width",
+      label: "幅",
+      options: FIGURE_WIDTH_OPTIONS,
+      defaultValue: "wide",
+    },
     { kind: "select", key: "style.orientation", label: "向き", options: CHART_ORIENTATION_OPTIONS },
     {
       kind: "select",

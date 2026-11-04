@@ -1,4 +1,6 @@
 export * from "./shared";
+export * from "./figure-width";
+export * from "./flow-layout";
 export * from "./text-block";
 export * from "./media";
 export * from "./character-standing";

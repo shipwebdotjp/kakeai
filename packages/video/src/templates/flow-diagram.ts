@@ -1,4 +1,9 @@
 import {
+  fitFlowNodeLabel,
+  flowHorizontalGap,
+  flowNodeWidth,
+  FLOW_PLOT_MAX_WIDTH_PX,
+  FLOW_VERTICAL_GAP_PX,
   flowDiagramInputSchema,
   type EmphasizeEffect,
   type FlowEdge,
@@ -22,17 +27,12 @@ import {
 import { accentForegroundHex, themeRoleFontStyle } from "../theme";
 import { toneHex } from "./tone";
 
-const FLOW_PLOT_W = 1320;
 const FLOW_PLOT_H = 760;
 /** Portrait has more vertical room; the vertical layout grows to use it. */
 const FLOW_PLOT_H_PORTRAIT = 1200;
-const FLOW_GAP = 72;
 const FLOW_ROUTE_OFFSET = 56;
 const FLOW_ROUTE_MARGIN = 24;
 const FLOW_H_NODE_H = 132;
-const FLOW_V_NODE_W = 600;
-const FLOW_NODE_MIN_W = 120;
-const FLOW_NODE_MAX_W = 360;
 const FLOW_NODE_MIN_H = 72;
 const FLOW_NODE_MAX_H = 150;
 
@@ -53,12 +53,14 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+const FLOW_VERTICAL_GAP = FLOW_VERTICAL_GAP_PX;
+
 function fitGap(available: number, count: number, minSize: number): number {
   if (count <= 1) {
-    return FLOW_GAP;
+    return FLOW_VERTICAL_GAP;
   }
   const maxGapForMinSize = (available - count * minSize) / (count - 1);
-  return Math.max(8, Math.min(FLOW_GAP, maxGapForMinSize));
+  return Math.max(8, Math.min(FLOW_VERTICAL_GAP, maxGapForMinSize));
 }
 
 interface PlotSize {
@@ -72,7 +74,7 @@ function computeLayout(count: number, orientation: FlowOrientation, size: PlotSi
     const nodeH = clamp((size.height - gap * (count - 1)) / count, FLOW_NODE_MIN_H, FLOW_NODE_MAX_H);
     const total = count * nodeH + gap * (count - 1);
     const offsetY = (size.height - total) / 2;
-    const nodeW = Math.min(FLOW_V_NODE_W, size.width);
+    const nodeW = flowNodeWidth(count, "vertical", size.width);
     const offsetX = (size.width - nodeW) / 2;
     const ys = Array.from({ length: count }, (_value, index) => offsetY + index * (nodeH + gap));
     const xs = Array.from({ length: count }, () => offsetX);
@@ -84,8 +86,8 @@ function computeLayout(count: number, orientation: FlowOrientation, size: PlotSi
       centers: ys.map((y) => ({ x: size.width / 2, y: y + nodeH / 2 })),
     };
   }
-  const gap = fitGap(size.width, count, FLOW_NODE_MIN_W);
-  const nodeW = clamp((size.width - gap * (count - 1)) / count, FLOW_NODE_MIN_W, FLOW_NODE_MAX_W);
+  const gap = flowHorizontalGap(size.width, count);
+  const nodeW = flowNodeWidth(count, "horizontal", size.width);
   const total = count * nodeW + gap * (count - 1);
   const offsetX = (size.width - total) / 2;
   const offsetY = (size.height - FLOW_H_NODE_H) / 2;
@@ -237,7 +239,7 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
   const preset = style?.preset ?? "clean";
   const nodeIds = diagram.nodes.map((_node, index) => context.scope.id(`node-${index}`));
   const plotSize: PlotSize = {
-    width: Math.min(FLOW_PLOT_W, context.canvas.contentWidth),
+    width: Math.min(FLOW_PLOT_MAX_WIDTH_PX, context.canvas.contentWidth),
     height:
       context.canvas.profile === "portrait" && orientation === "vertical"
         ? FLOW_PLOT_H_PORTRAIT
@@ -286,7 +288,19 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
         node.caption === undefined || node.caption.trim().length === 0
           ? ""
           : `<span class="kakeai-flownode-caption">${escapeHtmlText(node.caption)}</span>`;
-      return `<div id="${nodeIds[index]}" class="kakeai-flownode" style="left:${round(layout.xs[index]!)}px;top:${round(layout.ys[index]!)}px;width:${round(layout.nodeW)}px;height:${round(layout.nodeH)}px"><span class="kakeai-flownode-label">${escapeHtmlText(node.label)}</span>${caption}${overlay}</div>`;
+      const labelFit = fitFlowNodeLabel(
+        node.label,
+        layout.nodeW,
+        context.canvas.typeScale,
+      );
+      const labelStyleParts: string[] = [];
+      if (labelFit.reduced || labelFit.overflow) {
+        const whiteSpace = labelFit.overflow ? "normal" : "nowrap";
+        labelStyleParts.push(`font-size:${round(labelFit.fontSizePx)}px`, `white-space:${whiteSpace}`);
+      }
+      const labelStyle =
+        labelStyleParts.length === 0 ? "" : ` style="${labelStyleParts.join(";")}"`;
+      return `<div id="${nodeIds[index]}" class="kakeai-flownode${labelFit.overflow ? " kakeai-flownode-overflow" : ""}" style="left:${round(layout.xs[index]!)}px;top:${round(layout.ys[index]!)}px;width:${round(layout.nodeW)}px;height:${round(layout.nodeH)}px"><span class="kakeai-flownode-label"${labelStyle}>${escapeHtmlText(node.label)}</span>${caption}${overlay}</div>`;
     })
     .join("");
 

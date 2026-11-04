@@ -74,9 +74,11 @@ NestedVisual =
 | `media.full-bleed@1` | background | assetId, fit, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
 | `media.card@1` | card | assetId, heading, caption?, focalPoint?, zoom?, loop?, videoPlayback? | 対応 |
 | `character.standing@1` | standing | characterId, appearanceId, side, scale | 対応（左右1体ずつ最大2体）。Face Set を持つ外観の表情合成（台詞区間ごと）は [../face-expression/spec.md](../face-expression/spec.md) |
-| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), backgroundColor?, animation?, statusBar?, keyboard? | 対応（複合ビジュアル、画面の登場アニメーション。screen は素材または `kind: "composition"`） |
+| `scene.device-frame@1` | background, card | screen(NestedVisual), frame(laptop/phone), scale?, placement?, backgroundColor?, animation?, statusBar?, keyboard? | 対応（複合ビジュアル、画面の登場アニメーション。screen は素材または `kind: "composition"`） |
 
 `scene.device-frame@1` は端末クロームを重ねられる。`frame: "phone"` では既定で画面の上に静的なステータスバー（時刻・ダイナミックアイランド・Wi‑Fi・バッテリー）を重ねる（`statusBar: false` で消せる）。`frame: "laptop"` では既定で画面の下に、開いたノートPCのベース（キーボード・トラックパッド・左右のスピーカーグリル・前面の指掛け）をパース投影で描く（`keyboard: false` で消せる。画面＋ベースがキャンバスに収まるよう画面幅を縮める）。どちらも**既定オンの任意入力**（`.default(true)`）であり、正式リリース前は見た目の変更を版の追加なしで行える（[ADR-0071](../adr/0071-pre-release-appearance-changes-without-version-bump.md)）。クロームは `chat.thread@1` と共通の描画（`device-chrome`）を使い、寸法は画面の大きさに追従するコンテナ相対で表す。
+
+任意の `scale`（`0.6..1`、省略時 `1`）は画面・端末枠・ステータスバー・キーボードを含むデバイス一式へ一様に適用する。`placement`（`left | center | right`、省略時 `center`）は、既存のデバイス余白内で縮小後の外形を左端・中央・右端へアンカーする。縦位置の指定と、背面／カードのデバイスと `standing` 層の立ち絵の衝突回避は持たない。利用者が構図として選ぶ。`scale` は立ち絵の `scale` やメディア内の `zoom` とは意味が異なる。
 
 ## テンプレート入力メタデータと汎用エディタ
 
@@ -88,8 +90,9 @@ type TemplateFieldSpec =
   | { kind: "nestedMedia"; key; label; assetKinds; allowComposition?; videoPlayback? }  // NestedVisual を media または composition として編集
   | { kind: "text"; key; label }
   | { kind: "optionalText"; key; label }             // 空なら key を削除
-  | { kind: "select"; key; label; options }
+  | { kind: "select"; key; label; options; defaultValue? }   // defaultValue は未指定時の表示値。その値のまま保存すると key を省略
   | { kind: "color"; key; label }                    // #RRGGBB を検証
+  | { kind: "decimal"; key; label; min?; max?; step?; optional?; defaultValue? }  // 小数。defaultValue は未指定時の表示値
   | { kind: "mediaCrop"; key; label; zoomKey? }      // 焦点位置と拡大率
   | { kind: "animation"; key; label }                // preset と durationMs
 ```

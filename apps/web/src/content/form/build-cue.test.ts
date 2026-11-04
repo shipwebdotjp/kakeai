@@ -242,6 +242,105 @@ describe("buildContentDocument", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("defaults new device-frame and figure fields without writing them", () => {
+    const device = createCueFormValue({
+      sceneId: "scene-intro",
+      templateId: "scene.device-frame",
+      templateVersion: 1,
+      layer: "background",
+      order: 0,
+    });
+    expect(device.fields.scale).toBe("1");
+    expect(device.fields.placement).toBe("center");
+    const table = createCueFormValue({
+      sceneId: "scene-intro",
+      templateId: "table.simple",
+      templateVersion: 1,
+      layer: "overlay",
+      order: 0,
+    });
+    expect(table.fields["style.width"]).toBe("wide");
+  });
+
+  it("round-trips device scale and placement and omits the defaults", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-device-layout",
+        template: { id: "scene.device-frame", version: 1 },
+        layer: "background",
+        input: {
+          frame: "laptop",
+          screen: { kind: "media", assetId: "asset-screen", fit: "cover" },
+        },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.fields.scale).toBe("1");
+    expect(cue.fields.placement).toBe("center");
+
+    const readInput = (document: ContentDocument) =>
+      document.scenes[0]!.visualCues[0]!.input as {
+        scale?: number;
+        placement?: string;
+      };
+
+    expect(readInput(buildContentDocument(base, values)).scale).toBeUndefined();
+    expect(
+      readInput(buildContentDocument(base, values)).placement,
+    ).toBeUndefined();
+
+    cue.fields.scale = "0.8";
+    cue.fields.placement = "left";
+    const changed = readInput(buildContentDocument(base, values));
+    expect(changed.scale).toBe(0.8);
+    expect(changed.placement).toBe("left");
+
+    cue.fields.scale = "1";
+    cue.fields.placement = "center";
+    const reset = readInput(buildContentDocument(base, values));
+    expect(reset.scale).toBeUndefined();
+    expect(reset.placement).toBeUndefined();
+    expect(contentDocumentSchema.safeParse(buildContentDocument(base, values)).success).toBe(
+      true,
+    );
+  });
+
+  it("round-trips table and chart width presets and omits wide", () => {
+    const base = createInitialContentDocument();
+    base.scenes[0]!.visualCues = [
+      vc({
+        id: "vc-table-width",
+        template: { id: "table.simple", version: 1 },
+        layer: "overlay",
+        input: {
+          data: {
+            columns: [{ key: "name", label: "項目", type: "text" }],
+            rows: [{ name: "a" }],
+          },
+        },
+      }),
+    ];
+    const values = toFormValues(base);
+    const cue = values.scenes[0]!.cues[0]!;
+    expect(cue.fields["style.width"]).toBe("wide");
+
+    const readWidth = (document: ContentDocument) =>
+      (document.scenes[0]!.visualCues[0]!.input as {
+        style?: { width?: string };
+      }).style?.width;
+
+    expect(readWidth(buildContentDocument(base, values))).toBeUndefined();
+    cue.fields["style.width"] = "narrow";
+    expect(readWidth(buildContentDocument(base, values))).toBe("narrow");
+    cue.fields["style.width"] = "wide";
+    expect(readWidth(buildContentDocument(base, values))).toBeUndefined();
+    expect(contentDocumentSchema.safeParse(buildContentDocument(base, values)).success).toBe(
+      true,
+    );
+  });
+
   it("round-trips a scene transition and omits it for cut", () => {
     const base = createInitialContentDocument();
     const values = toFormValues(base);

@@ -44,6 +44,21 @@ function chartCue(input: unknown): VisualCue {
   };
 }
 
+function flowCue(input: unknown): VisualCue {
+  return {
+    id: "visual-flow-1",
+    range: { kind: "scene" },
+    layer: "overlay",
+    order: 0,
+    transition: {
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
+    },
+    template: { id: "flow.diagram", version: 1 },
+    input,
+  };
+}
+
 describe("textWidthUnits", () => {
   it("counts halfwidth characters as one unit and fullwidth as two", () => {
     expect(textWidthUnits("abc")).toBe(3);
@@ -294,6 +309,65 @@ describe("computeContentWarnings", () => {
     const codes = computeContentWarnings(document).map((warning) => warning.code);
     expect(codes).toContain("chart_categories_overflow");
     expect(codes).toContain("chart_series_overflow");
+  });
+
+  it("warns when a flow node label is reduced or cannot fit one line", () => {
+    const document = validContentDocument();
+    const nodes = [
+      { label: "データ" },
+      ...Array.from({ length: 6 }, () => ({ label: "受付" })),
+      { label: "とても長いノードラベル" },
+    ];
+    document.scenes[1]!.visualCues.push(
+      flowCue({ diagram: { nodes, edges: [] }, style: { orientation: "horizontal" } }),
+    );
+    const warnings = computeContentWarnings(document);
+    const reduced = warnings.find((warning) => warning.code === "flow_label_reduced");
+    expect(reduced?.path).toEqual([
+      "scenes",
+      1,
+      "visualCues",
+      2,
+      "input",
+      "diagram",
+      "nodes",
+      0,
+      "label",
+    ]);
+    const overflow = warnings.find((warning) => warning.code === "flow_label_overflow");
+    expect(overflow?.path).toEqual([
+      "scenes",
+      1,
+      "visualCues",
+      2,
+      "input",
+      "diagram",
+      "nodes",
+      7,
+      "label",
+    ]);
+  });
+
+  it("uses the portrait default vertical node width for the flow warning", () => {
+    const document = validContentDocument();
+    const nodes = [
+      { label: "データ" },
+      ...Array.from({ length: 6 }, () => ({ label: "受付" })),
+      { label: "とても長いノードラベル" },
+    ];
+    document.scenes[1]!.visualCues.push(
+      flowCue({ diagram: { nodes, edges: [] } }),
+    );
+    expect(
+      computeContentWarnings(document, { outputProfile: "portrait" }).map(
+        (warning) => warning.code,
+      ),
+    ).not.toContain("flow_label_reduced");
+    expect(
+      computeContentWarnings(document, { outputProfile: "portrait" }).map(
+        (warning) => warning.code,
+      ),
+    ).not.toContain("flow_label_overflow");
   });
 });
 

@@ -1,6 +1,8 @@
 import {
+  CHART_PLOT_MAX_WIDTH_PX,
   DEFAULT_ANIMATION_POLICY,
   chartBarInputSchema,
+  figureWidthScale,
   type ChartAppearPreset,
   type ChartColorBy,
   type ChartEffect,
@@ -35,7 +37,6 @@ import { toneHex } from "./tone";
 
 const PLOT_HEIGHT_PX = 560;
 const CATEGORY_BAND_PX = 48;
-const PLOT_WIDTH_PX = 1280;
 const ROW_LABEL_WIDTH_PX = 220;
 /** Left edge of the horizontal bar area: the row label plus the row gap (CSS). */
 const HORIZONTAL_BAR_LEFT_PX = ROW_LABEL_WIDTH_PX + 16;
@@ -355,7 +356,10 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
 
   const args: RenderArgs = {
     context,
-    plotWidth: Math.min(PLOT_WIDTH_PX, context.canvas.contentWidth),
+    plotWidth: Math.round(
+      Math.min(CHART_PLOT_MAX_WIDTH_PX, context.canvas.contentWidth) *
+        figureWidthScale(style?.width),
+    ),
     rows,
     values,
     stats,
@@ -387,9 +391,10 @@ export function renderChartBar(input: unknown, context: RenderContext): Rendered
   );
   const gridClass = (style?.preset ?? "clean") === "grid" ? " kakeai-chart-grid" : "";
   const orientationClass = orientation === "horizontal" ? " kakeai-chart-horizontal" : "";
+  const frameStyle = `--kakeai-chart-frame-max-w:${args.plotWidth}px`;
 
   return {
-    html: `<figure class="kakeai-chartwrap" style="${themeRoleFontStyle(context.theme, "body", context.document.locale)}"><div class="kakeai-chartframe${gridClass}${orientationClass}">${titleHtml}${legendHtml}${body}</div></figure>`,
+    html: `<figure class="kakeai-chartwrap" style="${themeRoleFontStyle(context.theme, "body", context.document.locale)}"><div class="kakeai-chartframe${gridClass}${orientationClass}" style="${frameStyle}">${titleHtml}${legendHtml}${body}</div></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

@@ -1092,7 +1092,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
             type="number"
             min={field.min}
             max={field.max}
-            step={field.kind === "number" ? (field.step ?? 1) : "any"}
+            step={field.step ?? (field.kind === "number" ? 1 : "any")}
             className={`w-24 ${textFieldClass}`}
             value={value}
             onChange={(event) => setField(field.key, event.target.value)}

@@ -224,6 +224,22 @@ describe("renderChartBar", () => {
     const b = renderChartBar(singleSeries, { ...context(), scope: cueScope("vc-b") });
     expect(a.html).not.toBe(b.html);
   });
+
+  it("caps the plot and frame width by the wide, medium, and narrow presets", () => {
+    for (const [width, expected] of [
+      [undefined, 1280],
+      ["wide", 1280],
+      ["medium", 960],
+      ["narrow", 768],
+    ] as const) {
+      const rendered = renderChartBar(
+        width === undefined ? singleSeries : { ...singleSeries, style: { width } },
+        context(),
+      );
+      expect(rendered.html).toContain(`--kakeai-chart-frame-max-w:${expected}px`);
+      expect(rendered.html).toContain(`width:${expected}px;height:560px`);
+    }
+  });
 });
 
 describe("renderChartBar effects", () => {

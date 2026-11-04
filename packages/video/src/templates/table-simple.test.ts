@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getVisualTheme } from "@kakeai/contracts";
 import { validContentDocument } from "@kakeai/contracts/testing/fixtures";
 import type { RenderContext } from "../render-context";
-import { LANDSCAPE_CANVAS } from "../canvas";
+import { LANDSCAPE_CANVAS, PORTRAIT_CANVAS } from "../canvas";
 import { neutralVisualSkin } from "../skins/neutral";
 import { cueScope } from "../scope";
 import type { AssetResolver } from "../resolver";
@@ -100,6 +100,29 @@ describe("renderTableSimple", () => {
     const second = renderTableSimple(baseInput, context());
     expect(first.html).toBe(second.html);
     expect(first.animation).toEqual(second.animation);
+  });
+
+  it("caps the frame width by the wide, medium, and narrow presets", () => {
+    for (const [width, expected] of [
+      [undefined, 1500],
+      ["wide", 1500],
+      ["medium", 1125],
+      ["narrow", 900],
+    ] as const) {
+      const rendered = renderTableSimple(
+        width === undefined ? baseInput : { ...baseInput, style: { width } },
+        context(),
+      );
+      expect(rendered.html).toContain(`--kakeai-figure-max-w:${expected}px`);
+    }
+  });
+
+  it("scales the narrow preset from the portrait content width", () => {
+    const rendered = renderTableSimple(
+      { ...baseInput, style: { width: "narrow" } },
+      { ...context(), canvas: PORTRAIT_CANVAS },
+    );
+    expect(rendered.html).toContain("--kakeai-figure-max-w:562px");
   });
 });
 

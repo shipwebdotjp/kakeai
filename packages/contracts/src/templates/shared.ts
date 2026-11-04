@@ -23,10 +23,30 @@ export type TemplateFieldSpec =
       marks: readonly [RichTextMark, ...RichTextMark[]];
       optional?: boolean;
     }
-  | { kind: "select"; key: string; label: string; options: readonly { value: string; label: string }[]; optional?: boolean }
+  | {
+      kind: "select";
+      key: string;
+      label: string;
+      options: readonly { value: string; label: string }[];
+      optional?: boolean;
+      /**
+       * Default shown when the input omits the key. Selecting this value
+       * removes the key again so an unchanged cue keeps its compact JSON.
+       */
+      defaultValue?: string;
+    }
   | { kind: "color"; key: string; label: string; optional?: boolean }
   | { kind: "number"; key: string; label: string; min?: number; max?: number; step?: number; optional?: boolean }
-  | { kind: "decimal"; key: string; label: string; min?: number; max?: number; optional?: boolean; defaultValue?: number }
+  | {
+      kind: "decimal";
+      key: string;
+      label: string;
+      min?: number;
+      max?: number;
+      step?: number;
+      optional?: boolean;
+      defaultValue?: number;
+    }
   | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
   | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }

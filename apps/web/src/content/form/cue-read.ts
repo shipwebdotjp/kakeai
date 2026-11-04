@@ -277,7 +277,12 @@ function readCueFields(
       }
       case "decimal": {
         const value = getAtPath(input, field.key);
-        result[field.key] = typeof value === "number" ? String(value) : "";
+        if (typeof value === "number") {
+          result[field.key] = String(value);
+        } else {
+          result[field.key] =
+            field.defaultValue !== undefined ? String(field.defaultValue) : "";
+        }
         break;
       }
       case "boolean": {
@@ -291,6 +296,8 @@ function readCueFields(
         const allowed = field.options.map((option) => option.value);
         if (allowed.includes(text)) {
           result[field.key] = text;
+        } else if (field.defaultValue !== undefined) {
+          result[field.key] = field.defaultValue;
         } else if (field.optional) {
           result[field.key] = "";
         } else {

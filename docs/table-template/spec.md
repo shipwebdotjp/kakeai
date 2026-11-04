@@ -30,6 +30,7 @@
   },
   "style": {
     "preset": "clean",            // clean | striped | bordered
+    "width": "wide",              // wide | medium | narrow（省略時 wide）
     "zebra": true,                // プリセットの上書き。省略時はプリセット既定
     "headerAccent": "primary"     // primary | secondary | tertiary。省略時はテーマ既定
   },
@@ -53,6 +54,7 @@
 - `columns[].type` は `text | number` とする。`align`（`left | center | right`）の既定は型から導出する（text→left、number→right）。`format` は number 列だけが持ち、`integer | decimal | percent | currency` とする（省略時はそのまま表示）。`percent` は比率（0.25→25%）と解釈し、`currency` はJPY・小数なしと解釈する。数値整形は `ja-JP` ロケールでコンパイル時に静的HTML化する。
 - `effects` は行トリガー付きの `appear`／`emphasize`／`value` を持つ。target は `row`（行番号）・`cell`（行番号と列キー）・`rows`（全行）・`columns`（全列）を指す。`trigger` は `cue`（Cue全体）または `lines`（同じSceneのセリフ区間）。`appear` は登場、`emphasize` は枠・背景・スポットライトの強調、`value` は数値セルのカウント（`cell` かつ数値列のみ）。`emphasize` は任意の `onset`（`sweep | flash | pop | marker | underline`）を持てる。セリフの実時間は音声尺から解決する。詳細は [../cue-effects/spec.md](../cue-effects/spec.md) を正とする。
 - 列数は最大 `8`、行数は最大 `12`、効果は最大 `32` をスキーマで強制する。フォントサイズはテンプレート契約として固定し、行数超過で描画時に黙って縮小しない。超過の目安は警告（`meta.warnings`）で返す。
+- `style.width` は表の占有幅のプリセットで、`wide`（現行の最大幅）・`medium`（`wide` の75%）・`narrow`（60%）を取る。省略時は `wide` と解釈する。文字・罫線は `transform: scale()` で縮小せず、外枠の最大幅だけを変える。出力形式のコンテンツ幅を超えて広げない。狭い幅でセルが折り返されることはあるが、`width` 自体は保存エラーや警告にしない。
 
 ## テンプレート定義
 
@@ -72,6 +74,7 @@
 | `caption` | optionalText | 表の見出し |
 | `data` | grid | 列・行の一括編集。CSV貼り付けからの変換入口（`dataKind: "table"`） |
 | `style.preset` | select | clean / striped / bordered |
+| `style.width` | select | 幅。wide / medium / narrow。未指定は wide として表示し、wide のまま保存すると値を省略する |
 | `style.headerAccent` | select（任意） | primary / secondary / tertiary |
 | `style.zebra` | boolean | ゼブラの上書き |
 | `effects` | effects | 行トリガー付きの登場・強調・数値カウント（`variant: "table"`） |
@@ -92,11 +95,13 @@
 - `onset` は対象のセル内の一時オーバーレイ（走査線など）に発火を当てる。行targetでは各セルにオーバーレイする（`<tr>` に子要素を置けないため）。発火と持続は別要素・別プロパティで競合しない。
 - `value` は数値セルのテキストを `from`（既定0）から値へ、Trigger区間でカウントする。書式は列の `format` を使い、静的表示と一致させる。
 - 見出し行はテーマのアクセント色で装飾する。表本体はテーマの surface・border・text を使い、9:16テンプレート将来対応のため出力ピクセルではなく相対配置で描く。文字はテーマの textRoles に従い、表本体は `body`、見出しは `heading` のフォントを使う。
+- 幅プリセットは外枠の最大幅へ適用する。`wide` と未指定は従来の `min(1500px, コンテンツ幅)` を保ち、`medium` はその75%、`narrow` は60%を上限にする。文字サイズ・行高・罫線は変えない。
 - 同一テンプレートの複数配置・入れ子で要素ID・AnimationPlan・stateIntervalsが衝突しないことをコンパイラテストで確認する。
 
 ## 受け入れ条件
 
 - 列定義・行・効果を持つ表を保存し、プレビューでシークし、MP4をレンダーできる。
 - 列キーの重複、範囲外の効果 target、許可外の `preset`・`format`・`tone`、上限超過の列数・行数を拒否する。
+- `style.width` の3段階を保存・復元・プレビュー・MP4レンダーでき、`wide` または未指定は現行と同じ最大幅になる。
 - セル文字数（全角換算で最大14文字、半角28文字相当）・行数の目安超過を `meta.warnings` で返す（拒否しない）。
 - CSV貼り付けで行列・型推論が成立し、上限超過は切り捨てを表示する。

@@ -15,11 +15,18 @@ import {
   chartBarV1,
   chatThreadInputSchema,
   chatThreadV1,
+  flowDiagramInputSchema,
+  flowDiagramV1,
+  fitFlowNodeLabel,
+  flowNodeWidth,
+  FLOW_PLOT_MAX_WIDTH_PX,
   tableSimpleInputSchema,
   tableSimpleV1,
   textBlockInputSchema,
   textBlockV1,
   type ChartData,
+  type FlowDiagram,
+  type FlowOrientation,
   type TableData,
   type TextRole,
 } from "../templates";
@@ -141,6 +148,46 @@ function tableWarnings(
   return warnings;
 }
 
+function flowWarnings(
+  diagram: FlowDiagram,
+  rawOrientation: unknown,
+  basePath: (string | number)[],
+  layout: OutputProfileLayout,
+): Warning[] {
+  const orientation: FlowOrientation =
+    rawOrientation === "vertical" || rawOrientation === "horizontal"
+      ? rawOrientation
+      : layout === OUTPUT_PROFILE_LAYOUT.portrait
+        ? "vertical"
+        : "horizontal";
+  const plotWidth = Math.min(FLOW_PLOT_MAX_WIDTH_PX, layout.contentWidth);
+  const nodeWidth = flowNodeWidth(diagram.nodes.length, orientation, plotWidth);
+  const warnings: Warning[] = [];
+  diagram.nodes.forEach((node, index) => {
+    const fit = fitFlowNodeLabel(node.label, nodeWidth, layout.typeScale);
+    if (!fit.reduced && !fit.overflow) {
+      return;
+    }
+    const path = [...basePath, "diagram", "nodes", index, "label"];
+    if (fit.overflow) {
+      warnings.push({
+        path,
+        code: "flow_label_overflow",
+        message:
+          "ノードラベルが最小サイズでも1行に収まりません。ラベルを短くしてください。",
+      });
+      return;
+    }
+    warnings.push({
+      path,
+      code: "flow_label_reduced",
+      message:
+        "ノードラベルの文字サイズを縮小しています。プレビューで読みやすさを確認してください。",
+    });
+  });
+  return warnings;
+}
+
 const ROLE_LABELS: Record<TextRole, string> = {
   title: "タイトル",
   subtitle: "サブタイトル",
@@ -198,6 +245,24 @@ export function computeContentWarnings(
   const warnings: Warning[] = [];
   document.scenes.forEach((scene, sceneIndex) => {
     scene.visualCues.forEach((cue, cueIndex) => {
+      if (cue.template.id === flowDiagramV1.id && cue.template.version === flowDiagramV1.version) {
+        const parsed = flowDiagramInputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          const rawOrientation =
+            typeof cue.input === "object" && cue.input !== null && "style" in cue.input
+              ? (cue.input as { style?: { orientation?: unknown } }).style?.orientation
+              : undefined;
+          warnings.push(
+            ...flowWarnings(
+              parsed.data.diagram,
+              rawOrientation,
+              ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
+              layout,
+            ),
+          );
+        }
+        return;
+      }
       if (cue.template.id === chartBarV1.id && cue.template.version === chartBarV1.version) {
         const parsed = chartBarInputSchema.safeParse(cue.input);
         if (parsed.success) {
