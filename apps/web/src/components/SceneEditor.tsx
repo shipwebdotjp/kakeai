@@ -1118,7 +1118,7 @@ export function SceneEditor({
           >
             <h3 className={sectionTitleClass}>テーマ（Visual Theme）</h3>
             <p className={sectionSummaryClass}>
-              作品全体の文字デザイン・配色テーマを指定します。選択変更後に「保存」すると新しい台本版が作成されます。
+              選択変更後に「保存」すると新しい台本版が作成されます。
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <label className={formLabelClass}>
@@ -1256,9 +1256,6 @@ export function SceneEditor({
             className={sectionCardClass}
           >
             <h3 className={sectionTitleClass}>キャラクター</h3>
-            <p className={sectionSummaryClass}>
-              この作品で使うキャラクターです。声プロファイルを割り当てると、そのキャラクターのセリフをTTSで生成できます。外観はライブラリから取り込んだ後に、この作品内で追加・編集できます。
-            </p>
             {voiceProfiles.isError && (
               <p className={errorTextClass}>
                 声プロファイルを読み込めませんでした。

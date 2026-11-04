@@ -10,7 +10,6 @@ import {
   errorTextClass,
   formLabelClass,
   formLabelTextClass,
-  metaTextClass,
   textFieldClass,
 } from "../ui";
 import { OnsetField } from "./OnsetField";
@@ -112,9 +111,6 @@ export function CalloutItemsField({
   return (
     <div className="my-2">
       <span className={formLabelTextClass}>{label}</span>
-      <p className={metaTextClass}>
-        ポイントごとに、特定のセリフ区間で強調（または登場）できます。
-      </p>
       {items.map((item, index) => {
         const hasEffect = item.effect !== undefined && item.trigger !== undefined;
         const trigger = triggerOf(item);

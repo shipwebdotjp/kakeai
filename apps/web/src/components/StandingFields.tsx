@@ -444,12 +444,11 @@ export function StandingFields({
                 summary={`倍率 ${scale} / 端 ${edgeLabel} / 高さ ${verticalLabel} / 入場 ${PRESET_LABELS[enterPreset] ?? enterPreset} / 退場 ${PRESET_LABELS[exitPreset] ?? exitPreset}`}
                 storageKey={`standing-${sceneId}-${side}`}
               >
-                <p className={metaTextClass}>
-                  配置は外観の標準を使います（倍率 {scale} / 端 {edgeLabel} / 高さ {verticalLabel}）。
-                  {standing?.layoutOverridden === true
-                    ? " このシーンには旧形式の明示値があります。"
-                    : ""}
-                </p>
+                {standing?.layoutOverridden === true && (
+                  <p className={metaTextClass}>
+                    このシーンには旧形式の明示値があります。
+                  </p>
+                )}
                 {standing?.layoutOverridden === true && (
                   <button
                     type="button"
@@ -539,15 +538,11 @@ export function StandingFields({
         );
       })}
 
-      <div className="mt-3 flex items-center gap-2">
-        <p className="text-sm font-semibold text-foreground">セリフごとの変更</p>
-      </div>
-      {lines.length === 0 ? (
-        <p className={metaTextClass}>
-          セリフがあるシーンで使えます。セリフを追加すると、その先頭から立ち絵を切り替えられます。
-        </p>
-      ) : (
+      {lines.length > 0 && (
         <>
+          <div className="mt-3 flex items-center gap-2">
+            <p className="text-sm font-semibold text-foreground">セリフごとの変更</p>
+          </div>
           <div className={`${itemCardClass} flex flex-wrap items-end gap-2`}>
             <label className={formLabelClass}>
               対象セリフ
@@ -594,11 +589,6 @@ export function StandingFields({
               </span>
             )}
           </div>
-          {sortedStates.length === 0 && (
-            <p className={metaTextClass}>
-              変更はありません。開始時状態がシーン全体で使われます。
-            </p>
-          )}
           {sortedStates.map(({ state, index }) => {
             const character = characters.find(
               (entry) => entry.id === state.characterId,

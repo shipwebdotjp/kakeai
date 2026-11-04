@@ -77,9 +77,6 @@ export function VideoPlaybackField({
         >
           セリフゲート再生を有効にする
         </button>
-        <p className={metaTextClass}>
-          台詞の開始をゲートにし、動画が先へ進みすぎたときだけフレームを保持します。
-        </p>
       </div>
     );
   }

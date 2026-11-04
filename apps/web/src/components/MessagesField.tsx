@@ -3,7 +3,6 @@ import {
   buttonNeutralClass,
   errorTextClass,
   formLabelTextClass,
-  metaTextClass,
   textFieldClass,
 } from "../ui";
 
@@ -82,9 +81,6 @@ export function MessagesField({
   return (
     <div className="my-2">
       <span className={formLabelTextClass}>{label}</span>
-      <p className={metaTextClass}>
-        会話を上から順に表示します。左右で吹き出しの向きが変わります。
-      </p>
       {messages.map((item, index) => (
         <div key={index} className="mt-2 rounded border border-border p-2">
           <div className="flex flex-wrap items-center gap-2">

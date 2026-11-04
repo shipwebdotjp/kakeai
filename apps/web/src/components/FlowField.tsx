@@ -5,7 +5,6 @@ import {
   iconButtonLargeClass,
   formLabelClass,
   formLabelTextClass,
-  metaTextClass,
   textFieldClass,
 } from "../ui";
 import {
@@ -184,9 +183,6 @@ export function FlowField({
   return (
     <div className="my-2">
       <span className={formLabelTextClass}>{label}</span>
-      <p className={metaTextClass}>
-        ノードを並べ、辺でつなぎます。矢印は from から to へ向きます。
-      </p>
 
       <div className="mt-2 rounded border border-border p-2">
         <div className="flex items-center justify-between">

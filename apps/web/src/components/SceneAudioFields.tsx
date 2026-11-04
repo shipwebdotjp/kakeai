@@ -56,9 +56,6 @@ export function SceneAudioFields({
   return (
     <div className={bare ? undefined : editAreaClass}>
       {!bare && <h4 className="text-sm font-semibold text-foreground">シーン音声</h4>}
-      <p className={metaTextClass}>
-        このシーンの先頭から終端まで再生する音声です。開始オフセット・フェード・ダッキングはありません。
-      </p>
       <ul className="m-0 list-none p-0">
         {fields.map((field, cueIndex) => {
           const cue = watched[cueIndex];
