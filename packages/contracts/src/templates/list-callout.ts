@@ -9,6 +9,11 @@ import {
 import type { VisualTemplateDefinition } from "./shared";
 import { EXAMPLE_LINE_TRIGGER } from "./common";
 import { collectTriggerLineRefs, readInputField } from "./line-refs";
+import {
+  TEXT_PRESET_WIDTH_OPTIONS,
+  textPresetWidthSchema,
+  type TextPresetWidth,
+} from "./text-preset-width";
 
 export const LIST_CALLOUT_MAX_ITEMS = 8;
 
@@ -40,8 +45,8 @@ export const listCalloutAppearSchema = z.strictObject({
 });
 export type ListCalloutAppear = z.infer<typeof listCalloutAppearSchema>;
 
-export const listCalloutWidthSchema = z.enum(["long", "medium", "short"]);
-export type ListCalloutWidth = z.infer<typeof listCalloutWidthSchema>;
+export const listCalloutWidthSchema = textPresetWidthSchema;
+export type ListCalloutWidth = TextPresetWidth;
 
 export const listCalloutAlignSchema = z.enum(["left", "center", "right"]);
 export type ListCalloutAlign = z.infer<typeof listCalloutAlignSchema>;
@@ -73,11 +78,7 @@ export const listCalloutV1: VisualTemplateDefinition = {
       kind: "select",
       key: "width",
       label: "幅",
-      options: [
-        { value: "long", label: "長い" },
-        { value: "medium", label: "中くらい" },
-        { value: "short", label: "短い" },
-      ],
+      options: TEXT_PRESET_WIDTH_OPTIONS,
     },
     {
       kind: "select",

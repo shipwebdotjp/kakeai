@@ -18,6 +18,7 @@
   "quote": "テンプレートは再利用の契約である",   // 必須。引用本文
   "author": "山田太郎",                        // 任意。著者
   "source": "設計資料 第3版",                   // 任意。出典
+  "width": "medium",                           // 任意。long | medium | short（未指定は内容量に応じる）
   "style": {
     "tone": "primary",                         // primary | secondary | tertiary | success | warning | error | info（既定 primary）
     "preset": "card"                           // plain | card（既定 plain）
@@ -33,6 +34,7 @@
 
 - `quote` は必須。空文字も許容するが、内容は利用者が入力する。
 - `author`・`source` は任意。両方空のときは帰属表示（`figcaption`）を描画しない。
+- `width` は任意。`long`（上限1400px）・`medium`（上限1120px）・`short`（上限840px）の3段階で、引用カード全体（本文・著者・出典）の占有幅を決める。未指定では内容量に応じた幅になり、JSONへ保存しない。文字サイズ・強調・登場効果は変えず、Canvasのコンテンツ幅（`--kakeai-content-width`）を超えない。
 - `style.tone` は本文の文字色ではなく、引用符・左罫線などのアクセント（差し込み色）に使う。引用本文の文字色はテーマの基本文字色（`text`）で描画する。
 - `effects` の各要素は `{ trigger, effect }`。target は持たない（引用は1つ）。
   - `effect` は `cueEffectSchema`（`appear` / `emphasize`）。
@@ -58,6 +60,7 @@
 | `quote` | text | 引用本文 |
 | `author` | optionalText | 著者 |
 | `source` | optionalText | 出典 |
+| `width` | select（未指定可） | 長い / 中くらい / 短い |
 | `style.tone` | select | 7トーン |
 | `style.preset` | select | plain / card |
 | `effects` | effects | セリフ同期の効果（`variant: "quote"`、targetなし） |
@@ -67,6 +70,7 @@
 ## レンダリング
 
 - `figure.kakeai-quotewrap` > `div.kakeai-quotecard`（`preset: card` のとき背景と影を付ける）> `blockquote.kakeai-quotetext` + `figcaption.kakeai-quoteattrib`（著者・出典）を描く。
+- `width` 指定時はカード外枠に `width:100%` と `max-width:min(...)` を適用する。未指定時は幅指定スタイルを付けず、内容量に応じた幅を保つ。`handmade-paper@1` でも同じ上限を使う。
 - 引用本文の文字色はテーマの基本文字色（`text`）とし、アクセント色（`style.tone`）は文字色には使わない。アクセントは左罫線（標準描画）や引用符（`handmade-paper@1`）などの差し込みにだけ使う。
 - 引用本文要素に `id` を付ける。`emphasize` は引用本文に `stateIntervals`（`tl.set`）を当て、`spotlight` では著者・出典要素に減光の `stateIntervals` を当てる。`onset` は引用本文内の一時オーバーレイに当てる（発火と持続は別要素・別プロパティ）。`background` の解除時は文字色を基本文字色（`text`）へ戻す。
 - `appear` はカード要素を `AnimationPlan` として登場させる。
@@ -89,3 +93,4 @@
 - 行の並べ替え・削除・分割後も、Trigger参照が同じ行を指し続ける。
 - 同一テンプレートの複数配置・入れ子で、要素ID・`AnimationPlan`・`stateIntervals` が衝突しない。
 - 引用本文を欠く入力を保存時に拒否する。
+- `width` の3プリセットが標準・紙スキンでカード幅に反映され、未指定の引用は従来の内容量に応じた幅を保つ。

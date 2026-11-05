@@ -12,6 +12,7 @@ export * from "./chart";
 export * from "./chart-line";
 export * from "./chart-line-layout";
 export * from "./number-format";
+export * from "./text-preset-width";
 export * from "./list-callout";
 export * from "./flow";
 export * from "./stat";

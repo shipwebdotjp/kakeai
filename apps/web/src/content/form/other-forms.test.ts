@@ -526,6 +526,7 @@ describe("quote form", () => {
     quote: "再利用できる",
     author: "山田太郎",
     source: "設計資料",
+    width: "medium",
     style: { tone: "secondary", preset: "card" },
     effects: [
       {
@@ -535,7 +536,7 @@ describe("quote form", () => {
     ],
   };
 
-  it("round-trips the quote, author, source, and a line-triggered effect", () => {
+  it("round-trips the quote, author, source, width, and a line-triggered effect", () => {
     const base = createInitialContentDocument();
     base.scenes[1]!.lines = [
       {
@@ -560,7 +561,25 @@ describe("quote form", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
-  it("creates new quote cues with a card-appear effect", () => {
+  it("defaults a quote width to unset and omits it from the input", () => {
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-quote-unset",
+        template: { id: "quote", version: 1 },
+        layer: "overlay",
+        input: { quote: "幅を指定しない" },
+      }),
+    ];
+    const values = toFormValues(base);
+    expect(values.scenes[1]!.cues[0]!.fields.width).toBe("");
+
+    const rebuilt = buildContentDocument(base, values);
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).not.toHaveProperty("width");
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("creates new quote cues with an unset width and a card-appear effect", () => {
     const cue = createCueFormValue({
       sceneId: "scene-point-1",
       templateId: "quote",
@@ -568,6 +587,7 @@ describe("quote form", () => {
       layer: "overlay",
       order: 0,
     });
+    expect(cue.fields.width).toBe("");
     const effects = JSON.parse(cue.fields.effects ?? "") as { effect: { kind: string } }[];
     expect(effects[0]!.effect.kind).toBe("appear");
   });

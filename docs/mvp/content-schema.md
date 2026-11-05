@@ -267,7 +267,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `list.callout@1` | 見出し、ポイント列、行トリガー付き効果 | 対応（[../cue-effects/spec.md](../cue-effects/spec.md)） |
 | `stat@1` | 数値、ラベル、補足、書式、トーン、効果 | 対応。大きな数値を行トリガーでカウントする（[../stat-template/spec.md](../stat-template/spec.md)） |
 | `flow.diagram@1` | タイトル、ノード、辺、レイアウト、向き、スタイル、効果 | 対応。`style.layout` は線形（既定）／循環を切替える。線形では `style.orientation` で縦横を切替え、自己ループ・後ろ向き辺・循環の周回辺を表せる。ノードラベルは幅に応じて自動縮小し、収まらない場合は警告する。行トリガーでノードを強調する（[../flow-loops/spec.md](../flow-loops/spec.md)） |
-| `quote@1` | 引用本文、著者、出典、トーン、スタイル、効果 | 対応。著者・出典付きの引用カードを行トリガーで強調する（[../quote-template/spec.md](../quote-template/spec.md)） |
+| `quote@1` | 引用本文、著者、出典、幅、トーン、スタイル、効果 | 対応。著者・出典付きの引用カードを行トリガーで強調する。幅は「長い・中くらい・短い」から選び、未指定は内容量に応じる（[../quote-template/spec.md](../quote-template/spec.md)） |
 | `chat.thread@1` | タイトル、メッセージ列（名前・本文・左右・時刻・アイコン）、枠、ステータスバー、キーボード、効果 | 対応。会話を吹き出しで並べる。`frame` でスマートフォン／ノートPC／デスクトップ／全面を選び、コンテナ相対で同じレイアウトを表示する。`phone` は下端に入力欄と送信アイコンの装飾ドックを持ち、`phone`・`desktop` は字幕セーフエリアの上に収まる。`effects` でメッセージ単位のセリフ同期（登場・強調）ができる（[../chat-template/spec.md](../chat-template/spec.md)） |
 | `terminal.session@1` | ウインドウのタイトル、プロンプト、入力速度、入力と出力のターン列、表示効果 | 対応。フローティングのmacOS風ウインドウに、コマンド入力と出力を並べる。1セリフ＝1ターンで、入力を固定速度でタイプし、セリフ尺からはみ出した残りは行末で一括表示する。出力は入力完了後に即時表示する。effectのないターンは最初から表示する。上寄せ・スクロールなしで、行数が目安を超えると `terminal_overflow` 警告を返す（[../terminal-template/spec.md](../terminal-template/spec.md)） |
 

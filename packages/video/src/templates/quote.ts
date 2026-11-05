@@ -17,6 +17,7 @@ import {
   SPOTLIGHT_DIM_ON,
 } from "../cue-effects";
 import { accentForegroundHex } from "../theme";
+import { textPresetWidthLayoutStyle } from "./text-preset-width";
 import { toneHex } from "./tone";
 
 function emphasizeOnVars(
@@ -50,7 +51,7 @@ export function renderQuote(input: unknown, context: RenderContext): RenderedCue
       { path: context.path, code: "invalid_input", message: "quote の入力が不正です。" },
     ]);
   }
-  const { quote, author, source, style, effects } = parsed.data;
+  const { quote, author, source, width, style, effects } = parsed.data;
   const theme = context.theme;
   const accentColor = toneHex(style?.tone ?? "primary", theme);
   const textColor = theme.text;
@@ -108,9 +109,11 @@ export function renderQuote(input: unknown, context: RenderContext): RenderedCue
       ? ""
       : `<figcaption class="kakeai-quoteattrib">${authorHtml}${sourceHtml}</figcaption>`;
   const cardClass = preset === "card" ? " kakeai-quote-card" : "";
+  const cardWidthStyle = textPresetWidthLayoutStyle(width);
+  const cardStyleAttr = cardWidthStyle.length > 0 ? ` style="${cardWidthStyle}"` : "";
 
   return {
-    html: `<figure class="kakeai-quotewrap"><div id="${cardId}" class="kakeai-quotecard${cardClass}">${quoteHtml}${attribution}</div></figure>`,
+    html: `<figure class="kakeai-quotewrap"><div id="${cardId}" class="kakeai-quotecard${cardClass}"${cardStyleAttr}>${quoteHtml}${attribution}</div></figure>`,
     assetIds: [],
     animation,
     stateIntervals,

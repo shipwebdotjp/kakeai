@@ -24,6 +24,7 @@ import { onsetOverlayId } from "../cue-effects";
 import { calloutItemOverlayHtml, listCalloutLayoutStyle, planListCalloutEffects } from "../templates/list-callout";
 import { renderMediaCardMedia } from "../templates/media-card";
 import { applyQuoteEffects } from "../templates/quote";
+import { textPresetWidthLayoutStyle } from "../templates/text-preset-width";
 import {
   ALIGN_ITEMS,
   JUSTIFY,
@@ -372,7 +373,7 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
       { path: context.path, code: "invalid_input", message: "quote の入力が不正です。" },
     ]);
   }
-  const { quote, author, source, style, effects } = parsed.data;
+  const { quote, author, source, width, style, effects } = parsed.data;
   const theme = context.theme;
   const palette = paperPalette(theme);
   const toneColor = toneHex(style?.tone ?? "primary", theme);
@@ -441,9 +442,11 @@ function renderHandmadeQuote(input: unknown, context: RenderContext): RenderedCu
     preset === "card"
       ? `inset 0 0 0 2px ${palette.paperEdge}`
       : `inset 0 0 0 1px ${palette.paperEdge}`;
+  const cardWidthStyle =
+    width === undefined ? "max-width:1400px" : textPresetWidthLayoutStyle(width);
 
   return {
-    html: `<figure class="kakeai-quotewrap kakeai-paper-quotewrap"><div id="${cardId}" class="kakeai-paper-quotecard" style="position:relative;max-width:1400px;filter:drop-shadow(0 14px 30px ${palette.shadow});transform:rotate(-0.5deg);"><div class="kakeai-paper-quotebody" style="position:relative;background:${palette.paper};box-shadow:${edgeShadow};border-radius:6px;padding:52px 72px 44px;clip-path:${tornBottomClipPath()};">${quoteMarkHtml}${quoteHtml}${attribution}</div>${tapeHtml(
+    html: `<figure class="kakeai-quotewrap kakeai-paper-quotewrap"><div id="${cardId}" class="kakeai-paper-quotecard" style="position:relative;${cardWidthStyle};filter:drop-shadow(0 14px 30px ${palette.shadow});transform:rotate(-0.5deg);"><div class="kakeai-paper-quotebody" style="position:relative;background:${palette.paper};box-shadow:${edgeShadow};border-radius:6px;padding:52px 72px 44px;clip-path:${tornBottomClipPath()};">${quoteMarkHtml}${quoteHtml}${attribution}</div>${tapeHtml(
       { top: "-14px", left: "42%", rotate: 4, width: 112, height: 28 },
       palette.shadow,
     )}</div></figure>`,

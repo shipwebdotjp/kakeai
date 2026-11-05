@@ -1,5 +1,6 @@
 import {
   listCalloutInputSchema,
+  TEXT_PRESET_WIDTH_PX,
   type EmphasizeEffect,
   type ListCalloutAlign,
   type ListCalloutAppear,
@@ -19,6 +20,7 @@ import {
   SPOTLIGHT_DIM_ON,
 } from "../cue-effects";
 import { accentForegroundHex } from "../theme";
+import { textPresetWidthLayoutStyle } from "./text-preset-width";
 import { toneHex } from "./tone";
 
 function emphasizeOnVars(
@@ -132,25 +134,16 @@ export function planListCalloutEffects(
 
 // "long" は `.kakeai-calloutlist` の既定 max-width（compiler.ts の 1400px）と同期させること。
 // align 単独指定のフォールバックがこの値を使うため、ずらすと align のみ指定時のリスト幅が変わる。
-export const LIST_CALLOUT_WIDTH_PX: Record<ListCalloutWidth, number> = {
-  long: 1400,
-  medium: 1120,
-  short: 840,
-};
+export const LIST_CALLOUT_WIDTH_PX: Record<ListCalloutWidth, number> = TEXT_PRESET_WIDTH_PX;
 
 export function listCalloutLayoutStyle(
   width: ListCalloutWidth | undefined,
   align: ListCalloutAlign | undefined,
 ): string {
-  const limitedWidth = (px: number): string =>
-    `min(${px}px,var(--kakeai-content-width,1600px))`;
   const parts: string[] = [];
-  if (width !== undefined) {
-    parts.push("width:100%");
-    parts.push(`max-width:${limitedWidth(LIST_CALLOUT_WIDTH_PX[width])}`);
-  } else if (align !== undefined) {
-    parts.push("width:100%");
-    parts.push(`max-width:${limitedWidth(LIST_CALLOUT_WIDTH_PX.long)}`);
+  const widthStyle = textPresetWidthLayoutStyle(width ?? (align !== undefined ? "long" : undefined));
+  if (widthStyle.length > 0) {
+    parts.push(widthStyle);
   }
   if (align !== undefined) {
     parts.push(`text-align:${align}`);

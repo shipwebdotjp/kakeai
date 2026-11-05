@@ -764,6 +764,29 @@ describe("quote@1", () => {
     ).toBe(true);
   });
 
+  it("accepts the shared width presets and rejects other widths", () => {
+    for (const width of ["long", "medium", "short"]) {
+      expect(quoteInputSchema.safeParse({ quote: "再利用できる", width }).success).toBe(true);
+    }
+    expect(
+      quoteInputSchema.safeParse({ quote: "再利用できる", width: "huge" }).success,
+    ).toBe(false);
+  });
+
+  it("exposes width as an optional select with the shared preset options", () => {
+    const fields = getTemplateInputFields("quote", 1);
+    expect(fields?.find((field) => field.key === "width")).toMatchObject({
+      kind: "select",
+      label: "幅",
+      optional: true,
+      options: [
+        { value: "long", label: "長い" },
+        { value: "medium", label: "中くらい" },
+        { value: "short", label: "短い" },
+      ],
+    });
+  });
+
   it("rejects a quote without the required text", () => {
     expect(quoteInputSchema.safeParse({ author: "山田太郎" }).success).toBe(false);
   });

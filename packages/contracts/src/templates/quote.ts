@@ -6,6 +6,7 @@ import { cueEffectSchema, lineTriggerSchema } from "../content/cue-effect";
 import type { VisualTemplateDefinition } from "./shared";
 import { TONE_OPTIONS } from "./common";
 import { createEffectsLineRefCollector } from "./line-refs";
+import { TEXT_PRESET_WIDTH_OPTIONS, textPresetWidthSchema } from "./text-preset-width";
 
 export const QUOTE_STYLE_PRESETS = ["plain", "card"] as const;
 export const quoteStylePresetSchema = z.enum(QUOTE_STYLE_PRESETS);
@@ -29,6 +30,7 @@ export const quoteInputSchema = z.strictObject({
   quote: z.string(),
   author: z.string().optional(),
   source: z.string().optional(),
+  width: textPresetWidthSchema.optional(),
   style: quoteStyleSchema.optional(),
   effects: quoteEffectsSchema.optional(),
 });
@@ -51,6 +53,13 @@ export const quoteV1: VisualTemplateDefinition = {
     { kind: "text", key: "quote", label: "引用" },
     { kind: "optionalText", key: "author", label: "著者" },
     { kind: "optionalText", key: "source", label: "出典" },
+    {
+      kind: "select",
+      key: "width",
+      label: "幅",
+      options: TEXT_PRESET_WIDTH_OPTIONS,
+      optional: true,
+    },
     { kind: "select", key: "style.tone", label: "色", options: TONE_OPTIONS },
     { kind: "select", key: "style.preset", label: "スタイル", options: QUOTE_STYLE_PRESET_OPTIONS },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "quote" },

@@ -237,6 +237,53 @@ describe("handmade-paper@1", () => {
     expect(compiled.html).toContain("出典");
   });
 
+  it("applies quote width presets in the paper skin and keeps unset quotes content-sized", () => {
+    for (const [width, px] of [
+      ["long", 1400],
+      ["medium", 1120],
+      ["short", 840],
+    ] as const) {
+      const cueId = `vc-quote-${width}`;
+      const compiled = compile([
+        {
+          id: cueId,
+          template: { id: "quote", version: 1 },
+          range: { kind: "scene" },
+          layer: "overlay",
+          order: 0,
+          transition,
+          input: { quote: "引用の言葉", width },
+        },
+      ]);
+      const cardId = cueScope(cueId).id("card");
+      const match = new RegExp(
+        `id="${cardId}" class="kakeai-paper-quotecard" style="([^"]*)"`,
+      ).exec(compiled.html);
+      expect(match?.[1] ?? "").toContain(
+        `width:100%;max-width:min(${px}px,var(--kakeai-content-width,1600px))`,
+      );
+    }
+
+    const compiled = compile([
+      {
+        id: "vc-quote-unset",
+        template: { id: "quote", version: 1 },
+        range: { kind: "scene" },
+        layer: "overlay",
+        order: 0,
+        transition,
+        input: { quote: "引用の言葉" },
+      },
+    ]);
+    const cardId = cueScope("vc-quote-unset").id("card");
+    const match = new RegExp(
+      `id="${cardId}" class="kakeai-paper-quotecard" style="([^"]*)"`,
+    ).exec(compiled.html);
+    const style = match?.[1] ?? "";
+    expect(style).toContain("max-width:1400px");
+    expect(style).not.toContain("width:100%");
+  });
+
   it("falls back to the neutral renderer for unsupported templates", () => {
     const compiled = compile([
       {

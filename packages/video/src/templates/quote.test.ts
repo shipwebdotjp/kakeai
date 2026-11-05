@@ -46,6 +46,11 @@ const baseInput = {
   style: { tone: "primary" as const, preset: "card" as const },
 };
 
+function quoteCardStyle(html: string): string {
+  const match = /class="kakeai-quotecard[^"]*" style="([^"]*)"/.exec(html);
+  return match?.[1] ?? "";
+}
+
 describe("renderQuote", () => {
   it("renders the quote, author, and source", () => {
     const rendered = renderQuote(baseInput, context());
@@ -57,6 +62,20 @@ describe("renderQuote", () => {
 
   it("rejects a quote without the required text", () => {
     expect(() => renderQuote({ author: "山田太郎" }, context())).toThrow(CompositionCompileError);
+  });
+
+  it("applies each width preset to the quote card and leaves the width unset by default", () => {
+    for (const [width, px] of [
+      ["long", 1400],
+      ["medium", 1120],
+      ["short", 840],
+    ] as const) {
+      const style = quoteCardStyle(renderQuote({ ...baseInput, width }, context()).html);
+      expect(style).toBe(
+        `width:100%;max-width:min(${px}px,var(--kakeai-content-width,1600px))`,
+      );
+    }
+    expect(quoteCardStyle(renderQuote(baseInput, context()).html)).toBe("");
   });
 
   it("renders deterministically and keeps two cues from colliding", () => {
