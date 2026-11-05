@@ -8,13 +8,17 @@ import {
   textFieldClass,
 } from "../ui";
 import {
+  flowNeedsRouteReview,
+  hasSelfLoop,
   moveDiagramNode,
+  nextFlowEdge,
   remapFlowEffectTargets,
   swapNodeIndex,
   type FlowDiagramJson,
   type FlowEdgeJson,
   type FlowNodeJson,
 } from "../content/flow";
+import { FLOW_CYCLE_MIN_NODES, type FlowLayout } from "@kakeai/contracts";
 
 interface FlowFieldProps {
   label: string;
@@ -26,6 +30,7 @@ interface FlowFieldProps {
   setFields: (patch: Record<string, string>) => void;
   maxNodes: number;
   maxEdges: number;
+  layout: FlowLayout;
 }
 
 function defaultDiagram(): FlowDiagramJson {
@@ -89,6 +94,7 @@ export function FlowField({
   setFields,
   maxNodes,
   maxEdges,
+  layout,
 }: FlowFieldProps) {
   const diagram = parseDiagram(value);
 
@@ -128,7 +134,10 @@ export function FlowField({
   };
 
   const removeNode = (index: number) => {
-    if (nodes.length <= 1) {
+    if (
+      nodes.length <= 1 ||
+      (layout === "cycle" && nodes.length <= FLOW_CYCLE_MIN_NODES)
+    ) {
       return;
     }
     const nextNodes = nodes.filter((_node, nodeIndex) => nodeIndex !== index);
@@ -174,15 +183,27 @@ export function FlowField({
   };
 
   const addEdge = () => {
-    if (edges.length >= maxEdges || nodes.length < 2) {
+    if (edges.length >= maxEdges) {
       return;
     }
-    commit({ ...diagram, edges: [...edges, { from: 0, to: 1 }] });
+    const next = nextFlowEdge(diagram);
+    if (next === null) {
+      return;
+    }
+    commit({ ...diagram, edges: [...edges, next] });
   };
 
   return (
     <div className="my-2">
       <span className={formLabelTextClass}>{label}</span>
+      {layout === "cycle" ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          ノードの並び順が時計回りの順番になります。
+          {nodes.length < FLOW_CYCLE_MIN_NODES
+            ? ` 循環レイアウトは${FLOW_CYCLE_MIN_NODES}ノード以上で使えます。`
+            : ""}
+        </p>
+      ) : null}
 
       <div className="mt-2 rounded border border-border p-2">
         <div className="flex items-center justify-between">
@@ -245,7 +266,10 @@ export function FlowField({
             <button
               type="button"
               className={buttonNeutralClass}
-              disabled={nodes.length <= 1}
+              disabled={
+                nodes.length <= 1 ||
+                (layout === "cycle" && nodes.length <= FLOW_CYCLE_MIN_NODES)
+              }
               onClick={() => removeNode(index)}
             >
               削除
@@ -260,12 +284,17 @@ export function FlowField({
           <button
             type="button"
             className={buttonNeutralClass}
-            disabled={edges.length >= maxEdges || nodes.length < 2}
+            disabled={edges.length >= maxEdges || nextFlowEdge(diagram) === null}
             onClick={addEdge}
           >
             辺を追加
           </button>
         </div>
+        {flowNeedsRouteReview(diagram, layout) ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            差戻し・補助辺・自己ループがあります。プレビューで経路を確認してください。
+          </p>
+        ) : null}
         {edges.map((edge, index) => (
           <div key={index} className="mt-1 flex flex-wrap items-center gap-2">
             <label className={formLabelClass}>
@@ -275,11 +304,15 @@ export function FlowField({
                 value={String(edge.from)}
                 onChange={(event) => setEdge(index, { from: Number(event.target.value) })}
               >
-                {nodes.map((_node, nodeIndex) => (
-                  <option key={nodeIndex} value={nodeIndex} disabled={nodeIndex === edge.to}>
-                    {nodeName(nodes, nodeIndex)}
-                  </option>
-                ))}
+                {nodes.map((_node, nodeIndex) => {
+                  const duplicateLoop =
+                    nodeIndex === edge.to && hasSelfLoop(diagram, nodeIndex, index);
+                  return (
+                    <option key={nodeIndex} value={nodeIndex} disabled={duplicateLoop}>
+                      {nodeName(nodes, nodeIndex)}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             <label className={formLabelClass}>
@@ -289,11 +322,15 @@ export function FlowField({
                 value={String(edge.to)}
                 onChange={(event) => setEdge(index, { to: Number(event.target.value) })}
               >
-                {nodes.map((_node, nodeIndex) => (
-                  <option key={nodeIndex} value={nodeIndex} disabled={nodeIndex === edge.from}>
-                    {nodeName(nodes, nodeIndex)}
-                  </option>
-                ))}
+                {nodes.map((_node, nodeIndex) => {
+                  const duplicateLoop =
+                    nodeIndex === edge.from && hasSelfLoop(diagram, nodeIndex, index);
+                  return (
+                    <option key={nodeIndex} value={nodeIndex} disabled={duplicateLoop}>
+                      {nodeName(nodes, nodeIndex)}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             <input

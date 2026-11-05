@@ -405,6 +405,35 @@ describe("flow.diagram form", () => {
     expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
   });
 
+  it("round-trips a cycle layout and keeps the saved orientation", () => {
+    const cycleInput = {
+      title: "改善サイクル",
+      diagram: {
+        nodes: [{ label: "Plan" }, { label: "Do" }, { label: "Check" }, { label: "Act" }],
+        edges: [
+          { from: 0, to: 1 },
+          { from: 1, to: 2 },
+          { from: 2, to: 3 },
+          { from: 3, to: 0, label: "反映" },
+          { from: 2, to: 2, label: "再確認" },
+        ],
+      },
+      style: { layout: "cycle", orientation: "vertical", preset: "clean" },
+    };
+    const base = createInitialContentDocument();
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-cycle",
+        template: { id: "flow.diagram", version: 1 },
+        layer: "overlay",
+        input: structuredClone(cycleInput),
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(cycleInput);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
   it("creates new flow cues with a starter diagram", () => {
     const cue = createCueFormValue({
       sceneId: "scene-point-1",

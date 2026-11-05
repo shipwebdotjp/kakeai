@@ -17,6 +17,7 @@ import {
   chatThreadV1,
   flowDiagramInputSchema,
   flowDiagramV1,
+  flowCycleNodeWidth,
   fitFlowNodeLabel,
   flowNodeWidth,
   FLOW_PLOT_MAX_WIDTH_PX,
@@ -26,6 +27,7 @@ import {
   textBlockV1,
   type ChartData,
   type FlowDiagram,
+  type FlowLayout,
   type FlowOrientation,
   type TableData,
   type TextRole,
@@ -151,6 +153,7 @@ function tableWarnings(
 function flowWarnings(
   diagram: FlowDiagram,
   rawOrientation: unknown,
+  flowLayout: FlowLayout,
   basePath: (string | number)[],
   layout: OutputProfileLayout,
 ): Warning[] {
@@ -161,7 +164,10 @@ function flowWarnings(
         ? "vertical"
         : "horizontal";
   const plotWidth = Math.min(FLOW_PLOT_MAX_WIDTH_PX, layout.contentWidth);
-  const nodeWidth = flowNodeWidth(diagram.nodes.length, orientation, plotWidth);
+  const nodeWidth =
+    flowLayout === "cycle"
+      ? flowCycleNodeWidth(diagram.nodes.length, plotWidth)
+      : flowNodeWidth(diagram.nodes.length, orientation, plotWidth);
   const warnings: Warning[] = [];
   diagram.nodes.forEach((node, index) => {
     const fit = fitFlowNodeLabel(node.label, nodeWidth, layout.typeScale);
@@ -256,6 +262,7 @@ export function computeContentWarnings(
             ...flowWarnings(
               parsed.data.diagram,
               rawOrientation,
+              parsed.data.style?.layout ?? "linear",
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
               layout,
             ),

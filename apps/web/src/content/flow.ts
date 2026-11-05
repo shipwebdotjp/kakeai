@@ -1,4 +1,10 @@
-import type { FlowDiagram, FlowEdge, FlowNode } from "@kakeai/contracts";
+import {
+  classifyFlowEdge,
+  type FlowDiagram,
+  type FlowEdge,
+  type FlowLayout,
+  type FlowNode,
+} from "@kakeai/contracts";
 
 export type FlowNodeJson = FlowNode;
 export type FlowEdgeJson = FlowEdge;
@@ -6,6 +12,51 @@ export type FlowDiagramJson = FlowDiagram;
 
 /** Sibling field that stores the node-indexed flow effects. */
 export const FLOW_EFFECTS_FIELD_KEY = "effects";
+
+/** True when another edge already retries the same node. */
+export function hasSelfLoop(
+  diagram: FlowDiagramJson,
+  nodeIndex: number,
+  exceptEdgeIndex = -1,
+): boolean {
+  return diagram.edges.some(
+    (edge, index) =>
+      index !== exceptEdgeIndex && edge.from === nodeIndex && edge.to === nodeIndex,
+  );
+}
+
+/** The first edge pair the editor can add without duplicating a stored edge. */
+export function nextFlowEdge(diagram: FlowDiagramJson): FlowEdgeJson | null {
+  const used = new Set(
+    diagram.edges.map((edge) => `${edge.from}->${edge.to}`),
+  );
+  for (let from = 0; from < diagram.nodes.length; from += 1) {
+    for (let to = 0; to < diagram.nodes.length; to += 1) {
+      if (from !== to && !used.has(`${from}->${to}`)) {
+        return { from, to };
+      }
+    }
+  }
+  for (let node = 0; node < diagram.nodes.length; node += 1) {
+    if (!used.has(`${node}->${node}`)) {
+      return { from: node, to: node };
+    }
+  }
+  return null;
+}
+
+/** Edges whose route the editor should confirm in the preview. */
+export function flowNeedsRouteReview(
+  diagram: FlowDiagramJson,
+  layout: FlowLayout,
+): boolean {
+  return diagram.edges.some((edge) => {
+    const kind = classifyFlowEdge(edge, layout, diagram.nodes.length);
+    return layout === "cycle"
+      ? kind === "auxiliary" || kind === "loop"
+      : kind === "backward" || kind === "loop";
+  });
+}
 
 /** Swaps two node indexes and leaves every other index untouched. */
 export function swapNodeIndex(value: number, first: number, second: number): number {

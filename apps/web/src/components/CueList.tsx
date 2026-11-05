@@ -278,7 +278,7 @@ function CueRow({
   );
 
   const isTextBlock = cue.templateId === textBlockV1.id && cue.templateVersion === textBlockV1.version;
-  const contentFields = fields ?? [];
+  const contentFields = (fields ?? []).filter((field) => field.key !== "style.orientation" || cue.fields["style.layout"] !== "cycle");
   const primaryFields = isTextBlock
     ? contentFields.filter((field) => TEXT_BLOCK_PRIMARY_KEYS.has(field.key))
     : contentFields;
@@ -1155,7 +1155,7 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           setField={setField}
           setFields={setFields}
           maxNodes={field.maxNodes}
-          maxEdges={field.maxEdges}
+          maxEdges={field.maxEdges} layout={values["style.layout"] === "cycle" ? "cycle" : "linear"}
         />
       );
     case "boolean": {

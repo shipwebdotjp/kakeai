@@ -11,28 +11,28 @@
 
 ## C1: 契約と共有ロジック
 
-- [ ] `packages/contracts` に `flowLayoutSchema` と `style.layout` を追加し、`linear` を省略時の既定にする。
-- [ ] 自己ループの禁止を外し、同じノードの自己ループが1本だけになる検証と、`cycle` の最小ノード数検証を追加する。
-- [ ] 辺種別を `from` / `to` / layout / nodeCount から導出する共有関数を追加し、レンダラーとUIで二重実装しない。
-- [ ] 既存の入力、自己ループ、循環の下限・上限、効果target、ノード並び替え後の参照を契約テストで確認する。
+- [x] `packages/contracts` に `flowLayoutSchema` と `style.layout` を追加し、`linear` を省略時の既定にする。
+- [x] 自己ループの禁止を外し、同じノードの自己ループが1本だけになる検証と、`cycle` の最小ノード数検証を追加する。
+- [x] 辺種別を `from` / `to` / layout / nodeCount から導出する共有関数を追加し、レンダラーとUIで二重実装しない。
+- [x] 既存の入力、自己ループ、循環の下限・上限、効果target、ノード並び替え後の参照を契約テストで確認する。
 
 ## C2: レンダラーと警告
 
-- [ ] 線形の後ろ向き辺・自己ループを仕様どおりの側へ描く。
-- [ ] 循環のノード配置、周回辺、補助辺のレーン、外向き自己ループを実装する。
-- [ ] 横型・縦型・各ノード数で、ラベル・キャプション・字幕セーフエリアと共存することを確認する。
-- [ ] 既存のノード効果と同じ入力・同じシーク位置で、プレビューとMP4の出力が一致することをテストする。
+- [x] 線形の後ろ向き辺・自己ループを仕様どおりの側へ描く。
+- [x] 循環のノード配置、周回辺、補助辺のレーン、外向き自己ループを実装する。
+- [x] 横型・縦型・各ノード数で、ラベル・キャプション・字幕セーフエリアと共存することを確認する。
+- [x] 既存のノード効果と同じ入力・同じシーク位置で、プレビューとMP4の出力が一致することをテストする。
 
 ## C3: 編集UIと保存往復
 
-- [ ] レイアウト選択と、循環時の向き選択の非表示／保持を実装する。
-- [ ] 自己ループを追加・削除でき、2本目を追加できない辺フォームにする。
-- [ ] 循環順としてのノード並び替えを表示し、辺・効果targetの追従をテストする。
-- [ ] 新規Cue、既存Cue、ドラフトプレビュー、保存・再読込で入力が契約どおり保たれることを確認する。
+- [x] レイアウト選択と、循環時の向き選択の非表示／保持を実装する。
+- [x] 自己ループを追加・削除でき、2本目を追加できない辺フォームにする。
+- [x] 循環順としてのノード並び替えを表示し、辺・効果targetの追従をテストする。
+- [x] 新規Cue、既存Cue、ドラフトプレビュー、保存・再読込で入力が契約どおり保たれることを確認する。
 
 ## C4: 検証と周辺文書
 
-- [ ] `packages/contracts`、`packages/video`、`apps/web` の振る舞い・境界テストを追加する。
-- [ ] 横型・縦型の代表図（差戻し、再確認、PDCA）を視覚確認する。
-- [ ] 実装内容に合わせて [../flow-template/spec.md](../flow-template/spec.md)、[../mvp/content-schema.md](../mvp/content-schema.md)、[../../user-guide/docs/getting-started/web-ui.md](../../user-guide/docs/getting-started/web-ui.md) を最終同期する。
-- [ ] `npm run typecheck` と `npm test` を通し、OCRレビューを最大3回実施し、変更をコミットする。
+- [x] `packages/contracts`、`packages/video`、`apps/web` の振る舞い・境界テストを追加する。
+- [x] 横型・縦型の代表図（差戻し、再確認、PDCA）を視覚確認する。
+- [x] 実装内容に合わせて [../flow-template/spec.md](../flow-template/spec.md)、[../mvp/content-schema.md](../mvp/content-schema.md)、[../../user-guide/docs/getting-started/web-ui.md](../../user-guide/docs/getting-started/web-ui.md) を最終同期する。
+- [x] `npm run typecheck` と `npm test` を通し、OCRレビューを最大3回実施し、変更をコミットする。

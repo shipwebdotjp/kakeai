@@ -6,6 +6,7 @@ import { cueEffectSchema, lineTriggerSchema } from "../content/cue-effect";
 import type { VisualTemplateDefinition } from "./shared";
 import { EXAMPLE_LINE_TRIGGER } from "./common";
 import { createEffectsLineRefCollector } from "./line-refs";
+import { FLOW_CYCLE_MIN_NODES, flowLayoutSchema } from "./flow-layout";
 
 export const FLOW_MAX_NODES = 8;
 export const FLOW_MAX_EDGES = 16;
@@ -35,6 +36,7 @@ export const flowDiagramSchema = z
     edges: z.array(flowEdgeSchema).max(FLOW_MAX_EDGES),
   })
   .superRefine((diagram, ctx) => {
+    const loopNodes = new Set<number>();
     diagram.edges.forEach((edge, index) => {
       if (edge.from >= diagram.nodes.length) {
         ctx.addIssue({
@@ -51,17 +53,21 @@ export const flowDiagramSchema = z
         });
       }
       if (edge.from === edge.to) {
-        ctx.addIssue({
-          code: "custom",
-          message: "自己ループの辺は指定できません",
-          path: ["edges", index, "to"],
-        });
+        if (loopNodes.has(edge.from)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "同じノードの自己ループは1本だけ指定できます",
+            path: ["edges", index, "to"],
+          });
+        }
+        loopNodes.add(edge.from);
       }
     });
   });
 export type FlowDiagram = z.infer<typeof flowDiagramSchema>;
 
 export const flowStyleSchema = z.strictObject({
+  layout: flowLayoutSchema.default("linear"),
   orientation: flowOrientationSchema.default("horizontal"),
   preset: flowStylePresetSchema.default("clean"),
 });
@@ -90,6 +96,16 @@ export const flowDiagramInputSchema = z
     effects: flowEffectsSchema.optional(),
   })
   .superRefine((input, ctx) => {
+    if (
+      input.style?.layout === "cycle" &&
+      input.diagram.nodes.length < FLOW_CYCLE_MIN_NODES
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: `循環レイアウトは${FLOW_CYCLE_MIN_NODES}ノード以上で指定できます`,
+        path: ["style", "layout"],
+      });
+    }
     (input.effects ?? []).forEach((entry, index) => {
       if (
         entry.target.kind === "node" &&
@@ -104,6 +120,11 @@ export const flowDiagramInputSchema = z
     });
   });
 export type FlowDiagramInput = z.infer<typeof flowDiagramInputSchema>;
+
+const FLOW_LAYOUT_OPTIONS = [
+  { value: "linear", label: "線形" },
+  { value: "cycle", label: "循環" },
+] as const;
 
 const FLOW_ORIENTATION_OPTIONS = [
   { value: "horizontal", label: "横" },
@@ -132,6 +153,7 @@ export const flowDiagramV1: VisualTemplateDefinition = {
       maxNodes: FLOW_MAX_NODES,
       maxEdges: FLOW_MAX_EDGES,
     },
+    { kind: "select", key: "style.layout", label: "レイアウト", options: FLOW_LAYOUT_OPTIONS, defaultValue: "linear" },
     { kind: "select", key: "style.orientation", label: "向き", options: FLOW_ORIENTATION_OPTIONS },
     { kind: "select", key: "style.preset", label: "スタイル", options: FLOW_STYLE_PRESET_OPTIONS },
     { kind: "effects", key: "effects", label: "セリフ同期の効果", variant: "flow" },

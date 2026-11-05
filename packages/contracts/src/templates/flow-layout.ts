@@ -1,4 +1,40 @@
+import { z } from "zod";
 import { textWidthUnits } from "../text-width";
+
+export const FLOW_CYCLE_MIN_NODES = 3;
+
+export const flowLayoutSchema = z.enum(["linear", "cycle"]);
+export type FlowLayout = z.infer<typeof flowLayoutSchema>;
+
+export type FlowEdgeKind = "forward" | "backward" | "loop" | "orbit" | "auxiliary";
+
+export interface FlowEdgeEndpoints {
+  from: number;
+  to: number;
+}
+
+/**
+ * Edge meaning is derived from the stored indexes, the layout, and the node
+ * count. A linear edge keeps its old forward/backward reading; a cycle edge is
+ * either a self-loop, the next step of the clockwise ring, or an auxiliary
+ * chord. Renderer and editor both call this so they cannot disagree.
+ */
+export function classifyFlowEdge(
+  edge: FlowEdgeEndpoints,
+  layout: FlowLayout,
+  nodeCount: number,
+): FlowEdgeKind {
+  if (edge.from === edge.to) {
+    return "loop";
+  }
+  if (layout === "cycle") {
+    if (nodeCount > 0 && edge.to === (edge.from + 1) % nodeCount) {
+      return "orbit";
+    }
+    return "auxiliary";
+  }
+  return edge.to > edge.from ? "forward" : "backward";
+}
 
 /**
  * Geometry and label-fit rules shared by the `flow.diagram@1` renderer and
@@ -16,6 +52,9 @@ export const FLOW_VERTICAL_GAP_PX = 72;
 export const FLOW_HORIZONTAL_NODE_MIN_WIDTH_PX = 120;
 export const FLOW_HORIZONTAL_NODE_MAX_WIDTH_PX = 360;
 export const FLOW_VERTICAL_NODE_WIDTH_PX = 600;
+export const FLOW_CYCLE_NODE_MIN_WIDTH_PX = 120;
+export const FLOW_CYCLE_NODE_MAX_WIDTH_PX = 260;
+export const FLOW_CYCLE_NODE_HEIGHT_PX = 112;
 
 export type FlowOrientationLike = "horizontal" | "vertical";
 
@@ -56,6 +95,19 @@ export function flowNodeWidth(
     (plotWidth - gap * (count - 1)) / count,
     FLOW_HORIZONTAL_NODE_MIN_WIDTH_PX,
     FLOW_HORIZONTAL_NODE_MAX_WIDTH_PX,
+  );
+}
+
+/**
+ * Node width for the cycle layout. The ring needs wider boxes than a dense
+ * linear row, but the width still shrinks as the node count grows so every
+ * box stays inside the plot. The warning calculation uses this same value.
+ */
+export function flowCycleNodeWidth(count: number, plotWidth: number): number {
+  return clamp(
+    plotWidth / Math.max(1, count + 2),
+    FLOW_CYCLE_NODE_MIN_WIDTH_PX,
+    FLOW_CYCLE_NODE_MAX_WIDTH_PX,
   );
 }
 

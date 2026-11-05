@@ -1,14 +1,11 @@
 import {
+  classifyFlowEdge,
   fitFlowNodeLabel,
-  flowHorizontalGap,
-  flowNodeWidth,
   FLOW_PLOT_MAX_WIDTH_PX,
-  FLOW_VERTICAL_GAP_PX,
   flowDiagramInputSchema,
   type EmphasizeEffect,
-  type FlowEdge,
   type FlowEffect,
-  type FlowOrientation,
+  type FlowLayout as FlowLayoutKind,
   type OnsetPreset,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
@@ -26,155 +23,30 @@ import {
 } from "../cue-effects";
 import { accentForegroundHex, themeRoleFontStyle } from "../theme";
 import { toneHex } from "./tone";
+import {
+  computeCycleLayout,
+  computeLayout,
+  edgePath,
+  round,
+  type FlowLayout,
+  type PlotSize,
+} from "./flow-diagram-layout";
 
 const FLOW_PLOT_H = 760;
 /** Portrait has more vertical room; the vertical layout grows to use it. */
 const FLOW_PLOT_H_PORTRAIT = 1200;
-const FLOW_ROUTE_OFFSET = 56;
-const FLOW_ROUTE_MARGIN = 24;
-const FLOW_H_NODE_H = 132;
-const FLOW_NODE_MIN_H = 72;
-const FLOW_NODE_MAX_H = 150;
+
+function resolvePlotHeight(
+  isCycle: boolean,
+  portrait: boolean,
+  vertical: boolean,
+): number {
+  return portrait && (isCycle || vertical) ? FLOW_PLOT_H_PORTRAIT : FLOW_PLOT_H;
+}
 
 interface FlowOnset {
   preset: OnsetPreset;
   color: string;
-}
-
-interface FlowLayout {
-  nodeW: number;
-  nodeH: number;
-  xs: number[];
-  ys: number[];
-  centers: { x: number; y: number }[];
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-const FLOW_VERTICAL_GAP = FLOW_VERTICAL_GAP_PX;
-
-function fitGap(available: number, count: number, minSize: number): number {
-  if (count <= 1) {
-    return FLOW_VERTICAL_GAP;
-  }
-  const maxGapForMinSize = (available - count * minSize) / (count - 1);
-  return Math.max(8, Math.min(FLOW_VERTICAL_GAP, maxGapForMinSize));
-}
-
-interface PlotSize {
-  width: number;
-  height: number;
-}
-
-function computeLayout(count: number, orientation: FlowOrientation, size: PlotSize): FlowLayout {
-  if (orientation === "vertical") {
-    const gap = fitGap(size.height, count, FLOW_NODE_MIN_H);
-    const nodeH = clamp((size.height - gap * (count - 1)) / count, FLOW_NODE_MIN_H, FLOW_NODE_MAX_H);
-    const total = count * nodeH + gap * (count - 1);
-    const offsetY = (size.height - total) / 2;
-    const nodeW = flowNodeWidth(count, "vertical", size.width);
-    const offsetX = (size.width - nodeW) / 2;
-    const ys = Array.from({ length: count }, (_value, index) => offsetY + index * (nodeH + gap));
-    const xs = Array.from({ length: count }, () => offsetX);
-    return {
-      nodeW,
-      nodeH,
-      xs,
-      ys,
-      centers: ys.map((y) => ({ x: size.width / 2, y: y + nodeH / 2 })),
-    };
-  }
-  const gap = flowHorizontalGap(size.width, count);
-  const nodeW = flowNodeWidth(count, "horizontal", size.width);
-  const total = count * nodeW + gap * (count - 1);
-  const offsetX = (size.width - total) / 2;
-  const offsetY = (size.height - FLOW_H_NODE_H) / 2;
-  const xs = Array.from({ length: count }, (_value, index) => offsetX + index * (nodeW + gap));
-  const ys = Array.from({ length: count }, () => offsetY);
-  return {
-    nodeW,
-    nodeH: FLOW_H_NODE_H,
-    xs,
-    ys,
-    centers: xs.map((x) => ({ x: x + nodeW / 2, y: size.height / 2 })),
-  };
-}
-
-function round(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function edgePath(
-  edge: FlowEdge,
-  layout: FlowLayout,
-  orientation: FlowOrientation,
-  size: PlotSize,
-): { d: string; labelX: number; labelY: number; anchor: "start" | "middle" | "end" } {
-  const distance = Math.abs(edge.to - edge.from);
-  if (orientation === "vertical") {
-    const forward = edge.to > edge.from;
-    if (distance === 1) {
-      const sx = layout.centers[edge.from]!.x;
-      const sy = forward
-        ? layout.ys[edge.from]! + layout.nodeH
-        : layout.ys[edge.from]!;
-      const tx = layout.centers[edge.to]!.x;
-      const ty = forward
-        ? layout.ys[edge.to]!
-        : layout.ys[edge.to]! + layout.nodeH;
-      return {
-        d: `M ${round(sx)} ${round(sy)} L ${round(tx)} ${round(ty)}`,
-        labelX: sx + 16,
-        labelY: (sy + ty) / 2,
-        anchor: "start",
-      };
-    }
-    const side = forward ? 1 : -1;
-    const sx = layout.xs[edge.from]! + (forward ? layout.nodeW : 0);
-    const sy = layout.centers[edge.from]!.y;
-    const tx = layout.xs[edge.to]! + (forward ? layout.nodeW : 0);
-    const ty = layout.centers[edge.to]!.y;
-    const routeOffset = FLOW_ROUTE_OFFSET * Math.max(1, distance - 1);
-    const routeX = forward
-      ? Math.min(size.width - FLOW_ROUTE_MARGIN, Math.max(sx, tx) + routeOffset)
-      : Math.max(FLOW_ROUTE_MARGIN, Math.min(sx, tx) - routeOffset);
-    return {
-      d: `M ${round(sx)} ${round(sy)} C ${round(routeX)} ${round(sy)} ${round(routeX)} ${round(ty)} ${round(tx)} ${round(ty)}`,
-      labelX: routeX - side * 20,
-      labelY: (sy + ty) / 2,
-      anchor: side === 1 ? "end" : "start",
-    };
-  }
-  const forward = edge.to > edge.from;
-  if (distance === 1) {
-    const sx = forward ? layout.xs[edge.from]! + layout.nodeW : layout.xs[edge.from]!;
-    const sy = layout.centers[edge.from]!.y;
-    const tx = forward ? layout.xs[edge.to]! : layout.xs[edge.to]! + layout.nodeW;
-    const ty = layout.centers[edge.to]!.y;
-    return {
-      d: `M ${round(sx)} ${round(sy)} L ${round(tx)} ${round(ty)}`,
-      labelX: (sx + tx) / 2,
-      labelY: sy - 20,
-      anchor: "middle",
-    };
-  }
-  const side = forward ? 1 : -1;
-  const sx = layout.centers[edge.from]!.x;
-  const sy = layout.ys[edge.from]! + (forward ? layout.nodeH : 0);
-  const tx = layout.centers[edge.to]!.x;
-  const ty = layout.ys[edge.to]! + (forward ? layout.nodeH : 0);
-  const routeOffset = FLOW_ROUTE_OFFSET * Math.max(1, distance - 1);
-  const routeY = forward
-    ? Math.min(size.height - FLOW_ROUTE_MARGIN, Math.max(sy, ty) + routeOffset)
-    : Math.max(FLOW_ROUTE_MARGIN, Math.min(sy, ty) - routeOffset);
-  return {
-    d: `M ${round(sx)} ${round(sy)} C ${round(sx)} ${round(routeY)} ${round(tx)} ${round(routeY)} ${round(tx)} ${round(ty)}`,
-    labelX: (sx + tx) / 2,
-    labelY: routeY - side * 20,
-    anchor: "middle",
-  };
 }
 
 interface FlowEffectTargetRef {
@@ -223,6 +95,8 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
   }
   const { title, diagram, style, effects } = parsed.data;
   const theme = context.theme;
+  const layoutKind: FlowLayoutKind = style?.layout ?? "linear";
+  const isCycle = layoutKind === "cycle";
   // `style.orientation` has a schema default, so it cannot tell an explicit
   // choice from the default. Read the raw input to keep an explicit value and
   // fall back to top-to-bottom only for portrait without one.
@@ -240,12 +114,15 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
   const nodeIds = diagram.nodes.map((_node, index) => context.scope.id(`node-${index}`));
   const plotSize: PlotSize = {
     width: Math.min(FLOW_PLOT_MAX_WIDTH_PX, context.canvas.contentWidth),
-    height:
-      context.canvas.profile === "portrait" && orientation === "vertical"
-        ? FLOW_PLOT_H_PORTRAIT
-        : FLOW_PLOT_H,
+    height: resolvePlotHeight(
+      isCycle,
+      context.canvas.profile === "portrait",
+      orientation === "vertical",
+    ),
   };
-  const layout = computeLayout(diagram.nodes.length, orientation, plotSize);
+  const linearLayout = computeLayout(diagram.nodes.length, orientation, plotSize);
+  const cycleLayout = isCycle ? computeCycleLayout(diagram.nodes.length, plotSize) : null;
+  const layout: FlowLayout = cycleLayout ?? linearLayout;
   const markerId = context.scope.id("arrow");
 
   const animation: AnimationItem[] = [];
@@ -266,9 +143,28 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
     onsets,
   });
 
+  const nodeCount = diagram.nodes.length;
+  const auxiliaryTotal = diagram.edges.filter(
+    (edge) => classifyFlowEdge(edge, layoutKind, nodeCount) === "auxiliary",
+  ).length;
+  let auxiliaryIndex = 0;
   const edgesHtml = diagram.edges
     .map((edge) => {
-      const { d, labelX, labelY, anchor } = edgePath(edge, layout, orientation, plotSize);
+      const kind = classifyFlowEdge(edge, layoutKind, nodeCount);
+      const lane =
+        kind === "auxiliary"
+          ? auxiliaryIndex++ - (auxiliaryTotal - 1) / 2
+          : 0;
+      const { d, labelX, labelY, anchor } = edgePath(
+        edge,
+        kind,
+        layoutKind,
+        linearLayout,
+        cycleLayout,
+        orientation,
+        plotSize,
+        lane,
+      );
       const label =
         edge.label === undefined || edge.label.trim().length === 0
           ? ""
@@ -309,7 +205,7 @@ export function renderFlowDiagram(input: unknown, context: RenderContext): Rende
       ? ""
       : `<figcaption class="kakeai-flowtitle" style="${themeRoleFontStyle(theme, "heading", context.document.locale)}">${escapeHtmlText(title)}</figcaption>`;
   const presetClass = preset === "boxed" ? " kakeai-flow-boxed" : "";
-  const plot = `<div class="kakeai-flowplot kakeai-flow-${orientation}${presetClass}" style="width:${plotSize.width}px;height:${plotSize.height}px"><svg class="kakeai-flowsvg" width="${plotSize.width}" height="${plotSize.height}" viewBox="0 0 ${plotSize.width} ${plotSize.height}"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--kakeai-muted)"></path></marker></defs>${edgesHtml}</svg>${nodesHtml}</div>`;
+  const plot = `<div class="kakeai-flowplot kakeai-flow-${isCycle ? "cycle" : orientation}${presetClass}" style="width:${plotSize.width}px;height:${plotSize.height}px"><svg class="kakeai-flowsvg" width="${plotSize.width}" height="${plotSize.height}" viewBox="0 0 ${plotSize.width} ${plotSize.height}"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--kakeai-muted)"></path></marker></defs>${edgesHtml}</svg>${nodesHtml}</div>`;
 
   return {
     html: `<figure class="kakeai-flowwrap" style="${themeRoleFontStyle(theme, "body", context.document.locale)}">${titleHtml}${plot}</figure>`,

@@ -3,6 +3,7 @@ import {
   chartBarInputSchema,
   chatThreadInputSchema,
   chatThreadV1,
+  classifyFlowEdge,
   collectNestedCompositionVersionIds,
   deviceFrameInputSchema,
   flowDiagramInputSchema,
@@ -526,7 +527,7 @@ describe("flow.diagram@1", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("rejects out-of-range, self-looping, and empty diagrams", () => {
+  it("rejects out-of-range and empty diagrams but accepts one self-loop per node", () => {
     expect(
       flowDiagramInputSchema.safeParse({
         diagram: { nodes: [{ label: "a" }], edges: [{ from: 0, to: 3 }] },
@@ -534,12 +535,66 @@ describe("flow.diagram@1", () => {
     ).toBe(false);
     expect(
       flowDiagramInputSchema.safeParse({
-        diagram: { nodes: [{ label: "a" }, { label: "b" }], edges: [{ from: 1, to: 1 }] },
+        diagram: { nodes: [{ label: "a" }], edges: [{ from: 0, to: 0 }] },
+      }).success,
+    ).toBe(true);
+    expect(
+      flowDiagramInputSchema.safeParse({
+        diagram: {
+          nodes: [{ label: "a" }, { label: "b" }],
+          edges: [
+            { from: 1, to: 1 },
+            { from: 1, to: 1 },
+          ],
+        },
       }).success,
     ).toBe(false);
     expect(flowDiagramInputSchema.safeParse({ diagram: { nodes: [], edges: [] } }).success).toBe(
       false,
     );
+  });
+
+  it("defaults the layout to linear and limits cycle to three nodes or more", () => {
+    const linear = flowDiagramInputSchema.safeParse(base);
+    expect(linear.success).toBe(true);
+    if (linear.success) {
+      expect(linear.data.style).toBeUndefined();
+    }
+    const defaults = flowDiagramInputSchema.safeParse({
+      ...base,
+      style: { orientation: "horizontal" },
+    });
+    expect(defaults.success).toBe(true);
+    if (defaults.success) {
+      expect(defaults.data.style?.layout).toBe("linear");
+    }
+    expect(
+      flowDiagramInputSchema.safeParse({
+        diagram: {
+          nodes: [{ label: "a" }, { label: "b" }],
+          edges: [{ from: 0, to: 1 }],
+        },
+        style: { layout: "cycle", orientation: "horizontal" },
+      }).success,
+    ).toBe(false);
+    const cycle = flowDiagramInputSchema.safeParse({
+      ...base,
+      style: { layout: "cycle", orientation: "vertical" },
+    });
+    expect(cycle.success).toBe(true);
+    if (cycle.success) {
+      expect(cycle.data.style?.layout).toBe("cycle");
+      expect(cycle.data.style?.orientation).toBe("vertical");
+    }
+  });
+
+  it("derives forward, backward, loop, orbit, and auxiliary edge kinds", () => {
+    expect(classifyFlowEdge({ from: 0, to: 1 }, "linear", 3)).toBe("forward");
+    expect(classifyFlowEdge({ from: 1, to: 0 }, "linear", 3)).toBe("backward");
+    expect(classifyFlowEdge({ from: 2, to: 2 }, "linear", 3)).toBe("loop");
+    expect(classifyFlowEdge({ from: 2, to: 0 }, "cycle", 3)).toBe("orbit");
+    expect(classifyFlowEdge({ from: 2, to: 1 }, "cycle", 3)).toBe("auxiliary");
+    expect(classifyFlowEdge({ from: 1, to: 1 }, "cycle", 3)).toBe("loop");
   });
 
   it("rejects an effect targeting a node past the diagram", () => {

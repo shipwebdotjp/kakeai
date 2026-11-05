@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { moveDiagramNode, remapFlowEffectTargets, type FlowDiagramJson } from "./flow";
+import {
+  flowNeedsRouteReview,
+  hasSelfLoop,
+  moveDiagramNode,
+  nextFlowEdge,
+  remapFlowEffectTargets,
+  type FlowDiagramJson,
+} from "./flow";
 
 const diagram: FlowDiagramJson = {
   nodes: [{ label: "受付" }, { label: "審査" }, { label: "完了" }],
@@ -35,6 +42,72 @@ describe("moveDiagramNode", () => {
     expect(moveDiagramNode(diagram, 0, -1)).toBe(diagram);
     expect(moveDiagramNode(diagram, 2, 1)).toBe(diagram);
     expect(moveDiagramNode(diagram, -1, 1)).toBe(diagram);
+  });
+});
+
+describe("flow edge helpers", () => {
+  it("detects an existing self-loop while ignoring the edge being edited", () => {
+    const looped: FlowDiagramJson = {
+      nodes: [{ label: "a" }, { label: "b" }],
+      edges: [
+        { from: 0, to: 0 },
+        { from: 1, to: 0 },
+      ],
+    };
+    expect(hasSelfLoop(looped, 0)).toBe(true);
+    expect(hasSelfLoop(looped, 0, 0)).toBe(false);
+    expect(hasSelfLoop(looped, 1)).toBe(false);
+  });
+
+  it("offers the next unused edge and a self-loop only when the node has none", () => {
+    const single: FlowDiagramJson = { nodes: [{ label: "a" }], edges: [] };
+    expect(nextFlowEdge(single)).toEqual({ from: 0, to: 0 });
+    expect(nextFlowEdge({ nodes: [{ label: "a" }], edges: [{ from: 0, to: 0 }] })).toBeNull();
+    expect(nextFlowEdge(diagram)).toEqual({ from: 1, to: 0 });
+    expect(
+      nextFlowEdge({
+        nodes: [{ label: "a" }, { label: "b" }],
+        edges: [
+          { from: 0, to: 1 },
+          { from: 1, to: 0 },
+          { from: 0, to: 0 },
+        ],
+      }),
+    ).toEqual({ from: 1, to: 1 });
+  });
+
+  it("asks for preview review for backward, auxiliary, and self-loop edges", () => {
+    expect(flowNeedsRouteReview(diagram, "linear")).toBe(false);
+    expect(
+      flowNeedsRouteReview(
+        { nodes: diagram.nodes, edges: [{ from: 2, to: 0 }] },
+        "linear",
+      ),
+    ).toBe(true);
+    expect(
+      flowNeedsRouteReview(
+        { nodes: diagram.nodes, edges: [{ from: 1, to: 1 }] },
+        "linear",
+      ),
+    ).toBe(true);
+    expect(
+      flowNeedsRouteReview(
+        { nodes: diagram.nodes, edges: [{ from: 2, to: 1 }] },
+        "cycle",
+      ),
+    ).toBe(true);
+    expect(
+      flowNeedsRouteReview(
+        { nodes: diagram.nodes, edges: [{ from: 2, to: 2 }] },
+        "cycle",
+      ),
+    ).toBe(true);
+    expect(
+      flowNeedsRouteReview(
+        { nodes: diagram.nodes, edges: [{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 2, to: 0 }] },
+        "cycle",
+      ),
+    ).toBe(false);
   });
 });
 

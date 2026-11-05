@@ -274,6 +274,133 @@ describe("renderFlowDiagram effects", () => {
 });
 
 
+describe("renderFlowDiagram loops and cycle", () => {
+  it("draws a linear self-loop outside the main axis", () => {
+    const rendered = renderFlowDiagram(
+      {
+        diagram: {
+          nodes: [{ label: "受付" }, { label: "完了" }],
+          edges: [
+            { from: 0, to: 1 },
+            { from: 0, to: 0, label: "再確認" },
+          ],
+        },
+        style: { orientation: "horizontal", preset: "clean" },
+      },
+      context(),
+    );
+    const paths = [...rendered.html.matchAll(/class="kakeai-flowered" d="([^"]+)"/g)].map(
+      (match) => match[1]!,
+    );
+    expect(paths).toHaveLength(2);
+    expect(paths[1]).toContain(" C ");
+    expect(rendered.html).toContain("再確認");
+  });
+
+  it("routes linear backward edges on the opposite side of forward skips", () => {
+    const rendered = renderFlowDiagram(
+      {
+        diagram: {
+          nodes: [{ label: "受付" }, { label: "審査" }, { label: "完了" }],
+          edges: [
+            { from: 0, to: 2, label: "特例" },
+            { from: 2, to: 0, label: "差戻し" },
+          ],
+        },
+        style: { orientation: "horizontal", preset: "clean" },
+      },
+      context(),
+    );
+    const node = rendered.html.match(
+      /class="kakeai-flownode" style="left:([0-9.]+)px;top:([0-9.]+)px;width:([0-9.]+)px;height:([0-9.]+)px"/,
+    );
+    expect(node).not.toBeNull();
+    const top = Number(node![2]);
+    const height = Number(node![4]);
+    const paths = [...rendered.html.matchAll(/class="kakeai-flowered" d="([^"]+)"/g)].map(
+      (match) => match[1]!,
+    );
+    const controlYs = paths.map((path) => {
+      const numbers = (path.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+      return numbers[3]!;
+    });
+    expect(controlYs[0]).toBeGreaterThan(top + height);
+    expect(controlYs[1]).toBeLessThan(top);
+  });
+
+  it("places cycle nodes on the ring and distinguishes orbit, auxiliary, and loop edges", () => {
+    const rendered = renderFlowDiagram(
+      {
+        title: "品質改善サイクル",
+        diagram: {
+          nodes: [
+            { label: "Plan" },
+            { label: "Do" },
+            { label: "Check" },
+            { label: "Act" },
+          ],
+          edges: [
+            { from: 0, to: 1 },
+            { from: 1, to: 2 },
+            { from: 2, to: 2, label: "再確認" },
+            { from: 2, to: 3 },
+            { from: 3, to: 0, label: "改善を反映" },
+            { from: 3, to: 1, label: "差戻し" },
+          ],
+        },
+        style: { layout: "cycle", orientation: "horizontal" },
+      },
+      context(),
+    );
+    expect(rendered.html).toContain("kakeai-flow-cycle");
+    expect(rendered.html).toContain("品質改善サイクル");
+    expect(rendered.html).toContain("再確認");
+    expect(rendered.html).toContain("改善を反映");
+    expect(rendered.html).toContain("差戻し");
+    const paths = [...rendered.html.matchAll(/class="kakeai-flowered" d="([^"]+)"/g)].map(
+      (match) => match[1]!,
+    );
+    expect(paths).toHaveLength(6);
+    expect(paths.filter((path) => path.includes(" A "))).toHaveLength(4);
+    expect(paths.filter((path) => path.includes(" Q "))).toHaveLength(1);
+    expect(paths.filter((path) => path.includes(" C "))).toHaveLength(1);
+
+    const nodes = [...rendered.html.matchAll(
+      /class="kakeai-flownode" style="left:([0-9.]+)px;top:([0-9.]+)px;width:([0-9.]+)px;height:([0-9.]+)px"/g,
+    )];
+    expect(nodes).toHaveLength(4);
+    for (const node of nodes) {
+      const left = Number(node[1]);
+      const top = Number(node[2]);
+      const width = Number(node[3]);
+      const height = Number(node[4]);
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(top).toBeGreaterThanOrEqual(0);
+      expect(left + width).toBeLessThanOrEqual(1320);
+      expect(top + height).toBeLessThanOrEqual(760);
+    }
+  });
+
+  it("renders the cycle identically for the same input", () => {
+    const input = {
+      diagram: {
+        nodes: [{ label: "A" }, { label: "B" }, { label: "C" }],
+        edges: [
+          { from: 0, to: 1 },
+          { from: 1, to: 2 },
+          { from: 2, to: 0 },
+          { from: 2, to: 1, label: "戻る" },
+          { from: 0, to: 0, label: "再試行" },
+        ],
+      },
+      style: { layout: "cycle" },
+    };
+    expect(renderFlowDiagram(input, context()).html).toBe(
+      renderFlowDiagram(input, context()).html,
+    );
+  });
+});
+
 describe("renderFlowDiagram portrait", () => {
   it("defaults to top-to-bottom when no orientation is given", () => {
     const rendered = renderFlowDiagram(
