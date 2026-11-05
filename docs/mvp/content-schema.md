@@ -265,7 +265,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `table.simple@1` | 見出し、列定義、行、スタイル、幅、効果 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
 | `list.callout@1` | 見出し、ポイント列、行トリガー付き効果 | 対応（[../cue-effects/spec.md](../cue-effects/spec.md)） |
 | `stat@1` | 数値、ラベル、補足、書式、トーン、効果 | 対応。大きな数値を行トリガーでカウントする（[../stat-template/spec.md](../stat-template/spec.md)） |
-| `flow.diagram@1` | タイトル、ノード、辺、向き、スタイル、効果 | 対応。縦横を `style.orientation` で切替える。ノードラベルは幅に応じて自動縮小し、収まらない場合は警告する。行トリガーでノードを強調する（[../flow-template/spec.md](../flow-template/spec.md)） |
+| `flow.diagram@1` | タイトル、ノード、辺、レイアウト、向き、スタイル、効果 | 対応。`style.layout` は線形（既定）／循環を切替える。線形では `style.orientation` で縦横を切替え、自己ループ・後ろ向き辺・循環の周回辺を表せる。ノードラベルは幅に応じて自動縮小し、収まらない場合は警告する。行トリガーでノードを強調する（[../flow-loops/spec.md](../flow-loops/spec.md)） |
 | `quote@1` | 引用本文、著者、出典、トーン、スタイル、効果 | 対応。著者・出典付きの引用カードを行トリガーで強調する（[../quote-template/spec.md](../quote-template/spec.md)） |
 | `chat.thread@1` | タイトル、メッセージ列（名前・本文・左右・時刻・アイコン）、枠、ステータスバー、キーボード、効果 | 対応。会話を吹き出しで並べる。`frame` でスマートフォン／ノートPC／デスクトップ／全面を選び、コンテナ相対で同じレイアウトを表示する。`phone` は下端に入力欄と送信アイコンの装飾ドックを持ち、`phone`・`desktop` は字幕セーフエリアの上に収まる。`effects` でメッセージ単位のセリフ同期（登場・強調）ができる（[../chat-template/spec.md](../chat-template/spec.md)） |
 

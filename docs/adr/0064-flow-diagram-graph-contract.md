@@ -1,5 +1,7 @@
 # フロー図の正本は index 参照の小さなグラフJSONとし、縦横は style.orientation で切り替える
 
+Status: amended by [ADR-0118](./0118-cyclic-flow-layout-and-loop-edges.md)
+
 `flow.diagram@1` の正本は、自前の小さなグラフJSON（`nodes` の配列と、ノード index を参照する `edges`）とする。縦横は別テンプレートに分けず、`style.orientation: horizontal | vertical` で切り替える。辺は常時表示とし、登場アニメを持たせない。詳細は [../flow-template/spec.md](../flow-template/spec.md)。
 
 ## Considered Options

@@ -237,6 +237,18 @@ _Avoid_: Step, box
 A directed connection between two Nodes of a Flow Diagram, referencing them by index. It may carry a label.
 _Avoid_: Arrow, link
 
+**Flow Layout** (フローレイアウト):
+The arrangement rule for a Flow Diagram: linear follows the node-list order on one axis, while cycle places that order clockwise around a loop.
+_Avoid_: graph layout, free positioning
+
+**Self-loop** (自己ループ):
+An Edge whose source and destination are the same Node, expressing a retry, continuation, or recheck within that Node.
+_Avoid_: duplicate node, repeat step
+
+**Backward Edge** (後ろ向き辺):
+In a linear Flow Layout, an Edge from a later Node-list position to an earlier one, expressing feedback or a return to a prior step.
+_Avoid_: reverse layout, backward node
+
 **Visual Cue** (映像演出):
 An instruction to display one Visual Template with specific inputs over a segment of a Scene, on a named layer and with an enter/exit transition. The editor shows it to users as 映像演出. It is distinct from an Audio Cue, which places sound over a Work or Scene range, and from a Video Gate, which holds a source-video playhead for Narration Segments.
 _Avoid_: Asset, template, Audio Cue, Video Gate
