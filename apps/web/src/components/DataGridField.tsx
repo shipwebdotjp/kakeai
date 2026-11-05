@@ -2,6 +2,17 @@ import { useState } from "react";
 import { tableDataSchema, type TableColumn, type TableData } from "@kakeai/contracts";
 import { defaultGridDataJson } from "../content/form";
 import {
+  chartLineGridIssues,
+  countChartLineCategoryEffects,
+  countChartLineSeriesEffects,
+  defaultChartLineGridDataJson,
+  parseChartLineGrid,
+  removeChartLineCategoryEffects,
+  removeChartLineSeriesEffects,
+  renameChartLineCategoryEffects,
+  renameChartLineSeriesEffects,
+} from "../content/chart-line";
+import {
   buttonNeutralClass,
   errorTextClass,
   formLabelTextClass,
@@ -36,6 +47,10 @@ interface DataGridFieldProps {
   setField: (key: string, value: string) => void;
   maxColumns: number;
   maxRows: number;
+  dataKind?: "table" | "chart" | "chart-line";
+  effectsKey?: string;
+  effectsValue?: string;
+  setFields?: (patch: Record<string, string>) => void;
 }
 
 function parseTableData(value: string): TableData | null {
@@ -184,25 +199,78 @@ export function DataGridField({
   setField,
   maxColumns,
   maxRows,
+  dataKind = "table",
+  effectsKey,
+  effectsValue = "",
+  setFields,
 }: DataGridFieldProps) {
   const [csvText, setCsvText] = useState("");
   const [notice, setNotice] = useState("");
-  const data = parseTableData(value);
+  const isChartLine = dataKind === "chart-line";
+  const data = isChartLine ? parseChartLineGrid(value) : parseTableData(value);
+  const issues = data !== null && isChartLine ? chartLineGridIssues(data) : [];
 
-  const commit = (next: TableData) => {
+  const commit = (next: TableData, effectsJson?: string | null) => {
     setNotice("");
-    setField(fieldKey, JSON.stringify({ columns: next.columns, rows: next.rows }));
+    const normalized = isChartLine
+      ? {
+          ...next,
+          rows: next.rows.map((row) => {
+            const key = next.columns[0]?.key;
+            const category = key === undefined ? undefined : row[key];
+            return key !== undefined && typeof category === "string"
+              ? { ...row, [key]: category.trim() }
+              : row;
+          }),
+        }
+      : next;
+    const gridJson = JSON.stringify({
+      columns: normalized.columns,
+      rows: normalized.rows,
+    });
+    if (
+      effectsKey !== undefined &&
+      setFields !== undefined &&
+      effectsJson !== undefined &&
+      effectsJson !== null
+    ) {
+      setFields({ [fieldKey]: gridJson, [effectsKey]: effectsJson });
+      return;
+    }
+    setField(fieldKey, gridJson);
+  };
+
+  const categoryColumnKey = isChartLine ? data?.columns[0]?.key : undefined;
+  const seriesColumns = isChartLine ? (data?.columns.slice(1) ?? []) : [];
+
+  const confirmRemoval = (count: number, target: string): boolean => {
+    if (count === 0) {
+      return true;
+    }
+    return window.confirm(
+      `${target}を参照する効果が${count}件あります。効果も削除してよろしいですか？`,
+    );
   };
 
   if (data === null) {
     return (
       <div className="my-2">
         <span className={formLabelTextClass}>{label}</span>
-        <p className={errorTextClass}>表データを読み取れませんでした。初期化してください。</p>
+        <p className={errorTextClass}>
+          {isChartLine
+            ? "折れ線グラフのデータを読み取れませんでした。初期化してください。"
+            : "表データを読み取れませんでした。初期化してください。"}
+        </p>
         <button
           type="button"
           className={buttonNeutralClass}
-          onClick={() => commit(JSON.parse(defaultGridDataJson()) as TableData)}
+          onClick={() =>
+            commit(
+              JSON.parse(
+                isChartLine ? defaultChartLineGridDataJson() : defaultGridDataJson(),
+              ) as TableData,
+            )
+          }
         >
           初期化
         </button>
@@ -238,10 +306,22 @@ export function DataGridField({
       const { [previous]: moved, ...rest } = row;
       return { ...rest, [key]: moved as string | number };
     });
-    commit({ ...data, columns, rows });
+    const effectsJson =
+      isChartLine && index > 0
+        ? renameChartLineSeriesEffects(effectsValue, previous, key)
+        : undefined;
+    commit({ ...data, columns, rows }, effectsJson);
   };
 
   const changeColumnType = (index: number, type: "text" | "number") => {
+    if (isChartLine) {
+      setNotice(
+        index === 0
+          ? "折れ線グラフの先頭列はカテゴリ（文字列）です"
+          : "折れ線グラフの系列は数値です",
+      );
+      return;
+    }
     const key = data.columns[index]!.key;
     const columns = data.columns.map((column, columnIndex) =>
       columnIndex === index ? { ...column, type, format: undefined } : column,
@@ -262,12 +342,37 @@ export function DataGridField({
     commit({ ...data, columns, rows });
   };
 
+  const changeSeriesFormat = (index: number, format: TableColumn["format"]) => {
+    const columns = data.columns.map((column, columnIndex) =>
+      columnIndex === index || (isChartLine && columnIndex > 0)
+        ? { ...column, format }
+        : column,
+    );
+    commit({ ...data, columns });
+  };
+
   const addColumn = () => {
     if (data.columns.length >= maxColumns) {
       setNotice(`列は最大${maxColumns}列までです`);
       return;
     }
     const key = nextColumnKey(data.columns);
+    if (isChartLine) {
+      const format = seriesColumns[0]?.format;
+      commit({
+        ...data,
+        columns: [
+          ...data.columns,
+          {
+            key,
+            label: `系列${seriesColumns.length + 1}`,
+            type: "number" as const,
+            ...(format === undefined ? {} : { format }),
+          },
+        ],
+      });
+      return;
+    }
     commit({
       ...data,
       columns: [...data.columns, { key, label: `列${data.columns.length + 1}`, type: "text" as const }],
@@ -275,22 +380,60 @@ export function DataGridField({
   };
 
   const removeColumn = (index: number) => {
+    if (isChartLine && index === 0) {
+      setNotice("カテゴリ列は削除できません");
+      return;
+    }
+    if (isChartLine && data.columns.length <= 2) {
+      setNotice("系列は1本以上必要です");
+      return;
+    }
     const key = data.columns[index]!.key;
-    commit({
-      ...data,
-      columns: data.columns.filter((_, columnIndex) => columnIndex !== index),
-      rows: data.rows.map((row) => {
-        const { [key]: _removed, ...rest } = row;
-        return rest;
-      }),
-    });
+    let effectsJson: string | null | undefined;
+    if (isChartLine && index > 0) {
+      const count = countChartLineSeriesEffects(effectsValue, key);
+      if (!confirmRemoval(count, `系列「${data.columns[index]!.label || key}」`)) {
+        return;
+      }
+      effectsJson = removeChartLineSeriesEffects(effectsValue, key);
+    }
+    commit(
+      {
+        ...data,
+        columns: data.columns.filter((_, columnIndex) => columnIndex !== index),
+        rows: data.rows.map((row) => {
+          const { [key]: _removed, ...rest } = row;
+          return rest;
+        }),
+      },
+      effectsJson,
+    );
   };
 
   const updateCell = (rowIndex: number, key: string, raw: string, type: "text" | "number") => {
+    const isCategoryCell = isChartLine && key === categoryColumnKey;
+    const nextValue = isCategoryCell ? raw.trim() : coerceCellValue(raw, type);
     const rows = data.rows.map((row, index) =>
-      index === rowIndex ? { ...row, [key]: coerceCellValue(raw, type) } : row,
+      index === rowIndex ? { ...row, [key]: nextValue } : row,
     );
-    commit({ ...data, rows });
+    let effectsJson: string | null | undefined;
+    if (isCategoryCell) {
+      const previous = data.rows[rowIndex]?.[key];
+      const nextCategory = String(nextValue);
+      if (
+        typeof previous === "string" &&
+        previous.trim().length > 0 &&
+        nextCategory.length > 0 &&
+        nextCategory !== previous.trim()
+      ) {
+        effectsJson = renameChartLineCategoryEffects(
+          effectsValue,
+          previous.trim(),
+          nextCategory,
+        );
+      }
+    }
+    commit({ ...data, rows }, effectsJson);
   };
 
   const addRow = () => {
@@ -299,14 +442,48 @@ export function DataGridField({
       return;
     }
     const row: Record<string, string | number> = {};
-    for (const column of data.columns) {
-      row[column.key] = "";
+    if (isChartLine) {
+      const used = new Set(
+        data.rows.map((entry) =>
+          categoryColumnKey === undefined ? "" : String(entry[categoryColumnKey] ?? ""),
+        ),
+      );
+      let ordinal = data.rows.length + 1;
+      while (used.has(`項目${ordinal}`)) {
+        ordinal += 1;
+      }
+      data.columns.forEach((column, index) => {
+        row[column.key] = index === 0 ? `項目${ordinal}` : 0;
+      });
+    } else {
+      for (const column of data.columns) {
+        row[column.key] = "";
+      }
     }
     commit({ ...data, rows: [...data.rows, row] });
   };
 
   const removeRow = (rowIndex: number) => {
-    commit({ ...data, rows: data.rows.filter((_, index) => index !== rowIndex) });
+    if (isChartLine && data.rows.length <= 2) {
+      setNotice("カテゴリは2件以上必要です");
+      return;
+    }
+    let effectsJson: string | null | undefined;
+    if (isChartLine && categoryColumnKey !== undefined) {
+      const raw = data.rows[rowIndex]?.[categoryColumnKey];
+      const categoryKey = typeof raw === "string" ? raw.trim() : "";
+      if (categoryKey.length > 0) {
+        const count = countChartLineCategoryEffects(effectsValue, categoryKey);
+        if (!confirmRemoval(count, `カテゴリ「${categoryKey}」`)) {
+          return;
+        }
+        effectsJson = removeChartLineCategoryEffects(effectsValue, categoryKey);
+      }
+    }
+    commit(
+      { ...data, rows: data.rows.filter((_, index) => index !== rowIndex) },
+      effectsJson,
+    );
   };
 
   const importCsv = () => {
@@ -327,7 +504,7 @@ export function DataGridField({
       return {
         key: `col${index + 1}`,
         label: label.trim().length > 0 ? label.trim() : `列${index + 1}`,
-        type: inferColumnType(cells),
+        type: isChartLine && index === 0 ? "text" : inferColumnType(cells),
       } as TableColumn;
     });
     const rows = body.map((cells) => {
@@ -344,6 +521,15 @@ export function DataGridField({
     if (truncatedRows > 0) {
       parts.push(`${truncatedRows}行を切り捨てました`);
     }
+    if (
+      isChartLine &&
+      effectsValue.trim().length > 0 &&
+      !window.confirm(
+        "CSV取り込みで系列・カテゴリの参照が変わります。既存の効果は自動で更新されません。取り込みますか？",
+      )
+    ) {
+      return;
+    }
     setNotice(parts.join("、"));
     setCsvText("");
     setField(fieldKey, JSON.stringify({ columns, rows }));
@@ -355,6 +541,18 @@ export function DataGridField({
       <p className={metaTextClass}>
         {data.columns.length}/{maxColumns}列・{data.rows.length}/{maxRows}行
       </p>
+      {isChartLine && (
+        <p className={metaTextClass}>
+          先頭列がカテゴリ、2列目以降が数値系列です。カテゴリは2〜8件、系列は1〜4本です。
+        </p>
+      )}
+      {issues.length > 0 && (
+        <ul className={errorTextClass}>
+          {issues.slice(0, 3).map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
+      )}
       {data.columns.some((column) => column.type === "number" && column.format === "percent") && (
         <p className={metaTextClass}>百分率の列は比率で入力します（0.25→25%）</p>
       )}
@@ -378,19 +576,25 @@ export function DataGridField({
                         columnKey={column.key}
                         onCommit={(key) => renameColumnKey(columnIndex, key)}
                       />
-                      <select
-                        className={textFieldClass}
-                        value={column.type}
-                        onChange={(event) =>
-                          changeColumnType(columnIndex, event.target.value as "text" | "number")
-                        }
-                      >
-                        {COLUMN_TYPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      {isChartLine ? (
+                        <span className="px-1 text-muted-foreground">
+                          {columnIndex === 0 ? "カテゴリ" : "数値"}
+                        </span>
+                      ) : (
+                        <select
+                          className={textFieldClass}
+                          value={column.type}
+                          onChange={(event) =>
+                            changeColumnType(columnIndex, event.target.value as "text" | "number")
+                          }
+                        >
+                          {COLUMN_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <select
                         className={textFieldClass}
                         value={column.align ?? ""}
@@ -414,12 +618,12 @@ export function DataGridField({
                           className={textFieldClass}
                           value={column.format ?? ""}
                           onChange={(event) =>
-                            updateColumn(columnIndex, {
-                              format:
-                                event.target.value.length === 0
-                                  ? undefined
-                                  : (event.target.value as TableColumn["format"]),
-                            })
+                            changeSeriesFormat(
+                              columnIndex,
+                              event.target.value.length === 0
+                                ? undefined
+                                : (event.target.value as TableColumn["format"]),
+                            )
                           }
                         >
                           {FORMAT_OPTIONS.map((option) => (
@@ -432,9 +636,13 @@ export function DataGridField({
                       <button
                         type="button"
                         className={buttonNeutralClass}
+                        disabled={
+                          isChartLine &&
+                          (columnIndex === 0 || data.columns.length <= 2)
+                        }
                         onClick={() => removeColumn(columnIndex)}
                       >
-                        列削除
+                        {isChartLine && columnIndex > 0 ? "系列削除" : "列削除"}
                       </button>
                     </div>
                   </div>
@@ -460,9 +668,10 @@ export function DataGridField({
                   <button
                     type="button"
                     className={buttonNeutralClass}
+                    disabled={isChartLine && data.rows.length <= 2}
                     onClick={() => removeRow(rowIndex)}
                   >
-                    行削除
+                    {isChartLine ? "カテゴリ削除" : "行削除"}
                   </button>
                 </td>
               </tr>
@@ -472,10 +681,10 @@ export function DataGridField({
       </div>
       <div className="mt-1 flex flex-wrap gap-2">
         <button type="button" className={buttonNeutralClass} onClick={addColumn}>
-          列を追加
+          {isChartLine ? "系列を追加" : "列を追加"}
         </button>
         <button type="button" className={buttonNeutralClass} onClick={addRow}>
-          行を追加
+          {isChartLine ? "カテゴリを追加" : "行を追加"}
         </button>
       </div>
       <div className="mt-2">
@@ -485,7 +694,7 @@ export function DataGridField({
           rows={3}
           value={csvText}
           onChange={(event) => setCsvText(event.target.value)}
-          placeholder="プラン,月額"
+          placeholder={isChartLine ? "月,売上,計画" : "プラン,月額"}
         />
         <button type="button" className={`mt-1 ${buttonNeutralClass}`} onClick={importCsv}>
           取り込む

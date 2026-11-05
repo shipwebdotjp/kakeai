@@ -53,6 +53,8 @@ import {
   type SpeakerFormValue,
 } from "../content/form";
 import { FLOW_EFFECTS_FIELD_KEY } from "../content/flow";
+import { chartLineCategoryChoices, chartLineSeriesChoices } from "../content/chart-line";
+import { messageTargetLabels } from "../content/labels";
 import {
   PRESET_LABELS,
   badgeNeutralClass,
@@ -265,6 +267,9 @@ function CueRow({
     setValue(fieldsPath, { ...current, ...patch }, { shouldDirty: true });
   };
   const setField = (key: string, value: string) => setFields({ [key]: value });
+  const effectsFieldKey = fields?.find((field) => field.kind === "effects" && field.variant === "line")?.key;
+  const gridFieldKey = fields?.find((field) => field.kind === "grid" && field.dataKind === "chart-line")?.key;
+  const valueLabelsFieldKey = fields?.find((field) => field.key === "style.valueLabels")?.key;
   const startIndex = lineIndex(lines, cue.startLineId);
   const endIndex = lineIndex(lines, cue.endLineId);
   const endCandidates = lineRangeEndCandidates(lines, cue.startLineId);
@@ -302,6 +307,9 @@ function CueRow({
       lines={lines}
       speakers={speakers}
       rangeStartLineId={rangeStartLineId}
+      effectsFieldKey={effectsFieldKey}
+      gridFieldKey={gridFieldKey}
+      valueLabelsFieldKey={valueLabelsFieldKey}
     />
   );
 
@@ -634,6 +642,9 @@ interface CueFieldProps {
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
   rangeStartLineId: string | null;
+  effectsFieldKey?: string;
+  gridFieldKey?: string;
+  valueLabelsFieldKey?: string;
 }
 
 function PositionZoomControls({
@@ -843,34 +854,6 @@ function NestedScreenField({
   );
 }
 
-function messageTargetLabels(values: Record<string, string>): string[] | undefined {
-  const raw = values.messages;
-  if (typeof raw !== "string" || raw.trim().length === 0) {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return undefined;
-    }
-    return parsed.map((entry, index) => {
-      const body =
-        typeof entry === "object" &&
-        entry !== null &&
-        typeof (entry as { body?: unknown }).body === "string"
-          ? (entry as { body: string }).body
-          : "";
-      const first = body.split("\n")[0].trim();
-      if (first.length === 0) {
-        return `メッセージ ${index + 1}`;
-      }
-      return first.length > 24 ? `${first.slice(0, 24)}…` : first;
-    });
-  } catch {
-    return undefined;
-  }
-}
-
 function videoAssetSelectHandler(
   fieldKey: string,
   current: string,
@@ -921,7 +904,7 @@ function CueVideoPlaybackField({
   );
 }
 
-function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers, rangeStartLineId }: CueFieldProps) {
+function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers, rangeStartLineId, effectsFieldKey, gridFieldKey, valueLabelsFieldKey }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
     return (
@@ -1108,6 +1091,10 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           setField={setField}
           maxColumns={field.maxColumns}
           maxRows={field.maxRows}
+          dataKind={field.dataKind}
+          effectsKey={field.dataKind === "chart-line" ? effectsFieldKey : undefined}
+          effectsValue={effectsFieldKey === undefined ? "" : (values[effectsFieldKey] ?? "")}
+          setFields={setFields}
         />
       );
     case "effects":
@@ -1121,6 +1108,19 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           lines={lines}
           speakers={speakers}
           messageLabels={field.variant === "chat" ? messageTargetLabels(values) : undefined}
+          lineSeries={
+            field.variant === "line" && gridFieldKey !== undefined
+              ? chartLineSeriesChoices(values[gridFieldKey] ?? "")
+              : undefined
+          }
+          lineCategories={
+            field.variant === "line" && gridFieldKey !== undefined
+              ? chartLineCategoryChoices(values[gridFieldKey] ?? "")
+              : undefined
+          }
+          lineValueLabels={
+            valueLabelsFieldKey !== undefined && values[valueLabelsFieldKey] === "true"
+          }
         />
       );
     case "calloutItems":

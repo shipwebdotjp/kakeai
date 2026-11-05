@@ -20,6 +20,7 @@ import {
   DEFAULT_ANIMATION_POLICY,
   getVisualTemplate,
   chartEffectsSchema,
+  chartLineEffectsSchema,
   chatEffectsSchema,
   CHART_APPEAR_PRESETS,
   flowEffectsSchema,
@@ -85,11 +86,13 @@ function normalizeChartEffect(entry: unknown): unknown {
 }
 
 export function effectsSchemaForVariant(
-  variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat",
+  variant: "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat",
 ) {
   switch (variant) {
     case "chart":
       return chartEffectsSchema;
+    case "line":
+      return chartLineEffectsSchema;
     case "flow":
       return flowEffectsSchema;
     case "stat":
@@ -104,11 +107,19 @@ export function effectsSchemaForVariant(
 }
 
 export function defaultEffectsForVariant(
-  variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat",
+  variant: "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat",
 ): unknown[] {
   switch (variant) {
     case "chat":
       return [];
+    case "line":
+      return [
+        {
+          target: { kind: "allSeries" },
+          trigger: { kind: "cue" },
+          effect: { kind: "appear", preset: "draw", durationMs: 600 },
+        },
+      ];
     case "chart":
       return [
         {

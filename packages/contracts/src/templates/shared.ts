@@ -56,9 +56,9 @@ export type TemplateFieldSpec =
     }
   | { kind: "mediaCrop"; key: string; label: string; zoomKey?: string }
   | { kind: "boolean"; key: string; label: string }
-  | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" }
+  | { kind: "grid"; key: string; label: string; maxColumns: number; maxRows: number; dataKind: "table" | "chart" | "chart-line" }
   | { kind: "flow"; key: string; label: string; maxNodes: number; maxEdges: number }
-  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "flow" | "stat" | "quote" | "chat" }
+  | { kind: "effects"; key: string; label: string; variant: "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat" }
   | { kind: "calloutItems"; key: string; label: string }
   | { kind: "messages"; key: string; label: string; maxMessages: number }
   | { kind: "animation"; key: string; label: string };

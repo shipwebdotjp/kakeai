@@ -1,6 +1,7 @@
 import {
   NEUTRAL_VISUAL_SKIN_REF,
   chartBarV1,
+  chartLineV1,
   chatThreadV1,
   characterStandingV1,
   compositionFullBleedV1,
@@ -20,6 +21,7 @@ import {
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
 import { renderChartBar } from "../templates/chart-bar";
+import { renderChartLine } from "../templates/chart-line";
 import { renderChatThread } from "../templates/chat-thread";
 import { renderCharacterStanding } from "../templates/character-standing";
 import { renderCompositionFullBleed } from "../templates/composition-full-bleed";
@@ -82,6 +84,10 @@ const templateRenderers: [string, VisualSkinTemplateRenderer][] = [
   [
     `${chartBarV1.id}@${chartBarV1.version}`,
     (input, context) => renderChartBar(input, context),
+  ],
+  [
+    `${chartLineV1.id}@${chartLineV1.version}`,
+    (input, context) => renderChartLine(input, context),
   ],
   [
     `${listCalloutV1.id}@${listCalloutV1.version}`,

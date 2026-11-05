@@ -22,6 +22,7 @@ import { deleteAtPath, readInputObject, setAtPath } from "./paths";
 import { intOrZero } from "./build-common";
 import {
   chartDataSchema,
+  chartLineDataSchema,
   chatMessagesSchema,
   flowDiagramSchema,
   listCalloutItemsSchema,
@@ -271,15 +272,22 @@ export function buildCueInput(
         }
         let parsedJson: unknown;
         const isChart = field.dataKind === "chart";
-        const errorMessage = isChart
-          ? "グラフデータを正しく入力してください"
-          : "表データを正しく入力してください";
+        const isChartLine = field.dataKind === "chart-line";
+        let errorMessage = "表データを正しく入力してください";
+        let schema: typeof tableDataSchema | typeof chartDataSchema | typeof chartLineDataSchema =
+          tableDataSchema;
+        if (isChartLine) {
+          errorMessage = "折れ線グラフのデータを正しく入力してください";
+          schema = chartLineDataSchema;
+        } else if (isChart) {
+          errorMessage = "グラフデータを正しく入力してください";
+          schema = chartDataSchema;
+        }
         try {
           parsedJson = JSON.parse(trimmed);
         } catch {
           throw new Error(errorMessage);
         }
-        const schema = isChart ? chartDataSchema : tableDataSchema;
         const validated = schema.safeParse(parsedJson);
         if (!validated.success) {
           throw new Error(errorMessage);

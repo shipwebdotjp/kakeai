@@ -262,6 +262,7 @@ Sceneの `timing` は判別unionである。新規の要点Sceneは原則とし�
 | `scene.device-frame@1` | `screen`(`NestedVisual`), `frame`(laptop/phone), `scale?`(0.6..1), `placement?`(left/center/right), `backgroundColor?`, `animation?`（preset, durationMs）, `statusBar?`, `keyboard?` | 対応。端末枠内に画像・動画、または `kind: "composition"` の CompositionVersion を表示する複合ビジュアル。背景・カードに置ける。screen のCompositionはCanvas Profileが `landscape` / `portrait` のどちらでも置け（phoneは9:16）、fit・zoom・位置で調整する。画面要素の登場アニメーションを追加できる。`scale` はデバイス一式の倍率、`placement` は縮小後の外形の左右アンカー。既定で端末クローム（phoneのステータスバー、laptopのキーボードベース）を重ねられ、`statusBar: false` / `keyboard: false` で消せる |
 | `scene.site-mockup@1` | `variant`, `screen`(`NestedVisual`), `theme?`, `name?`/`handle?`/`url?`/`caption?`, `logo?`, `animation?` | 対応。有名サイト・ブラウザのガワに画像・動画を収める。card/overlay |
 | `chart.bar@1` | タイトル、カテゴリ、系列、数値、向き、幅、目盛り、効果 | 対応（[../chart-template/spec.md](../chart-template/spec.md)） |
+| `chart.line@1` | タイトル、カテゴリ、系列、数値、幅、目盛り、値ラベル、効果 | 対応。等間隔カテゴリに対する1〜4系列の推移を直線で描く。値軸は `fit` のみで、`draw` / `fade` の登場、系列・カテゴリ・個別点の強調と値カウントを持つ（[../chart-line-template/spec.md](../chart-line-template/spec.md)） |
 | `table.simple@1` | 見出し、列定義、行、スタイル、幅、効果 | 対応（[../table-template/spec.md](../table-template/spec.md)） |
 | `list.callout@1` | 見出し、ポイント列、行トリガー付き効果 | 対応（[../cue-effects/spec.md](../cue-effects/spec.md)） |
 | `stat@1` | 数値、ラベル、補足、書式、トーン、効果 | 対応。大きな数値を行トリガーでカウントする（[../stat-template/spec.md](../stat-template/spec.md)） |

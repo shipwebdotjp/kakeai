@@ -30,7 +30,11 @@ export const animationSpecSchema = z
   });
 export type AnimationSpec = z.infer<typeof animationSpecSchema>;
 
-export const figureActionSchema = z.enum([...animationPresetSchema.options, "grow"]);
+export const figureActionSchema = z.enum([
+  ...animationPresetSchema.options,
+  "grow",
+  "draw",
+]);
 export type FigureAction = z.infer<typeof figureActionSchema>;
 
 export const figureEaseSchema = z.enum(["normal", "overshoot"]);

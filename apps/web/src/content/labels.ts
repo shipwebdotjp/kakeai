@@ -32,6 +32,40 @@ export function sceneDisplayName(
   return SCENE_LABELS[scene.kind] ?? scene.kind;
 }
 
+/**
+ * Message dropdown labels for chat effects. Reads the serialized `messages`
+ * field without assuming the rest of the form shape.
+ */
+export function messageTargetLabels(
+  values: Record<string, string>,
+): string[] | undefined {
+  const raw = values.messages;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return undefined;
+    }
+    return parsed.map((entry, index) => {
+      const body =
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as { body?: unknown }).body === "string"
+          ? (entry as { body: string }).body
+          : "";
+      const first = body.split("\n")[0]!.trim();
+      if (first.length === 0) {
+        return `メッセージ ${index + 1}`;
+      }
+      return first.length > 24 ? `${first.slice(0, 24)}…` : first;
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export const TEXT_ROLE_LABELS: Record<TextRole, string> = {
   title: "タイトル",
   subtitle: "サブタイトル",

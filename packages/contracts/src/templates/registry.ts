@@ -9,6 +9,7 @@ import { sceneSiteMockupV1 } from "./site-mockup";
 import { compositionFullBleedV1 } from "./composition-full-bleed";
 import { tableSimpleV1 } from "./table";
 import { chartBarV1 } from "./chart";
+import { chartLineV1 } from "./chart-line";
 import { listCalloutV1 } from "./list-callout";
 import { flowDiagramV1 } from "./flow";
 import { statV1 } from "./stat";
@@ -25,6 +26,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   compositionFullBleedV1,
   tableSimpleV1,
   chartBarV1,
+  chartLineV1,
   listCalloutV1,
   flowDiagramV1,
   statV1,

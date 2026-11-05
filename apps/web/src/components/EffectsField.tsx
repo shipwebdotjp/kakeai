@@ -1,10 +1,12 @@
 import {
   APPEAR_PRESETS,
   CHART_APPEAR_PRESETS,
+  CHART_LINE_APPEAR_PRESETS,
   EMPHASIZE_STYLES,
   TABLE_TONES,
 } from "@kakeai/contracts";
 import { lineOptionLabel, type LineFormValue, type SpeakerFormValue } from "../content/form";
+import type { ChartLineChoice } from "../content/chart-line";
 import {
   buttonNeutralClass,
   errorTextClass,
@@ -17,12 +19,13 @@ import { OnsetField } from "./OnsetField";
 
 type Json = Record<string, unknown>;
 
-type EffectVariant = "table" | "chart" | "flow" | "stat" | "quote" | "chat";
+type EffectVariant = "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat";
 
 const EFFECT_HINTS: Record<EffectVariant, string> = {
   stat: "セリフ区間を契機に、開始値から「数値（カウント後の値）」までカウントします。",
   table: "セリフ区間を契機に、対象の行・セルを登場・強調・数値カウントします。",
   chart: "セリフ区間を契機に、対象の棒を登場・強調・数値カウントします。",
+  line: "セリフ区間を契機に、折れ線・点を描画・強調・数値カウントします。",
   flow: "セリフ区間を契機に、対象のノードを登場・強調します。",
   quote: "セリフ区間を契機に、引用を登場・強調します。",
   chat: "セリフ区間を契機に、対象のメッセージを登場・強調します。",
@@ -37,6 +40,9 @@ interface EffectsFieldProps {
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
   messageLabels?: string[];
+  lineSeries?: ChartLineChoice[];
+  lineCategories?: ChartLineChoice[];
+  lineValueLabels?: boolean;
 }
 
 const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: string }[]> = {
@@ -50,6 +56,12 @@ const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
     { value: "category", label: "カテゴリ" },
     { value: "series", label: "系列" },
     { value: "bars", label: "全棒" },
+  ],
+  line: [
+    { value: "allSeries", label: "全系列" },
+    { value: "series", label: "系列" },
+    { value: "category", label: "カテゴリ" },
+    { value: "point", label: "個別点" },
   ],
   flow: [
     { value: "node", label: "ノード" },
@@ -79,6 +91,11 @@ const EFFECT_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
     { value: "emphasize", label: "強調" },
     { value: "value", label: "数値カウント" },
   ],
+  line: [
+    { value: "appear", label: "登場" },
+    { value: "emphasize", label: "強調" },
+    { value: "value", label: "数値カウント" },
+  ],
   flow: [
     { value: "appear", label: "登場" },
     { value: "emphasize", label: "強調" },
@@ -99,6 +116,7 @@ const EFFECT_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
 };
 
 const APPEAR_PRESET_LABELS: Record<string, string> = {
+  draw: "描画",
   fade: "フェード",
   "slide-up": "下から",
   "slide-down": "上から",
@@ -107,6 +125,16 @@ const APPEAR_PRESET_LABELS: Record<string, string> = {
   "scale-in": "拡大",
   grow: "伸ばす",
   bounce: "弾ませる",
+};
+
+const APPEAR_PRESETS_BY_VARIANT: Record<EffectVariant, readonly string[]> = {
+  table: APPEAR_PRESETS,
+  chart: CHART_APPEAR_PRESETS,
+  line: CHART_LINE_APPEAR_PRESETS,
+  flow: APPEAR_PRESETS,
+  stat: APPEAR_PRESETS,
+  quote: APPEAR_PRESETS,
+  chat: APPEAR_PRESETS,
 };
 
 const EMPHASIZE_STYLE_LABELS: Record<string, string> = {
@@ -137,28 +165,83 @@ function parseEntries(value: string): Json[] | null {
   }
 }
 
-function normalizeTarget(kind: string, previous: Json): Json {
+function normalizeTarget(
+  kind: string,
+  previous: Json,
+  variant: EffectVariant,
+): Json {
   if (kind === "cell") {
     return { kind, row: Number(previous.row) || 0, key: String(previous.key ?? "") };
   }
-  if (
-    kind === "row" ||
-    kind === "category" ||
-    kind === "series" ||
-    kind === "node" ||
-    kind === "message"
-  ) {
+  if (kind === "point") {
+    return {
+      kind,
+      categoryKey: String(previous.categoryKey ?? ""),
+      seriesKey: String(previous.seriesKey ?? ""),
+    };
+  }
+  if (kind === "series" || kind === "category") {
+    return variant === "line"
+      ? { kind, [`${kind}Key`]: String(previous[`${kind}Key`] ?? "") }
+      : { kind, index: Number(previous.index) || 0 };
+  }
+  if (kind === "row" || kind === "node" || kind === "message") {
     return { kind, index: Number(previous.index) || 0 };
   }
   return { kind };
 }
 
-function makeEffect(kind: string): Json {
+function fillLineTargetKeys(
+  target: Json,
+  series: readonly ChartLineChoice[],
+  categories: readonly ChartLineChoice[],
+): Json {
+  if (target.kind === "series" && String(target.seriesKey ?? "").length === 0) {
+    return { ...target, seriesKey: series[0]?.key ?? "" };
+  }
+  if (target.kind === "category" && String(target.categoryKey ?? "").length === 0) {
+    return { ...target, categoryKey: categories[0]?.key ?? "" };
+  }
+  if (target.kind === "point") {
+    return {
+      ...target,
+      categoryKey: String(target.categoryKey ?? "").length > 0
+        ? target.categoryKey
+        : (categories[0]?.key ?? ""),
+      seriesKey: String(target.seriesKey ?? "").length > 0
+        ? target.seriesKey
+        : (series[0]?.key ?? ""),
+    };
+  }
+  return target;
+}
+
+function allowedLineEffectKinds(targetKind: string): readonly string[] {
+  if (targetKind === "allSeries") {
+    return ["appear", "value"];
+  }
+  if (targetKind === "series") {
+    return ["appear", "emphasize", "value"];
+  }
+  return ["emphasize", "value"];
+}
+
+function fallbackLineEffect(targetKind: string): Json {
+  if (targetKind === "allSeries" || targetKind === "series") {
+    return { kind: "appear", preset: "draw", durationMs: 600 };
+  }
+  return { kind: "emphasize", style: "frame", tone: "primary" };
+}
+
+function makeEffect(kind: string, variant?: EffectVariant): Json {
   if (kind === "emphasize") {
     return { kind: "emphasize", style: "frame", tone: "primary" };
   }
   if (kind === "value") {
     return { kind: "value" };
+  }
+  if (variant === "line") {
+    return { kind: "appear", preset: "draw", durationMs: 600 };
   }
   return { kind: "appear", preset: "fade", durationMs: 400 };
 }
@@ -170,8 +253,15 @@ function defaultEntry(variant: EffectVariant): Json {
   if (variant === "quote") {
     return { trigger: { kind: "cue" }, effect: { kind: "emphasize", style: "frame", tone: "primary" } };
   }
+  if (variant === "line") {
+    return {
+      target: { kind: "allSeries" },
+      trigger: { kind: "cue" },
+      effect: { kind: "appear", preset: "draw", durationMs: 600 },
+    };
+  }
   return {
-    target: normalizeTarget(TARGET_OPTIONS[variant][0]!.value, {}),
+    target: normalizeTarget(TARGET_OPTIONS[variant][0]!.value, {}, variant),
     trigger: { kind: "cue" },
     effect:
       variant === "chart"
@@ -189,11 +279,14 @@ export function EffectsField({
   lines,
   speakers,
   messageLabels,
+  lineSeries = [],
+  lineCategories = [],
+  lineValueLabels = false,
 }: EffectsFieldProps) {
   const entries = parseEntries(value);
   const targetless = variant === "stat" || variant === "quote";
   const emphasizeStyles =
-    variant === "chart"
+    variant === "chart" || variant === "line"
       ? EMPHASIZE_STYLES.filter((style) => style !== "background")
       : [...EMPHASIZE_STYLES];
 
@@ -242,11 +335,24 @@ export function EffectsField({
         const targetKind = String(target.kind ?? "");
         const hasIndex =
           targetKind === "row" ||
-          targetKind === "category" ||
-          targetKind === "series" ||
           targetKind === "node" ||
-          targetKind === "message";
+          targetKind === "message" ||
+          (variant !== "line" &&
+            (targetKind === "category" || targetKind === "series"));
         const isCell = targetKind === "cell";
+        const isLineTarget = variant === "line";
+        const lineSeriesKey = String(target.seriesKey ?? "");
+        const lineCategoryKey = String(target.categoryKey ?? "");
+        const showSeriesKey =
+          isLineTarget && (targetKind === "series" || targetKind === "point");
+        const showCategoryKey =
+          isLineTarget && (targetKind === "category" || targetKind === "point");
+        const showOnset =
+          effect.kind === "emphasize" &&
+          (!isLineTarget || targetKind === "category" || targetKind === "point");
+        const lineAllowedEffects = isLineTarget
+          ? allowedLineEffectKinds(targetKind)
+          : null;
         return (
           <div key={index} className="mt-2 rounded border border-border p-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -259,7 +365,22 @@ export function EffectsField({
                       value={targetKind}
                       onChange={(event) => {
                         const kind = event.target.value;
-                        update(index, { target: normalizeTarget(kind, target) });
+                        const nextTarget =
+                          variant === "line"
+                            ? fillLineTargetKeys(
+                                normalizeTarget(kind, target, variant),
+                                lineSeries,
+                                lineCategories,
+                              )
+                            : normalizeTarget(kind, target, variant);
+                        const patch: Json = { target: nextTarget };
+                        if (
+                          variant === "line" &&
+                          !allowedLineEffectKinds(kind).includes(String(effect.kind ?? "appear"))
+                        ) {
+                          patch.effect = fallbackLineEffect(kind);
+                        }
+                        update(index, patch);
                       }}
                     >
                       {TARGET_OPTIONS[variant].map((option) => (
@@ -346,6 +467,60 @@ export function EffectsField({
                         />
                       </label>
                     </>
+                  )}
+                  {showCategoryKey && (
+                    <label className={formLabelClass}>
+                      カテゴリ
+                      <select
+                        className={textFieldClass}
+                        value={lineCategoryKey}
+                        onChange={(event) =>
+                          update(index, {
+                            target: { ...target, categoryKey: event.target.value },
+                          })
+                        }
+                      >
+                        {lineCategoryKey.length === 0 && <option value="">未選択</option>}
+                        {lineCategoryKey.length > 0 &&
+                          !lineCategories.some((choice) => choice.key === lineCategoryKey) && (
+                            <option value={lineCategoryKey}>
+                              {`未定義: ${lineCategoryKey}`}
+                            </option>
+                          )}
+                        {lineCategories.map((choice) => (
+                          <option key={choice.key} value={choice.key}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {showSeriesKey && (
+                    <label className={formLabelClass}>
+                      系列
+                      <select
+                        className={textFieldClass}
+                        value={lineSeriesKey}
+                        onChange={(event) =>
+                          update(index, {
+                            target: { ...target, seriesKey: event.target.value },
+                          })
+                        }
+                      >
+                        {lineSeriesKey.length === 0 && <option value="">未選択</option>}
+                        {lineSeriesKey.length > 0 &&
+                          !lineSeries.some((choice) => choice.key === lineSeriesKey) && (
+                            <option value={lineSeriesKey}>
+                              {`未定義: ${lineSeriesKey}`}
+                            </option>
+                          )}
+                        {lineSeries.map((choice) => (
+                          <option key={choice.key} value={choice.key}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   )}
                 </>
               )}
@@ -440,15 +615,39 @@ export function EffectsField({
                 <select
                   className={textFieldClass}
                   value={String(effect.kind ?? "appear")}
-                  onChange={(event) => update(index, { effect: makeEffect(event.target.value) })}
+                  onChange={(event) =>
+                    update(index, { effect: makeEffect(event.target.value, variant) })
+                  }
                 >
                   {EFFECT_OPTIONS[variant].map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      disabled={
+                        (lineAllowedEffects !== null &&
+                          !lineAllowedEffects.includes(option.value)) ||
+                        (option.value === "value" &&
+                          variant === "line" &&
+                          !lineValueLabels)
+                      }
+                    >
                       {option.label}
                     </option>
                   ))}
                 </select>
               </label>
+              {variant === "line" &&
+                lineAllowedEffects !== null &&
+                !lineAllowedEffects.includes(String(effect.kind ?? "appear")) && (
+                  <p className={errorTextClass}>
+                    この対象には選べない効果です。対象か効果を変更してください。
+                  </p>
+                )}
+              {variant === "line" && effect.kind === "value" && !lineValueLabels && (
+                <p className={errorTextClass}>
+                  数値カウントを使うには「値ラベル」をオンにしてください。
+                </p>
+              )}
               {effect.kind === "emphasize" ? (
                 <>
                   <label className={formLabelClass}>
@@ -483,10 +682,12 @@ export function EffectsField({
                       ))}
                     </select>
                   </label>
-                  <OnsetField
-                    effect={effect}
-                    onChange={(next) => update(index, { effect: next })}
-                  />
+                  {showOnset && (
+                    <OnsetField
+                      effect={effect}
+                      onChange={(next) => update(index, { effect: next })}
+                    />
+                  )}
                 </>
               ) : effect.kind === "value" ? (
                 <>
@@ -537,7 +738,7 @@ export function EffectsField({
                         update(index, { effect: { ...effect, preset: event.target.value } })
                       }
                     >
-                      {(variant === "chart" ? CHART_APPEAR_PRESETS : APPEAR_PRESETS).map((preset) => (
+                      {APPEAR_PRESETS_BY_VARIANT[variant].map((preset) => (
                         <option key={preset} value={preset}>
                           {APPEAR_PRESET_LABELS[preset] ?? preset}
                         </option>

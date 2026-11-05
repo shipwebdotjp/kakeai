@@ -22,6 +22,11 @@ export interface AnimationItem {
   ease?: FigureEase;
   startMs: number;
   durationMs: number;
+  /**
+   * Property values to animate from. Renderers use this when the start value
+   * depends on emitted geometry (for example a path length).
+   */
+  fromVars?: Record<string, string | number>;
 }
 
 export interface ExpressionTarget {

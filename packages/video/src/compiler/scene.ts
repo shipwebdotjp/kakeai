@@ -49,6 +49,7 @@ import {
   secondsText,
   stateIntervalTweenLines,
   toSecondsText,
+  tweenVarsText,
   valueTweenLine,
 } from "./animation";
 import {
@@ -294,7 +295,11 @@ export function renderScenes(context: SceneRenderContext): void {
         if (item.durationMs <= 0) {
           continue;
         }
-        const vars = actionVars(item.action, item.axis);
+        const rawVars =
+          item.fromVars === undefined
+            ? actionVars(item.action, item.axis)
+            : tweenVarsText(item.fromVars);
+        const vars = rawVars === "" ? null : rawVars;
         if (vars !== null) {
           tweenLines.push(
             `tl.from(document.getElementById("${item.targetId}"),{${vars},duration:${secondsText(item.durationMs / 1000)},ease:"${actionEase(item.ease)}",immediateRender:false},${toSecondsText(absStartMs + item.startMs)});`,

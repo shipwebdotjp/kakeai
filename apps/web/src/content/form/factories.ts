@@ -18,6 +18,7 @@ import {
 } from "./constants";
 import { emptyStandingSlots } from "./read";
 import { defaultEffectsForVariant, toCueFormValue } from "./cue-read";
+import { defaultChartLineGridDataJson } from "../chart-line";
 import {
   DEFAULT_ANIMATION_POLICY,
   DEFAULT_TRANSITION_POLICY,
@@ -252,7 +253,10 @@ function defaultCueFields(
         fields[field.key] = "";
         break;
       case "grid":
-        fields[field.key] = defaultGridDataJson();
+        fields[field.key] =
+          field.dataKind === "chart-line"
+            ? defaultChartLineGridDataJson()
+            : defaultGridDataJson();
         break;
       case "decimal":
         fields[field.key] = String(field.defaultValue ?? 0);

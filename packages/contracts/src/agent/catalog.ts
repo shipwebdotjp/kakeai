@@ -363,6 +363,7 @@ export const agentWarningCodes = [
   "chart_categories_overflow",
   "chart_negative_value",
   "chart_series_overflow",
+  "chart_value_label_overlap",
   "cue_removed_after_line_removal",
   "cue_removed_after_split",
   "cue_line_refs_reset",

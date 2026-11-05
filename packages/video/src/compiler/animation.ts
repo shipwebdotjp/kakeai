@@ -19,13 +19,17 @@ export function secondsText(seconds: number): string {
   return toSecondsText(seconds * 1000);
 }
 
-function tweenVarsText(vars: Record<string, string | number>): string {
+export function tweenVarsText(vars: Record<string, string | number>): string {
   return Object.entries(vars)
     .map(([key, value]) => {
-      if (typeof value !== "number") {
-        return `${key}:${JSON.stringify(value)}`;
-      }
-      return `${key}:${Number.isFinite(value) ? value : 0}`;
+      const serialized =
+        typeof value === "number"
+          ? String(Number.isFinite(value) ? value : 0)
+          : JSON.stringify(value);
+      const keyText = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)
+        ? key
+        : JSON.stringify(key);
+      return `${keyText}:${serialized}`;
     })
     .join(",");
 }
@@ -129,6 +133,10 @@ export function actionVars(
   switch (action) {
     case "grow":
       return axis === "x" ? "scaleX:0" : "scaleY:0";
+    case "draw":
+      // Requires item.fromVars (for example { strokeDashoffset: length }).
+      // Without it scene.ts skips the tween rather than animating a wrong value.
+      return null;
     case "sweep":
       return 'opacity:1,"--kakeai-onset-progress":0';
     case "flash":

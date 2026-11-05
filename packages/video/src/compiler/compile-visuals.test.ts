@@ -572,4 +572,44 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("scaleY:0");
     expect(compiled.html).toContain('ease:"back.out(1.6)"');
   });
+
+  it("renders a chart.line cue with draw progress and marker reveal", () => {
+    const document = validContentDocument();
+    document.scenes[0]!.visualCues = [
+      cue({
+        id: "vc-line",
+        template: { id: "chart.line", version: 1 },
+        layer: "overlay",
+        input: {
+          title: "月別売上",
+          data: {
+            columns: [
+              { key: "month", label: "月", type: "text" },
+              { key: "sales", label: "売上", type: "number", format: "currency" },
+            ],
+            rows: [
+              { month: "1月", sales: 100 },
+              { month: "2月", sales: 200 },
+            ],
+          },
+          effects: [
+            {
+              target: { kind: "allSeries" },
+              trigger: { kind: "cue" },
+              effect: { kind: "appear", preset: "draw", durationMs: 600 },
+            },
+          ],
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const path = cueScope("vc-line").id("line-path-0");
+    const secondPoint = cueScope("vc-line").id("line-point-1-0");
+    expect(compiled.html).toContain("kakeai-linechart");
+    expect(compiled.html).toContain("￥200");
+    expect(compiled.html).toContain(`document.getElementById("${path}")`);
+    expect(compiled.html).toContain(`document.getElementById("${secondPoint}")`);
+    expect(compiled.html).toContain("strokeDashoffset:");
+    expect(compiled.html).not.toContain("--kakeai-draw-progress");
+  });
 });

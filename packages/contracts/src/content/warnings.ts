@@ -13,6 +13,13 @@ export { UNITS_PER_FULLWIDTH_CHAR, textWidthUnits } from "../text-width";
 import {
   chartBarInputSchema,
   chartBarV1,
+  chartLineInputSchema,
+  chartLineV1,
+  CHART_PLOT_MAX_WIDTH_PX,
+  computeChartLineGeometry,
+  figureWidthScale,
+  formatNumber,
+  parseChartLineNumber,
   chatThreadInputSchema,
   chatThreadV1,
   flowDiagramInputSchema,
@@ -26,6 +33,7 @@ import {
   textBlockInputSchema,
   textBlockV1,
   type ChartData,
+  type ChartLineInput,
   type FlowDiagram,
   type FlowLayout,
   type FlowOrientation,
@@ -110,6 +118,62 @@ function chartWarnings(
       }
     });
   });
+  return warnings;
+}
+
+function chartLineWarnings(
+  input: ChartLineInput,
+  basePath: (string | number)[],
+  layout: OutputProfileLayout,
+  locale: string,
+): Warning[] {
+  const warnings: Warning[] = [];
+  const categories = input.data.rows.length;
+  const seriesColumns = input.data.columns.slice(1);
+  const series = seriesColumns.length;
+  if (categories > layout.chartCategoryLimit) {
+    warnings.push({
+      path: [...basePath, "data", "rows"],
+      code: "chart_categories_overflow",
+      message: `グラフのカテゴリ数が目安（最大${layout.chartCategoryLimit}件）を超えています。プレビューで確認してください。`,
+    });
+  }
+  if (series > layout.chartSeriesLimit) {
+    warnings.push({
+      path: [...basePath, "data", "columns"],
+      code: "chart_series_overflow",
+      message: `グラフの系列数が目安（最大${layout.chartSeriesLimit}本）を超えています。プレビューで確認してください。`,
+    });
+  }
+  if (input.style?.valueLabels !== true) {
+    return warnings;
+  }
+  const values = input.data.rows.map((row) =>
+    seriesColumns.map((column) => parseChartLineNumber(row[column.key]) ?? 0),
+  );
+  const labelTexts = values.map((row) =>
+    row.map((value, index) =>
+      formatNumber(value, seriesColumns[index]?.format, locale),
+    ),
+  );
+  const width = Math.round(
+    Math.min(CHART_PLOT_MAX_WIDTH_PX, layout.contentWidth) *
+      figureWidthScale(input.style?.width),
+  );
+  const geometry = computeChartLineGeometry({
+    values,
+    seriesKeys: seriesColumns.map((column) => column.key),
+    width,
+    labelTexts,
+  });
+  if (geometry.labelOverlap) {
+    warnings.push({
+      path: [...basePath, "data", "rows"],
+      code: "chart_value_label_overlap",
+      message:
+        "値ラベルが重なっています。カテゴリを減らすか、値ラベルを非表示にしてください。",
+    });
+  }
   return warnings;
 }
 
@@ -278,6 +342,20 @@ export function computeContentWarnings(
               parsed.data.data,
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
               layout,
+            ),
+          );
+        }
+        return;
+      }
+      if (cue.template.id === chartLineV1.id && cue.template.version === chartLineV1.version) {
+        const parsed = chartLineInputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          warnings.push(
+            ...chartLineWarnings(
+              parsed.data,
+              ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
+              layout,
+              document.locale,
             ),
           );
         }

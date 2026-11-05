@@ -44,8 +44,22 @@ function chartCue(input: unknown): VisualCue {
   };
 }
 
-function flowCue(input: unknown): VisualCue {
+function lineCue(input: unknown): VisualCue {
   return {
+    id: "visual-line-1",
+    range: { kind: "scene" },
+    layer: "overlay",
+    order: 0,
+    transition: {
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
+    },
+    template: { id: "chart.line", version: 1 },
+    input,
+  };
+}
+
+function flowCue(input: unknown): VisualCue {  return {
     id: "visual-flow-1",
     range: { kind: "scene" },
     layer: "overlay",
@@ -309,6 +323,36 @@ describe("computeContentWarnings", () => {
     const codes = computeContentWarnings(document).map((warning) => warning.code);
     expect(codes).toContain("chart_categories_overflow");
     expect(codes).toContain("chart_series_overflow");
+  });
+
+  it("warns when line chart value labels overlap", () => {
+    const document = validContentDocument();
+    const rows = Array.from({ length: 8 }, (_, index) => ({
+      name: `c${index + 1}`,
+      value: 10000000,
+    }));
+    const input = {
+      data: {
+        columns: [
+          { key: "name", label: "項目", type: "text" },
+          { key: "value", label: "値", type: "number", format: "decimal" },
+        ],
+        rows,
+      },
+      style: { valueLabels: true },
+    };
+    document.scenes[1]!.visualCues.push(lineCue(input));
+    expect(
+      computeContentWarnings(document).map((warning) => warning.code),
+    ).toContain("chart_value_label_overlap");
+
+    const withoutLabels = validContentDocument();
+    withoutLabels.scenes[1]!.visualCues.push(
+      lineCue({ ...input, style: { valueLabels: false } }),
+    );
+    expect(
+      computeContentWarnings(withoutLabels).map((warning) => warning.code),
+    ).not.toContain("chart_value_label_overlap");
   });
 
   it("warns when a flow node label is reduced or cannot fit one line", () => {
