@@ -21,11 +21,8 @@ import {
   type TemplateFieldSpec,
 } from "@kakeai/contracts";
 import {
-  CROP_CENTER_PERCENT,
   CROP_X_SUFFIX,
   CROP_Y_SUFFIX,
-  CROP_ZOOM_MAX_PERCENT,
-  CROP_ZOOM_MIN_PERCENT,
   CROP_ZOOM_SUFFIX,
   NESTED_MEDIA_FIT_SUFFIX,
   NESTED_COMPOSITION_FIT_SUFFIX,
@@ -54,7 +51,7 @@ import {
 } from "../content/form";
 import { FLOW_EFFECTS_FIELD_KEY } from "../content/flow";
 import { chartLineCategoryChoices, chartLineSeriesChoices } from "../content/chart-line";
-import { messageTargetLabels } from "../content/labels";
+import { messageTargetLabels, terminalTurnTargetLabels } from "../content/labels";
 import {
   PRESET_LABELS,
   badgeNeutralClass,
@@ -82,10 +79,11 @@ import { DataGridField } from "./DataGridField";
 import { EffectsField } from "./EffectsField";
 import { CalloutItemsField } from "./CalloutItemsField";
 import { MessagesField } from "./MessagesField";
+import { TerminalTurnsField } from "./TerminalTurnsField";
+import { PositionZoomControls } from "./PositionZoomControls";
 import { FlowField } from "./FlowField";
 
 const COMPOSITION_VERSION_FIELD_KEY = "compositionVersionId";
-const IDENTITY_ZOOM_PERCENT = "100";
 
 const LAYER_LABELS: Record<CueLayer, string> = {
   background: "背景",
@@ -268,6 +266,9 @@ function CueRow({
   };
   const setField = (key: string, value: string) => setFields({ [key]: value });
   const effectsFieldKey = fields?.find((field) => field.kind === "effects" && field.variant === "line")?.key;
+  const terminalEffectsFieldKey = fields?.find(
+    (field) => field.kind === "effects" && field.variant === "terminal",
+  )?.key;
   const gridFieldKey = fields?.find((field) => field.kind === "grid" && field.dataKind === "chart-line")?.key;
   const valueLabelsFieldKey = fields?.find((field) => field.key === "style.valueLabels")?.key;
   const startIndex = lineIndex(lines, cue.startLineId);
@@ -308,6 +309,7 @@ function CueRow({
       speakers={speakers}
       rangeStartLineId={rangeStartLineId}
       effectsFieldKey={effectsFieldKey}
+      terminalEffectsFieldKey={terminalEffectsFieldKey}
       gridFieldKey={gridFieldKey}
       valueLabelsFieldKey={valueLabelsFieldKey}
     />
@@ -643,109 +645,9 @@ interface CueFieldProps {
   speakers: SpeakerFormValue[];
   rangeStartLineId: string | null;
   effectsFieldKey?: string;
+  terminalEffectsFieldKey?: string;
   gridFieldKey?: string;
   valueLabelsFieldKey?: string;
-}
-
-function PositionZoomControls({
-  label,
-  xKey,
-  yKey,
-  zoomKey,
-  values,
-  setField,
-  setFields,
-  getFields,
-}: {
-  label?: string;
-  xKey: string;
-  yKey: string;
-  zoomKey?: string;
-  values: Record<string, string>;
-  setField: (key: string, value: string) => void;
-  setFields: (values: Record<string, string>) => void;
-  getFields: () => Record<string, string>;
-}) {
-  const center = String(CROP_CENTER_PERCENT);
-  const xValue = values[xKey] ?? "";
-  const yValue = values[yKey] ?? "";
-  const zoomValue = zoomKey !== undefined ? (values[zoomKey] ?? "") : "";
-  const xDisplay = xValue.length > 0 ? xValue : center;
-  const yDisplay = yValue.length > 0 ? yValue : center;
-  const zoomDisplay = zoomValue.length > 0 ? zoomValue : IDENTITY_ZOOM_PERCENT;
-  const isCentered = xValue.length === 0 && yValue.length === 0;
-  const moveAxis = (axisKey: string, otherKey: string, next: string) => {
-    const otherValue = getFields()[otherKey] ?? "";
-    setFields(
-      otherValue.length === 0 ? { [axisKey]: next, [otherKey]: center } : { [axisKey]: next },
-    );
-  };
-  return (
-    <div className="my-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {label !== undefined && <span className={formLabelTextClass}>{label}</span>}
-        <span className={metaTextClass}>
-          横 {xDisplay}% / 縦 {yDisplay}%
-        </span>
-        <button
-          type="button"
-          className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
-          disabled={isCentered}
-          onClick={() => setFields({ [xKey]: "", [yKey]: "" })}
-        >
-          中央に戻す
-        </button>
-      </div>
-      <label className="mt-1 flex items-center gap-2">
-        <span className="w-6 text-xs">横</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          className="w-48"
-          value={xDisplay}
-          onChange={(event) => moveAxis(xKey, yKey, event.target.value)}
-        />
-      </label>
-      <label className="mt-1 flex items-center gap-2">
-        <span className="w-6 text-xs">縦</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          className="w-48"
-          value={yDisplay}
-          onChange={(event) => moveAxis(yKey, xKey, event.target.value)}
-        />
-      </label>
-      {zoomKey !== undefined && (
-        <label className="mt-1 flex items-center gap-2">
-          <span className="w-6 text-xs">倍率</span>
-          <input
-            type="range"
-            min={CROP_ZOOM_MIN_PERCENT}
-            max={CROP_ZOOM_MAX_PERCENT}
-            step={1}
-            className="w-48"
-            value={zoomDisplay}
-            onChange={(event) => setField(zoomKey, event.target.value)}
-          />
-          <span className={metaTextClass}>{zoomDisplay}%</span>
-          {zoomValue.length > 0 && (
-            <button
-              type="button"
-              className="text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setField(zoomKey, "")}
-            >
-              等倍に戻す
-            </button>
-          )}
-        </label>
-      )}
-    </div>
-  );
 }
 
 function NestedScreenField({
@@ -904,7 +806,7 @@ function CueVideoPlaybackField({
   );
 }
 
-function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers, rangeStartLineId, effectsFieldKey, gridFieldKey, valueLabelsFieldKey }: CueFieldProps) {
+function CueField({ field, values, setField, setFields, getFields, multiline = false, animationPresets, lines, speakers, rangeStartLineId, effectsFieldKey, terminalEffectsFieldKey, gridFieldKey, valueLabelsFieldKey }: CueFieldProps) {
   const value = values[field.key] ?? "";
   if (field.key === COMPOSITION_VERSION_FIELD_KEY) {
     return (
@@ -1108,6 +1010,9 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           lines={lines}
           speakers={speakers}
           messageLabels={field.variant === "chat" ? messageTargetLabels(values) : undefined}
+          turnLabels={
+            field.variant === "terminal" ? terminalTurnTargetLabels(values) : undefined
+          }
           lineSeries={
             field.variant === "line" && gridFieldKey !== undefined
               ? chartLineSeriesChoices(values[gridFieldKey] ?? "")
@@ -1142,6 +1047,24 @@ function CueField({ field, values, setField, setFields, getFields, multiline = f
           value={value}
           setField={setField}
           maxMessages={field.maxMessages}
+        />
+      );
+    case "turns":
+      return (
+        <TerminalTurnsField
+          label={field.label}
+          fieldKey={field.key}
+          value={value}
+          setField={setField}
+          setFields={setFields}
+          maxTurns={field.maxTurns}
+          lines={lines}
+          effectsKey={terminalEffectsFieldKey}
+          effectsValue={
+            terminalEffectsFieldKey === undefined
+              ? ""
+              : (values[terminalEffectsFieldKey] ?? "")
+          }
         />
       );
     case "flow":

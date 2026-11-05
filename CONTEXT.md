@@ -229,6 +229,18 @@ _Avoid_: speaker badge, caption title, narration label
 The decorative input bar and send icon at the bottom of a phone-framed Chat Template. It is a static part of the frame's appearance, holds no editable value, and is not a template input.
 _Avoid_: message input, form field, composer schema
 
+**Terminal Template** (ターミナル):
+A data-driven Visual Template that shows a floating macOS-style terminal window with a prompt, typed input lines, and output lines. It is shown as video only and is not tied to narration, speakers, or TTS.
+_Avoid_: Chat Template, code block, shell
+
+**Terminal Turn**:
+One input/output pair in a Terminal Template. A turn is the unit that a reveal effect shows; a turn without an effect is visible from the start of the cue.
+_Avoid_: message, line, command output
+
+**Terminal Reveal**:
+A terminal-specific display effect that starts a turn at a line or cue trigger, types the input at a fixed speed, and then shows the output. It is distinct from the shared appearance effects because it coordinates input completion with output display.
+_Avoid_: appear, transition, animation preset
+
 **Node**:
 An item of a Flow Diagram, referenced by its position in the diagram's node list. It carries a label and an optional caption.
 _Avoid_: Step, box

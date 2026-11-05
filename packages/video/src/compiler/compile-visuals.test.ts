@@ -612,4 +612,43 @@ describe("compileDocument", () => {
     expect(compiled.html).toContain("strokeDashoffset:");
     expect(compiled.html).not.toContain("--kakeai-draw-progress");
   });
+
+  it("compiles a terminal cue with typing and output state intervals", () => {
+    const document = validContentDocument();
+    const lineId = document.scenes[1]!.lines[0]!.id;
+    document.scenes[1]!.visualCues = [
+      cue({
+        id: "vc-terminal",
+        template: { id: "terminal.session", version: 1 },
+        layer: "card",
+        input: {
+          title: "~/project — zsh",
+          turns: [{ input: "pwd", output: ["/tmp"] }],
+          effects: [
+            {
+              target: { kind: "turn", index: 0 },
+              trigger: {
+                kind: "lines",
+                startLineId: lineId,
+                endLineId: lineId,
+              },
+              effect: { kind: "reveal", mode: "type" },
+            },
+          ],
+        },
+      }),
+    ];
+    const compiled = compileDocument({ document, assetResolver: resolver });
+    const scope = cueScope("vc-terminal");
+    expect(compiled.html).toContain("kakeai-terminalwindow");
+    expect(compiled.html).toContain("kakeai-terminaldot");
+    expect(compiled.html).toContain(`id="${scope.id("turn-0")}"`);
+    expect(compiled.html).toContain(`id="${scope.id("char-0-1")}"`);
+    expect(compiled.html).toContain(
+      `tl.set(document.getElementById("${scope.id("turn-0")}"),{display:"none"},`,
+    );
+    expect(compiled.html).toContain(
+      `tl.set(document.getElementById("${scope.id("char-0-1")}"),{opacity:0},`,
+    );
+  });
 });

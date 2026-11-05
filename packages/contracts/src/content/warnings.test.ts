@@ -13,6 +13,7 @@ import {
   computeContentWarnings,
   textWidthUnits,
 } from "./warnings";
+import { TERMINAL_ROWS_GUIDELINE } from "../templates";
 
 function tableCue(input: unknown): VisualCue {
   return {
@@ -55,6 +56,21 @@ function lineCue(input: unknown): VisualCue {
       exit: { preset: "none", durationMs: 0 },
     },
     template: { id: "chart.line", version: 1 },
+    input,
+  };
+}
+
+function terminalCue(input: unknown): VisualCue {
+  return {
+    id: "visual-terminal-1",
+    range: { kind: "scene" },
+    layer: "card",
+    order: 0,
+    transition: {
+      enter: { preset: "none", durationMs: 0 },
+      exit: { preset: "none", durationMs: 0 },
+    },
+    template: { id: "terminal.session", version: 1 },
     input,
   };
 }
@@ -300,6 +316,41 @@ describe("computeContentWarnings", () => {
       1,
       "value",
     ]);
+  });
+
+  it("warns when terminal rows exceed the floating window guideline", () => {
+    const document = validContentDocument();
+    const outputLines = Array.from(
+      { length: TERMINAL_ROWS_GUIDELINE.landscape },
+      (_value, index) => `line ${index + 1}`,
+    );
+    document.scenes[1]!.visualCues.push(
+      terminalCue({
+        prompt: "$",
+        turns: [{ input: "command", output: outputLines }],
+      }),
+    );
+    const warnings = computeContentWarnings(document);
+    expect(warnings.map((warning) => warning.code)).toContain("terminal_overflow");
+    expect(warnings.find((warning) => warning.code === "terminal_overflow")?.path).toEqual([
+      "scenes",
+      1,
+      "visualCues",
+      2,
+      "input",
+      "turns",
+    ]);
+
+    const shorter = validContentDocument();
+    shorter.scenes[1]!.visualCues.push(
+      terminalCue({
+        prompt: "$",
+        turns: [{ input: "command", output: outputLines.slice(0, -1) }],
+      }),
+    );
+    expect(
+      computeContentWarnings(shorter).map((warning) => warning.code),
+    ).not.toContain("terminal_overflow");
   });
 
   it("warns when bar chart categories or series exceed the guidelines", () => {

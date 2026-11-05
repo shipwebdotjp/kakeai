@@ -66,6 +66,40 @@ export function messageTargetLabels(
   }
 }
 
+/**
+ * Turn dropdown labels for terminal effects. Reads the serialized `turns`
+ * field without assuming the rest of the form shape.
+ */
+export function terminalTurnTargetLabels(
+  values: Record<string, string>,
+): string[] | undefined {
+  const raw = values.turns;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return undefined;
+    }
+    return parsed.map((entry, index) => {
+      const input =
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as { input?: unknown }).input === "string"
+          ? (entry as { input: string }).input
+          : "";
+      const first = input.split("\n")[0]!.trim();
+      if (first.length === 0) {
+        return `ターン ${index + 1}`;
+      }
+      return first.length > 24 ? `${first.slice(0, 24)}…` : first;
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export const TEXT_ROLE_LABELS: Record<TextRole, string> = {
   title: "タイトル",
   subtitle: "サブタイトル",

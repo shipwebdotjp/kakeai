@@ -28,6 +28,7 @@ Kakeai のインストールから動画の MP4 出力までを案内します�
 - [サムネイルの作成](./works/thumbnails.md)
 - [動画を挿入する（インサートScene）](./works/insert-scenes.md)
 - [セリフゲート動画再生](./works/video-gate-playback.md)
+- [ターミナル風の映像を作る](./works/terminal-template.md)
 - [Visual Theme のカスタマイズ](./theme-customization.md)
 - [Composition Library](./composition-library.md)
 

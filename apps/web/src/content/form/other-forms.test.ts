@@ -830,6 +830,61 @@ describe("initialVideoGateLineId", () => {
 });
 
 
+describe("terminal.session form", () => {
+  it("round-trips turns, typing, and a line-triggered reveal", () => {
+    const base = createInitialContentDocument();
+    const lineId = "line-terminal-1";
+    base.scenes[1]!.lines.push({
+      id: lineId,
+      speakerId: null,
+      captionText: "ターミナル",
+      speechText: "ターミナル",
+      selectedAudioTakeId: null,
+      expressionId: null,
+    });
+    const input = {
+      title: "~/project — zsh",
+      prompt: "$",
+      typing: { charsPerSecond: 40 },
+      turns: [
+        { input: "npm test", output: ["PASS src/example.test.ts"] },
+        { input: "git status" },
+      ],
+      effects: [
+        {
+          target: { kind: "turn", index: 1 },
+          trigger: { kind: "lines", startLineId: lineId, endLineId: lineId },
+          effect: { kind: "reveal", mode: "type" },
+        },
+      ],
+    };
+    base.scenes[1]!.visualCues = [
+      vc({
+        id: "vc-terminal",
+        template: { id: "terminal.session", version: 1 },
+        layer: "card",
+        input,
+      }),
+    ];
+    const rebuilt = buildContentDocument(base, toFormValues(base));
+    expect(rebuilt.scenes[1]!.visualCues[0]!.input).toEqual(input);
+    expect(contentDocumentSchema.safeParse(rebuilt).success).toBe(true);
+  });
+
+  it("creates new terminal cues with two starter turns and no effects", () => {
+    const cue = createCueFormValue({
+      sceneId: "scene-point-1",
+      templateId: "terminal.session",
+      templateVersion: 1,
+      layer: "card",
+      order: 0,
+    });
+    const turns = JSON.parse(cue.fields.turns ?? "") as unknown[];
+    expect(turns).toHaveLength(2);
+    expect(cue.fields.effects).toBe("[]");
+  });
+});
+
 describe("defaultOffsetEndMs", () => {
   it("returns 3000ms when the scene duration is unknown", () => {
     expect(defaultOffsetEndMs(null)).toBe(3000);

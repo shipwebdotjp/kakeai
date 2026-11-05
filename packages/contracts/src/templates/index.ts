@@ -17,5 +17,6 @@ export * from "./flow";
 export * from "./stat";
 export * from "./quote";
 export * from "./chat";
+export * from "./terminal";
 export * from "./nested-refs";
 export * from "./registry";

@@ -22,6 +22,10 @@ import {
   parseChartLineNumber,
   chatThreadInputSchema,
   chatThreadV1,
+  terminalSessionInputSchema,
+  terminalSessionV1,
+  TERMINAL_CHARS_PER_LINE_GUIDELINE,
+  TERMINAL_ROWS_GUIDELINE,
   flowDiagramInputSchema,
   flowDiagramV1,
   flowCycleNodeWidth,
@@ -267,6 +271,37 @@ const ROLE_LABELS: Record<TextRole, string> = {
   label: "ラベル",
 };
 
+function terminalWarnings(
+  input: { prompt: string; turns: readonly { input: string; output?: readonly string[] }[] },
+  basePath: (string | number)[],
+  layout: OutputProfileLayout,
+): Warning[] {
+  const charsPerLine = charsPerLineFor(TERMINAL_CHARS_PER_LINE_GUIDELINE, layout);
+  const rows = input.turns.reduce((total, turn) => {
+    const prompt = input.prompt.length > 0 ? `${input.prompt} ${turn.input}` : turn.input;
+    const inputRows = estimateLineCount(prompt, charsPerLine);
+    const outputRows = (turn.output ?? []).reduce(
+      (sum, line) => sum + Math.max(1, estimateLineCount(line, charsPerLine)),
+      0,
+    );
+    return total + inputRows + outputRows;
+  }, 0);
+  const maxRows =
+    layout === OUTPUT_PROFILE_LAYOUT.portrait
+      ? TERMINAL_ROWS_GUIDELINE.portrait
+      : TERMINAL_ROWS_GUIDELINE.landscape;
+  if (rows <= maxRows) {
+    return [];
+  }
+  return [
+    {
+      path: [...basePath, "turns"],
+      code: "terminal_overflow",
+      message: `ターミナルの行数が目安（最大${maxRows}行）を超えています。ターンや出力行を減らすか、シーンを分割してください。`,
+    },
+  ];
+}
+
 function estimateLineCount(text: string, charsPerLine: number): number {
   if (text.length === 0) {
     return 0;
@@ -367,6 +402,22 @@ export function computeContentWarnings(
           warnings.push(
             ...tableWarnings(
               parsed.data.data,
+              ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
+              layout,
+            ),
+          );
+        }
+        return;
+      }
+      if (
+        cue.template.id === terminalSessionV1.id &&
+        cue.template.version === terminalSessionV1.version
+      ) {
+        const parsed = terminalSessionInputSchema.safeParse(cue.input);
+        if (parsed.success) {
+          warnings.push(
+            ...terminalWarnings(
+              parsed.data,
               ["scenes", sceneIndex, "visualCues", cueIndex, "input"],
               layout,
             ),

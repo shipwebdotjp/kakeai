@@ -1,10 +1,4 @@
-import {
-  APPEAR_PRESETS,
-  CHART_APPEAR_PRESETS,
-  CHART_LINE_APPEAR_PRESETS,
-  EMPHASIZE_STYLES,
-  TABLE_TONES,
-} from "@kakeai/contracts";
+import { EMPHASIZE_STYLES } from "@kakeai/contracts";
 import { lineOptionLabel, type LineFormValue, type SpeakerFormValue } from "../content/form";
 import type { ChartLineChoice } from "../content/chart-line";
 import {
@@ -15,11 +9,9 @@ import {
   metaTextClass,
   textFieldClass,
 } from "../ui";
-import { OnsetField } from "./OnsetField";
+import { EffectConfigField, type EffectVariant } from "./EffectConfigField";
 
 type Json = Record<string, unknown>;
-
-type EffectVariant = "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat";
 
 const EFFECT_HINTS: Record<EffectVariant, string> = {
   stat: "セリフ区間を契機に、開始値から「数値（カウント後の値）」までカウントします。",
@@ -29,6 +21,7 @@ const EFFECT_HINTS: Record<EffectVariant, string> = {
   flow: "セリフ区間を契機に、対象のノードを登場・強調します。",
   quote: "セリフ区間を契機に、引用を登場・強調します。",
   chat: "セリフ区間を契機に、対象のメッセージを登場・強調します。",
+  terminal: "セリフ区間を契機に、入力のタイプ表示と出力の表示を始めます。",
 };
 
 interface EffectsFieldProps {
@@ -40,6 +33,7 @@ interface EffectsFieldProps {
   lines: LineFormValue[];
   speakers: SpeakerFormValue[];
   messageLabels?: string[];
+  turnLabels?: string[];
   lineSeries?: ChartLineChoice[];
   lineCategories?: ChartLineChoice[];
   lineValueLabels?: boolean;
@@ -73,85 +67,13 @@ const TARGET_OPTIONS: Record<EffectVariant, readonly { value: string; label: str
     { value: "message", label: "メッセージ" },
     { value: "messages", label: "全メッセージ" },
   ],
+  terminal: [{ value: "turn", label: "ターン" }],
 };
 
 const TRIGGER_OPTIONS = [
   { value: "cue", label: "映像演出全体" },
   { value: "lines", label: "セリフ区間" },
 ] as const;
-
-const EFFECT_OPTIONS: Record<EffectVariant, readonly { value: string; label: string }[]> = {
-  table: [
-    { value: "appear", label: "登場" },
-    { value: "emphasize", label: "強調" },
-    { value: "value", label: "数値カウント" },
-  ],
-  chart: [
-    { value: "appear", label: "登場" },
-    { value: "emphasize", label: "強調" },
-    { value: "value", label: "数値カウント" },
-  ],
-  line: [
-    { value: "appear", label: "登場" },
-    { value: "emphasize", label: "強調" },
-    { value: "value", label: "数値カウント" },
-  ],
-  flow: [
-    { value: "appear", label: "登場" },
-    { value: "emphasize", label: "強調" },
-  ],
-  stat: [
-    { value: "value", label: "数値カウント" },
-    { value: "emphasize", label: "強調" },
-    { value: "appear", label: "登場" },
-  ],
-  quote: [
-    { value: "emphasize", label: "強調" },
-    { value: "appear", label: "登場" },
-  ],
-  chat: [
-    { value: "appear", label: "登場" },
-    { value: "emphasize", label: "強調" },
-  ],
-};
-
-const APPEAR_PRESET_LABELS: Record<string, string> = {
-  draw: "描画",
-  fade: "フェード",
-  "slide-up": "下から",
-  "slide-down": "上から",
-  "slide-left": "右から",
-  "slide-right": "左から",
-  "scale-in": "拡大",
-  grow: "伸ばす",
-  bounce: "弾ませる",
-};
-
-const APPEAR_PRESETS_BY_VARIANT: Record<EffectVariant, readonly string[]> = {
-  table: APPEAR_PRESETS,
-  chart: CHART_APPEAR_PRESETS,
-  line: CHART_LINE_APPEAR_PRESETS,
-  flow: APPEAR_PRESETS,
-  stat: APPEAR_PRESETS,
-  quote: APPEAR_PRESETS,
-  chat: APPEAR_PRESETS,
-};
-
-const EMPHASIZE_STYLE_LABELS: Record<string, string> = {
-  frame: "枠",
-  background: "背景",
-  spotlight: "スポットライト",
-};
-
-const TONE_LABELS: Record<string, string> = {
-  primary: "プライマリ",
-  secondary: "セカンダリ",
-  tertiary: "ターシャリ",
-  success: "成功",
-  warning: "警告",
-  error: "エラー",
-  info: "情報",
-};
 
 function parseEntries(value: string): Json[] | null {
   if (value.trim().length === 0) {
@@ -185,7 +107,12 @@ function normalizeTarget(
       ? { kind, [`${kind}Key`]: String(previous[`${kind}Key`] ?? "") }
       : { kind, index: Number(previous.index) || 0 };
   }
-  if (kind === "row" || kind === "node" || kind === "message") {
+  if (
+    kind === "row" ||
+    kind === "node" ||
+    kind === "message" ||
+    kind === "turn"
+  ) {
     return { kind, index: Number(previous.index) || 0 };
   }
   return { kind };
@@ -233,25 +160,19 @@ function fallbackLineEffect(targetKind: string): Json {
   return { kind: "emphasize", style: "frame", tone: "primary" };
 }
 
-function makeEffect(kind: string, variant?: EffectVariant): Json {
-  if (kind === "emphasize") {
-    return { kind: "emphasize", style: "frame", tone: "primary" };
-  }
-  if (kind === "value") {
-    return { kind: "value" };
-  }
-  if (variant === "line") {
-    return { kind: "appear", preset: "draw", durationMs: 600 };
-  }
-  return { kind: "appear", preset: "fade", durationMs: 400 };
-}
-
 function defaultEntry(variant: EffectVariant): Json {
   if (variant === "stat") {
     return { trigger: { kind: "cue" }, effect: { kind: "value" } };
   }
   if (variant === "quote") {
     return { trigger: { kind: "cue" }, effect: { kind: "emphasize", style: "frame", tone: "primary" } };
+  }
+  if (variant === "terminal") {
+    return {
+      target: { kind: "turn", index: 0 },
+      trigger: { kind: "cue" },
+      effect: { kind: "reveal", mode: "type" },
+    };
   }
   if (variant === "line") {
     return {
@@ -279,6 +200,7 @@ export function EffectsField({
   lines,
   speakers,
   messageLabels,
+  turnLabels,
   lineSeries = [],
   lineCategories = [],
   lineValueLabels = false,
@@ -337,8 +259,22 @@ export function EffectsField({
           targetKind === "row" ||
           targetKind === "node" ||
           targetKind === "message" ||
+          targetKind === "turn" ||
           (variant !== "line" &&
             (targetKind === "category" || targetKind === "series"));
+        let indexLabels: string[] | undefined;
+        let indexLabel = "番号";
+        if (targetKind === "message") {
+          indexLabels = messageLabels;
+          indexLabel = "メッセージ";
+        } else if (targetKind === "turn") {
+          indexLabels = turnLabels;
+          indexLabel = "ターン";
+        }
+        const configEffect =
+          variant === "terminal" && effect.kind !== "reveal"
+            ? { kind: "reveal", mode: "type" }
+            : effect;
         const isCell = targetKind === "cell";
         const isLineTarget = variant === "line";
         const lineSeriesKey = String(target.seriesKey ?? "");
@@ -392,10 +328,8 @@ export function EffectsField({
                   </label>
                   {hasIndex && (
                     <label className={formLabelClass}>
-                      {targetKind === "message" ? "メッセージ" : "番号"}
-                      {targetKind === "message" &&
-                      messageLabels !== undefined &&
-                      messageLabels.length > 0 ? (
+                      {indexLabel}
+                      {indexLabels !== undefined && indexLabels.length > 0 ? (
                         <select
                           className={textFieldClass}
                           value={String(target.index ?? 0)}
@@ -408,14 +342,14 @@ export function EffectsField({
                             })
                           }
                         >
-                          {Number(target.index ?? 0) >= messageLabels.length && (
+                          {Number(target.index ?? 0) >= indexLabels.length && (
                             <option value={String(target.index ?? 0)}>
                               {`範囲外（${Number(target.index ?? 0) + 1}）`}
                             </option>
                           )}
-                          {messageLabels.map((messageLabel, messageIndex) => (
-                            <option key={messageIndex} value={messageIndex}>
-                              {`${messageIndex + 1}. ${messageLabel}`}
+                          {indexLabels.map((optionLabel, optionIndex) => (
+                            <option key={optionIndex} value={optionIndex}>
+                              {`${optionIndex + 1}. ${optionLabel}`}
                             </option>
                           ))}
                         </select>
@@ -567,15 +501,19 @@ export function EffectsField({
                 </select>
               </label>
               {trigger.kind === "lines" && (
-                <>
+                variant === "terminal" ? (
                   <label className={formLabelClass}>
-                    開始
+                    セリフ
                     <select
                       className={textFieldClass}
                       value={String(trigger.startLineId ?? "")}
                       onChange={(event) =>
                         update(index, {
-                          trigger: { ...trigger, startLineId: event.target.value },
+                          trigger: {
+                            kind: "lines",
+                            startLineId: event.target.value,
+                            endLineId: event.target.value,
+                          },
                         })
                       }
                     >
@@ -587,199 +525,59 @@ export function EffectsField({
                       ))}
                     </select>
                   </label>
-                  <label className={formLabelClass}>
-                    終了
-                    <select
-                      className={textFieldClass}
-                      value={String(trigger.endLineId ?? "")}
-                      onChange={(event) =>
-                        update(index, {
-                          trigger: { ...trigger, endLineId: event.target.value },
-                        })
-                      }
-                    >
-                      <option value="">未選択</option>
-                      {lines.map((line, lineIndexValue) => (
-                        <option key={line.id} value={line.id}>
-                          {lineOptionLabel(lines, lineIndexValue, speakers)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </>
+                ) : (
+                  <>
+                    <label className={formLabelClass}>
+                      開始
+                      <select
+                        className={textFieldClass}
+                        value={String(trigger.startLineId ?? "")}
+                        onChange={(event) =>
+                          update(index, {
+                            trigger: { ...trigger, startLineId: event.target.value },
+                          })
+                        }
+                      >
+                        <option value="">未選択</option>
+                        {lines.map((line, lineIndexValue) => (
+                          <option key={line.id} value={line.id}>
+                            {lineOptionLabel(lines, lineIndexValue, speakers)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={formLabelClass}>
+                      終了
+                      <select
+                        className={textFieldClass}
+                        value={String(trigger.endLineId ?? "")}
+                        onChange={(event) =>
+                          update(index, {
+                            trigger: { ...trigger, endLineId: event.target.value },
+                          })
+                        }
+                      >
+                        <option value="">未選択</option>
+                        {lines.map((line, lineIndexValue) => (
+                          <option key={line.id} value={line.id}>
+                            {lineOptionLabel(lines, lineIndexValue, speakers)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )
               )}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <label className={formLabelClass}>
-                効果
-                <select
-                  className={textFieldClass}
-                  value={String(effect.kind ?? "appear")}
-                  onChange={(event) =>
-                    update(index, { effect: makeEffect(event.target.value, variant) })
-                  }
-                >
-                  {EFFECT_OPTIONS[variant].map((option) => (
-                    <option
-                      key={option.value}
-                      value={option.value}
-                      disabled={
-                        (lineAllowedEffects !== null &&
-                          !lineAllowedEffects.includes(option.value)) ||
-                        (option.value === "value" &&
-                          variant === "line" &&
-                          !lineValueLabels)
-                      }
-                    >
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {variant === "line" &&
-                lineAllowedEffects !== null &&
-                !lineAllowedEffects.includes(String(effect.kind ?? "appear")) && (
-                  <p className={errorTextClass}>
-                    この対象には選べない効果です。対象か効果を変更してください。
-                  </p>
-                )}
-              {variant === "line" && effect.kind === "value" && !lineValueLabels && (
-                <p className={errorTextClass}>
-                  数値カウントを使うには「値ラベル」をオンにしてください。
-                </p>
-              )}
-              {effect.kind === "emphasize" ? (
-                <>
-                  <label className={formLabelClass}>
-                    見た目
-                    <select
-                      className={textFieldClass}
-                      value={String(effect.style ?? "frame")}
-                      onChange={(event) =>
-                        update(index, { effect: { ...effect, style: event.target.value } })
-                      }
-                    >
-                      {emphasizeStyles.map((style) => (
-                        <option key={style} value={style}>
-                          {EMPHASIZE_STYLE_LABELS[style] ?? style}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={formLabelClass}>
-                    色
-                    <select
-                      className={textFieldClass}
-                      value={String(effect.tone ?? "primary")}
-                      onChange={(event) =>
-                        update(index, { effect: { ...effect, tone: event.target.value } })
-                      }
-                    >
-                      {TABLE_TONES.map((tone) => (
-                        <option key={tone} value={tone}>
-                          {TONE_LABELS[tone] ?? tone}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {showOnset && (
-                    <OnsetField
-                      effect={effect}
-                      onChange={(next) => update(index, { effect: next })}
-                    />
-                  )}
-                </>
-              ) : effect.kind === "value" ? (
-                <>
-                  <label className={formLabelClass}>
-                    {variant === "stat" ? "開始値（数値まで）" : "開始値"}
-                    <input
-                      type="number"
-                      className={`w-24 ${textFieldClass}`}
-                      value={effect.from === undefined ? "" : String(effect.from)}
-                      onChange={(event) => {
-                        const next = { ...effect };
-                        if (event.target.value === "") {
-                          delete next.from;
-                        } else {
-                          next.from = Number(event.target.value) || 0;
-                        }
-                        update(index, { effect: next });
-                      }}
-                    />
-                  </label>
-                  <label className={formLabelClass}>
-                    尺(ms)
-                    <input
-                      type="number"
-                      min={0}
-                      className={`w-20 ${textFieldClass}`}
-                      value={effect.durationMs === undefined ? "" : String(effect.durationMs)}
-                      onChange={(event) => {
-                        const next = { ...effect };
-                        if (event.target.value === "") {
-                          delete next.durationMs;
-                        } else {
-                          next.durationMs = Math.max(0, Math.floor(Number(event.target.value) || 0));
-                        }
-                        update(index, { effect: next });
-                      }}
-                    />
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label className={formLabelClass}>
-                    動き
-                    <select
-                      className={textFieldClass}
-                      value={String(effect.preset ?? "fade")}
-                      onChange={(event) =>
-                        update(index, { effect: { ...effect, preset: event.target.value } })
-                      }
-                    >
-                      {APPEAR_PRESETS_BY_VARIANT[variant].map((preset) => (
-                        <option key={preset} value={preset}>
-                          {APPEAR_PRESET_LABELS[preset] ?? preset}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={formLabelClass}>
-                    尺(ms)
-                    <input
-                      type="number"
-                      min={0}
-                      className={`w-20 ${textFieldClass}`}
-                      value={String(effect.durationMs ?? 400)}
-                      onChange={(event) =>
-                        update(index, {
-                          effect: { ...effect, durationMs: Number(event.target.value) || 0 },
-                        })
-                      }
-                    />
-                  </label>
-                  <label className={formLabelClass}>
-                    ずれ(ms)
-                    <input
-                      type="number"
-                      min={0}
-                      className={`w-20 ${textFieldClass}`}
-                      value={effect.staggerMs === undefined ? "" : String(effect.staggerMs)}
-                      onChange={(event) => {
-                        const next = { ...effect };
-                        if (event.target.value === "") {
-                          delete next.staggerMs;
-                        } else {
-                          next.staggerMs = Number(event.target.value) || 0;
-                        }
-                        update(index, { effect: next });
-                      }}
-                    />
-                  </label>
-                </>
-              )}
-            </div>
+            <EffectConfigField
+              effect={configEffect}
+              variant={variant}
+              lineAllowedEffects={lineAllowedEffects}
+              lineValueLabels={lineValueLabels}
+              emphasizeStyles={emphasizeStyles}
+              showOnset={showOnset}
+              onChange={(next) => update(index, { effect: next })}
+            />
           </div>
         );
       })}

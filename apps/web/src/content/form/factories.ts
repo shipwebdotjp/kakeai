@@ -281,6 +281,12 @@ function defaultCueFields(
           { name: "自分", body: "よろしくお願いします", side: "right" },
         ]);
         break;
+      case "turns":
+        fields[field.key] = JSON.stringify([
+          { input: "npm test", output: ["PASS src/example.test.ts"] },
+          { input: "git status", output: ["On branch main"] },
+        ]);
+        break;
       default:
         fields[field.key] = "";
     }

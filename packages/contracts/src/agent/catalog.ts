@@ -375,6 +375,7 @@ export const agentWarningCodes = [
   "table_cell_overflow",
   "table_columns_overflow",
   "table_rows_overflow",
+  "terminal_overflow",
   "text_overflow",
 ] as const;
 export type AgentWarningCode = (typeof agentWarningCodes)[number];

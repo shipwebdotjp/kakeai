@@ -17,6 +17,8 @@ import {
   quoteInputSchema,
   statInputSchema,
   tableSimpleInputSchema,
+  terminalSessionInputSchema,
+  terminalSessionV1,
   textBlockInputSchema,
 } from "./index";
 
@@ -875,6 +877,151 @@ describe("chat.thread@1", () => {
       ["input"],
     );
     expect(refs.map((ref) => ref.assetId)).toEqual(["asset-1", "asset-2"]);
+  });
+});
+
+describe("terminal.session@1", () => {
+  it("registers terminal.session@1 as an editable card template with turns and effects", () => {
+    const definition = getVisualTemplate("terminal.session", 1);
+    expect(definition?.layers).toEqual(["card"]);
+    expect(isEditableTemplate("terminal.session", 1)).toBe(true);
+    const fields = getTemplateInputFields("terminal.session", 1);
+    const turns = fields?.find((field) => field.kind === "turns");
+    expect(turns?.kind).toBe("turns");
+    if (turns?.kind === "turns") {
+      expect(turns.maxTurns).toBe(12);
+    }
+    const effects = fields?.find((field) => field.kind === "effects");
+    expect(effects?.kind).toBe("effects");
+    if (effects?.kind === "effects") {
+      expect(effects.variant).toBe("terminal");
+    }
+  });
+
+  it("defaults the prompt and accepts typed turns", () => {
+    const parsed = terminalSessionInputSchema.safeParse({
+      turns: [{ input: "npm test", output: ["PASS"] }],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.prompt).toBe("$");
+      expect(parsed.data.turns).toHaveLength(1);
+    }
+    expect(
+      terminalSessionInputSchema.safeParse({
+        prompt: "",
+        turns: [{ input: "pwd" }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects empty, over-long, and multi-line turns", () => {
+    expect(terminalSessionInputSchema.safeParse({ turns: [] }).success).toBe(false);
+    expect(
+      terminalSessionInputSchema.safeParse({
+        turns: Array.from({ length: 13 }, () => ({ input: "a" })),
+      }).success,
+    ).toBe(false);
+    expect(
+      terminalSessionInputSchema.safeParse({ turns: [{ input: "a\nb" }] }).success,
+    ).toBe(false);
+    expect(
+      terminalSessionInputSchema.safeParse({
+        turns: [{ input: "a", output: ["b\nc"] }],
+      }).success,
+    ).toBe(false);
+    expect(
+      terminalSessionInputSchema.safeParse({
+        title: "a\nb",
+        turns: [{ input: "a" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      terminalSessionInputSchema.safeParse({
+        prompt: "a\nb",
+        turns: [{ input: "a" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts one reveal per turn and rejects mismatched or duplicate triggers", () => {
+    const turns = [{ input: "a" }, { input: "b" }];
+    expect(
+      terminalSessionInputSchema.safeParse({
+        turns,
+        effects: [
+          {
+            target: { kind: "turn", index: 0 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: { kind: "reveal", mode: "type" },
+          },
+          {
+            target: { kind: "turn", index: 1 },
+            trigger: { kind: "cue" },
+            effect: { kind: "reveal", mode: "instant" },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      terminalSessionInputSchema.safeParse({
+        turns,
+        effects: [
+          {
+            target: { kind: "turn", index: 2 },
+            trigger: { kind: "cue" },
+            effect: { kind: "reveal" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      terminalSessionInputSchema.safeParse({
+        turns,
+        effects: [
+          {
+            target: { kind: "turn", index: 0 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l2" },
+            effect: { kind: "reveal" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      terminalSessionInputSchema.safeParse({
+        turns,
+        effects: [
+          {
+            target: { kind: "turn", index: 0 },
+            trigger: { kind: "cue" },
+            effect: { kind: "reveal" },
+          },
+          {
+            target: { kind: "turn", index: 0 },
+            trigger: { kind: "cue" },
+            effect: { kind: "reveal" },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("collects line references from reveal effects", () => {
+    const refs = terminalSessionV1.collectLineRefs?.(
+      {
+        turns: [{ input: "a" }],
+        effects: [
+          {
+            target: { kind: "turn", index: 0 },
+            trigger: { kind: "lines", startLineId: "l1", endLineId: "l1" },
+            effect: { kind: "reveal" },
+          },
+        ],
+      },
+      ["input"],
+    );
+    expect(refs?.map((ref) => ref.lineId)).toEqual(["l1", "l1"]);
+    expect(refs?.[0]?.path).toEqual(["input", "effects", 0, "trigger", "startLineId"]);
   });
 });
 

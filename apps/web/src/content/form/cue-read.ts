@@ -27,6 +27,7 @@ import {
   quoteEffectsSchema,
   statEffectsSchema,
   tableEffectsSchema,
+  terminalEffectsSchema,
   videoPlaybackSchema,
   type AnimationPreset,
   type VisualCue,
@@ -86,7 +87,7 @@ function normalizeChartEffect(entry: unknown): unknown {
 }
 
 export function effectsSchemaForVariant(
-  variant: "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat",
+  variant: "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat" | "terminal",
 ) {
   switch (variant) {
     case "chart":
@@ -101,16 +102,19 @@ export function effectsSchemaForVariant(
       return quoteEffectsSchema;
     case "chat":
       return chatEffectsSchema;
+    case "terminal":
+      return terminalEffectsSchema;
     case "table":
       return tableEffectsSchema;
   }
 }
 
 export function defaultEffectsForVariant(
-  variant: "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat",
+  variant: "table" | "chart" | "line" | "flow" | "stat" | "quote" | "chat" | "terminal",
 ): unknown[] {
   switch (variant) {
     case "chat":
+    case "terminal":
       return [];
     case "line":
       return [
@@ -349,6 +353,11 @@ function readCueFields(
         break;
       }
       case "messages": {
+        const value = getAtPath(input, field.key);
+        result[field.key] = Array.isArray(value) ? JSON.stringify(value) : "";
+        break;
+      }
+      case "turns": {
         const value = getAtPath(input, field.key);
         result[field.key] = Array.isArray(value) ? JSON.stringify(value) : "";
         break;

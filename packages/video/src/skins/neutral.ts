@@ -17,6 +17,7 @@ import {
   sceneSiteMockupV1,
   statV1,
   tableSimpleV1,
+  terminalSessionV1,
   textBlockV1,
   type VisualThemeDefinition,
 } from "@kakeai/contracts";
@@ -34,6 +35,7 @@ import { renderQuote } from "../templates/quote";
 import { renderSiteMockup } from "../templates/site-mockup";
 import { renderStat } from "../templates/stat";
 import { renderTableSimple } from "../templates/table-simple";
+import { renderTerminalSession } from "../templates/terminal-session";
 import { renderTextBlock } from "../templates/text-block";
 import { mixHex } from "../theme";
 import type { ResolvedVisualSkin, VisualSkinTemplateRenderer } from "./types";
@@ -108,6 +110,10 @@ const templateRenderers: [string, VisualSkinTemplateRenderer][] = [
   [
     `${chatThreadV1.id}@${chatThreadV1.version}`,
     (input, context) => renderChatThread(input, context),
+  ],
+  [
+    `${terminalSessionV1.id}@${terminalSessionV1.version}`,
+    (input, context) => renderTerminalSession(input, context),
   ],
   [
     `${compositionFullBleedV1.id}@${compositionFullBleedV1.version}`,

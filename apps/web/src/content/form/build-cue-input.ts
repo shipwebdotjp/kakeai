@@ -27,6 +27,7 @@ import {
   flowDiagramSchema,
   listCalloutItemsSchema,
   tableDataSchema,
+  terminalTurnsSchema,
   DEFAULT_STANDING_EDGE,
   DEFAULT_STANDING_VERTICAL,
   type AnimationPreset,
@@ -381,6 +382,29 @@ export function buildCueInput(
               ? `（${detail.path.join(".")}）`
               : "";
           throw new Error(`メッセージを正しく入力してください${where}`);
+        }
+        setAtPath(input, field.key, validated.data);
+        break;
+      }
+      case "turns": {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          throw new Error("入力と出力を1つ以上入力してください");
+        }
+        let parsedJson: unknown;
+        try {
+          parsedJson = JSON.parse(trimmed);
+        } catch {
+          throw new Error("入力と出力を正しく入力してください");
+        }
+        const validated = terminalTurnsSchema.safeParse(parsedJson);
+        if (!validated.success) {
+          const detail = validated.error.issues[0];
+          const where =
+            detail && detail.path.length > 0
+              ? `（${detail.path.join(".")}）`
+              : "";
+          throw new Error(`入力と出力を正しく入力してください${where}`);
         }
         setAtPath(input, field.key, validated.data);
         break;

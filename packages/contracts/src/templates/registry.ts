@@ -15,6 +15,7 @@ import { flowDiagramV1 } from "./flow";
 import { statV1 } from "./stat";
 import { quoteV1 } from "./quote";
 import { chatThreadV1 } from "./chat";
+import { terminalSessionV1 } from "./terminal";
 
 export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   textBlockV1,
@@ -32,6 +33,7 @@ export const visualTemplateDefinitions: readonly VisualTemplateDefinition[] = [
   statV1,
   quoteV1,
   chatThreadV1,
+  terminalSessionV1,
 ];
 
 export const visualTemplateRegistry: ReadonlyMap<string, VisualTemplateDefinition> = new Map(

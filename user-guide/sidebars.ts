@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
         'works/thumbnails',
         'works/insert-scenes',
         'works/video-gate-playback',
+        'works/terminal-template',
         'theme-customization',
         'composition-library',
       ],

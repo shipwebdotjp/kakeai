@@ -97,13 +97,18 @@ export const agentTemplateFieldSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("effects"),
     ...fieldKeyShape,
-    variant: z.enum(["table", "chart", "line", "flow", "stat", "quote", "chat"]),
+    variant: z.enum(["table", "chart", "line", "flow", "stat", "quote", "chat", "terminal"]),
   }),
   z.strictObject({ kind: z.literal("calloutItems"), ...fieldKeyShape }),
   z.strictObject({
     kind: z.literal("messages"),
     ...fieldKeyShape,
     maxMessages: positiveInt,
+  }),
+  z.strictObject({
+    kind: z.literal("turns"),
+    ...fieldKeyShape,
+    maxTurns: positiveInt,
   }),
   z.strictObject({ kind: z.literal("animation"), ...fieldKeyShape }),
 ]);

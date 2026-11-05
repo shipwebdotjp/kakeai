@@ -180,6 +180,13 @@ function toTemplateField(field: TemplateFieldSpec): AgentTemplateField {
         label: field.label,
         maxMessages: field.maxMessages,
       };
+    case "turns":
+      return {
+        kind: field.kind,
+        key: field.key,
+        label: field.label,
+        maxTurns: field.maxTurns,
+      };
   }
 }
 
