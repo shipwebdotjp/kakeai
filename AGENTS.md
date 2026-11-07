@@ -38,6 +38,7 @@ npm run live -- --package <dir>  # ライブアプリ（ステージ/コンソ�
 
 - `packages/contracts`: Zodスキーマと型の唯一の定義場所。API・フォーム・復元・検証・編集操作はここから導出した型だけを使う。
 - `packages/script-edits`: 台本編集の共有操作コア。Web UI・API・エージェント束縛は同じ操作を呼ぶ。
+- `packages/tts`: TTSアダプタの共有実装。`apps/api` と `apps/live` が使う。
 - `packages/video`: Compositionコンパイラと信頼済みVisualTemplate（P4で追加）。
 - `apps/api`: Express + Prisma。workerループを内蔵し、単一プロセスで起動する（P1以降）。
 - `apps/mcp`: MCP stdio サーバー。`@kakeai/agent-client` でローカル制御ソケットへ接続する薄い束縛。

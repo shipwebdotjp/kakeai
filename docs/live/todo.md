@@ -94,7 +94,7 @@
 
 ## P3. プレイアウトとステージ描画
 
-- [ ] TTSアダプタ実装を `packages/tts` へ切り出し、`apps/api` と `apps/live` から使えるようにする。既存のTTS Jobの挙動を変えない。
+- [x] TTSアダプタ実装を `packages/tts` へ切り出し、`apps/api` と `apps/live` から使えるようにする。既存のTTS Jobの挙動を変えない。
 - [ ] プレイアウト: キュー状態（draft/preparing/ready/playing/done/skipped/failed）、`attempt`/`sequence`、先読み、`minBufferMs`、`maxThinkingMs`、退避キュー、`audio_ended`、ウォッチドッグ、音声エラー時のスキップ、一時停止・再開・停止フェード。
 - [ ] ステージ: programだけが`<audio>`を再生する。previewはミュート・イベント非送信。次キュー音声のプリロード、`stage_ready`、`audio_ended`、`audio_error`、再接続時のシーク/再開。
 - [ ] キャラクター描画: 外観画像、顔レイヤー、表情プリセット、瞬き、口パク、話者バウンド、左右の立ち位置。

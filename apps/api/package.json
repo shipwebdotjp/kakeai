@@ -17,6 +17,7 @@
     "@hyperframes/engine": "^0.8.143",
     "@hyperframes/producer": "^0.8.143",
     "@kakeai/contracts": "*",
+    "@kakeai/tts": "*",
     "@kakeai/video": "*",
     "@prisma/adapter-better-sqlite3": "7.10.0",
     "@prisma/client": "7.10.0",

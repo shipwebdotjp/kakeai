@@ -2,6 +2,11 @@ import type { TtsVoice, VoiceAdapterId, VoiceProfileExtras } from "./voice-profi
 
 export interface TtsAdapterContext {
   readonly baseUrl: string;
+  /**
+   * OpenAI互換アダプタが `Authorization: Bearer <key>` を送るための任意のAPIキー。
+   * 未指定時は従来どおり認証ヘッダを付けない。
+   */
+  readonly apiKey?: string;
 }
 
 export interface TtsSynthesisRequest {

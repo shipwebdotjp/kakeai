@@ -6,10 +6,12 @@ import { TtsEngineUnavailableError, TtsInputRejectedError } from "./errors.ts";
 let server: Server;
 let baseUrl: string;
 let lastSpeechBody: Record<string, unknown> | null = null;
+let lastAuthorization: string | null = null;
 let speechMode: "ok" | "reject" | "fail" = "ok";
 const wavBytes = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00]);
 
 function handle(req: IncomingMessage, res: ServerResponse): void {
+  lastAuthorization = req.headers.authorization ?? null;
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   if (req.method === "GET" && url.pathname === "/v1/models") {
     res.setHeader("Content-Type", "application/json");
@@ -96,6 +98,28 @@ describe("openai-compatible adapter", () => {
     await expect(
       adapter.listVoices({ baseUrl: "http://127.0.0.1:1" }, { settings: { model: "kokoro" } }),
     ).rejects.toBeInstanceOf(TtsEngineUnavailableError);
+  });
+
+  it("sends the configured api key as a bearer token", async () => {
+    speechMode = "ok";
+    const context = { baseUrl, apiKey: "secret" };
+    await adapter.listModels!(context);
+    expect(lastAuthorization).toBe("Bearer secret");
+    await adapter.listVoices(context, { settings: { model: "kokoro" } });
+    expect(lastAuthorization).toBe("Bearer secret");
+    await adapter.synthesize(context, {
+      text: "Hello",
+      voiceId: "af_heart",
+      speedScale: 1,
+      settings: { model: "kokoro" },
+    });
+    expect(lastAuthorization).toBe("Bearer secret");
+  });
+
+  it("does not send authorization without an api key", async () => {
+    speechMode = "ok";
+    await adapter.listModels!({ baseUrl });
+    expect(lastAuthorization).toBeNull();
   });
 
   it("synthesizes wav through /v1/audio/speech", async () => {

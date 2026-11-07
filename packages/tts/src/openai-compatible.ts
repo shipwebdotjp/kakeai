@@ -40,8 +40,21 @@ function isEngineUnavailableStatus(status: number): boolean {
   return status >= 500 || status === 401 || status === 403 || status === 429;
 }
 
-async function fetchModels(baseUrl: string): Promise<string[]> {
-  const response = await request(`${baseUrl}/v1/models`, { method: "GET" });
+function authHeaders(
+  context: TtsAdapterContext,
+  headers?: Record<string, string>,
+): Record<string, string> | undefined {
+  if (context.apiKey === undefined) {
+    return headers;
+  }
+  return { ...headers, Authorization: `Bearer ${context.apiKey}` };
+}
+
+async function fetchModels(context: TtsAdapterContext): Promise<string[]> {
+  const response = await request(`${context.baseUrl}/v1/models`, {
+    method: "GET",
+    headers: authHeaders(context),
+  });
   if (isEngineUnavailableStatus(response.status)) {
     throw new TtsEngineUnavailableError();
   }
@@ -74,10 +87,13 @@ async function fetchModels(baseUrl: string): Promise<string[]> {
   return models;
 }
 
-async function fetchVoices(baseUrl: string, model: string): Promise<TtsVoice[]> {
-  const url = new URL(`${baseUrl}/v1/audio/voices`);
+async function fetchVoices(context: TtsAdapterContext, model: string): Promise<TtsVoice[]> {
+  const url = new URL(`${context.baseUrl}/v1/audio/voices`);
   url.searchParams.set("model", model);
-  const response = await request(url.toString(), { method: "GET" });
+  const response = await request(url.toString(), {
+    method: "GET",
+    headers: authHeaders(context),
+  });
   if (isEngineUnavailableStatus(response.status)) {
     throw new TtsEngineUnavailableError();
   }
@@ -117,12 +133,12 @@ export function createOpenAiCompatibleAdapter(id: VoiceAdapterId): TtsAdapter {
 
     async listVoices(context: TtsAdapterContext, query: TtsVoiceQuery): Promise<TtsVoiceListing> {
       const model = readModel(query.settings);
-      const voices = model === null ? [] : await fetchVoices(context.baseUrl, model);
+      const voices = model === null ? [] : await fetchVoices(context, model);
       return { voices, engineVersion: null };
     },
 
     async listModels(context: TtsAdapterContext): Promise<string[]> {
-      return fetchModels(context.baseUrl);
+      return fetchModels(context);
     },
 
     async synthesize(
@@ -177,7 +193,7 @@ export function createOpenAiCompatibleAdapter(id: VoiceAdapterId): TtsAdapter {
         `${context.baseUrl}/v1/audio/speech`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(context, { "Content-Type": "application/json" }),
           body: JSON.stringify(body),
         },
         SYNTHESIS_TIMEOUT_MS,
