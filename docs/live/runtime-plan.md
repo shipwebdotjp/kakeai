@@ -43,7 +43,8 @@ apps/live/
 
 - `LiveController` が唯一の状態所有者。フェーズ、セグメント、キュー、再生試行、リース、コメントコーナーを持つ。
 - ステージは`StageState`を描画し、programだけが音声を再生する。
-- `attempt`は再生試行ごとに増やし、`sequence`はサーバが送る再生指示ごとに増やす。サーバは現在の`cueId`・`attempt`・`sequence`に一致しない`audio_ended`/`audio_error`を無視する。
+- `attempt`は再生試行ごとに増やし、`sequence`はサーバが送る再生指示ごとに増やす。`StagePlayback`に`sequence`を含め、ステージは受け取った値をそのまま`audio_ended`/`audio_error`に返す。サーバは現在の`cueId`・`attempt`・`sequence`に完全一致しないイベントを無視する。
+- プレイアウトはタイマーではなくprogramステージの音声イベントで進む。タイマーは`attempt`単位のウォッチドッグと`maxThinkingMs`の待機にだけ使う。
 - ウォッチドッグは`attempt`単位で、音声尺＋余裕で動く。古い試行のタイムアウトは現在の状態を進めない。
 
 ## フェーズと進行

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idSchema, positiveInt, timestampSchema } from "../content/primitives";
+import { idSchema, nonNegativeInt, positiveInt, timestampSchema } from "../content/primitives";
 import { livePackageRelativePathSchema } from "./paths";
 import { liveSegmentKindSchema } from "./profile";
 import { runLogEventSchema } from "./run-log";
@@ -56,6 +56,8 @@ export const consoleSnapshotSchema = z.strictObject({
   stages: z.array(liveStageConnectionSchema),
   queue: z.array(liveCueSchema),
   currentCueId: idSchema.nullable(),
+  /** Index in the flattened queue, or null when there is no current cue. Optional for older servers. */
+  queuePosition: nonNegativeInt.nullable().optional(),
   playback: stagePlaybackSchema.nullable(),
   status: stageStatusSchema,
   clock: stageClockSchema,
@@ -132,6 +134,7 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("resume") }),
   z.strictObject({ kind: z.literal("stop") }),
   z.strictObject({ kind: z.literal("safe_mode") }),
+  z.strictObject({ kind: z.literal("skip_cue") }),
   z.strictObject({ kind: z.literal("takeover_program"), sessionId: idSchema }),
 ]);
 export type LiveCommand = z.infer<typeof liveCommandSchema>;

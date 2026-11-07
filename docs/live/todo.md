@@ -95,13 +95,15 @@
 ## P3. プレイアウトとステージ描画
 
 - [x] TTSアダプタ実装を `packages/tts` へ切り出し、`apps/api` と `apps/live` から使えるようにする。既存のTTS Jobの挙動を変えない。
-- [ ] プレイアウト: キュー状態（draft/preparing/ready/playing/done/skipped/failed）、`attempt`/`sequence`、先読み、`minBufferMs`、`maxThinkingMs`、退避キュー、`audio_ended`、ウォッチドッグ、音声エラー時のスキップ、一時停止・再開・停止フェード。
+- [x] プレイアウト: キュー状態（draft/preparing/ready/playing/done/skipped/failed）、`attempt`/`sequence`、先読み、`minBufferMs`、`maxThinkingMs`、退避キュー、`audio_ended`、ウォッチドッグ、音声エラー時のスキップ、一時停止・再開・停止フェード。サーバ側は完了（音声のフェードアウトはステージ側）。
 - [ ] ステージ: programだけが`<audio>`を再生する。previewはミュート・イベント非送信。次キュー音声のプリロード、`stage_ready`、`audio_ended`、`audio_error`、再接続時のシーク/再開。
 - [ ] キャラクター描画: 外観画像、顔レイヤー、表情プリセット、瞬き、口パク、話者バウンド、左右の立ち位置。
 - [ ] 字幕: テーマのcaptionロール、話者名タブ、折返し、最大行数、フェード。
 - [ ] 素材カード: `img`/`video`/スクリプトなしsandbox iframeで静止PNG・無音MP4・静的HTMLを中央スロットに縮小、読み込み失敗時の非表示、フォーカス状態。無音を検証する。
 - [ ] セグメントラベル、`idle`/`thinking`/`speaking`の状態表現と`paused`フェーズ。
 - [ ] 状態遷移表の実装: `stop`/`pause`/`safe_mode`/`end`/`closingReserveMs`/`pin_overflow`。
+  - [x] `stop`/`pause`/`safe_mode`/`end`/`closingReserveMs` をサーバ側に実装する。
+  - [ ] `pin_overflow` をP4のピン選択と合わせて実装する。
 - [ ] コンソール: 現在のキュー、キュー一覧、スキップ、一時停止、停止、安全モード、program/previewプレビュー。
 - [ ] テスト: キューの進行、`audio_ended`の重複・古い`attempt`の無視、タイムアウト、バッファ不足時の退避、音声エラー、停止フェード、再接続、状態遷移、previewのミュート。
 - 完了条件: 10分版の準備済みキューが音声途切れなく流れ、キャラクター・字幕・素材カードが切り替わる。手動で停止・再開できる。

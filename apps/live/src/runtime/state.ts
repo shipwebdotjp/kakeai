@@ -20,6 +20,7 @@ export interface StageStateInput {
   segment: { id: string; label: string } | null;
   cue: LiveCue | null;
   attempt: number;
+  sequence: number | null;
   cueStartedAt: Date | null;
   material: MaterialCard | null;
   comment: StageCommentState | null;
@@ -59,26 +60,28 @@ function characterState(
   characters: LiveCharacterSheet,
   side: "left" | "right",
   cue: LiveCue | null,
+  speaking: boolean,
 ) {
   const character = characters.characters.find((entry) => entry.side === side);
   if (character === undefined) {
     return null;
   }
-  const speaking = cue !== null && cue.speaker === side;
-  // P2 draws placeholder characters, so both sides use the required neutral
-  // expression. P3 resolves per-cue expression presets from characters.json.
+  // The speaking side uses the cue's preset; the listener keeps the neutral
+  // expression. Character art rendering is handled by the stage.
+  const isSpeaker = speaking && cue !== null && cue.speaker === side;
   return {
-    expression: "normal",
-    speaking,
+    expression: isSpeaker && cue !== null ? cue.expression : "normal",
+    speaking: isSpeaker,
   };
 }
 
 /**
- * Builds the P2 stage state. Character art is placeholder-only for now; the
+ * Builds the stage state. Character art is placeholder-only for now; the
  * expression and speaking flags already match the contract that P3 will draw.
  */
 export function buildStageState(input: StageStateInput): StageState {
   const { cue } = input;
+  const isSpeaking = input.status === "speaking";
   return {
     phase: input.phase,
     show: {
@@ -87,8 +90,8 @@ export function buildStageState(input: StageStateInput): StageState {
     },
     segment: input.segment,
     characters: {
-      left: characterState(input.characters, "left", cue),
-      right: characterState(input.characters, "right", cue),
+      left: characterState(input.characters, "left", cue, isSpeaking),
+      right: characterState(input.characters, "right", cue, isSpeaking),
     },
     caption: cue === null ? null : { speaker: cue.speaker, text: cue.caption },
     material:
@@ -98,11 +101,15 @@ export function buildStageState(input: StageStateInput): StageState {
     comment: input.comment,
     status: input.status,
     playback:
-      cue === null || cue.audio === null || input.cueStartedAt === null
+      cue === null ||
+      cue.audio === null ||
+      input.cueStartedAt === null ||
+      input.sequence === null
         ? null
         : {
             cueId: cue.id,
             attempt: input.attempt,
+            sequence: input.sequence,
             startedAt: input.cueStartedAt.toISOString(),
             audioUrl: cue.audio,
           },
@@ -118,6 +125,7 @@ export function buildConsoleSnapshot(input: {
   stages: LiveStageConnection[];
   queue: LiveCue[];
   currentCueId: string | null;
+  queuePosition: number | null;
   playback: StageState["playback"];
   status: StageStatus;
   clock: StageClock;
@@ -130,6 +138,7 @@ export function buildConsoleSnapshot(input: {
     stages: input.stages,
     queue: input.queue,
     currentCueId: input.currentCueId,
+    queuePosition: input.queuePosition,
     playback: input.playback,
     status: input.status,
     clock: input.clock,

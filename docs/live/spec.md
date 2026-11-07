@@ -415,6 +415,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
   "playback": {
     "cueId": "cue-news-1-1",
     "attempt": 1,
+    "sequence": 1,
     "startedAt": "2026-11-07T12:00:00.000Z",
     "audioUrl": "audio/prepared/cue-news-1-1.wav"
   },
@@ -438,7 +439,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 - `audio_error`: 音声の読み込み・再生失敗。
 - `stage_heartbeat`: 接続維持と状態同期。
 
-各イベントは`runId`・`sessionId`・`cueId`・`attempt`・`sequence`を持ち、programステージだけが送る。サーバは古い`attempt`/`sequence`を無視する。previewはイベントを送らない。
+各イベントは`runId`・`sessionId`・`cueId`・`attempt`・`sequence`を持ち、programステージだけが送る。サーバは現在の`cueId`・`attempt`・`sequence`に一致しないイベントを無視する。previewはイベントを送らない。
 
 サーバはステージの接続時に最新の`StageState`を送る。ステージが再接続した場合は、現在のキューと再生位置を送り、可能ならシークして再開する。再開できない場合は現在のキューを先頭から再生し、二重再生を避ける。
 
@@ -465,7 +466,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 - programステージは1つだけリースを保持する。OBSに出すステージがprogramであり、音声を再生できるのはprogramだけとする。
 - コンソールのプレビューは`role: "preview"`で接続し、ミュート・イベント非送信とする。プレビューから`audio_ended`を送らない。
 - `StageState.playback`は、`cueId`・`attempt`・`startedAt`・`audioUrl`を持つ。
-- `StageEvent`は、`runId`・`sessionId`・`cueId`・`attempt`・`sequence`・イベント種別を持つ。サーバは現在の`attempt`と`sequence`より古いイベントを無視する。
+- `StageEvent`は、`runId`・`sessionId`・`cueId`・`attempt`・`sequence`・イベント種別を持つ。サーバは現在の`cueId`・`attempt`・`sequence`に一致しないイベントを無視する。
 - ウォッチドッグは`attempt`単位で動かす。古い試行のタイムアウトで現在のキューを進めない。
 - programステージが切断した場合、リースは`expiresAt`までに失効する。オペレーターはコンソールから明示的にprogramを引き継ぐ。自動で別のステージをprogramに昇格しない。
 - 再接続したprogramステージには、サーバが現在のキューと再生位置を送る。再開できなければ同じ`attempt`の先頭から再生し、古いイベントは無視する。

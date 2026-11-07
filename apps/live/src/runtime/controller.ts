@@ -4,23 +4,35 @@ import type {
   LiveCommand,
   LiveCue,
   LivePackageShow,
+  LivePreloadCue,
   LiveSegment,
   LiveStageConnection,
   LiveNoticeLevel,
   RunLogEvent,
+  StageClock,
   StageEvent,
   StageLease,
   StagePhase,
   StageState,
 } from "@kakeai/contracts";
 import type { RunLogEventInput, RunStore } from "../runs/run-store.ts";
+import type { SegmentBufferEstimate } from "./buffer.ts";
+import { CueControl, type LiveCuePatch } from "./control-queue.ts";
 import { StageLeaseManager } from "./lease.ts";
-import { Playout, type PlayoutEvent } from "./playout.ts";
+import { Playout, type PlayoutEvent, type PlayoutScheduler } from "./playout.ts";
+import { dispatchPlayoutEvent } from "./playout-events.ts";
+import { CueQueueStore } from "./queue.ts";
+import { ACTIVE_PHASES } from "./segments.ts";
+import { Spine } from "./spine.ts";
+import { handleProgramStageEvent } from "./stage-events.ts";
 import { buildConsoleSnapshot, buildShowMeta, buildStageState, computeClock } from "./state.ts";
+
+export type { LiveCuePatch } from "./control-queue.ts";
 
 export type LiveControllerChange =
   | { type: "state"; state: StageState }
   | { type: "snapshot"; snapshot: ConsoleSnapshot }
+  | { type: "preload"; cues: LivePreloadCue[] }
   | { type: "event"; event: RunLogEvent }
   | { type: "notice"; level: LiveNoticeLevel; message: string };
 
@@ -33,22 +45,13 @@ export interface LiveControllerOptions {
   runStore?: RunStore;
   now?: () => Date;
   leaseTtlMs?: number;
+  playoutScheduler?: PlayoutScheduler;
 }
 
-const ACTIVE_PHASES: ReadonlySet<StagePhase> = new Set([
-  "opening",
-  "script",
-  "material",
-  "comment",
-  "closing",
-  "safe_mode",
-]);
-
 /**
- * Single owner of live state. Stages only render `StageState` and (in P3)
- * report audio events; every phase and cue transition happens here. Playout
- * timing is isolated in `Playout` so P3 can switch from timers to
- * `audio_ended` without rewriting phase logic.
+ * Single owner of live state. Stages only render `StageState` and report audio
+ * events; every phase, segment and cue transition happens here. Playout is
+ * event-driven: a timer is only a watchdog or the bounded "thinking" poll.
  */
 export class LiveController {
   readonly runId: string;
@@ -59,16 +62,17 @@ export class LiveController {
   private readonly leases: StageLeaseManager;
   private readonly listeners = new Set<(change: LiveControllerChange) => void>();
   private readonly playout: Playout;
-  private readonly segmentQueues = new Map<string, LiveCue[]>();
+  private readonly queues: CueQueueStore;
+  private readonly cueControl: CueControl;
+  private readonly spine: Spine;
   private readonly materialById = new Map<string, LivePackageShow["materials"][number]>();
-  private readonly flatQueue: LiveCue[] = [];
   private phase: StagePhase = "pre_show";
   private phaseBeforePause: StagePhase | null = null;
   private currentSegmentIndex: number | null = null;
   private showStartedAtMs: number | null = null;
+  private finalClock: StageClock | null = null;
   private endRequested = false;
   private safeMode = false;
-  private lastStageSequence = -1;
   private finished = false;
 
   constructor(options: LiveControllerOptions) {
@@ -86,34 +90,48 @@ export class LiveController {
         );
       },
     });
-    this.playout = new Playout((event) => this.handlePlayoutEvent(event));
-    this.buildQueues();
+    this.queues = new CueQueueStore(this.show);
+    this.playout = new Playout({
+      maxThinkingMs: this.show.playout.maxThinkingMs,
+      minBufferMs: this.show.playout.minBufferMs,
+      emit: (event) => this.handlePlayoutEvent(event),
+      followingCues: () => this.queues.afterSegment(this.currentSegmentIndex),
+      ...(options.playoutScheduler === undefined
+        ? {}
+        : { scheduler: options.playoutScheduler }),
+    });
+    this.cueControl = new CueControl({
+      show: this.show,
+      queues: this.queues,
+      playout: this.playout,
+      phase: () => this.phase,
+      currentSegmentIndex: () => this.currentSegmentIndex,
+      log: (input) => this.log(input),
+      publish: () => this.publish(),
+      publishPreload: () => this.publishPreload(),
+    });
+    this.spine = new Spine({
+      show: this.show,
+      queues: this.queues,
+      playout: this.playout,
+      phase: () => this.phase,
+      currentSegmentIndex: () => this.currentSegmentIndex,
+      currentSegment: () => this.segment(),
+      setCurrentSegmentIndex: (index) => {
+        this.currentSegmentIndex = index;
+      },
+      setPhase: (phase) => this.setPhase(phase),
+      isSafeMode: () => this.safeMode,
+      isEndRequested: () => this.endRequested,
+      clearEndRequested: () => {
+        this.endRequested = false;
+      },
+      remainingMs: () => this.remainingMs(),
+      hasMaterial: (segment) => this.segmentMaterial(segment) !== null,
+      enterPostShow: () => this.enterPostShow(),
+    });
     for (const material of this.show.materials) {
       this.materialById.set(material.id, material);
-    }
-  }
-
-  private buildQueues(): void {
-    const cueById = new Map(this.show.cues.map((cue) => [cue.id, cue]));
-    for (const segment of this.show.segments) {
-      if (!("cues" in segment)) {
-        continue;
-      }
-      const cues: LiveCue[] = [];
-      for (const cueId of segment.cues) {
-        const prepared = cueById.get(cueId);
-        if (prepared === undefined) {
-          continue;
-        }
-        cues.push({
-          ...prepared,
-          source: "prepared",
-          status: "ready",
-          commentId: null,
-        });
-      }
-      this.segmentQueues.set(segment.id, cues);
-      this.flatQueue.push(...cues);
     }
   }
 
@@ -137,6 +155,10 @@ export class LiveController {
 
   private publishSnapshot(): void {
     this.emit({ type: "snapshot", snapshot: this.getSnapshot() });
+  }
+
+  private publishPreload(): void {
+    this.emit({ type: "preload", cues: this.playout.getPreloadCues() });
   }
 
   private notice(level: LiveNoticeLevel, message: string): void {
@@ -167,21 +189,6 @@ export class LiveController {
     return this.show.segments[this.currentSegmentIndex] ?? null;
   }
 
-  private segmentPhase(segment: LiveSegment): StagePhase {
-    switch (segment.kind) {
-      case "opening":
-      case "closing":
-      case "comment":
-        return segment.kind;
-      case "script":
-        return this.segmentMaterial(segment)?.focus === true ? "material" : "script";
-      default: {
-        const exhaustive: never = segment;
-        throw new Error(`Unsupported live segment kind: ${JSON.stringify(exhaustive)}`);
-      }
-    }
-  }
-
   private segmentMaterial(segment: LiveSegment) {
     if (segment.material === undefined) {
       return null;
@@ -193,13 +200,32 @@ export class LiveController {
     return segment === null ? null : { id: segment.id, label: segment.label };
   }
 
+  private remainingMs(): number {
+    return computeClock(this.show, this.showStartedAtMs, this.now().getTime()).remainingMs;
+  }
+
   private stageStatus(): "idle" | "thinking" | "speaking" {
+    if (
+      this.phase === "paused" ||
+      this.phase === "pre_show" ||
+      this.phase === "post_show" ||
+      this.phase === "error"
+    ) {
+      return "idle";
+    }
+    if (this.playout.isThinking) {
+      return "thinking";
+    }
     const cue = this.playout.current;
-    return cue === null || cue.audio === null ? "idle" : "speaking";
+    return cue !== null && cue.audio !== null && this.playout.currentStartedAt !== null
+      ? "speaking"
+      : "idle";
   }
 
   getState(): StageState {
     const segment = this.segment();
+    const clock =
+      this.finalClock ?? computeClock(this.show, this.showStartedAtMs, this.now().getTime());
     return buildStageState({
       show: this.show,
       characters: this.characters,
@@ -207,25 +233,31 @@ export class LiveController {
       segment: this.segmentLabel(segment),
       cue: this.playout.current,
       attempt: this.playout.currentAttempt,
+      sequence: this.playout.currentSequenceValue,
       cueStartedAt: this.playout.currentStartedAt,
       material: segment === null ? null : this.segmentMaterial(segment),
       comment: null,
       status: this.stageStatus(),
-      clock: computeClock(this.show, this.showStartedAtMs, this.now().getTime()),
+      clock,
     });
   }
 
   getSnapshot(): ConsoleSnapshot {
     const segment = this.segment();
     const state = this.getState();
+    const queue = this.queues.flatten().map((cue) => ({ ...cue }));
+    const currentCueId =
+      state.playback?.cueId ?? (this.playout.isThinking ? this.playout.current?.id ?? null : null);
+    const found = currentCueId === null ? -1 : queue.findIndex((cue) => cue.id === currentCueId);
     return buildConsoleSnapshot({
       runId: this.runId,
       show: this.show,
       phase: this.phase,
       segment: this.segmentLabel(segment),
       stages: this.leases.list(),
-      queue: this.flatQueue.map((cue) => ({ ...cue })),
-      currentCueId: this.playout.current?.id ?? null,
+      queue,
+      currentCueId,
+      queuePosition: found < 0 ? null : found,
       playback: state.playback,
       status: state.status,
       clock: state.clock,
@@ -238,6 +270,14 @@ export class LiveController {
 
   getStageConnections(): LiveStageConnection[] {
     return this.leases.list();
+  }
+
+  getPreloadCues(): LivePreloadCue[] {
+    return this.cueControl.getPreloadCues();
+  }
+
+  getBufferEstimate(): SegmentBufferEstimate {
+    return this.cueControl.getBufferEstimate();
   }
 
   connectStage(sessionId: string): { lease: StageLease; state: StageState } {
@@ -259,7 +299,7 @@ export class LiveController {
   }
 
   private handleProgramLeaseLost(message: string): void {
-    if (!ACTIVE_PHASES.has(this.phase) || this.playout.current === null) {
+    if (!ACTIVE_PHASES.has(this.phase)) {
       this.publishSnapshot();
       return;
     }
@@ -284,6 +324,8 @@ export class LiveController {
         return this.stop();
       case "safe_mode":
         return this.enterSafeMode();
+      case "skip_cue":
+        return this.skipCue();
       case "takeover_program":
         return this.takeover(command.sessionId);
       default: {
@@ -306,14 +348,22 @@ export class LiveController {
       return this.reject("開始できるのは pre_show のときだけです。");
     }
     this.showStartedAtMs = this.now().getTime();
+    this.finalClock = null;
     this.endRequested = false;
     this.enterSegment(0);
     return { ok: true };
   }
 
   private end(): CommandResult {
-    if (this.phase === "post_show" || this.phase === "pre_show") {
+    if (this.phase === "post_show" || this.phase === "pre_show" || this.phase === "error") {
       return this.reject("終了できる状態ではありません。");
+    }
+    if (this.showStartedAtMs === null) {
+      return this.reject("まだ開始していません。");
+    }
+    if (this.segment()?.kind === "closing") {
+      this.enterPostShow();
+      return { ok: true };
     }
     if (this.phase === "paused") {
       this.endRequested = false;
@@ -326,7 +376,7 @@ export class LiveController {
   }
 
   private pause(): CommandResult {
-    if (!ACTIVE_PHASES.has(this.phase)) {
+    if (!ACTIVE_PHASES.has(this.phase) || this.showStartedAtMs === null) {
       return this.reject("一時停止できる状態ではありません。");
     }
     this.phaseBeforePause = this.phase;
@@ -340,37 +390,92 @@ export class LiveController {
     if (this.phase !== "paused") {
       return this.reject("再開できる状態ではありません。");
     }
-    const resumePhase = this.phaseBeforePause ?? "script";
+    const resumePhase = this.safeMode ? "safe_mode" : (this.phaseBeforePause ?? "script");
     this.setPhase(resumePhase);
     this.playout.resume();
-    this.log({ type: "resumed", ...(this.playout.current === null ? {} : { cueId: this.playout.current.id }) });
+    this.log({
+      type: "resumed",
+      ...(this.playout.current === null ? {} : { cueId: this.playout.current.id }),
+    });
     this.publish();
     return { ok: true };
   }
 
   private stop(): CommandResult {
-    if (this.phase === "post_show") {
+    if (
+      this.phase === "pre_show" ||
+      this.phase === "post_show" ||
+      this.phase === "error" ||
+      this.showStartedAtMs === null
+    ) {
       return this.reject("停止できる状態ではありません。");
     }
+    const currentCueId = this.playout.current?.id ?? null;
     if (this.phase !== "paused") {
       this.phaseBeforePause = this.phase;
     }
     this.setPhase("paused");
     this.playout.stop();
-    this.log({ type: "stopped", ...(this.playout.current === null ? {} : { cueId: this.playout.current.id }) });
+    const removed = [
+      ...this.playout.discardGeneratedCues({ continuePlaying: false }),
+      ...this.queues.removeWhere(
+        (cue) => cue.source === "generated" || cue.source === "manual",
+      ),
+    ];
+    for (const cue of removed) {
+      this.log({ type: "cue_deleted", cueId: cue.id, data: { reason: "stop" } });
+    }
+    this.log({
+      type: "stopped",
+      ...(currentCueId === null ? {} : { cueId: currentCueId }),
+    });
+    this.publishPreload();
     this.publish();
     return { ok: true };
   }
 
   private enterSafeMode(): CommandResult {
-    if (this.phase === "paused" || this.phase === "post_show" || this.phase === "safe_mode") {
+    if (this.phase === "post_show" || this.phase === "error" || this.phase === "safe_mode") {
       return this.reject("安全モードへ移行できる状態ではありません。");
     }
     // v1 has no exit command: once the operator enters safe mode, prepared
     // cues continue safely until the show ends.
     this.safeMode = true;
-    this.setPhase("safe_mode");
-    this.log({ type: "safe_mode", ...(this.playout.current === null ? {} : { cueId: this.playout.current.id }) });
+    this.log({
+      type: "safe_mode",
+      ...(this.playout.current === null ? {} : { cueId: this.playout.current.id }),
+    });
+    const paused = this.phase === "paused";
+    if (paused) {
+      this.playout.stop();
+    } else {
+      this.setPhase("safe_mode");
+    }
+    const removed = [
+      ...this.playout.discardGeneratedCues({ continuePlaying: !paused }),
+      ...this.queues.removeWhere(
+        (cue) => cue.source === "generated" || cue.source === "manual",
+      ),
+    ];
+    for (const cue of removed) {
+      this.log({ type: "cue_deleted", cueId: cue.id, data: { reason: "safe_mode" } });
+    }
+    this.publishPreload();
+    this.publish();
+    return { ok: true };
+  }
+
+  private skipCue(): CommandResult {
+    if (this.phase === "pre_show" || this.phase === "post_show" || this.phase === "error") {
+      return this.reject("スキップできる状態ではありません。");
+    }
+    if (this.playout.current === null) {
+      return this.reject("スキップするキューがありません。");
+    }
+    if (!this.playout.skipCurrent()) {
+      return this.reject("スキップできませんでした。");
+    }
+    this.publishPreload();
     this.publish();
     return { ok: true };
   }
@@ -386,140 +491,75 @@ export class LiveController {
   }
 
   handleStageEvent(sessionId: string, event: StageEvent): void {
-    if (this.leases.roleOf(sessionId) !== "program") {
-      return;
-    }
-    if (event.runId !== this.runId || event.sessionId !== sessionId) {
-      return;
-    }
-    if (event.kind === "stage_heartbeat") {
-      this.leases.touch(sessionId);
-      return;
-    }
-    if (event.kind === "stage_ready") {
-      return;
-    }
-    // Any valid event from the program proves the stage is alive.
-    this.leases.touch(sessionId);
-    if (this.phase === "paused" || this.phase === "pre_show" || this.phase === "post_show") {
-      return;
-    }
-    const cue = this.playout.current;
-    if (cue === null || event.cueId !== cue.id || event.attempt !== this.playout.currentAttempt) {
-      return;
-    }
-    if (event.sequence <= this.lastStageSequence) {
-      return;
-    }
-    this.lastStageSequence = event.sequence;
-    if (event.kind === "audio_error") {
-      // P2 has no retry/watchdog policy yet: an audio failure fails the cue
-      // forward so the spine keeps moving. P3 adds retry/backoff here.
-      cue.status = "failed";
-      const message = event.error ?? `音声の再生に失敗しました: ${cue.id}`;
-      this.log({ type: "error", cueId: cue.id, data: { message } });
-      this.runStore?.appendError(message);
-      this.notice("error", message);
-    }
-    this.playout.advance();
+    handleProgramStageEvent(
+      {
+        runId: this.runId,
+        leases: this.leases,
+        playout: this.playout,
+        logIgnored: (ignored, reason) => this.logIgnoredStageEvent(ignored, reason),
+      },
+      sessionId,
+      event,
+    );
+  }
+
+  private logIgnoredStageEvent(event: StageEvent, reason: string): void {
+    this.runStore?.appendCue({
+      event: "stage_event_ignored",
+      kind: event.kind,
+      cueId: event.cueId,
+      attempt: event.attempt,
+      sequence: event.sequence,
+      reason,
+    });
   }
 
   private handlePlayoutEvent(event: PlayoutEvent): void {
-    switch (event.type) {
-      case "cue_started":
-        // StageEvent.sequence is scoped to the current cue attempt.
-        this.lastStageSequence = -1;
-        event.cue.status = "playing";
-        this.runStore?.appendCue({
-          cueId: event.cue.id,
-          status: "playing",
-          attempt: event.attempt,
-          segmentId: this.segment()?.id ?? null,
-        });
-        this.publish();
-        return;
-      case "cue_finished":
-        if (event.cue.status !== "failed") {
-          event.cue.status = "done";
-        }
-        this.runStore?.appendCue({
-          cueId: event.cue.id,
-          status: event.cue.status,
-          attempt: event.attempt,
-          reason: event.reason,
-        });
-        this.publish();
-        return;
-      case "queue_finished":
-        this.handleQueueFinished();
-        return;
-      default: {
-        const exhaustive: never = event;
-        throw new Error(`Unsupported playout event: ${JSON.stringify(exhaustive)}`);
-      }
+    dispatchPlayoutEvent(
+      {
+        runStore: this.runStore,
+        segmentId: () => this.segment()?.id ?? null,
+        log: (input) => this.log(input),
+        notice: (level, message) => this.notice(level, message),
+        publish: () => this.publish(),
+        emitPreload: (cues) => this.emit({ type: "preload", cues }),
+        pauseForFailure: () => this.pauseForFailure(),
+        handleQueueFinished: () => this.handleQueueFinished(),
+      },
+      event,
+    );
+  }
+
+  private pauseForFailure(): void {
+    if (this.phase !== "paused") {
+      this.phaseBeforePause = this.phase;
+      this.setPhase("paused");
     }
   }
 
   private handleQueueFinished(): void {
-    const segment = this.segment();
-    if (segment?.kind === "closing") {
-      this.enterPostShow();
-      return;
-    }
-    if (this.endRequested) {
-      this.endRequested = false;
-      this.enterClosing();
-      return;
-    }
-    this.enterSegment((this.currentSegmentIndex ?? 0) + 1);
+    this.spine.handleQueueFinished();
   }
 
   private enterSegment(startIndex: number): void {
-    for (let index = startIndex; index < this.show.segments.length; index += 1) {
-      const segment = this.show.segments[index];
-      if (segment === undefined || segment.kind === "comment") {
-        // Comment corners arrive in P4; the spine skips them for now.
-        continue;
-      }
-      const cues = this.segmentQueues.get(segment.id) ?? [];
-      if (cues.length === 0) {
-        continue;
-      }
-      this.currentSegmentIndex = index;
-      this.setPhase(this.safeMode ? "safe_mode" : this.segmentPhase(segment));
-      this.playout.setQueue(cues);
-      this.playout.start();
-      return;
-    }
-    this.enterPostShow();
+    this.spine.enterSegment(startIndex);
   }
 
   private enterClosing(): void {
-    const index = this.show.segments.findIndex((segment) => segment.kind === "closing");
-    if (index === -1) {
-      this.enterPostShow();
-      return;
-    }
-    const segment = this.show.segments[index]!;
-    const cues = this.segmentQueues.get(segment.id) ?? [];
-    if (cues.length === 0) {
-      this.enterPostShow();
-      return;
-    }
-    this.currentSegmentIndex = index;
-    this.setPhase(this.safeMode ? "safe_mode" : "closing");
-    this.playout.setQueue(cues);
-    this.playout.start();
+    this.spine.enterClosing();
   }
 
   private enterPostShow(): void {
     if (this.phase === "post_show") {
       return;
     }
+    this.finalClock = computeClock(this.show, this.showStartedAtMs, this.now().getTime());
     this.currentSegmentIndex = null;
     this.endRequested = false;
+    this.phaseBeforePause = null;
     this.playout.setQueue([]);
     this.setPhase("post_show");
+    this.publishPreload();
     this.publish();
     if (!this.finished) {
       this.finished = true;
@@ -527,6 +567,30 @@ export class LiveController {
         ?.finish({ status: "completed", phase: "post_show" })
         .catch(() => undefined);
     }
+  }
+
+  enqueueGeneratedCues(cues: LiveCue[]): void {
+    this.cueControl.enqueueGeneratedCues(cues);
+  }
+
+  updateCue(cueId: string, patch: LiveCuePatch): boolean {
+    return this.cueControl.updateCue(cueId, patch);
+  }
+
+  removeCue(cueId: string): boolean {
+    return this.cueControl.removeCue(cueId);
+  }
+
+  moveCue(cueId: string, beforeCueId: string | null): boolean {
+    return this.cueControl.moveCue(cueId, beforeCueId);
+  }
+
+  getCue(cueId: string): LiveCue | null {
+    return this.cueControl.getCue(cueId);
+  }
+
+  getUpcomingCues(limit: number): LiveCue[] {
+    return this.cueControl.getUpcomingCues(limit);
   }
 
   dispose(): void {

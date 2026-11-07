@@ -258,6 +258,28 @@ describe("live contracts", () => {
     expect(stageStateSchema.safeParse(stageState).success).toBe(true);
     expect(stageStateSchema.safeParse({ ...stageState, show: undefined }).success).toBe(false);
 
+    const playback = {
+      cueId: "cue-script",
+      attempt: 1,
+      sequence: 4,
+      startedAt: NOW,
+      audioUrl: "audio/prepared/cue-0002.wav",
+    };
+    expect(
+      stageStateSchema.safeParse({
+        ...stageState,
+        phase: "script",
+        status: "speaking",
+        playback,
+      }).success,
+    ).toBe(true);
+    expect(
+      stageStateSchema.safeParse({
+        ...stageState,
+        playback: { ...playback, sequence: undefined },
+      }).success,
+    ).toBe(false);
+
     const showMeta = {
       title: "テスト配信",
       targetDurationMs: 600_000,
@@ -304,12 +326,15 @@ describe("live contracts", () => {
         ],
         queue: [],
         currentCueId: null,
+        queuePosition: null,
         playback: null,
         status: "idle",
         clock: { elapsedMs: 0, remainingMs: 600_000 },
       }).success,
     ).toBe(true);
     expect(liveCommandSchema.safeParse({ kind: "start" }).success).toBe(true);
+    expect(liveCommandSchema.safeParse({ kind: "skip_cue" }).success).toBe(true);
+    expect(liveCommandSchema.safeParse({ kind: "unknown" }).success).toBe(false);
     expect(
       liveCommandSchema.safeParse({ kind: "takeover_program", sessionId: "session-1" }).success,
     ).toBe(true);

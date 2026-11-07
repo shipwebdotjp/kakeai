@@ -138,6 +138,10 @@ export class LiveSocketHub {
         showMeta: this.options.controller.getShowMeta(),
       };
       sendJson(socket, hello);
+      sendJson(socket, {
+        type: "preload",
+        cues: this.options.controller.getPreloadCues(),
+      });
     } else {
       const hello: LiveServerHelloMessage = {
         type: "hello",
@@ -219,6 +223,13 @@ export class LiveSocketHub {
         for (const client of this.clients.values()) {
           if (client.role === "console") {
             sendJson(client.socket, { type: "snapshot", snapshot: change.snapshot });
+          }
+        }
+        return;
+      case "preload":
+        for (const client of this.clients.values()) {
+          if (client.role === "stage") {
+            sendJson(client.socket, { type: "preload", cues: change.cues });
           }
         }
         return;

@@ -6,8 +6,10 @@ import {
   liveRuntimeConfigSchema,
   liveServerMessageSchema,
   type ConsoleSnapshot,
+  type LivePreloadCue,
   type LiveServerHelloMessage,
   type LiveServerMessage,
+  type LiveServerPreloadMessage,
   type LiveServerSnapshotMessage,
   type LiveServerStateMessage,
   type StageState,
@@ -123,6 +125,13 @@ class TestWsClient {
     return this.waitForMessage<LiveServerStateMessage>(
       "state",
       (message) => predicate(message.state),
+    );
+  }
+
+  waitForPreload(predicate: (cues: LivePreloadCue[]) => boolean = () => true) {
+    return this.waitForMessage<LiveServerPreloadMessage>(
+      "preload",
+      (message) => predicate(message.cues),
     );
   }
 
@@ -307,6 +316,137 @@ describe("live WebSocket server", () => {
     consoleClient.close();
   });
 
+  it("advances on program audio_ended and ignores preview and duplicate events", async () => {
+    const consoleClient = await connect(server.port, "console");
+    await consoleClient.waitForHello();
+    await consoleClient.waitForSnapshot();
+
+    const program = await connect(server.port, "stage");
+    const programHello = await program.waitForHello();
+    const preview = await connect(server.port, "stage");
+    const previewHello = await preview.waitForHello();
+    expect(programHello.lease?.role).toBe("program");
+    expect(previewHello.lease?.role).toBe("preview");
+
+    consoleClient.send({ type: "command", command: { kind: "start" } });
+    const opening = await program.waitForState(
+      (state) => state.phase === "opening" && state.playback !== null,
+    );
+    const openingPlayback = opening.state.playback!;
+
+    preview.send({
+      type: "stage_event",
+      event: {
+        kind: "audio_ended",
+        runId: previewHello.runId,
+        sessionId: previewHello.sessionId,
+        cueId: openingPlayback.cueId,
+        attempt: openingPlayback.attempt,
+        sequence: openingPlayback.sequence,
+      },
+    });
+    program.send({
+      type: "stage_event",
+      event: {
+        kind: "audio_ended",
+        runId: programHello.runId,
+        sessionId: programHello.sessionId,
+        cueId: openingPlayback.cueId,
+        attempt: openingPlayback.attempt,
+        sequence: openingPlayback.sequence,
+      },
+    });
+
+    const script = await program.waitForState(
+      (state) => state.phase === "script" && state.playback?.cueId === "cue-script",
+    );
+    const scriptPlayback = script.state.playback!;
+    expect(scriptPlayback.attempt).toBe(1);
+    expect(scriptPlayback.sequence).toBeGreaterThan(openingPlayback.sequence);
+
+    program.send({
+      type: "stage_event",
+      event: {
+        kind: "audio_ended",
+        runId: programHello.runId,
+        sessionId: programHello.sessionId,
+        cueId: openingPlayback.cueId,
+        attempt: openingPlayback.attempt,
+        sequence: openingPlayback.sequence,
+      },
+    });
+    program.send({
+      type: "stage_event",
+      event: {
+        kind: "audio_ended",
+        runId: programHello.runId,
+        sessionId: programHello.sessionId,
+        cueId: scriptPlayback.cueId,
+        attempt: scriptPlayback.attempt,
+        sequence: scriptPlayback.sequence,
+      },
+    });
+    await program.waitForState((state) => state.phase === "closing");
+
+    program.close();
+    preview.close();
+    consoleClient.close();
+  });
+
+  it("sends preload messages for the next ready cues", async () => {
+    const consoleClient = await connect(server.port, "console");
+    await consoleClient.waitForHello();
+    await consoleClient.waitForSnapshot();
+
+    const stage = await connect(server.port, "stage");
+    const hello = await stage.waitForHello();
+    consoleClient.send({ type: "command", command: { kind: "start" } });
+
+    const preload = await stage.waitForPreload((cues) => cues.length === 2);
+    expect(preload.cues.map((cue) => cue.cueId)).toEqual(["cue-script", "cue-closing"]);
+
+    const opening = await stage.waitForState(
+      (state) => state.phase === "opening" && state.playback !== null,
+    );
+    const playback = opening.state.playback!;
+    stage.send({
+      type: "stage_event",
+      event: {
+        kind: "audio_ended",
+        runId: hello.runId,
+        sessionId: hello.sessionId,
+        cueId: playback.cueId,
+        attempt: playback.attempt,
+        sequence: playback.sequence,
+      },
+    });
+    const nextPreload = await stage.waitForPreload(
+      (cues) => cues.length === 1 && cues[0]?.cueId === "cue-closing",
+    );
+    expect(nextPreload.cues[0]?.audioUrl).toBe("audio/prepared/cue-closing.wav");
+
+    stage.close();
+    consoleClient.close();
+  });
+
+  it("applies skip_cue from the console", async () => {
+    const consoleClient = await connect(server.port, "console");
+    await consoleClient.waitForHello();
+    await consoleClient.waitForSnapshot();
+
+    const stage = await connect(server.port, "stage");
+    await stage.waitForHello();
+    consoleClient.send({ type: "command", command: { kind: "start" } });
+    await stage.waitForState((state) => state.phase === "opening");
+
+    consoleClient.send({ type: "command", command: { kind: "skip_cue" } });
+    const script = await stage.waitForState((state) => state.phase === "script");
+    expect(script.state.playback?.cueId).toBe("cue-script");
+
+    stage.close();
+    consoleClient.close();
+  });
+
   it("sends the latest state to a reconnected stage", async () => {
     const consoleClient = await connect(server.port, "console");
     await consoleClient.waitForHello();
@@ -347,7 +487,10 @@ describe("live WebSocket server", () => {
     expect(secondHello.lease?.role).toBe("preview");
 
     consoleClient.send({ type: "command", command: { kind: "start" } });
-    await second.waitForState((state) => state.phase === "opening");
+    const opening = await second.waitForState(
+      (state) => state.phase === "opening" && state.playback !== null,
+    );
+    const before = opening.state.playback!;
 
     first.close();
     await consoleClient.waitForSnapshot(
@@ -366,7 +509,11 @@ describe("live WebSocket server", () => {
     expect(takenOver.snapshot.stages[0]?.sessionId).toBe(secondHello.sessionId);
 
     consoleClient.send({ type: "command", command: { kind: "resume" } });
-    await second.waitForState((state) => state.phase === "opening");
+    const resumed = await second.waitForState(
+      (state) => state.phase === "opening" && (state.playback?.sequence ?? 0) > before.sequence,
+    );
+    expect(resumed.state.playback?.cueId).toBe(before.cueId);
+    expect(resumed.state.playback?.attempt).toBe(before.attempt);
 
     second.close();
     consoleClient.close();

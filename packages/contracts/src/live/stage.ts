@@ -62,6 +62,11 @@ export type StageCommentState = z.infer<typeof stageCommentStateSchema>;
 export const stagePlaybackSchema = z.strictObject({
   cueId: idSchema,
   attempt: positiveInt,
+  /**
+   * Server-wide monotonic playback instruction. A stage echoes the value it
+   * received; resume, skip and reconnect each issue a new sequence.
+   */
+  sequence: nonNegativeInt,
   startedAt: timestampSchema,
   audioUrl: livePackageRelativePathSchema,
 });
@@ -116,7 +121,7 @@ export const stageEventSchema = z.strictObject({
   sessionId: idSchema,
   cueId: idSchema.nullable(),
   attempt: nonNegativeInt,
-  /** Monotonic per cue attempt; the server ignores sequence <= the last accepted. */
+  /** Playback sequence echoed from `StageState.playback`; only an exact match is accepted. */
   sequence: nonNegativeInt,
   positionMs: nonNegativeInt.optional(),
   error: z.string().optional(),
