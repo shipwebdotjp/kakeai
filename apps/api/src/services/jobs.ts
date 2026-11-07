@@ -41,8 +41,9 @@ export async function cancelJob(prisma: PrismaClient, jobId: string): Promise<Jo
     if (row === null) {
       throw resourceNotFound("job", jobId);
     }
-    const cancellableRunningRender = row.kind === "render" && row.status === "running";
-    if (row.status !== "queued" && !cancellableRunningRender) {
+    const cancellableRunningJob =
+      (row.kind === "render" || row.kind === "live_export") && row.status === "running";
+    if (row.status !== "queued" && !cancellableRunningJob) {
       throw new ApiError(409, "JOB_NOT_CANCELLABLE", undefined, {
         jobId,
         status: row.status,
@@ -60,9 +61,10 @@ export async function cancelJob(prisma: PrismaClient, jobId: string): Promise<Jo
         status: latest?.status ?? "unknown",
       });
     }
-    if (previousStatus === "running") {
+    if (previousStatus === "running" && row.kind === "render") {
       // Stop the render engine only after the status is committed as cancelled,
-      // so a late success write can never overwrite it.
+      // so a late success write can never overwrite it. live_export checks the
+      // committed status at cue boundaries and stops cooperatively.
       abortRender = true;
     }
     if (row.kind === "asset_ingest" && row.assetId !== null) {

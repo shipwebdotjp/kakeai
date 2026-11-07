@@ -20,6 +20,7 @@ Kakeai のインストールから動画の MP4 出力までを案内します�
 - [作品の管理](./works/works.md)
 - [素材ライブラリ](./assets/assets.md)
 - [音声プロファイルと読み上げ（TTS）](./tts/tts.md)
+- [ライブパッケージを書き出す](./live/export.md)
 
 ## 応用・映像を作り込む
 

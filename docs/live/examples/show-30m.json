@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "show": {
+    "title": "今週のニュース（30分版）",
+    "locale": "ja-JP",
+    "targetDurationMs": 1800000,
+    "stageTemplate": "news-desk",
+    "theme": "theme.css",
+    "characters": {
+      "left": "char-left",
+      "right": "char-right"
+    },
+    "startAt": null
+  },
+  "commentSource": {
+    "kind": "fixture"
+  },
+  "segments": [
+    {
+      "id": "seg-opening",
+      "kind": "opening",
+      "label": "オープニング",
+      "targetDurationMs": 120000,
+      "cues": [
+        "cue-opening-1",
+        "cue-opening-2"
+      ]
+    },
+    {
+      "id": "seg-news-1",
+      "kind": "script",
+      "label": "ニュース1",
+      "targetDurationMs": 360000,
+      "material": "material-news-1",
+      "cues": [
+        "cue-news-1-1",
+        "cue-news-1-2",
+        "cue-news-1-3"
+      ]
+    },
+    {
+      "id": "seg-comments-1",
+      "kind": "comment",
+      "label": "コメント1",
+      "targetDurationMs": 240000,
+      "commentPolicy": {
+        "maxCommentsPerCorner": 4,
+        "maxHumanPinsPerCorner": 4,
+        "maxExtraSlots": 2
+      }
+    },
+    {
+      "id": "seg-news-2",
+      "kind": "script",
+      "label": "ニュース2",
+      "targetDurationMs": 360000,
+      "material": "material-news-2",
+      "cues": [
+        "cue-news-2-1",
+        "cue-news-2-2",
+        "cue-news-2-3"
+      ]
+    },
+    {
+      "id": "seg-comments-2",
+      "kind": "comment",
+      "label": "コメント2",
+      "targetDurationMs": 240000,
+      "commentPolicy": {
+        "maxCommentsPerCorner": 4,
+        "maxHumanPinsPerCorner": 4,
+        "maxExtraSlots": 2
+      }
+    },
+    {
+      "id": "seg-news-3",
+      "kind": "script",
+      "label": "ニュース3",
+      "targetDurationMs": 300000,
+      "cues": [
+        "cue-news-3-1",
+        "cue-news-3-2"
+      ]
+    },
+    {
+      "id": "seg-closing",
+      "kind": "closing",
+      "label": "クロージング",
+      "targetDurationMs": 180000,
+      "cues": [
+        "cue-closing-1",
+        "cue-closing-2"
+      ]
+    }
+  ],
+  "scriptCues": [
+    {
+      "id": "cue-news-1-1",
+      "lineId": "line-news-1-1",
+      "expressionId": "normal"
+    },
+    {
+      "id": "cue-news-1-2",
+      "lineId": "line-news-1-2",
+      "expressionId": "smile"
+    },
+    {
+      "id": "cue-news-1-3",
+      "lineId": "line-news-1-3",
+      "expressionId": "normal"
+    },
+    {
+      "id": "cue-news-2-1",
+      "lineId": "line-news-2-1",
+      "expressionId": "normal"
+    },
+    {
+      "id": "cue-news-2-2",
+      "lineId": "line-news-2-2",
+      "expressionId": "smile"
+    },
+    {
+      "id": "cue-news-2-3",
+      "lineId": "line-news-2-3",
+      "expressionId": "normal"
+    },
+    {
+      "id": "cue-news-3-1",
+      "lineId": "line-news-3-1",
+      "expressionId": "normal"
+    },
+    {
+      "id": "cue-news-3-2",
+      "lineId": "line-news-3-2",
+      "expressionId": "smile"
+    }
+  ],
+  "liveCues": [
+    {
+      "id": "cue-opening-1",
+      "speaker": "left",
+      "caption": "今週も始まりました。",
+      "speech": "こんしゅうも はじまりました。",
+      "expression": "smile"
+    },
+    {
+      "id": "cue-opening-2",
+      "speaker": "right",
+      "caption": "よろしくお願いします。",
+      "speech": "よろしく おねがいします。",
+      "expression": "smile"
+    },
+    {
+      "id": "cue-closing-1",
+      "speaker": "left",
+      "caption": "今日はここまでです。",
+      "speech": "きょうは ここまでです。",
+      "expression": "smile"
+    },
+    {
+      "id": "cue-closing-2",
+      "speaker": "right",
+      "caption": "また来週お会いしましょう。",
+      "speech": "また らいしゅう おあいしましょう。",
+      "expression": "smile"
+    }
+  ],
+  "materials": [
+    {
+      "id": "material-news-1",
+      "sceneId": "scene-material-1",
+      "focus": true,
+      "format": "png",
+      "durationMs": 4000
+    },
+    {
+      "id": "material-news-2",
+      "sceneId": "scene-material-2",
+      "focus": true,
+      "format": "html",
+      "durationMs": 4000
+    }
+  ],
+  "commentPolicy": {
+    "mode": "corner",
+    "freshnessMin": 10,
+    "maxCommentsPerCorner": 4,
+    "maxHumanPinsPerCorner": 4,
+    "maxExtraSlots": 2,
+    "allowImmediateInterrupt": false,
+    "skipWhenEmpty": true
+  },
+  "safety": {
+    "blockedTopics": [
+      "政治",
+      "宗教",
+      "医療",
+      "法律",
+      "金融"
+    ],
+    "persona": "親しみやすいニュース解説キャラクター。断定しすぎず、不明なことは保留する。",
+    "maxResponseChars": 180,
+    "maxResponseCues": 2,
+    "fallbackCueId": "cue-closing-1"
+  },
+  "playout": {
+    "minBufferMs": 10000,
+    "maxThinkingMs": 2000,
+    "closingReserveMs": 180000,
+    "noApprovalDelay": true
+  },
+  "test": {
+    "fixture": "comments-30m.json"
+  }
+}

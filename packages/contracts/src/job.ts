@@ -1,6 +1,9 @@
 import { z } from "zod";
-import { idSchema, nonNegativeInt, positiveInt } from "./content/primitives";
+import { idSchema, localeSchema, nonNegativeInt, positiveInt } from "./content/primitives";
 import { contentDocumentSchema } from "./content/document";
+import { liveFixtureCommentSchema } from "./live/comment";
+import { liveManifestFontSchema } from "./live/paths";
+import { liveShowProfileSchema } from "./live/profile";
 import { voiceAdapterIdSchema, voiceIdSchema, voiceProfileExtrasSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 import { compositionManifestSchema, CANVAS_PROFILE_DIMENSIONS } from "./composition";
@@ -8,6 +11,13 @@ import { expressionPresetSchema, faceLayerSchema } from "./face-set";
 import { visualSkinRefSchema, visualThemeDefinitionSchema } from "./content/theme";
 
 export const SNAPSHOT_SCHEMA_VERSION = 3 as const;
+
+/**
+ * Live export has its own snapshot version. Bumping the shared render/tts
+ * version would make queued legacy jobs unreadable, so the new kind starts at
+ * 1 and evolves independently.
+ */
+export const LIVE_EXPORT_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
 export const snapshotCompositionVersionRefSchema = z.object({
   id: idSchema,
@@ -124,17 +134,74 @@ export const ttsJobSnapshotSchema = z.object({
   engineVersion: z.string().nullable(),
 });
 
+export const liveVoiceProfileSnapshotSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  adapterId: voiceAdapterIdSchema,
+  voiceId: voiceIdSchema,
+  locale: localeSchema,
+  settings: voiceProfileExtrasSchema,
+});
+export type LiveVoiceProfileSnapshot = z.infer<typeof liveVoiceProfileSnapshotSchema>;
+
+export const liveExportJobSnapshotSchema = z.object({
+  snapshotSchemaVersion: z.literal(LIVE_EXPORT_SNAPSHOT_SCHEMA_VERSION),
+  kind: z.literal("live_export"),
+  workId: idSchema,
+  languageEditionId: idSchema,
+  scriptVersionId: idSchema,
+  versionNumber: positiveInt,
+  locale: localeSchema,
+  content: contentDocumentSchema,
+  profile: liveShowProfileSchema,
+  profileSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  fixture: z.array(liveFixtureCommentSchema).optional(),
+  outDir: z
+    .string()
+    .min(1)
+    .refine(
+      (value) =>
+        value.startsWith("/") &&
+        value !== "/" &&
+        value.split("/").filter(Boolean).length >= 2 &&
+        !value.includes("\0") &&
+        !value.includes("\\") &&
+        !value.split("/").includes(".."),
+      { message: "outDir には .. を含まない絶対パスを指定してください" },
+    ),
+  exporterVersion: z.string().min(1),
+  theme: visualThemeDefinitionSchema,
+  skin: visualSkinRefSchema.optional(),
+  assets: z.array(snapshotAssetRefSchema),
+  faceSets: z.array(snapshotFaceSetRefSchema).optional().default([]),
+  voiceProfiles: z.array(liveVoiceProfileSnapshotSchema),
+  fonts: z.array(liveManifestFontSchema),
+  fontDiagnostics: z
+    .object({
+      missingFonts: z.array(z.string()),
+      diagnostics: z.array(z.string()).optional().default([]),
+    })
+    .optional(),
+});
+export type LiveExportJobSnapshot = z.infer<typeof liveExportJobSnapshotSchema>;
+
 export const jobInputSnapshotSchema = z.discriminatedUnion("kind", [
   renderJobSnapshotSchema,
   assetIngestJobSnapshotSchema,
   ttsJobSnapshotSchema,
+  liveExportJobSnapshotSchema,
 ]);
 
 export function parseRenderJobSnapshot(input: unknown): RenderJobSnapshot {
   return renderJobSnapshotSchema.parse(input);
 }
 
+export function parseLiveExportJobSnapshot(input: unknown): LiveExportJobSnapshot {
+  return liveExportJobSnapshotSchema.parse(input);
+}
+
 export type RenderJobSnapshot = z.infer<typeof renderJobSnapshotSchema>;
+export type SnapshotAssetRef = z.infer<typeof snapshotAssetRefSchema>;
 export type SnapshotFaceSet = z.infer<typeof snapshotFaceSetRefSchema>;
 export type AssetIngestJobSnapshot = z.infer<typeof assetIngestJobSnapshotSchema>;
 export type TtsJobSnapshot = z.infer<typeof ttsJobSnapshotSchema>;

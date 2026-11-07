@@ -7,11 +7,13 @@
     ".": "./src/index.ts"
   },
   "bin": {
-    "kakeai-agent": "./bin/kakeai-agent.js"
+    "kakeai-agent": "./bin/kakeai-agent.js",
+    "kakeai-live-export": "./bin/kakeai-live-export.js"
   },
   "scripts": {
     "start": "tsx src/bin.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "live:export": "tsx src/bin-live-export.ts"
   },
   "dependencies": {
     "@kakeai/agent-client": "*",

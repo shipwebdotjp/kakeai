@@ -17,6 +17,7 @@ const queuedTtsJob = {
   finishedAt: null,
   error: null,
   ttsResult: null,
+  liveExportResult: null,
   artifacts: [],
 };
 

@@ -101,6 +101,7 @@ const job = {
   finishedAt: null,
   error: null,
   ttsResult: null,
+  liveExportResult: null,
   artifacts: [],
 };
 

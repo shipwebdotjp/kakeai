@@ -416,3 +416,117 @@ An operation that creates when absent and partially updates when present.
 
 **Save Operation**:
 An operation that saves a whole document or draft; not for partial updates.
+
+## Live
+
+**Live Show**:
+A scheduled, state-driven performance of a Work's characters and material cards, separate from a rendered Composition. It is not a Script Version, Render Job, or Artifact.
+_Avoid_: live render, composition playback
+
+**Live Package**:
+An immutable export of a Live Show containing its Show Profile, theme CSS, character assets, pre-compiled material cards, prepared audio, and fixtures. The live app reads it; it does not share Kakeai's database.
+_Avoid_: project, asset bundle, script
+
+**Show Profile**:
+The live-specific configuration of a Live Show: segments, cues, materials, comment policy, safety, stage, and target duration. It is not a Script Version.
+_Avoid_: script, template
+
+**Spine**:
+The ordered segment list of a Live Show that defines its planned progression. It is not a Composition timeline.
+_Avoid_: timeline, storyboard
+
+**Material Bank**:
+Optional extra topics, bits, and fallback material a Live Show can use when time allows or when the spine needs adjustment. It is not a Script Version.
+_Avoid_: script, asset library
+
+**Stage**:
+The browser surface that renders the live state: characters, caption, material, comment card, and phase. The Program Stage is captured by OBS; the Preview Stage is not. It is not a Composition player.
+_Avoid_: composition, preview, canvas
+
+**Playout**:
+The state-driven audio and cue queue that advances the Stage. It is not a timeline.
+_Avoid_: timeline, render queue
+
+**Live Cue**:
+The smallest unit of live output: speaker, caption, speech, expression, optional material or comment, and audio.
+_Avoid_: narration segment, clip
+
+**Material Card**:
+A static PNG/HTML or short silent MP4 shown in the Stage's center slot. It is created by Kakeai at export time; it is not a live Composition or a running GSAP timeline.
+_Avoid_: visual cue, slide, composition
+
+**Prepared Cue**:
+A Live Cue resolved at export from a Script Version or authored as a live-only cue, before playout.
+_Avoid_: live cue, narration segment
+
+**Script Cue**:
+A Live Cue whose caption, speech, speaker, and audio come from a Narration Segment via a line id.
+_Avoid_: live-only cue, caption
+
+**Live-only Cue**:
+A Live Cue authored for the live show, not present in the Script Version, such as an opening, correction, or fallback.
+_Avoid_: script cue, ad-lib
+
+**Program Stage**:
+The single Stage that holds the Playback Lease and plays audio. It is the Stage captured by OBS.
+_Avoid_: preview, console
+
+**Preview Stage**:
+A muted, event-disabled Stage shown in the Operator Console. It never advances playback.
+_Avoid_: program stage, OBS
+
+**Playback Lease**:
+The exclusive right to play the current Live Cue and send playback events for one run. Only the Program Stage holds it.
+_Avoid_: lock, session
+
+**Comment Corner**:
+A bounded segment of a Live Show where viewer comments are selected and answered. It is not a continuous chat overlay.
+_Avoid_: chat, comment feed
+
+**Human Pin**:
+A comment the operator explicitly selects for the next Comment Corner. It takes precedence over AI candidates but cannot override safety blocks.
+_Avoid_: approval, favorite
+
+**AI Candidate**:
+A comment proposed by the Comment Analyst to fill the remaining slots of a Comment Corner.
+_Avoid_: selection, pick
+
+**Comment Source**:
+The read-only boundary that supplies viewer comments, either YouTube live chat or a test fixture.
+_Avoid_: chat API, scraper
+
+**Comment Analyst**:
+The structured filter that scores and classifies comments before the Live Director sees them. It does not write responses.
+_Avoid_: director, moderator
+
+**Live Director**:
+The live-side decision loop that selects cues and generates comment responses. It does not manage the YouTube broadcast.
+_Avoid_: host, agent
+
+**Local LLM**:
+A model endpoint on the same machine as the live app, used for real YouTube comment analysis and response generation. It does not send YouTube data to external services.
+_Avoid_: cloud model, external LLM
+
+**External LLM**:
+A model endpoint outside the machine. In v1 it may receive only fixture comments, never real YouTube comments.
+_Avoid_: local model, production model
+
+**Operator Console**:
+The local control surface for pinning, skipping, pausing, stopping, editing, and reviewing logs. It is not captured by OBS.
+_Avoid_: stage, admin panel
+
+**Test Mode**:
+A Live Show run driven by a fixture Comment Source instead of YouTube, while using the real Comment Analyst, Live Director, TTS, Stage, and Operator Console.
+_Avoid_: mock, demo
+
+**Safe Mode**:
+A live state that stops generated responses and plays only prepared or fallback cues.
+_Avoid_: pause, stop
+
+**Pre-show**:
+The Stage phase before the opening, showing the title, countdown, and waiting characters.
+_Avoid_: opening
+
+**Post-show**:
+The Stage phase after the closing, showing the end card and thanks.
+_Avoid_: ending

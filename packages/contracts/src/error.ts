@@ -36,6 +36,7 @@ export const errorCodeSchema = z.enum([
   "INVALID_OPERATION",
   "EXPORT_TARGET_EXISTS",
   "EXPORT_FAILED",
+  "LIVE_EXPORT_OUTPUT_UNAVAILABLE",
   "INTERNAL_ERROR",
   "DATABASE_BUSY",
 ]);

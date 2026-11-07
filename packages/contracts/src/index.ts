@@ -35,6 +35,7 @@ export * from "./content/line-refs";
 export * from "./templates";
 export * from "./thumbnail";
 export * from "./youtube/settings";
+export * from "./live";
 export * from "./voice-profile";
 export * from "./character-library";
 export * from "./face-set";

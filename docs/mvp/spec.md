@@ -31,6 +31,8 @@
 - 複数VisualCueの編集、VisualCueのセリフ区間・offset区間の編集、立ち絵の表情自動切替・口パク、複数テンプレート、縦型出力
 - クラウド保存、外部公開、共同編集、認証、通知
 
+AIキャラクターによるライブ配信は、MVPのレンダー経路とは別の実行系である。Kakeaiはライブパッケージの書き出しを担い、ライブの進行は別アプリが行う。詳細は [ライブ配信仕様](../live/spec.md) を正とする。
+
 ## 出力仕様と入力制約
 
 | 項目 | MVPの仕様 |
@@ -72,7 +74,7 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 | `AssetRendition` | Assetから導いた、プレビューまたはレンダーに安全に使える不変の正規化ファイル。 |
 | `Composition` | AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。 |
 | `CompositionVersion` | publish済みCompositionの不変bundle。ScriptVersionはIDだけを参照し、Render Jobはbundle hashを固定する。 |
-| `Job` | 非同期処理の実行記録。MVPでは `asset_ingest` と `render` を実行する。 |
+| `Job` | 非同期処理の実行記録。MVPでは `asset_ingest` と `render` を実行し、先行実装の `tts` とライブ書き出しの `live_export` も同じ枠組みを使う。 |
 | `Artifact` | あるJobが生成した出力ファイル。MVPではrender Jobが生成するMP4。Assetへ自動昇格せず、再利用は明示的なAsset化による。 |
 
 `Work` の原本言語と `LanguageEdition.locale` はBCP 47形式で保存する。画面上は日本語だけを選択可能にし、未対応の言語版やジョブ種別は明示的に未対応として扱う。
@@ -82,6 +84,8 @@ HyperFrames Composition HTML、出力MP4、開始・終了フレームは派生�
 `Job` は種別、状態（`queued` / `running` / `succeeded` / `failed` / `cancelled`）、入力スナップショット、成果物参照、エラー、開始・完了時刻を持つ。MVPの `asset_ingest` はアップロード原本を検査してメタデータを記録し、原本を直接レンダーに使えない場合にだけRenditionを作り、`render` はMP4を作る。将来のTTS、画像生成、調査、台本下書きも同じ枠組みに追加する。
 
 > 先行実装として、別途起動したローカル VOICEVOX ENGINE へ接続する `tts` Job と、アプリ共通の `VoiceProfile`、ContentDocument v3 を [../tts/spec.md](../tts/spec.md) で定義する。この文書の MVP 記述のうち TTS に関わる部分は同仕様を正とする。
+>
+> ライブ配信のパッケージ書き出しは `live_export` Job として実行する。ライブの契約と書き出し内容は [../live/spec.md](../live/spec.md) を正とする。
 
 ## MVPのDBスキーマ
 
@@ -118,10 +122,10 @@ Prismaモデル名は以下のとおりとする。IDはアプリ生成の文字
 | `Composition` | `id`, `runtimeCompositionId`, `name`, `scope`, `workId?`, `archivedAt?`, `createdAt`, `updatedAt` | AIが作業する再利用可能なHyperFrames projectの論理単位。`runtimeCompositionId` は安定し、異なるComposition間で一意。`scope` は `work`（作品専用）・`shared`（全作品共通）・`unclassified`（移行時のみ）で、`work` のときだけ `workId` を持つ。`archivedAt` は一覧・ピッカーから既定で隠すアーカイブ。 |
 | `CompositionDraft` | `id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt` | AIが更新する可変の作業コピー。ScriptVersionとJobから参照しない。Compositionごとに高々1つのactive draftを持つ。 |
 | `CompositionVersion` | `id`, `compositionId`, `versionNumber`, `bundleHash`, `storageKey`, `manifestJson`, `createdAt` | publish済みの不変bundle。`@@unique([compositionId, versionNumber])`、`storageKey` は一意。bundle hashとmanifestは作成後に変更しない。詳細は[Composition Library仕様](../composition-library/spec.md)。 |
-| `Job` | `id`, `kind`, `status`, `workId?`, `assetId?`, `languageEditionId?`, `scriptVersionId?`, `snapshotSchemaVersion`, `inputSnapshotJson`, `resultJson?`, `progressPercent`, `errorCode?`, `errorMessage?`, `createdAt`, `startedAt?`, `finishedAt?` | 非同期実行の記録。statusは `queued` / `running` / `succeeded` / `failed` / `cancelled`。MVPの `kind` は `asset_ingest` / `render`。renderは `workId` と `scriptVersionId` を必須、asset_ingestは `assetId` を必須とする。`inputSnapshotJson` はkindごとの判別unionで定義し、`snapshotSchemaVersion` で解釈版を特定する。`@@index([status, createdAt])`、`@@index([workId, createdAt])`、`@@index([assetId, createdAt])` を置く。 |
+| `Job` | `id`, `kind`, `status`, `workId?`, `assetId?`, `languageEditionId?`, `scriptVersionId?`, `snapshotSchemaVersion`, `inputSnapshotJson`, `resultJson?`, `progressPercent`, `errorCode?`, `errorMessage?`, `createdAt`, `startedAt?`, `finishedAt?` | 非同期実行の記録。statusは `queued` / `running` / `succeeded` / `failed` / `cancelled`。MVPの `kind` は `asset_ingest` / `render` / `tts` / `live_export`。renderとttsとlive_exportは `workId`・`languageEditionId`・`scriptVersionId` を必須、asset_ingestは `assetId` を必須とする。live_exportは `outDir` とShow Profileを入力スナップショットに固定し、DBの台本・素材・声を変更しない。`inputSnapshotJson` はkindごとの判別unionで定義し、`snapshotSchemaVersion` で解釈版を特定する。`@@index([status, createdAt])`、`@@index([workId, createdAt])`、`@@index([assetId, createdAt])` を置く。 |
 | `Artifact` | `id`, `jobId`, `role`, `format`, `storageKey`, `sha256`, `byteSize`, `durationMs?`, `widthPx?`, `heightPx?`, `fps?`, `videoCodec?`, `audioCodec?`, `createdAt` | Jobが生成した出力ファイル。`role` は `render` / `thumbnail` / `caption` などの用途、`format` は `mp4` などの形式。MVPはrender Jobが `role=render`、`format=mp4` のArtifactを1つ生成する。1 Jobは複数Artifactを持てる。`storageKey` は一意とし、`@@index([jobId])` を置く。 |
 
-Jobの対象はkindで決める。renderは `workId`、`languageEditionId`、`scriptVersionId` を必須とし、asset_ingestは `assetId` を必須とする。TTSや画像生成はLanguageEditionまたはScriptVersionに結び、調査のように作品全体に対するJobは `workId` だけを持てる。`Asset.generatedByJobId` は将来の生成Assetの来歴を示す任意の外部キーである。
+Jobの対象はkindで決める。render・tts・live_exportは `workId`、`languageEditionId`、`scriptVersionId` を必須とし、asset_ingestは `assetId` を必須とする。live_exportは入力スナップショットにShow Profile、fixture、出力先、解決済みのTheme・Asset・Face Set・Voice Profileを固定する。TTSや画像生成はLanguageEditionまたはScriptVersionに結び、調査のように作品全体に対するJobは `workId` だけを持てる。`Asset.generatedByJobId` は将来の生成Assetの来歴を示す任意の外部キーである。
 
 誤削除を防ぐため、通常の外部キーは `onDelete: Restrict` とする。Workの削除だけは、参照の有無を検査してからEdition、ScriptVersion、Job、Artifactを同一トランザクション／削除計画で明示的に消す。ファイル実体はDBの削除後に隔離し、失敗時は起動時の清掃処理で回収する。`Work.updatedAt` と `LanguageEdition.updatedAt` は、新しいScriptVersionの保存時にも同一トランザクションで更新し、作品一覧の並び順に使う。
 
@@ -239,4 +243,4 @@ HyperFramesはApache-2.0で公開されているが、導入するCatalogブロ�
 - テスト素材を使い、作成→保存→再読込→プレビュー→レンダー→`<video>`でのMP4再生・シークを自動確認できる。
 - MP4/WebM/MP3/WAVの原本を取り込み、そのまま使える素材は正規化せずに、必要時だけRenditionを作って使用できる。取り込み中は状態を表示する。対応外コーデック、可変フレームレート、回転メタデータを含む入力も、必要時に作られるRendition経由でプレビューとレンダーができる。
 - 参照されていないAsset、個別Artifact、Work全体を明示削除できる。参照中のAssetは409で拒否され、削除後の履歴が再プレビュー・再レンダー不可であることをUIに表示する。
-- queued状態のrender Jobまたはasset_ingest Jobと、実行中のrender Jobをキャンセルできる。実行中のasset_ingest・ttsはキャンセルできず、アプリまたはワーカーの中断時は従来どおり `WORKER_INTERRUPTED` で失敗する。
+- queued状態のrender / asset_ingest / tts / live_export Jobと、実行中のrender / live_export Jobをキャンセルできる。実行中のasset_ingest・ttsはキャンセルできず、アプリまたはワーカーの中断時は従来どおり `WORKER_INTERRUPTED` で失敗する。実行中のlive_exportはキュー境界で協調キャンセルできる。

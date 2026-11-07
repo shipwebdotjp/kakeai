@@ -10,6 +10,7 @@ import {
   jobErrorCodeSchema,
   jobKindSchema,
   jobStatusSchema,
+  liveExportResultSchema,
   localeSchema,
   scriptVersionAuthorSchema,
   standingEdgeSchema,
@@ -28,6 +29,7 @@ import {
   type FaceSetRevision,
   type Job,
   type LanguageEditionSummary,
+  type LiveExportResult,
   type ScriptVersion,
   type ScriptVersionSummary,
   type Thumbnail,
@@ -264,8 +266,26 @@ export function toJob(row: JobWithArtifacts): Job {
         ? null
         : { code: errorCode, message: row.errorMessage ?? "" },
     ttsResult: parseTtsResult(row),
+    liveExportResult: parseLiveExportResult(row),
     artifacts: row.artifacts.map(toArtifact),
   };
+}
+
+function parseLiveExportResult(row: JobRow): LiveExportResult | null {
+  if (row.kind !== "live_export" || row.resultJson === null) {
+    return null;
+  }
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(row.resultJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "Job.liveExportResult の値を解釈できません。");
+  }
+  const parsed = liveExportResultSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", "Job.liveExportResult の値が不正です。");
+  }
+  return parsed.data;
 }
 
 function parseTtsResult(row: JobRow): TtsJobResult | null {

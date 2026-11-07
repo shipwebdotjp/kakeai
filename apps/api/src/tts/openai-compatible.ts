@@ -135,7 +135,13 @@ export function createOpenAiCompatibleAdapter(id: VoiceAdapterId): TtsAdapter {
       }
       const extras = parsed.data;
       // 参照音声モード。ref_text ありは ICL、なしは x-vector（話者埋め込みのみ）。
-      const refAudioMode = extras.refAudioAssetId !== undefined;
+      // ライブパッケージは内部 Asset ID を持たないため、解決済みの
+      // refAudioPath をモードの判定に使う。TTS Job も同じ経路を通る。
+      const refAudioMode =
+        requestBody.refAudioPath !== undefined && requestBody.refAudioPath.length > 0;
+      if (!refAudioMode && extras.refAudioAssetId !== undefined) {
+        throw new TtsInputRejectedError("参照音声ファイルを解決できませんでした。");
+      }
       let body: Record<string, unknown>;
       if (refAudioMode) {
         // superRefine が参照音声時の langCode を必須化済み。到達しないが、

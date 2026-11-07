@@ -28,6 +28,7 @@ Kakeai は、編集意図（正本JSON）をレンダー済みメディアから
 npm install        # 依存のインストール
 npm run typecheck  # 全ワークスペースの型検査
 npm test           # vitest（{packages,apps}/*/src/**/*.test.ts）
+npm run live:export -- --work <workId> --script-version <scriptVersionId> --profile <show-profile.json> --out <dir>  # ライブパッケージ書き出し
 ```
 
 コード・設定を変更した後は必ず `npm run typecheck` と `npm test` を通す。文書のみの追加・変更（文書以外のファイルに差分がない場合）は、レビュー・型検査・テストの実行を不要とする。

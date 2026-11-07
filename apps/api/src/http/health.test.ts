@@ -12,7 +12,12 @@ describe("buildHealthResponse", () => {
     expect(response.storage.status).toBe("ok");
     expect(response.storage.warningThresholdBytes).toBe(80 * 1024 ** 3);
     expect(response.capabilities.locales).toEqual(["ja-JP", "en-US", "zh-Hans", "zh-Hant"]);
-    expect(response.capabilities.jobKinds).toEqual(["asset_ingest", "render", "tts"]);
+    expect(response.capabilities.jobKinds).toEqual([
+      "asset_ingest",
+      "render",
+      "tts",
+      "live_export",
+    ]);
     expect(response.capabilities.assetKinds).toEqual(["image", "video", "audio"]);
     expect(response.capabilities.voiceAdapters).toEqual([
       "voicevox",

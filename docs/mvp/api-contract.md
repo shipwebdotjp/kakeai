@@ -66,7 +66,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | Composition | id, runtimeCompositionId, name, scope, workId, archivedAt, createdAt, updatedAt, draft, versions | Kakeai管理AIが編集する再利用可能なHyperFrames projectの論理単位。Assetではない。`scope` は `work`（作品専用）・`shared`（全作品共通）・`unclassified`（移行時のみ）で、`work` のときだけ `workId` を持つ。`archivedAt` は既定の一覧・ピッカーから隠すアーカイブで、nullなら未設定。`draft` は高々1つの可変な作業コピー（`id`, `compositionId`, `entrypoint`, `storageKey`, `updatedAt`, `styleProvenance`）で、ScriptVersion・Jobから参照しない。`versions` はpublish済みCompositionVersionの配列。 |
 | CompositionVersion | id, compositionId, versionNumber, bundleHash, storageKey, manifest, styleProvenance, createdAt | publish済みの不変bundle。manifestはruntime composition ID、entrypoint、Canvas Profile、その固定寸法、既定尺、依存一覧を持つ。`canvasProfile` は `landscape`（1920×1080、既定）または `portrait`（1080×1920）で、versionごとに不変。`contentHash` は任意。`storageKey` はアプリデータルート相対の内部キーであり、参照やURL生成に使わない（絶対パスは返さない）。`styleProvenance` はauthoring元Theme/Skin/Style Kit hashとFont診断の不変記録で、`authored` / `neutral` / `legacy` の判別union（[../visual-skins/spec.md](../visual-skins/spec.md)）。 |
 | CompositionDraftFiles | entrypoint, files, binaryFiles | draftのentrypointと、bundle相対パスをキーにしたファイル内容のマップ。`files` はUTF-8テキスト、`binaryFiles` はbase64文字列（存在する場合のみ）。seedとAIの更新内容を含む。 |
-| Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts`。`ttsResult` は `tts` Jobが生成したAudio Take候補で、それ以外はnull。 |
+| Job | id, kind, status, workId, assetId, languageEditionId, scriptVersionId, progressPercent, createdAt, startedAt, finishedAt, error, ttsResult, liveExportResult, artifacts | 入力スナップショット自体は返さない。`artifacts` は出力の要約配列。kindは `asset_ingest` / `render` / `tts` / `live_export`。`ttsResult` は `tts` Jobが生成したAudio Take候補、`liveExportResult` は `live_export` Jobのパッケージ・manifest・警告・失敗詳細で、それ以外はnull。 |
 | Artifact | id, jobId, role, format, byteSize, durationMs, widthPx, heightPx, fps, videoCodec, audioCodec, createdAt, contentUrl | Jobの出力ファイル。MVPは role=render / format=mp4。videoCodecとaudioCodecはレンダー時のffprobe結果で、取得できない場合はnull。ファイルは同一originのメディアCookieを使ってcontentUrlから取得・再生する。 |
 | VoiceProfile | id, name, adapterId, voiceId, locale, settings, createdAt, updatedAt | アプリ共通の声の設定。`adapterId` は登録済みアダプター記述子の ID（作成後は不変）、`voiceId` はアダプター定義の不透明な声 ID、`locale` は声の言語、`settings` はアダプター固有の追加分（OpenAI互換は `{ model, refAudioAssetId?, refText?, langCode?, maxTokens? }`。参照音声ありでは `refAudioAssetId`・`langCode` が必須、`refText` は任意（付けると ICL 方式、省略すると x-vector 方式））。詳細は [../tts/spec.md](../tts/spec.md)。 |
 | VoiceAdapter | id, label, defaultLocale, voiceSelection, modelSelection | 登録済み TTS アダプター記述子。`defaultLocale` は固定言語（無ければnull）、`voiceSelection` は `list` / `list-or-manual`、`modelSelection` はモデル指定の要否。 |
@@ -151,6 +151,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /voice-profiles/models?adapterId=<id> | 200 | 接続中エンジンのモデル候補（`models`）を取得。非対応は空配列 |
 | POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/tts-jobs | 202 | 音声が未選択の要点セリフを一括でTTS Jobへ追加。投入Jobと除外セリフを返す（[../tts/spec.md](../tts/spec.md)） |
+| POST | /live-exports | 202 | ライブパッケージの `live_export` Jobを作成（[../live/spec.md](../live/spec.md)） |
 | GET | /characters | 200 | キャラクターライブラリの一覧を取得（[../character-library/spec.md](../character-library/spec.md)） |
 | POST | /characters | 201 | キャラクターを作成 |
 | PATCH | /characters/:characterId | 200 | キャラクターの名前・ロケール別名・声・外観を更新 |
@@ -187,7 +188,7 @@ GET /health は起動確認とUIの初期診断に使う。レンダーワーカ
     },
     "capabilities": {
       "locales": ["ja-JP", "en-US", "zh-Hans", "zh-Hant"],
-      "jobKinds": ["asset_ingest", "render"],
+      "jobKinds": ["asset_ingest", "render", "tts", "live_export"],
       "assetKinds": ["image", "video", "audio"]
     },
     "storage": {
@@ -682,6 +683,14 @@ Content-Type: application/json
 ~~~
 
 固定尺の選択音声合計超過など、レンダー入力を組み立てる時点で判定する問題は422 RENDER_INPUT_INVALIDとする。Asset参照の欠落や素材種別と用途の不一致、`explanation-scenes@1` のScene構成は台本保存の段階で422 VALIDATION_ERRORまたはASSET_NOT_FOUNDとして拒否する。Assetがまだprocessingなら409 `ASSET_PROCESSING` とし、failedなAssetは422 `ASSET_UNAVAILABLE` とする。短時間に同じ版を複数回レンダーすることは許可し、その都度異なるJobを作る。UIは送信中にボタンを無効化して、二重クリックによる意図しない重複だけを防ぐ。
+
+### ライブパッケージの書き出し
+
+POST /api/v1/live-exports は、`workId`・`scriptVersionId`・Show Profile（JSON本文）・任意のfixture配列・`outDir` を受け取り、`live_export` Jobを作成して202 AcceptedでJob DTOを返す。`outDir` は絶対パスで、存在しないディレクトリに限る。APIはサーバ上のプロファイルパスを読まず、CLIがプロファイルとfixtureを読んで本文へ入れる。
+
+入力はJob作成時に同期検証する。`scriptCues[].lineId`、話者の左右、キャラクターと外観、Face Set、Voice Profile、参照音声、Asset、素材Sceneの制約、Theme、フォントを解決し、失敗は422 `VALIDATION_ERROR` または該当する素材エラーで返す。Workerはスナップショットだけを使い、KakeaiのDBの台本・素材・声を変更しない。TTSのテスト合成と準備済み音声の生成はWorkerで行う。
+
+成功した `live_export` Jobの `liveExportResult` は、`packagePath`（絶対ローカルパス）、`packageId`、`manifestSha256`、`fileCount`、`preparedCueCount`、`warnings`、`failures` を持つ。`failures` は失敗したキュー・Voice Profile・素材のIDと理由で、失敗Jobでも返す。絶対ローカルパスを返すのはこの結果だけで、ループバック限定のCLI利用に限る。実行中の `live_export` は `POST /jobs/:jobId/cancel` で協調キャンセルできる。
 
 ### Jobのポーリングと履歴
 

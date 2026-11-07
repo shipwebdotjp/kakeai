@@ -5,12 +5,13 @@ import { templateRefSchema } from "./content/nested";
 import { visualThemeDefinitionSchema } from "./content/theme";
 import { assetTagsSchema } from "./asset";
 import { errorCodeSchema } from "./error";
+import { liveExportResultSchema } from "./live/job";
 import {
   resolvedThumbnailAppearanceSchema,
   thumbnailAppearanceSchema,
 } from "./thumbnail/appearance";
 
-export const jobKindSchema = z.enum(["asset_ingest", "render", "tts"]);
+export const jobKindSchema = z.enum(["asset_ingest", "render", "tts", "live_export"]);
 export const jobStatusSchema = z.enum([
   "queued",
   "running",
@@ -33,6 +34,11 @@ export const jobErrorCodeSchema = z.enum([
   "TTS_ENGINE_UNAVAILABLE",
   "TTS_INPUT_REJECTED",
   "TTS_SYNTHESIS_FAILED",
+  "LIVE_EXPORT_INPUT_INVALID",
+  "LIVE_EXPORT_TTS_FAILED",
+  "LIVE_EXPORT_MATERIAL_FAILED",
+  "LIVE_EXPORT_FAILED",
+  "LIVE_EXPORT_OUTPUT_UNAVAILABLE",
 ]);
 
 export const scriptVersionRefSchema = z.object({
@@ -161,6 +167,7 @@ export const jobSchema = z
     finishedAt: timestampSchema.nullable(),
     error: jobErrorSchema.nullable(),
     ttsResult: ttsJobResultSchema.nullable(),
+    liveExportResult: liveExportResultSchema.nullable(),
     artifacts: z.array(artifactSchema),
   })
   .superRefine((job, ctx) => {
@@ -204,6 +211,23 @@ export const jobSchema = z
         message: "asset_ingest Job は assetId を必須とします",
         path: ["assetId"],
       });
+    } else if (job.kind === "live_export") {
+      for (const field of ["workId", "languageEditionId", "scriptVersionId"] as const) {
+        if (job[field] === null) {
+          ctx.addIssue({
+            code: "custom",
+            message: `live_export Job は ${field} を必須とします`,
+            path: [field],
+          });
+        }
+      }
+      if (job.assetId !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "live_export Job は assetId を持ちません",
+          path: ["assetId"],
+        });
+      }
     }
     if (job.kind !== "tts" && job.ttsResult !== null) {
       ctx.addIssue({
@@ -225,6 +249,68 @@ export const jobSchema = z
           code: "custom",
           message: "ttsResult は succeeded な tts Job だけが持ちます",
           path: ["ttsResult"],
+        });
+      }
+    }
+    if (job.kind !== "live_export" && job.liveExportResult !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "liveExportResult は live_export Job だけが持ちます",
+        path: ["liveExportResult"],
+      });
+    }
+    if (job.kind === "live_export") {
+      if (job.status === "succeeded") {
+        if (job.liveExportResult === null) {
+          ctx.addIssue({
+            code: "custom",
+            message: "succeeded な live_export Job は liveExportResult を必須とします",
+            path: ["liveExportResult"],
+          });
+        } else {
+          for (const field of [
+            "packagePath",
+            "packageId",
+            "manifestSha256",
+            "fileCount",
+            "preparedCueCount",
+          ] as const) {
+            if (job.liveExportResult[field] === null) {
+              ctx.addIssue({
+                code: "custom",
+                message: `succeeded な live_export Job の liveExportResult.${field} は必須です`,
+                path: ["liveExportResult", field],
+              });
+            }
+          }
+        }
+      }
+      if (job.status === "failed" && job.liveExportResult !== null) {
+        for (const field of [
+          "packagePath",
+          "packageId",
+          "manifestSha256",
+          "fileCount",
+          "preparedCueCount",
+        ] as const) {
+          if (job.liveExportResult[field] !== null) {
+            ctx.addIssue({
+              code: "custom",
+              message: `failed な live_export Job の liveExportResult.${field} は null にしてください`,
+              path: ["liveExportResult", field],
+            });
+          }
+        }
+      }
+      if (
+        job.status !== "succeeded" &&
+        job.status !== "failed" &&
+        job.liveExportResult !== null
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "liveExportResult は succeeded / failed の live_export Job だけが持ちます",
+          path: ["liveExportResult"],
         });
       }
     }

@@ -38,6 +38,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   INVALID_OPERATION: "この操作は許可されていません。",
   EXPORT_TARGET_EXISTS: "同名のファイルまたはディレクトリが既に存在します。別のファイル名を指定してください。",
   EXPORT_FAILED: "ファイルを書き出せませんでした。再試行してください。",
+  LIVE_EXPORT_OUTPUT_UNAVAILABLE: "ライブパッケージの出力先を利用できません。存在しないディレクトリを指定してください。",
   INTERNAL_ERROR: "予期しないエラーが発生しました。",
   DATABASE_BUSY: "データベースが混雑しています。少し待って再試行してください。",
 };

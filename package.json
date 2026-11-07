@@ -14,7 +14,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "check:file-size": "node scripts/check-file-size.mjs",
-    "skills:check": "node scripts/check-skills.mjs"
+    "skills:check": "node scripts/check-skills.mjs",
+    "live:export": "npm run live:export --workspace @kakeai/cli --"
   },
   "devDependencies": {
     "skills": "1.7.4",

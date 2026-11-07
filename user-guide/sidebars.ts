@@ -26,6 +26,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'ライブ配信',
+      items: ['live/export'],
+    },
+    {
+      type: 'category',
       label: '応用・映像を作り込む',
       items: [
         'getting-started/web-ui',

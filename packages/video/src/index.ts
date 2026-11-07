@@ -52,6 +52,9 @@ export { buildYouTubeChapterList } from "./youtube-chapters";
 export type { BuildYouTubeChapterListResult } from "./youtube-chapters";
 export { compileDocument, toSecondsText } from "./compiler";
 export type { CompileDocumentOptions, CompiledComposition } from "./compiler";
+export { compileMaterialCardRaw, compileStaticMaterialCard } from "./material-card/compile-card";
+export type { CompileMaterialCardOptions, CompiledMaterialCard } from "./material-card/compile-card";
+export { assertStaticHtml, stripScripts } from "./material-card/strip-scripts";
 export { neutralVisualSkin } from "./skins/neutral";
 export { handmadePaperSkin } from "./skins/handmade-paper";
 export {

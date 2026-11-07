@@ -101,6 +101,7 @@ export function fixtureAssetJob(
     finishedAt: status === "succeeded" ? FIXTURE_TIMESTAMP : null,
     error: null,
     ttsResult: null,
+    liveExportResult: null,
     artifacts: [],
   };
 }
@@ -123,6 +124,7 @@ export function fixtureRenderJob(
     finishedAt: status === "succeeded" ? FIXTURE_TIMESTAMP : null,
     error: null,
     ttsResult: null,
+    liveExportResult: null,
     artifacts: [],
   };
 }
@@ -159,6 +161,7 @@ export function fixtureTtsJob(
             source: "tts",
           }
         : null,
+    liveExportResult: null,
     artifacts: [],
   };
 }
