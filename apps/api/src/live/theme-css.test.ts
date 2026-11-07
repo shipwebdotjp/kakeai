@@ -12,6 +12,9 @@ describe("live theme CSS", () => {
     expect(css).toContain("--kakeai-canvas:");
     expect(css).toContain("--kakeai-font-caption:");
     expect(css).toContain("--kakeai-font-title:");
+    expect(css).toContain("--kakeai-text-caption-size:");
+    expect(css).toContain("--kakeai-text-caption-color:");
+    expect(css).toContain("--kakeai-text-caption-line-height:");
   });
 
   it("records found and fallback font roles", () => {

@@ -3,6 +3,7 @@ import type { IncomingMessage, Server as HttpServer } from "node:http";
 import type { Duplex } from "node:stream";
 import {
   liveClientMessageSchema,
+  type ConsoleSnapshot,
   type LiveServerHelloMessage,
   type LiveServerMessage,
 } from "@kakeai/contracts";
@@ -53,6 +54,7 @@ export class LiveSocketHub {
   private readonly wss: WebSocketServer;
   private readonly clients = new Map<WebSocket, ClientBase>();
   private readonly alive = new Map<WebSocket, boolean>();
+  private readonly stageRoles = new Map<string, "program" | "preview">();
   private readonly pingTimer: ReturnType<typeof setInterval>;
   private readonly unsubscribe: () => void;
   private readonly onUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
@@ -62,7 +64,7 @@ export class LiveSocketHub {
     this.unsubscribe = options.controller.subscribe((change) => this.broadcast(change));
     this.onUpgrade = (req, socket, head) => this.handleUpgrade(req, socket, head);
     options.server.on("upgrade", this.onUpgrade);
-    this.pingTimer = setInterval(() => this.checkLiveness(), 30_000);
+    this.pingTimer = setInterval(() => this.checkLiveness(), 10_000);
   }
 
   private checkLiveness(): void {
@@ -101,6 +103,10 @@ export class LiveSocketHub {
       denyUpgrade(socket);
       return;
     }
+    // `/stage?preview=1` opens `/ws?role=stage&preview=1`. The console embeds
+    // that URL, so its preview iframe never becomes program even when OBS has
+    // not connected yet.
+    const requestedRole = url.searchParams.get("preview") === "1" ? "preview" : undefined;
     const denied = evaluateWebSocketAccess(
       {
         host: headerValue(req.headers.host),
@@ -113,21 +119,33 @@ export class LiveSocketHub {
       return;
     }
     this.wss.handleUpgrade(req, socket, head, (ws) => {
-      this.register(ws, role);
+      this.register(ws, role, requestedRole);
     });
   }
 
-  private register(socket: WebSocket, role: ConnectionRole): void {
+  private register(
+    socket: WebSocket,
+    role: ConnectionRole,
+    requestedRole?: "program" | "preview",
+  ): void {
     const sessionId = `session-${randomUUID()}`;
     const client: ClientBase = { sessionId, role, socket };
     this.clients.set(socket, client);
     this.alive.set(socket, true);
     socket.on("pong", () => {
       this.alive.set(socket, true);
+      if (role === "stage") {
+        // Previews send no stage events. Keep only their lease alive from the
+        // transport; a frozen program must still expire so playback pauses.
+        this.options.controller.touchPreviewStage(sessionId);
+      }
     });
 
     if (role === "stage") {
-      const { lease, state } = this.options.controller.connectStage(sessionId);
+      const { lease, state } = this.options.controller.connectStage(
+        sessionId,
+        requestedRole === undefined ? {} : { requestedRole },
+      );
       const hello: LiveServerHelloMessage = {
         type: "hello",
         runId: this.options.controller.runId,
@@ -142,6 +160,7 @@ export class LiveSocketHub {
         type: "preload",
         cues: this.options.controller.getPreloadCues(),
       });
+      this.stageRoles.set(sessionId, lease.role);
     } else {
       const hello: LiveServerHelloMessage = {
         type: "hello",
@@ -206,7 +225,38 @@ export class LiveSocketHub {
     this.clients.delete(client.socket);
     this.alive.delete(client.socket);
     if (client.role === "stage") {
+      this.stageRoles.delete(client.sessionId);
       this.options.controller.disconnectStage(client.sessionId);
+    }
+  }
+
+  /**
+   * A takeover or lease expiry changes roles without a reconnect. Send the new
+   * lease to the affected stage so its audio output follows program.
+   */
+  private syncStageRoles(stages: ConsoleSnapshot["stages"]): void {
+    const seen = new Set<string>();
+    for (const stage of stages) {
+      seen.add(stage.sessionId);
+      const previous = this.stageRoles.get(stage.sessionId);
+      this.stageRoles.set(stage.sessionId, stage.role);
+      if (previous === undefined || previous === stage.role) {
+        continue;
+      }
+      const lease = this.options.controller.getStageLease(stage.sessionId);
+      if (lease === null) {
+        continue;
+      }
+      for (const client of this.clients.values()) {
+        if (client.sessionId === stage.sessionId) {
+          sendJson(client.socket, { type: "lease", lease });
+        }
+      }
+    }
+    for (const sessionId of [...this.stageRoles.keys()]) {
+      if (!seen.has(sessionId)) {
+        this.stageRoles.delete(sessionId);
+      }
     }
   }
 
@@ -220,6 +270,7 @@ export class LiveSocketHub {
         }
         return;
       case "snapshot":
+        this.syncStageRoles(change.snapshot.stages);
         for (const client of this.clients.values()) {
           if (client.role === "console") {
             sendJson(client.socket, { type: "snapshot", snapshot: change.snapshot });
@@ -268,6 +319,7 @@ export class LiveSocketHub {
     }
     this.clients.clear();
     this.alive.clear();
+    this.stageRoles.clear();
     this.wss.close();
   }
 }

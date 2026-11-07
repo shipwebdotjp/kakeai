@@ -90,7 +90,7 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 420px;
   gap: 16px;
   padding: 16px 24px 32px;
   align-items: start;
@@ -214,6 +214,66 @@ button.danger {
   color: var(--console-muted);
 }
 
+.block-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.block-head h2 {
+  margin: 0;
+}
+
+.queue-position {
+  color: var(--console-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+button.skip {
+  margin-left: auto;
+  border-color: var(--console-warn);
+  color: var(--console-warn);
+}
+
+.current-cue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--console-panel-alt);
+  border-left: 3px solid var(--console-accent);
+}
+
+.current-cue.empty {
+  border-left-color: var(--console-border);
+}
+
+.current-cue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.current-speaker {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.current-caption {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.current-cue .muted {
+  margin: 0;
+}
+
 .segments {
   list-style: none;
   margin: 0;
@@ -288,11 +348,24 @@ button.danger {
 }
 
 .queue tr.current td {
-  background: rgba(74, 163, 255, 0.12);
+  background: rgba(74, 163, 255, 0.16);
+}
+
+.queue tr.current td:first-child {
+  box-shadow: inset 3px 0 0 var(--console-accent);
+}
+
+.queue tr.past td {
+  opacity: 0.55;
 }
 
 .queue tr:last-child td {
   border-bottom: none;
+}
+
+.index-cell {
+  width: 34px;
+  text-align: right;
 }
 
 .caption-cell {
@@ -411,6 +484,38 @@ button.danger {
 .event-type {
   color: var(--console-accent);
   font-size: 11px;
+}
+
+/* Stage preview */
+
+.preview-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--console-border);
+  background: #000;
+}
+
+.preview-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.stage-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--console-accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.stage-link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 1100px) {

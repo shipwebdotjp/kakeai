@@ -31,6 +31,10 @@ export function buildThemeCss(theme: VisualThemeDefinition, locale: string): str
         style.font,
         locale,
       )}`,
+      `--kakeai-text-${role}-size:${style.fontSize}px`,
+      `--kakeai-text-${role}-color:${style.color}`,
+      `--kakeai-text-${role}-weight:${style.decoration.bold ? 700 : 400}`,
+      `--kakeai-text-${role}-line-height:${style.lineHeight}`,
     );
   }
   return `:root{${declarations.join(";")}}\n`;

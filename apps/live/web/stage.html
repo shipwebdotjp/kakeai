@@ -4,13 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kakeai Live Stage</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/package/theme.css" />
     <link rel="stylesheet" href="./stage/stage.css" />
   </head>
   <body>
     <div id="stage-viewport">
       <div id="stage-canvas" class="stage-canvas">
-        <div id="phase-overlay" class="phase-overlay">
+        <div id="phase-overlay" class="phase-overlay" hidden>
           <p id="phase-kicker" class="phase-kicker">まもなく始まります</p>
           <h1 id="phase-title" class="phase-title"></h1>
           <p id="phase-countdown" class="phase-countdown" hidden></p>
@@ -19,36 +20,23 @@
         <div id="live-layout" class="live-layout" hidden>
           <header class="segment-bar">
             <span id="segment-label" class="segment-label"></span>
+            <span id="safe-mode-badge" class="safe-mode-badge" hidden>安全モード</span>
           </header>
 
           <main class="stage-main">
-            <section id="character-left" class="character character-left">
-              <div class="character-figure">
-                <div class="character-head">
-                  <span class="character-eye eye-left"></span>
-                  <span class="character-eye eye-right"></span>
-                  <span class="character-mouth"></span>
-                </div>
-                <div class="character-body"></div>
-              </div>
-              <p class="character-name"></p>
-              <p class="character-expression"></p>
-            </section>
+            <section id="character-left" class="character character-left" hidden></section>
 
-            <section id="material-slot" class="material-slot" hidden></section>
-
-            <section id="character-right" class="character character-right">
-              <div class="character-figure">
-                <div class="character-head">
-                  <span class="character-eye eye-left"></span>
-                  <span class="character-eye eye-right"></span>
-                  <span class="character-mouth"></span>
-                </div>
-                <div class="character-body"></div>
+            <div class="stage-center">
+              <div id="thinking-indicator" class="thinking-indicator" hidden>
+                <span class="thinking-dot"></span>
+                <span class="thinking-dot"></span>
+                <span class="thinking-dot"></span>
+                <span class="thinking-label">考え中</span>
               </div>
-              <p class="character-name"></p>
-              <p class="character-expression"></p>
-            </section>
+              <section id="material-slot" class="material-slot" hidden></section>
+            </div>
+
+            <section id="character-right" class="character character-right" hidden></section>
           </main>
 
           <div id="comment-card" class="comment-card" hidden aria-live="polite" role="status">
@@ -63,8 +51,18 @@
             <span id="caption-text" class="caption-text"></span>
           </div>
 
-          <div id="status-badge" class="status-badge" hidden></div>
+          <div id="paused-overlay" class="paused-overlay" hidden>
+            <p class="paused-label">一時停止中</p>
+          </div>
+
+          <div id="error-overlay" class="error-overlay" hidden>
+            <p class="error-label">エラーが発生しました</p>
+            <p class="error-detail">コンソールで状態を確認してください。</p>
+          </div>
         </div>
+
+        <div id="preview-badge" class="preview-badge" hidden>PREVIEW</div>
+        <div id="connection-badge" class="connection-badge" hidden></div>
       </div>
     </div>
     <script type="module" src="./stage/main.ts"></script>

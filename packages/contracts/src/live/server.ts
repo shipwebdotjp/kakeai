@@ -40,6 +40,8 @@ export const liveStageConnectionSchema = z.strictObject({
   role: stageLeaseRoleSchema,
   connectedAt: timestampSchema,
   leaseExpiresAt: timestampSchema,
+  /** `/stage?preview=1`: always preview and not a takeover candidate by default. */
+  explicitPreview: z.boolean().optional(),
 });
 export type LiveStageConnection = z.infer<typeof liveStageConnectionSchema>;
 
@@ -117,6 +119,13 @@ export const liveServerEventMessageSchema = z.strictObject({
 });
 export type LiveServerEventMessage = z.infer<typeof liveServerEventMessageSchema>;
 
+export const liveServerLeaseMessageSchema = z.strictObject({
+  type: z.literal("lease"),
+  /** Sent to a stage when an explicit takeover or expiry changes its role. */
+  lease: stageLeaseSchema,
+});
+export type LiveServerLeaseMessage = z.infer<typeof liveServerLeaseMessageSchema>;
+
 export const liveServerMessageSchema = z.discriminatedUnion("type", [
   liveServerHelloMessageSchema,
   liveServerStateMessageSchema,
@@ -124,6 +133,7 @@ export const liveServerMessageSchema = z.discriminatedUnion("type", [
   liveServerPreloadMessageSchema,
   liveServerNoticeMessageSchema,
   liveServerEventMessageSchema,
+  liveServerLeaseMessageSchema,
 ]);
 export type LiveServerMessage = z.infer<typeof liveServerMessageSchema>;
 

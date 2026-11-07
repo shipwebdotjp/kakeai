@@ -6,12 +6,22 @@ interface StageSession {
   role: StageLeaseRole;
   connectedAt: string;
   lease: StageLease;
+  explicitPreview: boolean;
 }
 
 export interface StageLeaseManagerOptions {
   ttlMs?: number;
   now?: () => Date;
   onProgramExpired?: (sessionId: string) => void;
+}
+
+export interface StageConnectOptions {
+  /**
+   * `preview` forces a preview lease even when no program is connected. The
+   * console embeds `/stage?preview=1` so its iframe never takes program.
+   * Ordinary stage connections omit this and still take the first program.
+   */
+  requestedRole?: StageLeaseRole;
 }
 
 export type TakeoverResult =
@@ -38,18 +48,24 @@ export class StageLeaseManager {
     this.onProgramExpired = options.onProgramExpired;
   }
 
-  connect(sessionId: string): StageLease {
+  connect(sessionId: string, options: StageConnectOptions = {}): StageLease {
     this.expireIfNeeded();
     const existing = this.sessions.get(sessionId);
     if (existing !== undefined) {
+      // The server issues a fresh session id per WebSocket connection, so this
+      // path only serves repeated calls in tests; keep the established role.
       return this.touch(sessionId) ?? existing.lease;
     }
-    const role: StageLeaseRole = this.program() === null ? "program" : "preview";
+    let role: StageLeaseRole = "preview";
+    if (options.requestedRole !== "preview" && this.program() === null) {
+      role = "program";
+    }
     const session: StageSession = {
       sessionId,
       role,
       connectedAt: this.now().toISOString(),
       lease: this.issue(sessionId, role),
+      explicitPreview: options.requestedRole === "preview",
     };
     this.sessions.set(sessionId, session);
     return session.lease;
@@ -94,6 +110,11 @@ export class StageLeaseManager {
     return session.lease;
   }
 
+  /** Transport keepalive for preview stages, which send no stage events. */
+  touchPreview(sessionId: string): StageLease | null {
+    return this.roleOf(sessionId) === "preview" ? this.touch(sessionId) : null;
+  }
+
   takeover(sessionId: string): TakeoverResult {
     this.expireIfNeeded();
     const target = this.sessions.get(sessionId);
@@ -122,6 +143,7 @@ export class StageLeaseManager {
         role: session.role,
         connectedAt: session.connectedAt,
         leaseExpiresAt: session.lease.expiresAt,
+        explicitPreview: session.explicitPreview,
       }));
   }
 

@@ -18,7 +18,7 @@ import type {
 import type { RunLogEventInput, RunStore } from "../runs/run-store.ts";
 import type { SegmentBufferEstimate } from "./buffer.ts";
 import { CueControl, type LiveCuePatch } from "./control-queue.ts";
-import { StageLeaseManager } from "./lease.ts";
+import { StageLeaseManager, type StageConnectOptions } from "./lease.ts";
 import { Playout, type PlayoutEvent, type PlayoutScheduler } from "./playout.ts";
 import { dispatchPlayoutEvent } from "./playout-events.ts";
 import { CueQueueStore } from "./queue.ts";
@@ -268,9 +268,10 @@ export class LiveController {
     return buildShowMeta(this.show);
   }
 
-  getStageConnections(): LiveStageConnection[] {
-    return this.leases.list();
-  }
+  getStageConnections(): LiveStageConnection[] { return this.leases.list(); }
+
+  touchPreviewStage(sessionId: string): StageLease | null { return this.leases.touchPreview(sessionId); }
+  getStageLease(sessionId: string): StageLease | null { return this.leases.leaseOf(sessionId); }
 
   getPreloadCues(): LivePreloadCue[] {
     return this.cueControl.getPreloadCues();
@@ -280,8 +281,8 @@ export class LiveController {
     return this.cueControl.getBufferEstimate();
   }
 
-  connectStage(sessionId: string): { lease: StageLease; state: StageState } {
-    const lease = this.leases.connect(sessionId);
+  connectStage(sessionId: string, options: StageConnectOptions = {}): { lease: StageLease; state: StageState } {
+    const lease = this.leases.connect(sessionId, options);
     this.publishSnapshot();
     return { lease, state: this.getState() };
   }

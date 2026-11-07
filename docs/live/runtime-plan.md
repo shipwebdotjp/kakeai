@@ -32,12 +32,17 @@ apps/live/
 
 - HTTP: `/stage`、`/console`、`/package/*`、`/healthz`。
 - WebSocket: `/ws?role=stage` と `/ws?role=console`。
-- サーバからステージへ: `hello`、`state`、`preload`、`notice`。
+- サーバからステージへ: `hello`、`state`、`preload`、`notice`、`lease`。
 - サーバからコンソールへ: `hello`、`snapshot`、`event`、`notice`。
 - ステージからサーバへ: `stage_event`（`StageEvent`）。
 - コンソールからサーバへ: `command`（開始・終了・停止・再開・安全モード・program引き継ぎ・ピン等）。
 
 サーバは接続時に最新状態を送る。programステージは実行中の再生位置を`playback.startedAt`から計算してシークする。previewはミュートし、`stage_event`を送らない（送られても無視する）。
+
+- `/stage?preview=1` は `/ws?role=stage&preview=1` で明示的にpreviewを要求する。programが不在でもpreviewになり、programには昇格しない。通常の `/stage` は従来どおり最初の接続がprogramを取る。
+- previewは`stage_event`を送らない。previewのリースはWebSocketのpongでサーバが更新し、コンソールの接続一覧から消えないようにする。
+- 明示的なprogram引き継ぎやリース失効でロールが変わったとき、サーバは対象ステージへ `lease` を送る。ステージは再生を止めずにミュート状態だけを切り替える。
+- ステージが読む音声URLはパッケージ相対パスを `/package/<path>` で解決する。P5の生成音声は、実行ディレクトリ配信（例: `/run/<runId>/generated/...`）として拡張する。
 
 ## 状態の所有者
 

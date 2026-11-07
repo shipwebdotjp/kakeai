@@ -22,7 +22,10 @@ const PAGE_CSP = [
   "img-src 'self' data:",
   "media-src 'self'",
   "frame-src 'self'",
-  "connect-src 'self' ws://127.0.0.1:* ws://localhost:* ws://[::1]:*",
+  // The server binds 127.0.0.1, so IPv4 loopback hosts are enough. Chrome
+  // rejects an IPv6 host source with a wildcard port, which would otherwise
+  // disable the whole connect-src directive.
+  "connect-src 'self' ws://127.0.0.1:* ws://localhost:*",
   "font-src 'self' data:",
   "base-uri 'none'",
   "form-action 'none'",

@@ -8,6 +8,8 @@ export type LiveSocketStatus = "connecting" | "open" | "closed";
 
 export interface LiveSocketOptions {
   role: "stage" | "console";
+  /** `/stage?preview=1` asks the server for an explicit preview lease. */
+  preview?: boolean;
   onMessage: (message: LiveServerMessage) => void;
   onStatus?: (status: LiveSocketStatus) => void;
 }
@@ -18,9 +20,10 @@ export interface LiveSocket {
   close(): void;
 }
 
-function socketUrl(role: "stage" | "console"): string {
+function socketUrl(role: "stage" | "console", preview: boolean): string {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws?role=${role}`;
+  const query = `role=${role}${preview ? "&preview=1" : ""}`;
+  return `${protocol}//${window.location.host}/ws?${query}`;
 }
 
 /**
@@ -52,7 +55,7 @@ export function openLiveSocket(options: LiveSocketOptions): LiveSocket {
       return;
     }
     options.onStatus?.("connecting");
-    const next = new WebSocket(socketUrl(options.role));
+    const next = new WebSocket(socketUrl(options.role, options.preview === true));
     socket = next;
     next.addEventListener("open", () => {
       attempts = 0;

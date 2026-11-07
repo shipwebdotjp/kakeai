@@ -1,21 +1,23 @@
 import type {
+  LiveCharacterSheet,
   LivePackageShow,
   LiveServerMessage,
   LiveSide,
-  MaterialCard,
-  StageCharacterState,
-  StageMaterialState,
   StageState,
 } from "@kakeai/contracts";
-import { openLiveSocket } from "../shared/socket";
+import { openLiveSocket, type LiveSocket, type LiveSocketStatus } from "../shared/socket";
+import { StageAudio } from "./audio";
+import { StageCharacters } from "./characters";
+import { element } from "./elements";
+import { StageMaterials } from "./materials";
+import {
+  loadStagePackageData,
+  preloadCharacterImages,
+  preloadFonts,
+  type StagePackageData,
+} from "./package-data";
 
-function element<T extends HTMLElement>(id: string): T {
-  const found = document.getElementById(id);
-  if (found === null) {
-    throw new Error(`ステージ要素が見つかりません: #${id}`);
-  }
-  return found as T;
-}
+const previewRequested = new URLSearchParams(window.location.search).get("preview") === "1";
 
 const canvas = element<HTMLDivElement>("stage-canvas");
 const overlay = element<HTMLDivElement>("phase-overlay");
@@ -24,8 +26,8 @@ const overlayTitle = element<HTMLHeadingElement>("phase-title");
 const countdownText = element<HTMLParagraphElement>("phase-countdown");
 const layout = element<HTMLDivElement>("live-layout");
 const segmentLabel = element<HTMLSpanElement>("segment-label");
-const leftCharacter = element<HTMLElement>("character-left");
-const rightCharacter = element<HTMLElement>("character-right");
+const safeModeBadge = element<HTMLSpanElement>("safe-mode-badge");
+const thinkingIndicator = element<HTMLDivElement>("thinking-indicator");
 const materialSlot = element<HTMLElement>("material-slot");
 const commentCard = element<HTMLDivElement>("comment-card");
 const commentAuthor = element<HTMLParagraphElement>("comment-author");
@@ -34,19 +36,43 @@ const commentState = element<HTMLParagraphElement>("comment-state");
 const captionBand = element<HTMLDivElement>("caption-band");
 const captionSpeaker = element<HTMLSpanElement>("caption-speaker");
 const captionText = element<HTMLSpanElement>("caption-text");
-const statusBadge = element<HTMLDivElement>("status-badge");
+const pausedOverlay = element<HTMLDivElement>("paused-overlay");
+const errorOverlay = element<HTMLDivElement>("error-overlay");
+const previewBadge = element<HTMLDivElement>("preview-badge");
+const connectionBadge = element<HTMLDivElement>("connection-badge");
+
+const speakerNames = new Map<LiveSide, string>();
+const materials = new StageMaterials(materialSlot);
+const characters = new StageCharacters({
+  left: element<HTMLElement>("character-left"),
+  right: element<HTMLElement>("character-right"),
+  names: speakerNames,
+});
 
 let state: StageState | null = null;
+let socket: LiveSocket | null = null;
+let role: "program" | "preview" | null = null;
 let liveRunId: string | null = null;
 let liveSessionId: string | null = null;
-let materials = new Map<string, MaterialCard>();
-const speakerNames = new Map<LiveSide, string>();
-let currentMaterialKey: string | null = null;
+let assetsReady = false;
+let readySentForSession: string | null = null;
+let currentCaptionKey: string | null = null;
 let countdownTimer: number | null = null;
 
-function packageUrl(path: string): string {
-  return `/package/${path.split("/").map(encodeURIComponent).join("/")}`;
-}
+const audio = new StageAudio({
+  isProgram: () => role === "program",
+  send: (event) => {
+    sendEvent({
+      kind: event.kind,
+      cueId: event.playback.cueId,
+      attempt: event.playback.attempt,
+      sequence: event.playback.sequence,
+      ...(event.error === undefined ? {} : { error: event.error }),
+    });
+  },
+});
+
+previewBadge.hidden = !previewRequested;
 
 function fitCanvas(): void {
   const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
@@ -55,6 +81,49 @@ function fitCanvas(): void {
 
 function speakerName(side: LiveSide): string {
   return speakerNames.get(side) ?? (side === "left" ? "左" : "右");
+}
+
+function sendEvent(event: {
+  kind: "stage_ready" | "audio_ended" | "audio_error" | "stage_heartbeat";
+  cueId: string | null;
+  attempt: number;
+  sequence: number;
+  error?: string;
+}): void {
+  if (role !== "program" || liveRunId === null || liveSessionId === null || socket === null) {
+    return;
+  }
+  socket.send({
+    type: "stage_event",
+    event: {
+      kind: event.kind,
+      runId: liveRunId,
+      sessionId: liveSessionId,
+      cueId: event.cueId,
+      attempt: event.attempt,
+      sequence: event.sequence,
+      ...(event.error === undefined ? {} : { error: event.error }),
+    },
+  });
+}
+
+function currentPlaybackFields(): { cueId: string | null; attempt: number; sequence: number } {
+  return {
+    cueId: state?.playback?.cueId ?? null,
+    attempt: state?.playback?.attempt ?? 0,
+    sequence: state?.playback?.sequence ?? 0,
+  };
+}
+
+function sendReadyIfPossible(): void {
+  if (!assetsReady || role !== "program" || liveSessionId === null) {
+    return;
+  }
+  if (readySentForSession === liveSessionId) {
+    return;
+  }
+  readySentForSession = liveSessionId;
+  sendEvent({ kind: "stage_ready", ...currentPlaybackFields() });
 }
 
 function formatCountdown(ms: number): string {
@@ -104,102 +173,22 @@ function setCountdown(active: boolean): void {
   countdownTimer = window.setInterval(updateCountdown, 1000);
 }
 
-function renderCharacter(
-  section: HTMLElement,
-  character: StageCharacterState | null,
-  side: LiveSide,
-): void {
-  if (character === null) {
-    section.hidden = true;
-    return;
-  }
-  section.hidden = false;
-  section.classList.toggle("speaking", character.speaking);
-  const name = section.querySelector<HTMLParagraphElement>(".character-name");
-  const expression = section.querySelector<HTMLParagraphElement>(".character-expression");
-  if (name !== null) {
-    name.textContent = speakerName(side);
-  }
-  if (expression !== null) {
-    expression.textContent = character.expression;
-  }
-}
-
-function clearMaterial(): void {
-  materialSlot.replaceChildren();
-  materialSlot.hidden = true;
-  currentMaterialKey = null;
-}
-
-function buildMaterialContent(card: MaterialCard): HTMLElement | null {
-  switch (card.kind) {
-    case "image": {
-      const image = document.createElement("img");
-      image.src = packageUrl(card.file);
-      image.alt = "";
-      image.addEventListener("error", () => clearMaterial());
-      return image;
-    }
-    case "video": {
-      const video = document.createElement("video");
-      video.src = packageUrl(card.file);
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.autoplay = true;
-      video.addEventListener("error", () => clearMaterial());
-      void video.play().catch(() => undefined);
-      return video;
-    }
-    case "html": {
-      const frame = document.createElement("iframe");
-      // ADR-0126: static package HTML must not run scripts. Same-origin keeps
-      // relative package assets working; `allow-scripts` is deliberately absent.
-      frame.setAttribute("sandbox", "allow-same-origin");
-      frame.setAttribute("title", "素材カード");
-      frame.src = packageUrl(card.file);
-      return frame;
-    }
-    default:
-      return null;
-  }
-}
-
-function renderMaterial(material: StageMaterialState | null): void {
-  if (material === null) {
-    if (currentMaterialKey !== null) {
-      clearMaterial();
-    }
-    materialSlot.hidden = true;
-    return;
-  }
-  const card = materials.get(material.id);
-  if (card === undefined) {
-    clearMaterial();
-    return;
-  }
-  const key = `${card.id}:${card.file}`;
-  if (key !== currentMaterialKey) {
-    const content = buildMaterialContent(card);
-    if (content === null) {
-      clearMaterial();
-      return;
-    }
-    materialSlot.replaceChildren(content);
-    currentMaterialKey = key;
-  }
-  materialSlot.hidden = false;
-  materialSlot.classList.toggle("focus", material.focus);
-}
-
 function renderCaption(next: StageState): void {
   if (next.caption === null) {
     captionBand.hidden = true;
+    currentCaptionKey = null;
     return;
   }
   captionBand.hidden = false;
   captionSpeaker.textContent = speakerName(next.caption.speaker);
-  captionText.textContent = next.caption.text;
+  const key = `${next.caption.speaker}:${next.caption.text}`;
+  if (key !== currentCaptionKey) {
+    currentCaptionKey = key;
+    captionText.textContent = next.caption.text;
+    captionText.classList.remove("caption-enter");
+    void captionText.offsetWidth;
+    captionText.classList.add("caption-enter");
+  }
 }
 
 function renderComment(next: StageState): void {
@@ -214,29 +203,18 @@ function renderComment(next: StageState): void {
   commentState.textContent = comment.state === "reading" ? "読み上げ中" : "回答中";
 }
 
-function renderStatusBadge(next: StageState): void {
-  let label: string | null = null;
-  if (next.phase === "paused") {
-    label = "一時停止中";
-  } else if (next.phase === "safe_mode") {
-    label = "安全モード";
-  } else if (next.phase === "error") {
-    label = "エラー";
-  } else if (next.status === "thinking") {
-    label = "考え中";
-  }
-  statusBadge.hidden = label === null;
-  statusBadge.textContent = label ?? "";
-}
-
 function renderLive(next: StageState): void {
   segmentLabel.textContent = next.segment?.label ?? "";
-  renderCharacter(leftCharacter, next.characters.left, "left");
-  renderCharacter(rightCharacter, next.characters.right, "right");
-  renderMaterial(next.material);
+  characters.render(next.characters);
+  materials.render(next.material);
   renderCaption(next);
   renderComment(next);
-  renderStatusBadge(next);
+  safeModeBadge.hidden = next.phase !== "safe_mode";
+  thinkingIndicator.hidden =
+    next.status !== "thinking" ||
+    next.phase === "paused" ||
+    next.phase === "error" ||
+    next.phase === "safe_mode";
 }
 
 function render(next: StageState): void {
@@ -244,6 +222,8 @@ function render(next: StageState): void {
   const showOverlay = next.phase === "pre_show" || next.phase === "post_show";
   overlay.hidden = !showOverlay;
   layout.hidden = showOverlay;
+  pausedOverlay.hidden = next.phase !== "paused";
+  errorOverlay.hidden = next.phase !== "error";
 
   if (next.phase === "pre_show") {
     overlayKicker.textContent = "まもなく始まります";
@@ -260,78 +240,111 @@ function render(next: StageState): void {
   if (!showOverlay) {
     renderLive(next);
   }
+  audio.update(next.phase, next.playback);
 }
-
-let liveSocket: ReturnType<typeof openLiveSocket> | null = null;
 
 function handleMessage(message: LiveServerMessage): void {
-  if (message.type === "hello") {
-    liveRunId = message.runId;
-    liveSessionId = message.sessionId;
-    render(message.state);
-    return;
-  }
-  if (message.type === "state") {
-    render(message.state);
+  switch (message.type) {
+    case "hello":
+      liveRunId = message.runId;
+      liveSessionId = message.sessionId;
+      role = message.role === "stage" ? (message.lease?.role ?? "preview") : null;
+      render(message.state);
+      sendReadyIfPossible();
+      return;
+    case "state":
+      render(message.state);
+      return;
+    case "lease":
+      if (message.lease.sessionId !== liveSessionId) {
+        return;
+      }
+      role = message.lease.role;
+      audio.setProgram(role === "program");
+      return;
+    case "preload":
+      audio.setPreload(message.cues);
+      return;
+    default:
+      return;
   }
 }
 
-async function loadShowData(): Promise<void> {
-  try {
-    const response = await fetch("/package/show.json", { cache: "force-cache" });
-    if (!response.ok) {
-      return;
+function setConnectionStatus(status: LiveSocketStatus): void {
+  document.body.dataset.connection = status;
+  if (!previewRequested) {
+    connectionBadge.hidden = true;
+    return;
+  }
+  connectionBadge.hidden = status === "open";
+  connectionBadge.textContent = status === "connecting" ? "プレビュー接続中" : "プレビュー切断";
+}
+
+function applyPackageData(data: StagePackageData): void {
+  applyShow(data.show);
+  applyCharacters(data.characters);
+}
+
+function applyShow(show: LivePackageShow | null): void {
+  if (show === null) {
+    return;
+  }
+  materials.setShow(show);
+  audio.setCueDurations(show.cues);
+  speakerNames.clear();
+  for (const speaker of show.speakers) {
+    speakerNames.set(speaker.side, speaker.name);
+  }
+  characters.setNames(speakerNames);
+}
+
+function applyCharacters(sheet: LiveCharacterSheet | null): void {
+  if (sheet === null) {
+    return;
+  }
+  characters.setSheet(sheet);
+  for (const character of sheet.characters) {
+    if (!speakerNames.has(character.side)) {
+      speakerNames.set(character.side, character.name);
     }
-    const show = (await response.json()) as LivePackageShow;
-    materials = new Map(show.materials.map((card) => [card.id, card]));
-    speakerNames.clear();
-    for (const speaker of show.speakers) {
-      speakerNames.set(speaker.side, speaker.name);
-    }
-    if (state !== null) {
-      render(state);
-    }
-  } catch {
-    // The stage still renders placeholders when package metadata is unavailable.
   }
 }
 
-document.body.dataset.connection = "connecting";
-liveSocket = openLiveSocket({
-  role: "stage",
-  onMessage: handleMessage,
-  onStatus: (status) => {
-    document.body.dataset.connection = status;
-    if (status !== "open") {
-      statusBadge.hidden = false;
-      statusBadge.textContent = status === "connecting" ? "再接続中" : "切断";
-      return;
-    }
-    if (state !== null) {
-      renderStatusBadge(state);
-    }
-  },
-});
+async function prepareStageAssets(data: StagePackageData): Promise<void> {
+  await Promise.all([
+    data.characters === null ? Promise.resolve() : preloadCharacterImages(data.characters),
+    preloadFonts(),
+  ]);
+  assetsReady = true;
+  sendReadyIfPossible();
+}
 
-// Keeps the program lease alive. P3 adds audio_ended/audio_error on the same
-// socket; sequence 0 is fine for heartbeats, which never advance playout.
-window.setInterval(() => {
-  if (liveSocket === null || liveRunId === null || liveSessionId === null) {
-    return;
-  }
-  liveSocket.send({
-    type: "stage_event",
-    event: {
-      kind: "stage_heartbeat",
-      runId: liveRunId,
-      sessionId: liveSessionId,
-      cueId: state?.playback?.cueId ?? null,
-      attempt: state?.playback?.attempt ?? 0,
-      sequence: 0,
-    },
+async function initialize(): Promise<void> {
+  document.body.dataset.connection = "connecting";
+  const data = await loadStagePackageData();
+  applyPackageData(data);
+
+  socket = openLiveSocket({
+    role: "stage",
+    preview: previewRequested,
+    onMessage: handleMessage,
+    onStatus: setConnectionStatus,
   });
-}, 10_000);
+
+  // Heartbeats keep the program lease alive. Preview roles never send one.
+  window.setInterval(() => {
+    if (role !== "program") {
+      return;
+    }
+    sendEvent({ kind: "stage_heartbeat", ...currentPlaybackFields() });
+  }, 10_000);
+
+  void prepareStageAssets(data);
+  if (state !== null) {
+    render(state);
+  }
+}
 
 window.addEventListener("resize", fitCanvas);
 fitCanvas();
-void loadShowData();
+void initialize();

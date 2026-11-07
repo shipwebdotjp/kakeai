@@ -8,6 +8,7 @@ import {
   type ConsoleSnapshot,
   type LivePreloadCue,
   type LiveServerHelloMessage,
+  type LiveServerLeaseMessage,
   type LiveServerMessage,
   type LiveServerPreloadMessage,
   type LiveServerSnapshotMessage,
@@ -135,6 +136,13 @@ class TestWsClient {
     );
   }
 
+  waitForLease(role: "program" | "preview"): Promise<LiveServerLeaseMessage> {
+    return this.waitForMessage<LiveServerLeaseMessage>(
+      "lease",
+      (message) => message.lease.role === role,
+    );
+  }
+
   send(value: unknown): void {
     this.socket.send(JSON.stringify(value));
   }
@@ -148,10 +156,14 @@ async function connect(
   port: number,
   role: "stage" | "console",
   headers: Record<string, string> = {},
+  preview = false,
 ): Promise<TestWsClient> {
-  const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?role=${role}`, {
-    headers: { Origin: `http://127.0.0.1:${port}`, ...headers },
-  });
+  const socket = new WebSocket(
+    `ws://127.0.0.1:${port}/ws?role=${role}${preview ? "&preview=1" : ""}`,
+    {
+      headers: { Origin: `http://127.0.0.1:${port}`, ...headers },
+    },
+  );
   const client = new TestWsClient(socket);
   await new Promise<void>((resolvePromise, rejectPromise) => {
     socket.once("open", () => resolvePromise());
@@ -314,6 +326,28 @@ describe("live WebSocket server", () => {
     stage1.close();
     stage2.close();
     consoleClient.close();
+  });
+
+  it("serves /stage?preview=1 and connects it as preview before program exists", async () => {
+    const page = await request(`${server.url}/stage?preview=1`);
+    expect(page.status).toBe(200);
+    expect(page.body.toString("utf8")).toContain("stage-canvas");
+
+    const preview = await connect(server.port, "stage", {}, true);
+    const previewHello = await preview.waitForHello();
+    expect(previewHello.lease?.role).toBe("preview");
+    expect(server.controller.getStageConnections().every((entry) => entry.role === "preview")).toBe(
+      true,
+    );
+    expect(server.controller.getStageConnections()[0]?.explicitPreview).toBe(true);
+
+    const program = await connect(server.port, "stage");
+    const programHello = await program.waitForHello();
+    expect(programHello.lease?.role).toBe("program");
+    expect(programHello.sessionId).not.toBe(previewHello.sessionId);
+
+    preview.close();
+    program.close();
   });
 
   it("advances on program audio_ended and ignores preview and duplicate events", async () => {
@@ -501,6 +535,9 @@ describe("live WebSocket server", () => {
       type: "command",
       command: { kind: "takeover_program", sessionId: secondHello.sessionId },
     });
+    const secondLease = await second.waitForLease("program");
+    expect(secondLease.lease.sessionId).toBe(secondHello.sessionId);
+    expect(secondLease.lease.role).toBe("program");
     const takenOver = await consoleClient.waitForSnapshot(
       (snapshot) =>
         snapshot.stages[0]?.role === "program" &&
