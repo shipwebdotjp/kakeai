@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt, timestampSchema } from "../content/primitives";
+import {
+  commentCornerSchema,
+  commentSourceStatusSchema,
+  liveCommentEntrySchema,
+} from "./comment";
 import { livePackageRelativePathSchema } from "./paths";
 import { liveSegmentKindSchema } from "./profile";
 import { runLogEventSchema } from "./run-log";
@@ -46,9 +51,9 @@ export const liveStageConnectionSchema = z.strictObject({
 export type LiveStageConnection = z.infer<typeof liveStageConnectionSchema>;
 
 /**
- * Server-to-console state. New sections (comments in P4, generation in P5) are
- * added as optional or required fields in later phases; clients validate the
- * messages they receive against this schema.
+ * Server-to-console state. Comment sections became required in P4; generation
+ * sections (P5) can be added as optional or required fields later. Clients
+ * validate every message against this schema.
  */
 export const consoleSnapshotSchema = z.strictObject({
   runId: idSchema,
@@ -63,6 +68,9 @@ export const consoleSnapshotSchema = z.strictObject({
   playback: stagePlaybackSchema.nullable(),
   status: stageStatusSchema,
   clock: stageClockSchema,
+  comments: z.array(liveCommentEntrySchema),
+  commentCorner: commentCornerSchema,
+  commentSource: commentSourceStatusSchema,
 });
 export type ConsoleSnapshot = z.infer<typeof consoleSnapshotSchema>;
 

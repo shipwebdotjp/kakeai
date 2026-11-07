@@ -3,8 +3,10 @@ import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DEFAULT_LIVE_COMMENTS_CONFIG,
   liveRuntimeConfigSchema,
   liveServerMessageSchema,
+  type CommentCandidate,
   type ConsoleSnapshot,
   type LivePreloadCue,
   type LiveServerHelloMessage,
@@ -17,8 +19,12 @@ import {
 } from "@kakeai/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
+import { CommentFilter } from "../comments/filter.ts";
+import type { CommentAnalyst } from "../llm/comment-analyst.ts";
 import { loadLivePackage } from "../package/loader.ts";
-import { createTestPackage } from "../testing/package-fixture.ts";
+import { CommentCorner } from "../runtime/comment-corner.ts";
+import { ManualCommentSource } from "../testing/manual-comment-source.ts";
+import { createTestPackage, testShow } from "../testing/package-fixture.ts";
 import { createLiveServer, type LiveServer } from "./server.ts";
 
 interface HttpResponse {
@@ -181,10 +187,55 @@ function config(dataDir: string) {
   });
 }
 
+function fixtureCandidate(commentId: string): CommentCandidate {
+  return {
+    commentId,
+    score: 0.7,
+    safety: "ok",
+    relevance: "high",
+    isQuestion: false,
+    reason: "理由",
+    suggestedAngle: "補足する",
+    safeSummary: `要約: ${commentId}`,
+    safeQuestion: `質問: ${commentId}`,
+    safeQuote: null,
+    piiRedacted: true,
+    urlsRemoved: true,
+  };
+}
+
+function testCommentCorner(): { corner: CommentCorner; source: ManualCommentSource } {
+  const source = new ManualCommentSource();
+  const analyst: CommentAnalyst = {
+    sourceKind: "fixture",
+    async analyze(comments) {
+      return { comments: comments.map((comment) => fixtureCandidate(comment.event.id)) };
+    },
+  };
+  const corner = new CommentCorner({
+    source,
+    analyst,
+    filter: new CommentFilter({
+      ngWords: [],
+      blockedTopics: [],
+      maxLength: 300,
+      maxPerAuthorPerMinute: 3,
+    }),
+    commentsConfig: { ...DEFAULT_LIVE_COMMENTS_CONFIG, ngWords: [], cornerHoldMs: 50 },
+    policy: testShow().commentPolicy,
+    safety: { blockedTopics: [] },
+    log: () => undefined,
+    appendComment: () => undefined,
+  });
+  return { corner, source };
+}
+
 const tempRoots: string[] = [];
 let server: LiveServer;
 let packageRoot: string;
 let distDir: string;
+let commentCorner: CommentCorner;
+let commentSource: ManualCommentSource;
 
 async function makeTemp(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
@@ -203,7 +254,16 @@ beforeEach(async () => {
   await writeFile(join(distDir, "assets", "app.js"), "console.log('live');", "utf8");
   const loaded = await loadLivePackage(packageRoot);
   const dataDir = await makeTemp("kakeai-live-data-");
-  server = await createLiveServer({ package: loaded, config: config(dataDir), port: 0, distDir });
+  const injected = testCommentCorner();
+  commentCorner = injected.corner;
+  commentSource = injected.source;
+  server = await createLiveServer({
+    package: loaded,
+    config: config(dataDir),
+    port: 0,
+    distDir,
+    commentCorner,
+  });
 });
 
 afterEach(async () => {
@@ -273,6 +333,7 @@ describe("live HTTP server", () => {
       config: config(dataDir),
       port: 0,
       distDir: emptyDist,
+      commentCorner: testCommentCorner().corner,
     });
     try {
       const stage = await request(`${extra.url}/stage`);
@@ -478,6 +539,70 @@ describe("live WebSocket server", () => {
     expect(script.state.playback?.cueId).toBe("cue-script");
 
     stage.close();
+    consoleClient.close();
+  });
+
+  it("applies comment pins and shows them in the snapshot", async () => {
+    const consoleClient = await connect(server.port, "console");
+    await consoleClient.waitForHello();
+    await consoleClient.waitForSnapshot();
+
+    commentSource.emit({ id: "c1", author: "みかん", text: "質問です" });
+    const received = await consoleClient.waitForSnapshot((snapshot) =>
+      snapshot.comments.some((entry) => entry.comment.id === "c1"),
+    );
+    expect(received.snapshot.comments[0]?.pinned).toBe(false);
+
+    consoleClient.send({
+      type: "command",
+      command: { kind: "pin_comment", commentId: "c1", note: "質問として" },
+    });
+    const pinned = await consoleClient.waitForSnapshot((snapshot) =>
+      snapshot.comments.some((entry) => entry.comment.id === "c1" && entry.pinned),
+    );
+    expect(pinned.snapshot.comments[0]?.pinNote).toBe("質問として");
+
+    consoleClient.send({
+      type: "command",
+      command: { kind: "unpin_comment", commentId: "c1" },
+    });
+    const unpinned = await consoleClient.waitForSnapshot(
+      (snapshot) =>
+        snapshot.comments.some((entry) => entry.comment.id === "c1") &&
+        snapshot.comments.every((entry) => !entry.pinned),
+    );
+    expect(unpinned.snapshot.comments[0]?.pinned).toBe(false);
+    consoleClient.close();
+  });
+
+  it("forwards set_live_chat to the comment source", async () => {
+    const consoleClient = await connect(server.port, "console");
+    await consoleClient.waitForHello();
+    await consoleClient.waitForSnapshot();
+
+    consoleClient.send({
+      type: "command",
+      command: { kind: "set_live_chat", liveChatId: "chat-2" },
+    });
+    const updated = await consoleClient.waitForSnapshot(
+      (snapshot) => snapshot.commentSource.liveChatId === "chat-2",
+    );
+    expect(commentSource.getStatus().liveChatId).toBe("chat-2");
+    expect(updated.snapshot.commentSource.kind).toBe("fixture");
+    consoleClient.close();
+  });
+
+  it("pauses and resumes comment processing without stopping the source", async () => {
+    const consoleClient = await connect(server.port, "console");
+    await consoleClient.waitForHello();
+    await consoleClient.waitForSnapshot();
+
+    consoleClient.send({ type: "command", command: { kind: "pause_comments" } });
+    await consoleClient.waitForSnapshot();
+    consoleClient.send({ type: "command", command: { kind: "resume_comments" } });
+    const resumed = await consoleClient.waitForSnapshot();
+    expect(resumed.snapshot.commentCorner.state).toBe("idle");
+    expect(commentSource.getStatus().state).not.toBe("stopped");
     consoleClient.close();
   });
 

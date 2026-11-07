@@ -9,6 +9,9 @@ import type {
 } from "@kakeai/contracts";
 import { openLiveSocket, type LiveSocket, type LiveSocketStatus } from "../shared/socket";
 import { EventsPanel, NoticesPanel, type NoticeEntry } from "./ActivityPanels";
+import { CommentCornerPanel } from "./CommentCornerPanel";
+import { CommentsPanel } from "./CommentsPanel";
+import { CommentSourcePanel } from "./CommentSourcePanel";
 import { formatTime } from "./format";
 import { PHASE_LABELS, STATUS_LABELS, phaseCanPause } from "./labels";
 import { PreviewPanel } from "./PreviewPanel";
@@ -198,10 +201,34 @@ function App() {
               snapshot={snapshot}
               onSkip={() => sendCommand({ kind: "skip_cue" })}
             />
+
+            <CommentsPanel
+              snapshot={snapshot}
+              onPin={(commentId, note) =>
+                sendCommand({
+                  kind: "pin_comment",
+                  commentId,
+                  ...(note === undefined ? {} : { note }),
+                })
+              }
+              onUnpin={(commentId) => sendCommand({ kind: "unpin_comment", commentId })}
+              onSkip={(commentId) => sendCommand({ kind: "skip_comment", commentId })}
+            />
           </section>
 
           <aside className="sidebar">
             <PreviewPanel />
+            <CommentCornerPanel snapshot={snapshot} />
+            <CommentSourcePanel
+              snapshot={snapshot}
+              onSetLiveChat={(liveChatId) =>
+                sendCommand({ kind: "set_live_chat", liveChatId })
+              }
+              onPauseComments={() => sendCommand({ kind: "pause_comments" })}
+              onResumeComments={() => sendCommand({ kind: "resume_comments" })}
+              onBlockAuthor={(author) => sendCommand({ kind: "block_author", author })}
+              onBlockTopic={(topic) => sendCommand({ kind: "block_topic", topic })}
+            />
             <StagePanel
               snapshot={snapshot}
               takeoverSession={takeoverSession}

@@ -486,6 +486,176 @@ button.skip {
   font-size: 11px;
 }
 
+/* Comments */
+
+.comments-scroll {
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--console-border);
+  border-radius: 7px;
+}
+
+.comments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.comment-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--console-border);
+  font-size: 12px;
+}
+
+.comment-row:last-child {
+  border-bottom: none;
+}
+
+.comment-row.selected {
+  background: rgba(74, 163, 255, 0.12);
+  box-shadow: inset 3px 0 0 var(--console-accent);
+}
+
+.comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.comment-freshness,
+.comment-state {
+  color: var(--console-muted);
+  font-size: 11px;
+}
+
+.comment-author {
+  font-weight: 700;
+}
+
+.comment-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--console-border);
+  font-size: 10px;
+}
+
+.comment-badge-accepted {
+  border-color: var(--console-ok);
+  color: var(--console-ok);
+}
+
+.comment-badge-review {
+  border-color: var(--console-warn);
+  color: var(--console-warn);
+}
+
+.comment-badge-blocked {
+  border-color: var(--console-danger);
+  color: var(--console-danger);
+}
+
+.comment-pin {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--console-accent);
+  color: var(--console-accent);
+  font-size: 10px;
+}
+
+.comment-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.comment-reasons,
+.comment-analysis,
+.comment-note {
+  margin: 0;
+  color: var(--console-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.comment-note {
+  color: var(--console-accent);
+}
+
+.comment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.comment-actions button {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+/* Comment source and corner */
+
+.source-grid {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 6px 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.source-label {
+  color: var(--console-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.source-warning {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--console-warn);
+  border-radius: 4px;
+  background: var(--console-panel-alt);
+  color: var(--console-warn);
+  font-size: 12px;
+}
+
+.source-error {
+  margin: 10px 0 0;
+  color: var(--console-danger);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.inline-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inline-form input,
+.inline-form select {
+  flex: 1;
+  min-width: 0;
+  background: var(--console-panel-alt);
+  color: var(--console-text);
+  border: 1px solid var(--console-border);
+  border-radius: 7px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.inline-form button {
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
 /* Stage preview */
 
 .preview-frame {

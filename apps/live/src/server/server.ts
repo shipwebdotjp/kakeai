@@ -8,9 +8,13 @@ import { resolve } from "node:path";
 import type { Duplex } from "node:stream";
 import type { LiveRuntimeConfig } from "@kakeai/contracts";
 import type { Express } from "express";
+import { CommentFilter } from "../comments/filter.ts";
+import { createCommentSource } from "../comments/factory.ts";
+import { createCommentAnalyst } from "../llm/comment-analyst.ts";
 import type { LoadedLivePackage } from "../package/loader.ts";
+import { CommentCorner } from "../runtime/comment-corner.ts";
 import { LiveController } from "../runtime/controller.ts";
-import { RunStore } from "../runs/run-store.ts";
+import { RunStore, type RunLogEventInput } from "../runs/run-store.ts";
 import { createLiveApp } from "./app.ts";
 import { LOCAL_BIND_ADDRESS } from "./security.ts";
 import { LiveSocketHub } from "./websocket.ts";
@@ -26,6 +30,8 @@ export interface CreateLiveServerOptions {
   runStore?: RunStore;
   now?: () => Date;
   leaseTtlMs?: number;
+  /** Tests inject a prepared corner with a fake source and analyst. */
+  commentCorner?: CommentCorner;
 }
 
 export interface LiveServer {
@@ -61,6 +67,45 @@ async function listen(server: HttpServer, port: number): Promise<number> {
   return address.port;
 }
 
+async function buildCommentCorner(
+  options: CreateLiveServerOptions,
+  hooks: {
+    log: (input: RunLogEventInput) => void;
+    appendComment: (entry: Record<string, unknown>) => void;
+  },
+): Promise<CommentCorner> {
+  const show = options.package.show;
+  const source = await createCommentSource({
+    show,
+    packageRoot: options.package.rootDir,
+    ...(options.testMode === undefined ? {} : { testMode: options.testMode }),
+    config: options.config,
+    ...(options.now === undefined ? {} : { now: options.now }),
+  });
+  const analyst = createCommentAnalyst({
+    llm: options.config.llm,
+    sourceKind: source.getStatus().kind,
+    commentsConfig: options.config.comments,
+  });
+  const filter = new CommentFilter({
+    ngWords: options.config.comments.ngWords,
+    blockedTopics: show.safety.blockedTopics,
+    maxLength: options.config.comments.maxLength,
+    maxPerAuthorPerMinute: options.config.comments.maxPerAuthorPerMinute,
+  });
+  return new CommentCorner({
+    source,
+    analyst,
+    filter,
+    commentsConfig: options.config.comments,
+    policy: show.commentPolicy,
+    safety: show.safety,
+    ...(options.now === undefined ? {} : { now: options.now }),
+    log: hooks.log,
+    appendComment: hooks.appendComment,
+  });
+}
+
 /**
  * Starts the loopback-only live server. The Kakeai API is not involved: the
  * immutable package, the run directory and the local config are the only
@@ -78,6 +123,19 @@ export async function createLiveServer(
       packagePath: options.package.rootDir,
       ...(options.now === undefined ? {} : { now: options.now }),
     }));
+  const controllerHolder: { current: LiveController | null } = { current: null };
+  let commentCorner = options.commentCorner;
+  if (commentCorner === undefined) {
+    try {
+      commentCorner = await buildCommentCorner(options, {
+        log: (input) => controllerHolder.current?.recordEvent(input),
+        appendComment: (entry) => runStore.appendComment(entry),
+      });
+    } catch (error) {
+      await runStore.finish({ status: "failed", phase: "pre_show" });
+      throw error;
+    }
+  }
   const controller = new LiveController({
     runId: runStore.runId,
     show: options.package.show,
@@ -85,7 +143,9 @@ export async function createLiveServer(
     runStore,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.leaseTtlMs === undefined ? {} : { leaseTtlMs: options.leaseTtlMs }),
+    ...(commentCorner === undefined ? {} : { comments: commentCorner }),
   });
+  controllerHolder.current = controller;
 
   const httpServer = createServer();
   // Serve an explicit 503 until the app needs the actual port. Without these

@@ -85,6 +85,50 @@ export const commentSourceStatusSchema = z.strictObject({
 });
 export type CommentSourceStatus = z.infer<typeof commentSourceStatusSchema>;
 
+export const liveCommentEntryDecisionSchema = z.enum(["accepted", "review", "blocked"]);
+export type LiveCommentEntryDecision = z.infer<typeof liveCommentEntryDecisionSchema>;
+
+export const liveCommentEntryStateSchema = z.enum([
+  "received",
+  "blocked",
+  "candidate",
+  "selected",
+  "done",
+  "skipped",
+  "deferred",
+]);
+export type LiveCommentEntryState = z.infer<typeof liveCommentEntryStateSchema>;
+
+/**
+ * Console-facing comment row. It intentionally carries the redacted text and
+ * the structured analysis only; the raw body and author are in `comment`, and
+ * the console renders them as text. Server logs never persist this object.
+ */
+export const liveCommentEntrySchema = z.strictObject({
+  comment: commentEventSchema,
+  decision: liveCommentEntryDecisionSchema,
+  reasons: z.array(z.string()),
+  redactedText: z.string(),
+  candidate: commentCandidateSchema.nullable(),
+  pinned: z.boolean(),
+  pinNote: z.string().nullable(),
+  selected: z.boolean(),
+  state: liveCommentEntryStateSchema,
+  freshnessMs: nonNegativeInt,
+});
+export type LiveCommentEntry = z.infer<typeof liveCommentEntrySchema>;
+
+/** Snapshot of the current or most recent comment corner. */
+export const commentCornerSchema = z.strictObject({
+  state: z.enum(["idle", "collecting", "running", "finished"]),
+  segmentId: idSchema.nullable(),
+  selectedCommentIds: z.array(z.string()),
+  currentCommentId: idSchema.nullable(),
+  deferredPinIds: z.array(z.string()),
+  remainingSlots: nonNegativeInt,
+});
+export type LiveCommentCorner = z.infer<typeof commentCornerSchema>;
+
 /** One fixture comment. `atMs` is relative to the start of the comment source. */
 export const liveFixtureCommentSchema = z.strictObject({
   atMs: nonNegativeInt,

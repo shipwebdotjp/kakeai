@@ -1,6 +1,9 @@
 import type {
+  CommentSourceStatus,
   ConsoleSnapshot,
   LiveCharacterSheet,
+  LiveCommentCorner,
+  LiveCommentEntry,
   LiveCue,
   LivePackageShow,
   LiveServerShowMeta,
@@ -129,6 +132,9 @@ export function buildConsoleSnapshot(input: {
   playback: StageState["playback"];
   status: StageStatus;
   clock: StageClock;
+  comments: LiveCommentEntry[];
+  commentCorner: LiveCommentCorner;
+  commentSource: CommentSourceStatus;
 }): ConsoleSnapshot {
   return {
     runId: input.runId,
@@ -142,5 +148,33 @@ export function buildConsoleSnapshot(input: {
     playback: input.playback,
     status: input.status,
     clock: input.clock,
+    comments: input.comments,
+    commentCorner: input.commentCorner,
+    commentSource: input.commentSource,
+  };
+}
+
+export function emptyCommentCorner(): LiveCommentCorner {
+  return {
+    state: "idle",
+    segmentId: null,
+    selectedCommentIds: [],
+    currentCommentId: null,
+    deferredPinIds: [],
+    remainingSlots: 0,
+  };
+}
+
+export function idleCommentSource(kind: CommentSourceStatus["kind"]): CommentSourceStatus {
+  return {
+    kind,
+    state: "idle",
+    liveChatId: null,
+    pollingIntervalMs: 0,
+    lastPolledAt: null,
+    lastError: null,
+    quota: null,
+    authExpiresAt: null,
+    needsReauth: false,
   };
 }

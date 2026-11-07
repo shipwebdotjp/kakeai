@@ -34,6 +34,15 @@ apps/live/
 - 前処理は `comments/filter.ts`、分析役は `llm/comment-analyst.ts`。実 YouTube は `createCommentAnalyst` がローカル LLM 以外を拒否し、プロンプトには commentId と本文だけを渡す（投稿者名は渡さない）。
 - OAuth は `auth/oauth.ts` と `auth/youtube-token.ts`。読み取り専用スコープだけを要求し、トークンは `dataDir/auth/youtube.json` に 0600 で保存、`invalid_grant` は `needsReauth` として status に出す。
 
+## コメントコーナーの実行境界
+
+- `runtime/comment-corner.ts` が受信コメントのメモリ保持、`CommentFilter` と `CommentAnalyst` の呼び出し、選択、現在カード、コーナー状態を持つ。生コメント本文と投稿者名はログに書かず、`comments.jsonl` は投稿ID・redactedText・decision/reasons・score 程度に限る。
+- 選択は `comments/selection.ts` の純粋関数に閉じる。人間ピン → AI候補の順、`maxExtraSlots` までの延長、`safety: block` の不可、`safety: review` はピン時だけ許可、鮮度はAI候補だけに適用する。
+- コーナー開始時は鮮度内の accepted/review をバッチで分析役へ渡す。分析失敗時は空候補で続行し、ピンだけ `redactedText` から保守的な候補を作ってコーナーを成立させる。0件なら `corner_empty` を記録してスパインへ戻る。
+- カード表示は `runtime/comment-responder.ts` の `CommentCornerResponder` 境界に分離する。P4 は `HoldCommentCornerResponder` が `cornerHoldMs`（既定4000ms）だけカードを表示する。P5 は同じ境界に生成レス＋TTSの responder を差し込み、選択・スパイン遷移・ピンの消費規則を変えない。
+- コントローラは `comments.startCorner(segment)` を呼び、終了時は `finishCorner` から `spine.handleQueueFinished()` に戻る。`pause`/`resume`/`stop`/`safe_mode`/`end`/`skip_cue` はコントローラからコーナーへ伝播し、`safe_mode` はコーナーを終了して以後の `comment` セグメントも飛ばす。
+- ステージは `StageState.comment` の `text` に `safeSummary`（または redactedText）だけを受け取る。生コメントはコンソールの人間だけが見る。
+
 ## 通信契約
 
 - HTTP: `/stage`、`/console`、`/package/*`、`/healthz`。

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  commentCornerSchema,
   commentSourceStatusSchema,
   consoleSnapshotSchema,
+  liveCommentEntrySchema,
   directorOutputSchema,
   jobSchema,
   liveCommandSchema,
@@ -332,6 +334,26 @@ describe("live contracts", () => {
         playback: null,
         status: "idle",
         clock: { elapsedMs: 0, remainingMs: 600_000 },
+        comments: [],
+        commentCorner: {
+          state: "idle",
+          segmentId: null,
+          selectedCommentIds: [],
+          currentCommentId: null,
+          deferredPinIds: [],
+          remainingSlots: 0,
+        },
+        commentSource: {
+          kind: "youtube",
+          state: "idle",
+          liveChatId: null,
+          pollingIntervalMs: 0,
+          lastPolledAt: null,
+          lastError: null,
+          quota: null,
+          authExpiresAt: null,
+          needsReauth: false,
+        },
       }).success,
     ).toBe(true);
     expect(liveCommandSchema.safeParse({ kind: "start" }).success).toBe(true);
@@ -451,6 +473,42 @@ describe("live contracts", () => {
       liveCommandSchema.safeParse({ kind: "set_live_chat", liveChatId: "chat-2" }).success,
     ).toBe(true);
     expect(liveCommandSchema.safeParse({ kind: "pin_comment", commentId: "" }).success).toBe(false);
+
+    const entry = {
+      comment: {
+        id: "yt-1",
+        authorName: "みかん",
+        text: "こんにちは",
+        publishedAt: NOW,
+        receivedAt: NOW,
+        kind: "normal" as const,
+      },
+      decision: "accepted" as const,
+      reasons: [],
+      redactedText: "こんにちは",
+      candidate: null,
+      pinned: false,
+      pinNote: null,
+      selected: false,
+      state: "received" as const,
+      freshnessMs: 1_000,
+    };
+    expect(liveCommentEntrySchema.safeParse(entry).success).toBe(true);
+    expect(liveCommentEntrySchema.safeParse({ ...entry, state: "unknown" }).success).toBe(false);
+    expect(
+      liveCommentEntrySchema.safeParse({ ...entry, freshnessMs: -1 }).success,
+    ).toBe(false);
+
+    const corner = {
+      state: "running" as const,
+      segmentId: "seg-comments",
+      selectedCommentIds: ["yt-1"],
+      currentCommentId: "yt-1",
+      deferredPinIds: [],
+      remainingSlots: 3,
+    };
+    expect(commentCornerSchema.safeParse(corner).success).toBe(true);
+    expect(commentCornerSchema.safeParse({ ...corner, remainingSlots: -1 }).success).toBe(false);
   });
 
   it("keeps older runtime configs valid and defaults the new comment settings", () => {

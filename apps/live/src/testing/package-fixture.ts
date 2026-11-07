@@ -7,6 +7,7 @@ import {
   livePackageManifestSchema,
   livePackageShowSchema,
   type LiveCharacterSheet,
+  type LiveFixtureComment,
   type LiveManifestFont,
   type LivePackageFile,
   type LivePackageManifest,
@@ -61,8 +62,22 @@ const THEME_CSS = [
 
 export interface TestPackageOptions {
   includeMaterial?: boolean;
+  /** Adds a comment segment, `test.fixture` and `fixtures/comments.json`. */
+  includeCommentCorner?: boolean;
+  /** Implies `includeCommentCorner` and becomes the fixture file content. */
+  fixtureComments?: LiveFixtureComment[];
   fonts?: LiveManifestFont[];
   startAt?: string | null;
+}
+
+export const DEFAULT_TEST_FIXTURE_COMMENTS: LiveFixtureComment[] = [
+  { atMs: 500, author: "みかん", text: "今日の話、分かりやすかったです", kind: "normal" },
+  { atMs: 1_000, author: "ゆず", text: "次の話題は何ですか？", kind: "normal" },
+  { atMs: 1_500, author: "かき", text: "http://example.com を見てください", kind: "normal" },
+];
+
+function includeComments(options: TestPackageOptions): boolean {
+  return options.includeCommentCorner === true || options.fixtureComments !== undefined;
 }
 
 export interface TestPackage {
@@ -100,7 +115,40 @@ function fileRecord(file: PendingFile): LivePackageFile {
 
 export function testShow(options: TestPackageOptions = {}): LivePackageShow {
   const includeMaterial = options.includeMaterial === true;
+  const includeComment = includeComments(options);
   const materialSegment = includeMaterial ? { material: "material-1" } : {};
+  const segments: unknown[] = [
+    {
+      id: "seg-opening",
+      kind: "opening",
+      label: "オープニング",
+      targetDurationMs: 60_000,
+      cues: ["cue-opening"],
+    },
+    {
+      id: "seg-script",
+      kind: "script",
+      label: "本編",
+      targetDurationMs: 300_000,
+      cues: ["cue-script"],
+      ...materialSegment,
+    },
+  ];
+  if (includeComment) {
+    segments.push({
+      id: "seg-comments",
+      kind: "comment",
+      label: "コメント",
+      targetDurationMs: 120_000,
+    });
+  }
+  segments.push({
+    id: "seg-closing",
+    kind: "closing",
+    label: "クロージング",
+    targetDurationMs: 60_000,
+    cues: ["cue-closing"],
+  });
   return livePackageShowSchema.parse({
     schemaVersion: 1,
     show: {
@@ -112,31 +160,9 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
       characters: { left: "char-left", right: "char-right" },
       startAt: options.startAt ?? null,
     },
-    commentSource: { kind: "youtube" },
-    segments: [
-      {
-        id: "seg-opening",
-        kind: "opening",
-        label: "オープニング",
-        targetDurationMs: 60_000,
-        cues: ["cue-opening"],
-      },
-      {
-        id: "seg-script",
-        kind: "script",
-        label: "本編",
-        targetDurationMs: 300_000,
-        cues: ["cue-script"],
-        ...materialSegment,
-      },
-      {
-        id: "seg-closing",
-        kind: "closing",
-        label: "クロージング",
-        targetDurationMs: 60_000,
-        cues: ["cue-closing"],
-      },
-    ],
+    commentSource: { kind: includeComment ? "fixture" : "youtube" },
+    segments,
+    ...(includeComment ? { test: { fixture: "fixtures/comments.json" } } : {}),
     cues: [
       {
         id: "cue-opening",
@@ -342,6 +368,16 @@ export async function createTestPackage(
       width: 1,
       height: 1,
       hasAudio: false,
+    });
+  }
+
+  if (includeComments(options)) {
+    const comments = options.fixtureComments ?? DEFAULT_TEST_FIXTURE_COMMENTS;
+    files.push({
+      path: "fixtures/comments.json",
+      data: Buffer.from(`${JSON.stringify(comments, null, 2)}\n`, "utf8"),
+      mediaType: "application/json",
+      kind: "fixture",
     });
   }
 

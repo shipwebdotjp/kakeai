@@ -18,6 +18,8 @@ export interface SpineHost {
   remainingMs(): number;
   hasMaterial(segment: LiveSegment): boolean;
   enterPostShow(): void;
+  hasCommentCorner(): boolean;
+  startCommentCorner(segment: Extract<LiveSegment, { kind: "comment" }>): void;
 }
 
 /** Walks the spine: segments, comment-corner boundaries and closing. */
@@ -43,9 +45,15 @@ export class Spine {
           this.enterClosing();
           return;
         }
-        // P3 has no comment source yet, so an empty corner is skipped on the
-        // spine. P4 fills the corner with generated cues and keeps the phase.
-        continue;
+        if (!this.host.hasCommentCorner()) {
+          continue;
+        }
+        // The corner owns its comments and calls `finishCorner` when done; it
+        // may finish synchronously when there are no comments.
+        this.host.setCurrentSegmentIndex(index);
+        this.host.setPhase("comment");
+        this.host.startCommentCorner(segment);
+        return;
       }
       const cues = this.host.queues.forSegment(index);
       if (cues === null || cues.length === 0) {
