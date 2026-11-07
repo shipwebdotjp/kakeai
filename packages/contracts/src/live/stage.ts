@@ -73,9 +73,22 @@ export const stageClockSchema = z.strictObject({
 });
 export type StageClock = z.infer<typeof stageClockSchema>;
 
+export const stageShowSchema = z.strictObject({
+  title: z.string().trim().min(1),
+  startAt: timestampSchema.nullable(),
+});
+export type StageShow = z.infer<typeof stageShowSchema>;
+
+export const stageSegmentRefSchema = z.strictObject({
+  id: idSchema,
+  label: z.string().trim().min(1),
+});
+export type StageSegmentRef = z.infer<typeof stageSegmentRefSchema>;
+
 export const stageStateSchema = z.strictObject({
   phase: stagePhaseSchema,
-  segment: z.strictObject({ id: idSchema, label: z.string() }).nullable(),
+  show: stageShowSchema,
+  segment: stageSegmentRefSchema.nullable(),
   characters: z.strictObject({
     left: stageCharacterStateSchema.nullable(),
     right: stageCharacterStateSchema.nullable(),
@@ -103,6 +116,7 @@ export const stageEventSchema = z.strictObject({
   sessionId: idSchema,
   cueId: idSchema.nullable(),
   attempt: nonNegativeInt,
+  /** Monotonic per cue attempt; the server ignores sequence <= the last accepted. */
   sequence: nonNegativeInt,
   positionMs: nonNegativeInt.optional(),
   error: z.string().optional(),

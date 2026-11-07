@@ -4,6 +4,7 @@ export * from "./profile";
 export * from "./show";
 export * from "./characters";
 export * from "./stage";
+export * from "./server";
 export * from "./comment";
 export * from "./director";
 export * from "./runtime";

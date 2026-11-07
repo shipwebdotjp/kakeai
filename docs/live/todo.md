@@ -79,17 +79,17 @@
 
 ## P2. ライブアプリの骨格
 
-- [ ] `apps/live` を同一モノレポに追加する。ワークスペース設定、typecheck、テスト設定に加える。
-- [ ] `AGENTS.md` のコマンドに `npm run live` を追加する。
-- [ ] パッケージローダー: `manifest.json` と `show.json` を検証し、相対パスの脱出、ファイル欠落、SHA-256不一致、未対応mediaType、カードの音声混入、フォント不足を扱う。
-- [ ] 起動CLI: `npm run live -- --package <dir> [--test] [--port <port>] [--config <file>]`。Kakeaiの起動を要求しない。
-- [ ] ローカルサーバー: `/stage`、`/console`、パッケージ配信、`/ws`（stage/console）、Host/Origin検証。
-- [ ] 再生リース: `StageLease`を発行し、programは1つだけ、previewはミュート・イベント非送信にする。
-- [ ] 実行ディレクトリ `runs/<runId>/` とJSONLログの基盤。
-- [ ] ステージ: 1920x1080固定キャンバス、テーマCSS、`pre_show` / `post_show`、プレースホルダーのキャラクター・字幕・素材・コメント。
-- [ ] コンソール: 開始・終了、フェーズ表示、経過時間、ステージ接続状態、program/previewの区別、基本操作。
-- [ ] ステージ再接続: サーバが最新状態を送る。programの引き継ぎは明示操作にする。音声位置の復元はP3で実装する。
-- [ ] テスト: パッケージ検証、パストラバーサル拒否、manifestハッシュ、program/previewリース、previewのイベント非送信、フェーズ遷移、pre/post、WebSocket再接続。
+- [x] `apps/live` を同一モノレポに追加する。ワークスペース設定、typecheck、テスト設定に加える。
+- [x] `AGENTS.md` のコマンドに `npm run live` を追加する。
+- [x] パッケージローダー: `manifest.json` と `show.json` を検証し、相対パスの脱出、ファイル欠落、SHA-256不一致、未対応mediaType、カードの音声混入、フォント不足を扱う。
+- [x] 起動CLI: `npm run live -- --package <dir> [--test] [--port <port>] [--config <file>]`。Kakeaiの起動を要求しない。
+- [x] ローカルサーバー: `/stage`、`/console`、パッケージ配信、`/ws`（stage/console）、Host/Origin検証。
+- [x] 再生リース: `StageLease`を発行し、programは1つだけ、previewはミュート・イベント非送信にする。
+- [x] 実行ディレクトリ `runs/<runId>/` とJSONLログの基盤。
+- [x] ステージ: 1920x1080固定キャンバス、テーマCSS、`pre_show` / `post_show`、プレースホルダーのキャラクター・字幕・素材・コメント。
+- [x] コンソール: 開始・終了、フェーズ表示、経過時間、ステージ接続状態、program/previewの区別、基本操作。
+- [x] ステージ再接続: サーバが最新状態を送る。programの引き継ぎは明示操作にする。音声位置の復元はP3で実装する。
+- [x] テスト: パッケージ検証、パストラバーサル拒否、manifestハッシュ、program/previewリース、previewのイベント非送信、フェーズ遷移、pre/post、WebSocket再接続。
 - 完了条件: サンプルパッケージでアプリを起動し、`pre_show`→開始→プレースホルダーのキュー→`post_show`まで動く。
 
 ## P3. プレイアウトとステージ描画

@@ -15,7 +15,8 @@
     "test": "vitest run",
     "check:file-size": "node scripts/check-file-size.mjs",
     "skills:check": "node scripts/check-skills.mjs",
-    "live:export": "npm run live:export --workspace @kakeai/cli --"
+    "live:export": "npm run live:export --workspace @kakeai/cli --",
+    "live": "npm run live --workspace @kakeai/live --"
   },
   "devDependencies": {
     "skills": "1.7.4",

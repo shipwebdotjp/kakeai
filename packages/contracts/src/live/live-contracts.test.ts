@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  consoleSnapshotSchema,
   directorOutputSchema,
   jobSchema,
+  liveCommandSchema,
   liveExportResultSchema,
   livePackageManifestSchema,
   livePackageRelativePathSchema,
   livePackageShowSchema,
+  liveServerHelloMessageSchema,
   liveShowProfileSchema,
   preparedCueSchema,
   runLogEventSchema,
   stageEventSchema,
+  stageStateSchema,
   type LiveShowProfile,
 } from "..";
 
@@ -234,6 +238,80 @@ describe("live contracts", () => {
         safety: profile().safety,
         playout: profile().playout,
       }).success,
+    ).toBe(true);
+
+    const stageState = {
+      phase: "pre_show",
+      show: { title: "テスト配信", startAt: null },
+      segment: null,
+      characters: {
+        left: { expression: "normal", speaking: false },
+        right: null,
+      },
+      caption: null,
+      material: null,
+      comment: null,
+      status: "idle",
+      playback: null,
+      clock: { elapsedMs: 0, remainingMs: 600_000 },
+    };
+    expect(stageStateSchema.safeParse(stageState).success).toBe(true);
+    expect(stageStateSchema.safeParse({ ...stageState, show: undefined }).success).toBe(false);
+
+    const showMeta = {
+      title: "テスト配信",
+      targetDurationMs: 600_000,
+      segments: [
+        {
+          id: "seg-opening",
+          label: "オープニング",
+          kind: "opening" as const,
+          targetDurationMs: 60_000,
+        },
+      ],
+    };
+    const lease = {
+      leaseId: "lease-1",
+      runId: "run-1",
+      sessionId: "session-1",
+      role: "program" as const,
+      expiresAt: NOW,
+    };
+    expect(
+      liveServerHelloMessageSchema.safeParse({
+        type: "hello",
+        runId: "run-1",
+        sessionId: "session-1",
+        role: "stage",
+        lease,
+        state: stageState,
+        showMeta,
+      }).success,
+    ).toBe(true);
+    expect(
+      consoleSnapshotSchema.safeParse({
+        runId: "run-1",
+        show: showMeta,
+        phase: "pre_show",
+        segment: null,
+        stages: [
+          {
+            sessionId: "session-1",
+            role: "program",
+            connectedAt: NOW,
+            leaseExpiresAt: NOW,
+          },
+        ],
+        queue: [],
+        currentCueId: null,
+        playback: null,
+        status: "idle",
+        clock: { elapsedMs: 0, remainingMs: 600_000 },
+      }).success,
+    ).toBe(true);
+    expect(liveCommandSchema.safeParse({ kind: "start" }).success).toBe(true);
+    expect(
+      liveCommandSchema.safeParse({ kind: "takeover_program", sessionId: "session-1" }).success,
     ).toBe(true);
 
     expect(

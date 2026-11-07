@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kakeai Live Stage</title>
+    <link rel="stylesheet" href="/package/theme.css" />
+    <link rel="stylesheet" href="./stage/stage.css" />
+  </head>
+  <body>
+    <div id="stage-viewport">
+      <div id="stage-canvas" class="stage-canvas">
+        <div id="phase-overlay" class="phase-overlay">
+          <p id="phase-kicker" class="phase-kicker">まもなく始まります</p>
+          <h1 id="phase-title" class="phase-title"></h1>
+          <p id="phase-countdown" class="phase-countdown" hidden></p>
+        </div>
+
+        <div id="live-layout" class="live-layout" hidden>
+          <header class="segment-bar">
+            <span id="segment-label" class="segment-label"></span>
+          </header>
+
+          <main class="stage-main">
+            <section id="character-left" class="character character-left">
+              <div class="character-figure">
+                <div class="character-head">
+                  <span class="character-eye eye-left"></span>
+                  <span class="character-eye eye-right"></span>
+                  <span class="character-mouth"></span>
+                </div>
+                <div class="character-body"></div>
+              </div>
+              <p class="character-name"></p>
+              <p class="character-expression"></p>
+            </section>
+
+            <section id="material-slot" class="material-slot" hidden></section>
+
+            <section id="character-right" class="character character-right">
+              <div class="character-figure">
+                <div class="character-head">
+                  <span class="character-eye eye-left"></span>
+                  <span class="character-eye eye-right"></span>
+                  <span class="character-mouth"></span>
+                </div>
+                <div class="character-body"></div>
+              </div>
+              <p class="character-name"></p>
+              <p class="character-expression"></p>
+            </section>
+          </main>
+
+          <div id="comment-card" class="comment-card" hidden aria-live="polite" role="status">
+            <span class="comment-badge">コメント</span>
+            <p id="comment-author" class="comment-author"></p>
+            <p id="comment-text" class="comment-text"></p>
+            <p id="comment-state" class="comment-state"></p>
+          </div>
+
+          <div id="caption-band" class="caption-band" hidden aria-live="polite" role="status">
+            <span id="caption-speaker" class="caption-speaker"></span>
+            <span id="caption-text" class="caption-text"></span>
+          </div>
+
+          <div id="status-badge" class="status-badge" hidden></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./stage/main.ts"></script>
+  </body>
+</html>
