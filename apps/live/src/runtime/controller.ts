@@ -267,7 +267,6 @@ export class LiveController {
   getShowMeta() {
     return buildShowMeta(this.show);
   }
-
   getStageConnections(): LiveStageConnection[] { return this.leases.list(); }
 
   touchPreviewStage(sessionId: string): StageLease | null { return this.leases.touchPreview(sessionId); }
@@ -329,10 +328,11 @@ export class LiveController {
         return this.skipCue();
       case "takeover_program":
         return this.takeover(command.sessionId);
-      default: {
-        const exhaustive: never = command;
-        throw new Error(`Unsupported live command: ${JSON.stringify(exhaustive)}`);
-      }
+      case "pin_comment": case "unpin_comment": case "skip_comment": case "pause_comments":
+      case "resume_comments": case "block_author": case "block_topic": case "set_live_chat":
+        return this.reject(`未対応のコマンドです: ${command.kind}`);
+      default:
+        throw new Error(`Unsupported live command: ${JSON.stringify(command satisfies never)}`);
     }
   }
 

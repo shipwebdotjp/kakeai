@@ -1,5 +1,12 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { LiveRuntimeConfig } from "@kakeai/contracts";
+import { runLoopbackOAuthFlow } from "./auth/oauth.ts";
+import {
+  saveTokenStore,
+  tokenStoreFromResponse,
+  youtubeTokenStorePath,
+} from "./auth/youtube-token.ts";
 import {
   defaultLiveRuntimeConfig,
   loadLiveRuntimeConfigFile,
@@ -7,40 +14,63 @@ import {
   type LiveRuntimeConfigOverrides,
 } from "./config.ts";
 import { isPackageError, loadLivePackage } from "./package/loader.ts";
+import { isLocalLlmEndpoint } from "./llm/local-endpoint.ts";
 import { createLiveServer } from "./server/server.ts";
 
 const USAGE = `使い方:
   npm run live -- --package <dir> [--test] [--port <port>] [--config <file>]
+  npm run live -- auth --config <file>
 
-  --package <dir>   ライブパッケージのディレクトリ（必須）
-  --test            コメントソースを fixture に上書きする（P4 で使用）
+  --package <dir>   ライブパッケージのディレクトリ（起動時に必須）
+  --test            コメントソースを fixture に上書きする
   --port <port>     待受ポート（既定 3010）
-  --config <file>   ライブ設定 JSON`;
+  --config <file>   ライブ設定 JSON
 
-interface CliOptions {
-  help: boolean;
-  packageDir: string | undefined;
-  testMode: boolean;
-  port: number | undefined;
-  configPath: string | undefined;
-}
+  auth              YouTube の読み取り専用 OAuth をやり直し、トークンを保存する`;
+
+export type LiveCliOptions =
+  | { kind: "help" }
+  | { kind: "auth"; configPath: string | undefined }
+  | {
+      kind: "run";
+      packageDir: string;
+      testMode: boolean;
+      port: number | undefined;
+      configPath: string | undefined;
+    };
 
 function usageError(message: string): never {
   throw new Error(`${message}\n\n${USAGE}`);
 }
 
-export function parseLiveArgs(argv: readonly string[]): CliOptions {
+function readOptionValue(argv: readonly string[], index: number, name: string): string {
+  const value = argv[index + 1];
+  if (value === undefined || value.trim().length === 0 || value.startsWith("-")) {
+    usageError(`${name} に値がありません。`);
+  }
+  return value;
+}
+
+function parseAuthArgs(argv: readonly string[]): LiveCliOptions {
+  let configPath: string | undefined;
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index]!;
+    if (arg === "--config") {
+      configPath = readOptionValue(argv, index, "--config");
+      index += 1;
+      continue;
+    }
+    usageError(`不明な引数です: ${arg}`);
+  }
+  return { kind: "auth", configPath };
+}
+
+export function parseLiveArgs(argv: readonly string[]): LiveCliOptions {
   if (argv.includes("--help") || argv.includes("-h")) {
-    return {
-      help: true,
-      packageDir: undefined,
-      testMode: false,
-      port: undefined,
-      configPath: undefined,
-    };
+    return { kind: "help" };
   }
   if (argv[0] === "auth") {
-    throw new Error("`live auth` は P4（YouTube 連携）で実装します。");
+    return parseAuthArgs(argv);
   }
   let packageDir: string | undefined;
   let configPath: string | undefined;
@@ -53,18 +83,13 @@ export function parseLiveArgs(argv: readonly string[]): CliOptions {
       case "--test":
         testMode = true;
         break;
-      case "--package": {
-        const value = argv[index + 1];
-        if (value === undefined || value.trim().length === 0 || value.startsWith("-")) {
-          usageError("--package に値がありません。");
-        }
-        packageDir = value;
+      case "--package":
+        packageDir = readOptionValue(argv, index, "--package");
         index += 1;
         break;
-      }
       case "--port": {
-        const value = argv[index + 1];
-        if (value === undefined || !/^\d+$/.test(value)) {
+        const value = readOptionValue(argv, index, "--port");
+        if (!/^\d+$/.test(value)) {
           usageError("--port には整数を指定してください。");
         }
         port = Number(value);
@@ -74,15 +99,10 @@ export function parseLiveArgs(argv: readonly string[]): CliOptions {
         index += 1;
         break;
       }
-      case "--config": {
-        const value = argv[index + 1];
-        if (value === undefined || value.trim().length === 0 || value.startsWith("-")) {
-          usageError("--config に値がありません。");
-        }
-        configPath = value;
+      case "--config":
+        configPath = readOptionValue(argv, index, "--config");
         index += 1;
         break;
-      }
       default:
         usageError(`不明な引数です: ${arg}`);
     }
@@ -91,43 +111,90 @@ export function parseLiveArgs(argv: readonly string[]): CliOptions {
   if (packageDir === undefined) {
     usageError("--package は必須です。");
   }
-  return { help: false, packageDir, testMode, port, configPath };
+  return { kind: "run", packageDir, testMode, port, configPath };
+}
+
+function invocationCwd(): string {
+  // npm workspace scripts run in apps/live; resolve user paths against the
+  // directory the command was invoked from.
+  return process.env.INIT_CWD ?? process.cwd();
+}
+
+async function loadConfig(
+  configPath: string | undefined,
+  overrides: LiveRuntimeConfigOverrides = {},
+): Promise<LiveRuntimeConfig> {
+  let config = defaultLiveRuntimeConfig();
+  if (configPath !== undefined) {
+    config = await loadLiveRuntimeConfigFile(resolve(invocationCwd(), configPath));
+  }
+  return resolveLiveRuntimeConfig(config, overrides);
+}
+
+function validateYouTubeRun(
+  config: LiveRuntimeConfig,
+  showKind: "youtube" | "fixture",
+  testMode: boolean,
+): void {
+  if (testMode || showKind === "fixture") {
+    return;
+  }
+  if (!isLocalLlmEndpoint(config.llm)) {
+    throw new Error(
+      "実 YouTube の実行ではローカル LLM（mode: local かつループバック URL）を使ってください。外部 LLM は --test の fixture だけで使えます。",
+    );
+  }
+  const youtube = config.youtube;
+  if (youtube === undefined) {
+    throw new Error(
+      "実 YouTube の実行には --config の youtube（clientId・clientSecret・videoUrl または liveChatId）が必要です。",
+    );
+  }
+  if (youtube.videoUrl === undefined && youtube.liveChatId === undefined) {
+    throw new Error("youtube 設定に videoUrl または liveChatId を指定してください。");
+  }
+}
+
+async function runAuth(configPath: string | undefined): Promise<void> {
+  const config = await loadConfig(configPath);
+  const youtube = config.youtube;
+  if (youtube === undefined) {
+    throw new Error(
+      "OAuth の設定がありません。--config の youtube に clientId と clientSecret を指定してください。",
+    );
+  }
+  const token = await runLoopbackOAuthFlow({
+    clientId: youtube.clientId,
+    clientSecret: youtube.clientSecret,
+    onAuthorizationUrl: (url) => {
+      console.log("次の URL をブラウザで開いて、YouTube の読み取りを許可してください:");
+      console.log(url);
+    },
+  });
+  const store = tokenStoreFromResponse(token);
+  await saveTokenStore(config.dataDir, store);
+  console.log(`認証情報を保存しました: ${youtubeTokenStorePath(config.dataDir)}`);
+  console.log(`OAuth アプリが Testing の場合の認証有効期限: ${store.authExpiresAt}`);
 }
 
 async function main(): Promise<void> {
   const options = parseLiveArgs(process.argv.slice(2));
-  if (options.help) {
+  if (options.kind === "help") {
     console.log(USAGE);
     return;
   }
-  const packageDir = options.packageDir;
-  if (packageDir === undefined) {
-    usageError("--package は必須です。");
+  if (options.kind === "auth") {
+    await runAuth(options.configPath);
+    return;
   }
-  // npm workspace scripts run in apps/live; resolve user paths against the
-  // directory the command was invoked from.
-  const invocationCwd = process.env.INIT_CWD ?? process.cwd();
-  const loaded = await loadLivePackage(resolve(invocationCwd, packageDir));
 
-  let config = defaultLiveRuntimeConfig();
-  if (options.configPath !== undefined) {
-    config = await loadLiveRuntimeConfigFile(resolve(invocationCwd, options.configPath));
-  }
+  const loaded = await loadLivePackage(resolve(invocationCwd(), options.packageDir));
   const overrides: LiveRuntimeConfigOverrides = {};
   if (options.port !== undefined) {
     overrides.port = options.port;
   }
-  config = resolveLiveRuntimeConfig(config, overrides);
-
-  if (
-    !options.testMode &&
-    loaded.show.commentSource.kind === "youtube" &&
-    config.llm.mode !== "local"
-  ) {
-    throw new Error(
-      "実 YouTube の実行では llm.mode を local にしてください。外部 LLM は --test の fixture だけで使えます。",
-    );
-  }
+  const config = await loadConfig(options.configPath, overrides);
+  validateYouTubeRun(config, loaded.show.commentSource.kind, options.testMode);
 
   const server = await createLiveServer({
     package: loaded,

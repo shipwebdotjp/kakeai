@@ -137,6 +137,8 @@ export const liveServerMessageSchema = z.discriminatedUnion("type", [
 ]);
 export type LiveServerMessage = z.infer<typeof liveServerMessageSchema>;
 
+const commentBlockTermSchema = z.string().trim().min(1).max(200);
+
 export const liveCommandSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("start") }),
   z.strictObject({ kind: z.literal("end") }),
@@ -146,6 +148,28 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("safe_mode") }),
   z.strictObject({ kind: z.literal("skip_cue") }),
   z.strictObject({ kind: z.literal("takeover_program"), sessionId: idSchema }),
+  // Comment corner commands consumed by the P4b controller integration.
+  z.strictObject({
+    kind: z.literal("pin_comment"),
+    commentId: idSchema,
+    note: commentBlockTermSchema.optional(),
+  }),
+  z.strictObject({ kind: z.literal("unpin_comment"), commentId: idSchema }),
+  z.strictObject({ kind: z.literal("skip_comment"), commentId: idSchema }),
+  z.strictObject({ kind: z.literal("pause_comments") }),
+  z.strictObject({ kind: z.literal("resume_comments") }),
+  z.strictObject({
+    kind: z.literal("block_author"),
+    author: commentBlockTermSchema,
+  }),
+  z.strictObject({
+    kind: z.literal("block_topic"),
+    topic: commentBlockTermSchema,
+  }),
+  z.strictObject({
+    kind: z.literal("set_live_chat"),
+    liveChatId: z.string().trim().min(1).max(500),
+  }),
 ]);
 export type LiveCommand = z.infer<typeof liveCommandSchema>;
 

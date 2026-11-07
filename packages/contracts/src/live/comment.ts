@@ -41,6 +41,50 @@ export const commentAnalysisSchema = z.strictObject({
 });
 export type CommentAnalysis = z.infer<typeof commentAnalysisSchema>;
 
+export const commentSourceKindSchema = z.enum(["youtube", "fixture"]);
+export type CommentSourceKind = z.infer<typeof commentSourceKindSchema>;
+
+export const commentSourceStateSchema = z.enum([
+  "idle",
+  "connecting",
+  "polling",
+  "paused",
+  "error",
+  "stopped",
+]);
+export type CommentSourceState = z.infer<typeof commentSourceStateSchema>;
+
+/**
+ * Running estimate of YouTube Data API consumption. `startedAt` is when the
+ * source started counting; the console derives a per-hour estimate from it.
+ * `windowStartedAt` can mark a rolling window reset without losing the run
+ * start time.
+ */
+export const commentQuotaEstimateSchema = z.strictObject({
+  requests: nonNegativeInt,
+  units: nonNegativeInt,
+  startedAt: timestampSchema,
+  windowStartedAt: timestampSchema.optional(),
+});
+export type CommentQuotaEstimate = z.infer<typeof commentQuotaEstimateSchema>;
+
+/**
+ * Status shared by the server and the operator console. The console renders
+ * this directly; it contains no comment text or author names.
+ */
+export const commentSourceStatusSchema = z.strictObject({
+  kind: commentSourceKindSchema,
+  state: commentSourceStateSchema,
+  liveChatId: z.string().trim().min(1).max(500).nullable(),
+  pollingIntervalMs: nonNegativeInt,
+  lastPolledAt: timestampSchema.nullable(),
+  lastError: z.string().nullable(),
+  quota: commentQuotaEstimateSchema.nullable(),
+  authExpiresAt: timestampSchema.nullable(),
+  needsReauth: z.boolean(),
+});
+export type CommentSourceStatus = z.infer<typeof commentSourceStatusSchema>;
+
 /** One fixture comment. `atMs` is relative to the start of the comment source. */
 export const liveFixtureCommentSchema = z.strictObject({
   atMs: nonNegativeInt,

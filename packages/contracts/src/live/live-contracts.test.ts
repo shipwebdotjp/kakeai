@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  commentSourceStatusSchema,
   consoleSnapshotSchema,
   directorOutputSchema,
   jobSchema,
@@ -8,6 +9,7 @@ import {
   livePackageManifestSchema,
   livePackageRelativePathSchema,
   livePackageShowSchema,
+  liveRuntimeConfigSchema,
   liveServerHelloMessageSchema,
   liveShowProfileSchema,
   preparedCueSchema,
@@ -406,5 +408,84 @@ describe("live contracts", () => {
     expect(
       liveExportResultSchema.safeParse({ ...base.liveExportResult, manifestSha256: "bad" }).success,
     ).toBe(false);
+  });
+
+  it("validates the comment source status and comment commands", () => {
+    const status = {
+      kind: "youtube" as const,
+      state: "polling" as const,
+      liveChatId: "chat-1",
+      pollingIntervalMs: 5000,
+      lastPolledAt: NOW,
+      lastError: null,
+      quota: { requests: 12, units: 60, startedAt: NOW, windowStartedAt: NOW },
+      authExpiresAt: NOW,
+      needsReauth: false,
+    };
+    expect(commentSourceStatusSchema.safeParse(status).success).toBe(true);
+    expect(
+      commentSourceStatusSchema.safeParse({ ...status, state: "unknown" }).success,
+    ).toBe(false);
+    expect(
+      commentSourceStatusSchema.safeParse({ ...status, quota: { requests: -1, units: 0, startedAt: NOW } })
+        .success,
+    ).toBe(false);
+
+    expect(liveCommandSchema.safeParse({ kind: "pause_comments" }).success).toBe(true);
+    expect(liveCommandSchema.safeParse({ kind: "resume_comments" }).success).toBe(true);
+    expect(
+      liveCommandSchema.safeParse({ kind: "pin_comment", commentId: "yt-1", note: "質問として" })
+        .success,
+    ).toBe(true);
+    expect(liveCommandSchema.safeParse({ kind: "unpin_comment", commentId: "yt-1" }).success).toBe(
+      true,
+    );
+    expect(liveCommandSchema.safeParse({ kind: "skip_comment", commentId: "yt-1" }).success).toBe(
+      true,
+    );
+    expect(liveCommandSchema.safeParse({ kind: "block_author", author: "spam" }).success).toBe(
+      true,
+    );
+    expect(liveCommandSchema.safeParse({ kind: "block_topic", topic: "政治" }).success).toBe(true);
+    expect(
+      liveCommandSchema.safeParse({ kind: "set_live_chat", liveChatId: "chat-2" }).success,
+    ).toBe(true);
+    expect(liveCommandSchema.safeParse({ kind: "pin_comment", commentId: "" }).success).toBe(false);
+  });
+
+  it("keeps older runtime configs valid and defaults the new comment settings", () => {
+    const base = {
+      llm: { mode: "local", baseUrl: "http://127.0.0.1:11434/v1", model: "test-model" },
+      tts: { adapters: {} },
+      port: 3010,
+      dataDir: "/tmp/kakeai-live",
+    };
+    const parsed = liveRuntimeConfigSchema.parse(base);
+    expect(parsed.llm.timeoutMs).toBe(15_000);
+    expect(parsed.comments).toEqual({
+      ngWords: [],
+      maxLength: 300,
+      maxPerAuthorPerMinute: 3,
+      analysisBatchSize: 20,
+      analysisTimeoutMs: 15_000,
+      cornerHoldMs: 4_000,
+    });
+    expect(parsed.youtube).toBeUndefined();
+
+    const explicit = liveRuntimeConfigSchema.parse({
+      ...base,
+      llm: { ...base.llm, timeoutMs: 5_000 },
+      youtube: {
+        clientId: "client-1",
+        clientSecret: "secret-1",
+        videoUrl: "https://youtu.be/abcdefghijk",
+        pollingIntervalMs: 9_000,
+      },
+      comments: { ngWords: ["NG"], maxLength: 120, analysisBatchSize: 5 },
+    });
+    expect(explicit.llm.timeoutMs).toBe(5_000);
+    expect(explicit.comments.maxLength).toBe(120);
+    expect(explicit.comments.maxPerAuthorPerMinute).toBe(3);
+    expect(explicit.youtube?.pollingIntervalMs).toBe(9_000);
   });
 });

@@ -28,6 +28,12 @@ apps/live/
 
 `apps/live` は `@kakeai/contracts` と `@kakeai/tts` だけに依存する。Kakeai APIのDB・サービスには依存しない。
 
+## コメントソースと分析役
+
+- `comments/source.ts` の `CommentSource` が YouTube と fixture の境界。`comments/factory.ts` が `--test`/`commentSource.kind` と `llm.mode` を検証し、実 YouTube は fixture を読まない。
+- 前処理は `comments/filter.ts`、分析役は `llm/comment-analyst.ts`。実 YouTube は `createCommentAnalyst` がローカル LLM 以外を拒否し、プロンプトには commentId と本文だけを渡す（投稿者名は渡さない）。
+- OAuth は `auth/oauth.ts` と `auth/youtube-token.ts`。読み取り専用スコープだけを要求し、トークンは `dataDir/auth/youtube.json` に 0600 で保存、`invalid_grant` は `needsReauth` として status に出す。
+
 ## 通信契約
 
 - HTTP: `/stage`、`/console`、`/package/*`、`/healthz`。

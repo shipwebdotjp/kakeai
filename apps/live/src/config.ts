@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { liveRuntimeConfigSchema, type LiveRuntimeConfig } from "@kakeai/contracts";
+import {
+  DEFAULT_LIVE_COMMENTS_CONFIG,
+  liveRuntimeConfigSchema,
+  type LiveRuntimeConfig,
+} from "@kakeai/contracts";
 
 export const DEFAULT_LIVE_PORT = 3010;
 export const DEFAULT_LLM_BASE_URL = "http://127.0.0.1:11434/v1";
@@ -32,8 +36,13 @@ export function defaultLiveRuntimeConfig(): LiveRuntimeConfig {
       mode: "local",
       baseUrl: DEFAULT_LLM_BASE_URL,
       model: DEFAULT_LLM_MODEL,
+      timeoutMs: 15_000,
     },
     tts: { adapters: {} },
+    comments: {
+      ...DEFAULT_LIVE_COMMENTS_CONFIG,
+      ngWords: [],
+    },
     port: DEFAULT_LIVE_PORT,
     dataDir: defaultLiveDataDir(),
   };

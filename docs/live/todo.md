@@ -111,16 +111,16 @@
 
 ## P4. コメントソースとコメントコーナー
 
-- [ ] `CommentSource` 境界と `FixtureCommentSource` を実装する。`atMs`、速度、停止、リセットを持つ。
-- [ ] `YouTubeCommentSource` を実装する。
-  - [ ] ライブURL/動画IDから `liveChatId` を解決する。手動入力も許す。
-  - [ ] `liveChatMessages.list` のポーリングを正規経路にする。`pollingIntervalMillis`を既定にし、5秒固定にしない。設定で長くできる。
+- [x] `CommentSource` 境界と `FixtureCommentSource` を実装する。`atMs`、速度、停止、リセットを持つ。
+- [x] `YouTubeCommentSource` を実装する。
+  - [x] ライブURL/動画IDから `liveChatId` を解決する。手動入力も許す。
+  - [x] `liveChatMessages.list` のポーリングを正規経路にする。`pollingIntervalMillis`を既定にし、5秒固定にしない。設定で長くできる。
   - [ ] P0.5で`liveChatMessages.streamList`のスパイクを行い、実装が軽く安定する場合だけ将来の改善として追加する。gRPCの正式依存は別ADRとする。
-  - [ ] `nextPageToken`を扱い、クォータの概算をコンソールに表示する。
-  - [ ] OAuthは `youtube.readonly` のみ。書き込みAPIを呼ばない。`live auth`再認証と7日失効の表示。
+  - [x] `nextPageToken`を扱い、クォータの概算をstatusに載せる。
+  - [x] OAuthは `youtube.readonly` のみ。書き込みAPIを呼ばない。`live auth`再認証と7日失効の表示。
   - [ ] クォータ・認証・接続エラーをコンソールに表示する。
-- [ ] ルールベースのコメント前処理（NG、URL、個人情報、スパム、連投、長文）を実装する。
-- [ ] コメント分析役（LLM）を実装する。バッチ入力、`score`/`safety`/`relevance`/`isQuestion`/`reason`/`suggestedAngle`/`safeSummary`/`safeQuestion`/`safeQuote`/`piiRedacted`/`urlsRemoved`の構造化出力、Zod検証、1回再試行。実YouTubeはローカルLLMのみ、fixtureテストは外部LLM可。
+- [x] ルールベースのコメント前処理（NG、URL、個人情報、スパム、連投、長文）を実装する。
+- [x] コメント分析役（LLM）を実装する。バッチ入力、`score`/`safety`/`relevance`/`isQuestion`/`reason`/`suggestedAngle`/`safeSummary`/`safeQuestion`/`safeQuote`/`piiRedacted`/`urlsRemoved`の構造化出力、Zod検証、1回再試行。実YouTubeはローカルLLMのみ、fixtureテストは外部LLM可。
 - [ ] コメントコーナーの選択ポリシーを実装する。
   - [ ] 人間ピンを確定枠として先に使う。
   - [ ] AI候補で残り枠を埋める。
