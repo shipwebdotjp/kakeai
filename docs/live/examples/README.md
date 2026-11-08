@@ -25,6 +25,8 @@
 
 Show Profile の ID を手で合わせる代わりに、`npm run live:export -- --auto-profile --save-profile <file>` で Work と ScriptVersion から下書きを生成できます。生成結果の summary と warnings を確認し、必要なら保存した JSON を編集してください。
 
+CutInを使う場合は、readyな動画Assetを用意し、Show Profileに `cutIns[]` と `cut_in` セグメントを追加します。入力例と契約は [../../live-media-playout/spec.md](../../live-media-playout/spec.md) を参照してください。このディレクトリのサンプルProfileにはCutInを含めていません。
+
 ## 書き出し
 
 ```sh

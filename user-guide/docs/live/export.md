@@ -62,6 +62,53 @@ npm run live:export -- \
 
 1つのCueは1回の再生に対応します。同じCue IDを複数のSegmentから参照したり、同じSegment内で重複させたりしないでください。素材カードはCueの切り替え時に読み込むため、最初の表示が一瞬空白になることがあります。
 
+## コーナーの区切りに動画を挿入する（CutIn）
+
+`cutIns[]` と `cut_in` セグメントで、コーナーの合間に短い動画（**CutIn**）を挿入できます。動画は素材ライブラリの **ready な動画Asset** を指定します。尺は入力せず、書き出し時に動画をprobeした結果を使います。
+
+```jsonc
+{
+  "segments": [
+    {
+      "id": "seg-news",
+      "kind": "script",
+      "label": "ニュース",
+      "targetDurationMs": 480000,
+      "cues": ["cue-news-1"]
+    },
+    {
+      "id": "cut-to-comments",
+      "kind": "cut_in",
+      "label": "コメントコーナーへ",
+      "cutInId": "jingle-comments"
+    },
+    {
+      "id": "seg-comments",
+      "kind": "comment",
+      "label": "コメント",
+      "targetDurationMs": 300000
+    }
+  ],
+  "cutIns": [
+    {
+      "id": "jingle-comments",
+      "assetId": "asset-video-jingle"
+    }
+  ]
+}
+```
+
+- `cut_in` セグメントは `targetDurationMs`、`cues`、`material` を持ちません。
+- `assetId` には ready な動画Assetを指定します。H.264/AAC以外の動画は、書き出し時にMP4へ正規化されます。
+- 音声は任意です。音声ありのCutInは program ステージだけが再生し、コンソールのプレビューはミュートされます。素材カードは従来どおり無音です。
+- 同じ `cutInId` を複数の区切りで再利用できます。
+- CutInは全画面で再生され、キャラクター・字幕・素材カード・コメントは隠れます。
+- 書き出し後の `show.json` には `cutIns[]` が追加されます。CutInを使わない場合は `cutIns` を書きません。
+
+:::note[CutInを使うパッケージ]
+CutInを使うパッケージは、CutInに対応したライブアプリで実行してください。CutInを使わないパッケージは従来のアプリでも読み込めます。
+:::
+
 ## 2本目以降
 
 Work を複製した場合は、行 ID と Scene ID が維持されるため、前回のプロファイルをそのまま使えます。プロファイルの `show.title` だけを新しい Work タイトルに合わせて更新してください。
@@ -122,11 +169,11 @@ API の接続先は環境変数 `KAKEAI_API_URL` で変更できます。
 ## 出力されるもの
 
 - `manifest.json`: 全ファイルの SHA-256、サイズ、mediaType、尺、寸法、無音フラグ、フォント診断、声のスナップショット
-- `show.json`: 解決済みのキュー、素材カード、コメントポリシー
+- `show.json`: 解決済みのキュー、素材カード、CutIn、コメントポリシー
 - `characters.json`: キャラクターの外観、顔レイヤー、表情、声
 - `theme.css`: テーマの CSS 変数とフォントスタック
 - `audio/prepared/`: 準備済み音声（既存の Audio Take または TTS）
-- `media/`: キャラクター画像、顔レイヤー、参照音声
+- `media/`: キャラクター画像、顔レイヤー、参照音声、CutInのMP4
 - `materials/`: 素材カード（PNG / HTML / 無音 MP4）
 - `fixtures/comments.json`: テストモード用のコメント（Show Profile にある場合）
 
@@ -138,6 +185,7 @@ API の接続先は環境変数 `KAKEAI_API_URL` で変更できます。
 - 書き出し中に TTS のテスト合成と準備済み音声の生成を行います。TTS エンジンが起動していることを確認してください。
 - 参照音声を使う Voice Profile は、参照音声がパッケージにコピーされます。接続先や API キーはパッケージに含まれません。
 - 素材カードにする Scene は、セリフ・立ち絵状態・Scene 範囲の音声キューを持たない単一 Scene にしてください。nested Composition、動画ゲート、`character.standing` は v1 では使えません。
+- CutInに使う動画は ready で、尺が確定している必要があります。書き出し時に音声・尺・コーデックを検証します。動画の読み込みや正規化に失敗した場合は、書き出しが失敗します。
 - 実行中の Job は `kakeai-agent job.cancel <jobId>` で協調キャンセルできます（現在のキューが終わってから停止します）。
 
 ## 次のステップ

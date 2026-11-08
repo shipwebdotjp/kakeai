@@ -8,6 +8,7 @@
 - 素材指定は当面、Show ProfileのJSONまたはエージェント経由で行う。Web編集UIは対象外とする。
 - `Segment.material` は既存Profileのための既定素材として残す。
 - 対象外は、音入り動画、全画面表示、CutIn、Visual Cueタイムラインからの自動変換、生成レスの素材選択、素材の先読みキャッシュである。
+- CutInは素材カードの拡張ではなく、Spine専用の `cut_in` セグメントとして [../live-media-playout/spec.md](../live-media-playout/spec.md) で定める。素材カードは引き続き無音で、CutInだけが埋め込み音声を持てる。
 - 1つのCueは1回の再生occurrenceとする。同じCue IDを複数のSegmentから参照しない。
 
 ## 契約
@@ -46,7 +47,7 @@
 
 `StageState.material` は現在のCueと現在のSegmentから毎回導出する。実効素材を別の状態として保持しない。`material` の値は `{ id, focus }` または `null` である。
 
-通常の本編は常に `script` フェーズとする。素材の有無は `StageState.material` だけで表し、`material` フェーズは持たない。CutIn用の実フェーズはフェーズ2まで追加しない。
+通常の本編は常に `script` フェーズとする。素材の有無は `StageState.material` だけで表し、`material` フェーズは持たない。CutIn用の実フェーズは [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とし、この仕様では追加しない。
 
 ## ステージ表示
 

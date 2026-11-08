@@ -695,7 +695,9 @@ POST /api/v1/live-profiles/auto は、`workId`・`scriptVersionId`・任意の`t
 
 POST /api/v1/live-exports は、`workId`・`scriptVersionId`・Show Profile（JSON本文）・任意のfixture配列・`outDir` を受け取り、`live_export` Jobを作成して202 AcceptedでJob DTOを返す。`outDir` は絶対パスで、存在しないディレクトリに限る。APIはサーバ上のプロファイルパスを読まず、CLIがプロファイルとfixtureを読んで本文へ入れる。
 
-入力はJob作成時に同期検証する。`scriptCues[].lineId`、`scriptCues[].materialId`の素材参照、Cueの重複参照、話者の左右、キャラクターと外観、Face Set、Voice Profile、参照音声、Asset、素材Sceneの制約、Theme、フォントを解決し、失敗は422 `VALIDATION_ERROR` または該当する素材エラーで返す。Workerはスナップショットだけを使い、KakeaiのDBの台本・素材・声を変更しない。TTSのテスト合成と準備済み音声の生成はWorkerで行う。
+入力はJob作成時に同期検証する。`scriptCues[].lineId`、`scriptCues[].materialId`の素材参照、`cutIns[].assetId`のCutIn動画参照、Cueの重複参照、話者の左右、キャラクターと外観、Face Set、Voice Profile、参照音声、Asset、素材Sceneの制約、Theme、フォントを解決し、失敗は422 `VALIDATION_ERROR` または該当する素材エラーで返す。Workerはスナップショットだけを使い、KakeaiのDBの台本・素材・声を変更しない。TTSのテスト合成と準備済み音声の生成はWorkerで行う。
+
+CutInは`cutIns[].assetId`でreadyなvideo Assetを参照し、書き出し時にパッケージ内の検証済みMP4へ解決する。尺と音声有無はprobe結果を正本とし、素材カードの無音検証は緩めない。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とする。
 
 成功した `live_export` Jobの `liveExportResult` は、`packagePath`（絶対ローカルパス）、`packageId`、`manifestSha256`、`fileCount`、`preparedCueCount`、`warnings`、`failures` を持つ。`failures` は失敗したキュー・Voice Profile・素材のIDと理由で、失敗Jobでも返す。絶対ローカルパスを返すのはこの結果だけで、ループバック限定のCLI利用に限る。実行中の `live_export` は `POST /jobs/:jobId/cancel` で協調キャンセルできる。
 

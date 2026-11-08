@@ -424,11 +424,11 @@ A scheduled, state-driven performance of a Work's characters and material cards,
 _Avoid_: live render, composition playback
 
 **Live Package**:
-An immutable export of a Live Show containing its Show Profile, theme CSS, character assets, pre-compiled material cards, prepared audio, and fixtures. The live app reads it; it does not share Kakeai's database.
+An immutable export of a Live Show containing its Show Profile, theme CSS, character assets, pre-compiled material cards, CutIn videos, prepared audio, and fixtures. The live app reads it; it does not share Kakeai's database.
 _Avoid_: project, asset bundle, script
 
 **Show Profile**:
-The live-specific configuration of a Live Show: segments, cues, materials, comment policy, safety, stage, and target duration. It is not a Script Version.
+The live-specific configuration of a Live Show: segments, cues, materials, CutIns, comment policy, safety, stage, and target duration. It is not a Script Version.
 _Avoid_: script, template
 
 **Spine**:
@@ -440,11 +440,11 @@ Optional extra topics, bits, and fallback material a Live Show can use when time
 _Avoid_: script, asset library
 
 **Stage**:
-The browser surface that renders the live state: characters, caption, material, comment card, and phase. The Program Stage is captured by OBS; the Preview Stage is not. It is not a Composition player.
+The browser surface that renders the live state: characters, caption, material, CutIn, comment card, and phase. The Program Stage is captured by OBS; the Preview Stage is not. It is not a Composition player.
 _Avoid_: composition, preview, canvas
 
 **Playout**:
-The state-driven audio and cue queue that advances the Stage. It is not a timeline.
+The state-driven audio, cue queue, and CutIn playback that advance the Stage. It is not a timeline.
 _Avoid_: timeline, render queue
 
 **Live Cue**:
@@ -454,6 +454,10 @@ _Avoid_: narration segment, clip
 **Material Card**:
 A static PNG/HTML or short silent MP4 shown in the Stage's center slot. It is created by Kakeai at export time; it is not a live Composition or a running GSAP timeline.
 _Avoid_: visual cue, slide, composition
+
+**CutIn**:
+A short full-screen video inserted at a spine boundary to mark a corner break, with an optional embedded audio track and a probe-derived duration. It is a dedicated segment and package kind, not a Material Card or a Live Cue.
+_Avoid_: material card, live cue, insert scene
 
 **Prepared Cue**:
 A Live Cue resolved at export from a Script Version or authored as a live-only cue, before playout.
