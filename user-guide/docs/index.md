@@ -20,7 +20,16 @@ Kakeai のインストールから動画の MP4 出力までを案内します�
 - [作品の管理](./works/works.md)
 - [素材ライブラリ](./assets/assets.md)
 - [音声プロファイルと読み上げ（TTS）](./tts/tts.md)
+
+## ライブ配信
+
+- [ライブ配信の準備](./live/index.md)
 - [ライブパッケージを書き出す](./live/export.md)
+- [ライブ設定と YouTube の OAuth](./live/setup.md)
+- [テストモードでリハーサルする](./live/test-mode.md)
+- [OBS にステージを設定する](./live/obs.md)
+- [当日のライブを操作する](./live/operations.md)
+- [トラブルシューティング](./live/troubleshooting.md)
 
 ## 応用・映像を作り込む
 

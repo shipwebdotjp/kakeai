@@ -1,11 +1,11 @@
 ---
-sidebar_position: 1
+sidebar_position: 2
 title: ライブパッケージを書き出す
 ---
 
 # ライブパッケージを書き出す
 
-ライブ配信アプリで使う**ライブパッケージ**を、Kakeai の Work と ScriptVersion から書き出します。書き出しには Kakeai API の `live_export` Job を使います。ライブ実行時に Kakeai の起動は不要です（ライブアプリは今後追加されます）。
+ライブ配信アプリで使う**ライブパッケージ**を、Kakeai の Work と ScriptVersion から書き出します。書き出しには Kakeai API の `live_export` Job を使います。ライブ実行時に Kakeai の起動は不要です。
 
 ## 必要なもの
 
@@ -73,3 +73,9 @@ API の接続先は環境変数 `KAKEAI_API_URL` で変更できます。
 - 参照音声を使う Voice Profile は、参照音声がパッケージにコピーされます。接続先や API キーはパッケージに含まれません。
 - 素材カードにする Scene は、セリフ・立ち絵状態・Scene 範囲の音声キューを持たない単一 Scene にしてください。nested Composition、動画ゲート、`character.standing` は v1 では使えません。
 - 実行中の Job は `kakeai-agent job.cancel <jobId>` で協調キャンセルできます（現在のキューが終わってから停止します）。
+
+## 次のステップ
+
+- [ライブ設定と YouTube の OAuth](./setup.md)
+- [テストモードでリハーサルする](./test-mode.md)
+- [OBS にステージを設定する](./obs.md)

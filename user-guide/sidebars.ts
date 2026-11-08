@@ -27,7 +27,15 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'ライブ配信',
-      items: ['live/export'],
+      items: [
+        'live/index',
+        'live/export',
+        'live/setup',
+        'live/test-mode',
+        'live/obs',
+        'live/operations',
+        'live/troubleshooting',
+      ],
     },
     {
       type: 'category',

@@ -154,11 +154,11 @@ P5a（ディレクター生成、安全フィルター、生成レスTTS基盤�
 
 - [ ] 実際のYouTubeライブで、`liveChatMessages.list`のポーリングを正規経路として実行する。P0.5の`streamList`スパイク結果を反映し、実用化できる場合だけ追加する。
 - [ ] 実YouTubeのコメント分析・応答生成がローカルLLMだけで動き、外部LLMが呼ばれないことを確認する。
-- [ ] OAuthの設定手順（Google Cloudプロジェクト、OAuthクライアント、`youtube.readonly`、リフレッシュトークン保存、`live auth`再認証、Testingの7日失効、公開・検証の判断）を整備する。
-- [ ] OBSの設定手順（ブラウザソース、1920x1080、音声経路、ステージURL、コンソールを出さない）を整備する。
+- [x] OAuthの設定手順（Google Cloudプロジェクト、OAuthクライアント、`youtube.readonly`、リフレッシュトークン保存、`live auth`再認証、Testingの7日失効、公開・検証の判断）を整備する。`user-guide/docs/live/setup.md` に記載した。
+- [x] OBSの設定手順（ブラウザソース、1920x1080、音声経路、ステージURL、コンソールを出さない）を整備する。`user-guide/docs/live/obs.md` に記載した。
 - [ ] `pre_show` のカウントダウン、`post_show` のお礼・次回予告を仕上げる。
-- [ ] ユーザーガイド `user-guide/docs/live/` を追加し、サイドバーに載せる（セットアップ、書き出し、テストモード、OBS、当日の操作、トラブル時）。
-- [ ] READMEは概要のままにし、ユーザーガイドへのリンクだけを確認する。
+- [x] ユーザーガイド `user-guide/docs/live/` を追加し、サイドバーに載せる（セットアップ、書き出し、テストモード、OBS、当日の操作、トラブル時）。`index`・`export`・`setup`・`test-mode`・`obs`・`operations`・`troubleshooting` を追加し、サイドバーと目次に載せた。
+- [x] READMEは概要のままにし、ユーザーガイドへのリンクだけを確認する。README の「使い方」から `https://kakeai.shipweb.jp` へリンクされていることを確認した。
 - [ ] 30分の非公開YouTubeライブで受け入れテストを行う。読み取り専用、配信操作とチャット投稿は人間が行う。
 - [ ] テスト: 10分版の通し、実YouTubeの読み取り（ローカルLLMのみ）、YouTube切断、TTS停止、LLMタイムアウト、ステージリロード。実YouTubeの経路で外部LLMが呼ばれないことを確認する。
 - 完了条件: 30分の非公開ライブで、音声途切れ、コメントコーナー、人間ピン、生成レス、開幕・終了画面、ログが確認できる。
