@@ -12,6 +12,7 @@ import type { RunLogEventInput } from "../runs/run-store.ts";
 import { FakeCommentScheduler, flushMicrotasks } from "../testing/fake-scheduler.ts";
 import { ManualCommentSource } from "../testing/manual-comment-source.ts";
 import { CommentCorner, type CommentCornerHost } from "./comment-corner.ts";
+import type { CommentCornerResponder } from "./comment-responder.ts";
 
 const BASE_TIME = Date.parse("2026-11-07T12:00:00.000Z");
 
@@ -61,6 +62,7 @@ function setup(options: {
   policy?: LiveCommentPolicy;
   holdMs?: number;
   commentsConfig?: Partial<LiveCommentsConfig>;
+  responder?: CommentCornerResponder;
 } = {}) {
   const scheduler = new FakeCommentScheduler();
   const now = () => new Date(BASE_TIME + scheduler.currentTimeMs);
@@ -102,6 +104,7 @@ function setup(options: {
     safety: { blockedTopics: [] },
     now,
     scheduler,
+    ...(options.responder === undefined ? {} : { responder: options.responder }),
     log: (input) => logs.push(input),
     appendComment: (entry) => appends.push(entry),
     host,
@@ -145,6 +148,39 @@ describe("CommentCorner", () => {
 
     await scheduler.advance(4_000);
     expect(corner.getStageComment()).toBeNull();
+    expect(corner.getSnapshot().corner.state).toBe("finished");
+    expect(finishCorner).toHaveBeenCalledTimes(1);
+  });
+
+  it("prepares every selected candidate and moves past a failed response", async () => {
+    const events: string[] = [];
+    const responder: CommentCornerResponder = {
+      prepare(candidates) {
+        events.push(`prepare:${candidates.map((entry) => entry.commentId).join(",")}`);
+      },
+      async respond(entry) {
+        events.push(`respond:${entry.commentId}`);
+        return entry.commentId === "c1" ? "failed" : "done";
+      },
+      pause: () => undefined,
+      resume: () => undefined,
+      stop: () => undefined,
+    };
+    const { corner, source, finishCorner } = setup({ responder });
+    source.emit({ id: "c1", text: "失敗する質問" });
+    source.emit({ id: "c2", text: "次の質問" });
+
+    corner.startCorner(SEGMENT);
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(events).toEqual(["prepare:c1,c2", "respond:c1", "respond:c2"]);
+    expect(corner.getSnapshot().comments.find((entry) => entry.comment.id === "c1")?.state).toBe(
+      "skipped",
+    );
+    expect(corner.getSnapshot().comments.find((entry) => entry.comment.id === "c2")?.state).toBe(
+      "done",
+    );
     expect(corner.getSnapshot().corner.state).toBe("finished");
     expect(finishCorner).toHaveBeenCalledTimes(1);
   });

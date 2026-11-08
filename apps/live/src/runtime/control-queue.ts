@@ -24,10 +24,14 @@ export interface CueControlHost {
   log(input: RunLogEventInput): void;
   publish(): void;
   publishPreload(): void;
+  /** Plays a correction when no cue is current (comment response queue). */
+  playCorrectionQueue?(cues: LiveCue[]): boolean;
 }
 
 /** P4/P5-facing cue edits, kept separate from command and phase handling. */
 export class CueControl {
+  private correctionSequence = 0;
+
   constructor(private readonly host: CueControlHost) {}
 
   getPreloadCues(): LivePreloadCue[] {
@@ -41,7 +45,8 @@ export class CueControl {
   }
 
   enqueueGeneratedCues(cues: LiveCue[]): void {
-    if (this.host.currentSegmentIndex() === null || cues.length === 0) {
+    const segmentIndex = this.host.currentSegmentIndex();
+    if (segmentIndex === null || cues.length === 0) {
       return;
     }
     const existingIds = new Set(this.host.queues.flatten().map((cue) => cue.id));
@@ -56,7 +61,26 @@ export class CueControl {
     if (fresh.length === 0) {
       return;
     }
-    this.host.playout.insertAfterCurrent(fresh);
+    const segment = this.host.show.segments[segmentIndex];
+    if (segment?.kind === "comment") {
+      const existing = this.host.queues.forSegment(segmentIndex);
+      if (existing !== null) {
+        // The playout holds this array by reference; keep it identical.
+        existing.push(...fresh);
+        if (this.host.playout.isQueueFinished && !this.host.playout.isPaused) {
+          this.host.playout.setQueue(existing);
+          this.host.playout.start();
+        }
+      } else {
+        const queue = [...fresh];
+        this.host.queues.setForSegment(segmentIndex, queue);
+        const installed = this.host.queues.forSegment(segmentIndex) ?? queue;
+        this.host.playout.setQueue(installed);
+        this.host.playout.start();
+      }
+    } else {
+      this.host.playout.insertAfterCurrent(fresh);
+    }
     for (const cue of fresh) {
       this.host.log({
         type: "cue_generated",
@@ -158,6 +182,43 @@ export class CueControl {
   getCue(cueId: string): LiveCue | null {
     const entry = this.host.queues.find(cueId);
     return entry === null ? null : { ...entry.cue };
+  }
+
+  /**
+   * Plays a prepared live cue again as a correction. The copy is inserted
+   * right after the current cue, or installed as a comment response queue when
+   * nothing is playing. Script-derived cues are never corrected.
+   */
+  playCorrection(cueId: string): boolean {
+    const prepared = this.host.show.cues.find(
+      (cue) => cue.id === cueId && cue.origin === "live",
+    );
+    if (prepared === undefined) {
+      return false;
+    }
+    this.correctionSequence += 1;
+    // Corrections are safe replays of live cues; `fallback` is intentional so
+    // stop/safe-mode's generated/manual discard leaves the operator's replay.
+    const correction: LiveCue = {
+      ...prepared,
+      id: `${prepared.id}-correction-${this.correctionSequence}`,
+      source: "fallback",
+      status: "ready",
+      commentId: null,
+    };
+    if (this.host.playout.current !== null) {
+      this.host.playout.insertAfterCurrent([correction]);
+    } else if (this.host.playCorrectionQueue?.([correction]) !== true) {
+      return false;
+    }
+    this.host.log({
+      type: "cue_generated",
+      cueId: correction.id,
+      data: { source: "fallback", reason: "correction", fromCueId: cueId },
+    });
+    this.host.publishPreload();
+    this.host.publish();
+    return true;
   }
 
   getUpcomingCues(limit: number): LiveCue[] {

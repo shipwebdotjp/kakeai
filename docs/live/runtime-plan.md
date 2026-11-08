@@ -43,6 +43,13 @@ apps/live/
 - コントローラは `comments.startCorner(segment)` を呼び、終了時は `finishCorner` から `spine.handleQueueFinished()` に戻る。`pause`/`resume`/`stop`/`safe_mode`/`end`/`skip_cue` はコントローラからコーナーへ伝播し、`safe_mode` はコーナーを終了して以後の `comment` セグメントも飛ばす。
 - ステージは `StageState.comment` の `text` に `safeSummary`（または redactedText）だけを受け取る。生コメントはコンソールの人間だけが見る。
 
+## 生成レスの先読みと退避
+
+- コーナー開始時に選択済み候補のLLM生成とTTSを並行開始し、候補ごとに `gen-<commentId>-<index>` のキューを作る。LLMは最大2、TTSは `maxConcurrentTts` の共有セマフォに従う。
+- `maxThinkingMs` 以内に ready にならない、LLM/TTSが失敗する、または再生待ちがタイムアウトした場合は、そのコーナーで1回だけ退避キューを再生して次の候補へ進む。
+- 生成状態（thinking/preparing/ready/failed）はコンソールの `snapshot.generation` に出し、コーナー終了・`stop`・`safe_mode`・`end`・`post_show` で null に戻す。
+- コメント応答のキュー再生中は `queue_finished` でスパインを進めず、応答キューが完了してからコーナーを終える。訂正キューは現在の直後、現在が無ければ応答キューとして再生する。
+
 ## 通信契約
 
 - HTTP: `/stage`、`/console`、`/package/*`、`/run/generated/*`、`/healthz`。

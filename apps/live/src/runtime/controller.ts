@@ -3,12 +3,12 @@ import type {
   LiveCharacterSheet,
   LiveCommand,
   LiveCue,
+  LiveGenerationStatus,
   LivePackageShow,
   LivePreloadCue,
   LiveSegment,
   LiveStageConnection,
   LiveNoticeLevel,
-  RunLogEvent,
   StageClock,
   StageEvent,
   StageLease,
@@ -16,44 +16,28 @@ import type {
   StageState,
 } from "@kakeai/contracts";
 import type { RunLogEventInput, RunStore } from "../runs/run-store.ts";
+import type { GeneratedCueCommands } from "../director/generation-service.ts";
 import type { SegmentBufferEstimate } from "./buffer.ts";
-import type { CommentCorner } from "./comment-corner.ts";
 import { CommentRuntime } from "./comment-runtime.ts";
 import { dispatchLiveCommand, type CommandResult } from "./command-dispatch.ts";
+import { PhaseCommands } from "./controller-commands.ts";
+import type { LiveControllerChange, LiveControllerOptions } from "./controller-types.ts";
 import { ControllerView } from "./controller-view.ts";
 import { CueControl, type LiveCuePatch } from "./control-queue.ts";
-import { handleCueCommand } from "./cue-commands.ts";
+import { handleCueCommand, type CueCommandHooks } from "./cue-commands.ts";
 import { StageLeaseManager, type StageConnectOptions } from "./lease.ts";
 import { Playout, type PlayoutEvent, type PlayoutScheduler } from "./playout.ts";
 import { dispatchPlayoutEvent } from "./playout-events.ts";
 import { CueQueueStore } from "./queue.ts";
+import { ResponsePlayback } from "./response-playback.ts";
 import { ACTIVE_PHASES } from "./segments.ts";
 import { Spine } from "./spine.ts";
 import { handleProgramStageEvent } from "./stage-events.ts";
 import { buildShowMeta, computeClock } from "./state.ts";
 
 export type { LiveCuePatch } from "./control-queue.ts";
-
-export type LiveControllerChange =
-  | { type: "state"; state: StageState }
-  | { type: "snapshot"; snapshot: ConsoleSnapshot }
-  | { type: "preload"; cues: LivePreloadCue[] }
-  | { type: "event"; event: RunLogEvent }
-  | { type: "notice"; level: LiveNoticeLevel; message: string };
-
+export type { LiveControllerChange, LiveControllerOptions } from "./controller-types.ts";
 export type { CommandResult } from "./command-dispatch.ts";
-
-export interface LiveControllerOptions {
-  runId: string;
-  show: LivePackageShow;
-  characters: LiveCharacterSheet;
-  runStore?: RunStore;
-  now?: () => Date;
-  leaseTtlMs?: number;
-  playoutScheduler?: PlayoutScheduler;
-  /** Comment corner implementation. Omit to skip comment segments. */
-  comments?: CommentCorner;
-}
 
 /**
  * Single owner of live state. Stages only render `StageState` and report audio
@@ -74,7 +58,12 @@ export class LiveController {
   private readonly spine: Spine;
   private readonly comments: CommentRuntime;
   private readonly view: ControllerView;
+  private readonly responsePlayback: ResponsePlayback;
+  private readonly phaseCommands: PhaseCommands;
   private readonly materialById = new Map<string, LivePackageShow["materials"][number]>();
+  private generation: LiveGenerationStatus | null = null;
+  private generatedCueCommands: GeneratedCueCommands | null = null;
+  private readonly cueCommandHooks: CueCommandHooks;
   private phase: StagePhase = "pre_show";
   private phaseBeforePause: StagePhase | null = null;
   private currentSegmentIndex: number | null = null;
@@ -94,6 +83,11 @@ export class LiveController {
       publish: () => this.publish(),
       finishCorner: () => {
         this.comments.clearStageComment();
+        this.setGeneration(null);
+        this.responsePlayback.cancel();
+        if (this.currentSegmentIndex !== null) {
+          this.queues.setForSegment(this.currentSegmentIndex, []);
+        }
         this.spine.handleQueueFinished();
       },
       isEndRequested: () => this.endRequested,
@@ -119,6 +113,13 @@ export class LiveController {
         ? {}
         : { scheduler: options.playoutScheduler }),
     });
+    this.responsePlayback = new ResponsePlayback({
+      queues: this.queues,
+      playout: this.playout,
+      currentSegmentIndex: () => this.currentSegmentIndex,
+      publishPreload: () => this.publishPreload(),
+      publish: () => this.publish(),
+    });
     this.view = new ControllerView({
       runId: this.runId,
       show: this.show,
@@ -133,6 +134,7 @@ export class LiveController {
       materialForSegment: (segment) => this.segmentMaterial(segment),
       clock: () =>
         this.finalClock ?? computeClock(this.show, this.showStartedAtMs, this.now().getTime()),
+      generation: () => this.generation,
     });
     this.cueControl = new CueControl({
       show: this.show,
@@ -143,7 +145,20 @@ export class LiveController {
       log: (input) => this.log(input),
       publish: () => this.publish(),
       publishPreload: () => this.publishPreload(),
+      playCorrectionQueue: (cues) => this.playCorrectionResponse(cues),
     });
+    this.cueCommandHooks = {
+      editGeneratedCue: (cueId, patch) =>
+        this.generatedCueCommands?.editGeneratedCue(cueId, patch) ??
+        this.reject("生成レスの編集が設定されていません。"),
+      regenerateGeneratedCue: (cueId) =>
+        this.generatedCueCommands?.regenerateGeneratedCue(cueId) ??
+        this.reject("生成レスの再生成が設定されていません。"),
+      playCorrection: (cueId) =>
+        this.cueControl.playCorrection(cueId)
+          ? { ok: true }
+          : this.reject("訂正できる準備済みキューがありません。"),
+    };
     this.spine = new Spine({
       show: this.show,
       queues: this.queues,
@@ -169,6 +184,44 @@ export class LiveController {
     for (const material of this.show.materials) {
       this.materialById.set(material.id, material);
     }
+    this.phaseCommands = new PhaseCommands({
+      phase: () => this.phase,
+      setPhase: (phase) => this.setPhase(phase),
+      showStartedAtMs: () => this.showStartedAtMs,
+      beginShow: (atMs) => {
+        this.showStartedAtMs = atMs;
+        this.finalClock = null;
+        this.endRequested = false;
+      },
+      phaseBeforePause: () => this.phaseBeforePause,
+      setPhaseBeforePause: (phase) => {
+        this.phaseBeforePause = phase;
+      },
+      endRequested: () => this.endRequested,
+      setEndRequested: (value) => {
+        this.endRequested = value;
+      },
+      safeMode: () => this.safeMode,
+      setSafeMode: (value) => {
+        this.safeMode = value;
+      },
+      now: this.now,
+      comments: this.comments,
+      spine: this.spine,
+      playout: this.playout,
+      queues: this.queues,
+      currentSegment: () => this.segment(),
+      log: (input) => this.log(input),
+      notice: (level, message) => this.notice(level, message),
+      reject: (message) => this.reject(message),
+      publish: () => this.publish(),
+      publishPreload: () => this.publishPreload(),
+      clearGeneration: () => {
+        this.setGeneration(null);
+      },
+      cancelResponse: () => this.responsePlayback.cancel(),
+      enterPostShow: () => this.enterPostShow(),
+    });
   }
 
   subscribe(listener: (change: LiveControllerChange) => void): () => void {
@@ -286,16 +339,16 @@ export class LiveController {
     return dispatchLiveCommand(
       {
         comments: this.comments,
-        start: () => this.start(),
-        end: () => this.end(),
-        pause: () => this.pause(),
-        resume: () => this.resume(),
-        stop: () => this.stop(),
-        enterSafeMode: () => this.enterSafeMode(),
-        skipCue: () => this.skipCue(),
+        start: () => this.phaseCommands.start(),
+        end: () => this.phaseCommands.end(),
+        pause: () => this.phaseCommands.pause(),
+        resume: () => this.phaseCommands.resume(),
+        stop: () => this.phaseCommands.stop(),
+        enterSafeMode: () => this.phaseCommands.enterSafeMode(),
+        skipCue: () => this.phaseCommands.skipCue(),
         takeover: (sessionId) => this.takeover(sessionId),
         cueCommand: (cueCommand) => {
-          const result = handleCueCommand(this.cueControl, cueCommand);
+          const result = handleCueCommand(this.cueControl, cueCommand, this.cueCommandHooks);
           return result.ok ? result : this.reject(result.message);
         },
         reject: (message) => this.reject(message),
@@ -307,181 +360,6 @@ export class LiveController {
   private reject(message: string): CommandResult {
     this.notice("warning", message);
     return { ok: false, message };
-  }
-
-  private start(): CommandResult {
-    const canStart =
-      this.phase === "pre_show" ||
-      (this.phase === "safe_mode" && this.showStartedAtMs === null);
-    if (!canStart) {
-      return this.reject("開始できるのは pre_show のときだけです。");
-    }
-    this.showStartedAtMs = this.now().getTime();
-    this.finalClock = null;
-    this.endRequested = false;
-    this.comments.startSources();
-    this.spine.enterSegment(0);
-    return { ok: true };
-  }
-
-  private end(): CommandResult {
-    if (this.phase === "post_show" || this.phase === "pre_show" || this.phase === "error") {
-      return this.reject("終了できる状態ではありません。");
-    }
-    if (this.showStartedAtMs === null) {
-      return this.reject("まだ開始していません。");
-    }
-    if (this.segment()?.kind === "closing") {
-      this.enterPostShow();
-      return { ok: true };
-    }
-    if (this.phase === "paused") {
-      this.endRequested = false;
-      this.comments.interrupt("skip");
-      this.spine.enterClosing();
-      return { ok: true };
-    }
-    this.endRequested = true;
-    this.notice("info", "現在のキューの終了後にクロージングへ進みます。");
-    return { ok: true };
-  }
-
-  private pause(): CommandResult {
-    if (!ACTIVE_PHASES.has(this.phase) || this.showStartedAtMs === null) {
-      return this.reject("一時停止できる状態ではありません。");
-    }
-    this.phaseBeforePause = this.phase;
-    this.setPhase("paused");
-    this.playout.pause();
-    this.comments.pause();
-    this.publish();
-    return { ok: true };
-  }
-
-  private resume(): CommandResult {
-    if (this.phase !== "paused") {
-      return this.reject("再開できる状態ではありません。");
-    }
-    if (
-      this.safeMode &&
-      this.segment()?.kind === "comment" &&
-      !this.comments.isActive()
-    ) {
-      // Safe mode ended the corner while paused. On resume continue at the
-      // next non-comment segment instead of waiting for a corner callback.
-      this.setPhase("safe_mode");
-      this.log({ type: "resumed" });
-      this.spine.handleQueueFinished();
-      this.publish();
-      return { ok: true };
-    }
-    const resumePhase = this.safeMode ? "safe_mode" : (this.phaseBeforePause ?? "script");
-    this.setPhase(resumePhase);
-    this.playout.resume();
-    this.comments.resume();
-    this.log({
-      type: "resumed",
-      ...(this.playout.current === null ? {} : { cueId: this.playout.current.id }),
-    });
-    this.publish();
-    return { ok: true };
-  }
-
-  private stop(): CommandResult {
-    if (
-      this.phase === "pre_show" ||
-      this.phase === "post_show" ||
-      this.phase === "error" ||
-      this.showStartedAtMs === null
-    ) {
-      return this.reject("停止できる状態ではありません。");
-    }
-    const currentCueId = this.playout.current?.id ?? null;
-    if (this.phase !== "paused") {
-      this.phaseBeforePause = this.phase;
-    }
-    this.setPhase("paused");
-    this.playout.stop();
-    this.comments.pause();
-    const removed = [
-      ...this.playout.discardGeneratedCues({ continuePlaying: false }),
-      ...this.queues.removeWhere(
-        (cue) => cue.source === "generated" || cue.source === "manual",
-      ),
-    ];
-    for (const cue of removed) {
-      this.log({ type: "cue_deleted", cueId: cue.id, data: { reason: "stop" } });
-    }
-    this.log({
-      type: "stopped",
-      ...(currentCueId === null ? {} : { cueId: currentCueId }),
-    });
-    this.publishPreload();
-    this.publish();
-    return { ok: true };
-  }
-
-  private enterSafeMode(): CommandResult {
-    if (this.phase === "post_show" || this.phase === "error" || this.phase === "safe_mode") {
-      return this.reject("安全モードへ移行できる状態ではありません。");
-    }
-    // v1 has no exit command: once the operator enters safe mode, prepared
-    // cues continue safely until the show ends.
-    this.safeMode = true;
-    this.log({
-      type: "safe_mode",
-      ...(this.playout.current === null ? {} : { cueId: this.playout.current.id }),
-    });
-    const paused = this.phase === "paused";
-    const cornerWasActive = this.comments.interrupt("safe_mode") ?? false;
-    if (paused) {
-      this.playout.stop();
-    } else {
-      this.setPhase("safe_mode");
-    }
-    const removed = [
-      ...this.playout.discardGeneratedCues({ continuePlaying: !paused }),
-      ...this.queues.removeWhere(
-        (cue) => cue.source === "generated" || cue.source === "manual",
-      ),
-    ];
-    for (const cue of removed) {
-      this.log({ type: "cue_deleted", cueId: cue.id, data: { reason: "safe_mode" } });
-    }
-    this.publishPreload();
-    this.publish();
-    if (cornerWasActive && !paused) {
-      this.spine.handleQueueFinished();
-    }
-    return { ok: true };
-  }
-
-  private skipCue(): CommandResult {
-    if (this.phase === "pre_show" || this.phase === "post_show" || this.phase === "error") {
-      return this.reject("スキップできる状態ではありません。");
-    }
-    if (this.segment()?.kind === "comment" && this.comments.isActive() === true) {
-      const currentCommentId = this.comments.getCurrentCommentId();
-      if (currentCommentId !== null) {
-        const result = this.comments.handleCommand({
-          kind: "skip_comment",
-          commentId: currentCommentId,
-        });
-        return result.ok ? { ok: true } : this.reject(result.message);
-      }
-      this.comments.interrupt("skip");
-      this.spine.handleQueueFinished();
-      return { ok: true };
-    }
-    if (this.playout.current === null) {
-      return this.reject("スキップするキューがありません。");
-    }
-    if (!this.playout.skipCurrent()) {
-      return this.reject("スキップできませんでした。");
-    }
-    this.publishPreload();
-    this.publish();
-    return { ok: true };
   }
 
   private takeover(sessionId: string): CommandResult {
@@ -528,7 +406,12 @@ export class LiveController {
         publish: () => this.publish(),
         emitPreload: (cues) => this.emit({ type: "preload", cues }),
         pauseForFailure: () => this.pauseForFailure(),
-        handleQueueFinished: () => this.spine.handleQueueFinished(),
+        handleQueueFinished: () => {
+          if (this.responsePlayback.consumeQueueFinished()) {
+            return;
+          }
+          this.spine.handleQueueFinished();
+        },
       },
       event,
     );
@@ -549,6 +432,8 @@ export class LiveController {
     this.currentSegmentIndex = null;
     this.endRequested = false;
     this.phaseBeforePause = null;
+    this.generation = null;
+    this.responsePlayback.cancel();
     this.comments.clearStageComment();
     this.comments.stopSources();
     this.comments.interrupt("stop");
@@ -586,6 +471,86 @@ export class LiveController {
 
   getUpcomingCues(limit: number): LiveCue[] {
     return this.cueControl.getUpcomingCues(limit);
+  }
+
+  /** Installs the generated-cue edit/regenerate service (P5b2 console). */
+  setGeneratedCueCommands(commands: GeneratedCueCommands | null): void {
+    this.generatedCueCommands = commands;
+  }
+
+  getCurrentSegment(): LiveSegment | null {
+    return this.segment();
+  }
+
+  getGeneration(): LiveGenerationStatus | null {
+    return this.generation;
+  }
+
+  setGeneration(status: LiveGenerationStatus | null): void {
+    this.generation = status;
+    this.publishSnapshot();
+  }
+
+  notify(level: LiveNoticeLevel, message: string): void {
+    this.notice(level, message);
+  }
+
+  /** Installs and starts a comment-corner response queue. Returns its serial. */
+  playResponseCues(cues: LiveCue[]): number {
+    if (this.isResponseStopped() || this.phase === "paused") {
+      return this.responsePlayback.start([]);
+    }
+    return this.responsePlayback.start(cues);
+  }
+
+  /**
+   * Plays a correction with no response waiter. `queue_finished` advances the
+   * spine normally, which matches "play the correction, then return to the
+   * spine". Used when no cue is current.
+   */
+  playCorrectionResponse(cues: LiveCue[]): boolean {
+    const index = this.currentSegmentIndex;
+    if (
+      index === null ||
+      cues.length === 0 ||
+      this.show.segments[index]?.kind !== "comment" ||
+      this.phase === "paused" ||
+      this.phase === "post_show" ||
+      this.phase === "error"
+    ) {
+      return false;
+    }
+    this.responsePlayback.cancel();
+    const pending = this.queues.forSegment(index) ?? [];
+    for (const cue of pending) {
+      if (cue.status !== "done" && cue.status !== "skipped" && cue.status !== "failed") {
+        this.log({ type: "cue_deleted", cueId: cue.id, data: { reason: "correction" } });
+      }
+    }
+    this.queues.setForSegment(index, cues);
+    const installed = this.queues.forSegment(index) ?? cues;
+    this.playout.setQueue(installed);
+    this.playout.start();
+    this.publishPreload();
+    this.publish();
+    return true;
+  }
+
+  endResponseCues(serial: number): void {
+    this.responsePlayback.end(serial);
+  }
+
+  cancelResponseCues(): void {
+    this.responsePlayback.cancel();
+  }
+
+  isResponseStopped(): boolean {
+    return (
+      this.safeMode ||
+      this.phase === "post_show" ||
+      this.phase === "error" ||
+      this.currentSegmentIndex === null
+    );
   }
 
   /** Public log hook for collaborators (the comment corner) wired before construction. */

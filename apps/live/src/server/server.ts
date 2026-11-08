@@ -10,10 +10,18 @@ import type { LiveRuntimeConfig } from "@kakeai/contracts";
 import type { Express } from "express";
 import { CommentFilter } from "../comments/filter.ts";
 import { createCommentSource } from "../comments/factory.ts";
+import { createDirector, type Director } from "../director/director.ts";
+import { GeneratedCueService } from "../director/generation-service.ts";
+import {
+  DirectorResponder,
+  type DirectorResponseHost,
+} from "../director/response-responder.ts";
 import { createCommentAnalyst } from "../llm/comment-analyst.ts";
 import type { LoadedLivePackage } from "../package/loader.ts";
 import { CommentCorner } from "../runtime/comment-corner.ts";
+import type { CommentCornerResponder } from "../runtime/comment-responder.ts";
 import { LiveController } from "../runtime/controller.ts";
+import { DirectorRuntime } from "../runtime/director-runtime.ts";
 import { RunStore, type RunLogEventInput } from "../runs/run-store.ts";
 import { createLiveApp } from "./app.ts";
 import { LOCAL_BIND_ADDRESS } from "./security.ts";
@@ -32,6 +40,10 @@ export interface CreateLiveServerOptions {
   leaseTtlMs?: number;
   /** Tests inject a prepared corner with a fake source and analyst. */
   commentCorner?: CommentCorner;
+  /** Tests inject a director without changing the rest of the wiring. */
+  director?: Director;
+  /** Tests replace the whole response responder (no director runtime then). */
+  responder?: CommentCornerResponder;
 }
 
 export interface LiveServer {
@@ -42,6 +54,8 @@ export interface LiveServer {
   app: Express;
   runStore: RunStore;
   testMode: boolean;
+  /** Present when the default generated-response wiring was built. */
+  directorRuntime: DirectorRuntime | null;
 }
 
 const DEFAULT_DIST_DIR = resolve(import.meta.dirname, "..", "..", "dist");
@@ -67,13 +81,23 @@ async function listen(server: HttpServer, port: number): Promise<number> {
   return address.port;
 }
 
+interface CommentCornerBuild {
+  corner: CommentCorner;
+  responder: CommentCornerResponder;
+  director: Director | null;
+  /** False when a test supplied its own responder; no runtime is needed. */
+  ownsResponder: boolean;
+}
+
 async function buildCommentCorner(
   options: CreateLiveServerOptions,
   hooks: {
     log: (input: RunLogEventInput) => void;
     appendComment: (entry: Record<string, unknown>) => void;
+    runDir: string;
+    host: () => DirectorResponseHost | null;
   },
-): Promise<CommentCorner> {
+): Promise<CommentCornerBuild> {
   const show = options.package.show;
   const source = await createCommentSource({
     show,
@@ -93,7 +117,35 @@ async function buildCommentCorner(
     maxLength: options.config.comments.maxLength,
     maxPerAuthorPerMinute: options.config.comments.maxPerAuthorPerMinute,
   });
-  return new CommentCorner({
+  const sourceKind = source.getStatus().kind;
+  const fallbackCue = show.cues.find((cue) => cue.id === show.safety.fallbackCueId);
+  if (fallbackCue === undefined) {
+    throw new Error(`退避キューが見つかりません: ${show.safety.fallbackCueId}`);
+  }
+  const ownsResponder = options.responder === undefined;
+  let responder: CommentCornerResponder;
+  let director: Director | null = options.director ?? null;
+  if (options.responder !== undefined) {
+    responder = options.responder;
+  } else {
+    director =
+      options.director ??
+      createDirector({
+        llm: options.config.llm,
+        sourceKind,
+      });
+    responder = new DirectorResponder({
+      director,
+      config: options.config,
+      show,
+      packageRoot: options.package.rootDir,
+      runDir: hooks.runDir,
+      fallbackCue,
+      host: hooks.host,
+      ...(options.now === undefined ? {} : { now: options.now }),
+    });
+  }
+  const corner = new CommentCorner({
     source,
     analyst,
     filter,
@@ -101,9 +153,11 @@ async function buildCommentCorner(
     policy: show.commentPolicy,
     safety: show.safety,
     ...(options.now === undefined ? {} : { now: options.now }),
+    responder,
     log: hooks.log,
     appendComment: hooks.appendComment,
   });
+  return { corner, responder, director, ownsResponder };
 }
 
 /**
@@ -124,13 +178,18 @@ export async function createLiveServer(
       ...(options.now === undefined ? {} : { now: options.now }),
     }));
   const controllerHolder: { current: LiveController | null } = { current: null };
+  const directorRuntimeHolder: { current: DirectorResponseHost | null } = { current: null };
   let commentCorner = options.commentCorner;
+  let build: CommentCornerBuild | null = null;
   if (commentCorner === undefined) {
     try {
-      commentCorner = await buildCommentCorner(options, {
+      build = await buildCommentCorner(options, {
         log: (input) => controllerHolder.current?.recordEvent(input),
         appendComment: (entry) => runStore.appendComment(entry),
+        runDir: runStore.dir,
+        host: () => directorRuntimeHolder.current,
       });
+      commentCorner = build.corner;
     } catch (error) {
       await runStore.finish({ status: "failed", phase: "pre_show" });
       throw error;
@@ -146,6 +205,51 @@ export async function createLiveServer(
     ...(commentCorner === undefined ? {} : { comments: commentCorner }),
   });
   controllerHolder.current = controller;
+
+  let directorRuntime: DirectorRuntime | null = null;
+  if (
+    build !== null &&
+    build.ownsResponder &&
+    build.director !== null &&
+    commentCorner !== undefined
+  ) {
+    directorRuntime = new DirectorRuntime({
+      controller,
+      runStore,
+      show: options.package.show,
+      characters: options.package.characters,
+      comments: commentCorner,
+      ...(options.now === undefined ? {} : { now: options.now }),
+    });
+    directorRuntimeHolder.current = directorRuntime;
+    const runtime = directorRuntime;
+    controller.setGeneratedCueCommands(
+      new GeneratedCueService({
+        show: options.package.show,
+        config: options.config,
+        packageRoot: options.package.rootDir,
+        runDir: runStore.dir,
+        director: build.director,
+        host: {
+          getCue: (cueId) => controller.getCue(cueId),
+          updateCue: (cueId, patch) => controller.updateCue(cueId, patch),
+          setGeneration: (status) => controller.setGeneration(status),
+          log: (input) => {
+            controller.recordEvent(input);
+            const message = input.data?.message;
+            if (input.type === "error" && typeof message === "string") {
+              runStore.appendError(message);
+            }
+          },
+          notice: (level, message) => controller.notify(level, message),
+          appendGeneratedText: (entry) => runStore.appendGeneratedText(entry),
+          contextFor: (candidate) => runtime.contextFor(candidate),
+          candidateFor: (commentId) => commentCorner?.getCandidate(commentId) ?? null,
+        },
+        ...(options.now === undefined ? {} : { now: options.now }),
+      }),
+    );
+  }
 
   const httpServer = createServer();
   // Serve an explicit 503 until the app needs the actual port. Without these
@@ -181,6 +285,7 @@ export async function createLiveServer(
     app,
     runStore,
     testMode: options.testMode === true,
+    directorRuntime,
     async close(): Promise<void> {
       if (closed) {
         return;

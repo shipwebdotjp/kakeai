@@ -6,11 +6,10 @@ import type {
   LiveCommentEntry,
   LiveCommentsConfig,
   LiveCommentPolicy,
-  LiveSafety,
   StageCommentState,
 } from "@kakeai/contracts";
 import { redactCommentText } from "../comments/filter.ts";
-import type { CommentFilter, CommentFilterReason } from "../comments/filter.ts";
+import type { CommentFilter } from "../comments/filter.ts";
 import type { CommentSource, CommentSourceScheduler } from "../comments/source.ts";
 import { realCommentScheduler } from "../comments/source.ts";
 import type { CommentAnalyst } from "../llm/comment-analyst.ts";
@@ -22,40 +21,23 @@ import {
   effectiveCommentPolicy,
   toPublicEntry,
 } from "./comment-corner-model.ts";
+import { settleCornerEntry } from "./comment-corner-outcome.ts";
+import type {
+  CommentCornerCommandResult,
+  CommentCornerHost,
+  CommentCornerOptions,
+} from "./comment-corner-types.ts";
 import {
   HoldCommentCornerResponder,
   type CommentCornerResponder,
 } from "./comment-responder.ts";
 
+export type {
+  CommentCornerCommandResult,
+  CommentCornerHost,
+  CommentCornerOptions,
+} from "./comment-corner-types.ts";
 export type { CommentSegment } from "./comment-corner-model.ts";
-
-export interface CommentCornerHost {
-  finishCorner(): void;
-  setStageComment(comment: StageCommentState | null): void;
-  publish(): void;
-  isEndRequested(): boolean;
-  isSafeMode(): boolean;
-  notice?(level: "info" | "warning" | "error", message: string): void;
-}
-
-export interface CommentCornerOptions {
-  source: CommentSource;
-  analyst: CommentAnalyst | null;
-  filter: CommentFilter;
-  commentsConfig: LiveCommentsConfig;
-  policy: LiveCommentPolicy;
-  safety: Pick<LiveSafety, "blockedTopics">;
-  now?: () => Date;
-  scheduler?: CommentSourceScheduler;
-  responder?: CommentCornerResponder;
-  log?: (input: RunLogEventInput) => void;
-  appendComment?: (entry: Record<string, unknown>) => void;
-  host?: CommentCornerHost;
-}
-
-export type CommentCornerCommandResult =
-  | { ok: true }
-  | { ok: false; message: string };
 
 const MAX_STAGE_AUTHOR = 200;
 
@@ -188,6 +170,21 @@ export class CommentCorner {
 
   getCurrentCommentId(): string | null {
     return this.currentCommentId;
+  }
+
+  /** Console/director view of one stored comment, including its candidate. */
+  getEntry(commentId: string): LiveCommentEntry | null {
+    const entry = this.entries.get(commentId);
+    return entry === undefined ? null : toPublicEntry(entry, this.now().getTime());
+  }
+
+  getCandidate(commentId: string): CommentCandidate | null {
+    const candidate = this.entries.get(commentId)?.candidate;
+    return candidate === null || candidate === undefined ? null : { ...candidate };
+  }
+
+  getPinNote(commentId: string): string | null {
+    return this.entries.get(commentId)?.pinNote ?? null;
   }
 
   getSnapshot(): {
@@ -419,6 +416,11 @@ export class CommentCorner {
     if (!this.isCurrent(token)) {
       return;
     }
+    try {
+      this.responder.prepare?.([...plan.selected]);
+    } catch (error) {
+      this.handlePrepareError(error);
+    }
     this.runNext();
   }
 
@@ -467,26 +469,16 @@ export class CommentCorner {
       if (outcome === "stopped") {
         return;
       }
-      this.finishCurrentEntry(entry);
+      settleCornerEntry({
+        entry,
+        failed: outcome === "failed",
+        log: this.logEvent,
+      });
       this.currentCommentId = null;
       this.setStageComment(null);
-      if (entry.pinned) {
-        entry.pinned = false;
-        entry.pinNote = null;
-        this.logEvent({
-          type: "pin_removed",
-          commentId: entry.event.id,
-          data: { reason: "consumed" },
-        });
-      }
       this.host?.publish();
       this.runNext();
     });
-  }
-
-  private finishCurrentEntry(entry: CornerEntry): void {
-    entry.state = "done";
-    entry.selected = true;
   }
 
   private finishCorner(reason: string, notifySpine: boolean): void {
@@ -591,5 +583,12 @@ export class CommentCorner {
     this.logEvent({ type: "error", data: { message } });
     this.host?.notice?.("warning", `コメントソース: ${message}`);
     this.host?.publish();
+  }
+
+  private handlePrepareError(error: unknown): void {
+    const message =
+      error instanceof Error ? error.message : "コメント応答の準備に失敗しました。";
+    this.logEvent({ type: "error", data: { message } });
+    this.host?.notice?.("warning", `コメント応答の準備: ${message}`);
   }
 }

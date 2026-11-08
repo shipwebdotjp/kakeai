@@ -45,6 +45,25 @@ export class CueQueueStore {
     return this.queues.get(segmentIndex) ?? null;
   }
 
+  /**
+   * Installs or replaces the queue for a segment. Comment corners have no
+   * prepared cue array, so the generated response is installed here before
+   * the playout receives the same array by reference. An existing array is
+   * mutated in place to keep that reference stable.
+   */
+  setForSegment(segmentIndex: number, cues: LiveCue[]): void {
+    const existing = this.queues.get(segmentIndex);
+    if (existing !== undefined) {
+      existing.splice(0, existing.length, ...cues);
+      return;
+    }
+    this.queues.set(segmentIndex, [...cues]);
+    if (!this.segmentIndexes.includes(segmentIndex)) {
+      this.segmentIndexes.push(segmentIndex);
+      this.segmentIndexes.sort((left, right) => left - right);
+    }
+  }
+
   /** Cues from segments after `segmentIndex`, in spine order. */
   afterSegment(segmentIndex: number | null): LiveCue[] {
     const result: LiveCue[] = [];

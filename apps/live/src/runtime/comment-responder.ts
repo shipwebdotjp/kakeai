@@ -1,7 +1,7 @@
 import type { CommentCandidate } from "@kakeai/contracts";
 import type { CommentSourceScheduler } from "../comments/source.ts";
 
-export type CommentCornerRespondOutcome = "done" | "stopped";
+export type CommentCornerRespondOutcome = "done" | "stopped" | "failed";
 
 /**
  * Boundary between the comment corner and the response it displays. P4 only
@@ -9,6 +9,12 @@ export type CommentCornerRespondOutcome = "done" | "stopped";
  * response and TTS without changing the corner loop.
  */
 export interface CommentCornerResponder {
+  /**
+   * Starts any expensive work for the whole corner before the first card is
+   * shown. P5 uses this to generate and synthesize every selected candidate
+   * ahead of time; P4's hold responder does not need it.
+   */
+  prepare?(candidates: CommentCandidate[]): void;
   respond(candidate: CommentCandidate): Promise<CommentCornerRespondOutcome>;
   pause(): void;
   resume(): void;
