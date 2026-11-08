@@ -5,6 +5,7 @@ export const ACTIVE_PHASES: ReadonlySet<StagePhase> = new Set([
   "script",
   "comment",
   "closing",
+  "cut_in",
   "safe_mode",
 ]);
 
@@ -15,6 +16,7 @@ export function phaseForSegment(segment: LiveSegment): StagePhase {
     case "closing":
     case "comment":
     case "script":
+    case "cut_in":
       return segment.kind;
     default: {
       const exhaustive: never = segment;

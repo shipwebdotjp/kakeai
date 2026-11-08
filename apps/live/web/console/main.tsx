@@ -12,6 +12,7 @@ import { EventsPanel, NoticesPanel, type NoticeEntry } from "./ActivityPanels";
 import { CommentCornerPanel } from "./CommentCornerPanel";
 import { CommentsPanel } from "./CommentsPanel";
 import { CommentSourcePanel } from "./CommentSourcePanel";
+import { CutInPanel } from "./CutInPanel";
 import { formatTime } from "./format";
 import { GenerationPanel } from "./GenerationPanel";
 import { PHASE_LABELS, STATUS_LABELS, phaseCanPause } from "./labels";
@@ -197,6 +198,11 @@ function App() {
                 ))}
               </ol>
             </section>
+
+            <CutInPanel
+              snapshot={snapshot}
+              onSkip={() => sendCommand({ kind: "skip_cut_in" })}
+            />
 
             <QueuePanel
               snapshot={snapshot}

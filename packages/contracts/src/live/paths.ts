@@ -123,6 +123,7 @@ export const liveFileKindSchema = z.enum([
   "characters",
   "asset",
   "material",
+  "cut-in",
   "voice-ref",
   "prepared-audio",
   "fixture",

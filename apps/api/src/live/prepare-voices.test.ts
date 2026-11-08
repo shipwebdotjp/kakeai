@@ -61,6 +61,7 @@ describe("prepareVoices", () => {
     };
     const resolved: ResolvedLiveProfile = {
       cues: [],
+      cutIns: [],
       speakers: [
         {
           id: "speaker-left",
@@ -124,6 +125,7 @@ describe("prepareVoices", () => {
     };
     const resolved: ResolvedLiveProfile = {
       cues: [],
+      cutIns: [],
       speakers: [
         {
           id: "speaker-left",

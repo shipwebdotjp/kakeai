@@ -14,6 +14,7 @@ export interface LiveCommandAdapter {
   stop(): CommandResult;
   enterSafeMode(): CommandResult;
   skipCue(): CommandResult;
+  skipCutIn(): CommandResult;
   takeover(sessionId: string): CommandResult;
   cueCommand(command: CueCommand): CommandResult;
   reject(message: string): CommandResult;
@@ -45,6 +46,8 @@ export function dispatchLiveCommand(
       return adapter.enterSafeMode();
     case "skip_cue":
       return adapter.skipCue();
+    case "skip_cut_in":
+      return adapter.skipCutIn();
     case "takeover_program":
       return adapter.takeover(command.sessionId);
     default:

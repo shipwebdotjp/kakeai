@@ -211,13 +211,14 @@ live-package/
 CutInは、コーナーの区切りなどに挿入する短い動画である。Spine上の `cut_in` セグメントとして明示し、ステージの全画面レイヤーで再生する。素材カードの拡張ではなく、Cueでもない。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とする。
 
 - 入力は `cutIns[]` の `{ id, assetId }` と、`segments[]` の `{ id, kind: "cut_in", label, cutInId }` で表す。`cut_in` セグメントは `targetDurationMs` を持たない。
+- 書き出し後の `cut_in` セグメントの実効尺は `show.cutIns[].durationMs` から導出し、`LiveServerShowMeta.segments[].targetDurationMs` にもその値を使う。入力・出力とも `cut_in` セグメントに `targetDurationMs` を持たせない。
 - `assetId` はreadyなvideo Assetを参照する。書き出し時にMP4へ解決し、尺と `hasAudio` はprobe結果を正本にする。
-- `cutIns` は複数のセグメントから再利用できる。occurrenceは `segmentId`・`attempt`・`sequence` で識別する。
+- `cutIns` は複数のセグメントから再利用できる。occurrenceは `segmentId`・`attempt`・`sequence` で識別する。参照されたCutInだけをパッケージに含め、CutInを使わない場合は `show.json` に `cutIns` を書かない。
 - 音声は任意とする。素材カードは無音のまま、CutInだけ `hasAudio: true` を許可する。
 - 再生は `phase: "cut_in"` と `StageState.cutIn` を使い、通常のCueの `playback` に流用しない。
 - 全画面レイヤーでキャラクター・字幕・素材カード・コメント・セグメントラベルを隠す。ループしない。
-- programステージだけが埋め込み音声を再生し、previewはミュートする。
-- `cut_in_ended` を受けたら次のSpine要素へ進む。読み込み失敗・watchdogは警告を記録して次へ進み、配信を停止しない。
+- programステージだけが埋め込み音声を再生し、previewはミュートし、再生イベントも送らない。
+- `cut_in_ended` を受けたら次のSpine要素へ進む。読み込み失敗・watchdogは警告を記録して次へ進み、配信を停止しない。watchdogは尺＋1500ms（最低3000ms）を目安にし、現在のoccurrenceに一致する試行だけを打ち切る。
 - pause後は先頭から再開する。再接続・program引継ぎ時は `startedAt` から位置を求めてシークし、尺を過ぎていれば終了を通知する。
 - 安全モード中はCutInをスキップする。
 
@@ -811,6 +812,7 @@ interface CommentSource {
 - コメント一覧（投稿者、本文、時刻、鮮度、フィルター状態、AIスコア、理由）。
 - コメントコーナーの枠（人間ピン、AI候補、残り枠）。
 - 生成中の応答（字幕、読み上げ、表情）と、編集・キャンセル・再生成。
+- 再生中のCutIn（名前、尺、経過、`cutInId`、`segmentId`、`attempt`、`sequence`）と、専用の「CutInをスキップ」操作。`ConsoleSnapshot.cutIn` は再生中のCutInだけ非nullとし、再生していなければnullとする。
 - ステージのプレビュー（ミュート・イベント非送信のpreviewステージ）。
 - エラー、TTS/LLM/YouTubeの接続状態、ログ。
 - テストモードのfixture再生・停止・速度・リセット。
@@ -821,6 +823,7 @@ interface CommentSource {
 - 一時停止、再開。
 - programステージの引き継ぎ（明示操作）。
 - ピン、ピン解除、スキップ、コメント一時停止。
+- CutInのスキップ（`skip_cut_in`）。通常キューの `skip_cue` とは操作対象を混ぜない。
 - 現在の音声の停止（フェードアウト）、安全モード、訂正キューの再生。
 - 生成中の応答の編集、キャンセル、再生成。準備完了後、再生開始前のキューの削除・並べ替え。再生開始後は停止・訂正だけ。
 - 投稿者・話題のブロック。

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt, timestampSchema } from "../content/primitives";
 import { liveSideSchema } from "./common";
-import { liveAudioUrlSchema } from "./paths";
+import { liveAudioUrlSchema, livePackageRelativePathSchema } from "./paths";
 
 export const stagePhaseSchema = z.enum([
   "pre_show",
@@ -9,6 +9,7 @@ export const stagePhaseSchema = z.enum([
   "script",
   "comment",
   "closing",
+  "cut_in",
   "post_show",
   "paused",
   "safe_mode",
@@ -71,6 +72,24 @@ export const stagePlaybackSchema = z.strictObject({
 });
 export type StagePlayback = z.infer<typeof stagePlaybackSchema>;
 
+/**
+ * CutIn playback is reported separately from `playback`: its audio never joins
+ * the cue attempt/sequence contract. `startedAt` lets a reconnecting program
+ * stage seek to the current position.
+ */
+export const stageCutInSchema = z.strictObject({
+  cutInId: idSchema,
+  segmentId: idSchema,
+  label: z.string().trim().min(1),
+  file: livePackageRelativePathSchema,
+  durationMs: positiveInt,
+  hasAudio: z.boolean(),
+  attempt: positiveInt,
+  sequence: nonNegativeInt,
+  startedAt: timestampSchema,
+});
+export type StageCutIn = z.infer<typeof stageCutInSchema>;
+
 export const stageClockSchema = z.strictObject({
   elapsedMs: nonNegativeInt,
   remainingMs: nonNegativeInt,
@@ -102,6 +121,8 @@ export const stageStateSchema = z.strictObject({
   comment: stageCommentStateSchema.nullable(),
   status: stageStatusSchema,
   playback: stagePlaybackSchema.nullable(),
+  /** Non-null only while a CutIn plays; older servers omit it and parse as null. */
+  cutIn: stageCutInSchema.nullable().default(null),
   clock: stageClockSchema,
 });
 export type StageState = z.infer<typeof stageStateSchema>;
@@ -110,19 +131,44 @@ export const stageEventKindSchema = z.enum([
   "stage_ready",
   "audio_ended",
   "audio_error",
+  "cut_in_ended",
+  "cut_in_error",
   "stage_heartbeat",
 ]);
 export type StageEventKind = z.infer<typeof stageEventKindSchema>;
 
-export const stageEventSchema = z.strictObject({
-  kind: stageEventKindSchema,
-  runId: idSchema,
-  sessionId: idSchema,
-  cueId: idSchema.nullable(),
-  attempt: nonNegativeInt,
-  /** Playback sequence echoed from `StageState.playback`; only an exact match is accepted. */
-  sequence: nonNegativeInt,
-  positionMs: nonNegativeInt.optional(),
-  error: z.string().optional(),
-});
+export const stageEventSchema = z
+  .strictObject({
+    kind: stageEventKindSchema,
+    runId: idSchema,
+    sessionId: idSchema,
+    cueId: idSchema.nullable(),
+    /** CutIn occurrence identity; omitted by audio and heartbeat events. */
+    cutInId: idSchema.nullable().optional(),
+    segmentId: idSchema.nullable().optional(),
+    attempt: nonNegativeInt,
+    /** Playback sequence echoed from `StageState.playback`; only an exact match is accepted. */
+    sequence: nonNegativeInt,
+    positionMs: nonNegativeInt.optional(),
+    error: z.string().optional(),
+  })
+  .superRefine((event, ctx) => {
+    if (event.kind !== "cut_in_ended" && event.kind !== "cut_in_error") {
+      return;
+    }
+    if (typeof event.cutInId !== "string") {
+      ctx.addIssue({
+        code: "custom",
+        message: "CutIn イベントには cutInId が必要です。",
+        path: ["cutInId"],
+      });
+    }
+    if (typeof event.segmentId !== "string") {
+      ctx.addIssue({
+        code: "custom",
+        message: "CutIn イベントには segmentId が必要です。",
+        path: ["segmentId"],
+      });
+    }
+  });
 export type StageEvent = z.infer<typeof stageEventSchema>;

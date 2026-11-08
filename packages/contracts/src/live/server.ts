@@ -73,6 +73,21 @@ export const liveStageConnectionSchema = z.strictObject({
 export type LiveStageConnection = z.infer<typeof liveStageConnectionSchema>;
 
 /**
+ * The console only needs the name and timing of the playing CutIn; the file and
+ * audio flags stay in the stage state.
+ */
+export const consoleCutInSchema = z.strictObject({
+  cutInId: idSchema,
+  segmentId: idSchema,
+  label: z.string().trim().min(1),
+  durationMs: positiveInt,
+  startedAt: timestampSchema,
+  attempt: positiveInt,
+  sequence: nonNegativeInt,
+});
+export type ConsoleCutIn = z.infer<typeof consoleCutInSchema>;
+
+/**
  * Server-to-console state. Comment sections became required in P4; generation
  * sections (P5) can be added as optional or required fields later. Clients
  * validate every message against this schema.
@@ -90,6 +105,8 @@ export const consoleSnapshotSchema = z.strictObject({
   playback: stagePlaybackSchema.nullable(),
   status: stageStatusSchema,
   clock: stageClockSchema,
+  /** Non-null only while a CutIn plays; older servers omit it and parse as null. */
+  cutIn: consoleCutInSchema.nullable().default(null),
   comments: z.array(liveCommentEntrySchema),
   commentCorner: commentCornerSchema,
   commentSource: commentSourceStatusSchema,
@@ -179,6 +196,7 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("stop") }),
   z.strictObject({ kind: z.literal("safe_mode") }),
   z.strictObject({ kind: z.literal("skip_cue") }),
+  z.strictObject({ kind: z.literal("skip_cut_in") }),
   z.strictObject({ kind: z.literal("takeover_program"), sessionId: idSchema }),
   // Generated-response editing. `edit_cue` requires at least one changed field.
   z

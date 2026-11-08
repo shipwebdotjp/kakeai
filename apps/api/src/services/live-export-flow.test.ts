@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import {
   liveCharacterSheetSchema,
   livePackageManifestSchema,
@@ -18,12 +20,16 @@ import { createPrismaClient } from "../db/client.ts";
 import { runMigrations } from "../db/migrate.ts";
 import { applySqlitePragmas } from "../db/pragmas.ts";
 import { ensureDataDirectories } from "../storage/paths.ts";
+import { probeMedia } from "../media/probe.ts";
+import { verifyPackage } from "../live/verify-package.ts";
 import { FakeFontCatalogAdapter, FontCatalogService } from "../services/font-catalog.ts";
 import * as scriptVersions from "../services/script-versions.ts";
 import * as works from "../services/works.ts";
 import { createLiveExportJob } from "../services/live-exports.ts";
 import { processLiveExportJob } from "../worker/live-export.ts";
 import { wavFixture } from "../testing/tts-mocks.ts";
+
+const execFileAsync = promisify(execFile);
 
 const testFontCatalog = new FontCatalogService(new FakeFontCatalogAdapter());
 
@@ -54,7 +60,7 @@ async function createAsset(
   config: AppConfig,
   input: {
     id: string;
-    kind: "image" | "audio";
+    kind: "image" | "audio" | "video";
     mediaType: string;
     data: Buffer;
     durationMs: number | null;
@@ -66,6 +72,8 @@ async function createAsset(
   const sha256 = createHash("sha256").update(input.data).digest("hex");
   const storageKey = `assets/${sha256}`;
   await writeAssetFile(config, storageKey, input.data);
+  const originalFilename =
+    input.kind === "image" ? "image.png" : input.kind === "audio" ? "audio.wav" : "video.mp4";
   return prisma.asset.create({
     data: {
       id: input.id,
@@ -73,7 +81,7 @@ async function createAsset(
       origin: "uploaded",
       status: "ready",
       storageKey,
-      originalFilename: input.kind === "image" ? "image.png" : "audio.wav",
+      originalFilename,
       mediaType: input.mediaType,
       byteSize: BigInt(input.data.byteLength),
       sha256,
@@ -85,9 +93,17 @@ async function createAsset(
   });
 }
 
-function showProfile(): LiveShowProfile {
+function showProfile(
+  options: {
+    audioAssetId?: string;
+    cutIns?: LiveShowProfile["cutIns"];
+    cutInSegmentIds?: string[];
+  } = {},
+): LiveShowProfile {
+  const audioAssetId = options.audioAssetId ?? "asset-audio-1";
   return {
     schemaVersion: 1,
+    cutIns: options.cutIns ?? [],
     show: {
       title: "ライブ書き出しテスト",
       locale: "ja-JP",
@@ -114,6 +130,12 @@ function showProfile(): LiveShowProfile {
         cues: ["cue-script"],
         material: "material-1",
       },
+      ...(options.cutInSegmentIds ?? []).map((cutInId, index) => ({
+        id: `seg-cut-${index + 1}`,
+        kind: "cut_in" as const,
+        label: "区切り",
+        cutInId,
+      })),
       {
         id: "seg-closing",
         kind: "closing",
@@ -130,7 +152,7 @@ function showProfile(): LiveShowProfile {
         caption: "始まります。",
         speech: "はじまります。",
         expression: "normal",
-        audioAssetId: "asset-audio-1",
+        audioAssetId,
       },
       {
         id: "cue-closing",
@@ -138,7 +160,7 @@ function showProfile(): LiveShowProfile {
         caption: "終わります。",
         speech: "おわります。",
         expression: "normal",
-        audioAssetId: "asset-audio-1",
+        audioAssetId,
       },
     ],
     materials: [
@@ -170,9 +192,130 @@ function showProfile(): LiveShowProfile {
   };
 }
 
+let fixtureCounter = 0;
+
+async function setupFixture(input: {
+  prefix: string;
+  imageId: string;
+  audioId: string;
+  voiceId: string;
+}) {
+  fixtureCounter += 1;
+  const size = 1 + fixtureCounter;
+  const image = await createAsset(prisma, config, {
+    id: input.imageId,
+    kind: "image",
+    mediaType: "image/png",
+    data: pngHeader(size, size),
+    durationMs: null,
+    widthPx: size,
+    heightPx: size,
+    hasAudio: false,
+  });
+  const audio = await createAsset(prisma, config, {
+    id: input.audioId,
+    kind: "audio",
+    mediaType: "audio/wav",
+    data: wavFixture(3000, 440 + fixtureCounter),
+    durationMs: 3000,
+    widthPx: null,
+    heightPx: null,
+    hasAudio: true,
+  });
+  await prisma.voiceProfile.create({
+    data: {
+      id: input.voiceId,
+      name: "テスト声",
+      adapterId: "voicevox",
+      voiceId: input.voiceId,
+      locale: "ja-JP",
+      settingsJson: "{}",
+    },
+  });
+  const work = await works.createWork(prisma, input.prefix, "ja-JP");
+  const edition = work.languageEditions[0]!;
+  const content = validContentDocument();
+  const speaker = content.speakers[0]!;
+  speaker.characterId = "char-left";
+  speaker.voiceProfileId = input.voiceId;
+  const character: Character = {
+    id: "char-left",
+    name: "左キャラ",
+    names: [],
+    voices: [{ locale: "ja-JP", voiceProfileId: input.voiceId }],
+    appearances: [
+      {
+        id: "appearance-1",
+        assetId: image.id,
+        expression: "normal",
+        pose: "standing",
+        faceSetId: null,
+        faceSetVersion: null,
+        libraryAppearanceId: null,
+      },
+    ],
+    libraryCharacterId: null,
+  };
+  content.characters.push(character);
+  const saved = await scriptVersions.saveScriptVersion(prisma, edition.id, {
+    sourceScriptVersionId: null,
+    content,
+  });
+  return { image, audio, work, scriptVersionId: saved.scriptVersion.id };
+}
+
 let dataDir: string;
 let config: AppConfig;
 let prisma: ReturnType<typeof createPrismaClient>;
+let cutInVideo:
+  | { data: Buffer; durationMs: number; width: number; height: number }
+  | undefined;
+let ffmpegReady = false;
+
+async function generateCutInVideo(): Promise<typeof cutInVideo> {
+  const path = join(dataDir, "cutin-source.mp4");
+  await execFileAsync("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=320x180:rate=30",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=2",
+    "-t",
+    "2",
+    "-c:v",
+    "libx264",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-shortest",
+    "-movflags",
+    "+faststart",
+    "-y",
+    path,
+  ]);
+  const probe = await probeMedia(path, "video", "video/mp4");
+  if (
+    probe.durationMs === null ||
+    probe.durationMs <= 0 ||
+    probe.widthPx === null ||
+    probe.heightPx === null ||
+    probe.audioCodec === null
+  ) {
+    return undefined;
+  }
+  return {
+    data: await readFile(path),
+    durationMs: probe.durationMs,
+    width: probe.widthPx,
+    height: probe.heightPx,
+  };
+}
 
 beforeAll(async () => {
   dataDir = await mkdtemp(join(tmpdir(), "kakeai-live-export-"));
@@ -182,6 +325,13 @@ beforeAll(async () => {
   await runMigrations();
   prisma = createPrismaClient(config.databaseUrl);
   await applySqlitePragmas(prisma);
+  try {
+    cutInVideo = await generateCutInVideo();
+    ffmpegReady = cutInVideo !== undefined;
+  } catch {
+    cutInVideo = undefined;
+    ffmpegReady = false;
+  }
 }, 60000);
 
 afterAll(async () => {
@@ -319,9 +469,11 @@ describe("live export flow", () => {
     expect(manifest.files.some((file) => file.path === "audio/prepared/cue-0001.wav")).toBe(true);
     expect(manifest.files.every((file) => !file.path.startsWith("/"))).toBe(true);
 
-    const exportedShow = livePackageShowSchema.parse(
-      JSON.parse(await readFile(join(outDir, "show.json"), "utf8")),
-    );
+    const exportedShowJson = JSON.parse(
+      await readFile(join(outDir, "show.json"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(exportedShowJson, "cutIns")).toBe(false);
+    const exportedShow = livePackageShowSchema.parse(exportedShowJson);
     expect(exportedShow.cues.find((cue) => cue.id === "cue-script")?.materialId).toBe(
       "material-2",
     );
@@ -349,5 +501,134 @@ describe("live export flow", () => {
     expect(after).toEqual(before);
     expect((await stat(outDir)).isDirectory()).toBe(true);
     expect(audio.id).toBe("asset-audio-1");
+  });
+
+  it("writes referenced CutIns to show.json and the manifest", async () => {
+    if (!ffmpegReady || cutInVideo === undefined) return;
+    const fixture = await setupFixture({
+      prefix: "CutIn書き出し",
+      imageId: "asset-cutin-bg",
+      audioId: "asset-cutin-audio",
+      voiceId: "voice-cutin",
+    });
+    const video = await createAsset(prisma, config, {
+      id: "asset-cutin-video",
+      kind: "video",
+      mediaType: "video/mp4",
+      data: cutInVideo.data,
+      // A stale DB duration proves the package uses the probed value.
+      durationMs: cutInVideo.durationMs + 1000,
+      widthPx: cutInVideo.width,
+      heightPx: cutInVideo.height,
+      hasAudio: true,
+    });
+    const cutIns = [
+      { id: "jingle", assetId: video.id },
+      { id: "shared", assetId: video.id },
+      { id: "unused", assetId: video.id },
+    ];
+    const outDir = join(dataDir, "cutin-package");
+    const job = await createLiveExportJob(
+      prisma,
+      {
+        workId: fixture.work.id,
+        scriptVersionId: fixture.scriptVersionId,
+        profile: showProfile({
+          audioAssetId: fixture.audio.id,
+          cutIns,
+          cutInSegmentIds: ["jingle", "shared"],
+        }),
+        outDir,
+      },
+      testFontCatalog,
+    );
+    const adapter: TtsAdapter = {
+      id: "voicevox",
+      listVoices: async () => ({ voices: [], engineVersion: null }),
+      synthesize: async () => ({ data: wavFixture(1000, 440), mediaType: "audio/wav" }),
+    };
+    const row = await prisma.job.update({
+      where: { id: job.id },
+      data: { status: "running", startedAt: new Date() },
+    });
+    await processLiveExportJob(prisma, config, row, {
+      adapterFor: () => adapter,
+      rasterizer: { renderPng: async () => pngHeader(1920, 1080) },
+      isCancelled: async () => false,
+    });
+
+    const finished = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(finished.status).toBe("succeeded");
+    const result = JSON.parse(finished.resultJson!);
+    expect(result.preparedCueCount).toBe(3);
+
+    const exportedShowJson = JSON.parse(
+      await readFile(join(outDir, "show.json"), "utf8"),
+    ) as {
+      cutIns: Array<{
+        id: string;
+        file: string;
+        durationMs: number;
+        hasAudio: boolean;
+        width: number;
+        height: number;
+      }>;
+      segments: Array<Record<string, unknown>>;
+    };
+    expect(exportedShowJson.cutIns.map((cutIn) => cutIn.id)).toEqual(["jingle", "shared"]);
+    const byId = new Map(exportedShowJson.cutIns.map((cutIn) => [cutIn.id, cutIn]));
+    for (const cutIn of exportedShowJson.cutIns) {
+      expect(cutIn.durationMs).toBe(cutInVideo.durationMs);
+      expect(cutIn.width).toBe(cutInVideo.width);
+      expect(cutIn.height).toBe(cutInVideo.height);
+      expect(cutIn.hasAudio).toBe(true);
+    }
+    expect(byId.get("jingle")?.file).toBe(byId.get("shared")?.file);
+    expect(byId.has("unused")).toBe(false);
+    const cutSegment = exportedShowJson.segments.find((segment) => segment.kind === "cut_in");
+    expect(cutSegment).toBeDefined();
+    expect(
+      Object.prototype.hasOwnProperty.call(cutSegment, "targetDurationMs"),
+    ).toBe(false);
+
+    const manifest = livePackageManifestSchema.parse(
+      JSON.parse(await readFile(join(outDir, "manifest.json"), "utf8")),
+    );
+    const cutInFiles = manifest.files.filter((file) => file.kind === "cut-in");
+    expect(cutInFiles).toHaveLength(1);
+    expect(cutInFiles[0]?.mediaType).toBe("video/mp4");
+    expect(cutInFiles[0]?.durationMs).toBe(cutInVideo.durationMs);
+    expect(cutInFiles[0]?.width).toBe(cutInVideo.width);
+    expect(cutInFiles[0]?.height).toBe(cutInVideo.height);
+    expect(cutInFiles[0]?.hasAudio).toBe(true);
+    expect(cutInFiles[0]?.path).toBe(byId.get("jingle")?.file);
+
+    const verified = await verifyPackage(outDir, manifest);
+    expect(verified.show.cutIns).toHaveLength(2);
+  });
+
+  it("rejects a CutIn asset that is not a video", async () => {
+    const fixture = await setupFixture({
+      prefix: "CutIn拒否",
+      imageId: "asset-reject-bg",
+      audioId: "asset-reject-audio",
+      voiceId: "voice-reject",
+    });
+    const error = await createLiveExportJob(
+      prisma,
+      {
+        workId: fixture.work.id,
+        scriptVersionId: fixture.scriptVersionId,
+        profile: showProfile({
+          audioAssetId: fixture.audio.id,
+          cutIns: [{ id: "wrong-kind", assetId: fixture.audio.id }],
+          cutInSegmentIds: ["wrong-kind"],
+        }),
+        outDir: join(dataDir, "reject-package"),
+      },
+      testFontCatalog,
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ status: 422, code: "VALIDATION_ERROR" });
   });
 });

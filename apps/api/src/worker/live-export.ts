@@ -28,6 +28,7 @@ import { assertUsableOutputDir } from "../live/output-dir.ts";
 import { PackageWriter } from "../live/package-writer.ts";
 import { prepareAudio } from "../live/prepare-audio.ts";
 import { prepareCharacters } from "../live/prepare-characters.ts";
+import { prepareCutIns } from "../live/prepare-cut-ins.ts";
 import { prepareMaterials, type RenderMp4 } from "../live/prepare-materials.ts";
 import { prepareVoices, voiceForSpeaker } from "../live/prepare-voices.ts";
 import { resolveLiveProfile } from "../live/profile-resolution.ts";
@@ -244,6 +245,15 @@ export async function processLiveExportJob(
       },
     );
     warnings.push(...materials.warnings);
+    const preparedCutIns = await prepareCutIns(
+      snapshot.profile,
+      resolved.cutIns,
+      assetById,
+      writer,
+      config,
+      { isCancelled: () => isCancelled(job.id) },
+    );
+    warnings.push(...preparedCutIns.warnings);
     if (snapshot.fontDiagnostics !== undefined) {
       if (snapshot.fontDiagnostics.missingFonts.length > 0) {
         warnings.push(
@@ -275,13 +285,14 @@ export async function processLiveExportJob(
       characterId: speaker.characterId,
       voice: voiceForSpeaker(speaker, voices),
     }));
-    let show: LivePackageShow = {
-      schemaVersion: 1,
+    const rawShow = {
+      schemaVersion: 1 as const,
       show: snapshot.profile.show,
       commentSource: snapshot.profile.commentSource,
       segments: snapshot.profile.segments,
       cues,
       materials: materials.materials,
+      ...(preparedCutIns.cutIns.length === 0 ? {} : { cutIns: preparedCutIns.cutIns }),
       speakers,
       commentPolicy: snapshot.profile.commentPolicy,
       safety: snapshot.profile.safety,
@@ -290,8 +301,11 @@ export async function processLiveExportJob(
         ? {}
         : { test: { fixture: "fixtures/comments.json" } }),
     };
+    let parsedShow: LivePackageShow;
     try {
-      show = livePackageShowSchema.parse(show);
+      // Omitting an empty `cutIns` keeps packages readable by apps that predate
+      // CutIn; the key is written only when a CutIn is actually used.
+      parsedShow = livePackageShowSchema.parse(rawShow);
     } catch (error) {
       throw new LiveExportError(
         "LIVE_EXPORT_FAILED",
@@ -299,7 +313,14 @@ export async function processLiveExportJob(
         `show.json が不正です: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    await writer.writeJson("show.json", show, {
+    const showForWrite =
+      preparedCutIns.cutIns.length > 0
+        ? parsedShow
+        : (() => {
+            const { cutIns: _omitted, ...showWithoutCutIns } = parsedShow;
+            return showWithoutCutIns;
+          })();
+    await writer.writeJson("show.json", showForWrite, {
       mediaType: "application/json",
       kind: "show",
       hasAudio: false,

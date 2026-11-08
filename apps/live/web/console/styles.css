@@ -316,6 +316,79 @@ button.skip {
   font-variant-numeric: tabular-nums;
 }
 
+/* CutIn */
+
+.cut-in-label {
+  color: var(--console-text);
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.cut-in-panel .cut-in-empty {
+  margin: 0;
+}
+
+button.cut-in-skip {
+  margin-left: auto;
+  border-color: var(--console-accent);
+  color: var(--console-accent);
+  white-space: nowrap;
+}
+
+.cut-in-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--console-panel-alt);
+  border-left: 3px solid var(--console-accent);
+}
+
+.cut-in-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--console-bg);
+  overflow: hidden;
+}
+
+.cut-in-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--console-accent);
+  transition: width 0.4s linear;
+}
+
+.cut-in-times {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.cut-in-elapsed {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cut-in-total,
+.cut-in-percent {
+  color: var(--console-muted);
+  font-size: 12px;
+}
+
+.cut-in-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.cut-in-meta .mono {
+  overflow-wrap: anywhere;
+}
+
 .queue-scroll {
   max-height: 420px;
   overflow: auto;
@@ -484,6 +557,12 @@ button.skip {
 .event-type {
   color: var(--console-accent);
   font-size: 11px;
+}
+
+.event-detail {
+  color: var(--console-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 /* Comments */

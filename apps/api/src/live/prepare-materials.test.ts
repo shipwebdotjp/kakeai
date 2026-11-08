@@ -28,6 +28,7 @@ function pngHeader(width: number, height: number): Buffer {
 function profile(material: LiveMaterialInput): LiveShowProfile {
   return {
     schemaVersion: 1,
+    cutIns: [],
     show: {
       title: "素材テスト",
       locale: "ja-JP",

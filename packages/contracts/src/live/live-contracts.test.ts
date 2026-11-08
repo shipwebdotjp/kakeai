@@ -760,3 +760,442 @@ describe("live contracts", () => {
     ).toBe(true);
   });
 });
+
+const CUT_IN_FILE = `media/assets/${"b".repeat(64)}.mp4`;
+
+function cutInProfile() {
+  const base = profile();
+  return {
+    ...base,
+    segments: [
+      base.segments[0],
+      base.segments[1],
+      {
+        id: "seg-cut",
+        kind: "cut_in",
+        label: "コメントコーナーへ",
+        cutInId: "jingle-1",
+      },
+      base.segments[2],
+    ],
+    cutIns: [{ id: "jingle-1", assetId: "asset-video-1" }],
+  };
+}
+
+const PACKAGE_CUT_IN = {
+  id: "jingle-1",
+  file: CUT_IN_FILE,
+  durationMs: 4200,
+  hasAudio: true,
+  width: 1920,
+  height: 1080,
+};
+
+function packageShow(options: { withCutIn: boolean; cutIns?: unknown[] }) {
+  const base = profile();
+  return {
+    schemaVersion: 1,
+    show: base.show,
+    commentSource: { kind: "youtube" },
+    segments: [
+      base.segments[0],
+      base.segments[1],
+      ...(options.withCutIn
+        ? [
+            {
+              id: "seg-cut",
+              kind: "cut_in",
+              label: "コメントコーナーへ",
+              cutInId: "jingle-1",
+            },
+          ]
+        : []),
+      base.segments[2],
+    ],
+    cues: [
+      {
+        id: "cue-opening",
+        origin: "live",
+        speaker: "left",
+        caption: "始まります。",
+        speech: "はじまります。",
+        expression: "normal",
+        audio: "audio/prepared/cue-opening.wav",
+        durationMs: 1000,
+      },
+      {
+        id: "cue-script",
+        origin: "script",
+        sourceLineId: "line-1",
+        speaker: "left",
+        caption: "本編です。",
+        speech: "ほんぺんです。",
+        expression: "smile",
+        audio: "audio/prepared/cue-script.wav",
+        durationMs: 1000,
+      },
+      {
+        id: "cue-closing",
+        origin: "live",
+        speaker: "left",
+        caption: "終わります。",
+        speech: "おわります。",
+        expression: "normal",
+        audio: "audio/prepared/cue-closing.wav",
+        durationMs: 1000,
+      },
+    ],
+    materials: [],
+    ...(options.cutIns === undefined ? {} : { cutIns: options.cutIns }),
+    speakers: [],
+    commentPolicy: base.commentPolicy,
+    safety: base.safety,
+    playout: base.playout,
+  };
+}
+
+function baseStageState() {
+  return {
+    phase: "pre_show",
+    show: { title: "テスト配信", startAt: null },
+    segment: null,
+    characters: {
+      left: { expression: "normal", speaking: false },
+      right: null,
+    },
+    caption: null,
+    material: null,
+    comment: null,
+    status: "idle",
+    playback: null,
+    clock: { elapsedMs: 0, remainingMs: 600_000 },
+  };
+}
+
+function baseConsoleSnapshot() {
+  return {
+    runId: "run-1",
+    show: {
+      title: "テスト配信",
+      targetDurationMs: 600_000,
+      segments: [
+        {
+          id: "seg-opening",
+          label: "オープニング",
+          kind: "opening",
+          targetDurationMs: 60_000,
+        },
+      ],
+    },
+    phase: "pre_show",
+    segment: null,
+    stages: [],
+    queue: [],
+    currentCueId: null,
+    queuePosition: null,
+    playback: null,
+    status: "idle",
+    clock: { elapsedMs: 0, remainingMs: 600_000 },
+    comments: [],
+    commentCorner: {
+      state: "idle",
+      segmentId: null,
+      selectedCommentIds: [],
+      currentCommentId: null,
+      deferredPinIds: [],
+      remainingSlots: 0,
+    },
+    commentSource: {
+      kind: "youtube",
+      state: "idle",
+      liveChatId: null,
+      pollingIntervalMs: 0,
+      lastPolledAt: null,
+      lastError: null,
+      quota: null,
+      authMode: "apiKey",
+      fallbackAvailable: false,
+      authExpiresAt: null,
+      needsReauth: false,
+    },
+    generation: null,
+  };
+}
+
+describe("live CutIn contracts", () => {
+  it("keeps old profiles valid with an empty cutIns default", () => {
+    const parsed = liveShowProfileSchema.parse(profile());
+    expect(parsed.cutIns).toEqual([]);
+  });
+
+  it("accepts a cut_in segment that references a profile CutIn", () => {
+    const parsed = liveShowProfileSchema.safeParse(cutInProfile());
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.segments.map((segment) => segment.kind)).toContain("cut_in");
+      expect(parsed.data.cutIns).toEqual([{ id: "jingle-1", assetId: "asset-video-1" }]);
+    }
+  });
+
+  it("rejects duplicate profile CutIn ids and missing cutInId references", () => {
+    expect(
+      liveShowProfileSchema.safeParse({
+        ...cutInProfile(),
+        cutIns: [
+          { id: "jingle-1", assetId: "asset-video-1" },
+          { id: "jingle-1", assetId: "asset-video-2" },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      liveShowProfileSchema.safeParse({
+        ...cutInProfile(),
+        cutIns: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      liveShowProfileSchema.safeParse({
+        ...cutInProfile(),
+        cutIns: [{ id: "other", assetId: "asset-video-1" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a cut_in segment that carries duration, cues, material or comment policy", () => {
+    const base = cutInProfile();
+    for (const extra of [
+      { targetDurationMs: 4200 },
+      { cues: ["cue-opening"] },
+      { material: "material-1" },
+      { commentPolicy: { maxCommentsPerCorner: 2 } },
+    ]) {
+      expect(
+        liveShowProfileSchema.safeParse({
+          ...base,
+          segments: [
+            base.segments[0],
+            base.segments[1],
+            {
+              id: "seg-cut",
+              kind: "cut_in",
+              label: "コメントコーナーへ",
+              cutInId: "jingle-1",
+              ...extra,
+            },
+            base.segments[2],
+          ],
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("parses package CutIns and defaults old packages to an empty array", () => {
+    const withCutIn = livePackageShowSchema.parse(
+      packageShow({ withCutIn: true, cutIns: [PACKAGE_CUT_IN] }),
+    );
+    expect(withCutIn.cutIns).toHaveLength(1);
+    expect(withCutIn.cutIns[0]).toMatchObject({
+      id: "jingle-1",
+      durationMs: 4200,
+      hasAudio: true,
+      width: 1920,
+      height: 1080,
+    });
+
+    const withoutCutIns = livePackageShowSchema.parse(packageShow({ withCutIn: false }));
+    expect(withoutCutIns.cutIns).toEqual([]);
+  });
+
+  it("rejects duplicate package CutIn ids and missing cutInId references", () => {
+    expect(
+      livePackageShowSchema.safeParse(
+        packageShow({ withCutIn: true, cutIns: [PACKAGE_CUT_IN, PACKAGE_CUT_IN] }),
+      ).success,
+    ).toBe(false);
+    expect(
+      livePackageShowSchema.safeParse(packageShow({ withCutIn: true, cutIns: [] })).success,
+    ).toBe(false);
+  });
+
+  it("defaults stage state cutIn to null and accepts a playing CutIn", () => {
+    const idle = stageStateSchema.parse(baseStageState());
+    expect(idle.cutIn).toBeNull();
+
+    const parsed = stageStateSchema.safeParse({
+      ...baseStageState(),
+      phase: "cut_in",
+      segment: { id: "seg-cut", label: "コメントコーナーへ" },
+      cutIn: {
+        cutInId: "jingle-1",
+        segmentId: "seg-cut",
+        label: "コメントコーナーへ",
+        file: CUT_IN_FILE,
+        durationMs: 4200,
+        hasAudio: true,
+        attempt: 1,
+        sequence: 1,
+        startedAt: NOW,
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.cutIn?.cutInId).toBe("jingle-1");
+    }
+  });
+
+  it("accepts cut_in_ended stage events with CutIn identity", () => {
+    const parsed = stageEventSchema.safeParse({
+      kind: "cut_in_ended",
+      runId: "run-1",
+      sessionId: "session-1",
+      cueId: null,
+      cutInId: "jingle-1",
+      segmentId: "seg-cut",
+      attempt: 1,
+      sequence: 2,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.cutInId).toBe("jingle-1");
+      expect(parsed.data.segmentId).toBe("seg-cut");
+    }
+  });
+
+  it("requires CutIn identity on cut_in_ended and cut_in_error events", () => {
+    const base = {
+      runId: "run-1",
+      sessionId: "session-1",
+      cueId: null,
+      attempt: 1,
+      sequence: 2,
+    };
+    for (const kind of ["cut_in_ended", "cut_in_error"] as const) {
+      expect(stageEventSchema.safeParse({ ...base, kind }).success).toBe(false);
+      expect(
+        stageEventSchema.safeParse({ ...base, kind, cutInId: "jingle-1" }).success,
+      ).toBe(false);
+      expect(
+        stageEventSchema.safeParse({ ...base, kind, segmentId: "seg-cut" }).success,
+      ).toBe(false);
+      expect(
+        stageEventSchema.safeParse({
+          ...base,
+          kind,
+          cutInId: null,
+          segmentId: "seg-cut",
+        }).success,
+      ).toBe(false);
+      expect(
+        stageEventSchema.safeParse({
+          ...base,
+          kind,
+          cutInId: "jingle-1",
+          segmentId: null,
+        }).success,
+      ).toBe(false);
+      expect(
+        stageEventSchema.safeParse({
+          ...base,
+          kind,
+          cutInId: "jingle-1",
+          segmentId: "seg-cut",
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("accepts an audio stage event with an explicit null segmentId", () => {
+    const parsed = stageEventSchema.safeParse({
+      kind: "audio_ended",
+      runId: "run-1",
+      sessionId: "session-1",
+      cueId: "cue-1",
+      segmentId: null,
+      attempt: 1,
+      sequence: 2,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.segmentId).toBeNull();
+    }
+  });
+
+  it("defaults console cutIn to null and accepts a playing CutIn", () => {
+    const idle = consoleSnapshotSchema.parse(baseConsoleSnapshot());
+    expect(idle.cutIn).toBeNull();
+
+    const parsed = consoleSnapshotSchema.safeParse({
+      ...baseConsoleSnapshot(),
+      phase: "cut_in",
+      segment: { id: "seg-cut", label: "コメントコーナーへ" },
+      cutIn: {
+        cutInId: "jingle-1",
+        segmentId: "seg-cut",
+        label: "コメントコーナーへ",
+        durationMs: 4200,
+        startedAt: NOW,
+        attempt: 1,
+        sequence: 1,
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.cutIn?.sequence).toBe(1);
+    }
+  });
+
+  it("accepts skip_cut_in and CutIn run log events", () => {
+    expect(liveCommandSchema.safeParse({ kind: "skip_cut_in" }).success).toBe(true);
+    expect(liveCommandSchema.safeParse({ kind: "skip_cut_in", cueId: "cue-1" }).success).toBe(
+      false,
+    );
+
+    const parsed = runLogEventSchema.safeParse({
+      schemaVersion: 1,
+      runId: "run-1",
+      sequence: 1,
+      at: NOW,
+      type: "cut_in_started",
+      cueId: null,
+      cutInId: "jingle-1",
+      segmentId: "seg-cut",
+      data: {},
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.cutInId).toBe("jingle-1");
+    }
+  });
+
+  it("accepts a cut-in manifest file with video/mp4 and audio", () => {
+    const manifest = {
+      packageSchemaVersion: 1,
+      exporterVersion: "0.1.0",
+      packageId: "livepkg-test",
+      createdAt: NOW,
+      source: {
+        workId: "work-1",
+        languageEditionId: "edition-1",
+        scriptVersionId: "script-1",
+        theme: { id: "neutral", version: 1 },
+        profileSha256: HASH,
+      },
+      files: [
+        {
+          path: CUT_IN_FILE,
+          sha256: HASH,
+          byteSize: 10,
+          mediaType: "video/mp4",
+          kind: "cut-in",
+          durationMs: 4200,
+          width: 1920,
+          height: 1080,
+          hasAudio: true,
+        },
+      ],
+      fonts: [],
+      voices: [],
+    };
+    expect(livePackageManifestSchema.safeParse(manifest).success).toBe(true);
+  });
+});

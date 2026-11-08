@@ -20,6 +20,8 @@ export interface RunLogEventInput {
   type: RunLogEventType;
   cueId?: string | null;
   commentId?: string | null;
+  cutInId?: string | null;
+  segmentId?: string | null;
   data?: RunLogEvent["data"];
 }
 
@@ -144,6 +146,8 @@ export class RunStore {
       type: input.type,
       ...(input.cueId === undefined ? {} : { cueId: input.cueId }),
       ...(input.commentId === undefined ? {} : { commentId: input.commentId }),
+      ...(input.cutInId === undefined ? {} : { cutInId: input.cutInId }),
+      ...(input.segmentId === undefined ? {} : { segmentId: input.segmentId }),
       data: input.data ?? {},
     };
     const validated = runLogEventSchema.safeParse(event);

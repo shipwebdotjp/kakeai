@@ -64,6 +64,8 @@ export interface TestPackageOptions {
   includeMaterial?: boolean;
   /** Adds a comment segment, `test.fixture` and `fixtures/comments.json`. */
   includeCommentCorner?: boolean;
+  /** Adds one `cut_in` segment before closing and its `cutIns[]` entry. */
+  includeCutIn?: boolean;
   /**
    * Number of script/comment pairs when a comment corner is included. Defaults
    * to 1; values below 1 are treated as 1.
@@ -194,6 +196,14 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
     }
   }
 
+  if (options.includeCutIn === true) {
+    segments.push({
+      id: "seg-cut-in",
+      kind: "cut_in",
+      label: "コメントコーナーへ",
+      cutInId: "jingle-1",
+    });
+  }
   segments.push({
     id: "seg-closing",
     kind: "closing",
@@ -225,6 +235,19 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
     },
     commentSource: { kind: corners > 0 ? "fixture" : "youtube" },
     segments,
+    cutIns:
+      options.includeCutIn === true
+        ? [
+            {
+              id: "jingle-1",
+              file: "media/assets/cutin.mp4",
+              durationMs: 4000,
+              hasAudio: true,
+              width: 1920,
+              height: 1080,
+            },
+          ]
+        : [],
     ...(corners > 0 ? { test: { fixture: "fixtures/comments.json" } } : {}),
     cues,
     materials: includeMaterial
@@ -384,6 +407,19 @@ export async function createTestPackage(
       width: 1,
       height: 1,
       hasAudio: false,
+    });
+  }
+
+  if (options.includeCutIn === true) {
+    files.push({
+      path: "media/assets/cutin.mp4",
+      data: Buffer.from("cut-in fixture bytes"),
+      mediaType: "video/mp4",
+      kind: "cut-in",
+      durationMs: 4000,
+      width: 1920,
+      height: 1080,
+      hasAudio: true,
     });
   }
 

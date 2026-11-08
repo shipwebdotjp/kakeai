@@ -64,7 +64,10 @@ export class DirectorRuntime implements DirectorResponseHost {
     const segment = this.controller.getCurrentSegment();
     const snapshot = this.controller.getSnapshot();
     const clock = snapshot.clock;
-    const target = segment?.targetDurationMs ?? clock.remainingMs;
+    const target =
+      segment !== null && segment.kind !== "cut_in"
+        ? segment.targetDurationMs
+        : clock.remainingMs;
     const expressions = new Set<string>(["normal"]);
     for (const character of this.characters.characters) {
       for (const appearance of character.appearances) {
@@ -178,7 +181,7 @@ export class DirectorRuntime implements DirectorResponseHost {
   }
 
   private materialLabel(segment: LiveSegment | null): string | null {
-    if (segment?.material === undefined) {
+    if (segment === null || segment.kind === "cut_in" || segment.material === undefined) {
       return null;
     }
     const material = this.show.materials.find((entry) => entry.id === segment.material);

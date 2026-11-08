@@ -697,7 +697,11 @@ POST /api/v1/live-exports は、`workId`・`scriptVersionId`・Show Profile（JS
 
 入力はJob作成時に同期検証する。`scriptCues[].lineId`、`scriptCues[].materialId`の素材参照、`cutIns[].assetId`のCutIn動画参照、Cueの重複参照、話者の左右、キャラクターと外観、Face Set、Voice Profile、参照音声、Asset、素材Sceneの制約、Theme、フォントを解決し、失敗は422 `VALIDATION_ERROR` または該当する素材エラーで返す。Workerはスナップショットだけを使い、KakeaiのDBの台本・素材・声を変更しない。TTSのテスト合成と準備済み音声の生成はWorkerで行う。
 
-CutInは`cutIns[].assetId`でreadyなvideo Assetを参照し、書き出し時にパッケージ内の検証済みMP4へ解決する。尺と音声有無はprobe結果を正本とし、素材カードの無音検証は緩めない。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とする。
+CutInは`cutIns[].assetId`でreadyなvideo Assetを参照する。Job作成時は、`cut_in`セグメントから参照されていないCutInを含め、`cutIns[]`の全`assetId`を検証する。Assetが存在しなければ422 `ASSET_NOT_FOUND`、processingなら409 `ASSET_PROCESSING`、failedなら422 `ASSET_UNAVAILABLE`、video以外なら422 `VALIDATION_ERROR` を返す。参照されないCutInは許容するが、`show.json`の`cutIns[]`にもmanifestにも含めない。
+
+書き出し時は、参照されたCutInのAssetをprobeし、ブラウザでそのまま再生できない場合はH.264/AACのMP4へ正規化する。パッケージに入れるMP4を再度probeし、`durationMs`・`width`・`height`・`hasAudio`を確定する。probeや正規化に失敗した場合はJobを`LIVE_EXPORT_CUT_IN_FAILED`（stage `material`）で失敗させる。尺と音声有無はprobe結果を正本とし、素材カードの無音検証は緩めない。
+
+`liveExportResult` はCutIn専用の件数を持たず、`preparedCueCount`はCueだけを数える。CutInは`show.json`の`cutIns[]`（`id`・`file`・`durationMs`・`hasAudio`・`width`・`height`）と、manifestの`kind: "cut-in"`かつ`mediaType: "video/mp4"`のファイルとして表す。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とする。
 
 成功した `live_export` Jobの `liveExportResult` は、`packagePath`（絶対ローカルパス）、`packageId`、`manifestSha256`、`fileCount`、`preparedCueCount`、`warnings`、`failures` を持つ。`failures` は失敗したキュー・Voice Profile・素材のIDと理由で、失敗Jobでも返す。絶対ローカルパスを返すのはこの結果だけで、ループバック限定のCLI利用に限る。実行中の `live_export` は `POST /jobs/:jobId/cancel` で協調キャンセルできる。
 

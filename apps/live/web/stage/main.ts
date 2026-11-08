@@ -8,6 +8,7 @@ import type {
 import { openLiveSocket, type LiveSocket, type LiveSocketStatus } from "../shared/socket";
 import { StageAudio } from "./audio";
 import { StageCharacters } from "./characters";
+import { StageCutIn } from "./cut-in";
 import { element } from "./elements";
 import { StageMaterials } from "./materials";
 import {
@@ -38,6 +39,8 @@ const captionSpeaker = element<HTMLSpanElement>("caption-speaker");
 const captionText = element<HTMLSpanElement>("caption-text");
 const pausedOverlay = element<HTMLDivElement>("paused-overlay");
 const errorOverlay = element<HTMLDivElement>("error-overlay");
+const cutInLayer = element<HTMLDivElement>("cut-in-layer");
+const cutInVideo = element<HTMLVideoElement>("cut-in-video");
 const previewBadge = element<HTMLDivElement>("preview-badge");
 const connectionBadge = element<HTMLDivElement>("connection-badge");
 
@@ -72,6 +75,22 @@ const audio = new StageAudio({
   },
 });
 
+const cutIn = new StageCutIn(cutInLayer, cutInVideo, {
+  isProgram: () => role === "program",
+  send: (event) => {
+    sendEvent({
+      kind: event.kind,
+      cueId: null,
+      attempt: event.attempt,
+      sequence: event.sequence,
+      cutInId: event.cutInId,
+      segmentId: event.segmentId,
+      ...(event.positionMs === undefined ? {} : { positionMs: event.positionMs }),
+      ...(event.error === undefined ? {} : { error: event.error }),
+    });
+  },
+});
+
 previewBadge.hidden = !previewRequested;
 
 function fitCanvas(): void {
@@ -84,10 +103,19 @@ function speakerName(side: LiveSide): string {
 }
 
 function sendEvent(event: {
-  kind: "stage_ready" | "audio_ended" | "audio_error" | "stage_heartbeat";
+  kind:
+    | "stage_ready"
+    | "audio_ended"
+    | "audio_error"
+    | "cut_in_ended"
+    | "cut_in_error"
+    | "stage_heartbeat";
   cueId: string | null;
   attempt: number;
   sequence: number;
+  cutInId?: string;
+  segmentId?: string;
+  positionMs?: number;
   error?: string;
 }): void {
   if (role !== "program" || liveRunId === null || liveSessionId === null || socket === null) {
@@ -100,8 +128,11 @@ function sendEvent(event: {
       runId: liveRunId,
       sessionId: liveSessionId,
       cueId: event.cueId,
+      ...(event.cutInId === undefined ? {} : { cutInId: event.cutInId }),
+      ...(event.segmentId === undefined ? {} : { segmentId: event.segmentId }),
       attempt: event.attempt,
       sequence: event.sequence,
+      ...(event.positionMs === undefined ? {} : { positionMs: event.positionMs }),
       ...(event.error === undefined ? {} : { error: event.error }),
     },
   });
@@ -222,6 +253,7 @@ function render(next: StageState): void {
   const showOverlay = next.phase === "pre_show" || next.phase === "post_show";
   overlay.hidden = !showOverlay;
   layout.hidden = showOverlay;
+  canvas.classList.toggle("cut-in-active", next.cutIn !== null);
   pausedOverlay.hidden = next.phase !== "paused";
   errorOverlay.hidden = next.phase !== "error";
 
@@ -240,6 +272,7 @@ function render(next: StageState): void {
   if (!showOverlay) {
     renderLive(next);
   }
+  cutIn.render(next);
   audio.update(next.phase, next.playback);
 }
 
@@ -261,6 +294,7 @@ function handleMessage(message: LiveServerMessage): void {
       }
       role = message.lease.role;
       audio.setProgram(role === "program");
+      cutIn.setProgram(role === "program");
       return;
     case "preload":
       audio.setPreload(message.cues);

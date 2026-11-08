@@ -1,4 +1,5 @@
 import type {
+  ConsoleCutIn,
   ConsoleSnapshot,
   LiveCharacterSheet,
   LiveCue,
@@ -7,11 +8,13 @@ import type {
   LiveSegment,
   MaterialCard,
   StageClock,
+  StageCutIn,
   StagePhase,
   StageState,
   StageStatus,
 } from "@kakeai/contracts";
 import type { CommentRuntime } from "./comment-runtime.ts";
+import type { CutInOccurrence } from "./cut-in-runtime.ts";
 import type { StageLeaseManager } from "./lease.ts";
 import type { Playout } from "./playout.ts";
 import type { CueQueueStore } from "./queue.ts";
@@ -34,6 +37,7 @@ export interface ControllerViewHost {
   segment(): LiveSegment | null;
   segmentLabel(segment: LiveSegment | null): { id: string; label: string } | null;
   materialForCue(segment: LiveSegment, cue: LiveCue | null): MaterialCard | null;
+  cutIn(): CutInOccurrence | null;
   clock(): StageClock;
   /** Wired by the director integration (P5b); null until then. */
   generation?(): LiveGenerationStatus | null;
@@ -50,6 +54,7 @@ export class ControllerView {
       phase === "paused" ||
       phase === "pre_show" ||
       phase === "post_show" ||
+      phase === "cut_in" ||
       phase === "error"
     ) {
       return "idle";
@@ -83,6 +88,7 @@ export class ControllerView {
       material: segment === null ? null : host.materialForCue(segment, cue),
       comment: host.comments.getStageComment(),
       status: this.getStatus(),
+      cutIn: stageCutIn(host.cutIn()),
       clock: host.clock(),
     });
   }
@@ -114,6 +120,39 @@ export class ControllerView {
       commentSource:
         commentSnapshot?.source ?? idleCommentSource(host.show.commentSource.kind),
       generation: host.generation?.() ?? null,
+      cutIn: consoleCutIn(host.cutIn()),
     });
   }
+}
+
+function stageCutIn(occurrence: CutInOccurrence | null): StageCutIn | null {
+  if (occurrence === null) {
+    return null;
+  }
+  return {
+    cutInId: occurrence.cutIn.id,
+    segmentId: occurrence.segment.id,
+    label: occurrence.segment.label,
+    file: occurrence.cutIn.file,
+    durationMs: occurrence.cutIn.durationMs,
+    hasAudio: occurrence.cutIn.hasAudio,
+    attempt: occurrence.attempt,
+    sequence: occurrence.sequence,
+    startedAt: occurrence.startedAt.toISOString(),
+  };
+}
+
+function consoleCutIn(occurrence: CutInOccurrence | null): ConsoleCutIn | null {
+  if (occurrence === null) {
+    return null;
+  }
+  return {
+    cutInId: occurrence.cutIn.id,
+    segmentId: occurrence.segment.id,
+    label: occurrence.segment.label,
+    durationMs: occurrence.cutIn.durationMs,
+    startedAt: occurrence.startedAt.toISOString(),
+    attempt: occurrence.attempt,
+    sequence: occurrence.sequence,
+  };
 }

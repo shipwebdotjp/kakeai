@@ -14,6 +14,9 @@ export const runLogEventTypeSchema = z.enum([
   "cue_edited",
   "cue_deleted",
   "cue_skipped",
+  "cut_in_started",
+  "cut_in_finished",
+  "cut_in_failed",
   "stopped",
   "resumed",
   "safe_mode",
@@ -51,6 +54,8 @@ export const runLogEventSchema = z.strictObject({
   at: timestampSchema,
   type: runLogEventTypeSchema,
   cueId: idSchema.nullable().optional(),
+  cutInId: idSchema.nullable().optional(),
+  segmentId: idSchema.nullable().optional(),
   commentId: idSchema.nullable().optional(),
   data: z.record(runLogDataKeySchema, runLogValueSchema).default({}),
 });

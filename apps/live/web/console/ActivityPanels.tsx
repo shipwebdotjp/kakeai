@@ -28,6 +28,10 @@ export function NoticesPanel({ notices }: { notices: NoticeEntry[] }) {
   );
 }
 
+function eventText(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
 export function EventsPanel({ events }: { events: RunLogEvent[] }) {
   return (
     <section className="panel">
@@ -36,15 +40,29 @@ export function EventsPanel({ events }: { events: RunLogEvent[] }) {
         <p className="muted">まだイベントはありません。</p>
       ) : (
         <ul className="events">
-          {events.map((event) => (
-            <li key={`${event.runId}-${event.sequence}`}>
-              <span className="mono">{formatTimestamp(event.at)}</span>
-              <span className="event-type">{event.type}</span>
-              {event.cueId === undefined || event.cueId === null ? null : (
-                <span className="mono">{event.cueId}</span>
-              )}
-            </li>
-          ))}
+          {events.map((event) => {
+            const reason = eventText(event.data.reason);
+            const message = eventText(event.data.message);
+            return (
+              <li key={`${event.runId}-${event.sequence}`}>
+                <span className="mono">{formatTimestamp(event.at)}</span>
+                <span className="event-type">{event.type}</span>
+                {event.cueId === undefined || event.cueId === null ? null : (
+                  <span className="mono">{event.cueId}</span>
+                )}
+                {event.cutInId === undefined || event.cutInId === null ? null : (
+                  <span className="mono">CutIn: {event.cutInId}</span>
+                )}
+                {event.segmentId === undefined || event.segmentId === null ? null : (
+                  <span className="mono">セグメント: {event.segmentId}</span>
+                )}
+                {reason === null ? null : (
+                  <span className="event-detail">理由: {reason}</span>
+                )}
+                {message === null ? null : <span className="event-detail">{message}</span>}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

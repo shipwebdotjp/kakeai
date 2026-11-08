@@ -32,6 +32,7 @@ const voice: LiveVoiceProfileSnapshot = {
 function profile(lineId = "line-p1-1"): LiveShowProfile {
   return {
     schemaVersion: 1,
+    cutIns: [],
     show: {
       title: "テスト",
       locale: "ja-JP",

@@ -111,7 +111,9 @@ describe("auto Show Profile generation", () => {
     const lastScript = result.profile.segments.find(
       (segment) => segment.kind === "script" && segment.label === "要点 2",
     );
-    expect(lastScript?.material).toBe("material-scene-point-3");
+    expect(lastScript?.kind === "script" ? lastScript.material : undefined).toBe(
+      "material-scene-point-3",
+    );
     expect(result.profile.show.characters).toEqual({
       left: "char-left",
       right: "char-right",

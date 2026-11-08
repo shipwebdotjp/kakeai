@@ -459,6 +459,22 @@ _Avoid_: visual cue, slide, composition
 A short full-screen video inserted at a spine boundary to mark a corner break, with an optional embedded audio track and a probe-derived duration. It is a dedicated segment and package kind, not a Material Card or a Live Cue.
 _Avoid_: material card, live cue, insert scene
 
+**CutIn Segment**:
+A Spine segment that plays one CutIn between normal segments. It carries no cues, material, or comment policy of its own; its duration comes from the CutIn it references.
+_Avoid_: material segment, cue
+
+**CutIn Occurrence**:
+One playback of a CutIn Segment, identified by its segment, attempt, and playback sequence. The same CutIn can be reused at several boundaries, and each playback is a separate occurrence.
+_Avoid_: cue attempt, loop
+
+**CutIn Asset**:
+The video Asset a CutIn is authored from. Export resolves it to the verified video stored in the Live Package.
+_Avoid_: material card, composition
+
+**CutIn Playback**:
+The full-screen playback of a CutIn, separate from Live Cue playback. Only the Program Stage plays its embedded audio; the Preview Stage stays muted.
+_Avoid_: cue playback, material card playback
+
 **Prepared Cue**:
 A Live Cue resolved at export from a Script Version or authored as a live-only cue, before playout.
 _Avoid_: live cue, narration segment

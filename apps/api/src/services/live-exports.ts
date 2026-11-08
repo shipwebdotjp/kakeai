@@ -148,6 +148,45 @@ function collectProfileAudioAssetIds(
   return [...ids];
 }
 
+function collectProfileCutInAssetIds(
+  profile: LiveExportRequest["profile"],
+): string[] {
+  return [...new Set(profile.cutIns.map((cutIn) => cutIn.assetId))];
+}
+
+/**
+ * Loads Profile-only Assets (audio cues, CutIn videos) that are not part of the
+ * script content. Missing rows become `ASSET_NOT_FOUND`; references keep the
+ * caller-provided order so validation reports the same asset first.
+ */
+async function loadExtraAssets(
+  prisma: PrismaClient,
+  ids: string[],
+  allowedKinds: AssetReference["allowedKinds"],
+  pathPrefix: string,
+): Promise<{ rows: AssetWithRenditions[]; references: AssetReference[] }> {
+  if (ids.length === 0) {
+    return { rows: [], references: [] };
+  }
+  const rows = await prisma.asset.findMany({
+    where: { id: { in: ids } },
+    include: { renditions: true },
+  });
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  const references: AssetReference[] = [];
+  for (const assetId of ids) {
+    if (!rowById.has(assetId)) {
+      throw new ApiError(422, "ASSET_NOT_FOUND", undefined, { assetIds: [assetId] });
+    }
+    references.push({
+      assetId,
+      allowedKinds,
+      path: [pathPrefix, assetId],
+    });
+  }
+  return { rows, references };
+}
+
 function validateCharacterBindings(
   content: ReturnType<typeof deserializeContent>,
   profile: LiveExportRequest["profile"],
@@ -269,29 +308,18 @@ export async function createLiveExportJob(
   validateCharacterBindings(content, input.profile, voiceProfiles);
 
   const extraAssetIds = collectProfileAudioAssetIds(input.profile, voiceProfiles);
-  const extraRows =
-    extraAssetIds.length === 0
-      ? []
-      : await prisma.asset.findMany({
-          where: { id: { in: extraAssetIds } },
-          include: { renditions: true },
-        });
-  const extraReferences: AssetReference[] = [];
-  for (const assetId of extraAssetIds) {
-    const asset = extraRows.find((entry) => entry.id === assetId);
-    if (asset === undefined) {
-      throw new ApiError(422, "ASSET_NOT_FOUND", undefined, { assetIds: [assetId] });
-    }
-    extraReferences.push({
-      assetId,
-      allowedKinds: ["audio"],
-      path: ["liveCues", assetId],
-    });
-    if (!assetById.has(assetId)) {
-      assetById.set(assetId, asset);
+  const cutInAssetIds = collectProfileCutInAssetIds(input.profile);
+  const [extra, cutIn] = await Promise.all([
+    loadExtraAssets(prisma, extraAssetIds, ["audio"], "liveCues"),
+    loadExtraAssets(prisma, cutInAssetIds, ["video"], "cutIns"),
+  ]);
+  for (const asset of [...extra.rows, ...cutIn.rows]) {
+    if (!assetById.has(asset.id)) {
+      assetById.set(asset.id, asset);
     }
   }
-  assertAssetsAvailable([...references, ...extraReferences], assetById);
+  const allExtraReferences = [...extra.references, ...cutIn.references];
+  assertAssetsAvailable([...references, ...allExtraReferences], assetById);
 
   const resolvedAssets = new Map<string, ResolvedAssetFile>();
   for (const [assetId, asset] of assetById) {
@@ -307,7 +335,7 @@ export async function createLiveExportJob(
     throw error;
   }
 
-  const snapshotAssets = [...new Set([...references, ...extraReferences].map((reference) => reference.assetId))]
+  const snapshotAssets = [...new Set([...references, ...allExtraReferences].map((reference) => reference.assetId))]
     .map((assetId) => assetById.get(assetId))
     .filter((asset): asset is AssetWithRenditions => asset !== undefined)
     .map(snapshotAsset);

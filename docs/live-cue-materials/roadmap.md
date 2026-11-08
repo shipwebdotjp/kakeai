@@ -11,7 +11,7 @@
 
 ## 別仕様へ移したもの
 
-- CutIn（コーナー間の短い動画）は、素材カードの拡張ではなくSpine専用の `cut_in` セグメントとして [../live-media-playout/spec.md](../live-media-playout/spec.md) で仕様化した。
+- CutIn（コーナー間の短い動画）は、素材カードの拡張ではなくSpine専用の `cut_in` セグメントとして [../live-media-playout/spec.md](../live-media-playout/spec.md) で仕様化した。素材カードは引き続き無音で、埋め込み音声を持てるのはCutInだけである。
 
 ## 次に検討する候補
 

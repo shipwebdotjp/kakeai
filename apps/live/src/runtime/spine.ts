@@ -19,6 +19,8 @@ export interface SpineHost {
   enterPostShow(): void;
   hasCommentCorner(): boolean;
   startCommentCorner(segment: Extract<LiveSegment, { kind: "comment" }>): void;
+  /** Starts a CutIn occurrence; false when its package entry is missing. */
+  startCutIn(index: number, segment: Extract<LiveSegment, { kind: "cut_in" }>): boolean;
 }
 
 /** Walks the spine: segments, comment-corner boundaries and closing. */
@@ -29,6 +31,17 @@ export class Spine {
     for (let index = startIndex; index < this.host.show.segments.length; index += 1) {
       const segment = this.host.show.segments[index];
       if (segment === undefined) {
+        continue;
+      }
+      if (segment.kind === "cut_in") {
+        if (this.host.isSafeMode()) {
+          continue;
+        }
+        // `startCutIn` owns the index/phase transition so the published state
+        // is correct before `onStarted` runs.
+        if (this.host.startCutIn(index, segment)) {
+          return;
+        }
         continue;
       }
       if (segment.kind === "comment") {

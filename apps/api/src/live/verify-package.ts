@@ -6,6 +6,7 @@ import {
   livePackageManifestSchema,
   livePackageShowSchema,
   type LiveMediaType,
+  type LivePackageFile,
   type LivePackageManifest,
   type LivePackageShow,
 } from "@kakeai/contracts";
@@ -123,6 +124,40 @@ function checkHtmlReference(
   }
 }
 
+/**
+ * Cross-checks the CutIns declared by show.json against their manifest
+ * entries. The packaged MP4 is probed separately; this catches a show/manifest
+ * disagreement before the (more expensive) probe runs.
+ */
+export function verifyShowCutIns(
+  show: LivePackageShow,
+  files: ReadonlyMap<string, LivePackageFile>,
+): void {
+  for (const cutIn of show.cutIns) {
+    const entry = files.get(cutIn.file);
+    if (entry === undefined) {
+      fail(`CutIn が参照するファイルが manifest にありません: ${cutIn.file}`);
+    }
+    if (entry.kind !== "cut-in") {
+      fail(`CutIn の manifest kind が cut-in ではありません: ${cutIn.file}`);
+    }
+    if (entry.mediaType !== "video/mp4") {
+      fail(`CutIn の mediaType が video/mp4 ではありません: ${cutIn.file}`);
+    }
+    if (entry.durationMs !== cutIn.durationMs) {
+      fail(
+        `CutIn の尺が manifest と一致しません: ${cutIn.file} (${entry.durationMs} != ${cutIn.durationMs})`,
+      );
+    }
+    if (entry.hasAudio !== cutIn.hasAudio) {
+      fail(`CutIn の音声情報が manifest と一致しません: ${cutIn.file}`);
+    }
+    if (entry.width !== cutIn.width || entry.height !== cutIn.height) {
+      fail(`CutIn の寸法が manifest と一致しません: ${cutIn.file}`);
+    }
+  }
+}
+
 export async function verifyPackage(
   rootDir: string,
   inputManifest: LivePackageManifest,
@@ -174,6 +209,7 @@ export async function verifyPackage(
     const showFilePaths = new Set([
       ...show.cues.map((cue) => cue.audio),
       ...show.materials.map((material) => material.file),
+      ...show.cutIns.map((cutIn) => cutIn.file),
       ...show.speakers.flatMap((speaker) =>
         speaker.voice.refAudio === undefined ? [] : [speaker.voice.refAudio],
       ),
@@ -193,6 +229,7 @@ export async function verifyPackage(
         fail(`show.json / characters.json が参照するファイルがありません: ${path}`);
       }
     }
+    verifyShowCutIns(show, expected);
   } catch (error) {
     if (error instanceof LiveExportError) {
       throw error;
@@ -216,11 +253,31 @@ export async function verifyPackage(
     }
     if (file.mediaType === "video/mp4") {
       const probe = await probeMedia(path, "video", "video/mp4");
-      if (probe.audioCodec !== null) {
-        fail(`動画カードに音声が含まれています: ${file.path}`);
-      }
-      if (file.width !== probe.widthPx || file.height !== probe.heightPx) {
-        fail(`動画カードの寸法が manifest と一致しません: ${file.path}`);
+      if (file.kind === "cut-in") {
+        if (probe.durationMs === null || probe.durationMs <= 0) {
+          fail(`CutIn の尺を取得できません: ${file.path}`);
+        }
+        if (file.durationMs === null || file.durationMs <= 0) {
+          fail(`CutIn の尺が manifest にありません: ${file.path}`);
+        }
+        if (file.durationMs !== probe.durationMs) {
+          fail(
+            `CutIn の尺が manifest と一致しません: ${file.path} (${file.durationMs} != ${probe.durationMs})`,
+          );
+        }
+        if (file.hasAudio !== (probe.audioCodec !== null)) {
+          fail(`CutIn の音声情報が manifest と一致しません: ${file.path}`);
+        }
+        if (file.width !== probe.widthPx || file.height !== probe.heightPx) {
+          fail(`CutIn の寸法が manifest と一致しません: ${file.path}`);
+        }
+      } else {
+        if (probe.audioCodec !== null) {
+          fail(`動画カードに音声が含まれています: ${file.path}`);
+        }
+        if (file.width !== probe.widthPx || file.height !== probe.heightPx) {
+          fail(`動画カードの寸法が manifest と一致しません: ${file.path}`);
+        }
       }
     } else if (file.mediaType === "image/png") {
       const dimensions = pngDimensions(await readPngHeader(path));

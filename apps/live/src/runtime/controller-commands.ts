@@ -2,6 +2,7 @@ import type { LiveNoticeLevel, LiveSegment, StagePhase } from "@kakeai/contracts
 import type { RunLogEventInput } from "../runs/run-store.ts";
 import type { CommentRuntime } from "./comment-runtime.ts";
 import type { CommandResult } from "./command-dispatch.ts";
+import type { CutInRuntime } from "./cut-in-runtime.ts";
 import type { Playout } from "./playout.ts";
 import type { CueQueueStore } from "./queue.ts";
 import { ACTIVE_PHASES } from "./segments.ts";
@@ -23,6 +24,7 @@ export interface PhaseCommandsHost {
   readonly comments: CommentRuntime;
   readonly spine: Spine;
   readonly playout: Playout;
+  readonly cutIn: CutInRuntime;
   readonly queues: CueQueueStore;
   currentSegment(): LiveSegment | null;
   log(input: RunLogEventInput): void;
@@ -70,8 +72,16 @@ export class PhaseCommands {
       host.enterPostShow();
       return { ok: true };
     }
+    if (phase === "cut_in") {
+      // Let the CutIn play to its natural end; the finish callback advances
+      // the spine and `handleQueueFinished` then enters closing.
+      host.setEndRequested(true);
+      host.notice("info", "現在の CutIn の終了後にクロージングへ進みます。");
+      return { ok: true };
+    }
     if (phase === "paused") {
       host.setEndRequested(false);
+      host.cutIn.cancel();
       host.comments.interrupt("skip");
       host.spine.enterClosing();
       return { ok: true };
@@ -86,9 +96,14 @@ export class PhaseCommands {
     if (!ACTIVE_PHASES.has(host.phase()) || host.showStartedAtMs() === null) {
       return host.reject("一時停止できる状態ではありません。");
     }
-    host.setPhaseBeforePause(host.phase());
+    const phase = host.phase();
+    host.setPhaseBeforePause(phase);
     host.setPhase("paused");
     host.playout.pause();
+    if (phase === "cut_in") {
+      // Retain the occurrence; resume replays it from the beginning.
+      host.cutIn.pause();
+    }
     host.comments.pause();
     host.publish();
     return { ok: true };
@@ -98,6 +113,37 @@ export class PhaseCommands {
     const { host } = this;
     if (host.phase() !== "paused") {
       return host.reject("再開できる状態ではありません。");
+    }
+    if (host.phaseBeforePause() === "cut_in") {
+      if (host.safeMode()) {
+        host.cutIn.cancel();
+        host.comments.resume();
+        host.setPhase("safe_mode");
+        host.log({ type: "resumed" });
+        host.publish();
+        host.spine.handleQueueFinished();
+        return { ok: true };
+      }
+      host.setPhase("cut_in");
+      const occurrence = host.cutIn.resume();
+      if (occurrence === null) {
+        // No retained occurrence; keep the phase and let the spine decide what
+        // comes next instead of forcing a phase here.
+        host.comments.resume();
+        host.log({ type: "resumed" });
+        host.publish();
+        host.spine.handleQueueFinished();
+        return { ok: true };
+      }
+      host.comments.resume();
+      host.log({
+        type: "resumed",
+        cutInId: occurrence.cutIn.id,
+        segmentId: occurrence.segment.id,
+        data: { attempt: occurrence.attempt, sequence: occurrence.sequence },
+      });
+      host.publish();
+      return { ok: true };
     }
     if (host.safeMode() && host.currentSegment()?.kind === "comment" && !host.comments.isActive()) {
       host.setPhase("safe_mode");
@@ -136,6 +182,7 @@ export class PhaseCommands {
     }
     host.setPhase("paused");
     host.playout.stop();
+    host.cutIn.stop();
     host.comments.pause();
     // `continuePlaying: false` cannot emit queue_finished synchronously, so
     // cancel before discard here (safe_mode keeps the flag through discard).
@@ -161,26 +208,30 @@ export class PhaseCommands {
 
   enterSafeMode(): CommandResult {
     const { host } = this;
-    if (
-      host.phase() === "post_show" ||
-      host.phase() === "error" ||
-      host.phase() === "safe_mode"
-    ) {
+    const phase = host.phase();
+    if (phase === "post_show" || phase === "error" || phase === "safe_mode") {
       return host.reject("安全モードへ移行できる状態ではありません。");
     }
     // v1 has no exit command: once the operator enters safe mode, prepared
     // cues continue safely until the show ends.
+    const playingCutIn = phase === "cut_in" ? host.cutIn.current : null;
     host.setSafeMode(true);
     host.clearGeneration();
     host.log({
       type: "safe_mode",
-      ...(host.playout.current === null ? {} : { cueId: host.playout.current.id }),
+      ...(playingCutIn === null ? {} : { cutInId: playingCutIn.cutIn.id }),
+      ...(host.playout.current === null || playingCutIn !== null
+        ? {}
+        : { cueId: host.playout.current.id }),
     });
-    const paused = host.phase() === "paused";
+    const paused = phase === "paused";
     const cornerWasActive = host.comments.interrupt("safe_mode") ?? false;
     if (paused) {
+      // Keep the paused phase, but clear the retained CutIn so a later resume
+      // continues in safe mode instead of replaying it.
+      host.cutIn.clear();
       host.playout.stop();
-    } else {
+    } else if (playingCutIn === null) {
       host.setPhase("safe_mode");
     }
     const removed = [
@@ -196,8 +247,12 @@ export class PhaseCommands {
       host.log({ type: "cue_deleted", cueId: cue.id, data: { reason: "safe_mode" } });
     }
     host.publishPreload();
+    if (!paused && playingCutIn !== null) {
+      // Stop and advance exactly once through the finish callback.
+      host.cutIn.finishForSafeMode();
+    }
     host.publish();
-    if (cornerWasActive && !paused) {
+    if (cornerWasActive && !paused && playingCutIn === null) {
       host.spine.handleQueueFinished();
     }
     return { ok: true };
@@ -208,6 +263,10 @@ export class PhaseCommands {
     const phase = host.phase();
     if (phase === "pre_show" || phase === "post_show" || phase === "error") {
       return host.reject("スキップできる状態ではありません。");
+    }
+    if (phase === "cut_in") {
+      // `skip_cue` never touches a CutIn; use the dedicated `skip_cut_in`.
+      return host.reject("CutIn は skip_cut_in でスキップしてください。");
     }
     if (host.currentSegment()?.kind === "comment" && host.comments.isActive()) {
       const currentCommentId = host.comments.getCurrentCommentId();
@@ -230,6 +289,18 @@ export class PhaseCommands {
     }
     host.publishPreload();
     host.publish();
+    return { ok: true };
+  }
+
+  skipCutIn(): CommandResult {
+    const { host } = this;
+    if (host.phase() !== "cut_in" || !host.cutIn.hasCurrent) {
+      return host.reject("CutIn は再生中ではありません。");
+    }
+    if (!host.cutIn.skip()) {
+      return host.reject("CutIn をスキップできませんでした。");
+    }
+    // The finish callback publishes and advances the spine exactly once.
     return { ok: true };
   }
 }

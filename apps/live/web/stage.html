@@ -61,6 +61,11 @@
           </div>
         </div>
 
+        <!-- ADR-0130: CutIn is its own full-screen layer, not the material slot. -->
+        <div id="cut-in-layer" class="cut-in-layer" hidden>
+          <video id="cut-in-video" playsinline muted preload="auto"></video>
+        </div>
+
         <div id="preview-badge" class="preview-badge" hidden>PREVIEW</div>
         <div id="connection-badge" class="connection-badge" hidden></div>
       </div>

@@ -130,6 +130,20 @@ export const materialCardSchema = z.strictObject({
 });
 export type MaterialCard = z.infer<typeof materialCardSchema>;
 
+/**
+ * A resolved CutIn in an exported package. Unlike material cards, CutIn video
+ * may carry audio; all media facts come from probing the packaged MP4.
+ */
+export const livePackageCutInSchema = z.strictObject({
+  id: idSchema,
+  file: livePackageRelativePathSchema,
+  durationMs: positiveInt,
+  hasAudio: z.boolean(),
+  width: positiveInt,
+  height: positiveInt,
+});
+export type LivePackageCutIn = z.infer<typeof livePackageCutInSchema>;
+
 export const livePackageShowSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
@@ -138,6 +152,7 @@ export const livePackageShowSchema = z
     segments: z.array(liveSegmentSchema).min(1),
     cues: z.array(preparedCueSchema),
     materials: z.array(materialCardSchema),
+    cutIns: z.array(livePackageCutInSchema).default([]),
     speakers: z.array(liveSpeakerSchema),
     commentPolicy: liveCommentPolicySchema,
     safety: liveSafetySchema,
@@ -168,6 +183,26 @@ export const livePackageShowSchema = z
       }
       materialIds.add(material.id);
     }
+    const cutInIds = new Set<string>();
+    for (const cutIn of show.cutIns) {
+      if (cutInIds.has(cutIn.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cutIns"],
+          message: `CutIn ID が重複しています: ${cutIn.id}`,
+        });
+      }
+      cutInIds.add(cutIn.id);
+    }
+    for (const [index, segment] of show.segments.entries()) {
+      if (segment.kind === "cut_in" && !cutInIds.has(segment.cutInId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["segments", index, "cutInId"],
+          message: `CutIn が見つかりません: ${segment.cutInId}`,
+        });
+      }
+    }
     for (const [index, cue] of show.cues.entries()) {
       if (
         cue.materialId !== undefined &&
@@ -182,7 +217,11 @@ export const livePackageShowSchema = z
       }
     }
     for (const [index, segment] of show.segments.entries()) {
-      if (segment.material !== undefined && !materialIds.has(segment.material)) {
+      if (
+        segment.kind !== "cut_in" &&
+        segment.material !== undefined &&
+        !materialIds.has(segment.material)
+      ) {
         ctx.addIssue({
           code: "custom",
           path: ["segments", index, "material"],

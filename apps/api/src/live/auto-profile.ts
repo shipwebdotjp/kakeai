@@ -337,7 +337,7 @@ function buildSummary(
       label: segment.label,
       cueCount: "cues" in segment ? segment.cues.length : 0,
       materialLabel:
-        segment.material === undefined
+        segment.kind === "cut_in" || segment.material === undefined
           ? null
           : (materialLabelById.get(segment.material) ?? segment.material),
     })),
@@ -526,7 +526,7 @@ export function buildAutoShowProfile(input: AutoShowProfileInput): AutoShowProfi
       title: input.title.trim(),
       locale: input.content.locale,
       targetDurationMs: segments.reduce(
-        (sum, segment) => sum + segment.targetDurationMs,
+        (sum, segment) => sum + ("targetDurationMs" in segment ? segment.targetDurationMs : 0),
         0,
       ),
       stageTemplate: "news-desk",

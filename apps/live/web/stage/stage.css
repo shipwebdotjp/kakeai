@@ -113,7 +113,9 @@ body {
 .live-layout {
   position: absolute;
   inset: 0;
-  z-index: 5;
+  /* No z-index: a stacking context here would trap the paused/error overlays
+     (z-index 30) below the CutIn layer. Without it their z-index applies
+     against the CutIn layer and they stay visible above the black video. */
   display: flex;
   flex-direction: column;
   padding: 44px 64px 48px;
@@ -432,6 +434,32 @@ body {
 
 .caption-text.caption-enter {
   animation: caption-in 220ms ease;
+}
+
+/* CutIn full-screen layer */
+
+.cut-in-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.cut-in-layer video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.stage-canvas.cut-in-active .segment-bar,
+.stage-canvas.cut-in-active .stage-main,
+.stage-canvas.cut-in-active .comment-card,
+.stage-canvas.cut-in-active .caption-band {
+  display: none;
 }
 
 /* Paused / error overlays */

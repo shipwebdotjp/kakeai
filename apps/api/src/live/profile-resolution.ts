@@ -54,8 +54,14 @@ export interface ResolvedSpeaker {
   voiceProfileId: string | null;
 }
 
+export interface ResolvedCutIn {
+  id: string;
+  assetId: string;
+}
+
 export interface ResolvedLiveProfile {
   cues: ResolvedCueSeed[];
+  cutIns: ResolvedCutIn[];
   speakers: ResolvedSpeaker[];
   sideBySpeakerId: Map<string, LiveSide>;
   speakerBySide: Map<LiveSide, ResolvedSpeaker>;
@@ -215,6 +221,25 @@ export function resolveLiveProfile(
   const speakerIdBySide = new Map<LiveSide, string>();
   const speakerBySide = new Map<LiveSide, ResolvedSpeaker>();
   const cues: ResolvedCueSeed[] = [];
+  const cutIns: ResolvedCutIn[] = [];
+  const cutInIds = new Set<string>();
+
+  for (const cutIn of profile.cutIns) {
+    const asset = assetById.get(cutIn.assetId);
+    if (asset === undefined) {
+      fail(`CutIn の素材が見つかりません: ${cutIn.assetId}`, cutIn.id);
+    }
+    if (asset.kind !== "video") {
+      fail(`CutIn の素材が動画ではありません: ${cutIn.assetId}`, cutIn.id);
+    }
+    cutInIds.add(cutIn.id);
+    cutIns.push({ id: cutIn.id, assetId: cutIn.assetId });
+  }
+  for (const segment of profile.segments) {
+    if (segment.kind === "cut_in" && !cutInIds.has(segment.cutInId)) {
+      fail(`CutIn が見つかりません: ${segment.cutInId}`, segment.id);
+    }
+  }
 
   for (const cue of profile.scriptCues) {
     const { line } = findLine(content, cue.lineId);
@@ -359,6 +384,7 @@ export function resolveLiveProfile(
 
   return {
     cues,
+    cutIns,
     speakers: [...speakerBySide.values()],
     sideBySpeakerId: new Map(
       [...speakerBySide.values()].map((speaker) => [speaker.id, speaker.side]),

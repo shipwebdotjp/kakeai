@@ -9,6 +9,7 @@ export const liveSegmentKindSchema = z.enum([
   "script",
   "comment",
   "closing",
+  "cut_in",
 ]);
 export type LiveSegmentKind = z.infer<typeof liveSegmentKindSchema>;
 
@@ -38,9 +39,24 @@ export const liveCommentSegmentSchema = z.strictObject({
     .optional(),
 });
 
+/**
+ * A Spine-only segment that plays one CutIn video between normal segments. It
+ * carries no duration, cues, material or comment policy: the duration comes
+ * from the resolved package CutIn, and CutIn playback never joins the cue
+ * playout contract.
+ */
+export const liveCutInSegmentSchema = z.strictObject({
+  id: idSchema,
+  label: z.string().trim().min(1),
+  kind: z.literal("cut_in"),
+  cutInId: idSchema,
+});
+export type LiveCutInSegment = z.infer<typeof liveCutInSegmentSchema>;
+
 export const liveSegmentSchema = z.discriminatedUnion("kind", [
   liveCueSegmentSchema,
   liveCommentSegmentSchema,
+  liveCutInSegmentSchema,
 ]);
 export type LiveSegment = z.infer<typeof liveSegmentSchema>;
 
@@ -154,6 +170,17 @@ export const liveTestConfigSchema = z.strictObject({
 export type LiveTestConfig = z.infer<typeof liveTestConfigSchema>;
 
 /**
+ * Input-only CutIn definition. `assetId` points at a ready video Asset; the
+ * package resolves it to a probed MP4 and never takes the Asset metadata as
+ * the source of truth for duration or audio.
+ */
+export const liveCutInInputSchema = z.strictObject({
+  id: idSchema,
+  assetId: idSchema,
+});
+export type LiveCutInInput = z.infer<typeof liveCutInInputSchema>;
+
+/**
  * The input Show Profile. Normal cues reference ScriptVersion lines; only
  * live-specific content carries caption/speech directly.
  */
@@ -163,6 +190,7 @@ export const liveShowProfileSchema = z
     show: liveShowMetaSchema,
     commentSource: liveCommentSourceSchema,
     segments: z.array(liveSegmentSchema).min(1),
+    cutIns: z.array(liveCutInInputSchema).default([]),
     scriptCues: z.array(liveScriptCueInputSchema).default([]),
     liveCues: z.array(liveCueInputSchema).default([]),
     materials: z.array(liveMaterialInputSchema).default([]),
@@ -265,6 +293,27 @@ export const liveShowProfileSchema = z
       materialIds.add(material.id);
     }
 
+    const cutInIds = new Set<string>();
+    for (const cutIn of profile.cutIns) {
+      if (cutInIds.has(cutIn.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cutIns"],
+          message: `CutIn ID が重複しています: ${cutIn.id}`,
+        });
+      }
+      cutInIds.add(cutIn.id);
+    }
+    for (const [index, segment] of profile.segments.entries()) {
+      if (segment.kind === "cut_in" && !cutInIds.has(segment.cutInId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["segments", index, "cutInId"],
+          message: `CutIn が見つかりません: ${segment.cutInId}`,
+        });
+      }
+    }
+
     for (const [index, cue] of profile.scriptCues.entries()) {
       if (
         cue.materialId !== undefined &&
@@ -281,7 +330,11 @@ export const liveShowProfileSchema = z
 
     validateSegmentCueReferences(profile.segments, cueIds, ctx);
     for (const [index, segment] of profile.segments.entries()) {
-      if (segment.material !== undefined && !materialIds.has(segment.material)) {
+      if (
+        segment.kind !== "cut_in" &&
+        segment.material !== undefined &&
+        !materialIds.has(segment.material)
+      ) {
         ctx.addIssue({
           code: "custom",
           path: ["segments", index, "material"],

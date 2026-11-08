@@ -176,6 +176,9 @@ function verifyKindMediaType(file: LivePackageFile): void {
         fail("image/*, video/mp4 or text/html");
       }
       break;
+    case "cut-in":
+      if (file.mediaType !== "video/mp4") fail("video/mp4");
+      break;
     default: {
       const exhaustive: never = file.kind;
       throw new Error(`Unsupported live file kind: ${String(exhaustive)}`);
@@ -259,6 +262,54 @@ function verifyMaterialCards(show: LivePackageShow, files: Map<string, LivePacka
         const exhaustive: never = card.kind;
         throw new Error(`Unsupported material kind: ${String(exhaustive)}`);
       }
+    }
+  }
+}
+
+function verifyCutIns(show: LivePackageShow, files: Map<string, LivePackageFile>): void {
+  const cutInIds = new Set(show.cutIns.map((cutIn) => cutIn.id));
+  for (const [index, segment] of show.segments.entries()) {
+    if (segment.kind === "cut_in" && !cutInIds.has(segment.cutInId)) {
+      // The show schema already rejects this; keep a defensive check so a
+      // hand-built object cannot reach the runtime.
+      throw packageError(
+        "reference_missing",
+        `CutIn が見つかりません: ${segment.cutInId}`,
+        `segments.${index}.cutInId`,
+      );
+    }
+  }
+  for (const cutIn of show.cutIns) {
+    const entry = requireEntry(files, cutIn.file, `CutIn ${cutIn.id}`);
+    requireKind(entry, ["cut-in"], `CutIn ${cutIn.id}`);
+    requireMedia(entry, new Set<LiveMediaType>(["video/mp4"]), `CutIn ${cutIn.id}`);
+    if (entry.durationMs === null || entry.durationMs <= 0) {
+      throw packageError(
+        "media_type_mismatch",
+        `CutIn の尺が manifest にありません: ${cutIn.file}`,
+        cutIn.file,
+      );
+    }
+    if (entry.durationMs !== cutIn.durationMs) {
+      throw packageError(
+        "media_type_mismatch",
+        `CutIn の尺が manifest と一致しません: ${cutIn.file} (${entry.durationMs} != ${cutIn.durationMs})`,
+        cutIn.file,
+      );
+    }
+    if (entry.hasAudio !== cutIn.hasAudio) {
+      throw packageError(
+        "media_type_mismatch",
+        `CutIn の音声情報が manifest と一致しません: ${cutIn.file}`,
+        cutIn.file,
+      );
+    }
+    if (entry.width !== cutIn.width || entry.height !== cutIn.height) {
+      throw packageError(
+        "media_type_mismatch",
+        `CutIn の寸法が manifest と一致しません: ${cutIn.file}`,
+        cutIn.file,
+      );
     }
   }
 }
@@ -360,6 +411,7 @@ export function verifyPackageContent(
 ): string[] {
   const files = manifestFileMap(manifest);
   verifyMaterialCards(show, files);
+  verifyCutIns(show, files);
   verifyReferences(show, characters, files);
   verifyManifestVoices(manifest, digests, files);
 

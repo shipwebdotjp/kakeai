@@ -1,5 +1,6 @@
 import type {
   CommentSourceStatus,
+  ConsoleCutIn,
   ConsoleSnapshot,
   LiveCharacterSheet,
   LiveCommentCorner,
@@ -12,6 +13,7 @@ import type {
   MaterialCard,
   StageClock,
   StageCommentState,
+  StageCutIn,
   StagePhase,
   StageState,
   StageStatus,
@@ -29,6 +31,7 @@ export interface StageStateInput {
   material: MaterialCard | null;
   comment: StageCommentState | null;
   status: StageStatus;
+  cutIn: StageCutIn | null;
   clock: StageClock;
 }
 
@@ -36,12 +39,26 @@ export function buildShowMeta(show: LivePackageShow): LiveServerShowMeta {
   return {
     title: show.show.title,
     targetDurationMs: show.show.targetDurationMs,
-    segments: show.segments.map((segment) => ({
-      id: segment.id,
-      label: segment.label,
-      kind: segment.kind,
-      targetDurationMs: segment.targetDurationMs,
-    })),
+    segments: show.segments.map((segment) => {
+      if (segment.kind === "cut_in") {
+        const cutIn = show.cutIns.find((entry) => entry.id === segment.cutInId);
+        return {
+          id: segment.id,
+          label: segment.label,
+          kind: segment.kind,
+          // Package load-time validation rejects a missing CutIn. Fall back to
+          // a positive duration so snapshot generation never throws on a
+          // corrupt show (the contract requires positiveInt, not 0).
+          targetDurationMs: cutIn?.durationMs ?? 1,
+        };
+      }
+      return {
+        id: segment.id,
+        label: segment.label,
+        kind: segment.kind,
+        targetDurationMs: segment.targetDurationMs,
+      };
+    }),
   };
 }
 
@@ -85,6 +102,26 @@ function characterState(
  */
 export function buildStageState(input: StageStateInput): StageState {
   const { cue } = input;
+  if (input.cutIn !== null) {
+    // CutIn is a full-screen layer: characters, captions, material cards and
+    // comments are hidden while it plays, and it is never cue playback.
+    return {
+      phase: input.phase,
+      show: {
+        title: input.show.show.title,
+        startAt: input.show.show.startAt,
+      },
+      segment: input.segment,
+      characters: { left: null, right: null },
+      caption: null,
+      material: null,
+      comment: null,
+      status: "idle",
+      playback: null,
+      cutIn: input.cutIn,
+      clock: input.clock,
+    };
+  }
   const isSpeaking = input.status === "speaking";
   return {
     phase: input.phase,
@@ -117,6 +154,7 @@ export function buildStageState(input: StageStateInput): StageState {
             startedAt: input.cueStartedAt.toISOString(),
             audioUrl: cue.audio,
           },
+    cutIn: input.cutIn,
     clock: input.clock,
   };
 }
@@ -137,6 +175,7 @@ export function buildConsoleSnapshot(input: {
   commentCorner: LiveCommentCorner;
   commentSource: CommentSourceStatus;
   generation: LiveGenerationStatus | null;
+  cutIn: ConsoleCutIn | null;
 }): ConsoleSnapshot {
   return {
     runId: input.runId,
@@ -150,6 +189,7 @@ export function buildConsoleSnapshot(input: {
     playback: input.playback,
     status: input.status,
     clock: input.clock,
+    cutIn: input.cutIn,
     comments: input.comments,
     commentCorner: input.commentCorner,
     commentSource: input.commentSource,

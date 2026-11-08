@@ -31,7 +31,10 @@ export function QueuePanel({ snapshot, onSkip }: QueuePanelProps) {
     currentIndex >= 0 && currentIndex < snapshot.queue.length
       ? (snapshot.queue[currentIndex] ?? null)
       : null;
-  const canSkip = snapshot.playback !== null && snapshot.phase !== "paused";
+  const canSkip =
+    snapshot.playback !== null &&
+    snapshot.phase !== "paused" &&
+    snapshot.phase !== "cut_in";
   const currentPlayback =
     snapshot.playback !== null && snapshot.playback.cueId === current?.id
       ? snapshot.playback

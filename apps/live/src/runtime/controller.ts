@@ -4,6 +4,7 @@ import type {
   LiveCommand,
   LiveCue,
   LiveGenerationStatus,
+  LivePackageCutIn,
   LivePackageShow,
   LivePreloadCue,
   LiveSegment,
@@ -25,6 +26,11 @@ import { PhaseCommands } from "./controller-commands.ts";
 import type { LiveControllerChange, LiveControllerOptions } from "./controller-types.ts";
 import { ControllerView } from "./controller-view.ts";
 import { CueControl, type LiveCuePatch } from "./control-queue.ts";
+import {
+  CutInRuntime,
+  type CutInEndReason,
+  type CutInOccurrence,
+} from "./cut-in-runtime.ts";
 import { handleCueCommand, type CueCommandHooks } from "./cue-commands.ts";
 import { StageLeaseManager, type StageConnectOptions } from "./lease.ts";
 import { resolveCueMaterialId } from "./material-resolution.ts";
@@ -55,6 +61,7 @@ export class LiveController {
   private readonly leases: StageLeaseManager;
   private readonly listeners = new Set<(change: LiveControllerChange) => void>();
   private readonly playout: Playout;
+  private readonly cutInRuntime: CutInRuntime;
   private readonly queues: CueQueueStore;
   private readonly cueControl: CueControl;
   private readonly spine: Spine;
@@ -63,6 +70,13 @@ export class LiveController {
   private readonly responsePlayback: ResponsePlayback;
   private readonly phaseCommands: PhaseCommands;
   private readonly materialById = new Map<string, LivePackageShow["materials"][number]>();
+  private readonly cutInById = new Map<string, LivePackageCutIn>();
+  /** One server-wide counter for cue and CutIn playback instructions. */
+  private sequenceCounter = 0;
+  private readonly nextSequence = (): number => {
+    this.sequenceCounter += 1;
+    return this.sequenceCounter;
+  };
   private generation: LiveGenerationStatus | null = null;
   private generatedCueCommands: GeneratedCueCommands | null = null;
   private readonly cueCommandHooks: CueCommandHooks;
@@ -111,6 +125,17 @@ export class LiveController {
       minBufferMs: this.show.playout.minBufferMs,
       emit: (event) => this.handlePlayoutEvent(event),
       followingCues: () => this.queues.afterSegment(this.currentSegmentIndex),
+      nextSequence: () => this.nextSequence(),
+      ...(options.playoutScheduler === undefined
+        ? {}
+        : { scheduler: options.playoutScheduler }),
+    });
+    this.cutInRuntime = new CutInRuntime({
+      now: () => this.now().getTime(),
+      nextSequence: () => this.nextSequence(),
+      onStarted: (occurrence) => this.handleCutInStarted(occurrence),
+      onFinished: (occurrence, reason, message) =>
+        this.handleCutInFinished(occurrence, reason, message),
       ...(options.playoutScheduler === undefined
         ? {}
         : { scheduler: options.playoutScheduler }),
@@ -134,6 +159,7 @@ export class LiveController {
       segment: () => this.segment(),
       segmentLabel: (segment) => this.segmentLabel(segment),
       materialForCue: (segment, cue) => this.materialForCue(segment, cue),
+      cutIn: () => this.cutInRuntime.current,
       clock: () =>
         this.finalClock ?? computeClock(this.show, this.showStartedAtMs, this.now().getTime()),
       generation: () => this.generation,
@@ -181,9 +207,13 @@ export class LiveController {
       enterPostShow: () => this.enterPostShow(),
       hasCommentCorner: () => this.comments.enabled,
       startCommentCorner: (segment) => this.comments.startCorner(segment),
+      startCutIn: (index, segment) => this.startCutIn(index, segment),
     });
     for (const material of this.show.materials) {
       this.materialById.set(material.id, material);
+    }
+    for (const cutIn of this.show.cutIns) {
+      this.cutInById.set(cutIn.id, cutIn);
     }
     this.phaseCommands = new PhaseCommands({
       phase: () => this.phase,
@@ -210,6 +240,7 @@ export class LiveController {
       comments: this.comments,
       spine: this.spine,
       playout: this.playout,
+      cutIn: this.cutInRuntime,
       queues: this.queues,
       currentSegment: () => this.segment(),
       log: (input) => this.log(input),
@@ -283,12 +314,94 @@ export class LiveController {
     segment: LiveSegment,
     cue: LiveCue | null,
   ): MaterialCard | null {
+    if (segment.kind === "cut_in") {
+      return null;
+    }
     const materialId = resolveCueMaterialId(segment.material, cue?.materialId);
     return materialId === null ? null : (this.materialById.get(materialId) ?? null);
   }
 
   private segmentLabel(segment: LiveSegment | null): { id: string; label: string } | null {
     return segment === null ? null : { id: segment.id, label: segment.label };
+  }
+
+  private startCutIn(
+    index: number,
+    segment: Extract<LiveSegment, { kind: "cut_in" }>,
+  ): boolean {
+    const cutIn = this.cutInById.get(segment.cutInId);
+    if (cutIn === undefined) {
+      return false;
+    }
+    // Starting while another occurrence is active would throw inside the
+    // runtime after the mutation below; refuse before touching index/phase.
+    if (this.cutInRuntime.hasCurrent) {
+      return false;
+    }
+    // Set the segment and phase before `start`, because its `onStarted`
+    // callback publishes state; a missing CutIn must not change either.
+    this.currentSegmentIndex = index;
+    this.setPhase("cut_in");
+    this.cutInRuntime.start(index, segment, cutIn);
+    return true;
+  }
+
+  private handleCutInStarted(occurrence: CutInOccurrence): void {
+    this.runStore?.appendCue({
+      event: "cut_in_started",
+      cutInId: occurrence.cutIn.id,
+      segmentId: occurrence.segment.id,
+      label: occurrence.segment.label,
+      status: "playing",
+      attempt: occurrence.attempt,
+      sequence: occurrence.sequence,
+    });
+    this.log({
+      type: "cut_in_started",
+      cutInId: occurrence.cutIn.id,
+      segmentId: occurrence.segment.id,
+      data: { attempt: occurrence.attempt, sequence: occurrence.sequence },
+    });
+    this.publish();
+  }
+
+  private handleCutInFinished(
+    occurrence: CutInOccurrence,
+    reason: CutInEndReason,
+    message?: string,
+  ): void {
+    const failed = reason === "error" || reason === "watchdog";
+    const failureMessage =
+      message ?? `CutIn の再生に失敗しました: ${occurrence.cutIn.id}`;
+    if (failed) {
+      this.runStore?.appendError(failureMessage);
+      this.log({
+        type: "cut_in_failed",
+        cutInId: occurrence.cutIn.id,
+        segmentId: occurrence.segment.id,
+        data: {
+          reason,
+          attempt: occurrence.attempt,
+          sequence: occurrence.sequence,
+          message: failureMessage,
+        },
+      });
+      // A failing CutIn never pauses the show: log and move on.
+      this.notice("warning", failureMessage);
+    } else {
+      this.log({
+        type: "cut_in_finished",
+        cutInId: occurrence.cutIn.id,
+        segmentId: occurrence.segment.id,
+        data: {
+          reason,
+          attempt: occurrence.attempt,
+          sequence: occurrence.sequence,
+        },
+      });
+    }
+    this.publish();
+    this.spine.handleQueueFinished();
   }
 
   private remainingMs(): number {
@@ -332,6 +445,7 @@ export class LiveController {
     this.phaseBeforePause = this.phase;
     this.setPhase("paused");
     this.playout.pause();
+    this.cutInRuntime.pause();
     this.comments.pause();
     this.notice("warning", message);
     this.publish();
@@ -348,6 +462,7 @@ export class LiveController {
         stop: () => this.phaseCommands.stop(),
         enterSafeMode: () => this.phaseCommands.enterSafeMode(),
         skipCue: () => this.phaseCommands.skipCue(),
+        skipCutIn: () => this.phaseCommands.skipCutIn(),
         takeover: (sessionId) => this.takeover(sessionId),
         cueCommand: (cueCommand) => {
           const result = handleCueCommand(this.cueControl, cueCommand, this.cueCommandHooks);
@@ -380,6 +495,7 @@ export class LiveController {
         runId: this.runId,
         leases: this.leases,
         playout: this.playout,
+        cutIn: this.cutInRuntime,
         logIgnored: (ignored, reason) => this.logIgnoredStageEvent(ignored, reason),
       },
       sessionId,
@@ -392,6 +508,8 @@ export class LiveController {
       event: "stage_event_ignored",
       kind: event.kind,
       cueId: event.cueId,
+      ...(event.cutInId === undefined ? {} : { cutInId: event.cutInId }),
+      ...(event.segmentId === undefined ? {} : { segmentId: event.segmentId }),
       attempt: event.attempt,
       sequence: event.sequence,
       reason,
@@ -434,6 +552,7 @@ export class LiveController {
     this.currentSegmentIndex = null;
     this.endRequested = false;
     this.phaseBeforePause = null;
+    this.cutInRuntime.cancel();
     this.generation = null;
     this.responsePlayback.cancel();
     this.comments.clearStageComment();
@@ -562,6 +681,7 @@ export class LiveController {
 
   dispose(): void {
     this.playout.dispose();
+    this.cutInRuntime.dispose();
     this.comments.dispose();
   }
 }

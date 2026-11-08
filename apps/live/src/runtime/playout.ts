@@ -68,6 +68,11 @@ export interface PlayoutOptions {
   /** Cues from later spine segments, used to preload across a segment boundary. */
   followingCues?: () => readonly LiveCue[];
   scheduler?: PlayoutScheduler;
+  /**
+   * Server-wide monotonic playback sequence. The controller shares one counter
+   * with the CutIn runtime; omitted, this playout owns its own counter.
+   */
+  nextSequence?: () => number;
 }
 
 const THINKING_POLL_MS = 100;
@@ -86,6 +91,7 @@ export class Playout {
   private readonly maxThinkingMs: number;
   private readonly minBufferMs: number;
   private readonly followingCues: () => readonly LiveCue[];
+  private readonly nextSequence: (() => number) | null;
   private queue: LiveCue[] = [];
   private index = -1;
   private attempt = 0;
@@ -106,6 +112,7 @@ export class Playout {
     this.maxThinkingMs = options.maxThinkingMs;
     this.minBufferMs = options.minBufferMs;
     this.followingCues = options.followingCues ?? (() => []);
+    this.nextSequence = options.nextSequence ?? null;
   }
 
   setQueue(cues: LiveCue[]): void {
@@ -460,8 +467,10 @@ export class Playout {
     this.thinking = false;
     this.attempt = attempt;
     this.startedAtMs = this.scheduler.now();
-    this.sequenceCounter += 1;
-    this.currentSequence = this.sequenceCounter;
+    this.currentSequence =
+      this.nextSequence === null
+        ? (this.sequenceCounter += 1)
+        : this.nextSequence();
     cue.status = "playing";
     this.scheduleWatchdog(cue, attempt, this.currentSequence);
     this.emit({
