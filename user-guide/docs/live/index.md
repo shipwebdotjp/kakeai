@@ -14,7 +14,7 @@ Kakeai で作った台本・キャラクター・素材・声を使って、AI �
 ## 全体の流れ
 
 1. [ライブパッケージを書き出す](./export.md)
-2. [ライブ設定と YouTube の OAuth を準備する](./setup.md)
+2. [ライブ設定と YouTube の接続を準備する](./setup.md)
 3. [テストモードでリハーサルする](./test-mode.md)
 4. [OBS にステージを設定する](./obs.md)
 5. [当日のライブを操作する](./operations.md)
@@ -25,7 +25,7 @@ Kakeai で作った台本・キャラクター・素材・声を使って、AI �
 - Kakeai で保存した ScriptVersion と、ライブ用の Show Profile
 - ローカル LLM（実 YouTube のコメント分析・応答生成に使う。外部 LLM はテストモードのみ）
 - TTS エンジン（VOICEVOX、AivisSpeech、または OpenAI 互換。生成レスと書き出しに使う）
-- YouTube Data API v3 を有効にした Google Cloud プロジェクトの OAuth クライアント
+- YouTube Data API v3 を有効にした Google Cloud プロジェクトの API キー（OAuth を使う場合は OAuth クライアント）
 - OBS Studio（ステージをブラウザソースとして取り込む）
 - macOS と Node.js 22.20.0 以上
 
@@ -52,7 +52,7 @@ npm run live -- \
 ## このセクションのページ
 
 - [ライブパッケージを書き出す](./export.md)
-- [ライブ設定と YouTube の OAuth](./setup.md)
+- [ライブ設定と YouTube の接続](./setup.md)
 - [テストモードでリハーサルする](./test-mode.md)
 - [OBS にステージを設定する](./obs.md)
 - [当日のライブを操作する](./operations.md)

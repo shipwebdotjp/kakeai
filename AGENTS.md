@@ -78,6 +78,7 @@ npm run live -- --package <dir>  # ライブアプリ（ステージ/コンソ�
 - `system_profiler SPFontsDataType` はこの環境で約12秒かかる。`createRenderJob` は `FontCatalogService.diagnoseTheme` を呼ぶため、テストでは必ず `FakeFontCatalogAdapter` を注入する（`render-flow.test.ts`・`composition-library.test.ts`）。実カタログは `getSharedFontCatalogService()` の共有インスタンスを使い、server起動時にバックグラウンドで温める。
 - `useMutation` の `data` は新しい `mutate` のpending中に `undefined` へ戻る。テーマ編集プレビューのように `data` だけを描画条件にすると待機中に `<hyperframes-player>` がアンマウントされ、再生位置が0に戻る。直前のHTMLをrefに保持して表示し、プレイヤーを作り直さない。
 - `npm test` は vitest を全体並列で実行する。既定の5秒では `packages/contracts/src/agent-operation-contract.test.ts` の digest テストが稀にタイムアウトするため、`vitest.config.ts` の `testTimeout` を60秒にしている（操作カタログの増加に合わせて5秒→20秒→30秒→60秒と引き上げた）。個別実行も同じ設定で動く。
+- `apps/live/src/runtime/director-integration.test.ts` の一時ディレクトリ削除は、`RunStore` の非同期ログ追記と競合して `ENOTEMPTY` になることがある。`afterEach` で短いリトライを行う。個別実行では再現しにくく、全体並列実行で出やすい。
 - `packages/video/src/compiler.ts` の `STYLES` 配列へ行を挿入するとき、直前要素の末尾カンマを落としやすい。`npm run typecheck` では構文エラーとして出るが、`tail` で見ると見落とすため、挿入は配列要素ごと置換し、`rg -n` で前後の行のカンマを確認する。
 - FFmpeg 6.x（Ubuntu 24.04）では裸の `-autorotate` が次の `-i` を値として消費し、入力が出力扱いになって失敗する。FFmpeg 9 では `-autorotate 1` も拒否する。`apps/api/src/media/normalize.ts` では `-autorotate` を渡さず、既定の自動回転に任せる。
 - 新規のプロダクションコードは1ファイル1責務を目安にし、600行以下に保つ。`npm run check:file-size` が600行超を警告、800行超を失敗にする。既存の800行超ファイルは `scripts/check-file-size.mjs` の `BASELINE` に記録されており、分割したらエントリを削除する。baseline を超えて成長させない。

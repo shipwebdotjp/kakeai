@@ -87,6 +87,27 @@ describe("live runtime config", () => {
     });
   });
 
+  it("accepts a YouTube config with only an API key", async () => {
+    const dataDir = await tempDir();
+    const path = await writeConfig({
+      llm: { mode: "local", baseUrl: "http://127.0.0.1:11434/v1", model: "test-model" },
+      tts: { adapters: {} },
+      youtube: {
+        apiKey: "  api-key-1  ",
+        videoUrl: "https://youtu.be/abcdefghijk",
+      },
+      port: 3010,
+      dataDir,
+    });
+    const config = await loadLiveRuntimeConfigFile(path);
+    expect(config.youtube).toMatchObject({
+      apiKey: "api-key-1",
+      videoUrl: "https://youtu.be/abcdefghijk",
+    });
+    expect(config.youtube?.clientId).toBeUndefined();
+    expect(config.youtube?.clientSecret).toBeUndefined();
+  });
+
   it("rejects invalid new fields", async () => {
     const dataDir = await tempDir();
     const base = {

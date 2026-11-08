@@ -556,14 +556,18 @@ interface CommentSource {
 
 ### YouTube（読み取り専用）
 
-- OAuthスコープは`https://www.googleapis.com/auth/youtube.readonly`だけを使う。
+- 認証は**APIキーを第一候補**とし、OAuthをフォールバックにする。公開ライブチャットの読み取りは`youtube.apiKey`で行い、OAuthスコープ`https://www.googleapis.com/auth/youtube.readonly`はOAuthを使う場合だけ使う。理由は [ADR-0129](../adr/0129-youtube-api-key-first-auth.md) を正とする。
+- APIキーは公開データの読み取りだけに使い、YouTube Data API v3に制限する。APIキーにも書き込み権限はなく、配信操作・チャット投稿・モデレーションのAPIは追加しない。実YouTubeのコメント処理はローカルLLMのみという制約も変えない。
+- APIキーのリクエストが401、403の`authError`/`forbidden`/`insufficientPermissions`/`keyInvalid`、または400の`keyInvalid`/`API_KEY_INVALID`で失敗し、OAuth設定と有効なトークンがある場合、同じリクエストをOAuthで1回だけ再試行する。再試行は1リクエストにつき1回までとする。
+- `liveChatDisabled`、`liveChatEnded`、`liveChatNotFound`は認証で解決しない端末エラーとして扱い、OAuthへフォールバックしない。
+- `youtube.apiKey`が無い場合は、`clientId`と`clientSecret`によるOAuthのみの設定を許可する。この場合、従来どおり`live auth`でトークンを保存する。
 - `liveChatId`は、コンソールに貼られたYouTubeのライブURLまたは動画IDから、`videos.list`の`liveStreamingDetails.activeLiveChatId`を読んで解決する。解決できない場合は手動入力を許す。
 - v1の正規経路は`liveChatMessages.list`のポーリングとする。ポーリング間隔はレスポンスの`pollingIntervalMillis`を既定とし、5秒固定にしない。設定でそれより長くできる。
 - `streamList`はP0.5でスパイクする。REST/HTTP2で扱えるか、gRPCの正式依存が必要かを確認し、実装が軽く安定する場合だけ将来の改善として採用する。v1の必須依存にはしない。理由は [ADR-0128](../adr/0128-live-comment-polling-primary.md) を正とする。
 - ポーリングは`nextPageToken`を扱い、クォータの概算をコンソールに表示する。30分の配信で、選択した間隔が既定クォータに収まるかを確認できるようにする。
 - 配信の作成・開始・終了、チャット投稿、削除、ピン留め、モデレーションは行わない。これらは人間がYouTube StudioまたはYouTubeのチャットUIで行う。
 - AIの返答は、ステージの音声と字幕として出す。YouTubeチャットには書き込まない。チャットにもテキストを出したい場合は、将来の書き込み対応ADRで追加する。
-- v1の初回は、Google CloudのOAuthクライアントをTestingのまま使い、`live auth`で再認証できるようにする。Testingのリフレッシュトークンは7日で失効するため、コンソールに有効期限を表示し、`invalid_grant`を検知したら再認証を促す。
+- OAuthを使う場合、v1の初回はGoogle CloudのOAuthクライアントをTestingのまま使い、`live auth`で再認証できるようにする。Testingのリフレッシュトークンは7日で失効するため、コンソールに有効期限を表示し、`invalid_grant`を検知したら再認証を促す。APIキーのみの場合は`live auth`も7日失効の警告も不要とする。
 - 定期配信を続ける場合は、OAuthアプリの公開・検証をP0.5の判断として扱う。P6の手順書だけに残さない。
 
 ### fixture（テストモード）
@@ -873,7 +877,8 @@ npm run live:export -- \
 - ステージとコンソールは、HostとOriginの検証を行う。同一originのローカルアクセスだけを受け入れる。
 - ライブパッケージは信頼済みのKakeai出力だけを使う。視聴者コメントや外部HTMLを素材カードとして実行しない。
 - コメント、投稿者名、生成テキストは、HTMLとして実行せず、必ずエスケープする。
-- YouTubeのOAuthリフレッシュトークンは、ライブアプリの設定ディレクトリに、利用者だけが読める権限で保存する。
+- YouTubeのAPIキーとOAuthリフレッシュトークンは、ライブアプリの設定ディレクトリまたは設定ファイルに置き、利用者だけが読める権限で保存する。APIキー・アクセストークンはログ、コンソールのstatus、エラー本文に出さない。
+- APIキーは公開データの読み取りだけに使う。キーを共有したり、リポジトリにコミットしたりしない。OAuthを使う場合は`youtube.readonly`だけを要求する。
 - TTSの接続設定（`baseUrl`・APIキー）はライブアプリのローカル設定に置く。ローカルTTSはループバックのみを許可する。
 - ログには個人情報を含み得るため、保存先と共有範囲を利用者が管理する。
 - 配信の開始・終了、チャット投稿、モデレーションはアプリの権限外とする。
@@ -917,7 +922,7 @@ npm run live:export -- \
 - ステージの正確なCSS、キャラクターの立ち位置、素材カードのサイズ。
 - 素材カードのiframeミニランナーが必要になったときの再生・停止・seekの契約。
 - OBSの音声経路（ブラウザソースの音声か、デスクトップ音声か）。
-- YouTube OAuthの設定手順と、リフレッシュトークンの保存場所。Testingクライアントの7日失効と、公開・検証の時期。
+- 公開ライブチャットをAPIキーだけで読めることの実配信での確認。失敗した場合のOAuthフォールバックの運用。OAuthを使う場合のリフレッシュトークンの保存場所、Testingクライアントの7日失効、公開・検証の時期。
 - ローカルLLMの実行環境（Ollama等）とモデルの初期候補。
 - ライブパッケージ書き出しのUI。v1は`live_export` JobとCLI。
 - 素材集（フィラー）の自動選択。v1はスパイン中心。

@@ -117,7 +117,7 @@
   - [x] `liveChatMessages.list` のポーリングを正規経路にする。`pollingIntervalMillis`を既定にし、5秒固定にしない。設定で長くできる。
   - [ ] P0.5で`liveChatMessages.streamList`のスパイクを行い、実装が軽く安定する場合だけ将来の改善として追加する。gRPCの正式依存は別ADRとする。
   - [x] `nextPageToken`を扱い、クォータの概算をstatusに載せる。
-  - [x] OAuthは `youtube.readonly` のみ。書き込みAPIを呼ばない。`live auth`再認証と7日失効の表示。
+  - [x] OAuthは `youtube.readonly` のみ。書き込みAPIを呼ばない。`live auth`再認証と7日失効の表示（OAuthフォールバックを使う場合）。
   - [x] クォータ・認証・接続エラーをコンソールに表示する。
 - [x] ルールベースのコメント前処理（NG、URL、個人情報、スパム、連投、長文）を実装する。
 - [x] コメント分析役（LLM）を実装する。バッチ入力、`score`/`safety`/`relevance`/`isQuestion`/`reason`/`suggestedAngle`/`safeSummary`/`safeQuestion`/`safeQuote`/`piiRedacted`/`urlsRemoved`の構造化出力、Zod検証、1回再試行。実YouTubeはローカルLLMのみ、fixtureテストは外部LLM可。
@@ -154,7 +154,8 @@ P5a（ディレクター生成、安全フィルター、生成レスTTS基盤�
 
 - [ ] 実際のYouTubeライブで、`liveChatMessages.list`のポーリングを正規経路として実行する。P0.5の`streamList`スパイク結果を反映し、実用化できる場合だけ追加する。
 - [ ] 実YouTubeのコメント分析・応答生成がローカルLLMだけで動き、外部LLMが呼ばれないことを確認する。
-- [x] OAuthの設定手順（Google Cloudプロジェクト、OAuthクライアント、`youtube.readonly`、リフレッシュトークン保存、`live auth`再認証、Testingの7日失効、公開・検証の判断）を整備する。`user-guide/docs/live/setup.md` に記載した。
+- [x] YouTubeコメント取得をAPIキー優先・OAuthフォールバックにする。`youtube.apiKey`だけで起動でき、認証系エラー時だけOAuth設定とトークンがある場合に1回再試行する（[ADR-0129](../adr/0129-youtube-api-key-first-auth.md)）。
+- [x] OAuth フォールバックの設定手順（Google Cloudプロジェクト、OAuthクライアント、`youtube.readonly`、リフレッシュトークン保存、`live auth`再認証、Testingの7日失効、公開・検証の判断）を整備する。`user-guide/docs/live/setup.md` に記載した。
 - [x] OBSの設定手順（ブラウザソース、1920x1080、音声経路、ステージURL、コンソールを出さない）を整備する。`user-guide/docs/live/obs.md` に記載した。
 - [ ] `pre_show` のカウントダウン、`post_show` のお礼・次回予告を仕上げる。
 - [x] ユーザーガイド `user-guide/docs/live/` を追加し、サイドバーに載せる（セットアップ、書き出し、テストモード、OBS、当日の操作、トラブル時）。`index`・`export`・`setup`・`test-mode`・`obs`・`operations`・`troubleshooting` を追加し、サイドバーと目次に載せた。

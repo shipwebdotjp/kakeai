@@ -5,7 +5,12 @@ import {
   type LivePackageShow,
   type LiveRuntimeConfig,
 } from "@kakeai/contracts";
-import { YouTubeTokenProvider, type YouTubeAccessTokenProvider } from "../auth/youtube-token.ts";
+import {
+  createYouTubeAuthProvider,
+  OAuthYouTubeAuthProvider,
+  type YouTubeAuthProvider,
+} from "../auth/youtube-auth.ts";
+import type { YouTubeAccessTokenProvider } from "../auth/youtube-token.ts";
 import { resolveContainedPath } from "../package/paths.ts";
 import { isLocalLlmEndpoint } from "../llm/local-endpoint.ts";
 import { FixtureCommentSource } from "./fixture-source.ts";
@@ -18,6 +23,9 @@ export interface CreateCommentSourceOptions {
   packageRoot: string;
   testMode?: boolean;
   config: LiveRuntimeConfig;
+  /** Fully built auth provider; wins over `tokenProvider` and the config. */
+  auth?: YouTubeAuthProvider;
+  /** Test seam; wrapped as an OAuth auth provider. */
   tokenProvider?: YouTubeAccessTokenProvider;
   fetch?: typeof fetch;
   scheduler?: CommentSourceScheduler;
@@ -80,25 +88,28 @@ export async function createCommentSource(
   const youtube = config.youtube;
   if (youtube === undefined) {
     throw new Error(
-      "実 YouTube の実行には設定の youtube（clientId・clientSecret・videoUrl または liveChatId）が必要です。",
+      "実 YouTube の実行には設定の youtube（apiKey、または OAuth の clientId と clientSecret、および videoUrl または liveChatId）が必要です。",
     );
   }
   if (youtube.videoUrl === undefined && youtube.liveChatId === undefined) {
     throw new Error("youtube 設定に videoUrl または liveChatId を指定してください。");
   }
 
-  const tokenProvider =
-    options.tokenProvider ??
-    (await YouTubeTokenProvider.load({
-      dataDir: config.dataDir,
-      clientId: youtube.clientId,
-      clientSecret: youtube.clientSecret,
-      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-      ...(options.now === undefined ? {} : { now: options.now }),
-    }));
+  const auth =
+    options.auth ??
+    (options.tokenProvider !== undefined
+      ? new OAuthYouTubeAuthProvider(options.tokenProvider)
+      : await createYouTubeAuthProvider({
+          ...(youtube.apiKey === undefined ? {} : { apiKey: youtube.apiKey }),
+          ...(youtube.clientId === undefined ? {} : { clientId: youtube.clientId }),
+          ...(youtube.clientSecret === undefined ? {} : { clientSecret: youtube.clientSecret }),
+          dataDir: config.dataDir,
+          ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+          ...(options.now === undefined ? {} : { now: options.now }),
+        }));
 
   return new YouTubeCommentSource({
-    tokenProvider,
+    auth,
     ...(youtube.liveChatId === undefined ? {} : { liveChatId: youtube.liveChatId }),
     ...(youtube.videoUrl === undefined ? {} : { videoUrl: youtube.videoUrl }),
     ...(youtube.pollingIntervalMs === undefined

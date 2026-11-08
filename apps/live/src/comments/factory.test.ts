@@ -28,7 +28,13 @@ function config(overrides: {
   dataDir: string;
   mode?: "local" | "external";
   baseUrl?: string;
-  youtube?: { clientId: string; clientSecret: string; videoUrl?: string; liveChatId?: string };
+  youtube?: {
+    apiKey?: string;
+    clientId?: string;
+    clientSecret?: string;
+    videoUrl?: string;
+    liveChatId?: string;
+  };
 }): LiveRuntimeConfig {
   return liveRuntimeConfigSchema.parse({
     llm: {
@@ -157,7 +163,7 @@ describe("createCommentSource", () => {
     ).rejects.toThrow(/youtube/);
   });
 
-  it("requires a saved token for a real source", async () => {
+  it("requires a saved token for an OAuth-only source", async () => {
     const packageRoot = await tempDir();
     const dataDir = await tempDir();
     await expect(
@@ -170,6 +176,50 @@ describe("createCommentSource", () => {
         }),
       }),
     ).rejects.toBeInstanceOf(YouTubeTokenMissingError);
+  });
+
+  it("creates a real YouTube source with only an API key", async () => {
+    const packageRoot = await tempDir();
+    const dataDir = await tempDir();
+    const source = await createCommentSource({
+      show: testShow(),
+      packageRoot,
+      config: config({
+        dataDir,
+        youtube: { apiKey: "api-key-1", videoUrl: "https://youtu.be/abcdefghijk" },
+      }),
+    });
+    expect(source.getStatus()).toMatchObject({
+      kind: "youtube",
+      state: "idle",
+      authMode: "apiKey",
+      fallbackAvailable: false,
+    });
+  });
+
+  it("exposes the OAuth fallback without requiring a token up front", async () => {
+    const packageRoot = await tempDir();
+    const dataDir = await tempDir();
+    const source = await createCommentSource({
+      show: testShow(),
+      packageRoot,
+      config: config({
+        dataDir,
+        youtube: {
+          apiKey: "api-key-1",
+          clientId: "c",
+          clientSecret: "s",
+          videoUrl: "https://youtu.be/abcdefghijk",
+        },
+      }),
+    });
+    expect(source.getStatus()).toMatchObject({
+      kind: "youtube",
+      state: "idle",
+      authMode: "apiKey",
+      fallbackAvailable: true,
+      authExpiresAt: null,
+    });
   });
 
   it("creates a YouTube source without calling the API at construction", async () => {

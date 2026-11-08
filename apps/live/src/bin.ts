@@ -26,7 +26,7 @@ const USAGE = `使い方:
   --port <port>     待受ポート（既定 3010）
   --config <file>   ライブ設定 JSON
 
-  auth              YouTube の読み取り専用 OAuth をやり直し、トークンを保存する`;
+  auth              YouTube の読み取り専用 OAuth をやり直し、フォールバック用トークンを保存する（APIキーのみなら不要）`;
 
 export type LiveCliOptions =
   | { kind: "help" }
@@ -147,7 +147,7 @@ function validateYouTubeRun(
   const youtube = config.youtube;
   if (youtube === undefined) {
     throw new Error(
-      "実 YouTube の実行には --config の youtube（clientId・clientSecret・videoUrl または liveChatId）が必要です。",
+      "実 YouTube の実行には --config の youtube（apiKey、または OAuth の clientId と clientSecret、および videoUrl または liveChatId）が必要です。",
     );
   }
   if (youtube.videoUrl === undefined && youtube.liveChatId === undefined) {
@@ -159,6 +159,18 @@ async function runAuth(configPath: string | undefined): Promise<void> {
   const config = await loadConfig(configPath);
   const youtube = config.youtube;
   if (youtube === undefined) {
+    throw new Error(
+      "YouTube の設定がありません。--config の youtube に apiKey、または clientId と clientSecret を指定してください。",
+    );
+  }
+  const hasOAuth = youtube.clientId !== undefined && youtube.clientSecret !== undefined;
+  if (youtube.apiKey !== undefined && !hasOAuth) {
+    console.log(
+      "APIキー方式では認証不要です。OAuth フォールバックを使う場合は clientId と clientSecret も設定してください。",
+    );
+    return;
+  }
+  if (youtube.clientId === undefined || youtube.clientSecret === undefined) {
     throw new Error(
       "OAuth の設定がありません。--config の youtube に clientId と clientSecret を指定してください。",
     );
@@ -173,7 +185,8 @@ async function runAuth(configPath: string | undefined): Promise<void> {
   });
   const store = tokenStoreFromResponse(token);
   await saveTokenStore(config.dataDir, store);
-  console.log(`認証情報を保存しました: ${youtubeTokenStorePath(config.dataDir)}`);
+  const purpose = youtube.apiKey === undefined ? "" : "OAuth フォールバック用の";
+  console.log(`${purpose}認証情報を保存しました: ${youtubeTokenStorePath(config.dataDir)}`);
   console.log(`OAuth アプリが Testing の場合の認証有効期限: ${store.authExpiresAt}`);
 }
 

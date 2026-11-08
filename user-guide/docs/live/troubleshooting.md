@@ -58,29 +58,52 @@ OBS の URL とコンソールの URL も新しいポートに合わせてくだ
 
 ### `YouTube の認証情報がありません`
 
-`live auth` を実行してください。
+OAuth のみの設定で、トークンがまだ保存されていない場合に出ます。`live auth` を実行してください。
 
 ```sh
 npm run live -- auth --config /path/to/live-config.json
 ```
 
+`youtube.apiKey` を設定している場合は、このエラーは出ません。API キーだけで起動でき、`live auth` は不要です。
+
 ### `invalid_grant` / 認証が失効している
 
 OAuth 同意画面が Testing の External アプリの場合、リフレッシュトークンは通常 7 日で失効します。コンソールの認証期限を確認し、`live auth` で再認証してください。
 
-トークンは `<dataDir>/auth/youtube.json` に保存されます。ファイルを削除した場合も再認証が必要です。
+トークンは `<dataDir>/auth/youtube.json` に保存されます。ファイルを削除した場合も再認証が必要です。API キーのみの運用では、この失効は関係ありません。
+
+### API キーが拒否される（400 `keyInvalid` / 403）
+
+- Google Cloud で **YouTube Data API v3** が有効になっているか確認する
+- API キーの「API の制限」に **YouTube Data API v3** が含まれているか確認する
+- API キーの値をコピーし直す。余分な空白や改行が入っていないか確認する
+- キーを削除・再作成した場合は、設定ファイルの `youtube.apiKey` も更新する
+
+API キーが認証系のエラーで失敗し、`youtube.clientId` / `clientSecret` と有効な OAuth トークンがある場合、ライブアプリは自動で OAuth に切り替えて同じリクエストを 1 回だけ再試行します。コンソールの認証方式が `OAuth` になり、`OAuthフォールバックあり` と表示されます。
+
+`403 liveChatDisabled`、`403 liveChatEnded`、`404 liveChatNotFound` は認証では解決しないため、フォールバックしません。配信状態と `liveChatId` を確認してください。
+
+### OAuth フォールバックに切り替わらない
+
+- 設定に `youtube.clientId` と `youtube.clientSecret` の両方があるか
+- `live auth` でトークンを保存したか。`<dataDir>/auth/youtube.json` があるか
+- トークンが 7 日失効していないか。コンソールの認証方式と認証期限を確認する
+- エラーが `liveChatDisabled` など認証以外の理由でないか
+
+API キーだけで動いている間は OAuth トークンは使われません。フォールバックが必要なときだけ遅延して読み込まれます。
 
 ### `liveChatId` を解決できない
 
 - `youtube.videoUrl` が実際のライブの URL か確認する
 - 配信が開始され、ライブチャットが有効になっているか確認する
+- API キーを使う場合、YouTube Data API v3 が有効で、キーの制限に含まれているか確認する
 - 自動解決できない場合は、`youtube.liveChatId` を直接設定する
 - コンソールの「liveChatId」欄から手動設定することもできる
 
 ### コメントが表示されない
 
 - コンソールの「コメントソース」が `polling` になっているか
-- 最終エラー、クォータ、認証期限を確認する
+- 認証方式（APIキー / OAuth）とフォールバックの有無、最終エラー、クォータ、認証期限を確認する
 - コメントはコメントコーナーの開始時にまとめて選ばれる。台本パート中はまだ表示されないことがある
 - `freshnessMin` より古いコメントは AI 候補から外れる。ピンは残る
 - コメント一時停止になっていないか
@@ -89,7 +112,7 @@ OAuth 同意画面が Testing の External アプリの場合、リフレッシ�
 
 ### クォータが心配
 
-コンソールにリクエスト数と units の概算が表示されます。v1 は `liveChatMessages.list` のポーリングを使い、`streamList` は使いません。ポーリング間隔は API の `pollingIntervalMillis` を既定とし、設定した `pollingIntervalMs` がそれより長い場合は設定値を使います。30 分の配信で既定のクォータに収まるか、コンソールの概算を確認してください。
+コンソールにリクエスト数と units の概算が表示されます。v1 は `liveChatMessages.list` のポーリングを使い、`streamList` は使いません。ポーリング間隔は API の `pollingIntervalMillis` を既定とし、設定した `pollingIntervalMs` がそれより長い場合は設定値を使います。API キーから OAuth への再試行も 1 リクエストとして数えます。30 分の配信で既定のクォータに収まるか、コンソールの概算を確認してください。
 
 ## LLM
 
@@ -180,9 +203,9 @@ v1 の安全モードはラッチ（解除不可）です。生成レスを止�
 
 - 実行ディレクトリ `<dataDir>/runs/<runId>/` にログと生成音声を保存します
 - `comments.jsonl` には生のコメント本文・投稿者名を保存せず、投稿 ID、伏せ字、判定理由、スコアを保存します
-- OAuth トークンは `<dataDir>/auth/youtube.json` に 0600 で保存します
+- YouTube の API キーはライブ設定ファイルに、OAuth トークンは `<dataDir>/auth/youtube.json` に 0600 で保存します
 - 実行ディレクトリを削除すると、その実行のログと生成音声を削除できます
-- OAuth を取り消す場合は、Google アカウントの許可を取り消し、`youtube.json` を削除してください
+- OAuth を取り消す場合は、Google アカウントの許可を取り消し、`youtube.json` を削除してください。API キーを失効させる場合は、Google Cloud の認証情報からキーを削除してください
 
 v1 には `live purge` コマンドはありません。不要な実行ディレクトリは利用者が削除してください。
 
@@ -193,6 +216,7 @@ v1 には `live purge` コマンドはありません。不要な実行ディレ
 ## 既知の制約
 
 - YouTube の配信作成・開始・終了、チャット投稿、モデレーションは行いません
+- YouTube の読み取りは API キーまたは OAuth の `youtube.readonly` だけで、書き込みは行いません
 - 実 YouTube はローカル LLM のみです
 - v1 のコメント取得は `liveChatMessages.list` のポーリングです。`streamList` は使いません
 - 台本の途中への即時コメント割り込みは行いません

@@ -32,8 +32,24 @@ async function makeTemp(prefix: string): Promise<string> {
   return dir;
 }
 
+async function removeTempRoot(dir: string): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rm(dir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      // RunStore logs are appended asynchronously; a write can land while the
+      // temp tree is being removed. Retry briefly before failing the teardown.
+      if ((error as NodeJS.ErrnoException).code !== "ENOTEMPTY" || attempt >= 9) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+}
+
 afterEach(async () => {
-  await Promise.all(tempRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(tempRoots.splice(0).map(removeTempRoot));
 });
 
 function candidate(commentId: string, score: number): CommentCandidate {

@@ -32,6 +32,8 @@ describe("FixtureCommentSource", () => {
       kind: "fixture",
       state: "idle",
       quota: null,
+      authMode: null,
+      fallbackAvailable: false,
       authExpiresAt: null,
       needsReauth: false,
     });

@@ -4,20 +4,17 @@ import type {
   CommentSourceStatus,
   LiveCommentKind,
 } from "@kakeai/contracts";
-import type {
-  YouTubeAccessTokenProvider,
-  YouTubeAuthState,
-} from "../auth/youtube-token.ts";
+import type { YouTubeAuthProvider, YouTubeAuthState } from "../auth/youtube-auth.ts";
 import {
   CommentSourceBase,
   realCommentScheduler,
   type CommentSourceScheduler,
 } from "./source.ts";
+import { YouTubeHttpClient } from "./youtube-http.ts";
 
 const DEFAULT_API_BASE_URL = "https://www.googleapis.com/youtube/v3";
 const DEFAULT_POLLING_INTERVAL_MS = 5_000;
 const MIN_POLLING_INTERVAL_MS = 1_000;
-const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const INITIAL_BACKOFF_MS = 5_000;
 const MAX_BACKOFF_MS = 60_000;
 const MESSAGES_LIST_UNITS = 5;
@@ -25,7 +22,7 @@ const VIDEOS_LIST_UNITS = 1;
 const MAX_SEEN_COMMENT_IDS = 5_000;
 
 export interface YouTubeCommentSourceOptions {
-  tokenProvider: YouTubeAccessTokenProvider;
+  auth: YouTubeAuthProvider;
   /** Manual chat ID. When set, `videos.list` resolution is skipped. */
   liveChatId?: string;
   videoUrl?: string;
@@ -138,12 +135,6 @@ function parseCommentItem(item: unknown, receivedAt: string): CommentEvent | nul
   };
 }
 
-interface HttpFailure {
-  message: string;
-  terminal: boolean;
-  authFailure: boolean;
-}
-
 /**
  * Read-only YouTube comment source. It calls `videos.list` once to resolve the
  * live chat and then polls `liveChatMessages.list`; no write endpoint or
@@ -151,13 +142,12 @@ interface HttpFailure {
  * only and never logged by this module.
  */
 export class YouTubeCommentSource extends CommentSourceBase {
-  private readonly tokenProvider: YouTubeAccessTokenProvider;
-  private readonly fetchImpl: typeof fetch;
+  private readonly auth: YouTubeAuthProvider;
+  private readonly http: YouTubeHttpClient;
   private readonly scheduler: CommentSourceScheduler;
   private readonly now: () => Date;
   private readonly apiBaseUrl: string;
   private readonly configuredPollingIntervalMs: number;
-  private readonly requestTimeoutMs: number;
   private readonly maxResults: number;
   private readonly videoUrl: string | undefined;
   private readonly quotaStartedAt: string;
@@ -170,7 +160,6 @@ export class YouTubeCommentSource extends CommentSourceBase {
   private effectivePollingIntervalMs: number;
   private lastPolledAt: string | null = null;
   private lastError: string | null = null;
-  private needsReauth = false;
   private backoffAttempt = 0;
   private requestCount = 0;
   private unitCount = 0;
@@ -182,8 +171,14 @@ export class YouTubeCommentSource extends CommentSourceBase {
 
   constructor(options: YouTubeCommentSourceOptions) {
     super();
-    this.tokenProvider = options.tokenProvider;
-    this.fetchImpl = options.fetch ?? fetch;
+    this.auth = options.auth;
+    this.http = new YouTubeHttpClient({
+      auth: options.auth,
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      ...(options.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: options.requestTimeoutMs }),
+    });
     this.scheduler = options.scheduler ?? realCommentScheduler;
     this.now = options.now ?? (() => new Date());
     this.apiBaseUrl = (options.apiBaseUrl ?? DEFAULT_API_BASE_URL).replace(/\/+$/u, "");
@@ -192,7 +187,6 @@ export class YouTubeCommentSource extends CommentSourceBase {
       this.configuredPollingIntervalMs > 0
         ? Math.max(this.configuredPollingIntervalMs, MIN_POLLING_INTERVAL_MS)
         : DEFAULT_POLLING_INTERVAL_MS;
-    this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.maxResults = Math.min(Math.max(options.maxResults ?? 200, 200), 2000);
     this.videoUrl = options.videoUrl;
     const trimmedChatId = options.liveChatId?.trim() ?? "";
@@ -256,7 +250,6 @@ export class YouTubeCommentSource extends CommentSourceBase {
     this.seenCommentIds.clear();
     this.pageToken = null;
     this.lastError = null;
-    this.needsReauth = false;
     this.backoffAttempt = 0;
     this.emitStatus();
     if (this.running) {
@@ -281,16 +274,18 @@ export class YouTubeCommentSource extends CommentSourceBase {
         startedAt: this.quotaStartedAt,
         windowStartedAt: this.quotaStartedAt,
       },
-      authExpiresAt: auth.authExpiresAt,
-      needsReauth: auth.needsReauth || this.needsReauth,
+      authMode: auth?.mode ?? null,
+      fallbackAvailable: auth?.fallbackAvailable ?? false,
+      authExpiresAt: auth?.authExpiresAt ?? null,
+      needsReauth: auth?.needsReauth ?? false,
     };
   }
 
-  private readAuthState(): YouTubeAuthState {
+  private readAuthState(): YouTubeAuthState | null {
     try {
-      return this.tokenProvider.getAuthState();
+      return this.auth.getAuthState();
     } catch {
-      return { authExpiresAt: null, needsReauth: false };
+      return null;
     }
   }
 
@@ -345,19 +340,20 @@ export class YouTubeCommentSource extends CommentSourceBase {
     if (this.videoId === null) {
       throw new Error("YouTube の動画 URL を解釈できませんでした。");
     }
-    const accessToken = await this.tokenProvider.getAccessToken();
-    this.countRequest(VIDEOS_LIST_UNITS);
     const url = new URL(`${this.apiBaseUrl}/videos`);
     url.searchParams.set("part", "liveStreamingDetails");
     url.searchParams.set("id", this.videoId);
-    const response = await this.fetchImpl(url.toString(), {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}` },
-      redirect: "error",
-      signal: AbortSignal.timeout(this.requestTimeoutMs),
-    });
+    const response = await this.http.get(url, () => this.countRequest(VIDEOS_LIST_UNITS));
     if (!response.ok) {
-      throw new Error(`YouTube の動画情報を取得できませんでした (HTTP ${response.status})。`);
+      const failure = await this.http.readFailure(response, "動画情報");
+      if (failure.terminal) {
+        // A disabled/ended/missing chat is not fixed by retrying the same ID.
+        this.running = false;
+        this.clearTimer();
+        this.lastError = failure.message;
+        this.setState("stopped");
+      }
+      throw new Error(failure.message);
     }
     let payload: unknown;
     try {
@@ -426,21 +422,6 @@ export class YouTubeCommentSource extends CommentSourceBase {
       return;
     }
 
-    let accessToken: string;
-    try {
-      accessToken = await this.tokenProvider.getAccessToken();
-    } catch (error) {
-      if (this.readAuthState().needsReauth) {
-        this.needsReauth = true;
-      }
-      this.handleFailure(error);
-      return;
-    }
-    if (!this.running || generation !== this.chatGeneration) {
-      return;
-    }
-
-    this.countRequest(MESSAGES_LIST_UNITS);
     const url = new URL(`${this.apiBaseUrl}/liveChatMessages`);
     url.searchParams.set("liveChatId", chatId);
     url.searchParams.set("part", "snippet,authorDetails");
@@ -451,12 +432,7 @@ export class YouTubeCommentSource extends CommentSourceBase {
 
     let response: Response;
     try {
-      response = await this.fetchImpl(url.toString(), {
-        method: "GET",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        redirect: "error",
-        signal: AbortSignal.timeout(this.requestTimeoutMs),
-      });
+      response = await this.http.get(url, () => this.countRequest(MESSAGES_LIST_UNITS));
     } catch (error) {
       this.handleFailure(error);
       return;
@@ -466,16 +442,13 @@ export class YouTubeCommentSource extends CommentSourceBase {
     }
 
     if (!response.ok) {
-      const failure = await this.readHttpFailure(response);
+      const failure = await this.http.readFailure(response);
       if (!this.running || generation !== this.chatGeneration) {
         return;
       }
       if (failure.terminal) {
         await this.stopForEndedChat(chatId);
         return;
-      }
-      if (failure.authFailure) {
-        this.tokenProvider.invalidateAccessToken?.();
       }
       this.handleFailure(new Error(failure.message));
       return;
@@ -521,35 +494,8 @@ export class YouTubeCommentSource extends CommentSourceBase {
     this.lastPolledAt = receivedAt;
     this.lastError = null;
     this.backoffAttempt = 0;
-    this.needsReauth = false;
     this.setState("polling");
     this.schedule(this.effectivePollingIntervalMs);
-  }
-
-  private async readHttpFailure(response: Response): Promise<HttpFailure> {
-    let reason: string | null = null;
-    try {
-      const payload = (await response.json()) as {
-        error?: { errors?: Array<{ reason?: unknown }> };
-      };
-      const value = payload.error?.errors?.[0]?.reason;
-      reason = typeof value === "string" ? value : null;
-    } catch {
-      // The status code is enough for the console.
-    }
-    const terminal =
-      reason === "liveChatEnded" || reason === "liveChatNotFound" || reason === "liveChatDisabled";
-    const authFailure =
-      response.status === 401 ||
-      (response.status === 403 &&
-        (reason === "authError" ||
-          reason === "forbidden" ||
-          reason === "insufficientPermissions"));
-    return {
-      message: `YouTube のコメント取得に失敗しました (HTTP ${response.status}${reason === null ? "" : `, ${reason}`})。`,
-      terminal,
-      authFailure,
-    };
   }
 
   private async stopForEndedChat(endedChatId: string): Promise<void> {
@@ -578,10 +524,6 @@ export class YouTubeCommentSource extends CommentSourceBase {
   private handleFailure(error: unknown): void {
     if (!this.running) {
       return;
-    }
-    const auth = this.readAuthState();
-    if (auth.needsReauth) {
-      this.needsReauth = true;
     }
     this.lastError = error instanceof Error ? error.message : String(error);
     this.backoffAttempt += 1;

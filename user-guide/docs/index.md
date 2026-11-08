@@ -25,7 +25,7 @@ Kakeai のインストールから動画の MP4 出力までを案内します�
 
 - [ライブ配信の準備](./live/index.md)
 - [ライブパッケージを書き出す](./live/export.md)
-- [ライブ設定と YouTube の OAuth](./live/setup.md)
+- [ライブ設定と YouTube の接続](./live/setup.md)
 - [テストモードでリハーサルする](./live/test-mode.md)
 - [OBS にステージを設定する](./live/obs.md)
 - [当日のライブを操作する](./live/operations.md)

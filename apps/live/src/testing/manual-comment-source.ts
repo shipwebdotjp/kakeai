@@ -45,6 +45,8 @@ export class ManualCommentSource extends CommentSourceBase {
       lastPolledAt: this.lastPolledAt,
       lastError: null,
       quota: null,
+      authMode: null,
+      fallbackAvailable: false,
       authExpiresAt: null,
       needsReauth: false,
     };

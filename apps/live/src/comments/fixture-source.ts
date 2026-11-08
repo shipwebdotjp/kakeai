@@ -133,6 +133,8 @@ export class FixtureCommentSource extends CommentSourceBase {
       lastPolledAt: this.lastEmittedAt,
       lastError: null,
       quota: null,
+      authMode: null,
+      fallbackAvailable: false,
       authExpiresAt: null,
       needsReauth: false,
     };

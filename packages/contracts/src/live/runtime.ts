@@ -56,22 +56,55 @@ export const liveTtsAdapterConfigSchema = z.strictObject({
 export type LiveTtsAdapterConfig = z.infer<typeof liveTtsAdapterConfigSchema>;
 
 /**
- * OAuth client for the read-only YouTube comment source. `clientSecret` is
- * required for the installed-app loopback flow, and `live auth` needs only the
- * client pair. A run needs `videoUrl` or a manual `liveChatId`; that is checked
- * by the factory and CLI because the same config is used for `live auth`.
+ * Read-only authentication for the YouTube comment source. An API key is the
+ * first choice because `videos.list` and `liveChatMessages.list` can read
+ * public data with it. The OAuth client pair is optional; when both values are
+ * present it is used as a fallback for permission errors. Without an API key,
+ * the OAuth client pair is required and `live auth` saves a token. A run needs
+ * `videoUrl` or a manual `liveChatId`; that is checked by the factory and CLI
+ * because the same config is used for `live auth`.
  */
-export const liveYouTubeConfigSchema = z.strictObject({
-  clientId: z.string().min(1).max(1000),
-  clientSecret: z.string().min(1).max(1000),
-  videoUrl: z.string().trim().min(1).max(2000).optional(),
-  liveChatId: z.string().trim().min(1).max(500).optional(),
-  /**
-   * Lower bound for the polling interval. The API's `pollingIntervalMillis` is
-   * used when it is longer; this value wins when it is longer than the API's.
-   */
-  pollingIntervalMs: positiveInt.optional(),
-});
+export const liveYouTubeConfigSchema = z
+  .strictObject({
+    apiKey: z.string().trim().min(1).max(1000).optional(),
+    clientId: z.string().trim().min(1).max(1000).optional(),
+    clientSecret: z.string().trim().min(1).max(1000).optional(),
+    videoUrl: z.string().trim().min(1).max(2000).optional(),
+    liveChatId: z.string().trim().min(1).max(500).optional(),
+    /**
+     * Lower bound for the polling interval. The API's `pollingIntervalMillis` is
+     * used when it is longer; this value wins when it is longer than the API's.
+     */
+    pollingIntervalMs: positiveInt.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.apiKey === undefined) {
+      if (value.clientId === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["clientId"],
+          message: "apiKey が無い場合は clientId が必要です",
+        });
+      }
+      if (value.clientSecret === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["clientSecret"],
+          message: "apiKey が無い場合は clientSecret が必要です",
+        });
+      }
+      return;
+    }
+    const hasClientId = value.clientId !== undefined;
+    const hasClientSecret = value.clientSecret !== undefined;
+    if (hasClientId !== hasClientSecret) {
+      ctx.addIssue({
+        code: "custom",
+        path: [hasClientId ? "clientSecret" : "clientId"],
+        message: "OAuth フォールバックには clientId と clientSecret の両方が必要です",
+      });
+    }
+  });
 export type LiveYouTubeConfig = z.infer<typeof liveYouTubeConfigSchema>;
 
 export const DEFAULT_LIVE_COMMENTS_CONFIG = {

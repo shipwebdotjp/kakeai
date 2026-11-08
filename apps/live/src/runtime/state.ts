@@ -177,6 +177,8 @@ export function idleCommentSource(kind: CommentSourceStatus["kind"]): CommentSou
     lastPolledAt: null,
     lastError: null,
     quota: null,
+    authMode: null,
+    fallbackAvailable: false,
     authExpiresAt: null,
     needsReauth: false,
   };

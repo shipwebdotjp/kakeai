@@ -76,6 +76,6 @@ API の接続先は環境変数 `KAKEAI_API_URL` で変更できます。
 
 ## 次のステップ
 
-- [ライブ設定と YouTube の OAuth](./setup.md)
+- [ライブ設定と YouTube の接続](./setup.md)
 - [テストモードでリハーサルする](./test-mode.md)
 - [OBS にステージを設定する](./obs.md)

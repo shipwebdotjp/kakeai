@@ -68,9 +68,13 @@ export const commentQuotaEstimateSchema = z.strictObject({
 });
 export type CommentQuotaEstimate = z.infer<typeof commentQuotaEstimateSchema>;
 
+export const commentSourceAuthModeSchema = z.enum(["apiKey", "oauth"]);
+export type CommentSourceAuthMode = z.infer<typeof commentSourceAuthModeSchema>;
+
 /**
  * Status shared by the server and the operator console. The console renders
- * this directly; it contains no comment text or author names.
+ * this directly; it contains no comment text, author names, API keys, or
+ * access tokens.
  */
 export const commentSourceStatusSchema = z.strictObject({
   kind: commentSourceKindSchema,
@@ -80,6 +84,10 @@ export const commentSourceStatusSchema = z.strictObject({
   lastPolledAt: timestampSchema.nullable(),
   lastError: z.string().nullable(),
   quota: commentQuotaEstimateSchema.nullable(),
+  /** Current credential source; null for the fixture source. */
+  authMode: commentSourceAuthModeSchema.nullable(),
+  /** True when an OAuth fallback can be used after an API-key failure. */
+  fallbackAvailable: z.boolean(),
   authExpiresAt: timestampSchema.nullable(),
   needsReauth: z.boolean(),
 });

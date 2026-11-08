@@ -11,6 +11,22 @@ interface CommentSourcePanelProps {
   onBlockTopic: (topic: string) => void;
 }
 
+const AUTH_MODE_LABELS = { apiKey: "APIキー", oauth: "OAuth" } as const;
+
+function authModeLabel(mode: ConsoleSnapshot["commentSource"]["authMode"]): string {
+  return mode === null ? "—" : AUTH_MODE_LABELS[mode];
+}
+
+function authExpiryLabel(
+  mode: ConsoleSnapshot["commentSource"]["authMode"],
+  expiresAt: string | null,
+): string {
+  if (mode === "apiKey") {
+    return "不要";
+  }
+  return expiresAt === null ? "—" : formatTimestamp(expiresAt);
+}
+
 export function CommentSourcePanel({
   snapshot,
   onSetLiveChat,
@@ -33,6 +49,7 @@ export function CommentSourcePanel({
       [...new Set(snapshot.comments.map((entry) => entry.comment.authorName))].slice(0, 200),
     [snapshot.comments],
   );
+  const currentAuthModeLabel = authModeLabel(status.authMode);
 
   return (
     <section className="panel">
@@ -42,6 +59,10 @@ export function CommentSourcePanel({
         <span>{status.kind}</span>
         <span className="source-label">状態</span>
         <span>{status.state}</span>
+        <span className="source-label">認証方式</span>
+        <span>{currentAuthModeLabel}</span>
+        <span className="source-label">フォールバック</span>
+        <span>{status.fallbackAvailable ? "OAuthフォールバックあり" : "—"}</span>
         <span className="source-label">liveChatId</span>
         <span className="mono">{status.liveChatId ?? "—"}</span>
         <span className="source-label">ポーリング</span>
@@ -58,11 +79,11 @@ export function CommentSourcePanel({
         </span>
         <span className="source-label">認証期限</span>
         <span className="mono">
-          {status.authExpiresAt === null ? "—" : formatTimestamp(status.authExpiresAt)}
+          {authExpiryLabel(status.authMode, status.authExpiresAt)}
         </span>
       </div>
 
-      {status.needsReauth ? (
+      {status.needsReauth && status.authMode === "oauth" ? (
         <p className="source-warning">
           認証が失効しています。`npm run live -- auth --config &lt;file&gt;` で再認証してください。
         </p>

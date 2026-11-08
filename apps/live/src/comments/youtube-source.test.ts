@@ -1,5 +1,10 @@
 import type { CommentEvent } from "@kakeai/contracts";
 import { describe, expect, it } from "vitest";
+import {
+  ApiKeyYouTubeAuthProvider,
+  OAuthYouTubeAuthProvider,
+  type YouTubeAuthProvider,
+} from "../auth/youtube-auth.ts";
 import type { YouTubeAccessTokenProvider } from "../auth/youtube-token.ts";
 import { FakeCommentScheduler, flushMicrotasks } from "../testing/fake-scheduler.ts";
 import {
@@ -11,6 +16,7 @@ import {
 const BASE_TIME = Date.parse("2026-11-07T12:00:00.000Z");
 const TOKEN = "access-token";
 const AUTH_EXPIRES_AT = "2026-11-14T12:00:00.000Z";
+const API_KEY = "api-key-1";
 
 interface RecordedCall {
   url: URL;
@@ -20,11 +26,43 @@ interface RecordedCall {
 
 type Route = (url: URL) => Response | Promise<Response>;
 
-function tokenProvider(overrides: Partial<YouTubeAccessTokenProvider> = {}): YouTubeAccessTokenProvider {
+function fakeTokenProvider(
+  overrides: Partial<YouTubeAccessTokenProvider> = {},
+): YouTubeAccessTokenProvider {
   return {
     getAccessToken: async () => TOKEN,
     getAuthState: () => ({ authExpiresAt: AUTH_EXPIRES_AT, needsReauth: false }),
     ...overrides,
+  };
+}
+
+function oauthAuth(overrides: Partial<YouTubeAuthProvider> = {}): YouTubeAuthProvider {
+  return {
+    getAuthState: () => ({
+      mode: "oauth",
+      authExpiresAt: AUTH_EXPIRES_AT,
+      needsReauth: false,
+      fallbackAvailable: false,
+    }),
+    authorize: async () => ({ headers: { Authorization: `Bearer ${TOKEN}` } }),
+    handleAuthFailure: async () => false,
+    ...overrides,
+  };
+}
+
+function apiKeyAuth(): YouTubeAuthProvider {
+  return {
+    getAuthState: () => ({
+      mode: "apiKey",
+      authExpiresAt: null,
+      needsReauth: false,
+      fallbackAvailable: false,
+    }),
+    authorize: async (url) => {
+      url.searchParams.set("key", API_KEY);
+      return { headers: {} };
+    },
+    handleAuthFailure: async () => false,
   };
 }
 
@@ -54,7 +92,7 @@ function setup(options: {
   const hasChatSelector =
     options.sourceOptions?.liveChatId !== undefined || options.sourceOptions?.videoUrl !== undefined;
   const source = new YouTubeCommentSource({
-    tokenProvider: tokenProvider(),
+    auth: oauthAuth(),
     apiBaseUrl: "https://youtube.test/youtube/v3",
     scheduler,
     now: () => new Date(BASE_TIME + scheduler.currentTimeMs),
@@ -141,12 +179,52 @@ describe("YouTubeCommentSource", () => {
       state: "polling",
       liveChatId: "chat-1",
       pollingIntervalMs: 7_000,
+      authMode: "oauth",
+      fallbackAvailable: false,
       authExpiresAt: AUTH_EXPIRES_AT,
       needsReauth: false,
     });
     expect(status.quota).toMatchObject({ requests: 2, units: 6 });
     expect(status.lastPolledAt).toBe(new Date(BASE_TIME).toISOString());
     expect(scheduler.pendingDelaysMs).toEqual([7_000]);
+  });
+
+  it("reads both endpoints with an API key and no Authorization header", async () => {
+    const { source, calls, received } = setup({
+      route: (url) =>
+        url.pathname.endsWith("/videos")
+          ? jsonResponse({ items: [{ liveStreamingDetails: { activeLiveChatId: "chat-1" } }] })
+          : jsonResponse({
+              items: [
+                {
+                  id: "yt-1",
+                  snippet: { type: "textMessageEvent", displayMessage: "こんにちは" },
+                  authorDetails: { displayName: "みかん" },
+                },
+              ],
+              pollingIntervalMillis: 5_000,
+            }),
+      sourceOptions: {
+        auth: apiKeyAuth(),
+        videoUrl: "https://youtu.be/abcdefghijk",
+      },
+    });
+
+    await source.start();
+
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call.url.searchParams.get("key")).toBe(API_KEY);
+      expect(call.headers.authorization).toBeUndefined();
+    }
+    expect(received.map((comment) => comment.id)).toEqual(["yt-1"]);
+    expect(source.getStatus()).toMatchObject({
+      state: "polling",
+      authMode: "apiKey",
+      fallbackAvailable: false,
+      authExpiresAt: null,
+      needsReauth: false,
+    });
   });
 
   it("uses nextPageToken and honors a longer configured interval", async () => {
@@ -293,34 +371,160 @@ describe("YouTubeCommentSource", () => {
     expect(received.map((comment) => comment.id)).toEqual(["yt-1", "yt-2"]);
   });
 
-  it("invalidates the cached access token on 401", async () => {
-    let invalidated = 0;
-    const scheduler = new FakeCommentScheduler();
-    const source = new YouTubeCommentSource({
-      tokenProvider: {
-        ...tokenProvider(),
-        invalidateAccessToken: () => {
-          invalidated += 1;
-        },
-      },
-      liveChatId: "chat-1",
-      scheduler,
-      fetch: async () => jsonResponse({ error: { errors: [{ reason: "authError" }] } }, 401),
-      now: () => new Date(BASE_TIME),
+  it("falls back from an API-key 403 auth error to OAuth and retries once", async () => {
+    let messagesCalls = 0;
+    const auth = new ApiKeyYouTubeAuthProvider({
+      apiKey: API_KEY,
+      fallback: { clientId: "client", clientSecret: "secret", dataDir: "/tmp/unused" },
+      loadFallback: async () => new OAuthYouTubeAuthProvider(fakeTokenProvider()),
     });
+    const { source, calls, scheduler } = setup({
+      route: (url) => {
+        if (url.pathname.endsWith("/liveChatMessages")) {
+          messagesCalls += 1;
+          if (messagesCalls === 1) {
+            return jsonResponse({ error: { errors: [{ reason: "authError" }] } }, 403);
+          }
+          return jsonResponse({ items: [], pollingIntervalMillis: 5_000 });
+        }
+        return jsonResponse({ items: [] });
+      },
+      sourceOptions: { auth, liveChatId: "chat-1" },
+    });
+
     await source.start();
-    expect(invalidated).toBe(1);
-    expect(source.getStatus().state).toBe("error");
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.url.searchParams.get("key")).toBe(API_KEY);
+    expect(calls[0]!.headers.authorization).toBeUndefined();
+    expect(calls[1]!.url.searchParams.get("key")).toBeNull();
+    expect(calls[1]!.headers.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(source.getStatus()).toMatchObject({
+      state: "polling",
+      authMode: "oauth",
+      fallbackAvailable: true,
+      needsReauth: false,
+    });
+    expect(source.getStatus().quota).toMatchObject({ requests: 2, units: 10 });
+    expect(scheduler.pendingDelaysMs).toEqual([5_000]);
   });
 
-  it("marks needsReauth when the token provider reports it", async () => {
+  it("does not retry more than once when both credentials fail", async () => {
+    const auth = new ApiKeyYouTubeAuthProvider({
+      apiKey: API_KEY,
+      fallback: { clientId: "client", clientSecret: "secret", dataDir: "/tmp/unused" },
+      loadFallback: async () => new OAuthYouTubeAuthProvider(fakeTokenProvider()),
+    });
+    const { source, calls } = setup({
+      route: () => jsonResponse({ error: { errors: [{ reason: "authError" }] } }, 401),
+      sourceOptions: { auth, liveChatId: "chat-1" },
+    });
+
+    await source.start();
+
+    expect(calls).toHaveLength(2);
+    expect(source.getStatus().state).toBe("error");
+    expect(source.getStatus().authMode).toBe("oauth");
+  });
+
+  it("treats liveChatDisabled as terminal without OAuth fallback", async () => {
+    let fallbackCalls = 0;
+    const auth = oauthAuth({
+      handleAuthFailure: async () => {
+        fallbackCalls += 1;
+        return true;
+      },
+    });
+    const { source, calls } = setup({
+      route: () =>
+        jsonResponse({ error: { errors: [{ reason: "liveChatDisabled" }] } }, 403),
+      sourceOptions: { auth, liveChatId: "chat-1" },
+    });
+
+    await source.start();
+
+    expect(calls).toHaveLength(1);
+    expect(fallbackCalls).toBe(0);
+    expect(source.getStatus().state).toBe("stopped");
+  });
+
+  it("treats a 400 keyInvalid as an auth failure", async () => {
+    let fallbackCalls = 0;
+    const auth = apiKeyAuth();
+    const { source, calls } = setup({
+      route: () => jsonResponse({ error: { errors: [{ reason: "keyInvalid" }] } }, 400),
+      sourceOptions: {
+        auth: {
+          ...auth,
+          handleAuthFailure: async () => {
+            fallbackCalls += 1;
+            return false;
+          },
+        },
+        liveChatId: "chat-1",
+      },
+    });
+
+    await source.start();
+
+    expect(calls).toHaveLength(1);
+    expect(fallbackCalls).toBe(1);
+    expect(source.getStatus().state).toBe("error");
+    expect(source.getStatus().lastError).toContain("keyInvalid");
+  });
+
+  it("retries an OAuth request once after a 401", async () => {
+    let authFailures = 0;
+    let messagesCalls = 0;
+    const auth = oauthAuth({
+      handleAuthFailure: async () => {
+        authFailures += 1;
+        return true;
+      },
+    });
+    const { source, calls } = setup({
+      route: () => {
+        messagesCalls += 1;
+        if (messagesCalls === 1) {
+          return jsonResponse({ error: { errors: [{ reason: "authError" }] } }, 401);
+        }
+        return jsonResponse({ items: [], pollingIntervalMillis: 5_000 });
+      },
+      sourceOptions: { auth, liveChatId: "chat-1" },
+    });
+
+    await source.start();
+
+    expect(authFailures).toBe(1);
+    expect(calls).toHaveLength(2);
+    expect(calls.every((call) => call.headers.authorization === `Bearer ${TOKEN}`)).toBe(true);
+    expect(source.getStatus().state).toBe("polling");
+  });
+
+  it("does not fall back when no OAuth credentials are configured", async () => {
+    const { source, calls } = setup({
+      route: () => jsonResponse({ error: { errors: [{ reason: "authError" }] } }, 401),
+      sourceOptions: { auth: apiKeyAuth(), liveChatId: "chat-1" },
+    });
+
+    await source.start();
+
+    expect(calls).toHaveLength(1);
+    expect(source.getStatus().state).toBe("error");
+    expect(source.getStatus().authMode).toBe("apiKey");
+    expect(source.getStatus().fallbackAvailable).toBe(false);
+  });
+
+  it("marks needsReauth when the auth provider reports it", async () => {
     const scheduler = new FakeCommentScheduler();
     const source = new YouTubeCommentSource({
-      tokenProvider: tokenProvider({
-        getAccessToken: async () => {
-          throw new Error("invalid_grant");
-        },
-        getAuthState: () => ({ authExpiresAt: AUTH_EXPIRES_AT, needsReauth: true }),
+      auth: oauthAuth({
+        getAuthState: () => ({
+          mode: "oauth",
+          authExpiresAt: AUTH_EXPIRES_AT,
+          needsReauth: true,
+          fallbackAvailable: false,
+        }),
       }),
       liveChatId: "chat-1",
       scheduler,
@@ -329,7 +533,7 @@ describe("YouTubeCommentSource", () => {
     });
     await source.start();
     expect(source.getStatus().needsReauth).toBe(true);
-    expect(source.getStatus().state).toBe("error");
+    expect(source.getStatus().state).toBe("polling");
   });
 
   it("does not emit comments or revive polling after stop during a request", async () => {
@@ -340,7 +544,7 @@ describe("YouTubeCommentSource", () => {
     });
     const received: CommentEvent[] = [];
     const source = new YouTubeCommentSource({
-      tokenProvider: tokenProvider(),
+      auth: oauthAuth(),
       liveChatId: "chat-1",
       scheduler,
       fetch: async () => pending,

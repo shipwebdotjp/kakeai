@@ -2,6 +2,7 @@
 
 > amended by [ADR-0123](./0123-live-youtube-local-llm-only.md): 実YouTubeのコメント処理はローカルLLMに限定し、外部LLMへ送らない。
 > amended by [ADR-0128](./0128-live-comment-polling-primary.md): v1のコメント取得はlistポーリングを正規経路とし、streamListはスパイク後に判断する。
+> amended by [ADR-0129](./0129-youtube-api-key-first-auth.md): 認証はAPIキーを第一候補とし、OAuthをフォールバックとして残す。
 
 Status: accepted
 

@@ -393,6 +393,8 @@ describe("live contracts", () => {
           lastPolledAt: null,
           lastError: null,
           quota: null,
+          authMode: "apiKey",
+          fallbackAvailable: false,
           authExpiresAt: null,
           needsReauth: false,
         },
@@ -523,6 +525,8 @@ describe("live contracts", () => {
       lastPolledAt: NOW,
       lastError: null,
       quota: { requests: 12, units: 60, startedAt: NOW, windowStartedAt: NOW },
+      authMode: "oauth" as const,
+      fallbackAvailable: true,
       authExpiresAt: NOW,
       needsReauth: false,
     };
@@ -530,6 +534,16 @@ describe("live contracts", () => {
     expect(
       commentSourceStatusSchema.safeParse({ ...status, state: "unknown" }).success,
     ).toBe(false);
+    expect(
+      commentSourceStatusSchema.safeParse({ ...status, authMode: "unknown" }).success,
+    ).toBe(false);
+    expect(
+      commentSourceStatusSchema.safeParse({
+        ...status,
+        authMode: null,
+        fallbackAvailable: false,
+      }).success,
+    ).toBe(true);
     expect(
       commentSourceStatusSchema.safeParse({ ...status, quota: { requests: -1, units: 0, startedAt: NOW } })
         .success,
@@ -629,5 +643,39 @@ describe("live contracts", () => {
     expect(explicit.comments.maxLength).toBe(120);
     expect(explicit.comments.maxPerAuthorPerMinute).toBe(3);
     expect(explicit.youtube?.pollingIntervalMs).toBe(9_000);
+
+    const apiKeyOnly = liveRuntimeConfigSchema.parse({
+      ...base,
+      youtube: { apiKey: "api-key-1", videoUrl: "https://youtu.be/abcdefghijk" },
+    });
+    expect(apiKeyOnly.youtube).toMatchObject({ apiKey: "api-key-1" });
+    expect(apiKeyOnly.youtube?.clientId).toBeUndefined();
+    expect(
+      liveRuntimeConfigSchema.safeParse({
+        ...base,
+        youtube: { videoUrl: "https://youtu.be/abcdefghijk" },
+      }).success,
+    ).toBe(false);
+    expect(
+      liveRuntimeConfigSchema.safeParse({
+        ...base,
+        youtube: {
+          apiKey: "api-key-1",
+          clientId: "client-1",
+          videoUrl: "https://youtu.be/abcdefghijk",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      liveRuntimeConfigSchema.safeParse({
+        ...base,
+        youtube: {
+          apiKey: "api-key-1",
+          clientId: "client-1",
+          clientSecret: "secret-1",
+          videoUrl: "https://youtu.be/abcdefghijk",
+        },
+      }).success,
+    ).toBe(true);
   });
 });

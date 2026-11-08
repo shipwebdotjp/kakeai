@@ -32,7 +32,9 @@ apps/live/
 
 - `comments/source.ts` の `CommentSource` が YouTube と fixture の境界。`comments/factory.ts` が `--test`/`commentSource.kind` と `llm.mode` を検証し、実 YouTube は fixture を読まない。
 - 前処理は `comments/filter.ts`、分析役は `llm/comment-analyst.ts`。実 YouTube は `createCommentAnalyst` がローカル LLM 以外を拒否し、プロンプトには commentId と本文だけを渡す（投稿者名は渡さない）。
-- OAuth は `auth/oauth.ts` と `auth/youtube-token.ts`。読み取り専用スコープだけを要求し、トークンは `dataDir/auth/youtube.json` に 0600 で保存、`invalid_grant` は `needsReauth` として status に出す。
+- YouTube認証は `auth/youtube-auth.ts` の `YouTubeAuthProvider`。`youtube.apiKey` があればAPIキーを第一候補にし、OAuth設定とトークンがある場合だけ401/403の認証系エラーで同じリクエストを1回再試行する。
+- OAuthは `auth/oauth.ts` と `auth/youtube-token.ts`。読み取り専用スコープだけを要求し、トークンは `dataDir/auth/youtube.json` に 0600 で保存、`invalid_grant` は `needsReauth` として status に出す。OAuthのみの設定も従来どおり動く。
+- `comments/youtube-http.ts` が認証付きGETと認証エラー判定を持ち、`comments/youtube-source.ts` はポーリング・pageToken・バックオフ・クォータ・端末エラーに専念する。クォータは再試行を含む実リクエストごとに数える。
 
 ## コメントコーナーの実行境界
 
