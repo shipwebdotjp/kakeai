@@ -86,6 +86,9 @@ export async function collectCornerPlan(
       ...(entry.pinNote === null ? {} : { note: entry.pinNote }),
     }));
   const candidates = [...options.entries.values()]
+    // A comment already answered in an earlier corner must not be picked again
+    // by the AI. An explicit new pin can still bring it back.
+    .filter((entry) => entry.state !== "done" || entry.pinned)
     .map((entry) => entry.candidate)
     .filter((candidate): candidate is CommentCandidate => candidate !== null);
 

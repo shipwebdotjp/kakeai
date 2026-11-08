@@ -36,6 +36,30 @@ describe("live package loader", () => {
     });
   });
 
+  it("loads a 30-minute fixture with multiple comment corners", async () => {
+    const pkg = await fixture({
+      includeCommentCorner: true,
+      commentCorners: 2,
+      targetDurationMs: 1_800_000,
+      fixtureComments: [
+        { atMs: 1_000, author: "みかん", text: "最初のコメント", kind: "normal" },
+      ],
+    });
+    const loaded = await loadLivePackage(pkg.rootDir);
+    expect(loaded.show.show.targetDurationMs).toBe(1_800_000);
+    expect(loaded.show.segments.map((segment) => segment.kind)).toEqual([
+      "opening",
+      "script",
+      "comment",
+      "script",
+      "comment",
+      "closing",
+    ]);
+    expect(loaded.show.cues.filter((cue) => cue.origin === "script")).toHaveLength(2);
+    expect(loaded.filesByPath.has("audio/prepared/cue-script-2.wav")).toBe(true);
+    expect(loaded.filesByPath.has("fixtures/comments.json")).toBe(true);
+  });
+
   it("rejects escaping paths in the manifest", async () => {
     const pkg = await fixture();
     const manifest = await readTestManifest(pkg.rootDir);

@@ -688,6 +688,231 @@ button.skip {
   text-decoration: underline;
 }
 
+/* Generated responses */
+
+.generation-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--console-border);
+  border-left: 3px solid var(--console-accent);
+  border-radius: 8px;
+  background: var(--console-panel-alt);
+}
+
+.generation-status-thinking,
+.generation-status-preparing {
+  border-left-color: var(--console-warn);
+}
+
+.generation-status-ready {
+  border-left-color: var(--console-ok);
+}
+
+.generation-status-failed {
+  border-left-color: var(--console-danger);
+  background: rgba(224, 106, 106, 0.12);
+}
+
+.generation-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.generation-phase {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.generation-progress {
+  color: var(--console-warn);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.generation-meta {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 4px 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.generation-meta > span:nth-child(odd) {
+  color: var(--console-muted);
+  font-size: 11px;
+}
+
+.generation-error {
+  color: var(--console-danger);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.generation-alert {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--console-danger);
+  border-radius: 4px;
+  background: rgba(224, 106, 106, 0.16);
+  color: var(--console-danger);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.generation-hint {
+  margin: 8px 0 10px;
+  color: var(--console-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.generation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.generation-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--console-border);
+  border-radius: 8px;
+  background: var(--console-panel-alt);
+}
+
+.generation-row.current {
+  border-color: var(--console-accent);
+  background: rgba(74, 163, 255, 0.16);
+  box-shadow: inset 3px 0 0 var(--console-accent);
+}
+
+.generation-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.generation-now {
+  color: var(--console-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.generation-speaker {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--console-border);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.source-generated {
+  border-color: var(--console-accent);
+  color: var(--console-accent);
+}
+
+.source-manual {
+  border-color: var(--console-ok);
+  color: var(--console-ok);
+}
+
+.source-fallback {
+  border-color: var(--console-warn);
+  color: var(--console-warn);
+}
+
+.generation-caption {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.generation-speech,
+.generation-expression,
+.generation-audio {
+  margin: 0;
+  color: var(--console-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.generation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.generation-actions button {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.generation-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--console-border);
+  border-radius: 6px;
+  background: var(--console-panel);
+}
+
+.generation-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--console-muted);
+  font-size: 11px;
+}
+
+.generation-edit input {
+  width: 100%;
+  background: var(--console-panel-alt);
+  color: var(--console-text);
+  border: 1px solid var(--console-border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.generation-note {
+  margin: 0;
+  color: var(--console-warn);
+  font-size: 11px;
+}
+
+.generation-correction {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--console-border);
+}
+
+.generation-correction h3 {
+  margin: 0;
+  color: var(--console-muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.generation-correction .inline-form {
+  margin-top: 0;
+}
+
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);

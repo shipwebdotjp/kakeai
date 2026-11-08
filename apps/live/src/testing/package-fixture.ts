@@ -64,8 +64,15 @@ export interface TestPackageOptions {
   includeMaterial?: boolean;
   /** Adds a comment segment, `test.fixture` and `fixtures/comments.json`. */
   includeCommentCorner?: boolean;
+  /**
+   * Number of script/comment pairs when a comment corner is included. Defaults
+   * to 1; values below 1 are treated as 1.
+   */
+  commentCorners?: number;
   /** Implies `includeCommentCorner` and becomes the fixture file content. */
   fixtureComments?: LiveFixtureComment[];
+  /** Show target duration. Defaults to 600000 (10 minutes). */
+  targetDurationMs?: number;
   fonts?: LiveManifestFont[];
   startAt?: string | null;
 }
@@ -77,7 +84,22 @@ export const DEFAULT_TEST_FIXTURE_COMMENTS: LiveFixtureComment[] = [
 ];
 
 function includeComments(options: TestPackageOptions): boolean {
-  return options.includeCommentCorner === true || options.fixtureComments !== undefined;
+  return (
+    options.includeCommentCorner === true ||
+    options.commentCorners !== undefined ||
+    options.fixtureComments !== undefined
+  );
+}
+
+function commentCornerCount(options: TestPackageOptions): number {
+  if (!includeComments(options)) {
+    return 0;
+  }
+  const requested = options.commentCorners ?? 1;
+  if (!Number.isFinite(requested)) {
+    return 1;
+  }
+  return Math.max(1, Math.min(20, Math.floor(requested)));
 }
 
 export interface TestPackage {
@@ -115,7 +137,7 @@ function fileRecord(file: PendingFile): LivePackageFile {
 
 export function testShow(options: TestPackageOptions = {}): LivePackageShow {
   const includeMaterial = options.includeMaterial === true;
-  const includeComment = includeComments(options);
+  const corners = commentCornerCount(options);
   const materialSegment = includeMaterial ? { material: "material-1" } : {};
   const segments: unknown[] = [
     {
@@ -125,23 +147,53 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
       targetDurationMs: 60_000,
       cues: ["cue-opening"],
     },
+  ];
+  const cues: unknown[] = [
     {
-      id: "seg-script",
-      kind: "script",
-      label: "本編",
-      targetDurationMs: 300_000,
-      cues: ["cue-script"],
-      ...materialSegment,
+      id: "cue-opening",
+      origin: "live",
+      speaker: "left",
+      caption: "まもなく始まります。",
+      speech: "まもなく はじまります。",
+      expression: "normal",
+      audio: "audio/prepared/cue-opening.wav",
+      durationMs: 1000,
     },
   ];
-  if (includeComment) {
+
+  const scriptCount = Math.max(1, corners);
+  for (let index = 1; index <= scriptCount; index += 1) {
+    const suffix = index === 1 ? "" : `-${index}`;
+    const scriptCueId = `cue-script${suffix}`;
     segments.push({
-      id: "seg-comments",
-      kind: "comment",
-      label: "コメント",
-      targetDurationMs: 120_000,
+      id: `seg-script${suffix}`,
+      kind: "script",
+      label: index === 1 ? "本編" : `本編${index}`,
+      targetDurationMs: 300_000,
+      cues: [scriptCueId],
+      ...(index === 1 ? materialSegment : {}),
     });
+    cues.push({
+      id: scriptCueId,
+      origin: "script",
+      sourceLineId: `line-${index}`,
+      speaker: "right",
+      caption: index === 1 ? "本編の話題です。" : `本編${index}の話題です。`,
+      speech: index === 1 ? "ほんぺんの わだいです。" : `ほんぺん${index}の わだいです。`,
+      expression: index === 1 ? "smile" : "normal",
+      audio: `audio/prepared/${scriptCueId}.wav`,
+      durationMs: 1000,
+    });
+    if (corners > 0) {
+      segments.push({
+        id: `seg-comments${suffix}`,
+        kind: "comment",
+        label: index === 1 ? "コメント" : `コメント${index}`,
+        targetDurationMs: 120_000,
+      });
+    }
   }
+
   segments.push({
     id: "seg-closing",
     kind: "closing",
@@ -149,53 +201,32 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
     targetDurationMs: 60_000,
     cues: ["cue-closing"],
   });
+  cues.push({
+    id: "cue-closing",
+    origin: "live",
+    speaker: "left",
+    caption: "本日はここまでです。",
+    speech: "ほんじつは ここまでです。",
+    expression: "normal",
+    audio: "audio/prepared/cue-closing.wav",
+    durationMs: 1000,
+  });
+
   return livePackageShowSchema.parse({
     schemaVersion: 1,
     show: {
       title: "テスト配信",
       locale: "ja-JP",
-      targetDurationMs: 600_000,
+      targetDurationMs: options.targetDurationMs ?? 600_000,
       stageTemplate: "news-desk",
       theme: "theme.css",
       characters: { left: "char-left", right: "char-right" },
       startAt: options.startAt ?? null,
     },
-    commentSource: { kind: includeComment ? "fixture" : "youtube" },
+    commentSource: { kind: corners > 0 ? "fixture" : "youtube" },
     segments,
-    ...(includeComment ? { test: { fixture: "fixtures/comments.json" } } : {}),
-    cues: [
-      {
-        id: "cue-opening",
-        origin: "live",
-        speaker: "left",
-        caption: "まもなく始まります。",
-        speech: "まもなく はじまります。",
-        expression: "normal",
-        audio: "audio/prepared/cue-opening.wav",
-        durationMs: 1000,
-      },
-      {
-        id: "cue-script",
-        origin: "script",
-        sourceLineId: "line-1",
-        speaker: "right",
-        caption: "本編の話題です。",
-        speech: "ほんぺんの わだいです。",
-        expression: "smile",
-        audio: "audio/prepared/cue-script.wav",
-        durationMs: 1000,
-      },
-      {
-        id: "cue-closing",
-        origin: "live",
-        speaker: "left",
-        caption: "本日はここまでです。",
-        speech: "ほんじつは ここまでです。",
-        expression: "normal",
-        audio: "audio/prepared/cue-closing.wav",
-        durationMs: 1000,
-      },
-    ],
+    ...(corners > 0 ? { test: { fixture: "fixtures/comments.json" } } : {}),
+    cues,
     materials: includeMaterial
       ? [
           {
@@ -333,32 +364,17 @@ export async function createTestPackage(
       width: 1,
       height: 1,
     },
-    {
-      path: "audio/prepared/cue-opening.wav",
-      data: wav,
-      mediaType: "audio/wav",
-      kind: "prepared-audio",
-      durationMs: 1000,
-      hasAudio: true,
-    },
-    {
-      path: "audio/prepared/cue-script.wav",
-      data: wav,
-      mediaType: "audio/wav",
-      kind: "prepared-audio",
-      durationMs: 1000,
-      hasAudio: true,
-    },
-    {
-      path: "audio/prepared/cue-closing.wav",
-      data: wav,
-      mediaType: "audio/wav",
-      kind: "prepared-audio",
-      durationMs: 1000,
-      hasAudio: true,
-    },
+    ...show.cues.map(
+      (cue): PendingFile => ({
+        path: cue.audio,
+        data: wav,
+        mediaType: "audio/wav",
+        kind: "prepared-audio",
+        durationMs: cue.durationMs,
+        hasAudio: true,
+      }),
+    ),
   ];
-
   if (options.includeMaterial === true) {
     files.push({
       path: "materials/card-1.png",

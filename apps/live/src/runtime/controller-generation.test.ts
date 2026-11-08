@@ -172,6 +172,12 @@ describe("generated cue commands", () => {
     expect(calls).toHaveLength(0);
 
     expect(
+      controller.handleCommand({ kind: "edit_cue", cueId: "g1", expression: "smile" }),
+    ).toEqual({ ok: true });
+    expect(controller.getCue("g1")?.expression).toBe("smile");
+    expect(calls).toHaveLength(0);
+
+    expect(
       controller.handleCommand({ kind: "edit_cue", cueId: "g1", speech: "新しい読み" }),
     ).toEqual({ ok: true });
     expect(controller.getCue("g1")?.status).toBe("preparing");
@@ -189,6 +195,12 @@ describe("generated cue commands", () => {
 
   it("rejects edits, cancels, moves and deletes once a cue is playing", async () => {
     const { controller } = await setup();
+    const notices: string[] = [];
+    controller.subscribe((change) => {
+      if (change.type === "notice") {
+        notices.push(change.message);
+      }
+    });
     controller.handleCommand({ kind: "start" });
     controller.enqueueGeneratedCues([
       generatedCue("g1", "一"),
@@ -209,6 +221,7 @@ describe("generated cue commands", () => {
       ok: false,
       message: "キャンセルできる生成キューがありません。再生開始後は停止・訂正を使ってください。",
     });
+    expect(notices.some((message) => message.includes("キャンセルできる生成キュー"))).toBe(true);
 
     endCurrent(controller);
     expect(controller.getState().playback?.cueId).toBe("g3");

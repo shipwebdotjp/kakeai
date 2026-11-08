@@ -13,6 +13,7 @@ import { CommentCornerPanel } from "./CommentCornerPanel";
 import { CommentsPanel } from "./CommentsPanel";
 import { CommentSourcePanel } from "./CommentSourcePanel";
 import { formatTime } from "./format";
+import { GenerationPanel } from "./GenerationPanel";
 import { PHASE_LABELS, STATUS_LABELS, phaseCanPause } from "./labels";
 import { PreviewPanel } from "./PreviewPanel";
 import { QueuePanel } from "./QueuePanel";
@@ -201,6 +202,8 @@ function App() {
               snapshot={snapshot}
               onSkip={() => sendCommand({ kind: "skip_cue" })}
             />
+
+            <GenerationPanel snapshot={snapshot} onCommand={sendCommand} />
 
             <CommentsPanel
               snapshot={snapshot}

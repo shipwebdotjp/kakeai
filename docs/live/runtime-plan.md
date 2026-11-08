@@ -49,6 +49,8 @@ apps/live/
 - `maxThinkingMs` 以内に ready にならない、LLM/TTSが失敗する、または再生待ちがタイムアウトした場合は、そのコーナーで1回だけ退避キューを再生して次の候補へ進む。
 - 生成状態（thinking/preparing/ready/failed）はコンソールの `snapshot.generation` に出し、コーナー終了・`stop`・`safe_mode`・`end`・`post_show` で null に戻す。
 - コメント応答のキュー再生中は `queue_finished` でスパインを進めず、応答キューが完了してからコーナーを終える。訂正キューは現在の直後、現在が無ければ応答キューとして再生する。
+- コンソールの生成UIは `web/console/GenerationPanel.tsx`。`snapshot.generation` と生成キュー（generated/manual/fallback）を表示し、編集・キャンセル・再生成・削除・並べ替え・訂正を既存のコマンドで送る。コマンド結果は既存の notice 経路で表示する。
+- 30分版の通しは `apps/live/src/runtime/p5-flow.test.ts` で、複数コメントコーナー、人間ピン優先、AI補充、TTS失敗時の退避、台本の継続、生成・編集・削除ログ、生コメント非保存を確認する。
 
 ## 通信契約
 
