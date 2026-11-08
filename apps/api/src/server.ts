@@ -13,6 +13,7 @@ import { createCharactersRouter } from "./http/routes/characters.ts";
 import { createFaceSetsRouter } from "./http/routes/face-sets.ts";
 import { createJobsRouter } from "./http/routes/jobs.ts";
 import { createLiveExportsRouter } from "./http/routes/live-exports.ts";
+import { createLiveProfilesRouter } from "./http/routes/live-profiles.ts";
 import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createVoiceProfilesRouter } from "./http/routes/voice-profiles.ts";
@@ -189,6 +190,7 @@ export function createApp(dependencies: AppDependencies): Express {
   api.use(createFaceSetsRouter({ prisma: dependencies.prisma }));
   api.use(createJobsRouter(dependencies.prisma));
   api.use(createLiveExportsRouter(dependencies.prisma, fontCatalogService));
+  api.use(createLiveProfilesRouter(dependencies.prisma));
   api.use(
     createArtifactsRouter({
       prisma: dependencies.prisma,

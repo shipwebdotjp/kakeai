@@ -77,6 +77,17 @@
 - [x] テスト: スキーマ検証、未知schemaVersionの拒否、`scriptCues`のlineId検証、マニフェストのハッシュ・メディア・フォント検証、相対URL、静止PNG/HTML/MP4の無音、静的HTMLのスクリプトなし、参照音声の存在、TTSテスト合成、DB非更新。
 - 完了条件: サンプルWorkからライブパッケージを書き出し、manifest検証とステージ用の静止カード・音声を確認できる。
 
+## P1.5. Show Profile の自動生成
+
+最初の1本を手書きせずに始めるため、Work と ScriptVersion から Show Profile の下書きを生成する。詳細は [spec.md](./spec.md) の「Show Profile の自動生成」を正とする。
+
+- [x] `POST /api/v1/live-profiles/auto` を追加し、WorkとScriptVersionからプロファイルを生成する。
+- [x] 生成規則（intro / point / insert / outro、コメントコーナー、素材、placeholder、警告）を実装する。
+- [x] CLI に `--auto-profile`、`--save-profile`、`--title`、`--no-comments`、`--dry-run`、`--force` を追加する。
+- [x] API・生成・CLI のテストを追加する。
+- [x] `docs/mvp/api-contract.md` とユーザーガイドを更新する。
+- 完了条件: サンプルWorkから `--auto-profile` でプロファイルを生成し、保存して書き出せる。生成内容の summary と warnings を確認できる。
+
 ## P2. ライブアプリの骨格
 
 - [x] `apps/live` を同一モノレポに追加する。ワークスペース設定、typecheck、テスト設定に加える。

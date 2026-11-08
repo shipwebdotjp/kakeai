@@ -23,6 +23,8 @@
 6. `show-10m.json` または `show-30m.json` の `lineId` / `sceneId` を、実際の ID に合わせる。`show.characters` も実際のキャラクター ID に合わせる。
 7. テストモードでは `commentSource.kind` が `fixture` になっている。`npm run live -- --test`（P2以降）はこの fixture を使う。
 
+Show Profile の ID を手で合わせる代わりに、`npm run live:export -- --auto-profile --save-profile <file>` で Work と ScriptVersion から下書きを生成できます。生成結果の summary と warnings を確認し、必要なら保存した JSON を編集してください。
+
 ## 書き出し
 
 ```sh

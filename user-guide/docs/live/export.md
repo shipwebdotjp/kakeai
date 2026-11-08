@@ -11,10 +11,52 @@ title: ライブパッケージを書き出す
 
 - Kakeai API が起動していること（既定: `http://127.0.0.1:4317`）
 - 保存済みの ScriptVersion
-- ライブ用の Show Profile（JSON）
+- ライブ用の Show Profile（JSON）。`--auto-profile` を使う場合は不要
 - 存在しない出力先ディレクトリ
 
 Show Profile の例は `docs/live/examples/` にあります。`lineId`、`sceneId`、キャラクター ID は、実際の Work に合わせてください。
+
+## 最初の1本を自動生成する
+
+Show Profile をまだ持っていない場合は、Work と ScriptVersion から下書きを生成できます。
+
+```sh
+npm run live:export -- \
+  --work <workId> \
+  --script-version <scriptVersionId> \
+  --auto-profile \
+  --save-profile live/ai-news/profile.json \
+  --out /tmp/live-package-1
+```
+
+生成内容だけ確認する場合:
+
+```sh
+npm run live:export -- \
+  --work <workId> \
+  --script-version <scriptVersionId> \
+  --auto-profile \
+  --save-profile live/ai-news/profile.json \
+  --dry-run
+```
+
+`--auto-profile` は `intro` Scene をオープニング、`point` Scene を本編、`outro` Scene をクロージングにし、セリフのない Scene を素材として紐づけます。コメントコーナーは各本編の後に置き、最後の本編だけは省きます。`--no-comments` で無効にできます。`--title` で `show.title` を上書きできます。
+
+生成結果には summary と warnings が出ます。opening / closing の placeholder、素材にできなかった Scene、話者のない行などは warning を確認してください。保存したプロファイルは通常の Show Profile なので、そのまま編集できます。`--auto-profile` では `--save-profile` が必須です（`--dry-run` を除く）。同じ保存先に再生成するときは `--force` を付けてください。
+
+## 2本目以降
+
+Work を複製した場合は、行 ID と Scene ID が維持されるため、前回のプロファイルをそのまま使えます。プロファイルの `show.title` だけを新しい Work タイトルに合わせて更新してください。
+
+```sh
+npm run live:export -- \
+  --work <newWorkId> \
+  --script-version <newScriptVersionId> \
+  --profile live/ai-news/profile.json \
+  --out /tmp/live-package-2
+```
+
+行を追加・削除・分割した場合は、`scriptCues` と `segments` の参照を更新してください。`show.title` はステージの `pre_show` に表示されます。
 
 ## 書き出し
 
@@ -31,6 +73,12 @@ npm run live:export -- \
 | `--work` | Work ID |
 | `--script-version` | ScriptVersion ID |
 | `--profile` | Show Profile の JSON |
+| `--auto-profile` | Work と ScriptVersion から Show Profile を生成する |
+| `--save-profile` | 生成した Show Profile の保存先（`--auto-profile` と併用） |
+| `--title` | 生成する `show.title` を上書きする |
+| `--no-comments` | コメントコーナーを生成しない |
+| `--dry-run` | 生成と summary 表示だけを行い、書き出さない |
+| `--force` | `--save-profile` の既存ファイルを上書きする |
 | `--out` | 出力先。存在しないディレクトリを指定する |
 | `--timeout-ms` | Job の待ち時間（既定: 30分） |
 | `--interval-ms` | Job のポーリング間隔（既定: 1秒） |

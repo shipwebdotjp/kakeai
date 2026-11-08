@@ -151,6 +151,7 @@ requestIdは各HTTPリクエストに付与し、APIとワーカーのログを�
 | GET | /voice-profiles/models?adapterId=<id> | 200 | 接続中エンジンのモデル候補（`models`）を取得。非対応は空配列 |
 | POST | /script-versions/:scriptVersionId/narration-segments/:narrationSegmentId/tts-jobs | 202 | TTS Jobをキューへ追加（[../tts/spec.md](../tts/spec.md)） |
 | POST | /script-versions/:scriptVersionId/tts-jobs | 202 | 音声が未選択の要点セリフを一括でTTS Jobへ追加。投入Jobと除外セリフを返す（[../tts/spec.md](../tts/spec.md)） |
+| POST | /live-profiles/auto | 200 | WorkとScriptVersionからShow Profileの下書きを生成（[../live/spec.md](../live/spec.md)） |
 | POST | /live-exports | 202 | ライブパッケージの `live_export` Jobを作成（[../live/spec.md](../live/spec.md)） |
 | GET | /characters | 200 | キャラクターライブラリの一覧を取得（[../character-library/spec.md](../character-library/spec.md)） |
 | POST | /characters | 201 | キャラクターを作成 |
@@ -683,6 +684,12 @@ Content-Type: application/json
 ~~~
 
 固定尺の選択音声合計超過など、レンダー入力を組み立てる時点で判定する問題は422 RENDER_INPUT_INVALIDとする。Asset参照の欠落や素材種別と用途の不一致、`explanation-scenes@1` のScene構成は台本保存の段階で422 VALIDATION_ERRORまたはASSET_NOT_FOUNDとして拒否する。Assetがまだprocessingなら409 `ASSET_PROCESSING` とし、failedなAssetは422 `ASSET_UNAVAILABLE` とする。短時間に同じ版を複数回レンダーすることは許可し、その都度異なるJobを作る。UIは送信中にボタンを無効化して、二重クリックによる意図しない重複だけを防ぐ。
+
+### Show Profile の自動生成
+
+POST /api/v1/live-profiles/auto は、`workId`・`scriptVersionId`・任意の`title`・`includeCommentCorners`（既定true）を受け取り、`LiveShowProfile`・表示用summary・warningsを200で返す。Jobやファイルは作成しない。`title`を省略するとWorkタイトルを使う。生成規則は [../live/spec.md](../live/spec.md) の「Show Profile の自動生成」を正とする。
+
+生成したプロファイルは通常の`LiveShowProfile`であり、CLIの`--save-profile`で保存し、`POST /api/v1/live-exports`へそのまま渡せる。`--dry-run`はこのエンドポイントだけを呼び、Jobを作らない。
 
 ### ライブパッケージの書き出し
 

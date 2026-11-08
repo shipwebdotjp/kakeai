@@ -1,6 +1,7 @@
 export * from "./common";
 export * from "./paths";
 export * from "./profile";
+export * from "./auto-profile";
 export * from "./show";
 export * from "./characters";
 export * from "./stage";

@@ -190,7 +190,7 @@ live-package/
 
 ## ショープロファイル
 
-ショープロファイルは、ライブの構成とポリシーを定めるJSONである。v1では手書きまたはエージェントが生成し、将来UIを追加する。契約は `packages/contracts` のライブ用スキーマを正とする。
+ショープロファイルは、ライブの構成とポリシーを定めるJSONである。v1では手書き、エージェント、または`--auto-profile`の自動生成で作り、将来UIを追加する。契約は `packages/contracts` のライブ用スキーマを正とする。
 
 書き出し前の**LiveShowProfile**は、台本の行を`lineId`で参照し、ライブ専用のキューだけを明示する。書き出し後の**LivePackageShow**（`show.json`）は、ScriptVersionから解決した`PreparedCue`を持つ。通常の準備済みキューを`caption`/`speech`で二重に書かない。理由は [ADR-0124](../adr/0124-live-cues-derived-from-script.md) を正とする。
 
@@ -307,6 +307,21 @@ live-package/
 - `safety.blockedTopics` は、コメント選別と生成レスの両方で使う。`persona`はディレクターのプロンプトに渡す。`fallbackCueId`は、停止・安全モード・障害時の退避キューである。
 - `playout.minBufferMs` は、常時確保する準備済み音声の長さ（ミリ秒）である。`maxThinkingMs`は、無音の「考え中」を許す上限である。`closingReserveMs`は、クロージングに入るために残す時間である。`noApprovalDelay`は、人間の承認待ちを入れないことを表し、v1では常に`true`とする。
 - `test.fixture` は、テストモードで使うコメント列である。本番では無視する。
+
+### Show Profile の自動生成
+
+最初の1本を手書きせずに始めるため、APIとCLIはWorkとScriptVersionからShow Profileの下書きを生成できる。
+
+- API: `POST /api/v1/live-profiles/auto` は`workId`・`scriptVersionId`・任意の`title`・`includeCommentCorners`を受け取り、`LiveShowProfile`・表示用summary・warningsを返す。Jobは作成しない。
+- CLI: `npm run live:export`の`--auto-profile`がこのAPIを呼び、`--save-profile`で下書きを保存してから書き出す。`--dry-run`はJobを作らず、summary表示（`--save-profile`指定時は保存）だけを行う。
+- `intro` Sceneは`opening`、`point` Sceneは`script`、`outro` Sceneは`closing`にする。セリフのない`insert`または`point` Sceneは素材候補にする。
+- `scriptCues`は各Sceneの行から作る。話者・キャラクター・声プロファイルがない行、字幕または読み上げが空の行は除外し、warningに残す。
+- 左右のキャラクターは、台本で最初に話すキャラクターから2人までを使う。3人以上はwarningを返す。
+- opening / closingに行がなければ、placeholderの`liveCue`を作る。
+- 素材候補は素材カードの制約を満たすものだけを使い、直前の`script`セグメントに紐づける。満たさないSceneは除外してwarningに残す。
+- コメントコーナーは各`script`の後に置き、最後の`script`だけは省く。`script`が1つだけなら1つ置く。`includeCommentCorners: false`で無効にできる。
+- 生成する`commentSource`は`youtube`、`safety`・`playout`・`commentPolicy`は既定値とする。`show.title`はWorkタイトル、`--title`で上書きできる。
+- 生成結果は通常の`LiveShowProfile`であり、保存後に手で編集できる。APIはScriptVersionのVisual Cueを自動変換しない。
 
 ### 出力 LivePackageShow
 
