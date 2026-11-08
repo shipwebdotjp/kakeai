@@ -11,7 +11,6 @@ export const PHASE_LABELS: Record<ConsoleSnapshot["phase"], string> = {
   pre_show: "開始前",
   opening: "オープニング",
   script: "本編",
-  material: "素材",
   comment: "コメント",
   closing: "クロージング",
   post_show: "終了後",
@@ -24,7 +23,6 @@ export function phaseCanPause(phase: ConsoleSnapshot["phase"]): boolean {
   return (
     phase === "opening" ||
     phase === "script" ||
-    phase === "material" ||
     phase === "comment" ||
     phase === "closing" ||
     phase === "safe_mode"

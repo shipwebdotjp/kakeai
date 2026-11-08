@@ -181,6 +181,7 @@ live-package/
 素材カードは、ライブの中央スロットに表示する視覚素材である。v1では、Kakeaiの単一Sceneから**静止PNG/HTMLまたは短い無音MP4**を書き出し、ステージの中央に`img`・`video`・スクリプトなしのsandbox iframeで表示する。コンポジションのGSAPタイムラインやHyperFrames Playerはライブで動かさない。理由は [ADR-0126](../adr/0126-live-material-cards-static-or-mp4.md) を正とする。
 
 - 素材カードは1920x1080で作り、中央スロットに縮小する。文字やカードの見た目はKakeaiのプレビューと一致する。
+- セグメントは既定素材を持ち、`scriptCues[].materialId`でCue単位に上書きできる。未指定はSegment既定、`null`は非表示、文字列はその素材を表示する。詳細は [../live-cue-materials/spec.md](../live-cue-materials/spec.md) を正とする。
 - 静止カードはPNGまたは静的なHTMLとする。短い動きが必要なカードだけ、3〜5秒の無音MP4にする。
 - 静的HTMLは、スクリプトを実行しないsandbox iframeで表示する。GSAPタイムラインやプレイヤーは動かさない。
 - カードは音声を持たない。音声はプレイアウトのキューが担当する。manifestの`hasAudio: false`で検証する。
@@ -244,7 +245,8 @@ live-package/
     {
       "id": "cue-news-1-1",
       "lineId": "line-news-1-1",
-      "expressionId": "smile"
+      "expressionId": "smile",
+      "materialId": "material-news-1"
     }
   ],
   "liveCues": [
@@ -296,9 +298,10 @@ live-package/
 - `targetDurationMs` は目安であり、厳密な終了時刻ではない。超過・不足を許容する。
 - `commentSource.kind` は `youtube` または `fixture`。通常は`youtube`とし、テストモードでは`fixture`に切り替えて`test.fixture`を読む。
 - `segments` はスパインである。`opening`、`script`、`comment`、`closing`の順に並べる。
-- `script` セグメントは、`scriptCues`または`liveCues`のIDと、任意の素材カードを持つ。
+- `script` セグメントは、`scriptCues`または`liveCues`のIDと、任意の素材カードを持つ。セグメントの素材は、Cueが明示しない場合の既定素材である。
 - `comment` セグメントは、コメントコーナーである。`commentPolicy`で枠数を上書きできる。
-- `scriptCues` は、`lineId`で`NarrationSegment`を参照する。`caption`・`speech`・`speaker`・`audio`は書き出し時に解決する。`expressionId`は任意の上書きとする。
+- `scriptCues` は、`lineId`で`NarrationSegment`を参照する。`caption`・`speech`・`speaker`・`audio`は書き出し時に解決する。`expressionId`は任意の上書きとする。`materialId`は任意で、未指定ならセグメント既定を継承し、`null`なら中央素材を隠し、文字列ならそのCueだけ指定の素材を表示する。詳細は [../live-cue-materials/spec.md](../live-cue-materials/spec.md) を正とする。
+- 1つのCueは1回の再生occurrenceとし、同じCue IDを複数のSegmentから参照しない。同じSegment内でのCue IDの重複も拒否する。
 - `liveCues` は、オープニング・訂正・退避・臨時の一言など、ScriptVersionに存在しないキューのみ。`caption`・`speech`・`speaker`・`expression`・任意の`audio`を持つ。
 - `materials` は、`sceneId`でKakeaiのSceneを参照する。書き出し後に`png`/`html`/`mp4`のカードへ解決される。
 - `commentPolicy.maxCommentsPerCorner` は、1回のコメントコーナーで拾う最大件数である。`maxHumanPinsPerCorner`は人間ピンの上限、`maxExtraSlots`はピンが枠を超えたときの延長上限である。
@@ -334,6 +337,7 @@ live-package/
       "id": "cue-news-1-1",
       "origin": "script",
       "sourceLineId": "line-news-1-1",
+      "materialId": "material-news-1",
       "speaker": "left",
       "caption": "今週のニュースです。",
       "speech": "こんしゅうの にゅーすです。",
@@ -355,6 +359,7 @@ live-package/
 ```
 
 - `origin`は`script`または`live`。`script`の`PreparedCue`は`sourceLineId`を必須とする。
+- `materialId`は入力の生値を保持する。未指定・`null`・文字列の意味は入力と同じで、実効素材は実行時にSegment既定と合わせて解決する。
 - `caption`・`speech`・`speaker`・`audio`・`durationMs`は、`scriptCues`なら`NarrationSegment`とVoice Profileから解決し、`liveCues`なら入力値とTTSから解決する。
 - `materials`は、`kind`（`image`/`video`/`html`）、`file`、`hasAudio`を持つ。カードは無音でなければならない。
 - 出力`show.json`はライブアプリが読む。入力`LiveShowProfile`は書き出し時だけ使う。
@@ -401,8 +406,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 | --- | --- |
 | `pre_show` | 「まもなく始まります」、番組タイトル、カウントダウン、キャラクターの待機。 |
 | `opening` | オープニングの準備済みキュー。 |
-| `script` | スパインの本編。素材カードを持つことができる。 |
-| `material` | 素材カードをフォーカスする状態。`script`の一部として使う。 |
+| `script` | スパインの本編。現在のCueに応じて素材カードを表示する。 |
 | `comment` | コメントコーナー。コメントカードを表示する。 |
 | `closing` | クロージングの準備済みキュー。 |
 | `post_show` | 「本日の配信は終了しました」、お礼、次回予告。 |
@@ -442,7 +446,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 - `phase`は前節のフェーズ。
 - `characters`は左右の表情と発話状態。表情IDは`characters.json`のプリセットを参照する。
 - `caption`は現在の字幕。`null`なら字幕を消す。
-- `material`は中央に表示する素材カード。`null`なら非表示。
+- `material`は中央に表示する素材カード。現在のCueの`materialId`が未指定ならSegment既定、`null`なら非表示、文字列ならその素材を表示する。
 - `comment`はコメントカード。`state`は`reading`または`responding`。
 - `status`は`idle`・`thinking`・`speaking`。キャラクターの待機・考え中・発話の表現に使う。
 - `playback`は現在の再生試行。programステージだけがこれを使って音声を再生し、`audio_ended`を返す。
@@ -531,7 +535,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 
 ## 状態遷移
 
-状態は`pre_show`・`opening`・`script`・`material`・`comment`・`closing`・`post_show`・`paused`・`safe_mode`・`error`とする。操作の優先順位は`error > stop > safe_mode > pause > end > closing > comment > current`とする。
+状態は`pre_show`・`opening`・`script`・`comment`・`closing`・`post_show`・`paused`・`safe_mode`・`error`とする。操作の優先順位は`error > stop > safe_mode > pause > end > closing > comment > current`とする。
 
 | 操作・イベント | 現在 | 次 | アクション |
 | --- | --- | --- | --- |
@@ -540,7 +544,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 | resume | `paused` | 元の状態 | 現在のキューを再開する。生成キューは再開しない。 |
 | stop | 任意 | `paused` | 音声を200msでフェードアウトし、生成キューをクリアする。準備済みキューは保持する。 |
 | safe_mode | 任意 | `safe_mode` | 生成レスを止め、準備済み・退避キューだけを流す。コメントコーナーを終了する。 |
-| end | `opening` / `script` / `material` / `comment` | `closing` | 現在のキューを終える。残り時間が`closingReserveMs`未満ならコメントコーナーを打ち切る。 |
+| end | `opening` / `script` / `comment` | `closing` | 現在のキューを終える。残り時間が`closingReserveMs`未満ならコメントコーナーを打ち切る。 |
 | audio_ended | 再生中 | 次のキュー / セグメント | 現在の`attempt`と`sequence`のイベントだけを受け付ける。 |
 | corner_empty | `comment` | 次のセグメント | コメント0件ならコーナーをスキップする。 |
 | pin_overflow | `comment` | `comment` | `maxExtraSlots`まで延長し、それを超えたら次のコーナーへ回す。 |
@@ -816,7 +820,7 @@ interface CommentSource {
 | 音声の読み込み・再生失敗 | そのキューをスキップし、次へ進む。連続失敗時は一時停止して通知する。 |
 | ステージの切断・リロード | programのリースを失効させ、オペレーターが明示的に引き継ぐ。previewは再読み込みだけで、再生に影響しない。 |
 | サーバのクラッシュ | OBSには最後のフレームが残る。人間がアプリを再起動する。v1では自動復帰しない。 |
-| 素材カードの読み込み失敗 | 中央を非表示にし、スパインを続行する。コンソールに通知する。 |
+| 素材カードの読み込み失敗 | 中央を非表示にし、スパインを続行する。コンソール通知は行わない。 |
 | OBS・音声経路の失敗 | 配信全体の問題として人間が対処する。アプリは検知できる範囲で通知する。 |
 
 原則は「台本を止めない」。生成レスやコメント機能の失敗で、準備済みのライブ全体を止めない。

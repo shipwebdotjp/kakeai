@@ -9,6 +9,7 @@ import type {
   LiveSegment,
   LiveStageConnection,
   LiveNoticeLevel,
+  MaterialCard,
   StageClock,
   StageEvent,
   StageLease,
@@ -26,6 +27,7 @@ import { ControllerView } from "./controller-view.ts";
 import { CueControl, type LiveCuePatch } from "./control-queue.ts";
 import { handleCueCommand, type CueCommandHooks } from "./cue-commands.ts";
 import { StageLeaseManager, type StageConnectOptions } from "./lease.ts";
+import { resolveCueMaterialId } from "./material-resolution.ts";
 import { Playout, type PlayoutEvent, type PlayoutScheduler } from "./playout.ts";
 import { dispatchPlayoutEvent } from "./playout-events.ts";
 import { CueQueueStore } from "./queue.ts";
@@ -131,7 +133,7 @@ export class LiveController {
       phase: () => this.phase,
       segment: () => this.segment(),
       segmentLabel: (segment) => this.segmentLabel(segment),
-      materialForSegment: (segment) => this.segmentMaterial(segment),
+      materialForCue: (segment, cue) => this.materialForCue(segment, cue),
       clock: () =>
         this.finalClock ?? computeClock(this.show, this.showStartedAtMs, this.now().getTime()),
       generation: () => this.generation,
@@ -176,7 +178,6 @@ export class LiveController {
         this.endRequested = false;
       },
       remainingMs: () => this.remainingMs(),
-      hasMaterial: (segment) => this.segmentMaterial(segment) !== null,
       enterPostShow: () => this.enterPostShow(),
       hasCommentCorner: () => this.comments.enabled,
       startCommentCorner: (segment) => this.comments.startCorner(segment),
@@ -278,11 +279,12 @@ export class LiveController {
     return this.show.segments[this.currentSegmentIndex] ?? null;
   }
 
-  private segmentMaterial(segment: LiveSegment) {
-    if (segment.material === undefined) {
-      return null;
-    }
-    return this.materialById.get(segment.material) ?? null;
+  private materialForCue(
+    segment: LiveSegment,
+    cue: LiveCue | null,
+  ): MaterialCard | null {
+    const materialId = resolveCueMaterialId(segment.material, cue?.materialId);
+    return materialId === null ? null : (this.materialById.get(materialId) ?? null);
   }
 
   private segmentLabel(segment: LiveSegment | null): { id: string; label: string } | null {

@@ -126,11 +126,48 @@ describe("resolveLiveProfile", () => {
     expect(script?.sourceLineId).toBe("line-p1-1");
     expect(script?.speaker).toBe("left");
     expect(script?.audio.kind).toBe("asset");
+    expect(script?.materialId).toBeUndefined();
     const live = resolved.cues.find((cue) => cue.id === "cue-closing");
     expect(live?.origin).toBe("live");
     expect(live?.audio.kind).toBe("tts");
     expect(resolved.speakers).toHaveLength(1);
     expect(resolved.speakers[0]?.side).toBe("left");
+  });
+
+  it("keeps a raw per-cue material reference", () => {
+    const content = validContentDocument();
+    content.speakers[0]!.characterId = "char-left";
+    content.speakers[0]!.voiceProfileId = "voice-1";
+    const value = profile();
+    value.scriptCues = [{ ...value.scriptCues[0]!, materialId: "material-1" }];
+    value.materials = [
+      {
+        id: "material-1",
+        sceneId: "scene-intro",
+        focus: true,
+        format: "png",
+        durationMs: 4000,
+      },
+    ];
+
+    const resolved = resolveLiveProfile(
+      content,
+      value,
+      new Map([["asset-audio-1", audioAsset]]),
+      new Map([["voice-1", voice]]),
+    );
+    expect(resolved.cues.find((cue) => cue.id === "cue-script")?.materialId).toBe(
+      "material-1",
+    );
+
+    value.scriptCues = [{ ...value.scriptCues[0]!, materialId: null }];
+    const hidden = resolveLiveProfile(
+      content,
+      value,
+      new Map([["asset-audio-1", audioAsset]]),
+      new Map([["voice-1", voice]]),
+    );
+    expect(hidden.cues.find((cue) => cue.id === "cue-script")?.materialId).toBeNull();
   });
 
   it("rejects a missing lineId", () => {

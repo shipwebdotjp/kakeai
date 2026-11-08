@@ -3,21 +3,19 @@ import type { LiveSegment, StagePhase } from "@kakeai/contracts";
 export const ACTIVE_PHASES: ReadonlySet<StagePhase> = new Set([
   "opening",
   "script",
-  "material",
   "comment",
   "closing",
   "safe_mode",
 ]);
 
 /** Maps a spine segment to the stage phase used while it plays. */
-export function phaseForSegment(segment: LiveSegment, hasMaterial: boolean): StagePhase {
+export function phaseForSegment(segment: LiveSegment): StagePhase {
   switch (segment.kind) {
     case "opening":
     case "closing":
     case "comment":
-      return segment.kind;
     case "script":
-      return hasMaterial ? "material" : "script";
+      return segment.kind;
     default: {
       const exhaustive: never = segment;
       throw new Error(`Unsupported live segment kind: ${JSON.stringify(exhaustive)}`);

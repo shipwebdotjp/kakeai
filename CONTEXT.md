@@ -448,7 +448,7 @@ The state-driven audio and cue queue that advances the Stage. It is not a timeli
 _Avoid_: timeline, render queue
 
 **Live Cue**:
-The smallest unit of live output: speaker, caption, speech, expression, optional material or comment, and audio.
+The smallest unit of live output: speaker, caption, speech, expression, an optional cue-level material override or comment, and audio. An omitted material override inherits the containing segment's default material.
 _Avoid_: narration segment, clip
 
 **Material Card**:

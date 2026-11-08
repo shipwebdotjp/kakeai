@@ -95,6 +95,43 @@ function showWithLongOpening(): LivePackageShow {
   });
 }
 
+function showWithCueMaterials(): LivePackageShow {
+  const base = testShow({ includeMaterial: true });
+  return livePackageShowSchema.parse({
+    ...base,
+    segments: base.segments.map((segment, index) =>
+      index === 1
+        ? { ...segment, cues: ["cue-script", "cue-script-2", "cue-script-3"] }
+        : segment,
+    ),
+    cues: [
+      ...base.cues,
+      preparedCue("cue-script-2", {
+        origin: "script",
+        sourceLineId: "line-2",
+        materialId: "material-2",
+      }),
+      preparedCue("cue-script-3", {
+        origin: "script",
+        sourceLineId: "line-3",
+        materialId: null,
+      }),
+    ],
+    materials: [
+      ...base.materials,
+      {
+        id: "material-2",
+        kind: "image",
+        file: "materials/card-2.png",
+        hasAudio: false,
+        focus: false,
+        width: 1,
+        height: 1,
+      },
+    ],
+  });
+}
+
 function audioEvent(
   controller: LiveController,
   overrides: Partial<StageEvent> = {},
@@ -173,13 +210,27 @@ describe("LiveController phases", () => {
     expect(controller.getState().playback).toBeNull();
   });
 
-  it("enters the material phase for a focused card", () => {
+  it("keeps the script phase while showing a focused card", () => {
     const { controller } = createController(testShow({ includeMaterial: true }));
     connectProgram(controller);
     controller.handleCommand({ kind: "start" });
     endCurrent(controller);
-    expect(controller.getState().phase).toBe("material");
+    expect(controller.getState().phase).toBe("script");
     expect(controller.getState().material).toEqual({ id: "material-1", focus: true });
+  });
+
+  it("resolves the current cue material over the segment default", () => {
+    const { controller } = createController(showWithCueMaterials());
+    connectProgram(controller);
+    controller.handleCommand({ kind: "start" });
+    endCurrent(controller);
+    expect(controller.getState().material).toEqual({ id: "material-1", focus: true });
+
+    endCurrent(controller);
+    expect(controller.getState().material).toEqual({ id: "material-2", focus: false });
+
+    endCurrent(controller);
+    expect(controller.getState().material).toBeNull();
   });
 
   it("freezes the show clock at the final value in post_show", () => {

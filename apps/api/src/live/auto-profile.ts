@@ -352,8 +352,8 @@ function buildSummary(
 
 /**
  * Builds a valid Show Profile draft from the ScriptVersion's fixed
- * intro → point/insert → outro structure. The draft deliberately uses only
- * segment-level materials; per-cue material overrides are a later feature.
+ * intro → point/insert → outro structure. The draft uses segment-level
+ * materials; per-cue overrides are authored in the saved Show Profile.
  */
 export function buildAutoShowProfile(input: AutoShowProfileInput): AutoShowProfileResult {
   const warner = createWarner();

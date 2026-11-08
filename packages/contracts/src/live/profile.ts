@@ -2,6 +2,7 @@ import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt, timestampSchema } from "../content/primitives";
 import { livePackageRelativePathSchema } from "./paths";
 import { liveSideSchema } from "./common";
+import { validateSegmentCueReferences } from "./segment-references";
 
 export const liveSegmentKindSchema = z.enum([
   "opening",
@@ -51,6 +52,11 @@ export const liveScriptCueInputSchema = z.strictObject({
   id: idSchema,
   lineId: idSchema,
   expressionId: idSchema.nullable().optional(),
+  /**
+   * Raw per-cue material reference. Omitted inherits the segment material,
+   * null hides the centre card, and a string selects one Material Card.
+   */
+  materialId: idSchema.nullable().optional(),
 });
 export type LiveScriptCueInput = z.infer<typeof liveScriptCueInputSchema>;
 
@@ -259,18 +265,22 @@ export const liveShowProfileSchema = z
       materialIds.add(material.id);
     }
 
-    for (const [index, segment] of profile.segments.entries()) {
-      if ("cues" in segment) {
-        for (const cueId of segment.cues) {
-          if (!cueIds.has(cueId)) {
-            ctx.addIssue({
-              code: "custom",
-              path: ["segments", index, "cues"],
-              message: `キューが見つかりません: ${cueId}`,
-            });
-          }
-        }
+    for (const [index, cue] of profile.scriptCues.entries()) {
+      if (
+        cue.materialId !== undefined &&
+        cue.materialId !== null &&
+        !materialIds.has(cue.materialId)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["scriptCues", index, "materialId"],
+          message: `素材が見つかりません: ${cue.materialId}`,
+        });
       }
+    }
+
+    validateSegmentCueReferences(profile.segments, cueIds, ctx);
+    for (const [index, segment] of profile.segments.entries()) {
       if (segment.material !== undefined && !materialIds.has(segment.material)) {
         ctx.addIssue({
           code: "custom",

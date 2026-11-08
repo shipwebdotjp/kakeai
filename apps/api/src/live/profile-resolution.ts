@@ -28,6 +28,7 @@ export interface ResolvedCueSeed {
   id: string;
   origin: "script" | "live";
   sourceLineId?: string;
+  materialId?: string | null;
   speaker: LiveSide;
   caption: string;
   speech: string;
@@ -278,6 +279,7 @@ export function resolveLiveProfile(
       id: cue.id,
       origin: "script",
       sourceLineId: line.id,
+      ...(cue.materialId === undefined ? {} : { materialId: cue.materialId }),
       speaker: side,
       caption: line.captionText,
       speech: line.speechText,

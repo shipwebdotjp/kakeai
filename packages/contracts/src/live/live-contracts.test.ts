@@ -110,6 +110,51 @@ describe("live contracts", () => {
     expect(liveShowProfileSchema.safeParse(duplicate).success).toBe(false);
   });
 
+  it("accepts per-cue material overrides and rejects unknown references", () => {
+    const base = profile();
+    const withCueMaterial = {
+      ...base,
+      scriptCues: [{ ...base.scriptCues[0]!, materialId: "material-1" }],
+    };
+    expect(liveShowProfileSchema.safeParse(withCueMaterial).success).toBe(true);
+    expect(
+      liveShowProfileSchema.safeParse({
+        ...withCueMaterial,
+        scriptCues: [{ ...withCueMaterial.scriptCues[0]!, materialId: null }],
+      }).success,
+    ).toBe(true);
+    expect(
+      liveShowProfileSchema.safeParse({
+        ...withCueMaterial,
+        scriptCues: [{ ...withCueMaterial.scriptCues[0]!, materialId: "material-missing" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects duplicate cue occurrences in a Show Profile", () => {
+    const base = profile();
+    expect(
+      liveShowProfileSchema.safeParse({
+        ...base,
+        segments: base.segments.map((segment) =>
+          segment.id === "seg-script"
+            ? { ...segment, cues: ["cue-script", "cue-script"] }
+            : segment,
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      liveShowProfileSchema.safeParse({
+        ...base,
+        segments: base.segments.map((segment) =>
+          segment.id === "seg-script"
+            ? { ...segment, cues: ["cue-script", "cue-opening"] }
+            : segment,
+        ),
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects paths that escape the package", () => {
     expect(livePackageRelativePathSchema.safeParse("../secret").success).toBe(false);
     expect(livePackageRelativePathSchema.safeParse("/absolute").success).toBe(false);
@@ -212,65 +257,101 @@ describe("live contracts", () => {
   });
 
   it("validates the resolved show and stage/comment contracts", () => {
+    const packageShow = {
+      schemaVersion: 1,
+      show: profile().show,
+      commentSource: { kind: "youtube" },
+      segments: profile().segments,
+      cues: [
+        {
+          id: "cue-opening",
+          origin: "live",
+          speaker: "left",
+          caption: "始まります。",
+          speech: "はじまります。",
+          expression: "normal",
+          audio: "audio/prepared/cue-0001.wav",
+          durationMs: 1000,
+        },
+        {
+          id: "cue-script",
+          origin: "script",
+          sourceLineId: "line-1",
+          materialId: "material-1",
+          speaker: "left",
+          caption: "本編です。",
+          speech: "ほんぺんです。",
+          expression: "smile",
+          audio: "audio/prepared/cue-0002.wav",
+          durationMs: 1000,
+        },
+        {
+          id: "cue-closing",
+          origin: "live",
+          speaker: "left",
+          caption: "終わります。",
+          speech: "おわります。",
+          expression: "normal",
+          audio: "audio/prepared/cue-0003.wav",
+          durationMs: 1000,
+        },
+      ],
+      materials: [
+        {
+          id: "material-1",
+          kind: "image",
+          file: "materials/card-1.png",
+          hasAudio: false,
+          focus: true,
+          width: 1920,
+          height: 1080,
+        },
+      ],
+      speakers: [
+        {
+          id: "speaker-left",
+          name: "左",
+          side: "left",
+          characterId: "char-left",
+          voice: {
+            adapterId: "voicevox",
+            voiceId: "voice-1",
+            speedScale: 1,
+            settings: {},
+          },
+        },
+      ],
+      commentPolicy: profile().commentPolicy,
+      safety: profile().safety,
+      playout: profile().playout,
+    };
+    expect(livePackageShowSchema.safeParse(packageShow).success).toBe(true);
     expect(
       livePackageShowSchema.safeParse({
-        schemaVersion: 1,
-        show: profile().show,
-        commentSource: { kind: "youtube" },
-        segments: profile().segments,
-        cues: [
-          {
-            id: "cue-opening",
-            origin: "live",
-            speaker: "left",
-            caption: "始まります。",
-            speech: "はじまります。",
-            expression: "normal",
-            audio: "audio/prepared/cue-0001.wav",
-            durationMs: 1000,
-          },
-          {
-            id: "cue-script",
-            origin: "script",
-            sourceLineId: "line-1",
-            speaker: "left",
-            caption: "本編です。",
-            speech: "ほんぺんです。",
-            expression: "smile",
-            audio: "audio/prepared/cue-0002.wav",
-            durationMs: 1000,
-          },
-          {
-            id: "cue-closing",
-            origin: "live",
-            speaker: "left",
-            caption: "終わります。",
-            speech: "おわります。",
-            expression: "normal",
-            audio: "audio/prepared/cue-0003.wav",
-            durationMs: 1000,
-          },
-        ],
-        materials: [],
-        speakers: [
-          {
-            id: "speaker-left",
-            name: "左",
-            side: "left",
-            characterId: "char-left",
-            voice: {
-              adapterId: "voicevox",
-              voiceId: "voice-1",
-              speedScale: 1,
-              settings: {},
-            },
-          },
-        ],
-        commentPolicy: profile().commentPolicy,
-        safety: profile().safety,
-        playout: profile().playout,
+        ...packageShow,
+        cues: packageShow.cues.map((cue) =>
+          cue.id === "cue-script" ? { ...cue, materialId: null } : cue,
+        ),
       }).success,
     ).toBe(true);
+    expect(
+      livePackageShowSchema.safeParse({
+        ...packageShow,
+        cues: packageShow.cues.map((cue) =>
+          cue.id === "cue-script" ? { ...cue, materialId: "material-missing" } : cue,
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      livePackageShowSchema.safeParse({
+        ...packageShow,
+        segments: packageShow.segments.map((segment) =>
+          segment.id === "seg-script"
+            ? { ...segment, cues: ["cue-script", "cue-opening"] }
+            : segment,
+        ),
+      }).success,
+    ).toBe(false);
 
     const stageState = {
       phase: "pre_show",

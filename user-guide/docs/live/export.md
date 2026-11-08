@@ -44,6 +44,24 @@ npm run live:export -- \
 
 生成結果には summary と warnings が出ます。opening / closing の placeholder、素材にできなかった Scene、話者のない行などは warning を確認してください。保存したプロファイルは通常の Show Profile なので、そのまま編集できます。`--auto-profile` では `--save-profile` が必須です（`--dry-run` を除く）。同じ保存先に再生成するときは `--force` を付けてください。
 
+## Cueごとに素材を切り替える
+
+`scriptCues` の `materialId` で、そのCueだけ中央の素材カードを切り替えられます。`materialId` は `materials[]` にある素材IDを指定します。
+
+```jsonc
+{
+  "id": "cue-news-1-2",
+  "lineId": "line-news-1-2",
+  "materialId": "material-chart"
+}
+```
+
+- 未指定: そのCueが属するSegmentの `material` を使います。
+- 文字列: そのCueだけ指定した素材を表示します。
+- `null`: Segment既定も無効にし、中央素材を隠します。
+
+1つのCueは1回の再生に対応します。同じCue IDを複数のSegmentから参照したり、同じSegment内で重複させたりしないでください。素材カードはCueの切り替え時に読み込むため、最初の表示が一瞬空白になることがあります。
+
 ## 2本目以降
 
 Work を複製した場合は、行 ID と Scene ID が維持されるため、前回のプロファイルをそのまま使えます。プロファイルの `show.title` だけを新しい Work タイトルに合わせて更新してください。

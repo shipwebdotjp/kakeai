@@ -122,7 +122,7 @@ function showProfile(): LiveShowProfile {
         cues: ["cue-closing"],
       },
     ],
-    scriptCues: [{ id: "cue-script", lineId: "line-p1-1" }],
+    scriptCues: [{ id: "cue-script", lineId: "line-p1-1", materialId: "material-2" }],
     liveCues: [
       {
         id: "cue-opening",
@@ -319,8 +319,11 @@ describe("live export flow", () => {
     expect(manifest.files.some((file) => file.path === "audio/prepared/cue-0001.wav")).toBe(true);
     expect(manifest.files.every((file) => !file.path.startsWith("/"))).toBe(true);
 
-    livePackageShowSchema.parse(
+    const exportedShow = livePackageShowSchema.parse(
       JSON.parse(await readFile(join(outDir, "show.json"), "utf8")),
+    );
+    expect(exportedShow.cues.find((cue) => cue.id === "cue-script")?.materialId).toBe(
+      "material-2",
     );
     liveCharacterSheetSchema.parse(
       JSON.parse(await readFile(join(outDir, "characters.json"), "utf8")),

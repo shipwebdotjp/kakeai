@@ -1,6 +1,7 @@
 import type {
   ConsoleSnapshot,
   LiveCharacterSheet,
+  LiveCue,
   LiveGenerationStatus,
   LivePackageShow,
   LiveSegment,
@@ -32,7 +33,7 @@ export interface ControllerViewHost {
   phase(): StagePhase;
   segment(): LiveSegment | null;
   segmentLabel(segment: LiveSegment | null): { id: string; label: string } | null;
-  materialForSegment(segment: LiveSegment): MaterialCard | null;
+  materialForCue(segment: LiveSegment, cue: LiveCue | null): MaterialCard | null;
   clock(): StageClock;
   /** Wired by the director integration (P5b); null until then. */
   generation?(): LiveGenerationStatus | null;
@@ -69,16 +70,17 @@ export class ControllerView {
   getState(): StageState {
     const { host } = this;
     const segment = host.segment();
+    const cue = host.playout.current;
     return buildStageState({
       show: host.show,
       characters: host.characters,
       phase: host.phase(),
       segment: host.segmentLabel(segment),
-      cue: host.playout.current,
+      cue,
       attempt: host.playout.currentAttempt,
       sequence: host.playout.currentSequenceValue,
       cueStartedAt: host.playout.currentStartedAt,
-      material: segment === null ? null : host.materialForSegment(segment),
+      material: segment === null ? null : host.materialForCue(segment, cue),
       comment: host.comments.getStageComment(),
       status: this.getStatus(),
       clock: host.clock(),

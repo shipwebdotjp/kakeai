@@ -82,7 +82,7 @@ apps/live/
 ## フェーズと進行
 
 - `pre_show` で開始操作を待つ。`start`でショー時計を開始し、先頭セグメントのキューを流す。
-- セグメント種別とフェーズの対応は `opening`→`opening`、`script`→`script`（素材があれば`material`）、`comment`→`comment`、`closing`→`closing`。
+- セグメント種別とフェーズの対応は `opening`→`opening`、`script`→`script`、`comment`→`comment`、`closing`→`closing`。素材の有無は`StageState.material`で表し、`script`のまま切り替える。
 - キューが尽きたら次のセグメントへ進む。スパインが尽きたら`post_show`。
 - `pause`は現在のattemptを保持し、再開時に同じattemptの先頭から再生する。`stop`は生成キューを消し、準備済みキューを保持して`paused`へ移る。
 - `safe_mode`は生成レスとコメントコーナーを止め、準備済みキューだけを流す。

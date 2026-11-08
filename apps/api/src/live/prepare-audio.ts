@@ -229,6 +229,7 @@ export async function prepareAudio(
       id: seed.id,
       origin: seed.origin,
       ...(seed.sourceLineId === undefined ? {} : { sourceLineId: seed.sourceLineId }),
+      ...(seed.materialId === undefined ? {} : { materialId: seed.materialId }),
       speaker: seed.speaker,
       caption: seed.caption,
       speech: seed.speech,

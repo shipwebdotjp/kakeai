@@ -7,7 +7,6 @@ export const stagePhaseSchema = z.enum([
   "pre_show",
   "opening",
   "script",
-  "material",
   "comment",
   "closing",
   "post_show",

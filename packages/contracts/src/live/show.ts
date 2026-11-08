@@ -18,6 +18,7 @@ import {
   liveTestConfigSchema,
 } from "./profile";
 import { liveAudioUrlSchema, livePackageRelativePathSchema } from "./paths";
+import { validateSegmentCueReferences } from "./segment-references";
 
 export const liveVoiceSettingsSchema = z.record(
   z
@@ -55,6 +56,8 @@ export const preparedCueSchema = z
     caption: z.string().trim().min(1),
     speech: z.string().trim().min(1),
     expression: idSchema,
+    /** Raw per-cue material reference; runtime resolves the segment default. */
+    materialId: idSchema.nullable().optional(),
     audio: livePackageRelativePathSchema,
     durationMs: positiveInt,
   })
@@ -85,6 +88,8 @@ export const liveCueSchema = z
     caption: z.string().trim().min(1),
     speech: z.string().trim().min(1),
     expression: idSchema,
+    /** Raw per-cue material reference; runtime resolves the segment default. */
+    materialId: idSchema.nullable().optional(),
     /** Package-relative for prepared cues, `run:generated/...` for generated speech. */
     audio: liveAudioUrlSchema.nullable(),
     durationMs: nonNegativeInt.nullable(),
@@ -151,19 +156,7 @@ export const livePackageShowSchema = z
       }
       cueIds.add(cue.id);
     }
-    for (const [index, segment] of show.segments.entries()) {
-      if ("cues" in segment) {
-        for (const cueId of segment.cues) {
-          if (!cueIds.has(cueId)) {
-            ctx.addIssue({
-              code: "custom",
-              path: ["segments", index, "cues"],
-              message: `キューが見つかりません: ${cueId}`,
-            });
-          }
-        }
-      }
-    }
+    validateSegmentCueReferences(show.segments, cueIds, ctx);
     const materialIds = new Set<string>();
     for (const material of show.materials) {
       if (materialIds.has(material.id)) {
@@ -174,6 +167,19 @@ export const livePackageShowSchema = z
         });
       }
       materialIds.add(material.id);
+    }
+    for (const [index, cue] of show.cues.entries()) {
+      if (
+        cue.materialId !== undefined &&
+        cue.materialId !== null &&
+        !materialIds.has(cue.materialId)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cues", index, "materialId"],
+          message: `素材が見つかりません: ${cue.materialId}`,
+        });
+      }
     }
     for (const [index, segment] of show.segments.entries()) {
       if (segment.material !== undefined && !materialIds.has(segment.material)) {

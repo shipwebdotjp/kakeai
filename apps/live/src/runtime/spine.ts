@@ -16,7 +16,6 @@ export interface SpineHost {
   isEndRequested(): boolean;
   clearEndRequested(): void;
   remainingMs(): number;
-  hasMaterial(segment: LiveSegment): boolean;
   enterPostShow(): void;
   hasCommentCorner(): boolean;
   startCommentCorner(segment: Extract<LiveSegment, { kind: "comment" }>): void;
@@ -61,9 +60,7 @@ export class Spine {
       }
       this.host.setCurrentSegmentIndex(index);
       this.host.setPhase(
-        this.host.isSafeMode()
-          ? "safe_mode"
-          : phaseForSegment(segment, this.host.hasMaterial(segment)),
+        this.host.isSafeMode() ? "safe_mode" : phaseForSegment(segment),
       );
       this.host.playout.setQueue(cues);
       this.host.playout.start();
