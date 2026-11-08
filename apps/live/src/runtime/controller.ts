@@ -22,6 +22,7 @@ import { CommentRuntime } from "./comment-runtime.ts";
 import { dispatchLiveCommand, type CommandResult } from "./command-dispatch.ts";
 import { ControllerView } from "./controller-view.ts";
 import { CueControl, type LiveCuePatch } from "./control-queue.ts";
+import { handleCueCommand } from "./cue-commands.ts";
 import { StageLeaseManager, type StageConnectOptions } from "./lease.ts";
 import { Playout, type PlayoutEvent, type PlayoutScheduler } from "./playout.ts";
 import { dispatchPlayoutEvent } from "./playout-events.ts";
@@ -240,17 +241,14 @@ export class LiveController {
   }
 
   getState(): StageState { return this.view.getState(); }
-
   getSnapshot(): ConsoleSnapshot { return this.view.getSnapshot(); }
 
   getShowMeta() { return buildShowMeta(this.show); }
   getStageConnections(): LiveStageConnection[] { return this.leases.list(); }
-
   touchPreviewStage(sessionId: string): StageLease | null { return this.leases.touchPreview(sessionId); }
   getStageLease(sessionId: string): StageLease | null { return this.leases.leaseOf(sessionId); }
 
   getPreloadCues(): LivePreloadCue[] { return this.cueControl.getPreloadCues(); }
-
   getBufferEstimate(): SegmentBufferEstimate { return this.cueControl.getBufferEstimate(); }
 
   connectStage(sessionId: string, options: StageConnectOptions = {}): { lease: StageLease; state: StageState } {
@@ -296,6 +294,10 @@ export class LiveController {
         enterSafeMode: () => this.enterSafeMode(),
         skipCue: () => this.skipCue(),
         takeover: (sessionId) => this.takeover(sessionId),
+        cueCommand: (cueCommand) => {
+          const result = handleCueCommand(this.cueControl, cueCommand);
+          return result.ok ? result : this.reject(result.message);
+        },
         reject: (message) => this.reject(message),
       },
       command,

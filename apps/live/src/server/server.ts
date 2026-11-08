@@ -166,6 +166,7 @@ export async function createLiveServer(
     loaded: options.package,
     distDir: options.distDir ?? DEFAULT_DIST_DIR,
     port: actualPort,
+    runDir: runStore.dir,
   });
   httpServer.off("request", startingHandler);
   httpServer.off("upgrade", startingUpgrade);

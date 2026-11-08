@@ -45,7 +45,7 @@ apps/live/
 
 ## 通信契約
 
-- HTTP: `/stage`、`/console`、`/package/*`、`/healthz`。
+- HTTP: `/stage`、`/console`、`/package/*`、`/run/generated/*`、`/healthz`。
 - WebSocket: `/ws?role=stage` と `/ws?role=console`。
 - サーバからステージへ: `hello`、`state`、`preload`、`notice`、`lease`。
 - サーバからコンソールへ: `hello`、`snapshot`、`event`、`notice`。
@@ -57,7 +57,8 @@ apps/live/
 - `/stage?preview=1` は `/ws?role=stage&preview=1` で明示的にpreviewを要求する。programが不在でもpreviewになり、programには昇格しない。通常の `/stage` は従来どおり最初の接続がprogramを取る。
 - previewは`stage_event`を送らない。previewのリースはWebSocketのpongでサーバが更新し、コンソールの接続一覧から消えないようにする。
 - 明示的なprogram引き継ぎやリース失効でロールが変わったとき、サーバは対象ステージへ `lease` を送る。ステージは再生を止めずにミュート状態だけを切り替える。
-- ステージが読む音声URLはパッケージ相対パスを `/package/<path>` で解決する。P5の生成音声は、実行ディレクトリ配信（例: `/run/<runId>/generated/...`）として拡張する。
+- ステージが読む音声URLはパッケージ相対パスを `/package/<path>` で解決する。生成音声は `run:generated/<file>.wav|mp3` と表し、現在の実行ディレクトリの `/run/generated/<file>` として配信する。`run:` は予約 prefix で、パッケージ相対パスとしては扱わない。
+- 生成音声は `runs/<runId>/generated/` にだけ書き、`..`・絶対パス・シンボリックリンク・generated 外は配信しない。`Cache-Control: no-store` を付ける。
 
 ## 状態の所有者
 
@@ -90,7 +91,9 @@ apps/live/
 
 - `--config <file>` のJSONは`LiveRuntimeConfig`に従う。省略時は既定値を使う。
 - `--port`、`--package`、`--test`、`KAKEAI_LIVE_DATA_DIR`で上書きする。
-- 実YouTubeのコメントソースを使うときは`llm.mode`が`local`でなければ起動を拒否する。fixtureでは`local`/`external`の両方を許す。
+- 実YouTubeのコメントソースを使うときは`llm.mode`が`local`でなければ起動を拒否する。ディレクターも同じ境界を通し、fixtureでは`local`/`external`の両方を許す。
+- 生成レスTTSは`tts.timeoutMs`（既定20000）で打ち切り、`tts.maxConcurrentTts`（既定2）の共有セマフォで同時実行を制限する。接続先はループバックのローカルTTSだけを許す。
+- ディレクターの出力はZod検証に加え、禁止話題・最大文字数・最大キュー数・URL/HTML/Markdownリンク・個人情報・強い断定を安全フィルターで検査する。不正は1回だけ再生成し、タイムアウトは再試行しない。
 - 生成音声・ログ・トークンは`dataDir`配下にだけ書く。パッケージは読み取り専用とする。
 
 ## テスト方針

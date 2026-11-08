@@ -7,12 +7,15 @@ import {
   resolvePackageFilePath,
   type LoadedLivePackage,
 } from "../package/loader.ts";
+import { resolveGeneratedAudioFile } from "./run-files.ts";
 import { liveAccessGuard } from "./security.ts";
 
 export interface LiveAppOptions {
   loaded: LoadedLivePackage;
   distDir: string;
   port: number;
+  /** Current `runs/<runId>` directory; enables `/run/generated/*`. */
+  runDir?: string;
 }
 
 const PAGE_CSP = [
@@ -110,6 +113,41 @@ export function createLiveApp(options: LiveAppOptions): express.Express {
       fallthrough: false,
     }),
   );
+
+  app.get("/run/*path", (req, res, next) => {
+    void (async () => {
+      if (options.runDir === undefined) {
+        res.status(404).json({ error: "not_found" });
+        return;
+      }
+      const raw = (req.params as Record<string, unknown>).path;
+      const relativePath = Array.isArray(raw)
+        ? raw.join("/")
+        : typeof raw === "string"
+          ? raw
+          : "";
+      const file = await resolveGeneratedAudioFile(options.runDir, relativePath);
+      if (file === null) {
+        res.status(404).json({ error: "not_found" });
+        return;
+      }
+      res.setHeader("Content-Type", file.mediaType);
+      res.setHeader("Cache-Control", "no-store");
+      if (req.method === "HEAD") {
+        res.end();
+        return;
+      }
+      const stream = createReadStream(file.path);
+      stream.on("error", (error) => {
+        if (res.headersSent) {
+          res.destroy(error);
+          return;
+        }
+        next(error);
+      });
+      stream.pipe(res);
+    })().catch(next);
+  });
 
   app.get("/package/*path", (req, res, next) => {
     void (async () => {

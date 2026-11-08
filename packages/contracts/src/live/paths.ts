@@ -25,6 +25,58 @@ export const livePackageRelativePathSchema = z
   );
 export type LivePackageRelativePath = z.infer<typeof livePackageRelativePathSchema>;
 
+/**
+ * Reserved URL prefix for audio generated during a run. The server maps it to
+ * `<runDir>/generated/<file>`; it never resolves inside the package.
+ */
+export const LIVE_RUN_AUDIO_PREFIX = "run:generated/";
+
+const GENERATED_AUDIO_FILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:wav|mp3)$/u;
+
+/** A flat file name under `generated/`: no separators, no `..`, no leading dot. */
+export function isSafeGeneratedAudioFileName(fileName: string): boolean {
+  return (
+    fileName.length > 0 &&
+    fileName.length <= 200 &&
+    GENERATED_AUDIO_FILE_PATTERN.test(fileName) &&
+    !fileName.includes("..")
+  );
+}
+
+export type LiveAudioLocation =
+  | { kind: "package"; path: string }
+  | { kind: "run"; fileName: string };
+
+/**
+ * Parses either a package-relative path or `run:generated/<file>`. Returns
+ * null for anything else, including path traversal and unsupported extensions.
+ */
+export function parseLiveAudioUrl(value: string): LiveAudioLocation | null {
+  if (value.startsWith(LIVE_RUN_AUDIO_PREFIX)) {
+    const fileName = value.slice(LIVE_RUN_AUDIO_PREFIX.length);
+    if (!isSafeGeneratedAudioFileName(fileName)) {
+      return null;
+    }
+    return { kind: "run", fileName };
+  }
+  // `run:` is reserved. Never let an unknown run prefix fall through as a
+  // package path.
+  if (value.startsWith("run:")) {
+    return null;
+  }
+  const parsed = livePackageRelativePathSchema.safeParse(value);
+  return parsed.success ? { kind: "package", path: parsed.data } : null;
+}
+
+export const liveAudioUrlSchema = z
+  .string()
+  .min(1)
+  .refine((value) => parseLiveAudioUrl(value) !== null, {
+    message:
+      "パッケージ内の相対パス、または run:generated/<ファイル名>.wav|mp3 を指定してください",
+  });
+export type LiveAudioUrl = z.infer<typeof liveAudioUrlSchema>;
+
 export const liveMediaTypeSchema = z.enum([
   "text/css",
   "application/json",

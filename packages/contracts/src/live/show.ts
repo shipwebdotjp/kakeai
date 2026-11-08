@@ -17,7 +17,7 @@ import {
   liveShowMetaSchema,
   liveTestConfigSchema,
 } from "./profile";
-import { livePackageRelativePathSchema } from "./paths";
+import { liveAudioUrlSchema, livePackageRelativePathSchema } from "./paths";
 
 export const liveVoiceSettingsSchema = z.record(
   z
@@ -85,7 +85,8 @@ export const liveCueSchema = z
     caption: z.string().trim().min(1),
     speech: z.string().trim().min(1),
     expression: idSchema,
-    audio: livePackageRelativePathSchema.nullable(),
+    /** Package-relative for prepared cues, `run:generated/...` for generated speech. */
+    audio: liveAudioUrlSchema.nullable(),
     durationMs: nonNegativeInt.nullable(),
     source: liveCueSourceSchema,
     status: liveCueStatusSchema,

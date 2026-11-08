@@ -6,11 +6,14 @@ import {
   liveCommentEntrySchema,
   directorOutputSchema,
   jobSchema,
+  liveAudioUrlSchema,
   liveCommandSchema,
   liveExportResultSchema,
+  liveGenerationStatusSchema,
   livePackageManifestSchema,
   livePackageRelativePathSchema,
   livePackageShowSchema,
+  parseLiveAudioUrl,
   liveRuntimeConfigSchema,
   liveServerHelloMessageSchema,
   liveShowProfileSchema,
@@ -112,6 +115,31 @@ describe("live contracts", () => {
     expect(livePackageRelativePathSchema.safeParse("/absolute").success).toBe(false);
     expect(livePackageRelativePathSchema.safeParse("media/./ok.png").success).toBe(false);
     expect(livePackageRelativePathSchema.safeParse("media\\ok.png").success).toBe(false);
+  });
+
+  it("accepts package and run audio URLs without path escapes", () => {
+    expect(parseLiveAudioUrl("audio/prepared/cue-1.wav")).toEqual({
+      kind: "package",
+      path: "audio/prepared/cue-1.wav",
+    });
+    expect(parseLiveAudioUrl("run:generated/cue-1-ab12cd.wav")).toEqual({
+      kind: "run",
+      fileName: "cue-1-ab12cd.wav",
+    });
+    expect(liveAudioUrlSchema.safeParse("run:generated/response.mp3").success).toBe(true);
+    for (const invalid of [
+      "run:generated/../secret.wav",
+      "run:generated//etc/passwd",
+      "run:generated/foo.ogg",
+      "run:generated/.hidden.wav",
+      "run:generated/foo..wav",
+      "run:generated/sub/foo.wav",
+      "run:other/foo.wav",
+      "../secret.wav",
+      "/absolute.wav",
+    ]) {
+      expect(liveAudioUrlSchema.safeParse(invalid).success).toBe(false);
+    }
   });
 
   it("requires sourceLineId only for script cues", () => {
@@ -280,6 +308,20 @@ describe("live contracts", () => {
     expect(
       stageStateSchema.safeParse({
         ...stageState,
+        phase: "script",
+        status: "speaking",
+        playback: { ...playback, audioUrl: "run:generated/response-ab12cd.wav" },
+      }).success,
+    ).toBe(true);
+    expect(
+      stageStateSchema.safeParse({
+        ...stageState,
+        playback: { ...playback, audioUrl: "run:generated/../escape.wav" },
+      }).success,
+    ).toBe(false);
+    expect(
+      stageStateSchema.safeParse({
+        ...stageState,
         playback: { ...playback, sequence: undefined },
       }).success,
     ).toBe(false);
@@ -354,14 +396,54 @@ describe("live contracts", () => {
           authExpiresAt: null,
           needsReauth: false,
         },
+        generation: null,
       }).success,
     ).toBe(true);
+    expect(
+      liveGenerationStatusSchema.safeParse({
+        phase: "preparing",
+        commentId: "yt-1",
+        cueIds: ["cue-gen-1"],
+        error: null,
+        updatedAt: NOW,
+      }).success,
+    ).toBe(true);
+    expect(
+      liveGenerationStatusSchema.safeParse({
+        phase: "unknown",
+        commentId: null,
+        cueIds: [],
+        error: null,
+        updatedAt: NOW,
+      }).success,
+    ).toBe(false);
     expect(liveCommandSchema.safeParse({ kind: "start" }).success).toBe(true);
     expect(liveCommandSchema.safeParse({ kind: "skip_cue" }).success).toBe(true);
     expect(liveCommandSchema.safeParse({ kind: "unknown" }).success).toBe(false);
     expect(
       liveCommandSchema.safeParse({ kind: "takeover_program", sessionId: "session-1" }).success,
     ).toBe(true);
+    expect(
+      liveCommandSchema.safeParse({
+        kind: "edit_cue",
+        cueId: "cue-1",
+        caption: "直した字幕",
+      }).success,
+    ).toBe(true);
+    expect(
+      liveCommandSchema.safeParse({ kind: "edit_cue", cueId: "cue-1" }).success,
+    ).toBe(false);
+    expect(
+      liveCommandSchema.safeParse({
+        kind: "move_cue",
+        cueId: "cue-1",
+        beforeCueId: null,
+      }).success,
+    ).toBe(true);
+    for (const kind of ["cancel_cue", "regenerate_cue", "delete_cue", "play_correction"] as const) {
+      expect(liveCommandSchema.safeParse({ kind, cueId: "cue-1" }).success).toBe(true);
+      expect(liveCommandSchema.safeParse({ kind, cueId: "" }).success).toBe(false);
+    }
 
     expect(
       stageEventSchema.safeParse({
@@ -520,6 +602,8 @@ describe("live contracts", () => {
     };
     const parsed = liveRuntimeConfigSchema.parse(base);
     expect(parsed.llm.timeoutMs).toBe(15_000);
+    expect(parsed.tts.timeoutMs).toBe(20_000);
+    expect(parsed.tts.maxConcurrentTts).toBe(2);
     expect(parsed.comments).toEqual({
       ngWords: [],
       maxLength: 300,

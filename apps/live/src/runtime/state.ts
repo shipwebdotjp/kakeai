@@ -5,6 +5,7 @@ import type {
   LiveCommentCorner,
   LiveCommentEntry,
   LiveCue,
+  LiveGenerationStatus,
   LivePackageShow,
   LiveServerShowMeta,
   LiveStageConnection,
@@ -135,6 +136,7 @@ export function buildConsoleSnapshot(input: {
   comments: LiveCommentEntry[];
   commentCorner: LiveCommentCorner;
   commentSource: CommentSourceStatus;
+  generation: LiveGenerationStatus | null;
 }): ConsoleSnapshot {
   return {
     runId: input.runId,
@@ -151,6 +153,7 @@ export function buildConsoleSnapshot(input: {
     comments: input.comments,
     commentCorner: input.commentCorner,
     commentSource: input.commentSource,
+    generation: input.generation,
   };
 }
 

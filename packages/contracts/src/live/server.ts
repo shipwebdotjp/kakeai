@@ -5,7 +5,7 @@ import {
   commentSourceStatusSchema,
   liveCommentEntrySchema,
 } from "./comment";
-import { livePackageRelativePathSchema } from "./paths";
+import { liveAudioUrlSchema } from "./paths";
 import { liveSegmentKindSchema } from "./profile";
 import { runLogEventSchema } from "./run-log";
 import { liveCueSchema } from "./show";
@@ -40,6 +40,28 @@ export const liveServerShowMetaSchema = z.strictObject({
 });
 export type LiveServerShowMeta = z.infer<typeof liveServerShowMetaSchema>;
 
+/**
+ * Server-side generated-response lifecycle. `thinking` is the LLM call,
+ * `preparing` covers TTS, `ready` means the cues are queued, and `failed`
+ * carries a console-facing error. `cueIds` is empty until the cues exist.
+ */
+export const liveGenerationPhaseSchema = z.enum([
+  "thinking",
+  "preparing",
+  "ready",
+  "failed",
+]);
+export type LiveGenerationPhase = z.infer<typeof liveGenerationPhaseSchema>;
+
+export const liveGenerationStatusSchema = z.strictObject({
+  phase: liveGenerationPhaseSchema,
+  commentId: idSchema.nullable(),
+  cueIds: z.array(idSchema),
+  error: z.string().nullable(),
+  updatedAt: timestampSchema,
+});
+export type LiveGenerationStatus = z.infer<typeof liveGenerationStatusSchema>;
+
 export const liveStageConnectionSchema = z.strictObject({
   sessionId: idSchema,
   role: stageLeaseRoleSchema,
@@ -71,6 +93,8 @@ export const consoleSnapshotSchema = z.strictObject({
   comments: z.array(liveCommentEntrySchema),
   commentCorner: commentCornerSchema,
   commentSource: commentSourceStatusSchema,
+  /** Current or most recent generated response; null before the first one. */
+  generation: liveGenerationStatusSchema.nullable(),
 });
 export type ConsoleSnapshot = z.infer<typeof consoleSnapshotSchema>;
 
@@ -100,7 +124,7 @@ export type LiveServerSnapshotMessage = z.infer<typeof liveServerSnapshotMessage
 
 export const livePreloadCueSchema = z.strictObject({
   cueId: idSchema,
-  audioUrl: livePackageRelativePathSchema,
+  audioUrl: liveAudioUrlSchema,
 });
 export type LivePreloadCue = z.infer<typeof livePreloadCueSchema>;
 
@@ -156,6 +180,31 @@ export const liveCommandSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("safe_mode") }),
   z.strictObject({ kind: z.literal("skip_cue") }),
   z.strictObject({ kind: z.literal("takeover_program"), sessionId: idSchema }),
+  // Generated-response editing. `edit_cue` requires at least one changed field.
+  z
+    .strictObject({
+      kind: z.literal("edit_cue"),
+      cueId: idSchema,
+      caption: z.string().trim().min(1).optional(),
+      speech: z.string().trim().min(1).optional(),
+      expression: idSchema.optional(),
+    })
+    .refine(
+      (command) =>
+        command.caption !== undefined ||
+        command.speech !== undefined ||
+        command.expression !== undefined,
+      { message: "caption・speech・expression のいずれかを指定してください。" },
+    ),
+  z.strictObject({ kind: z.literal("cancel_cue"), cueId: idSchema }),
+  z.strictObject({ kind: z.literal("regenerate_cue"), cueId: idSchema }),
+  z.strictObject({ kind: z.literal("delete_cue"), cueId: idSchema }),
+  z.strictObject({
+    kind: z.literal("move_cue"),
+    cueId: idSchema,
+    beforeCueId: idSchema.nullable(),
+  }),
+  z.strictObject({ kind: z.literal("play_correction"), cueId: idSchema }),
   // Comment corner commands consumed by the P4b controller integration.
   z.strictObject({
     kind: z.literal("pin_comment"),

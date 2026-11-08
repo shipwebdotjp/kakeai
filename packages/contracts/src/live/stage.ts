@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt, timestampSchema } from "../content/primitives";
 import { liveSideSchema } from "./common";
-import { livePackageRelativePathSchema } from "./paths";
+import { liveAudioUrlSchema } from "./paths";
 
 export const stagePhaseSchema = z.enum([
   "pre_show",
@@ -68,7 +68,7 @@ export const stagePlaybackSchema = z.strictObject({
    */
   sequence: nonNegativeInt,
   startedAt: timestampSchema,
-  audioUrl: livePackageRelativePathSchema,
+  audioUrl: liveAudioUrlSchema,
 });
 export type StagePlayback = z.infer<typeof stagePlaybackSchema>;
 

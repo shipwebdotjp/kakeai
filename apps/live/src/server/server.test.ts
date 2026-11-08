@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -296,6 +296,39 @@ describe("live HTTP server", () => {
     expect(String(show.headers["content-type"])).toContain("application/json");
 
     expect((await request(`${server.url}/package/manifest.json`)).status).toBe(404);
+  });
+
+  it("serves generated audio only from the current run directory", async () => {
+    const generatedDir = join(server.runStore.dir, "generated");
+    await mkdir(generatedDir, { recursive: true });
+    await writeFile(join(generatedDir, "response-ab12cd.wav"), Buffer.from("RIFFdata"), "utf8");
+    await writeFile(join(generatedDir, "response-ab12cd.mp3"), Buffer.from("ID3data"), "utf8");
+
+    const wav = await request(`${server.url}/run/generated/response-ab12cd.wav`);
+    expect(wav.status).toBe(200);
+    expect(String(wav.headers["content-type"])).toBe("audio/wav");
+    expect(String(wav.headers["cache-control"])).toBe("no-store");
+    expect(wav.body.toString("utf8")).toBe("RIFFdata");
+
+    const mp3 = await request(`${server.url}/run/generated/response-ab12cd.mp3`);
+    expect(mp3.status).toBe(200);
+    expect(String(mp3.headers["content-type"])).toBe("audio/mpeg");
+
+    const outside = await makeTemp("kakeai-live-outside-");
+    await writeFile(join(outside, "secret.wav"), "secret", "utf8");
+    await symlink(join(outside, "secret.wav"), join(generatedDir, "link.wav"));
+
+    for (const path of [
+      "/run/generated/../secret.wav",
+      "/run/generated/%2e%2e%2fsecret.wav",
+      "/run/generated/sub/response-ab12cd.wav",
+      "/run/generated/response-ab12cd.ogg",
+      "/run/generated/link.wav",
+      "/run/other/response-ab12cd.wav",
+      "/run/generated/missing.wav",
+    ]) {
+      expect((await request(`${server.url}${path}`)).status).toBe(404);
+    }
   });
 
   it("rejects bad Host and Origin and requires Origin for POST", async () => {

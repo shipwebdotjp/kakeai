@@ -99,6 +99,10 @@ export const liveRuntimeConfigSchema = z.strictObject({
   llm: liveLlmConfigSchema,
   tts: z.strictObject({
     adapters: z.partialRecord(voiceAdapterIdSchema, liveTtsAdapterConfigSchema),
+    /** Per-synthesis timeout for generated responses. */
+    timeoutMs: positiveInt.default(20_000),
+    /** Shared limit for concurrent generated-response TTS calls. */
+    maxConcurrentTts: positiveInt.default(2),
   }),
   youtube: liveYouTubeConfigSchema.optional(),
   comments: liveCommentsConfigSchema.default(() => ({

@@ -1,5 +1,6 @@
 import type { LiveCommand } from "@kakeai/contracts";
 import { isCommentCommand, type CommentRuntime } from "./comment-runtime.ts";
+import { isCueCommand, type CueCommand } from "./cue-commands.ts";
 
 export type CommandResult = { ok: true } | { ok: false; message: string };
 
@@ -14,6 +15,7 @@ export interface LiveCommandAdapter {
   enterSafeMode(): CommandResult;
   skipCue(): CommandResult;
   takeover(sessionId: string): CommandResult;
+  cueCommand(command: CueCommand): CommandResult;
   reject(message: string): CommandResult;
 }
 
@@ -24,6 +26,9 @@ export function dispatchLiveCommand(
   if (isCommentCommand(command)) {
     const result = adapter.comments.handleCommand(command);
     return result.ok ? { ok: true } : adapter.reject(result.message);
+  }
+  if (isCueCommand(command)) {
+    return adapter.cueCommand(command);
   }
   switch (command.kind) {
     case "start":

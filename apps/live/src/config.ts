@@ -38,7 +38,7 @@ export function defaultLiveRuntimeConfig(): LiveRuntimeConfig {
       model: DEFAULT_LLM_MODEL,
       timeoutMs: 15_000,
     },
-    tts: { adapters: {} },
+    tts: { adapters: {}, timeoutMs: 20_000, maxConcurrentTts: 2 },
     comments: {
       ...DEFAULT_LIVE_COMMENTS_CONFIG,
       ngWords: [],

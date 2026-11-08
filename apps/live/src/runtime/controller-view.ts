@@ -1,6 +1,7 @@
 import type {
   ConsoleSnapshot,
   LiveCharacterSheet,
+  LiveGenerationStatus,
   LivePackageShow,
   LiveSegment,
   MaterialCard,
@@ -33,6 +34,8 @@ export interface ControllerViewHost {
   segmentLabel(segment: LiveSegment | null): { id: string; label: string } | null;
   materialForSegment(segment: LiveSegment): MaterialCard | null;
   clock(): StageClock;
+  /** Wired by the director integration (P5b); null until then. */
+  generation?(): LiveGenerationStatus | null;
 }
 
 /** Assembles the stage state and console snapshot from the live controller. */
@@ -108,6 +111,7 @@ export class ControllerView {
       commentCorner: commentSnapshot?.corner ?? emptyCommentCorner(),
       commentSource:
         commentSnapshot?.source ?? idleCommentSource(host.show.commentSource.kind),
+      generation: host.generation?.() ?? null,
     });
   }
 }

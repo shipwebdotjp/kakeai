@@ -38,6 +38,8 @@ describe("live runtime config", () => {
     });
     const config = await loadLiveRuntimeConfigFile(path);
     expect(config.llm.timeoutMs).toBe(15_000);
+    expect(config.tts.timeoutMs).toBe(20_000);
+    expect(config.tts.maxConcurrentTts).toBe(2);
     expect(config.youtube).toBeUndefined();
     expect(config.comments).toEqual({
       ngWords: [],
@@ -58,7 +60,7 @@ describe("live runtime config", () => {
         model: "test-model",
         timeoutMs: 7_000,
       },
-      tts: { adapters: {} },
+      tts: { adapters: {}, timeoutMs: 9_000, maxConcurrentTts: 3 },
       youtube: {
         clientId: "client-1",
         clientSecret: "secret-1",
@@ -71,6 +73,8 @@ describe("live runtime config", () => {
     });
     const config = await loadLiveRuntimeConfigFile(path);
     expect(config.llm.timeoutMs).toBe(7_000);
+    expect(config.tts.timeoutMs).toBe(9_000);
+    expect(config.tts.maxConcurrentTts).toBe(3);
     expect(config.youtube).toMatchObject({
       clientId: "client-1",
       videoUrl: "https://youtu.be/abcdefghijk",
@@ -102,12 +106,24 @@ describe("live runtime config", () => {
     await expect(
       loadLiveRuntimeConfigFile(await writeConfig({ ...base, comments: { unknown: true } })),
     ).rejects.toThrow();
+    await expect(
+      loadLiveRuntimeConfigFile(
+        await writeConfig({ ...base, tts: { adapters: {}, timeoutMs: 0 } }),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      loadLiveRuntimeConfigFile(
+        await writeConfig({ ...base, tts: { adapters: {}, maxConcurrentTts: 0 } }),
+      ),
+    ).rejects.toThrow();
   });
 
   it("returns the documented defaults and applies CLI overrides", async () => {
     const defaults = defaultLiveRuntimeConfig();
     expect(defaults.llm.mode).toBe("local");
     expect(defaults.llm.timeoutMs).toBe(15_000);
+    expect(defaults.tts.timeoutMs).toBe(20_000);
+    expect(defaults.tts.maxConcurrentTts).toBe(2);
     expect(defaults.comments.cornerHoldMs).toBe(4_000);
 
     const dataDir = await tempDir();

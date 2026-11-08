@@ -1,7 +1,7 @@
 import type { LivePreloadCue, StagePhase, StagePlayback } from "@kakeai/contracts";
 import { FADE_OUT_DURATION_MS, fadeOutVolume, shouldFadeOut } from "../../src/runtime/audio-fade.ts";
 import { resolvePlaybackStart } from "../../src/runtime/audio-start.ts";
-import { packageUrl } from "./elements.ts";
+import { audioUrlForStage } from "../../src/shared/audio-url.ts";
 
 export interface StageAudioEvent {
   kind: "audio_ended" | "audio_error";
@@ -86,7 +86,7 @@ export class StageAudio {
       if (this.active?.playback.cueId === cue.cueId) {
         continue;
       }
-      const audio = new Audio(packageUrl(cue.audioUrl));
+      const audio = new Audio(audioUrlForStage(cue.audioUrl));
       audio.preload = "auto";
       audio.muted = true;
       this.preloaded.set(cue.cueId, audio);
@@ -141,7 +141,7 @@ export class StageAudio {
       this.emit({ kind: "audio_ended", playback });
       return;
     }
-    const audio = this.takePreloaded(playback) ?? new Audio(packageUrl(playback.audioUrl));
+    const audio = this.takePreloaded(playback) ?? new Audio(audioUrlForStage(playback.audioUrl));
     audio.preload = "auto";
     audio.volume = 1;
     audio.muted = !this.isProgram();
@@ -182,7 +182,7 @@ export class StageAudio {
       return null;
     }
     this.preloaded.delete(playback.cueId);
-    const expected = new URL(packageUrl(playback.audioUrl), window.location.href).href;
+    const expected = new URL(audioUrlForStage(playback.audioUrl), window.location.href).href;
     if (audio.src !== expected) {
       audio.removeAttribute("src");
       audio.load();
