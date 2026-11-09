@@ -7,6 +7,7 @@ import {
   resolvePackageFilePath,
   type LoadedLivePackage,
 } from "../package/loader.ts";
+import { createControlRouter, type LiveControlOptions } from "./control.ts";
 import { resolveGeneratedAudioFile } from "./run-files.ts";
 import { liveAccessGuard } from "./security.ts";
 
@@ -16,6 +17,8 @@ export interface LiveAppOptions {
   port: number;
   /** Current `runs/<runId>` directory; enables `/run/generated/*`. */
   runDir?: string;
+  /** Present when launched with a control token; absent for manual runs. */
+  control?: LiveControlOptions;
 }
 
 const PAGE_CSP = [
@@ -85,6 +88,16 @@ export function createLiveApp(options: LiveAppOptions): express.Express {
   app.get("/healthz", (_req, res) => {
     res.json({ ok: true });
   });
+
+  if (options.control !== undefined) {
+    app.use("/control", createControlRouter(options.control));
+  } else {
+    // Manual `npm run live` keeps working, but never exposes an unauthenticated
+    // control plane.
+    app.use("/control", (_req, res) => {
+      res.status(404).json({ error: "control_disabled" });
+    });
+  }
 
   app.get("/stage", (_req, res) => {
     sendPage(res, join(options.distDir, "stage.html"));

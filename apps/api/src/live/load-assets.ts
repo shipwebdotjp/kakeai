@@ -5,7 +5,7 @@ import { bigIntToSafeNumber } from "../dto/mappers.ts";
 import { hashFile, resolveStoragePath } from "../storage/asset-store.ts";
 import type { AppConfig } from "../config.ts";
 import { LiveExportError } from "./errors";
-import type { ResolvedAssetFile } from "./profile-resolution";
+import type { ResolvedAssetFile } from "./resolved-assets";
 
 /**
  * Loads the exact Asset/Rendition bytes frozen in the Job snapshot. The DB row

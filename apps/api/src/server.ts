@@ -13,7 +13,9 @@ import { createCharactersRouter } from "./http/routes/characters.ts";
 import { createFaceSetsRouter } from "./http/routes/face-sets.ts";
 import { createJobsRouter } from "./http/routes/jobs.ts";
 import { createLiveExportsRouter } from "./http/routes/live-exports.ts";
-import { createLiveProfilesRouter } from "./http/routes/live-profiles.ts";
+import { createLiveFormatsRouter } from "./http/routes/live-formats.ts";
+import { createLiveProgramsRouter } from "./http/routes/live-programs.ts";
+import { createLiveRunsRouter } from "./http/routes/live-runs.ts";
 import { createLanguageEditionsRouter } from "./http/routes/language-editions.ts";
 import { createScriptVersionsRouter } from "./http/routes/script-versions.ts";
 import { createVoiceProfilesRouter } from "./http/routes/voice-profiles.ts";
@@ -190,7 +192,17 @@ export function createApp(dependencies: AppDependencies): Express {
   api.use(createFaceSetsRouter({ prisma: dependencies.prisma }));
   api.use(createJobsRouter(dependencies.prisma));
   api.use(createLiveExportsRouter(dependencies.prisma, fontCatalogService));
-  api.use(createLiveProfilesRouter(dependencies.prisma));
+  api.use(createLiveFormatsRouter(dependencies.prisma));
+  api.use(createLiveProgramsRouter(dependencies.prisma));
+  api.use(
+    createLiveRunsRouter({
+      prisma: dependencies.prisma,
+      dataRoot: dependencies.config.directories.root,
+      ...(dependencies.config.liveConfigPath === undefined
+        ? {}
+        : { liveConfigPath: dependencies.config.liveConfigPath }),
+    }),
+  );
   api.use(
     createArtifactsRouter({
       prisma: dependencies.prisma,

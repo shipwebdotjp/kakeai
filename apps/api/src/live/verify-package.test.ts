@@ -42,6 +42,46 @@ function wavBytes(): Buffer {
   return buffer;
 }
 
+/** A JPEG whose SOF marker sits after two large APP1 segments (>64 KiB). */
+function largeExifJpeg(width: number, height: number): Buffer {
+  const segments: Buffer[] = [];
+  for (let index = 0; index < 2; index += 1) {
+    const payload = Buffer.alloc(65_000, 0x20);
+    const header = Buffer.alloc(4);
+    header[0] = 0xff;
+    header[1] = 0xe1;
+    header.writeUInt16BE(payload.length + 2, 2);
+    segments.push(header, payload);
+  }
+  const sof = Buffer.from([
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    (height >> 8) & 0xff,
+    height & 0xff,
+    (width >> 8) & 0xff,
+    width & 0xff,
+    0x03,
+    0x01,
+    0x11,
+    0x00,
+    0x02,
+    0x11,
+    0x01,
+    0x03,
+    0x11,
+    0x01,
+  ]);
+  return Buffer.concat([
+    Buffer.from([0xff, 0xd8]),
+    ...segments,
+    sof,
+    Buffer.from([0xff, 0xd9]),
+  ]);
+}
+
 interface FileMeta {
   mediaType: LiveMediaType;
   kind: LivePackageFile["kind"];
@@ -54,6 +94,13 @@ interface FileMeta {
 interface PackageOptions {
   materialVideoWithAudio?: boolean;
   manifestCutInDurationMs?: number;
+  cardAsset?: {
+    id: string;
+    bytes: Buffer;
+    mediaType: LiveMediaType;
+    width: number;
+    height: number;
+  };
 }
 
 const roots: string[] = [];
@@ -144,7 +191,7 @@ async function buildPackage(options: PackageOptions = {}) {
   });
 
   const wav = wavBytes();
-  for (const cueId of ["cue-opening", "cue-script", "cue-closing"]) {
+  for (const cueId of ["cue-opening", "cue-script", "cue-closing", "cue-fallback"]) {
     await add(`audio/prepared/${cueId}.wav`, wav, {
       mediaType: "audio/wav",
       kind: "prepared-audio",
@@ -176,8 +223,22 @@ async function buildPackage(options: PackageOptions = {}) {
     });
   }
 
+  const cardAssetFile =
+    options.cardAsset === undefined
+      ? null
+      : `cards/${options.cardAsset.id}.${options.cardAsset.mediaType === "image/png" ? "png" : "jpg"}`;
+  if (options.cardAsset !== undefined && cardAssetFile !== null) {
+    await add(cardAssetFile, options.cardAsset.bytes, {
+      mediaType: options.cardAsset.mediaType,
+      kind: "card-asset",
+      width: options.cardAsset.width,
+      height: options.cardAsset.height,
+      hasAudio: false,
+    });
+  }
+
   const show = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     show: {
       title: "CutIn 検証",
       locale: "ja-JP",
@@ -185,9 +246,7 @@ async function buildPackage(options: PackageOptions = {}) {
       stageTemplate: "news-desk",
       theme: "theme.css",
       characters: { left: "char-left", right: null },
-      startAt: null,
     },
-    commentSource: { kind: "youtube" },
     segments: [
       {
         id: "seg-opening",
@@ -230,8 +289,7 @@ async function buildPackage(options: PackageOptions = {}) {
       },
       {
         id: "cue-script",
-        origin: "script",
-        sourceLineId: "line-1",
+        origin: "live",
         speaker: "left",
         caption: "本編です。",
         speech: "ほんぺんです。",
@@ -249,6 +307,16 @@ async function buildPackage(options: PackageOptions = {}) {
         audio: "audio/prepared/cue-closing.wav",
         durationMs: 100,
       },
+      {
+        id: "cue-fallback",
+        origin: "live",
+        speaker: "left",
+        caption: "補足します。",
+        speech: "ほそくします。",
+        expression: "normal",
+        audio: "audio/prepared/cue-fallback.wav",
+        durationMs: 100,
+      },
     ],
     materials:
       options.materialVideoWithAudio === true
@@ -262,6 +330,18 @@ async function buildPackage(options: PackageOptions = {}) {
               width: probedCutInWidth,
               height: probedCutInHeight,
               durationMs: probedCutInDurationMs,
+            },
+          ]
+        : [],
+    cardAssets:
+      options.cardAsset !== undefined && cardAssetFile !== null
+        ? [
+            {
+              id: options.cardAsset.id,
+              file: cardAssetFile,
+              mediaType: options.cardAsset.mediaType,
+              width: options.cardAsset.width,
+              height: options.cardAsset.height,
             },
           ]
         : [],
@@ -290,7 +370,7 @@ async function buildPackage(options: PackageOptions = {}) {
       persona: "親しみやすい解説役",
       maxResponseChars: 180,
       maxResponseCues: 2,
-      fallbackCueId: "cue-opening",
+      fallbackCueId: "cue-fallback",
     },
     playout: {
       minBufferMs: 10_000,
@@ -314,17 +394,19 @@ async function buildPackage(options: PackageOptions = {}) {
   }
 
   const manifest = livePackageManifestSchema.parse({
-    packageSchemaVersion: 1,
+    packageSchemaVersion: 2,
     exporterVersion: "0.1.0",
     packageId: "livepkg-test",
     createdAt: NOW,
     source: {
-      workId: "work-1",
-      languageEditionId: "edition-1",
-      scriptVersionId: "script-1",
+      programId: "program-1",
+      programVersionId: "program-version-1",
+      programVersionNumber: 1,
+      programDocumentSha256: "a".repeat(64),
+      resolutionSnapshotSha256: "b".repeat(64),
       theme: { id: "neutral", version: 1 },
-      profileSha256: "a".repeat(64),
     },
+    cardSchemaVersion: 1,
     files,
     fonts: [],
     voices: [],
@@ -428,6 +510,33 @@ describe("verifyShowCardAssets", () => {
     expect(() =>
       verifyShowCardAssets(show, new Map([[entry.path, { ...entry, hasAudio: true }]])),
     ).toThrow(/音声/);
+  });
+});
+
+describe("verifyPackage card assets", () => {
+  it("falls back to a full read for a JPEG whose SOF follows large EXIF metadata", async () => {
+    if (!ffmpegReady) return;
+    const { root, manifest } = await buildPackage({
+      cardAsset: {
+        id: "card-large-exif",
+        bytes: largeExifJpeg(640, 360),
+        mediaType: "image/jpeg",
+        width: 640,
+        height: 360,
+      },
+    });
+    await expect(verifyPackage(root, manifest)).resolves.toMatchObject({
+      show: {
+        cardAssets: [
+          expect.objectContaining({
+            id: "card-large-exif",
+            mediaType: "image/jpeg",
+            width: 640,
+            height: 360,
+          }),
+        ],
+      },
+    });
   });
 });
 

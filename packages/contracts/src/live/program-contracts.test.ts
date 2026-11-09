@@ -254,11 +254,24 @@ describe("live program contracts", () => {
           type: "image",
           states: [{ id: "state-1", assetId: "asset-image" }],
         },
+        {
+          id: "card-unused",
+          type: "image",
+          states: [{ id: "state-unused", assetId: "asset-unused" }],
+        },
       ],
       cues: programDocument().cues.map((cue) =>
-        cue.id === "cue-script" ? { ...cue, audioAssetId: "asset-audio" } : cue,
+        cue.id === "cue-script"
+          ? {
+              ...cue,
+              audioAssetId: "asset-audio",
+              visual: { kind: "card", cardId: "card-image", stateId: "state-1" },
+            }
+          : cue,
       ),
     });
+    // card-unused is not referenced by any visual, so a v2 package omits it
+    // and its image asset must not make finalization fail.
     expect(collectLiveProgramAssetReferences(doc)).toEqual({
       cardImageAssetIds: ["asset-image"],
       audioAssetIds: ["asset-audio"],

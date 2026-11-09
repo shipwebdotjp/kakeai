@@ -425,7 +425,7 @@ _Avoid_: template document, composition
 
 **Live Program**:
 The live-only manuscript for one episode: segments, cues, cards, imported materials, CutIns, comment policy, safety, and playout. It owns its captions, speech, speakers, and expressions. It does not reference a Work or Script Version line.
-_Avoid_: script version, show profile, composition
+_Avoid_: script version, composition
 
 **Live Program Version**:
 An immutable snapshot of a Live Program. Export and live start use a version, never the editable draft.
@@ -442,10 +442,6 @@ _Avoid_: project, asset bundle, script
 **Live Run**:
 One execution of a live show, fixing the Live Program Version, the exact package build, the comment source or fixture, the start time, the port, the control endpoint, and the run log. It never stores credentials or model connection settings.
 _Avoid_: package, job, session
-
-**Show Profile**:
-Legacy live configuration used before Live Program. It references Script Version lines and is not the current source of truth. See [ADR-0131](docs/adr/0131-live-program-owns-live-script.md).
-_Avoid_: live program, script
 
 **Spine**:
 The ordered segment list of a Live Program that defines its planned progression. It is not a Composition timeline.

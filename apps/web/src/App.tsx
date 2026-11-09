@@ -5,9 +5,20 @@ import {
   CHARACTER_LIBRARY_ROUTE_PATH,
   COMPOSITION_LIBRARY_ROUTE_PATH,
   FACE_SETS_ROUTE_PATH,
+  LIVE_FORMATS_ROUTE_PATH,
+  LIVE_PROGRAMS_ROUTE_PATH,
+  LIVE_RUNS_ROUTE_PATH,
   THEMES_ROUTE_PATH,
   VOICE_PROFILES_ROUTE_PATH,
 } from "./lib/routes";
+import { LiveProgramsPage } from "./pages/live/LiveProgramsPage";
+import { LiveProgramNewPage } from "./pages/live/LiveProgramNewPage";
+import { LiveProgramEditorPage } from "./pages/live/LiveProgramEditorPage";
+import { LiveFormatsPage } from "./pages/live/LiveFormatsPage";
+import { LiveFormatNewPage } from "./pages/live/LiveFormatNewPage";
+import { LiveFormatEditorPage } from "./pages/live/LiveFormatEditorPage";
+import { LiveRunNewPage } from "./pages/live/LiveRunNewPage";
+import { LiveRunsPage } from "./live/runs/LiveRunsPage";
 import { CharacterLibraryPage } from "./pages/CharacterLibraryPage";
 import { CompositionLibraryPage } from "./pages/CompositionLibraryPage";
 import { FaceSetPage } from "./pages/FaceSetPage";
@@ -64,6 +75,24 @@ function RootLayout() {
             >
               テーマ
             </Link>
+            <Link
+              to={LIVE_PROGRAMS_ROUTE_PATH}
+              className="text-inherit no-underline hover:underline"
+            >
+              ライブプログラム
+            </Link>
+            <Link
+              to={LIVE_FORMATS_ROUTE_PATH}
+              className="text-inherit no-underline hover:underline"
+            >
+              ライブフォーマット
+            </Link>
+            <Link
+              to={LIVE_RUNS_ROUTE_PATH}
+              className="text-inherit no-underline hover:underline"
+            >
+              ライブ実行
+            </Link>
           </nav>
         </div>
         <ThemeToggle />
@@ -109,11 +138,43 @@ export const router = createBrowserRouter([
         element: <ThemeDetailPage />,
       },
       {
+        path: `${LIVE_PROGRAMS_ROUTE_PATH}/new`,
+        element: <LiveProgramNewPage />,
+      },
+      {
+        path: `${LIVE_PROGRAMS_ROUTE_PATH}/:programId`,
+        element: <LiveProgramEditorPage />,
+      },
+      {
+        path: `${LIVE_FORMATS_ROUTE_PATH}/new`,
+        element: <LiveFormatNewPage />,
+      },
+      {
+        path: `${LIVE_FORMATS_ROUTE_PATH}/:formatId`,
+        element: <LiveFormatEditorPage />,
+      },
+      {
+        path: `${LIVE_RUNS_ROUTE_PATH}/new`,
+        element: <LiveRunNewPage />,
+      },
+      {
         element: <PageLayout />,
         children: [
           {
             index: true,
             element: <WorkListPage />,
+          },
+          {
+            path: LIVE_PROGRAMS_ROUTE_PATH,
+            element: <LiveProgramsPage />,
+          },
+          {
+            path: LIVE_FORMATS_ROUTE_PATH,
+            element: <LiveFormatsPage />,
+          },
+          {
+            path: LIVE_RUNS_ROUTE_PATH,
+            element: <LiveRunsPage />,
           },
           {
             path: "assets",

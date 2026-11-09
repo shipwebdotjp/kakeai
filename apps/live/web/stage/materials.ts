@@ -1,4 +1,4 @@
-import type { LivePackageShow, MaterialCard, StageMaterialState } from "@kakeai/contracts";
+import type { LivePackageShow, MaterialCard } from "@kakeai/contracts";
 import { packageUrl } from "./elements";
 
 /**
@@ -23,12 +23,8 @@ export class StageMaterials {
     }
   }
 
-  render(material: StageMaterialState | null): void {
-    if (material === null) {
-      this.clear();
-      return;
-    }
-    const card = this.cards.get(material.id);
+  render(materialId: string, focus: boolean): void {
+    const card = this.cards.get(materialId);
     if (card === undefined) {
       this.clear();
       return;
@@ -46,7 +42,11 @@ export class StageMaterials {
       this.slot.replaceChildren(content);
     }
     this.slot.hidden = false;
-    this.slot.classList.toggle("focus", material.focus);
+    this.slot.classList.toggle("focus", focus);
+  }
+
+  hide(): void {
+    this.clear();
   }
 
   private buildContent(card: MaterialCard): HTMLElement | null {

@@ -1,6 +1,7 @@
-import { readFile, readdir, lstat, open, stat } from "node:fs/promises";
+import { open, readFile, readdir, lstat, stat } from "node:fs/promises";
 import { join, posix, relative, sep } from "node:path";
 import {
+  LIVE_CARD_SCHEMA_VERSION,
   liveCharacterSheetSchema,
   liveExtensionForMediaType,
   livePackageManifestSchema,
@@ -15,6 +16,7 @@ import { hashFile } from "../storage/asset-store.ts";
 import { probeMedia } from "../media/probe.ts";
 import { canonicalJson } from "./canonical-json.ts";
 import { LiveExportError } from "./errors";
+import { readImageDimensions } from "./image-dimensions.ts";
 
 export interface VerifiedPackage {
   fileCount: number;
@@ -60,28 +62,30 @@ function expectedExtensions(mediaType: LiveMediaType): string[] {
   return [liveExtensionForMediaType(mediaType)];
 }
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-function pngDimensions(buffer: Buffer): { width: number; height: number } | null {
-  if (
-    buffer.length < 24 ||
-    !buffer.subarray(0, 8).equals(PNG_SIGNATURE) ||
-    buffer.toString("ascii", 12, 16) !== "IHDR"
-  ) {
-    return null;
-  }
-  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
-}
-
-async function readPngHeader(path: string): Promise<Buffer> {
+/**
+ * Reads only the beginning of a file. PNG needs 24 bytes; JPEG SOF and WebP
+ * dimensions are expected well inside the first 64 KiB, avoiding a full image
+ * allocation for a multi-megabyte card.
+ */
+async function readFileHeader(path: string, length: number): Promise<Buffer> {
   const handle = await open(path, "r");
   try {
-    const header = Buffer.alloc(24);
-    await handle.read(header, 0, header.length, 0);
-    return header;
+    const header = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    return header.subarray(0, bytesRead);
   } finally {
     await handle.close();
   }
+}
+
+const PNG_HEADER_BYTES = 24;
+const CARD_IMAGE_HEADER_BYTES = 64 * 1024;
+
+async function readCardImageHeader(path: string, mediaType: string): Promise<Buffer> {
+  return readFileHeader(
+    path,
+    mediaType === "image/png" ? PNG_HEADER_BYTES : CARD_IMAGE_HEADER_BYTES,
+  );
 }
 
 function referencedUrls(attribute: string, value: string): string[] {
@@ -231,6 +235,12 @@ export async function verifyPackage(
     show = livePackageShowSchema.parse(
       JSON.parse(await readFile(join(rootDir, "show.json"), "utf8")),
     );
+    if (manifest.packageSchemaVersion !== show.schemaVersion) {
+      fail("show.json と manifest.json のパッケージスキーマ版が一致しません。");
+    }
+    if (manifest.cardSchemaVersion !== LIVE_CARD_SCHEMA_VERSION) {
+      fail("manifest.json の cardSchemaVersion が対応していません。");
+    }
     const characters = liveCharacterSheetSchema.parse(
       JSON.parse(await readFile(join(rootDir, "characters.json"), "utf8")),
     );
@@ -309,8 +319,40 @@ export async function verifyPackage(
           fail(`動画カードの寸法が manifest と一致しません: ${file.path}`);
         }
       }
+    } else if (file.kind === "card-asset") {
+      if (
+        file.mediaType !== "image/png" &&
+        file.mediaType !== "image/jpeg" &&
+        file.mediaType !== "image/webp"
+      ) {
+        fail(`カード画像の mediaType が非対応です: ${file.path}`);
+      }
+      const headerBytes = await readCardImageHeader(path, file.mediaType);
+      let dimensions = readImageDimensions(
+        headerBytes,
+        file.mediaType as "image/png" | "image/jpeg" | "image/webp",
+      );
+      // A JPEG/WebP may carry a large EXIF/ICC segment before its dimension
+      // header. Only those formats need a full read as a fallback; PNG
+      // dimensions are always in its fixed 24-byte header.
+      if (dimensions === null && file.mediaType !== "image/png") {
+        dimensions = readImageDimensions(
+          await readFile(path),
+          file.mediaType as "image/jpeg" | "image/webp",
+        );
+      }
+      if (
+        dimensions === null ||
+        file.width !== dimensions.width ||
+        file.height !== dimensions.height
+      ) {
+        fail(`カード画像の寸法が manifest と一致しません: ${file.path}`);
+      }
     } else if (file.mediaType === "image/png") {
-      const dimensions = pngDimensions(await readPngHeader(path));
+      const dimensions = readImageDimensions(
+        await readFileHeader(path, PNG_HEADER_BYTES),
+        "image/png",
+      );
       if (
         dimensions === null ||
         file.width !== dimensions.width ||

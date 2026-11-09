@@ -1,9 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   DEFAULT_LIVE_COMMENTS_CONFIG,
+  liveRunConfigSchema,
   liveRuntimeConfigSchema,
+  type LiveRunConfig,
   type LiveRuntimeConfig,
 } from "@kakeai/contracts";
 
@@ -68,6 +70,53 @@ export async function loadLiveRuntimeConfigFile(path: string): Promise<LiveRunti
     throw new Error(`ライブ設定ファイルが不正です: ${formatIssues(parsed.error)}`);
   }
   return parsed.data;
+}
+
+function parseJsonFile(text: string, label: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    throw new Error(
+      `${label} が JSON ではありません: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function readTextFile(path: string, label: string): Promise<string> {
+  return readFile(path, "utf8").catch((error: unknown) => {
+    throw new Error(`${label} を読めません: ${path}`, { cause: error });
+  });
+}
+
+/** Validates the Kakeai-provided `run-config.json`; it contains no secrets. */
+export async function loadLiveRunConfigFile(path: string): Promise<LiveRunConfig> {
+  const text = await readTextFile(path, "Run 設定ファイル");
+  const parsed = liveRunConfigSchema.safeParse(parseJsonFile(text, "Run 設定ファイル"));
+  if (!parsed.success) {
+    throw new Error(`Run 設定ファイルが不正です: ${formatIssues(parsed.error)}`);
+  }
+  return parsed.data;
+}
+
+/** Reads the one-time control token written by Kakeai with 0600 permissions. */
+export async function readControlTokenFile(path: string): Promise<string> {
+  const info = await lstat(path).catch((error: unknown) => {
+    throw new Error(`control token ファイルを読めません: ${path}`, { cause: error });
+  });
+  if (!info.isFile()) {
+    throw new Error(`control token ファイルは通常ファイルにしてください: ${path}`);
+  }
+  const mode = info.mode & 0o777;
+  if (mode !== 0o600 && mode !== 0o400) {
+    throw new Error(
+      `control token ファイルの権限は 0600 または 0400 にしてください: ${path}`,
+    );
+  }
+  const token = (await readTextFile(path, "control token ファイル")).trim();
+  if (token.length === 0) {
+    throw new Error(`control token ファイルが空です: ${path}`);
+  }
+  return token;
 }
 
 export interface LiveRuntimeConfigOverrides {

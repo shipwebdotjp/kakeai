@@ -1,6 +1,8 @@
 # ライブ配信はコンポジションとは別の状態駆動ランタイムとし、ライブパッケージで受け渡す
 
 > amended by [ADR-0126](./0126-live-material-cards-static-or-mp4.md): 素材カードはコンポジションHTMLのiframeではなく、静止PNG/HTMLまたは短い無音MP4に限定する。
+>
+> amended by [ADR-0134](./0134-live-program-v2-only.md): パッケージは Live Program Version 由来のv2だけとし、Show Profile とv1の内容は削除した。
 
 Status: accepted
 

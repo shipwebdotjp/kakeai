@@ -15,7 +15,7 @@ import { loadLivePackage, type LoadedLivePackage } from "../package/loader.ts";
 import { CommentCorner } from "../runtime/comment-corner.ts";
 import { RunStore } from "../runs/run-store.ts";
 import { FakeCommentScheduler, flushMicrotasks } from "../testing/fake-scheduler.ts";
-import { createTestPackage, type TestPackage } from "../testing/package-fixture.ts";
+import { createTestPackage, testRunConfig, type TestPackage } from "../testing/package-fixture.ts";
 import { createLiveServer, type LiveServer } from "./server.ts";
 
 const BASE_TIME = Date.parse("2026-11-07T12:00:00.000Z");
@@ -72,10 +72,9 @@ beforeEach(async () => {
   });
   scheduler = new FakeCommentScheduler();
   const now = () => new Date(BASE_TIME + scheduler.currentTimeMs);
+  const runConfig = await testRunConfig(pkg, { startAt: null });
   const source = await createCommentSource({
-    show: loaded.show,
-    packageRoot: loaded.rootDir,
-    testMode: true,
+    runConfig,
     config,
     scheduler,
     now,
@@ -121,7 +120,7 @@ beforeEach(async () => {
     config,
     port: 0,
     distDir,
-    testMode: true,
+    runConfig,
     runStore,
     now,
     commentCorner: corner,

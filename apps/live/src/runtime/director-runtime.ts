@@ -14,6 +14,7 @@ import type { DirectorContext } from "../director/prompt.ts";
 import type { DirectorResponseHost } from "../director/response-responder.ts";
 import type { CommentCorner } from "./comment-corner.ts";
 import type { LiveController } from "./controller.ts";
+import { resolveEffectiveVisual } from "./visual-resolution.ts";
 
 export interface DirectorRuntimeOptions {
   controller: LiveController;
@@ -96,7 +97,7 @@ export class DirectorRuntime implements DirectorResponseHost {
         suggestedAngle: candidate.suggestedAngle,
       },
       pinNote: this.comments?.getPinNote(candidate.commentId) ?? null,
-      materialLabel: this.materialLabel(segment),
+      materialLabel: this.materialLabel(segment, this.controller.getCurrentCue()),
       expressions: [...expressions],
       speakerNames: { left: left ?? "左", right },
     };
@@ -180,12 +181,32 @@ export class DirectorRuntime implements DirectorResponseHost {
       .map((cue) => cue.caption);
   }
 
-  private materialLabel(segment: LiveSegment | null): string | null {
-    if (segment === null || segment.kind === "cut_in" || segment.material === undefined) {
+  private materialLabel(
+    segment: LiveSegment | null,
+    cue: LiveCue | null,
+  ): string | null {
+    if (segment === null || segment.kind === "cut_in") {
       return null;
     }
-    const material = this.show.materials.find((entry) => entry.id === segment.material);
-    return material === undefined ? segment.material : fileLabel(material.file, material.id);
+    const visual = resolveEffectiveVisual(
+      {
+        cards: this.show.cards,
+        materials: this.show.materials,
+      },
+      segment,
+      cue,
+    );
+    if (visual === null) {
+      return null;
+    }
+    if (visual.kind === "material") {
+      const material = this.show.materials.find((entry) => entry.id === visual.materialId);
+      return material === undefined
+        ? visual.materialId
+        : fileLabel(material.file, material.id);
+    }
+    const card = this.show.cards.find((entry) => entry.id === visual.cardId);
+    return card?.name ?? visual.cardId;
   }
 
   private speakerName(side: "left" | "right"): string | null {

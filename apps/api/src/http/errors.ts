@@ -39,6 +39,12 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   EXPORT_TARGET_EXISTS: "同名のファイルまたはディレクトリが既に存在します。別のファイル名を指定してください。",
   EXPORT_FAILED: "ファイルを書き出せませんでした。再試行してください。",
   LIVE_EXPORT_OUTPUT_UNAVAILABLE: "ライブパッケージの出力先を利用できません。存在しないディレクトリを指定してください。",
+  LIVE_PROGRAM_REVISION_CONFLICT: "他の編集が先に保存されました。現行の下書きを確認してください。",
+  LIVE_RUN_PACKAGE_INVALID: "指定されたパッケージ build を利用できません。",
+  LIVE_RUN_FIXTURE_INVALID: "fixture ファイルを利用できません。",
+  LIVE_RUN_ALREADY_LAUNCHED: "この Run は既に起動済みです。",
+  LIVE_RUN_LAUNCH_FAILED: "ライブアプリを起動できませんでした。",
+  LIVE_RUN_STOP_FAILED: "ライブアプリを停止できませんでした。",
   INTERNAL_ERROR: "予期しないエラーが発生しました。",
   DATABASE_BUSY: "データベースが混雑しています。少し待って再試行してください。",
 };

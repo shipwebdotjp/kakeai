@@ -14,7 +14,7 @@ import { probeMedia, type MediaProbe } from "../media/probe.ts";
 import { getTtsAdapter } from "../tts/index.ts";
 import { LiveExportError } from "./errors";
 import type { PackageWriter } from "./package-writer";
-import type { ResolvedAssetFile, ResolvedCueSeed } from "./profile-resolution";
+import type { ResolvedAssetFile, ResolvedCueSeed } from "./resolved-assets";
 import type { PreparedVoices } from "./prepare-voices";
 
 export interface PrepareAudioDependencies {
@@ -228,8 +228,7 @@ export async function prepareAudio(
     return {
       id: seed.id,
       origin: seed.origin,
-      ...(seed.sourceLineId === undefined ? {} : { sourceLineId: seed.sourceLineId }),
-      ...(seed.materialId === undefined ? {} : { materialId: seed.materialId }),
+      ...(seed.visual === undefined ? {} : { visual: seed.visual }),
       speaker: seed.speaker,
       caption: seed.caption,
       speech: seed.speech,

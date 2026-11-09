@@ -9,7 +9,7 @@ import type {
   CommentCornerRespondOutcome,
 } from "../runtime/comment-responder.ts";
 import { loadLivePackage } from "../package/loader.ts";
-import { createTestPackage } from "../testing/package-fixture.ts";
+import { createTestPackage, testRunConfig } from "../testing/package-fixture.ts";
 import { createLiveServer, type LiveServer } from "./server.ts";
 
 const tempRoots: string[] = [];
@@ -65,7 +65,7 @@ async function newServer(options: {
     config: config(options.dataDir),
     port: 0,
     distDir: options.distDir,
-    testMode: true,
+    runConfig: await testRunConfig(pkg),
     ...(options.director === undefined ? {} : { director: options.director }),
     ...(options.responder === undefined ? {} : { responder: options.responder }),
   });

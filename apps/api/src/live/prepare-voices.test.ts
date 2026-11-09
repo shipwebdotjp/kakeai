@@ -12,7 +12,7 @@ import { dataDirectories } from "../storage/paths.ts";
 import { wavFixture } from "../testing/tts-mocks.ts";
 import { LiveExportError } from "./errors";
 import { PackageWriter } from "./package-writer";
-import type { ResolvedAssetFile, ResolvedLiveProfile } from "./profile-resolution";
+import type { ResolvedAssetFile, ResolvedLiveProgram } from "./resolved-assets";
 import { prepareVoices } from "./prepare-voices";
 
 let dir: string;
@@ -59,7 +59,7 @@ describe("prepareVoices", () => {
       locale: "ja-JP",
       settings: { model: "test-model", refAudioAssetId: "ref-1", langCode: "Japanese" },
     };
-    const resolved: ResolvedLiveProfile = {
+    const resolved: ResolvedLiveProgram = {
       cues: [],
       cutIns: [],
       speakers: [
@@ -123,7 +123,7 @@ describe("prepareVoices", () => {
       locale: "ja-JP",
       settings: {},
     };
-    const resolved: ResolvedLiveProfile = {
+    const resolved: ResolvedLiveProgram = {
       cues: [],
       cutIns: [],
       speakers: [

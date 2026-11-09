@@ -1,6 +1,9 @@
-import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { realpath } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { LiveRuntimeConfig } from "@kakeai/contracts";
+import type { LiveRunConfig, LiveRuntimeConfig } from "@kakeai/contracts";
 import { runLoopbackOAuthFlow } from "./auth/oauth.ts";
 import {
   saveTokenStore,
@@ -9,24 +12,33 @@ import {
 } from "./auth/youtube-token.ts";
 import {
   defaultLiveRuntimeConfig,
+  loadLiveRunConfigFile,
   loadLiveRuntimeConfigFile,
+  readControlTokenFile,
   resolveLiveRuntimeConfig,
   type LiveRuntimeConfigOverrides,
 } from "./config.ts";
+import { resolveCommentSourceKind } from "./comments/factory.ts";
 import { isPackageError, loadLivePackage } from "./package/loader.ts";
 import { isLocalLlmEndpoint } from "./llm/local-endpoint.ts";
+import { RunStore } from "./runs/run-store.ts";
 import { createLiveServer } from "./server/server.ts";
 
 const USAGE = `使い方:
-  npm run live -- --package <dir> [--test] [--port <port>] [--config <file>]
+  npm run live -- --package <dir> --run-config <file> [--port <port>] [--config <file>]
+  npm run live -- --package <dir> --run-id <id> --run-dir <dir> \\
+    --control-token-file <file> --run-config <file> [--port <port>] [--config <file>]
   npm run live -- auth --config <file>
 
-  --package <dir>   ライブパッケージのディレクトリ（起動時に必須）
-  --test            コメントソースを fixture に上書きする
-  --port <port>     待受ポート（既定 3010）
-  --config <file>   ライブ設定 JSON
+  --package <dir>           ライブパッケージのディレクトリ（起動時に必須）
+  --port <port>             待受ポート（既定は Run 設定、なければ 3010）
+  --config <file>           ライブ設定 JSON（LLM/TTS/YouTube認証情報）
+  --run-id <id>             Kakeai が発行した Run ID（Run 設定と照合）
+  --run-dir <dir>           Run のログ・run-config・fixture を置くディレクトリ
+  --control-token-file <file>  loopback control 用の一回限りのトークン（0600）
+  --run-config <file>       Kakeai が書いた Run 設定 JSON（必須）
 
-  auth              YouTube の読み取り専用 OAuth をやり直し、フォールバック用トークンを保存する（APIキーのみなら不要）`;
+  auth                      YouTube の読み取り専用 OAuth をやり直し、フォールバック用トークンを保存する（APIキーのみなら不要）`;
 
 export type LiveCliOptions =
   | { kind: "help" }
@@ -34,9 +46,12 @@ export type LiveCliOptions =
   | {
       kind: "run";
       packageDir: string;
-      testMode: boolean;
       port: number | undefined;
       configPath: string | undefined;
+      runId: string | undefined;
+      runDir: string | undefined;
+      controlTokenFile: string | undefined;
+      runConfigPath: string;
     };
 
 function usageError(message: string): never {
@@ -75,16 +90,32 @@ export function parseLiveArgs(argv: readonly string[]): LiveCliOptions {
   let packageDir: string | undefined;
   let configPath: string | undefined;
   let port: number | undefined;
-  let testMode = false;
+  let runId: string | undefined;
+  let runDir: string | undefined;
+  let controlTokenFile: string | undefined;
+  let runConfigPath: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]!;
     switch (arg) {
-      case "--test":
-        testMode = true;
-        break;
       case "--package":
         packageDir = readOptionValue(argv, index, "--package");
+        index += 1;
+        break;
+      case "--run-id":
+        runId = readOptionValue(argv, index, "--run-id");
+        index += 1;
+        break;
+      case "--run-dir":
+        runDir = readOptionValue(argv, index, "--run-dir");
+        index += 1;
+        break;
+      case "--control-token-file":
+        controlTokenFile = readOptionValue(argv, index, "--control-token-file");
+        index += 1;
+        break;
+      case "--run-config":
+        runConfigPath = readOptionValue(argv, index, "--run-config");
         index += 1;
         break;
       case "--port": {
@@ -111,7 +142,22 @@ export function parseLiveArgs(argv: readonly string[]): LiveCliOptions {
   if (packageDir === undefined) {
     usageError("--package は必須です。");
   }
-  return { kind: "run", packageDir, testMode, port, configPath };
+  if (runDir !== undefined && runId === undefined) {
+    usageError("--run-dir には --run-id も必要です。");
+  }
+  if (runConfigPath === undefined) {
+    usageError("--run-config は必須です。");
+  }
+  return {
+    kind: "run",
+    packageDir,
+    port,
+    configPath,
+    runId,
+    runDir,
+    controlTokenFile,
+    runConfigPath,
+  };
 }
 
 function invocationCwd(): string {
@@ -131,27 +177,118 @@ async function loadConfig(
   return resolveLiveRuntimeConfig(config, overrides);
 }
 
-function validateYouTubeRun(
+export function validateYouTubeRun(
   config: LiveRuntimeConfig,
-  showKind: "youtube" | "fixture",
-  testMode: boolean,
+  runConfig: LiveRunConfig,
 ): void {
-  if (testMode || showKind === "fixture") {
+  if (resolveCommentSourceKind(runConfig) === "fixture") {
     return;
   }
   if (!isLocalLlmEndpoint(config.llm)) {
     throw new Error(
-      "実 YouTube の実行ではローカル LLM（mode: local かつループバック URL）を使ってください。外部 LLM は --test の fixture だけで使えます。",
+      "実 YouTube の実行ではローカル LLM（mode: local かつループバック URL）を使ってください。外部 LLM は fixture の Run 設定だけで使えます。",
     );
   }
-  const youtube = config.youtube;
-  if (youtube === undefined) {
+  if (config.youtube === undefined) {
     throw new Error(
-      "実 YouTube の実行には --config の youtube（apiKey、または OAuth の clientId と clientSecret、および videoUrl または liveChatId）が必要です。",
+      "実 YouTube の実行には --config の youtube（apiKey、または OAuth の clientId と clientSecret）が必要です。",
     );
   }
-  if (youtube.videoUrl === undefined && youtube.liveChatId === undefined) {
-    throw new Error("youtube 設定に videoUrl または liveChatId を指定してください。");
+  // The Run is authoritative for the target. Local config supplies auth only;
+  // an explicit null in the Run must not be filled from it.
+  const source = runConfig.source;
+  if (source.kind !== "youtube") {
+    return;
+  }
+  if (source.videoUrl === null && source.liveChatId === null) {
+    throw new Error(
+      "Run 設定に videoUrl または liveChatId を指定してください（ローカル設定の youtube からは補いません）。",
+    );
+  }
+}
+
+async function sha256File(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) {
+    hash.update(chunk);
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * Resolves the loopback control token. An explicitly empty environment value
+ * must fail instead of silently running without control, because Kakeai would
+ * otherwise launch a Run it can never stop through the control endpoint.
+ */
+export async function resolveControlToken(
+  controlTokenFile: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | undefined> {
+  if (controlTokenFile !== undefined) {
+    return readControlTokenFile(resolve(invocationCwd(), controlTokenFile));
+  }
+  const envToken = env.KAKEAI_LIVE_CONTROL_TOKEN;
+  if (envToken === undefined) {
+    return undefined;
+  }
+  const token = envToken.trim();
+  if (token.length === 0) {
+    throw new Error(
+      "KAKEAI_LIVE_CONTROL_TOKEN が空です。control を無効にする場合は環境変数自体を設定しないでください。",
+    );
+  }
+  return token;
+}
+
+/**
+ * Re-checks the Run config against the loaded package. Kakeai already verified
+ * this at creation; doing it again catches a package or fixture changed while
+ * the operator was preparing the show.
+ */
+async function validateRunConfig(
+  runConfig: LiveRunConfig,
+  loaded: Awaited<ReturnType<typeof loadLivePackage>>,
+): Promise<void> {
+  if (runConfig.runId.length === 0) {
+    throw new Error("Run ID がありません。");
+  }
+  if (loaded.manifest.packageSchemaVersion !== 2) {
+    throw new Error("Run で使えるのは packageSchemaVersion: 2 のパッケージだけです。");
+  }
+  if (runConfig.package.packageId !== loaded.manifest.packageId) {
+    throw new Error("Run 設定の packageId がパッケージと一致しません。");
+  }
+  let configuredPackagePath: string;
+  let loadedPackagePath: string;
+  try {
+    [configuredPackagePath, loadedPackagePath] = await Promise.all([
+      realpath(runConfig.package.packagePath),
+      realpath(loaded.rootDir),
+    ]);
+  } catch (error) {
+    throw new Error(
+      `Run 設定とパッケージの実パスを解決できません: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (configuredPackagePath !== loadedPackagePath) {
+    throw new Error("Run 設定の packagePath が読み込んだパッケージと一致しません。");
+  }
+  const manifestSha256 = await sha256File(join(loaded.rootDir, "manifest.json"));
+  if (manifestSha256 !== runConfig.package.manifestSha256) {
+    throw new Error("Run 設定の manifestSha256 がパッケージと一致しません。");
+  }
+  const source = loaded.manifest.source;
+  if (!("programVersionId" in source)) {
+    throw new Error("Run 用パッケージの manifest source が Live Program ではありません。");
+  }
+  if (source.programVersionId !== runConfig.programVersionId) {
+    throw new Error("Run 設定の programVersionId がパッケージと一致しません。");
+  }
+  if (runConfig.source.kind === "fixture") {
+    const digest = await sha256File(runConfig.source.fixturePath);
+    if (digest !== runConfig.source.fixtureSha256) {
+      throw new Error("fixture の SHA-256 が Run 設定と一致しません。");
+    }
   }
 }
 
@@ -202,32 +339,41 @@ async function main(): Promise<void> {
   }
 
   const loaded = await loadLivePackage(resolve(invocationCwd(), options.packageDir));
+  const runConfig = await loadLiveRunConfigFile(
+    resolve(invocationCwd(), options.runConfigPath),
+  );
+  const runId = options.runId ?? runConfig.runId;
+  if (runId !== runConfig.runId) {
+    throw new Error("--run-id と Run 設定の runId が一致しません。");
+  }
+  await validateRunConfig(runConfig, loaded);
+
   const overrides: LiveRuntimeConfigOverrides = {};
   if (options.port !== undefined) {
     overrides.port = options.port;
+  } else {
+    overrides.port = runConfig.requestedPort;
   }
   const config = await loadConfig(options.configPath, overrides);
-  validateYouTubeRun(config, loaded.show.commentSource.kind, options.testMode);
+  validateYouTubeRun(config, runConfig);
 
-  const server = await createLiveServer({
-    package: loaded,
-    config,
-    testMode: options.testMode,
+  const controlToken = await resolveControlToken(options.controlTokenFile);
+
+  const runStore = await RunStore.create({
+    dataDir: config.dataDir,
+    showTitle: loaded.show.show.title,
+    packageId: loaded.manifest.packageId,
+    packagePath: loaded.rootDir,
+    ...(runId === undefined ? {} : { runId }),
+    ...(options.runDir === undefined
+      ? {}
+      : { dir: resolve(invocationCwd(), options.runDir) }),
   });
 
-  for (const warning of loaded.warnings) {
-    console.warn(`警告: ${warning}`);
-  }
-  console.log("Kakeai Live");
-  console.log(`  パッケージ: ${loaded.rootDir}`);
-  console.log(`  実行ディレクトリ: ${server.runStore.dir}`);
-  console.log(`  ステージ:   ${server.url}/stage`);
-  console.log(`  コンソール: ${server.url}/console`);
-  console.log(`  テストモード: ${options.testMode ? "on" : "off"}`);
-
+  let server: Awaited<ReturnType<typeof createLiveServer>> | null = null;
   let closing = false;
   const shutdown = (signal: string) => {
-    if (closing) {
+    if (closing || server === null) {
       return;
     }
     closing = true;
@@ -240,6 +386,27 @@ async function main(): Promise<void> {
       },
     );
   };
+
+  server = await createLiveServer({
+    package: loaded,
+    config,
+    runStore,
+    runConfig,
+    ...(controlToken === undefined ? {} : { controlToken }),
+    onStopRequested: () => shutdown("control"),
+  });
+
+  for (const warning of loaded.warnings) {
+    console.warn(`警告: ${warning}`);
+  }
+  console.log("Kakeai Live");
+  console.log(`  Run: ${server.runStore.runId}`);
+  console.log(`  パッケージ: ${loaded.rootDir}`);
+  console.log(`  実行ディレクトリ: ${server.runStore.dir}`);
+  console.log(`  ステージ:   ${server.url}/stage`);
+  console.log(`  コンソール: ${server.url}/console`);
+  console.log(`  control: ${controlToken === undefined ? "disabled" : "enabled"}`);
+
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }

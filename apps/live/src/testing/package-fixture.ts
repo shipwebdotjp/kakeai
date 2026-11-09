@@ -6,6 +6,7 @@ import {
   liveCharacterSheetSchema,
   livePackageManifestSchema,
   livePackageShowSchema,
+  liveRunConfigSchema,
   type LiveCharacterSheet,
   type LiveFixtureComment,
   type LiveManifestFont,
@@ -14,6 +15,7 @@ import {
   type LivePackageShow,
   type LiveMediaType,
   type LiveFileKind,
+  type LiveRunConfig,
 } from "@kakeai/contracts";
 
 const NOW = "2026-11-07T12:00:00.000Z";
@@ -62,7 +64,9 @@ const THEME_CSS = [
 
 export interface TestPackageOptions {
   includeMaterial?: boolean;
-  /** Adds a comment segment, `test.fixture` and `fixtures/comments.json`. */
+  /** Adds a native headline card and uses it as the script default visual. */
+  includeCard?: boolean;
+  /** Adds a comment segment. The fixture file is read through the Run config. */
   includeCommentCorner?: boolean;
   /** Adds one `cut_in` segment before closing and its `cutIns[]` entry. */
   includeCutIn?: boolean;
@@ -76,7 +80,6 @@ export interface TestPackageOptions {
   /** Show target duration. Defaults to 600000 (10 minutes). */
   targetDurationMs?: number;
   fonts?: LiveManifestFont[];
-  startAt?: string | null;
 }
 
 export const DEFAULT_TEST_FIXTURE_COMMENTS: LiveFixtureComment[] = [
@@ -139,8 +142,8 @@ function fileRecord(file: PendingFile): LivePackageFile {
 
 export function testShow(options: TestPackageOptions = {}): LivePackageShow {
   const includeMaterial = options.includeMaterial === true;
+  const includeCard = options.includeCard === true && !includeMaterial;
   const corners = commentCornerCount(options);
-  const materialSegment = includeMaterial ? { material: "material-1" } : {};
   const segments: unknown[] = [
     {
       id: "seg-opening",
@@ -173,12 +176,16 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
       label: index === 1 ? "本編" : `本編${index}`,
       targetDurationMs: 300_000,
       cues: [scriptCueId],
-      ...(index === 1 ? materialSegment : {}),
+      ...(index === 1 && includeMaterial
+        ? { visual: { kind: "material", materialId: "material-1" } }
+        : {}),
+      ...(index === 1 && includeCard
+        ? { visual: { kind: "card", cardId: "card-test", stateId: "state-test" } }
+        : {}),
     });
     cues.push({
       id: scriptCueId,
-      origin: "script",
-      sourceLineId: `line-${index}`,
+      origin: "live",
       speaker: "right",
       caption: index === 1 ? "本編の話題です。" : `本編${index}の話題です。`,
       speech: index === 1 ? "ほんぺんの わだいです。" : `ほんぺん${index}の わだいです。`,
@@ -211,19 +218,31 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
     targetDurationMs: 60_000,
     cues: ["cue-closing"],
   });
-  cues.push({
-    id: "cue-closing",
-    origin: "live",
-    speaker: "left",
-    caption: "本日はここまでです。",
-    speech: "ほんじつは ここまでです。",
-    expression: "normal",
-    audio: "audio/prepared/cue-closing.wav",
-    durationMs: 1000,
-  });
+  cues.push(
+    {
+      id: "cue-closing",
+      origin: "live",
+      speaker: "left",
+      caption: "本日はここまでです。",
+      speech: "ほんじつは ここまでです。",
+      expression: "normal",
+      audio: "audio/prepared/cue-closing.wav",
+      durationMs: 1000,
+    },
+    {
+      id: "cue-fallback",
+      origin: "live",
+      speaker: "left",
+      caption: "少し補足します。",
+      speech: "すこし ほそくします。",
+      expression: "normal",
+      audio: "audio/prepared/cue-fallback.wav",
+      durationMs: 1000,
+    },
+  );
 
   return livePackageShowSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: 2,
     show: {
       title: "テスト配信",
       locale: "ja-JP",
@@ -231,9 +250,7 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
       stageTemplate: "news-desk",
       theme: "theme.css",
       characters: { left: "char-left", right: "char-right" },
-      startAt: options.startAt ?? null,
     },
-    commentSource: { kind: corners > 0 ? "fixture" : "youtube" },
     segments,
     cutIns:
       options.includeCutIn === true
@@ -248,7 +265,6 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
             },
           ]
         : [],
-    ...(corners > 0 ? { test: { fixture: "fixtures/comments.json" } } : {}),
     cues,
     materials: includeMaterial
       ? [
@@ -263,6 +279,16 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
           },
         ]
       : [],
+    cards: includeCard
+      ? [
+          {
+            id: "card-test",
+            type: "headline",
+            states: [{ id: "state-test", title: "今日のポイント" }],
+          },
+        ]
+      : [],
+    cardAssets: [],
     speakers: [
       {
         id: "speaker-left",
@@ -293,7 +319,7 @@ export function testShow(options: TestPackageOptions = {}): LivePackageShow {
       persona: "親しみやすい解説役",
       maxResponseChars: 180,
       maxResponseCues: 2,
-      fallbackCueId: "cue-opening",
+      fallbackCueId: "cue-fallback",
     },
     playout: {
       minBufferMs: 10_000,
@@ -389,11 +415,11 @@ export async function createTestPackage(
     },
     ...show.cues.map(
       (cue): PendingFile => ({
-        path: cue.audio,
+        path: cue.audio as string,
         data: wav,
         mediaType: "audio/wav",
         kind: "prepared-audio",
-        durationMs: cue.durationMs,
+        durationMs: cue.durationMs ?? 1000,
         hasAudio: true,
       }),
     ),
@@ -442,17 +468,19 @@ export async function createTestPackage(
     }
 
     manifest = livePackageManifestSchema.parse({
-      packageSchemaVersion: 1,
+      packageSchemaVersion: 2,
       exporterVersion: "0.1.0",
       packageId: "livepkg-test",
       createdAt: NOW,
       source: {
-        workId: "work-1",
-        languageEditionId: "edition-1",
-        scriptVersionId: "script-1",
+        programId: "program-1",
+        programVersionId: "program-version-1",
+        programVersionNumber: 1,
+        programDocumentSha256: "a".repeat(64),
+        resolutionSnapshotSha256: "b".repeat(64),
         theme: { id: "neutral", version: 1 },
-        profileSha256: "a".repeat(64),
       },
+      cardSchemaVersion: 1,
       files: files.map(fileRecord),
       fonts:
         options.fonts ?? [
@@ -485,6 +513,54 @@ export async function createTestPackage(
       await rm(rootDir, { recursive: true, force: true });
     },
   };
+}
+
+export interface TestRunConfigOptions {
+  source?: "fixture" | "youtube";
+  runId?: string;
+  startAt?: string | null;
+  requestedPort?: number;
+}
+
+/**
+ * Builds the Run config that now owns comment source, fixture and startAt.
+ * Fixture runs point at `fixtures/comments.json` inside the test package.
+ */
+export async function testRunConfig(
+  pkg: Pick<TestPackage, "rootDir" | "manifest">,
+  options: TestRunConfigOptions = {},
+): Promise<LiveRunConfig> {
+  const runId = options.runId ?? "run-test-1";
+  const sourceKind = options.source ?? "fixture";
+  // A YouTube run needs no fixture file, so only the fixture branch reads one.
+  const manifestBytes = await readFile(join(pkg.rootDir, "manifest.json"));
+  const fixtureSource =
+    sourceKind === "fixture"
+      ? {
+          kind: "fixture" as const,
+          fixturePath: join(pkg.rootDir, "fixtures/comments.json"),
+          fixtureSha256: createHash("sha256")
+            .update(await readFile(join(pkg.rootDir, "fixtures/comments.json")))
+            .digest("hex"),
+        }
+      : null;
+  return liveRunConfigSchema.parse({
+    schemaVersion: 1,
+    runId,
+    programVersionId: "program-version-1",
+    package: {
+      packageId: pkg.manifest.packageId,
+      manifestSha256: createHash("sha256").update(manifestBytes).digest("hex"),
+      packagePath: pkg.rootDir,
+    },
+    source: fixtureSource ?? {
+      kind: "youtube",
+      videoUrl: "https://www.youtube.com/watch?v=test",
+      liveChatId: null,
+    },
+    startAt: options.startAt ?? null,
+    requestedPort: options.requestedPort ?? 3010,
+  });
 }
 
 export async function readTestManifest(rootDir: string): Promise<LivePackageManifest> {

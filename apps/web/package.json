@@ -12,6 +12,7 @@
   "dependencies": {
     "@hyperframes/player": "0.8.143",
     "@kakeai/contracts": "*",
+    "@kakeai/live-cards": "*",
     "@kakeai/video": "*",
     "@tanstack/react-query": "^5.104.1",
     "lucide-react": "^1.55.0",

@@ -230,7 +230,7 @@ describe("DirectorResponder", () => {
       status: "ready",
       commentId: "c1",
     });
-    expect(cue?.sourceLineId).toBeUndefined();
+    expect(cue).not.toHaveProperty("sourceLineId");
     expect(cue?.audio).toMatch(/^run:generated\/gen-c1-0-.+\.wav$/u);
     expect(cue?.durationMs).toBeGreaterThan(0);
     expect(host.waits[0]?.cueIds).toEqual(["gen-c1-0"]);

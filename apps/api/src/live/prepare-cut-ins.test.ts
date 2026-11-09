@@ -4,103 +4,20 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { LiveShowProfile } from "@kakeai/contracts";
 import { probeMedia } from "../media/probe.ts";
 import { dataDirectories } from "../storage/paths.ts";
 import { LiveExportError } from "./errors";
 import { PackageWriter } from "./package-writer";
-import type { ResolvedAssetFile, ResolvedCutIn } from "./profile-resolution";
+import type { ResolvedAssetFile, ResolvedCutIn } from "./resolved-assets";
 import { prepareCutIns } from "./prepare-cut-ins";
 
 const execFileAsync = promisify(execFile);
 
 function profile(
-  cutIns: LiveShowProfile["cutIns"],
+  _cutIns: Array<{ id: string; assetId: string }>,
   referencedIds: string[],
-): LiveShowProfile {
-  return {
-    schemaVersion: 1,
-    cutIns,
-    show: {
-      title: "CutIn テスト",
-      locale: "ja-JP",
-      targetDurationMs: 600_000,
-      stageTemplate: "news-desk",
-      theme: "theme.css",
-      characters: { left: "char-left", right: null },
-      startAt: null,
-    },
-    commentSource: { kind: "youtube" },
-    segments: [
-      {
-        id: "seg-opening",
-        kind: "opening",
-        label: "オープニング",
-        targetDurationMs: 60_000,
-        cues: ["cue-opening"],
-      },
-      {
-        id: "seg-script",
-        kind: "script",
-        label: "本編",
-        targetDurationMs: 300_000,
-        cues: ["cue-script"],
-      },
-      ...referencedIds.map((cutInId, index) => ({
-        id: `seg-cut-${index}`,
-        kind: "cut_in" as const,
-        label: "区切り",
-        cutInId,
-      })),
-      {
-        id: "seg-closing",
-        kind: "closing",
-        label: "クロージング",
-        targetDurationMs: 60_000,
-        cues: ["cue-closing"],
-      },
-    ],
-    scriptCues: [{ id: "cue-script", lineId: "line-p1-1" }],
-    liveCues: [
-      {
-        id: "cue-opening",
-        speaker: "left",
-        caption: "始まります。",
-        speech: "はじまります。",
-        expression: "normal",
-      },
-      {
-        id: "cue-closing",
-        speaker: "left",
-        caption: "終わります。",
-        speech: "おわります。",
-        expression: "normal",
-      },
-    ],
-    materials: [],
-    commentPolicy: {
-      mode: "corner",
-      freshnessMin: 10,
-      maxCommentsPerCorner: 4,
-      maxHumanPinsPerCorner: 4,
-      maxExtraSlots: 2,
-      allowImmediateInterrupt: false,
-      skipWhenEmpty: true,
-    },
-    safety: {
-      blockedTopics: [],
-      persona: "解説役",
-      maxResponseChars: 180,
-      maxResponseCues: 2,
-      fallbackCueId: "cue-opening",
-    },
-    playout: {
-      minBufferMs: 10_000,
-      maxThinkingMs: 2000,
-      closingReserveMs: 120_000,
-      noApprovalDelay: true,
-    },
-  };
+): string[] {
+  return referencedIds;
 }
 
 function resolvedCutIns(entries: Array<{ id: string; assetId: string }>): ResolvedCutIn[] {

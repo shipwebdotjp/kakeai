@@ -1,17 +1,13 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { parseArgs } from "node:util";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   jobSchema,
-  liveAutoProfileResultSchema,
   liveFixtureCommentsSchema,
-  liveShowProfileSchema,
   type Job,
-  type LiveAutoProfileResult,
   type LiveExportFailure,
-  type LiveShowProfile,
+  type LiveFixtureComment,
 } from "@kakeai/contracts";
-import { formatAutoProfileSummary } from "./live-profile.ts";
+import { CliError, parseArgsOrHelp, usage } from "./live-export-args.ts";
 
 export interface LiveExportIo {
   stdout: (text: string) => void;
@@ -26,54 +22,7 @@ export interface RunLiveExportOptions {
 }
 
 const DEFAULT_API_URL = "http://127.0.0.1:4317";
-const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-const DEFAULT_INTERVAL_MS = 1000;
 const REQUEST_TIMEOUT_MS = 30_000;
-
-class CliError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly exitCode = 1,
-    readonly details: unknown = undefined,
-  ) {
-    super(message);
-  }
-}
-
-function usage(): string {
-  return [
-    "Usage:",
-    "  npm run live:export -- --work <workId> --script-version <scriptVersionId> --profile <show-profile.json> --out <dir>",
-    "  npm run live:export -- --work <workId> --script-version <scriptVersionId> --auto-profile --save-profile <show-profile.json> --out <dir>",
-    "",
-    "Options:",
-    "  --work <id>              Work ID",
-    "  --script-version <id>    ScriptVersion ID",
-    "  --profile <file>         Show Profile JSON",
-    "  --auto-profile           generate a Show Profile from the Work and ScriptVersion",
-    "  --save-profile <file>    save the generated profile (required with --auto-profile)",
-    "  --title <text>           override show.title (with --auto-profile)",
-    "  --no-comments            do not generate comment corners (with --auto-profile)",
-    "  --dry-run                generate and print the summary, but do not export",
-    "  --force                  overwrite an existing --save-profile file",
-    "  --out <dir>              New output directory (must not exist; absolute or relative)",
-    "  --timeout-ms <ms>        total polling budget (default: 1800000)",
-    "  --interval-ms <ms>       polling interval (default: 1000)",
-    "  --help                   show this help",
-  ].join("\n");
-}
-
-function parsePositive(value: string | undefined, name: string, fallback: number): number {
-  if (value === undefined) {
-    return fallback;
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new CliError("LIVE_EXPORT_CLI_USAGE", `${name} は正の整数で指定してください。`, 2);
-  }
-  return parsed;
-}
 
 function errorEnvelope(value: unknown): { code: string; message: string; details?: unknown } | null {
   if (typeof value !== "object" || value === null || !("error" in value)) {
@@ -95,50 +44,24 @@ function errorEnvelope(value: unknown): { code: string; message: string; details
   };
 }
 
-async function readProfile(path: string): Promise<{ profile: LiveShowProfile; fixture?: unknown }> {
+function failureSummary(job: Job): LiveExportFailure[] {
+  return job.liveExportResult?.failures ?? [];
+}
+
+async function readFixture(path: string): Promise<LiveFixtureComment[]> {
   let raw: string;
   try {
     raw = await readFile(path, "utf8");
   } catch {
-    throw new CliError("LIVE_EXPORT_PROFILE_NOT_FOUND", `プロファイルを読めません: ${path}`, 1);
+    throw new CliError("LIVE_EXPORT_FIXTURE_NOT_FOUND", `fixture を読めません: ${path}`, 1);
   }
-  let parsed: unknown;
+  let json: unknown;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new CliError("LIVE_EXPORT_PROFILE_INVALID", "プロファイルのJSONが不正です。", 1);
-  }
-  const profile = liveShowProfileSchema.safeParse(parsed);
-  if (!profile.success) {
-    throw new CliError(
-      "LIVE_EXPORT_PROFILE_INVALID",
-      "Show Profile がスキーマに一致しません。",
-      1,
-      profile.error.issues,
-    );
-  }
-  const fixturePath = profile.data.test?.fixture;
-  if (fixturePath === undefined) {
-    return { profile: profile.data };
-  }
-  const absoluteFixture = resolve(dirname(path), fixturePath);
-  let fixtureRaw: string;
-  try {
-    fixtureRaw = await readFile(absoluteFixture, "utf8");
-  } catch {
-    throw new CliError(
-      "LIVE_EXPORT_FIXTURE_NOT_FOUND",
-      `fixture を読めません: ${absoluteFixture}`,
-      1,
-    );
-  }
-  let fixtureJson: unknown;
-  try {
-    fixtureJson = JSON.parse(fixtureRaw);
+    json = JSON.parse(raw);
   } catch {
     throw new CliError("LIVE_EXPORT_FIXTURE_INVALID", "fixture のJSONが不正です。", 1);
   }
-  const fixture = liveFixtureCommentsSchema.safeParse(fixtureJson);
+  const fixture = liveFixtureCommentsSchema.safeParse(json);
   if (!fixture.success) {
     throw new CliError(
       "LIVE_EXPORT_FIXTURE_INVALID",
@@ -147,11 +70,7 @@ async function readProfile(path: string): Promise<{ profile: LiveShowProfile; fi
       fixture.error.issues,
     );
   }
-  return { profile: profile.data, fixture: fixture.data };
-}
-
-function failureSummary(job: Job): LiveExportFailure[] {
-  return job.liveExportResult?.failures ?? [];
+  return fixture.data;
 }
 
 function parseJobResponse(value: unknown): Job {
@@ -201,214 +120,6 @@ async function requestJson(
   return body;
 }
 
-interface CommonArgs {
-  workId: string;
-  scriptVersionId: string;
-  timeoutMs: number;
-  intervalMs: number;
-}
-
-type ParsedArgs =
-  | { help: true }
-  | (CommonArgs & { mode: "profile"; profilePath: string; outDir: string })
-  | (CommonArgs & {
-      mode: "auto";
-      saveProfilePath: string | undefined;
-      title: string | undefined;
-      includeCommentCorners: boolean;
-      force: boolean;
-      dryRun: boolean;
-      outDir: string | undefined;
-    });
-
-function usageError(message: string): never {
-  throw new CliError("LIVE_EXPORT_CLI_USAGE", message, 2);
-}
-
-function required(value: string | undefined, name: string): string {
-  if (value === undefined || value.trim().length === 0) {
-    usageError(`${name} は必須です。`);
-  }
-  return value.trim();
-}
-
-async function requestAutoProfile(
-  fetchImpl: typeof fetch,
-  baseUrl: string,
-  input: {
-    workId: string;
-    scriptVersionId: string;
-    title?: string;
-    includeCommentCorners: boolean;
-  },
-): Promise<LiveAutoProfileResult> {
-  const response = await requestJson(fetchImpl, `${baseUrl}/api/v1/live-profiles/auto`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: new URL(baseUrl).origin,
-    },
-    body: JSON.stringify(input),
-  });
-  const parsed = liveAutoProfileResultSchema.safeParse(
-    (response as { data?: unknown }).data,
-  );
-  if (!parsed.success) {
-    throw new CliError(
-      "LIVE_EXPORT_API_INVALID",
-      "Kakeai API の自動生成応答がスキーマに一致しません。",
-      1,
-      parsed.error.issues,
-    );
-  }
-  return parsed.data;
-}
-
-async function saveGeneratedProfile(
-  path: string,
-  profile: LiveShowProfile,
-  force: boolean,
-): Promise<void> {
-  try {
-    await stat(path);
-    if (!force) {
-      throw new CliError(
-        "LIVE_EXPORT_PROFILE_EXISTS",
-        `プロファイルが既に存在します: ${path}。上書きするには --force を指定してください。`,
-        1,
-      );
-    }
-  } catch (error) {
-    if (error instanceof CliError) {
-      throw error;
-    }
-    if (!(error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT")) {
-      throw new CliError(
-        "LIVE_EXPORT_PROFILE_WRITE_FAILED",
-        `プロファイルの確認に失敗しました: ${path}`,
-        1,
-      );
-    }
-  }
-  try {
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, `${JSON.stringify(profile, null, 2)}\n`, "utf8");
-  } catch {
-    throw new CliError(
-      "LIVE_EXPORT_PROFILE_WRITE_FAILED",
-      `プロファイルを書き込めません: ${path}`,
-      1,
-    );
-  }
-}
-
-function parseArgsOrHelp(args: readonly string[]): ParsedArgs {
-  let values;
-  try {
-    ({ values } = parseArgs({
-      args: [...args],
-      strict: true,
-      allowPositionals: false,
-      options: {
-        work: { type: "string" },
-        "script-version": { type: "string" },
-        profile: { type: "string" },
-        "auto-profile": { type: "boolean" },
-        "save-profile": { type: "string" },
-        title: { type: "string" },
-        "no-comments": { type: "boolean" },
-        "dry-run": { type: "boolean" },
-        force: { type: "boolean" },
-        out: { type: "string" },
-        "timeout-ms": { type: "string" },
-        "interval-ms": { type: "string" },
-        help: { type: "boolean", short: "h" },
-      },
-    }));
-  } catch (error) {
-    throw new CliError(
-      "LIVE_EXPORT_CLI_USAGE",
-      error instanceof Error ? error.message : String(error),
-      2,
-    );
-  }
-  if (values.help === true) {
-    return { help: true };
-  }
-
-  const workId = required(values.work, "--work");
-  const scriptVersionId = required(values["script-version"], "--script-version");
-  const timeoutMs = parsePositive(values["timeout-ms"], "--timeout-ms", DEFAULT_TIMEOUT_MS);
-  const intervalMs = parsePositive(values["interval-ms"], "--interval-ms", DEFAULT_INTERVAL_MS);
-  const hasProfile = values.profile !== undefined;
-  const autoProfile = values["auto-profile"] === true;
-  const dryRun = values["dry-run"] === true;
-  const force = values.force === true;
-  const saveProfile = values["save-profile"];
-  const title = values.title;
-
-  if (hasProfile && autoProfile) {
-    usageError("--profile と --auto-profile は同時に指定できません。");
-  }
-  if (!hasProfile && !autoProfile) {
-    usageError("--profile または --auto-profile を指定してください。");
-  }
-  if (title !== undefined && title.trim().length === 0) {
-    usageError("--title は空にできません。");
-  }
-  if (saveProfile !== undefined && saveProfile.trim().length === 0) {
-    usageError("--save-profile は空にできません。");
-  }
-
-  if (hasProfile) {
-    for (const [name, enabled] of [
-      ["--save-profile", saveProfile !== undefined],
-      ["--title", title !== undefined],
-      ["--no-comments", values["no-comments"] === true],
-      ["--dry-run", dryRun],
-      ["--force", force],
-    ] as const) {
-      if (enabled) {
-        usageError(`${name} は --auto-profile と一緒にだけ使えます。`);
-      }
-    }
-    return {
-      mode: "profile",
-      workId,
-      scriptVersionId,
-      profilePath: required(values.profile, "--profile"),
-      outDir: required(values.out, "--out"),
-      timeoutMs,
-      intervalMs,
-    };
-  }
-
-  if (!dryRun && saveProfile === undefined) {
-    usageError("--auto-profile には --save-profile が必要です（--dry-run を除く）。");
-  }
-  if (force && saveProfile === undefined) {
-    usageError("--force は --save-profile と一緒にだけ使えます。");
-  }
-  const outDir =
-    values.out === undefined ? undefined : required(values.out, "--out");
-  if (!dryRun && outDir === undefined) {
-    usageError("--out は必須です。");
-  }
-  return {
-    mode: "auto",
-    workId,
-    scriptVersionId,
-    saveProfilePath: saveProfile?.trim(),
-    title: title?.trim(),
-    includeCommentCorners: values["no-comments"] !== true,
-    force,
-    dryRun,
-    outDir,
-    timeoutMs,
-    intervalMs,
-  };
-}
-
 export async function runLiveExport(
   args: readonly string[],
   io: LiveExportIo,
@@ -441,42 +152,15 @@ export async function runLiveExport(
       );
     }
 
-    let profile: LiveShowProfile;
-    let fixture: unknown;
-    let outDir: string;
-    if (parsed.mode === "profile") {
-      ({ profile, fixture } = await readProfile(resolve(cwd, parsed.profilePath)));
-      outDir = parsed.outDir;
-    } else {
-      const generated = await requestAutoProfile(fetchImpl, baseUrl, {
-        workId: parsed.workId,
-        scriptVersionId: parsed.scriptVersionId,
-        ...(parsed.title === undefined ? {} : { title: parsed.title }),
-        includeCommentCorners: parsed.includeCommentCorners,
-      });
-      profile = generated.profile;
-      const savedPath =
-        parsed.saveProfilePath === undefined
-          ? undefined
-          : resolve(cwd, parsed.saveProfilePath);
-      if (savedPath !== undefined) {
-        await saveGeneratedProfile(savedPath, profile, parsed.force);
-      }
-      io.stderr(
-        formatAutoProfileSummary(generated, {
-          ...(savedPath === undefined ? {} : { savedPath }),
-          dryRun: parsed.dryRun,
-        }),
-      );
-      if (parsed.dryRun) {
-        return 0;
-      }
-      // Defensive: parseArgsOrHelp requires --out whenever this is not a dry run.
-      if (parsed.outDir === undefined) {
-        throw new CliError("LIVE_EXPORT_CLI_USAGE", "--out は必須です。", 2);
-      }
-      outDir = parsed.outDir;
-    }
+    const fixture =
+      parsed.fixturePath === undefined
+        ? undefined
+        : await readFixture(resolve(cwd, parsed.fixturePath));
+    const requestBody = {
+      programVersionId: parsed.programVersionId,
+      outDir: resolve(cwd, parsed.outDir),
+      ...(fixture === undefined ? {} : { fixture }),
+    };
 
     const created = await requestJson(fetchImpl, `${baseUrl}/api/v1/live-exports`, {
       method: "POST",
@@ -484,13 +168,7 @@ export async function runLiveExport(
         "content-type": "application/json",
         origin: new URL(baseUrl).origin,
       },
-      body: JSON.stringify({
-        workId: parsed.workId,
-        scriptVersionId: parsed.scriptVersionId,
-        profile,
-        ...(fixture === undefined ? {} : { fixture }),
-        outDir: resolve(cwd, outDir),
-      }),
+      body: JSON.stringify(requestBody),
     });
     const job = parseJobResponse((created as { data?: unknown }).data);
     const deadline = Date.now() + parsed.timeoutMs;

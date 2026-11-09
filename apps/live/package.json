@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build",
     "live": "vite build && tsx src/bin.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@kakeai/contracts": "*",
+    "@kakeai/live-cards": "*",
     "@kakeai/tts": "*",
     "express": "^5.2.1",
     "react": "^19.3.0",

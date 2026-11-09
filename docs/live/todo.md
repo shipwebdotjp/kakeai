@@ -1,6 +1,6 @@
 # ライブ配信 TODO
 
-> **Status: legacy input.** ライブ台本は [ADR-0131](../adr/0131-live-program-owns-live-script.md) で Live Program へ移行する。新しい台本・カード・パッケージv2の作業は [../live-program/todo.md](../live-program/todo.md) を正とする。このファイルは、ステージ、プレイアウト、コメント、CutIn、TTSの既存実装の履歴として残す。
+> **Status: historical.** ライブ台本は Live Program へ移行し、旧 Show Profile、`live-profiles/auto`、`--profile` / `--auto-profile`、v1 パッケージ経路は P7 で削除した。新しい台本・カード・パッケージv2の作業は [../live-program/todo.md](../live-program/todo.md) を正とする。このファイルは、ステージ、プレイアウト、コメント、CutIn、TTSの既存実装の履歴として残す。
 
 [spec.md](./spec.md) を正とする。Phase順に進め、完了したらチェックを付ける。コードを変更したPhaseでは、`npm run typecheck` と `npm test` を通す。
 

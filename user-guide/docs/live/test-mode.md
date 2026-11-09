@@ -1,49 +1,32 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 title: テストモードでリハーサルする
 ---
 
 # テストモードでリハーサルする
 
-テストモードは、YouTube に接続せず、パッケージに含まれた fixture のコメントでライブ全体をリハーサルするモードです。コメントの供給元だけを差し替え、フィルター、コメント分析、ディレクター、TTS、ステージ、コンソールは本番と同じものを使います。
+テストモードは、YouTube に接続せず、Live Run に指定した fixture のコメントでライブ全体をリハーサルするモードです。コメントの供給元だけを差し替え、フィルター、コメント分析、ディレクター、TTS、ステージ、コンソールは本番と同じものを使います。
 
-## テスト用の Show Profile を書き出す
+## Run のコメントソースを fixture にする
 
-Show Profile に `commentSource.kind: "fixture"` と `test.fixture` を指定します。`docs/live/examples/show-10m.json` と `show-30m.json` は、テスト用の設定を含んでいます。
+Kakeai の Live Run 作成画面で、コメントソースに **fixture** を選びます。既存の JSON ファイルを指定するか、コメントを直接入力します。
 
-```json
-{
-  "commentSource": { "kind": "fixture" },
-  "test": { "fixture": "comments-10m.json" }
-}
-```
+- 指定した fixture は Run 作成時に `<runDir>/fixtures/comments.json` へコピーされます。
+- Run はコピーした fixture の SHA-256 を固定し、実行中に元ファイルが変わっても影響を受けません。
+- パッケージや Live Program は書き換えません。
 
-`test.fixture` は Show Profile ファイルからの相対パスです。`npm run live:export` は fixture を読み、パッケージの `fixtures/comments.json` に書き出します。
-
-```sh
-npm run live:export -- \
-  --work <workId> \
-  --script-version <scriptVersionId> \
-  --profile docs/live/examples/show-10m.json \
-  --out /tmp/live-package-10m
-```
-
-:::note[実 YouTube 用の Show Profile でテストする場合]
-`--test` はコメントソースを fixture に上書きしますが、fixture 本体はパッケージに含まれている必要があります。実配信用の Show Profile にも `test.fixture` を書いてから書き出すか、テスト用の別プロファイルを用意してください。fixture がない場合、コメントは 0 件になり、コメントコーナーはスキップされます。
-:::
-
-## 起動する
+Kakeai から起動すると、Run 設定と control token が自動で渡されます。手動で起動する場合は、Run 画面に表示される Run 設定 JSON を `--run-config` に指定してください。
 
 ```sh
 npm run live -- \
-  --package /tmp/live-package-10m \
-  --test \
+  --package /tmp/live-package-v2 \
+  --run-config /tmp/live-run/run-config.json \
   --config /path/to/live-config.json
 ```
 
-`--test` を付けると、Show Profile の `commentSource` が `youtube` でも fixture が使われます。`--test` を付けない場合も、パッケージの `commentSource.kind` が `fixture` なら fixture が使われます。
+fixture を使うかどうかは Run 設定の `source.kind` だけで決まります。
 
-テストモードでも、生成レスには設定ファイルの TTS と LLM を使います。LLM はテストモードに限り `mode: "external"` も使えます。実 YouTube のコメントを外部 LLM へ送る経路はありません。
+テストモードでも、生成レスには設定ファイルの TTS と LLM を使います。LLM は fixture の Run に限り `mode: "external"` も使えます。実 YouTube のコメントを外部 LLM へ送る経路はありません。
 
 ## fixture の形式
 
@@ -77,8 +60,8 @@ fixture には、通常のコメント、質問、URL、スパム、個人情報
 ## リハーサルの確認項目
 
 1. ステージを OBS またはブラウザで開き、`pre_show` が表示される
-2. コンソールで「開始」を押し、オープニングの準備済みキューが流れる
-3. 字幕・キャラクター・素材カードが切り替わる
+2. コンソールで「開始」を押し、オープニングの準備済み Cue が流れる
+3. 字幕・キャラクター・カード・素材が切り替わる
 4. コメントコーナーで、危険なコメントがブロックされ、通常コメントが表示される
 5. コメント一覧からピンを刺し、AI 候補より先に拾われる
 6. 生成レスが TTS 付きで流れ、コンソールの「生成レス」に字幕・読み上げ・表情が表示される
@@ -89,9 +72,9 @@ fixture には、通常のコメント、質問、URL、スパム、個人情報
 
 ## 停止と後片付け
 
-- ライブアプリは `Ctrl+C` で停止します。
+- ライブアプリは `Ctrl+C` で停止します。Kakeai の Run 画面から停止することもできます。
 - 実行ディレクトリは `<dataDir>/runs/<runId>/` に作られます。テスト用の音声やログが不要になったら、実行ディレクトリを削除してください。
-- テストモードでは YouTube の API は呼びません。API キーや OAuth トークンがなくても起動できます。
+- fixture の Run では YouTube の API は呼びません。API キーや OAuth トークンがなくても起動できます。
 
 ## テストモードで確認できないこと
 

@@ -3,12 +3,15 @@ import { idSchema, localeSchema, nonNegativeInt, positiveInt } from "./content/p
 import { contentDocumentSchema } from "./content/document";
 import { liveFixtureCommentSchema } from "./live/comment";
 import { liveManifestFontSchema } from "./live/paths";
-import { liveShowProfileSchema } from "./live/profile";
 import { voiceAdapterIdSchema, voiceIdSchema, voiceProfileExtrasSchema } from "./voice-profile";
 import { MAX_TTS_SPEED_SCALE, MIN_TTS_SPEED_SCALE } from "./requests";
 import { compositionManifestSchema, CANVAS_PROFILE_DIMENSIONS } from "./composition";
 import { expressionPresetSchema, faceLayerSchema } from "./face-set";
 import { visualSkinRefSchema, visualThemeDefinitionSchema } from "./content/theme";
+import { standingLayoutSchema } from "./content/standing-layout";
+import { liveSideSchema } from "./live/common";
+import { liveProgramVersionDocumentSchema } from "./live/program";
+import { liveResolutionSnapshotSchema } from "./live/resolution";
 
 export const SNAPSHOT_SCHEMA_VERSION = 3 as const;
 
@@ -144,36 +147,69 @@ export const liveVoiceProfileSnapshotSchema = z.object({
 });
 export type LiveVoiceProfileSnapshot = z.infer<typeof liveVoiceProfileSnapshotSchema>;
 
-export const liveExportJobSnapshotSchema = z.object({
+/**
+ * Display information frozen for characters.json. The resolution snapshot
+ * owns appearance/asset hashes; this adds the standing layout and face-set
+ * version that only the Character library row knows.
+ */
+export const liveExportProgramCharacterAppearanceSchema = z.strictObject({
+  id: idSchema,
+  expression: z.string().min(1),
+  pose: z.string().min(1),
+  imageAssetId: idSchema,
+  faceSetId: idSchema.nullable(),
+  faceSetVersion: positiveInt.nullable(),
+  standing: standingLayoutSchema.optional(),
+});
+export type LiveExportProgramCharacterAppearance = z.infer<
+  typeof liveExportProgramCharacterAppearanceSchema
+>;
+
+export const liveExportProgramCharacterSchema = z.strictObject({
+  id: idSchema,
+  side: liveSideSchema,
+  name: z.string().min(1),
+  appearances: z.array(liveExportProgramCharacterAppearanceSchema).min(1),
+});
+export type LiveExportProgramCharacter = z.infer<typeof liveExportProgramCharacterSchema>;
+
+const liveExportOutDirSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (value) =>
+      value.startsWith("/") &&
+      value !== "/" &&
+      value.split("/").filter(Boolean).length >= 2 &&
+      !value.includes("\0") &&
+      !value.includes("\\") &&
+      !value.split("/").includes(".."),
+    { message: "outDir には .. を含まない絶対パスを指定してください" },
+  );
+
+/**
+ * Everything the worker needs to export one Live Program Version without
+ * reading Work, Scene or draft state. Resolution-owned references are frozen
+ * as hashes; this snapshot adds the resolved file metadata and display data.
+ */
+export const liveExportProgramJobSnapshotSchema = z.strictObject({
   snapshotSchemaVersion: z.literal(LIVE_EXPORT_SNAPSHOT_SCHEMA_VERSION),
   kind: z.literal("live_export"),
-  workId: idSchema,
-  languageEditionId: idSchema,
-  scriptVersionId: idSchema,
-  versionNumber: positiveInt,
-  locale: localeSchema,
-  content: contentDocumentSchema,
-  profile: liveShowProfileSchema,
-  profileSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  sourceKind: z.literal("program"),
+  programId: idSchema,
+  programVersionId: idSchema,
+  programVersionNumber: positiveInt,
+  programDocumentSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  resolutionSnapshotSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  document: liveProgramVersionDocumentSchema,
+  resolutionSnapshot: liveResolutionSnapshotSchema,
+  characters: z.array(liveExportProgramCharacterSchema),
+  faceSets: z.array(snapshotFaceSetRefSchema).optional().default([]),
   fixture: z.array(liveFixtureCommentSchema).optional(),
-  outDir: z
-    .string()
-    .min(1)
-    .refine(
-      (value) =>
-        value.startsWith("/") &&
-        value !== "/" &&
-        value.split("/").filter(Boolean).length >= 2 &&
-        !value.includes("\0") &&
-        !value.includes("\\") &&
-        !value.split("/").includes(".."),
-      { message: "outDir には .. を含まない絶対パスを指定してください" },
-    ),
+  outDir: liveExportOutDirSchema,
   exporterVersion: z.string().min(1),
   theme: visualThemeDefinitionSchema,
-  skin: visualSkinRefSchema.optional(),
   assets: z.array(snapshotAssetRefSchema),
-  faceSets: z.array(snapshotFaceSetRefSchema).optional().default([]),
   voiceProfiles: z.array(liveVoiceProfileSnapshotSchema),
   fonts: z.array(liveManifestFontSchema),
   fontDiagnostics: z
@@ -183,12 +219,19 @@ export const liveExportJobSnapshotSchema = z.object({
     })
     .optional(),
 });
+export type LiveExportProgramJobSnapshot = z.infer<
+  typeof liveExportProgramJobSnapshotSchema
+>;
+
+export const liveExportJobSnapshotSchema = liveExportProgramJobSnapshotSchema;
 export type LiveExportJobSnapshot = z.infer<typeof liveExportJobSnapshotSchema>;
 
-export const jobInputSnapshotSchema = z.discriminatedUnion("kind", [
-  renderJobSnapshotSchema,
-  assetIngestJobSnapshotSchema,
-  ttsJobSnapshotSchema,
+export const jobInputSnapshotSchema = z.union([
+  z.discriminatedUnion("kind", [
+    renderJobSnapshotSchema,
+    assetIngestJobSnapshotSchema,
+    ttsJobSnapshotSchema,
+  ]),
   liveExportJobSnapshotSchema,
 ]);
 

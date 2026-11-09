@@ -24,7 +24,6 @@ function packageShow() {
       stageTemplate: "news-desk",
       characters: { left: "char-left", right: null },
     },
-    commentSource: { kind: "youtube" },
     segments: [
       {
         id: "seg-opening",

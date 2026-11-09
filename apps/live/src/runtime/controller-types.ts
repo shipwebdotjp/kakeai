@@ -1,4 +1,5 @@
 import type {
+  CommentSourceKind,
   ConsoleSnapshot,
   LiveCharacterSheet,
   LiveNoticeLevel,
@@ -23,6 +24,10 @@ export interface LiveControllerOptions {
   show: LivePackageShow;
   characters: LiveCharacterSheet;
   runStore?: RunStore;
+  /** Run start time; only the Live Run config supplies it. */
+  startAt?: string | null;
+  /** Comment source kind; only the Live Run config supplies it. */
+  commentSourceKind?: CommentSourceKind;
   now?: () => Date;
   leaseTtlMs?: number;
   playoutScheduler?: PlayoutScheduler;

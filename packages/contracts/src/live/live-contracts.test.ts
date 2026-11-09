@@ -3,42 +3,46 @@ import {
   commentCornerSchema,
   commentSourceStatusSchema,
   consoleSnapshotSchema,
-  liveCommentEntrySchema,
   directorOutputSchema,
   jobSchema,
   liveAudioUrlSchema,
   liveCommandSchema,
+  liveExportRequestSchema,
   liveExportResultSchema,
   liveGenerationStatusSchema,
+  livePackageBuildSchema,
   livePackageManifestSchema,
   livePackageRelativePathSchema,
   livePackageShowSchema,
-  parseLiveAudioUrl,
+  liveResolutionVoiceSchema,
+  liveRunSourceInputSchema,
   liveRuntimeConfigSchema,
   liveServerHelloMessageSchema,
-  liveShowProfileSchema,
+  parseLiveAudioUrl,
   preparedCueSchema,
   runLogEventSchema,
   stageEventSchema,
   stageStateSchema,
-  type LiveShowProfile,
 } from "..";
 
 const HASH = "a".repeat(64);
 const NOW = "2026-11-07T12:00:00.000Z";
 
-function profile(): LiveShowProfile {
-  return liveShowProfileSchema.parse({
-    schemaVersion: 1,
-    show: {
-      title: "テスト配信",
-      locale: "ja-JP",
-      targetDurationMs: 600_000,
-      stageTemplate: "news-desk",
-      characters: { left: "char-left", right: null },
-      startAt: null,
-    },
-    commentSource: { kind: "youtube" },
+function showMeta() {
+  return {
+    title: "テスト配信",
+    locale: "ja-JP" as const,
+    targetDurationMs: 600_000,
+    stageTemplate: "news-desk",
+    theme: "theme.css" as const,
+    characters: { left: "char-left", right: null },
+  };
+}
+
+function packageShow() {
+  return livePackageShowSchema.parse({
+    schemaVersion: 2,
+    show: showMeta(),
     segments: [
       {
         id: "seg-opening",
@@ -62,97 +66,98 @@ function profile(): LiveShowProfile {
         cues: ["cue-closing"],
       },
     ],
-    scriptCues: [{ id: "cue-script", lineId: "line-1", expressionId: "smile" }],
-    liveCues: [
+    cues: [
       {
         id: "cue-opening",
+        origin: "live",
         speaker: "left",
         caption: "始まります。",
         speech: "はじまります。",
         expression: "normal",
+        audio: "audio/prepared/cue-0001.wav",
+        durationMs: 1000,
+      },
+      {
+        id: "cue-script",
+        origin: "live",
+        speaker: "left",
+        caption: "本編です。",
+        speech: "ほんぺんです。",
+        expression: "smile",
+        audio: "audio/prepared/cue-0002.wav",
+        durationMs: 1000,
       },
       {
         id: "cue-closing",
+        origin: "live",
         speaker: "left",
         caption: "終わります。",
         speech: "おわります。",
         expression: "normal",
+        audio: "audio/prepared/cue-0003.wav",
+        durationMs: 1000,
+      },
+      {
+        id: "cue-fallback",
+        origin: "live",
+        speaker: "left",
+        caption: "補足します。",
+        speech: "ほそくします。",
+        expression: "normal",
+        audio: "audio/prepared/cue-0004.wav",
+        durationMs: 1000,
       },
     ],
-    materials: [{ id: "material-1", sceneId: "scene-1", focus: true, format: "png" }],
+    materials: [],
+    speakers: [
+      {
+        id: "speaker-left",
+        name: "左",
+        side: "left",
+        characterId: "char-left",
+        voice: {
+          adapterId: "voicevox",
+          voiceId: "voice-1",
+          speedScale: 1,
+          settings: {},
+        },
+      },
+    ],
+    commentPolicy: {},
     safety: {
       blockedTopics: [],
       persona: "親しみやすい解説役",
       maxResponseChars: 180,
       maxResponseCues: 2,
-      fallbackCueId: "cue-opening",
+      fallbackCueId: "cue-fallback",
     },
+    playout: {},
   });
 }
 
 describe("live contracts", () => {
-  it("accepts a minimal Show Profile and applies defaults", () => {
-    const parsed = profile();
-    expect(parsed.commentPolicy.maxCommentsPerCorner).toBe(4);
-    expect(parsed.playout.minBufferMs).toBe(10_000);
-    expect(parsed.materials[0]?.durationMs).toBe(4000);
-  });
-
-  it("rejects unknown schema versions and duplicate cues", () => {
-    const value = profile();
+  it("accepts only the program-version export request", () => {
     expect(
-      liveShowProfileSchema.safeParse({ ...value, schemaVersion: 2 }).success,
-    ).toBe(false);
-    const duplicate = {
-      ...value,
-      liveCues: [...value.liveCues, value.liveCues[0]!],
-    };
-    expect(liveShowProfileSchema.safeParse(duplicate).success).toBe(false);
-  });
-
-  it("accepts per-cue material overrides and rejects unknown references", () => {
-    const base = profile();
-    const withCueMaterial = {
-      ...base,
-      scriptCues: [{ ...base.scriptCues[0]!, materialId: "material-1" }],
-    };
-    expect(liveShowProfileSchema.safeParse(withCueMaterial).success).toBe(true);
-    expect(
-      liveShowProfileSchema.safeParse({
-        ...withCueMaterial,
-        scriptCues: [{ ...withCueMaterial.scriptCues[0]!, materialId: null }],
+      liveExportRequestSchema.safeParse({
+        programVersionId: "program-version-1",
+        outDir: "/tmp/kakeai/package",
       }).success,
     ).toBe(true);
-    expect(
-      liveShowProfileSchema.safeParse({
-        ...withCueMaterial,
-        scriptCues: [{ ...withCueMaterial.scriptCues[0]!, materialId: "material-missing" }],
-      }).success,
-    ).toBe(false);
-  });
-
-  it("rejects duplicate cue occurrences in a Show Profile", () => {
-    const base = profile();
-    expect(
-      liveShowProfileSchema.safeParse({
-        ...base,
-        segments: base.segments.map((segment) =>
-          segment.id === "seg-script"
-            ? { ...segment, cues: ["cue-script", "cue-script"] }
-            : segment,
-        ),
-      }).success,
-    ).toBe(false);
-    expect(
-      liveShowProfileSchema.safeParse({
-        ...base,
-        segments: base.segments.map((segment) =>
-          segment.id === "seg-script"
-            ? { ...segment, cues: ["cue-script", "cue-opening"] }
-            : segment,
-        ),
-      }).success,
-    ).toBe(false);
+    for (const legacy of [
+      {
+        workId: "work-1",
+        scriptVersionId: "script-version-1",
+        profile: {},
+        outDir: "/tmp/kakeai/package",
+      },
+      {
+        programVersionId: "program-version-1",
+        workId: "work-1",
+        outDir: "/tmp/kakeai/package",
+      },
+    ]) {
+      expect(liveExportRequestSchema.safeParse(legacy).success).toBe(false);
+    }
   });
 
   it("rejects paths that escape the package", () => {
@@ -187,46 +192,36 @@ describe("live contracts", () => {
     }
   });
 
-  it("requires sourceLineId only for script cues", () => {
-    expect(
-      preparedCueSchema.safeParse({
-        id: "cue-1",
-        origin: "script",
-        speaker: "left",
-        caption: "字幕",
-        speech: "こくじ",
-        expression: "normal",
-        audio: "audio/prepared/cue-0001.wav",
-        durationMs: 1000,
-      }).success,
-    ).toBe(false);
-    expect(
-      preparedCueSchema.safeParse({
-        id: "cue-2",
-        origin: "live",
-        sourceLineId: "line-1",
-        speaker: "left",
-        caption: "字幕",
-        speech: "こくじ",
-        expression: "normal",
-        audio: "audio/prepared/cue-0002.wav",
-        durationMs: 1000,
-      }).success,
-    ).toBe(false);
+  it("keeps prepared cues live-only and rejects legacy fields", () => {
+    const cue = {
+      id: "cue-1",
+      origin: "live" as const,
+      speaker: "left" as const,
+      caption: "字幕",
+      speech: "こくじ",
+      expression: "normal",
+      audio: "audio/prepared/cue-0001.wav",
+      durationMs: 1000,
+    };
+    expect(preparedCueSchema.safeParse(cue).success).toBe(true);
+    expect(preparedCueSchema.safeParse({ ...cue, origin: "script" }).success).toBe(false);
+    expect(preparedCueSchema.safeParse({ ...cue, sourceLineId: "line-1" }).success).toBe(false);
+    expect(preparedCueSchema.safeParse({ ...cue, materialId: "material-1" }).success).toBe(false);
   });
 
-  it("validates the package manifest and rejects unknown versions", () => {
+  it("validates a v2 manifest and rejects v1 sources", () => {
     const manifest = {
-      packageSchemaVersion: 1,
+      packageSchemaVersion: 2,
       exporterVersion: "0.1.0",
       packageId: "livepkg-test",
       createdAt: NOW,
       source: {
-        workId: "work-1",
-        languageEditionId: "edition-1",
-        scriptVersionId: "script-1",
+        programId: "program-1",
+        programVersionId: "program-version-1",
+        programVersionNumber: 1,
+        programDocumentSha256: HASH,
+        resolutionSnapshotSha256: HASH,
         theme: { id: "neutral", version: 1 },
-        profileSha256: HASH,
       },
       files: [
         {
@@ -245,34 +240,22 @@ describe("live contracts", () => {
       voices: [],
     };
     expect(livePackageManifestSchema.safeParse(manifest).success).toBe(true);
-    const programManifest = {
-      ...manifest,
-      packageSchemaVersion: 2,
-      source: {
-        programId: "program-1",
-        programVersionId: "program-version-1",
-        programVersionNumber: 1,
-        programDocumentSha256: HASH,
-        resolutionSnapshotSha256: HASH,
-        theme: { id: "neutral", version: 1 },
+    for (const legacy of [
+      { ...manifest, packageSchemaVersion: 1 },
+      {
+        ...manifest,
+        source: {
+          workId: "work-1",
+          languageEditionId: "edition-1",
+          scriptVersionId: "script-1",
+          theme: { id: "neutral", version: 1 },
+          profileSha256: HASH,
+        },
       },
-    };
-    expect(livePackageManifestSchema.safeParse(programManifest).success).toBe(true);
-    expect(
-      livePackageManifestSchema.safeParse({
-        ...manifest,
-        packageSchemaVersion: 2,
-      }).success,
-    ).toBe(false);
-    expect(
-      livePackageManifestSchema.safeParse({
-        ...manifest,
-        source: programManifest.source,
-      }).success,
-    ).toBe(false);
-    expect(
-      livePackageManifestSchema.safeParse({ ...manifest, packageSchemaVersion: 3 }).success,
-    ).toBe(false);
+      { ...manifest, packageSchemaVersion: 3 },
+    ]) {
+      expect(livePackageManifestSchema.safeParse(legacy).success).toBe(false);
+    }
     expect(
       livePackageManifestSchema.safeParse({
         ...manifest,
@@ -281,103 +264,42 @@ describe("live contracts", () => {
     ).toBe(false);
   });
 
-  it("validates the resolved show and stage/comment contracts", () => {
-    const packageShow = {
-      schemaVersion: 1,
-      show: profile().show,
-      commentSource: { kind: "youtube" },
-      segments: profile().segments,
-      cues: [
-        {
-          id: "cue-opening",
-          origin: "live",
-          speaker: "left",
-          caption: "始まります。",
-          speech: "はじまります。",
-          expression: "normal",
-          audio: "audio/prepared/cue-0001.wav",
-          durationMs: 1000,
-        },
-        {
-          id: "cue-script",
-          origin: "script",
-          sourceLineId: "line-1",
-          materialId: "material-1",
-          speaker: "left",
-          caption: "本編です。",
-          speech: "ほんぺんです。",
-          expression: "smile",
-          audio: "audio/prepared/cue-0002.wav",
-          durationMs: 1000,
-        },
-        {
-          id: "cue-closing",
-          origin: "live",
-          speaker: "left",
-          caption: "終わります。",
-          speech: "おわります。",
-          expression: "normal",
-          audio: "audio/prepared/cue-0003.wav",
-          durationMs: 1000,
-        },
-      ],
-      materials: [
-        {
-          id: "material-1",
-          kind: "image",
-          file: "materials/card-1.png",
-          hasAudio: false,
-          focus: true,
-          width: 1920,
-          height: 1080,
-        },
-      ],
-      speakers: [
-        {
-          id: "speaker-left",
-          name: "左",
-          side: "left",
-          characterId: "char-left",
-          voice: {
-            adapterId: "voicevox",
-            voiceId: "voice-1",
-            speedScale: 1,
-            settings: {},
-          },
-        },
-      ],
-      commentPolicy: profile().commentPolicy,
-      safety: profile().safety,
-      playout: profile().playout,
-    };
-    expect(livePackageShowSchema.safeParse(packageShow).success).toBe(true);
+  it("accepts the v2 show and rejects v1-only fields", () => {
+    const show = packageShow();
+    expect(show.schemaVersion).toBe(2);
+    expect(livePackageShowSchema.safeParse({ ...show, schemaVersion: 1 }).success).toBe(false);
     expect(
       livePackageShowSchema.safeParse({
-        ...packageShow,
-        cues: packageShow.cues.map((cue) =>
-          cue.id === "cue-script" ? { ...cue, materialId: null } : cue,
-        ),
+        ...show,
+        show: { ...show.show, startAt: null },
       }).success,
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      livePackageShowSchema.safeParse({ ...show, commentSource: { kind: "youtube" } }).success,
+    ).toBe(false);
+    expect(
+      livePackageShowSchema.safeParse({ ...show, test: { fixture: "fixtures/comments.json" } })
+        .success,
+    ).toBe(false);
     expect(
       livePackageShowSchema.safeParse({
-        ...packageShow,
-        cues: packageShow.cues.map((cue) =>
-          cue.id === "cue-script" ? { ...cue, materialId: "material-missing" } : cue,
+        ...show,
+        cues: show.cues.map((cue) =>
+          cue.id === "cue-script" ? { ...cue, materialId: "material-1" } : cue,
         ),
       }).success,
     ).toBe(false);
     expect(
       livePackageShowSchema.safeParse({
-        ...packageShow,
-        segments: packageShow.segments.map((segment) =>
-          segment.id === "seg-script"
-            ? { ...segment, cues: ["cue-script", "cue-opening"] }
-            : segment,
+        ...show,
+        segments: show.segments.map((segment) =>
+          segment.id === "seg-script" ? { ...segment, material: "material-1" } : segment,
         ),
       }).success,
     ).toBe(false);
+  });
 
+  it("validates the stage, comment and console contracts", () => {
     const stageState = {
       phase: "pre_show",
       show: { title: "テスト配信", startAt: null },
@@ -387,14 +309,31 @@ describe("live contracts", () => {
         right: null,
       },
       caption: null,
-      material: null,
+      visual: null,
       comment: null,
       status: "idle",
       playback: null,
       clock: { elapsedMs: 0, remainingMs: 600_000 },
     };
     expect(stageStateSchema.safeParse(stageState).success).toBe(true);
-    expect(stageStateSchema.safeParse({ ...stageState, show: undefined }).success).toBe(false);
+    expect(
+      stageStateSchema.safeParse({
+        ...stageState,
+        visual: { kind: "card", cardId: "card-1", stateId: "state-1", sequence: 2 },
+      }).success,
+    ).toBe(true);
+    expect(
+      stageStateSchema.safeParse({
+        ...stageState,
+        visual: { kind: "material", materialId: "material-1", focus: true, sequence: 3 },
+      }).success,
+    ).toBe(true);
+    expect(
+      stageStateSchema.safeParse({
+        ...stageState,
+        visual: { kind: "card", cardId: "card-1", stateId: "state-1", sequence: -1 },
+      }).success,
+    ).toBe(false);
 
     const playback = {
       cueId: "cue-script",
@@ -426,13 +365,11 @@ describe("live contracts", () => {
       }).success,
     ).toBe(false);
     expect(
-      stageStateSchema.safeParse({
-        ...stageState,
-        playback: { ...playback, sequence: undefined },
-      }).success,
+      stageStateSchema.safeParse({ ...stageState, playback: { ...playback, sequence: undefined } })
+        .success,
     ).toBe(false);
 
-    const showMeta = {
+    const showMetaValue = {
       title: "テスト配信",
       targetDurationMs: 600_000,
       segments: [
@@ -459,13 +396,13 @@ describe("live contracts", () => {
         role: "stage",
         lease,
         state: stageState,
-        showMeta,
+        showMeta: showMetaValue,
       }).success,
     ).toBe(true);
     expect(
       consoleSnapshotSchema.safeParse({
         runId: "run-1",
-        show: showMeta,
+        show: showMetaValue,
         phase: "pre_show",
         segment: null,
         stages: [
@@ -507,6 +444,14 @@ describe("live contracts", () => {
         generation: null,
       }).success,
     ).toBe(true);
+    expect(commentCornerSchema.safeParse({
+      state: "idle",
+      segmentId: null,
+      selectedCommentIds: [],
+      currentCommentId: null,
+      deferredPinIds: [],
+      remainingSlots: 0,
+    }).success).toBe(true);
     expect(
       liveGenerationStatusSchema.safeParse({
         phase: "preparing",
@@ -526,33 +471,7 @@ describe("live contracts", () => {
       }).success,
     ).toBe(false);
     expect(liveCommandSchema.safeParse({ kind: "start" }).success).toBe(true);
-    expect(liveCommandSchema.safeParse({ kind: "skip_cue" }).success).toBe(true);
     expect(liveCommandSchema.safeParse({ kind: "unknown" }).success).toBe(false);
-    expect(
-      liveCommandSchema.safeParse({ kind: "takeover_program", sessionId: "session-1" }).success,
-    ).toBe(true);
-    expect(
-      liveCommandSchema.safeParse({
-        kind: "edit_cue",
-        cueId: "cue-1",
-        caption: "直した字幕",
-      }).success,
-    ).toBe(true);
-    expect(
-      liveCommandSchema.safeParse({ kind: "edit_cue", cueId: "cue-1" }).success,
-    ).toBe(false);
-    expect(
-      liveCommandSchema.safeParse({
-        kind: "move_cue",
-        cueId: "cue-1",
-        beforeCueId: null,
-      }).success,
-    ).toBe(true);
-    for (const kind of ["cancel_cue", "regenerate_cue", "delete_cue", "play_correction"] as const) {
-      expect(liveCommandSchema.safeParse({ kind, cueId: "cue-1" }).success).toBe(true);
-      expect(liveCommandSchema.safeParse({ kind, cueId: "" }).success).toBe(false);
-    }
-
     expect(
       stageEventSchema.safeParse({
         kind: "audio_ended",
@@ -563,7 +482,6 @@ describe("live contracts", () => {
         sequence: 2,
       }).success,
     ).toBe(true);
-
     expect(
       directorOutputSchema.safeParse({
         cues: [
@@ -572,7 +490,6 @@ describe("live contracts", () => {
         skip: false,
       }).success,
     ).toBe(true);
-
     expect(
       runLogEventSchema.safeParse({
         schemaVersion: 1,
@@ -585,15 +502,17 @@ describe("live contracts", () => {
     ).toBe(true);
   });
 
-  it("enforces live_export Job result rules", () => {
+  it("enforces program-only live_export Job result rules", () => {
     const base = {
       id: "job-1",
       kind: "live_export" as const,
       status: "succeeded" as const,
-      workId: "work-1",
+      workId: null,
       assetId: null,
-      languageEditionId: "edition-1",
-      scriptVersionId: "script-1",
+      languageEditionId: null,
+      scriptVersionId: null,
+      programId: "program-1",
+      programVersionId: "program-version-1",
       progressPercent: 100,
       createdAt: NOW,
       startedAt: NOW,
@@ -620,9 +539,30 @@ describe("live contracts", () => {
     expect(
       liveExportResultSchema.safeParse({ ...base.liveExportResult, manifestSha256: "bad" }).success,
     ).toBe(false);
+    expect(
+      jobSchema.safeParse({
+        ...base,
+        workId: "work-1",
+        languageEditionId: "edition-1",
+        scriptVersionId: "script-1",
+      }).success,
+    ).toBe(false);
+    expect(
+      jobSchema.safeParse({
+        ...base,
+        programVersionId: undefined,
+      }).success,
+    ).toBe(false);
+    expect(
+      jobSchema.safeParse({
+        ...base,
+        programId: null,
+        programVersionId: null,
+      }).success,
+    ).toBe(false);
   });
 
-  it("validates the comment source status and comment commands", () => {
+  it("validates the comment source status", () => {
     const status = {
       kind: "youtube" as const,
       state: "polling" as const,
@@ -640,587 +580,184 @@ describe("live contracts", () => {
     expect(
       commentSourceStatusSchema.safeParse({ ...status, state: "unknown" }).success,
     ).toBe(false);
-    expect(
-      commentSourceStatusSchema.safeParse({ ...status, authMode: "unknown" }).success,
-    ).toBe(false);
-    expect(
-      commentSourceStatusSchema.safeParse({
-        ...status,
-        authMode: null,
-        fallbackAvailable: false,
-      }).success,
-    ).toBe(true);
-    expect(
-      commentSourceStatusSchema.safeParse({ ...status, quota: { requests: -1, units: 0, startedAt: NOW } })
-        .success,
-    ).toBe(false);
-
-    expect(liveCommandSchema.safeParse({ kind: "pause_comments" }).success).toBe(true);
-    expect(liveCommandSchema.safeParse({ kind: "resume_comments" }).success).toBe(true);
-    expect(
-      liveCommandSchema.safeParse({ kind: "pin_comment", commentId: "yt-1", note: "質問として" })
-        .success,
-    ).toBe(true);
-    expect(liveCommandSchema.safeParse({ kind: "unpin_comment", commentId: "yt-1" }).success).toBe(
-      true,
-    );
-    expect(liveCommandSchema.safeParse({ kind: "skip_comment", commentId: "yt-1" }).success).toBe(
-      true,
-    );
-    expect(liveCommandSchema.safeParse({ kind: "block_author", author: "spam" }).success).toBe(
-      true,
-    );
-    expect(liveCommandSchema.safeParse({ kind: "block_topic", topic: "政治" }).success).toBe(true);
-    expect(
-      liveCommandSchema.safeParse({ kind: "set_live_chat", liveChatId: "chat-2" }).success,
-    ).toBe(true);
-    expect(liveCommandSchema.safeParse({ kind: "pin_comment", commentId: "" }).success).toBe(false);
-
-    const entry = {
-      comment: {
-        id: "yt-1",
-        authorName: "みかん",
-        text: "こんにちは",
-        publishedAt: NOW,
-        receivedAt: NOW,
-        kind: "normal" as const,
-      },
-      decision: "accepted" as const,
-      reasons: [],
-      redactedText: "こんにちは",
-      candidate: null,
-      pinned: false,
-      pinNote: null,
-      selected: false,
-      state: "received" as const,
-      freshnessMs: 1_000,
-    };
-    expect(liveCommentEntrySchema.safeParse(entry).success).toBe(true);
-    expect(liveCommentEntrySchema.safeParse({ ...entry, state: "unknown" }).success).toBe(false);
-    expect(
-      liveCommentEntrySchema.safeParse({ ...entry, freshnessMs: -1 }).success,
-    ).toBe(false);
-
-    const corner = {
-      state: "running" as const,
-      segmentId: "seg-comments",
-      selectedCommentIds: ["yt-1"],
-      currentCommentId: "yt-1",
-      deferredPinIds: [],
-      remainingSlots: 3,
-    };
-    expect(commentCornerSchema.safeParse(corner).success).toBe(true);
-    expect(commentCornerSchema.safeParse({ ...corner, remainingSlots: -1 }).success).toBe(false);
   });
 
-  it("keeps older runtime configs valid and defaults the new comment settings", () => {
-    const base = {
-      llm: { mode: "local", baseUrl: "http://127.0.0.1:11434/v1", model: "test-model" },
+  it("validates the live runtime config", () => {
+    const config = {
+      llm: { mode: "local", baseUrl: "http://127.0.0.1:11434/v1", model: "test" },
       tts: { adapters: {} },
       port: 3010,
       dataDir: "/tmp/kakeai-live",
     };
-    const parsed = liveRuntimeConfigSchema.parse(base);
-    expect(parsed.llm.timeoutMs).toBe(15_000);
-    expect(parsed.tts.timeoutMs).toBe(20_000);
-    expect(parsed.tts.maxConcurrentTts).toBe(2);
-    expect(parsed.comments).toEqual({
-      ngWords: [],
-      maxLength: 300,
-      maxPerAuthorPerMinute: 3,
-      analysisBatchSize: 20,
-      analysisTimeoutMs: 15_000,
-      cornerHoldMs: 4_000,
-    });
-    expect(parsed.youtube).toBeUndefined();
-
-    const explicit = liveRuntimeConfigSchema.parse({
-      ...base,
-      llm: { ...base.llm, timeoutMs: 5_000 },
-      youtube: {
-        clientId: "client-1",
-        clientSecret: "secret-1",
-        videoUrl: "https://youtu.be/abcdefghijk",
-        pollingIntervalMs: 9_000,
-      },
-      comments: { ngWords: ["NG"], maxLength: 120, analysisBatchSize: 5 },
-    });
-    expect(explicit.llm.timeoutMs).toBe(5_000);
-    expect(explicit.comments.maxLength).toBe(120);
-    expect(explicit.comments.maxPerAuthorPerMinute).toBe(3);
-    expect(explicit.youtube?.pollingIntervalMs).toBe(9_000);
-
-    const apiKeyOnly = liveRuntimeConfigSchema.parse({
-      ...base,
-      youtube: { apiKey: "api-key-1", videoUrl: "https://youtu.be/abcdefghijk" },
-    });
-    expect(apiKeyOnly.youtube).toMatchObject({ apiKey: "api-key-1" });
-    expect(apiKeyOnly.youtube?.clientId).toBeUndefined();
+    expect(liveRuntimeConfigSchema.safeParse(config).success).toBe(true);
     expect(
       liveRuntimeConfigSchema.safeParse({
-        ...base,
-        youtube: { videoUrl: "https://youtu.be/abcdefghijk" },
+        ...config,
+        llm: { ...config.llm, baseUrl: "http://example.com/v1" },
       }).success,
     ).toBe(false);
+  });
+
+  it("bounds the resolved voice speed scale", () => {
+    const voice = {
+      side: "left" as const,
+      characterId: "char-1",
+      voiceProfileId: "voice-1",
+      adapterId: "voicevox" as const,
+      voiceId: "voice-1",
+      speedScale: 1,
+      settings: {},
+      referenceAudio: null,
+    };
+    expect(liveResolutionVoiceSchema.safeParse(voice).success).toBe(true);
     expect(
-      liveRuntimeConfigSchema.safeParse({
-        ...base,
-        youtube: {
-          apiKey: "api-key-1",
-          clientId: "client-1",
-          videoUrl: "https://youtu.be/abcdefghijk",
-        },
-      }).success,
+      liveResolutionVoiceSchema.safeParse({ ...voice, speedScale: 0.49 }).success,
     ).toBe(false);
     expect(
-      liveRuntimeConfigSchema.safeParse({
-        ...base,
-        youtube: {
-          apiKey: "api-key-1",
-          clientId: "client-1",
-          clientSecret: "secret-1",
-          videoUrl: "https://youtu.be/abcdefghijk",
-        },
+      liveResolutionVoiceSchema.safeParse({ ...voice, speedScale: 2.01 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects traversal-like absolute paths for Run inputs", () => {
+    expect(
+      liveRunSourceInputSchema.safeParse({
+        kind: "fixture",
+        fixturePath: "/tmp/kakeai/fixture.json",
+      }).success,
+    ).toBe(true);
+    for (const path of [
+      "/tmp",
+      "/tmp//fixture.json",
+      "/tmp/./fixture.json",
+      "/tmp/../fixture.json",
+      "/tmp/%2e%2e/fixture.json",
+      "/tmp/%2f/fixture.json",
+      "/tmp/%5c/fixture.json",
+      "/tmp/\\fixture.json",
+      "relative/fixture.json",
+    ]) {
+      expect(
+        liveRunSourceInputSchema.safeParse({ kind: "fixture", fixturePath: path })
+          .success,
+        path,
+      ).toBe(false);
+    }
+    expect(
+      livePackageBuildSchema.safeParse({
+        packageId: "pkg-1",
+        manifestSha256: HASH,
+        packagePath: "/tmp/kakeai/package",
       }).success,
     ).toBe(true);
   });
-});
 
-const CUT_IN_FILE = `media/assets/${"b".repeat(64)}.mp4`;
-
-function cutInProfile() {
-  const base = profile();
-  return {
-    ...base,
-    segments: [
-      base.segments[0],
-      base.segments[1],
-      {
-        id: "seg-cut",
-        kind: "cut_in",
-        label: "コメントコーナーへ",
-        cutInId: "jingle-1",
-      },
-      base.segments[2],
-    ],
-    cutIns: [{ id: "jingle-1", assetId: "asset-video-1" }],
-  };
-}
-
-const PACKAGE_CUT_IN = {
-  id: "jingle-1",
-  file: CUT_IN_FILE,
-  durationMs: 4200,
-  hasAudio: true,
-  width: 1920,
-  height: 1080,
-};
-
-function packageShow(options: { withCutIn: boolean; cutIns?: unknown[] }) {
-  const base = profile();
-  return {
-    schemaVersion: 1,
-    show: base.show,
-    commentSource: { kind: "youtube" },
-    segments: [
-      base.segments[0],
-      base.segments[1],
-      ...(options.withCutIn
-        ? [
-            {
-              id: "seg-cut",
-              kind: "cut_in",
-              label: "コメントコーナーへ",
-              cutInId: "jingle-1",
-            },
-          ]
-        : []),
-      base.segments[2],
-    ],
-    cues: [
-      {
-        id: "cue-opening",
-        origin: "live",
-        speaker: "left",
-        caption: "始まります。",
-        speech: "はじまります。",
-        expression: "normal",
-        audio: "audio/prepared/cue-opening.wav",
-        durationMs: 1000,
-      },
-      {
-        id: "cue-script",
-        origin: "script",
-        sourceLineId: "line-1",
-        speaker: "left",
-        caption: "本編です。",
-        speech: "ほんぺんです。",
-        expression: "smile",
-        audio: "audio/prepared/cue-script.wav",
-        durationMs: 1000,
-      },
-      {
-        id: "cue-closing",
-        origin: "live",
-        speaker: "left",
-        caption: "終わります。",
-        speech: "おわります。",
-        expression: "normal",
-        audio: "audio/prepared/cue-closing.wav",
-        durationMs: 1000,
-      },
-    ],
-    materials: [],
-    ...(options.cutIns === undefined ? {} : { cutIns: options.cutIns }),
-    speakers: [],
-    commentPolicy: base.commentPolicy,
-    safety: base.safety,
-    playout: base.playout,
-  };
-}
-
-function baseStageState() {
-  return {
-    phase: "pre_show",
-    show: { title: "テスト配信", startAt: null },
-    segment: null,
-    characters: {
-      left: { expression: "normal", speaking: false },
-      right: null,
-    },
-    caption: null,
-    material: null,
-    comment: null,
-    status: "idle",
-    playback: null,
-    clock: { elapsedMs: 0, remainingMs: 600_000 },
-  };
-}
-
-function baseConsoleSnapshot() {
-  return {
-    runId: "run-1",
-    show: {
-      title: "テスト配信",
-      targetDurationMs: 600_000,
-      segments: [
-        {
-          id: "seg-opening",
-          label: "オープニング",
-          kind: "opening",
-          targetDurationMs: 60_000,
-        },
-      ],
-    },
-    phase: "pre_show",
-    segment: null,
-    stages: [],
-    queue: [],
-    currentCueId: null,
-    queuePosition: null,
-    playback: null,
-    status: "idle",
-    clock: { elapsedMs: 0, remainingMs: 600_000 },
-    comments: [],
-    commentCorner: {
-      state: "idle",
-      segmentId: null,
-      selectedCommentIds: [],
-      currentCommentId: null,
-      deferredPinIds: [],
-      remainingSlots: 0,
-    },
-    commentSource: {
-      kind: "youtube",
-      state: "idle",
-      liveChatId: null,
-      pollingIntervalMs: 0,
-      lastPolledAt: null,
-      lastError: null,
-      quota: null,
-      authMode: "apiKey",
-      fallbackAvailable: false,
-      authExpiresAt: null,
-      needsReauth: false,
-    },
-    generation: null,
-  };
-}
-
-describe("live CutIn contracts", () => {
-  it("keeps old profiles valid with an empty cutIns default", () => {
-    const parsed = liveShowProfileSchema.parse(profile());
-    expect(parsed.cutIns).toEqual([]);
-  });
-
-  it("accepts a cut_in segment that references a profile CutIn", () => {
-    const parsed = liveShowProfileSchema.safeParse(cutInProfile());
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.segments.map((segment) => segment.kind)).toContain("cut_in");
-      expect(parsed.data.cutIns).toEqual([{ id: "jingle-1", assetId: "asset-video-1" }]);
-    }
-  });
-
-  it("rejects duplicate profile CutIn ids and missing cutInId references", () => {
-    expect(
-      liveShowProfileSchema.safeParse({
-        ...cutInProfile(),
-        cutIns: [
-          { id: "jingle-1", assetId: "asset-video-1" },
-          { id: "jingle-1", assetId: "asset-video-2" },
-        ],
-      }).success,
-    ).toBe(false);
-    expect(
-      liveShowProfileSchema.safeParse({
-        ...cutInProfile(),
-        cutIns: [],
-      }).success,
-    ).toBe(false);
-    expect(
-      liveShowProfileSchema.safeParse({
-        ...cutInProfile(),
-        cutIns: [{ id: "other", assetId: "asset-video-1" }],
-      }).success,
-    ).toBe(false);
-  });
-
-  it("rejects a cut_in segment that carries duration, cues, material or comment policy", () => {
-    const base = cutInProfile();
-    for (const extra of [
-      { targetDurationMs: 4200 },
-      { cues: ["cue-opening"] },
-      { material: "material-1" },
-      { commentPolicy: { maxCommentsPerCorner: 2 } },
-    ]) {
-      expect(
-        liveShowProfileSchema.safeParse({
-          ...base,
-          segments: [
-            base.segments[0],
-            base.segments[1],
-            {
-              id: "seg-cut",
-              kind: "cut_in",
-              label: "コメントコーナーへ",
-              cutInId: "jingle-1",
-              ...extra,
-            },
-            base.segments[2],
-          ],
-        }).success,
-      ).toBe(false);
-    }
-  });
-
-  it("parses package CutIns and defaults old packages to an empty array", () => {
-    const withCutIn = livePackageShowSchema.parse(
-      packageShow({ withCutIn: true, cutIns: [PACKAGE_CUT_IN] }),
-    );
-    expect(withCutIn.cutIns).toHaveLength(1);
-    expect(withCutIn.cutIns[0]).toMatchObject({
-      id: "jingle-1",
-      durationMs: 4200,
-      hasAudio: true,
-      width: 1920,
-      height: 1080,
-    });
-
-    const withoutCutIns = livePackageShowSchema.parse(packageShow({ withCutIn: false }));
-    expect(withoutCutIns.cutIns).toEqual([]);
-  });
-
-  it("rejects duplicate package CutIn ids and missing cutInId references", () => {
-    expect(
-      livePackageShowSchema.safeParse(
-        packageShow({ withCutIn: true, cutIns: [PACKAGE_CUT_IN, PACKAGE_CUT_IN] }),
-      ).success,
-    ).toBe(false);
-    expect(
-      livePackageShowSchema.safeParse(packageShow({ withCutIn: true, cutIns: [] })).success,
-    ).toBe(false);
-  });
-
-  it("defaults stage state cutIn to null and accepts a playing CutIn", () => {
-    const idle = stageStateSchema.parse(baseStageState());
-    expect(idle.cutIn).toBeNull();
-
-    const parsed = stageStateSchema.safeParse({
-      ...baseStageState(),
-      phase: "cut_in",
-      segment: { id: "seg-cut", label: "コメントコーナーへ" },
-      cutIn: {
-        cutInId: "jingle-1",
-        segmentId: "seg-cut",
-        label: "コメントコーナーへ",
-        file: CUT_IN_FILE,
-        durationMs: 4200,
-        hasAudio: true,
-        attempt: 1,
-        sequence: 1,
-        startedAt: NOW,
-      },
-    });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.cutIn?.cutInId).toBe("jingle-1");
-    }
-  });
-
-  it("accepts cut_in_ended stage events with CutIn identity", () => {
-    const parsed = stageEventSchema.safeParse({
-      kind: "cut_in_ended",
-      runId: "run-1",
-      sessionId: "session-1",
-      cueId: null,
-      cutInId: "jingle-1",
-      segmentId: "seg-cut",
-      attempt: 1,
-      sequence: 2,
-    });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.cutInId).toBe("jingle-1");
-      expect(parsed.data.segmentId).toBe("seg-cut");
-    }
-  });
-
-  it("requires CutIn identity on cut_in_ended and cut_in_error events", () => {
+  it("keeps stage event identities mutually exclusive", () => {
     const base = {
       runId: "run-1",
       sessionId: "session-1",
       cueId: null,
-      attempt: 1,
-      sequence: 2,
-    };
-    for (const kind of ["cut_in_ended", "cut_in_error"] as const) {
-      expect(stageEventSchema.safeParse({ ...base, kind }).success).toBe(false);
-      expect(
-        stageEventSchema.safeParse({ ...base, kind, cutInId: "jingle-1" }).success,
-      ).toBe(false);
-      expect(
-        stageEventSchema.safeParse({ ...base, kind, segmentId: "seg-cut" }).success,
-      ).toBe(false);
-      expect(
-        stageEventSchema.safeParse({
-          ...base,
-          kind,
-          cutInId: null,
-          segmentId: "seg-cut",
-        }).success,
-      ).toBe(false);
-      expect(
-        stageEventSchema.safeParse({
-          ...base,
-          kind,
-          cutInId: "jingle-1",
-          segmentId: null,
-        }).success,
-      ).toBe(false);
-      expect(
-        stageEventSchema.safeParse({
-          ...base,
-          kind,
-          cutInId: "jingle-1",
-          segmentId: "seg-cut",
-        }).success,
-      ).toBe(true);
-    }
-  });
-
-  it("accepts an audio stage event with an explicit null segmentId", () => {
-    const parsed = stageEventSchema.safeParse({
-      kind: "audio_ended",
-      runId: "run-1",
-      sessionId: "session-1",
-      cueId: "cue-1",
-      segmentId: null,
-      attempt: 1,
-      sequence: 2,
-    });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.segmentId).toBeNull();
-    }
-  });
-
-  it("defaults console cutIn to null and accepts a playing CutIn", () => {
-    const idle = consoleSnapshotSchema.parse(baseConsoleSnapshot());
-    expect(idle.cutIn).toBeNull();
-
-    const parsed = consoleSnapshotSchema.safeParse({
-      ...baseConsoleSnapshot(),
-      phase: "cut_in",
-      segment: { id: "seg-cut", label: "コメントコーナーへ" },
-      cutIn: {
-        cutInId: "jingle-1",
-        segmentId: "seg-cut",
-        label: "コメントコーナーへ",
-        durationMs: 4200,
-        startedAt: NOW,
-        attempt: 1,
-        sequence: 1,
-      },
-    });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.cutIn?.sequence).toBe(1);
-    }
-  });
-
-  it("accepts skip_cut_in and CutIn run log events", () => {
-    expect(liveCommandSchema.safeParse({ kind: "skip_cut_in" }).success).toBe(true);
-    expect(liveCommandSchema.safeParse({ kind: "skip_cut_in", cueId: "cue-1" }).success).toBe(
-      false,
-    );
-
-    const parsed = runLogEventSchema.safeParse({
-      schemaVersion: 1,
-      runId: "run-1",
+      attempt: 0,
       sequence: 1,
-      at: NOW,
-      type: "cut_in_started",
-      cueId: null,
-      cutInId: "jingle-1",
-      segmentId: "seg-cut",
-      data: {},
-    });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.cutInId).toBe("jingle-1");
+    };
+    const card = {
+      ...base,
+      kind: "card_error" as const,
+      cardId: "card-1",
+      stateId: "state-1",
+    };
+    expect(stageEventSchema.safeParse(card).success).toBe(true);
+    expect(
+      stageEventSchema.safeParse({ ...card, cutInId: "cut-1" }).success,
+    ).toBe(false);
+    expect(
+      stageEventSchema.safeParse({ ...card, segmentId: "seg-1" }).success,
+    ).toBe(false);
+    // null is the same as omitted for a nullable optional field.
+    expect(
+      stageEventSchema.safeParse({ ...card, cutInId: null, segmentId: null }).success,
+    ).toBe(true);
+    expect(
+      stageEventSchema.safeParse({ ...card, cardId: undefined }).success,
+    ).toBe(false);
+
+    const cutIn = {
+      ...base,
+      kind: "cut_in_ended" as const,
+      cutInId: "cut-1",
+      segmentId: "seg-1",
+    };
+    expect(stageEventSchema.safeParse(cutIn).success).toBe(true);
+    expect(
+      stageEventSchema.safeParse({ ...cutIn, cardId: "card-1" }).success,
+    ).toBe(false);
+    expect(
+      stageEventSchema.safeParse({ ...cutIn, stateId: "state-1" }).success,
+    ).toBe(false);
+    expect(
+      stageEventSchema.safeParse({ ...cutIn, cardId: null, stateId: null }).success,
+    ).toBe(true);
+    expect(
+      stageEventSchema.safeParse({ ...cutIn, segmentId: undefined }).success,
+    ).toBe(false);
+    expect(
+      stageEventSchema.safeParse({ ...cutIn, kind: "cut_in_error", cutInId: null }).success,
+    ).toBe(false);
+
+    for (const kind of [
+      "audio_ended",
+      "audio_error",
+      "stage_ready",
+      "stage_heartbeat",
+    ] as const) {
+      const plain = { ...base, kind };
+      expect(stageEventSchema.safeParse(plain).success).toBe(true);
+      for (const stray of [
+        { cutInId: "cut-1" },
+        { segmentId: "seg-1" },
+        { cardId: "card-1" },
+        { stateId: "state-1" },
+      ]) {
+        expect(
+          stageEventSchema.safeParse({ ...plain, ...stray }).success,
+          `${kind} ${Object.keys(stray)[0]}`,
+        ).toBe(false);
+      }
     }
   });
 
-  it("accepts a cut-in manifest file with video/mp4 and audio", () => {
-    const manifest = {
-      packageSchemaVersion: 1,
-      exporterVersion: "0.1.0",
-      packageId: "livepkg-test",
+  it("rejects program references on non-live_export jobs", () => {
+    const tts = {
+      id: "job-1",
+      kind: "tts" as const,
+      status: "queued" as const,
+      workId: "work-1",
+      assetId: null,
+      languageEditionId: "edition-1",
+      scriptVersionId: "script-1",
+      progressPercent: 0,
       createdAt: NOW,
-      source: {
-        workId: "work-1",
-        languageEditionId: "edition-1",
-        scriptVersionId: "script-1",
-        theme: { id: "neutral", version: 1 },
-        profileSha256: HASH,
-      },
-      files: [
-        {
-          path: CUT_IN_FILE,
-          sha256: HASH,
-          byteSize: 10,
-          mediaType: "video/mp4",
-          kind: "cut-in",
-          durationMs: 4200,
-          width: 1920,
-          height: 1080,
-          hasAudio: true,
-        },
-      ],
-      fonts: [],
-      voices: [],
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      ttsResult: null,
+      liveExportResult: null,
+      artifacts: [],
     };
-    expect(livePackageManifestSchema.safeParse(manifest).success).toBe(true);
+    expect(jobSchema.safeParse(tts).success).toBe(true);
+    expect(
+      jobSchema.safeParse({
+        ...tts,
+        programId: "program-1",
+        programVersionId: "program-version-1",
+      }).success,
+    ).toBe(false);
+    expect(
+      jobSchema.safeParse({
+        ...tts,
+        kind: "asset_ingest",
+        assetId: "asset-1",
+        programId: "program-1",
+      }).success,
+    ).toBe(false);
   });
 });

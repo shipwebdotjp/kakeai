@@ -3,6 +3,19 @@ import type { Job } from "@kakeai/contracts";
 import { apiRequest } from "../client";
 import { queryKeys } from "./queryKeys";
 
+export function useJob(jobId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.job(jobId),
+    enabled: jobId !== undefined && jobId.length > 0,
+    queryFn: async () =>
+      (await apiRequest<Job>(`/jobs/${encodeURIComponent(jobId ?? "")}`)).data,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? 2000 : false;
+    },
+  });
+}
+
 export function useCreateRenderJob(scriptVersionId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({

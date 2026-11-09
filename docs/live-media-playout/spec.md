@@ -12,8 +12,8 @@ CutInは、コーナーの区切り、スポンサー告知、オープニング
 - 尺は入力しない。書き出し時のprobe結果を正本にする。
 - 通常の素材カードは無音のままとする。CutInだけが `hasAudio: true` を許可される別のパッケージ種別を持つ。
 - programステージだけがCutInの埋め込み音声を再生し、previewはミュートする。
-- v1の1つの `cut_in` セグメントは1つの動画を参照する。トリム、ループ、複数動画の連結、トランジション、BGMの重ねは対象外とする。
-- CutInの入力はShow ProfileのJSONまたはエージェント経由とする。Web編集UI、auto-profileによる自動挿入は対象外とする。
+- 1つの `cut_in` セグメントは1つの動画を参照する。トリム、ループ、複数動画の連結、トランジション、BGMの重ねは対象外とする。
+- CutInの入力は Live Program 文書の `cutIns[]` と `segments[]` とする。Live Program エディタで編集する。
 
 ## 用語
 
@@ -26,7 +26,7 @@ CutInは、コーナーの区切り、スポンサー告知、オープニング
 
 用語の正は [../../CONTEXT.md](../../CONTEXT.md) とする。
 
-## 入力 Show Profile
+## 入力 Live Program
 
 ### `cutIns[]`
 
@@ -50,9 +50,9 @@ CutInの元になるAssetを、トップレベルの `cutIns[]` に定義する�
 }
 ```
 
-- `cutIns[].id` はShow Profile内で一意とする。
+- `cutIns[].id` は Live Program 内で一意とする。
 - `cutIns[].assetId` はreadyな `video` Assetを参照する。音声トラックの有無は問わない。
-- `cutIns[]` は任意で、既定は空配列とする。CutInを使わない既存Profileはそのまま読み込める。
+- `cutIns[]` は任意で、既定は空配列とする。CutInを使わないProgramはそのまま版確定できる。
 - 参照されない `cutIns` は許容するが、書き出し対象にはしない。パッケージには `cut_in` セグメントから参照されたCutInだけを含める。
 - 同じ `cutInId` を複数の `cut_in` セグメントから参照できる。CutInの発生は `segmentId`・`attempt`・`sequence` で区別する。
 
@@ -324,16 +324,14 @@ CutIn専用のイベントを追加する。
 
 ## 互換性
 
-- `packageSchemaVersion` は1のままとする。CutInは任意の `cutIns[]` と新しい `cut_in` セグメント種別の追加であり、既存パッケージの意味を変えない。
-- CutInを使わない場合、`show.json` に `cutIns` を書かない。これにより、旧アプリでもCutInを使わない新パッケージを読み込める。
-- CutInを使うパッケージを旧アプリで読む互換性は保証しない。旧アプリは `cut_in` セグメントまたは `cut-in` ファイル種別を解釈できない。
-- 新しいライブアプリは、`cutIns` を持たない旧パッケージを `cutIns: []` として読み込む。
-- Show Profileの `schemaVersion` は1のままとする。`cutIns` は任意フィールドである。
-- `cut_in` セグメントは `targetDurationMs` を持たないため、旧来の「全セグメントが目標尺を持つ」前提を置かない。
+- パッケージは `packageSchemaVersion: 2`、`show.json` は `schemaVersion: 2` だけを持つ。CutInは `cutIns[]` と `cut_in` セグメント種別を含む。
+- CutInを使わない場合も `cutIns` は省略できる。ライブアプリは省略を空配列として読む。
+- 旧 v1 パッケージは読み込まない。`materialId`、`segment.material`、`commentSource`、`test`、`show.startAt` を持つパッケージは strict schema が拒否する。
+- `cut_in` セグメントは `targetDurationMs` を持たない。実効尺はパッケージの `cutIns[].durationMs` から導出する。
 
 ## 検証とテスト
 
-- 契約テスト: `cutIns` の受理、ID重複の拒否、`cutInId` 不在の拒否、`cut_in` セグメントの余分なフィールド拒否、`cutIns` 省略時の既定値、旧パッケージの読み込み。
+- 契約テスト: `cutIns` の受理、ID重複の拒否、`cutInId` 不在の拒否、`cut_in` セグメントの余分なフィールド拒否、`cutIns` 省略時の既定値、v1パッケージの拒否。
 - 書き出しテスト: video Assetの解決、MP4への正規化、probe結果の `durationMs`・`hasAudio`・寸法の反映、`manifest.kind: "cut-in"` の生成、素材カードの音声混入拒否が維持されること。
 - パッケージ検証テスト: `cut-in` のmediaType、尺、音声、参照の不一致拒否。
 - ランタイムテスト: `cut_in` フェーズへの遷移、`cut_in_ended` で次へ進む、古いイベントの無視、watchdog、pause/resumeの先頭再開、skip、end、stop、safe mode、再接続のseekと終了通知。
@@ -346,7 +344,7 @@ CutIn専用のイベントを追加する。
 - CutInのBGM、効果音、音量調整、ダッキング。
 - 1つのCutInに複数動画をつなぐこと、トリム、ループ、速度変更、逆再生。
 - CutIn間のトランジション、ワイプ、フェード。
-- CutInのWeb編集UI、auto-profileによる自動挿入。
+- CutInの自動挿入。
 - CutInの明示的な先読み、デコード済みキャッシュ。
 - HTML、PNG、CompositionをCutInとして再生すること。
 - CutIn中の字幕、キャラクター、テロップのオーバーレイ。

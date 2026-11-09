@@ -7,14 +7,14 @@ import {
   liveCardSchema,
   liveVisualRefSchema,
   resolveLiveCardState,
+  type LiveCard,
   type LiveVisualRef,
 } from "./card";
 import {
   liveCommentPolicySchema,
-  liveCutInInputSchema,
   livePlayoutSchema,
   liveSafetySchema,
-} from "./profile";
+} from "./package-policy";
 import {
   validateClosingReserve,
   validateCueMembership,
@@ -111,7 +111,18 @@ export const liveProgramMaterialSchema = z.strictObject({
 });
 export type LiveProgramMaterial = z.infer<typeof liveProgramMaterialSchema>;
 
-const DEFAULT_COMMENT_POLICY = {
+/**
+ * A program-owned CutIn binding. `assetId` points at a ready video Asset; the
+ * package resolves it to a probed MP4 and never trusts Asset metadata for
+ * duration or audio.
+ */
+export const liveProgramCutInSchema = z.strictObject({
+  id: idSchema,
+  assetId: idSchema,
+});
+export type LiveProgramCutIn = z.infer<typeof liveProgramCutInSchema>;
+
+export const LIVE_PROGRAM_DEFAULT_COMMENT_POLICY = Object.freeze({
   mode: "corner",
   freshnessMin: 10,
   maxCommentsPerCorner: 4,
@@ -119,14 +130,17 @@ const DEFAULT_COMMENT_POLICY = {
   maxExtraSlots: 2,
   allowImmediateInterrupt: false,
   skipWhenEmpty: true,
-} as const;
+} as const);
 
-const DEFAULT_PLAYOUT = {
+export const LIVE_PROGRAM_DEFAULT_PLAYOUT = Object.freeze({
   minBufferMs: 10_000,
   maxThinkingMs: 2_000,
   closingReserveMs: 120_000,
   noApprovalDelay: true,
-} as const;
+} as const);
+
+const DEFAULT_COMMENT_POLICY = LIVE_PROGRAM_DEFAULT_COMMENT_POLICY;
+const DEFAULT_PLAYOUT = LIVE_PROGRAM_DEFAULT_PLAYOUT;
 
 /**
  * Shape and basic-reference validation shared by drafts and versions.
@@ -277,7 +291,9 @@ export function validateLiveProgramDocumentForVersion(
 /**
  * Asset ids the version service must resolve before freezing a version.
  * The pure document schema cannot see the DB, so callers use this list to
- * validate every image/audio/CutIn reference.
+ * validate every image/audio/CutIn reference. Only images of cards that the
+ * version actually references are included: a v2 package omits unused cards,
+ * so validating their assets would reject drafts that can be exported.
  */
 export function collectLiveProgramAssetReferences(document: LiveProgramDocument): {
   cardImageAssetIds: string[];
@@ -285,9 +301,7 @@ export function collectLiveProgramAssetReferences(document: LiveProgramDocument)
   cutInAssetIds: string[];
 } {
   return {
-    cardImageAssetIds: [
-      ...new Set(document.cards.flatMap((card) => liveCardImageAssetIds(card))),
-    ],
+    cardImageAssetIds: collectReferencedLiveCardAssetIds(document),
     audioAssetIds: [
       ...new Set(
         document.cues.flatMap((cue) => (cue.audioAssetId === undefined ? [] : [cue.audioAssetId])),
@@ -295,6 +309,52 @@ export function collectLiveProgramAssetReferences(document: LiveProgramDocument)
     ],
     cutInAssetIds: [...new Set(document.cutIns.map((cutIn) => cutIn.assetId))],
   };
+}
+
+/**
+ * Visuals that a package must be able to resolve: segment defaults plus every
+ * cue override. `null` hides the centre slot and is not a reference.
+ */
+export function collectLiveProgramVisualRefs(
+  document: LiveProgramDocument,
+): LiveVisualRef[] {
+  const visuals: LiveVisualRef[] = [];
+  for (const segment of document.segments) {
+    if (segment.kind !== "cut_in" && segment.visual !== undefined) {
+      visuals.push(segment.visual);
+    }
+  }
+  for (const cue of document.cues) {
+    if (cue.visual !== undefined && cue.visual !== null) {
+      visuals.push(cue.visual);
+    }
+  }
+  return visuals;
+}
+
+/**
+ * Cards referenced by a visual, in document order. A v2 package carries only
+ * these cards; an unused card definition is not part of the version output.
+ */
+export function collectReferencedLiveCards(document: LiveProgramDocument): LiveCard[] {
+  const cardIds = new Set<string>();
+  for (const visual of collectLiveProgramVisualRefs(document)) {
+    if (visual.kind === "card") {
+      cardIds.add(visual.cardId);
+    }
+  }
+  return document.cards.filter((card) => cardIds.has(card.id));
+}
+
+/** Image assets needed by the cards that a version actually references. */
+export function collectReferencedLiveCardAssetIds(
+  document: LiveProgramDocument,
+): string[] {
+  return [
+    ...new Set(
+      collectReferencedLiveCards(document).flatMap((card) => liveCardImageAssetIds(card)),
+    ),
+  ];
 }
 
 export const liveProgramDocumentSchema = z
@@ -311,10 +371,19 @@ export const liveProgramDocumentSchema = z
     cues: z.array(liveProgramCueSchema).default([]),
     cards: z.array(liveCardSchema).default([]),
     materials: z.array(liveProgramMaterialSchema).default([]),
-    cutIns: z.array(liveCutInInputSchema).default([]),
+    cutIns: z.array(liveProgramCutInSchema).default([]),
     commentPolicy: liveCommentPolicySchema.default(DEFAULT_COMMENT_POLICY),
     safety: liveSafetySchema.optional(),
     playout: livePlayoutSchema.default(DEFAULT_PLAYOUT),
   })
   .superRefine(validateLiveProgramDocumentDraft);
 export type LiveProgramDocument = z.infer<typeof liveProgramDocumentSchema>;
+
+/**
+ * A draft that is ready to become an immutable version. It keeps the draft
+ * shape rules and adds the completeness rules that cannot be checked without
+ * resolving DB references.
+ */
+export const liveProgramVersionDocumentSchema =
+  liveProgramDocumentSchema.superRefine(validateLiveProgramDocumentForVersion);
+export type LiveProgramVersionDocument = z.infer<typeof liveProgramVersionDocumentSchema>;

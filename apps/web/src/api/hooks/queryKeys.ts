@@ -17,4 +17,16 @@ export const queryKeys = {
   youtubeSettingsTemplates: () => ["youtube-settings-templates"] as const,
   youtubeChapters: (scriptVersionId: string | undefined) => ["youtube-chapters", scriptVersionId] as const,
   youtubeSettingsTemplate: (templateId: string | undefined) => ["youtube-settings-template", templateId] as const,
+  liveFormats: () => ["live-formats"] as const,
+  liveFormat: (formatId: string | undefined) => ["live-format", formatId] as const,
+  livePrograms: () => ["live-programs"] as const,
+  liveProgram: (programId: string | undefined) => ["live-program", programId] as const,
+  liveProgramVersions: (programId: string | undefined) =>
+    ["live-program-versions", programId] as const,
+  liveProgramVersion: (programId: string | undefined, versionId: string | undefined) =>
+    ["live-program-version", programId, versionId] as const,
+  liveMaterials: (programId: string | undefined) => ["live-materials", programId] as const,
+  liveRuns: () => ["live-runs"] as const,
+  liveRun: (runId: string | undefined) => ["live-run", runId] as const,
+  job: (jobId: string | undefined) => ["job", jobId] as const,
 } as const;

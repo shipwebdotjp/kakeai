@@ -1,0 +1,20 @@
+{
+  "name": "@kakeai/live-cards",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kakeai/contracts": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "linkedom": "^0.18.13",
+    "typescript": "^5.9.2"
+  }
+}

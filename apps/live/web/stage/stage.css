@@ -300,6 +300,17 @@ body {
   background: #fff;
 }
 
+/* Native Live Card */
+/* The shared renderer owns the Shadow DOM; the host only provides the slot
+   size and inherits the package theme's --kakeai-* custom properties. Both
+   centre slots use the same 16:9 box as `.material-slot`. */
+.card-slot {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 500px;
+}
+
 /* Thinking indicator */
 
 .thinking-indicator {

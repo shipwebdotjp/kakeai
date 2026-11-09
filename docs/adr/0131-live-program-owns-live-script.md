@@ -1,6 +1,8 @@
 # ライブ台本はWorkから独立したLive Programを正本とする
 
 > amended by [ADR-0133](./0133-live-version-resolution-snapshot.md): 版は解決スナップショットと不変のpackage buildを持つ。
+>
+> amended by [ADR-0134](./0134-live-program-v2-only.md): Show Profile と v1 パッケージの経路を削除し、Live Program とパッケージv2だけを契約とする。
 
 Status: accepted
 

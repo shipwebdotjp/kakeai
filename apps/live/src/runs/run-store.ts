@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, isAbsolute, resolve } from "node:path";
 import {
   runLogEventSchema,
   type RunLogEvent,
@@ -13,6 +13,11 @@ export interface RunStoreOptions {
   packageId: string;
   packagePath: string;
   runId?: string;
+  /**
+   * Exact run directory supplied by Kakeai (`--run-dir`). Manual runs omit it
+   * and keep `<dataDir>/runs/<runId>`.
+   */
+  dir?: string;
   now?: () => Date;
 }
 
@@ -86,7 +91,19 @@ export class RunStore {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(runId)) {
       throw new Error(`runId に使用できない文字が含まれています: ${runId}`);
     }
-    const dir = join(options.dataDir, "runs", runId);
+    if (
+      options.dir !== undefined &&
+      (!isAbsolute(options.dir) || options.dir.includes("\0"))
+    ) {
+      throw new Error(`run ディレクトリは絶対パスで指定してください: ${options.dir}`);
+    }
+    const dir =
+      options.dir === undefined
+        ? join(options.dataDir, "runs", runId)
+        : resolve(options.dir);
+    if (!dir.startsWith("/") || dir.includes("\0")) {
+      throw new Error(`run ディレクトリが不正です: ${options.dir ?? dir}`);
+    }
     await mkdir(join(dir, "generated"), { recursive: true });
     const metadata: RunMetadata = {
       schemaVersion: 1,

@@ -1,4 +1,5 @@
 import type {
+  CommentSourceKind,
   ConsoleSnapshot,
   LiveCharacterSheet,
   LiveCommand,
@@ -10,12 +11,12 @@ import type {
   LiveSegment,
   LiveStageConnection,
   LiveNoticeLevel,
-  MaterialCard,
   StageClock,
   StageEvent,
   StageLease,
   StagePhase,
   StageState,
+  StageVisualState,
 } from "@kakeai/contracts";
 import type { RunLogEventInput, RunStore } from "../runs/run-store.ts";
 import type { GeneratedCueCommands } from "../director/generation-service.ts";
@@ -33,7 +34,6 @@ import {
 } from "./cut-in-runtime.ts";
 import { handleCueCommand, type CueCommandHooks } from "./cue-commands.ts";
 import { StageLeaseManager, type StageConnectOptions } from "./lease.ts";
-import { resolveCueMaterialId } from "./material-resolution.ts";
 import { Playout, type PlayoutEvent, type PlayoutScheduler } from "./playout.ts";
 import { dispatchPlayoutEvent } from "./playout-events.ts";
 import { CueQueueStore } from "./queue.ts";
@@ -42,10 +42,15 @@ import { ACTIVE_PHASES } from "./segments.ts";
 import { Spine } from "./spine.ts";
 import { handleProgramStageEvent } from "./stage-events.ts";
 import { buildShowMeta, computeClock } from "./state.ts";
+import { resolveEffectiveVisual, StageVisualTracker } from "./visual-resolution.ts";
 
 export type { LiveCuePatch } from "./control-queue.ts";
 export type { LiveControllerChange, LiveControllerOptions } from "./controller-types.ts";
 export type { CommandResult } from "./command-dispatch.ts";
+
+/** Card failure text is display/log data, so keep it bounded and deduped. */
+const CARD_ERROR_MESSAGE_LIMIT = 500;
+const CARD_ERROR_NOTICE_LIMIT = 100;
 
 /**
  * Single owner of live state. Stages only render `StageState` and report audio
@@ -56,6 +61,8 @@ export class LiveController {
   readonly runId: string;
   private readonly show: LivePackageShow;
   private readonly characters: LiveCharacterSheet;
+  private readonly startAt: string | null;
+  private readonly commentSourceKind: CommentSourceKind;
   private readonly runStore: RunStore | undefined;
   private readonly now: () => Date;
   private readonly leases: StageLeaseManager;
@@ -69,7 +76,8 @@ export class LiveController {
   private readonly view: ControllerView;
   private readonly responsePlayback: ResponsePlayback;
   private readonly phaseCommands: PhaseCommands;
-  private readonly materialById = new Map<string, LivePackageShow["materials"][number]>();
+  private readonly visualTracker = new StageVisualTracker();
+  private readonly cardErrorNotices = new Set<string>();
   private readonly cutInById = new Map<string, LivePackageCutIn>();
   /** One server-wide counter for cue and CutIn playback instructions. */
   private sequenceCounter = 0;
@@ -93,6 +101,8 @@ export class LiveController {
     this.runId = options.runId;
     this.show = options.show;
     this.characters = options.characters;
+    this.startAt = options.startAt ?? null;
+    this.commentSourceKind = options.commentSourceKind ?? "youtube";
     this.runStore = options.runStore;
     this.now = options.now ?? (() => new Date());
     this.comments = new CommentRuntime(options.comments, {
@@ -150,6 +160,8 @@ export class LiveController {
     this.view = new ControllerView({
       runId: this.runId,
       show: this.show,
+      startAt: this.startAt,
+      commentSourceKind: this.commentSourceKind,
       characters: this.characters,
       playout: this.playout,
       queues: this.queues,
@@ -158,7 +170,7 @@ export class LiveController {
       phase: () => this.phase,
       segment: () => this.segment(),
       segmentLabel: (segment) => this.segmentLabel(segment),
-      materialForCue: (segment, cue) => this.materialForCue(segment, cue),
+      resolveVisual: (segment, cue) => this.resolveVisual(segment, cue),
       cutIn: () => this.cutInRuntime.current,
       clock: () =>
         this.finalClock ?? computeClock(this.show, this.showStartedAtMs, this.now().getTime()),
@@ -209,9 +221,6 @@ export class LiveController {
       startCommentCorner: (segment) => this.comments.startCorner(segment),
       startCutIn: (index, segment) => this.startCutIn(index, segment),
     });
-    for (const material of this.show.materials) {
-      this.materialById.set(material.id, material);
-    }
     for (const cutIn of this.show.cutIns) {
       this.cutInById.set(cutIn.id, cutIn);
     }
@@ -310,15 +319,21 @@ export class LiveController {
     return this.show.segments[this.currentSegmentIndex] ?? null;
   }
 
-  private materialForCue(
-    segment: LiveSegment,
+  private resolveVisual(
+    segment: LiveSegment | null,
     cue: LiveCue | null,
-  ): MaterialCard | null {
-    if (segment.kind === "cut_in") {
-      return null;
-    }
-    const materialId = resolveCueMaterialId(segment.material, cue?.materialId);
-    return materialId === null ? null : (this.materialById.get(materialId) ?? null);
+  ): StageVisualState | null {
+    const visual = resolveEffectiveVisual(
+      {
+        cards: this.show.cards,
+        materials: this.show.materials,
+      },
+      segment,
+      cue,
+    );
+    // The tracker owns the server-wide visual sequence, so repeated builds of
+    // the same state keep the same sequence.
+    return this.visualTracker.update(visual);
   }
 
   private segmentLabel(segment: LiveSegment | null): { id: string; label: string } | null {
@@ -411,6 +426,15 @@ export class LiveController {
   getState(): StageState { return this.view.getState(); }
   getSnapshot(): ConsoleSnapshot { return this.view.getSnapshot(); }
 
+  /** Control-plane view: the show may be running while the app is merely ready. */
+  getLifecycle(): { phase: StagePhase; started: boolean; ended: boolean } {
+    return {
+      phase: this.phase,
+      started: this.showStartedAtMs !== null,
+      ended: this.phase === "post_show",
+    };
+  }
+
   getShowMeta() { return buildShowMeta(this.show); }
   getStageConnections(): LiveStageConnection[] { return this.leases.list(); }
   touchPreviewStage(sessionId: string): StageLease | null { return this.leases.touchPreview(sessionId); }
@@ -496,11 +520,48 @@ export class LiveController {
         leases: this.leases,
         playout: this.playout,
         cutIn: this.cutInRuntime,
+        cardError: (cardError) => this.handleCardError(cardError),
         logIgnored: (ignored, reason) => this.logIgnoredStageEvent(ignored, reason),
       },
       sessionId,
       event,
     );
+  }
+
+  /**
+   * A card failure never stops the show. The stage already deduplicates per
+   * card/state/reason; this second guard covers reconnects and session churn.
+   */
+  private handleCardError(event: StageEvent): void {
+    const rawMessage =
+      event.error?.trim() ||
+      `カードの表示に失敗しました: ${event.cardId ?? "(unknown)"}/${event.stateId ?? "(unknown)"}`;
+    const message =
+      rawMessage.length > CARD_ERROR_MESSAGE_LIMIT
+        ? rawMessage.slice(0, CARD_ERROR_MESSAGE_LIMIT)
+        : rawMessage;
+    const key = `${event.cardId ?? ""}:${event.stateId ?? ""}:${message}`;
+    if (this.cardErrorNotices.has(key)) {
+      return;
+    }
+    this.cardErrorNotices.add(key);
+    // Bound the dedupe memory: a flapping renderer can produce an unlimited
+    // number of distinct messages. Evict the oldest insertion first.
+    if (this.cardErrorNotices.size > CARD_ERROR_NOTICE_LIMIT) {
+      const oldest = this.cardErrorNotices.values().next().value;
+      if (oldest !== undefined) {
+        this.cardErrorNotices.delete(oldest);
+      }
+    }
+    const data = {
+      message,
+      cardId: event.cardId ?? null,
+      stateId: event.stateId ?? null,
+      visualSequence: event.sequence,
+    };
+    this.runStore?.appendError(message);
+    this.log({ type: "error", cueId: event.cueId, data });
+    this.notice("warning", message);
   }
 
   private logIgnoredStageEvent(event: StageEvent, reason: string): void {
@@ -601,6 +662,11 @@ export class LiveController {
 
   getCurrentSegment(): LiveSegment | null {
     return this.segment();
+  }
+
+  /** The cue currently playing (or waiting to play) in the playout. */
+  getCurrentCue(): LiveCue | null {
+    return this.playout.current;
   }
 
   getGeneration(): LiveGenerationStatus | null {

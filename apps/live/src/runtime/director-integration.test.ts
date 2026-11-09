@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   DEFAULT_LIVE_COMMENTS_CONFIG,
+  livePackageShowSchema,
   liveRuntimeConfigSchema,
   type CommentCandidate,
   type LiveCue,
@@ -327,7 +328,7 @@ describe("director runtime integration", () => {
     source.emit({ id: "c2", text: "次の質問" });
     await reachCommentCorner(controller);
     await settle();
-    await waitForPlayback(controller, "cue-opening-fallback-1");
+    await waitForPlayback(controller, "cue-fallback-fallback-1");
 
     expect(controller.getSnapshot().queue.some((cue) => cue.source === "fallback")).toBe(true);
     endCurrent(controller);
@@ -416,6 +417,24 @@ describe("director runtime integration", () => {
     expect(context.recentCaptions).toContain("本編の話題です。");
     expect(context.segmentRemainingMs).toBeGreaterThan(0);
     expect(context.showRemainingMs).toBeGreaterThan(0);
+    controller.dispose();
+  });
+
+  it("uses the current cue visual override for the director material label", async () => {
+    const base = testShow({ includeMaterial: true });
+    const show = livePackageShowSchema.parse({
+      ...base,
+      cues: base.cues.map((cue) =>
+        cue.id === "cue-script" ? { ...cue, visual: null } : cue,
+      ),
+    });
+    const { controller, runtime } = await setup({ show });
+    expect(controller.handleCommand({ kind: "start" })).toEqual({ ok: true });
+    endCurrent(controller);
+    expect(controller.getState().playback?.cueId).toBe("cue-script");
+    // The segment default is a material, but the current cue hides it.
+    expect(controller.getState().visual).toBeNull();
+    expect(runtime.contextFor(candidate("c1", 0.9)).materialLabel).toBeNull();
     controller.dispose();
   });
 

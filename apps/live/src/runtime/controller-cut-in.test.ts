@@ -99,7 +99,7 @@ describe("LiveController CutIn runtime", () => {
     });
     expect(state.characters).toEqual({ left: null, right: null });
     expect(state.caption).toBeNull();
-    expect(state.material).toBeNull();
+    expect(state.visual).toBeNull();
     expect(state.comment).toBeNull();
     expect(state.status).toBe("idle");
     expect(state.playback).toBeNull();

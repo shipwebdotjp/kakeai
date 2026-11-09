@@ -422,3 +422,97 @@ model YouTubeSettingsTemplate {
 
   @@index([updatedAt])
 }
+
+/// Reusable Live Program preset. The document is a `LiveFormatDocumentV1`:
+/// generic spine/cues/cards only, never episode text, materials or CutIns.
+model LiveFormat {
+  id           String   @id @default(cuid())
+  name         String
+  documentJson String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+/// One live show draft. `draftRevision` guards whole-document saves; confirmed
+/// versions are immutable snapshots in LiveProgramVersion.
+model LiveProgram {
+  id                     String               @id @default(cuid())
+  title                  String
+  draftJson              String
+  draftRevision          Int                  @default(0)
+  /// Provenance of the format this program was copied from. Never resolved.
+  sourceFormatId         String?
+  sourceFormatUpdatedAt  DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  versions               LiveProgramVersion[]
+  materials              LiveMaterial[]
+
+  @@index([updatedAt])
+}
+
+/// Immutable confirmed Live Program document plus its resolution snapshot.
+/// No update path exists; the draft may keep changing independently.
+model LiveProgramVersion {
+  id                         String      @id @default(cuid())
+  programId                  String
+  program                    LiveProgram @relation(fields: [programId], references: [id], onDelete: Restrict)
+  versionNumber              Int
+  schemaVersion              Int
+  documentJson               String
+  documentSha256             String
+  resolutionSnapshotJson     String
+  resolutionSnapshotSha256   String
+  note                       String?
+  createdAt                  DateTime    @default(now())
+  runs                       LiveRun[]
+
+  @@unique([programId, versionNumber])
+  @@index([programId, createdAt])
+}
+
+/// Program-owned snapshot of an imported Work Scene. Work/Scene ids live only
+/// in provenanceJson; the program document references this row by id.
+model LiveMaterial {
+  id             String      @id @default(cuid())
+  programId      String
+  program        LiveProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  name           String
+  snapshotJson   String
+  provenanceJson String
+  createdAt      DateTime    @default(now())
+
+  @@index([programId, createdAt])
+}
+
+/// One operational snapshot of a live show. The immutable package build and
+/// the comment source are fixed at creation; launch adds a one-time control
+/// token reference, PID and control URL. Token values never live in this row.
+model LiveRun {
+  id                String             @id @default(cuid())
+  programVersionId  String
+  programVersion    LiveProgramVersion @relation(fields: [programVersionId], references: [id], onDelete: Restrict)
+  packageId         String
+  manifestSha256    String
+  packagePath       String
+  sourceKind        String
+  sourceJson        String
+  startAt           DateTime?
+  requestedPort     Int
+  status            String
+  controlUrl        String?
+  controlTokenRef   String?
+  pid               Int?
+  logDir            String
+  failureCode       String?
+  failureMessage    String?
+  launchedAt        DateTime?
+  endedAt           DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}

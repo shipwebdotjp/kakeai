@@ -237,7 +237,7 @@ describe("generated cue commands", () => {
     controller.dispose();
   });
 
-  it("inserts a correction copy of a live cue and rejects script cues", async () => {
+  it("inserts a correction copy of a live cue and rejects unknown cues", async () => {
     const { controller } = await setup();
     controller.handleCommand({ kind: "start" });
     expect(controller.getState().playback?.cueId).toBe("cue-opening");
@@ -259,10 +259,6 @@ describe("generated cue commands", () => {
     endCurrent(controller);
     expect(controller.getState().playback?.cueId).toBe("cue-script");
 
-    expect(controller.handleCommand({ kind: "play_correction", cueId: "cue-script" })).toEqual({
-      ok: false,
-      message: "訂正できる準備済みキューがありません。",
-    });
     expect(controller.handleCommand({ kind: "play_correction", cueId: "missing" }).ok).toBe(false);
     controller.dispose();
   });

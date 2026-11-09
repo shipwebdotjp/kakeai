@@ -1,12 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { LivePackageCutIn, LiveShowProfile } from "@kakeai/contracts";
+import type { LivePackageCutIn } from "@kakeai/contracts";
 import type { AppConfig } from "../config.ts";
 import { createRendition } from "../media/normalize.ts";
 import { probeMedia, type MediaProbe } from "../media/probe.ts";
 import { LiveExportError } from "./errors";
 import type { PackageWriter } from "./package-writer";
-import type { ResolvedAssetFile, ResolvedCutIn } from "./profile-resolution";
+import type { ResolvedAssetFile, ResolvedCutIn } from "./resolved-assets";
 
 export interface PrepareCutInsDependencies {
   isCancelled?: () => Promise<boolean>;
@@ -161,11 +161,11 @@ function warningsForAsset(
 
 /**
  * Resolves the CutIns referenced by `cut_in` segments into package MP4s.
- * Unreferenced Profile CutIns are allowed but never written. The same Asset
- * used by several CutIns is probed and normalized only once.
+ * Unreferenced CutIns are allowed but never written. The same Asset used by
+ * several CutIns is probed and normalized only once.
  */
 export async function prepareCutIns(
-  profile: LiveShowProfile,
+  referencedIds: readonly string[],
   resolvedCutIns: readonly ResolvedCutIn[],
   assetById: Map<string, ResolvedAssetFile>,
   writer: PackageWriter,
@@ -182,11 +182,7 @@ export async function prepareCutIns(
       );
     }
   };
-  const referenced = new Set(
-    profile.segments
-      .filter((segment) => segment.kind === "cut_in")
-      .map((segment) => segment.cutInId),
-  );
+  const referenced = new Set<string>(referencedIds);
   const resolvedById = new Map(resolvedCutIns.map((cutIn) => [cutIn.id, cutIn]));
   for (const cutInId of referenced) {
     if (!resolvedById.has(cutInId)) {

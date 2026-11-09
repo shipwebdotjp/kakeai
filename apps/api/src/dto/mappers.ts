@@ -7,6 +7,7 @@ import {
   assetStatusSchema,
   assetTagsSchema,
   faceLayerPartSchema,
+  idSchema,
   jobErrorCodeSchema,
   jobKindSchema,
   jobStatusSchema,
@@ -249,6 +250,7 @@ export function toArtifact(row: ArtifactRow): Artifact {
 export function toJob(row: JobWithArtifacts): Job {
   const errorCode =
     row.errorCode === null ? null : parseJobEnum(jobErrorCodeSchema, row.errorCode, "errorCode");
+  const programRef = parseLiveExportProgramRef(row);
   return {
     id: row.id,
     kind: parseJobEnum(jobKindSchema, row.kind, "kind"),
@@ -257,6 +259,8 @@ export function toJob(row: JobWithArtifacts): Job {
     assetId: row.assetId,
     languageEditionId: row.languageEditionId,
     scriptVersionId: row.scriptVersionId,
+    programId: programRef?.programId ?? null,
+    programVersionId: programRef?.programVersionId ?? null,
     progressPercent: row.progressPercent,
     createdAt: toIso(row.createdAt),
     startedAt: row.startedAt === null ? null : toIso(row.startedAt),
@@ -269,6 +273,36 @@ export function toJob(row: JobWithArtifacts): Job {
     liveExportResult: parseLiveExportResult(row),
     artifacts: row.artifacts.map(toArtifact),
   };
+}
+
+const liveExportProgramRefSchema = z.object({
+  programId: idSchema,
+  programVersionId: idSchema,
+});
+
+/**
+ * Program exports keep their source ids in the Job input snapshot instead of
+ * adding Work-style columns to the Job table. A live_export Job without valid
+ * source ids cannot be represented by the contract, so a corrupt snapshot is
+ * an internal error rather than a silently invalid DTO.
+ */
+function parseLiveExportProgramRef(
+  row: JobRow,
+): { programId: string; programVersionId: string } | null {
+  if (row.kind !== "live_export") {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.inputSnapshotJson);
+  } catch {
+    throw new ApiError(500, "INTERNAL_ERROR", "Job.inputSnapshot の値を解釈できません。");
+  }
+  const ref = liveExportProgramRefSchema.safeParse(parsed);
+  if (!ref.success) {
+    throw new ApiError(500, "INTERNAL_ERROR", "Job.inputSnapshot の値が不正です。");
+  }
+  return ref.data;
 }
 
 function parseLiveExportResult(row: JobRow): LiveExportResult | null {

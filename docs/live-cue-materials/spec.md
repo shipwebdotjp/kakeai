@@ -1,70 +1,66 @@
-# ライブCue単位の素材カード
+# ライブCue単位の中央ビジュアル
 
-[ライブ配信仕様](../live/spec.md) のうち、`scriptCues` ごとに中央の素材カードを切り替える契約を定める。ライブ全体のフェーズ、スパイン、コメントコーナー、パッケージ構成は [../live/spec.md](../live/spec.md) を正とする。
+[ライブ配信仕様](../live/spec.md) のうち、Cueごとに中央スロットのカードまたは素材を切り替える契約を定める。ライブ全体のフェーズ、スパイン、コメントコーナー、パッケージ構成は [../live/spec.md](../live/spec.md) と [../live-program/spec.md](../live-program/spec.md) を正とする。
 
 ## 目的とスコープ
 
-- 対象は `scriptCues` の行単位で指定する画像・静的HTML・無音短尺MP4の素材カードである。
-- 素材指定は当面、Show ProfileのJSONまたはエージェント経由で行う。Web編集UIは対象外とする。
-- `Segment.material` は既存Profileのための既定素材として残す。
-- 対象外は、音入り動画、全画面表示、CutIn、Visual Cueタイムラインからの自動変換、生成レスの素材選択、素材の先読みキャッシュである。
-- CutInは素材カードの拡張ではなく、Spine専用の `cut_in` セグメントとして [../live-media-playout/spec.md](../live-media-playout/spec.md) で定める。素材カードは引き続き無音で、CutInだけが埋め込み音声を持てる。
+- 対象は、CueとSegmentが持つ単一の `visual` による中央スロットの表示である。
+- `visual` は `{ kind: "card", cardId, stateId }`、`{ kind: "material", materialId }`、`null`、未指定のいずれかとする。
+- カードと素材を同時に指定する表現は持たない。優先順位の問題を型で消す。
+- 対象外は、音入り素材カード、全画面のCutIn、Visual Cueタイムラインからの自動変換、生成レスによる素材選択、素材の先読みキャッシュである。
+- CutInは素材カードの拡張ではなく、Spine専用の `cut_in` セグメントとして [../live-media-playout/spec.md](../live-media-playout/spec.md) で定める。
 - 1つのCueは1回の再生occurrenceとする。同じCue IDを複数のSegmentから参照しない。
 
 ## 契約
 
-`scriptCues[]` に任意の `materialId` を追加する。
-
 ```jsonc
 {
   "id": "cue-news-1-2",
-  "lineId": "line-news-1-2",
-  "materialId": "material-chart"
+  "visual": { "kind": "card", "cardId": "card-chart", "stateId": "state-chart-1" }
 }
 ```
 
-`materialId` は `string | null | 未指定` の3値とする。
-
 | 値 | 意味 |
 | --- | --- |
-| 未指定 | そのCueが属するSegmentの `material` を継承する。Segmentにも無ければ中央素材を隠す。 |
-| 文字列 | そのCueだけ指定のMaterial Cardを表示する。 |
-| `null` | Segment既定も無効にし、中央素材を隠す。 |
+| 未指定 | そのCueが属するSegmentの `visual` を継承する。Segmentにも無ければ中央スロットを隠す。 |
+| `{ kind: "card", ... }` | 指定したカード状態を表示する。 |
+| `{ kind: "material", ... }` | 指定した Live Material を表示する。 |
+| `null` | Segment既定も無効にし、中央スロットを隠す。 |
 
-`PreparedCue` と実行中の `LiveCue` にも同じ任意フィールドを保持する。いずれも入力された生値を保持し、実効素材はSegment文脈で実行時に解決する。書き出し時にSegment既定を `PreparedCue` へ焼き込まない。
+`PreparedCue` と実行中の `LiveCue` にも同じ任意フィールドを保持する。書き出し時にSegment既定をCueへ焼き込まない。
 
-`materialId` が文字列のときは、`materials[]` に同じIDが存在しなければならない。Profile検証時とパッケージ読込時の両方で検証する。
+`visual` がカードを指す場合、`cards[]` にカードと状態が存在しなければならない。素材を指す場合、`materials[]` に同じIDが存在しなければならない。Program検証時とパッケージ読込時の両方で検証する。
 
-同じCue IDが複数のSegmentから参照されている場合、または同じSegment内でCue IDが重複している場合は、Profile検証とパッケージ読込の両方で拒否する。
+同じCue IDが複数のSegmentから参照されている場合、または同じSegment内でCue IDが重複している場合は、Program検証とパッケージ読込の両方で拒否する。
 
 ## 実行時の解決
 
-素材解決は次の純粋な規則に集約する。
+実効ビジュアルはサーバー側で次の規則により解決する。
 
-1. Cueの `materialId` が文字列なら、そのMaterial Cardを表示する。
-2. Cueの `materialId` が `null` なら、中央素材を隠す。
-3. Cueの `materialId` が未指定なら、Segmentの `material` を使う。Segmentにも無ければ隠す。
+1. Cueの `visual` が `null` なら、中央スロットを隠す。
+2. Cueの `visual` がカードまたは素材なら、その参照を表示する。
+3. Cueの `visual` が未指定なら、Segmentの `visual` を使う。Segmentにも無ければ隠す。
 
-`StageState.material` は現在のCueと現在のSegmentから毎回導出する。実効素材を別の状態として保持しない。`material` の値は `{ id, focus }` または `null` である。
+`StageState.visual` は現在のCueとSegmentから毎回導出する。実効ビジュアルを別の状態として保持しない。
 
-通常の本編は常に `script` フェーズとする。素材の有無は `StageState.material` だけで表し、`material` フェーズは持たない。CutIn用の実フェーズは [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とし、この仕様では追加しない。
+`visual.sequence` は実効ビジュアルの識別子（`cardId`/`stateId`、`materialId`/`focus`、非表示）が変わったときだけ増やす。ステージは非nullの `sequence` が直前に適用した値より小さい状態を無視し、古いカードへ戻らない。
 
 ## ステージ表示
 
-- 同じ素材が連続する場合、動画要素を作り直さず再生を続ける。
-- 異なる動画カードへ切り替わる場合は先頭から再生し、ミュート・ループする。
+- 同じカードの状態変更はキー付き差分で描画する。初回マウント、preview、再接続では完成状態を即時描画する。
+- カードの読み込み・描画失敗は中央スロットを隠し、配信を止めない。programステージは `card_error` を送り、サーバーは重複を抑えてRun logとコンソールに残す。
+- 素材の読み込みに失敗した場合も中央スロットを隠し、ナレーションとスパインは止めない。
 - 字幕、立ち絵、コメントカードは通常どおり表示する。
-- 素材の読み込みに失敗した場合は、前の素材を残さず中央枠を隠す。ナレーションとスパインは止めない。
-- 素材の読み込み失敗はコンソールへ通知しない。失敗時はステージ内で隠すだけとする。
-- 素材カードの明示的な先読み・デコード済みキャッシュは行わない。ブラウザの通常のHTTPキャッシュに任せ、切り替え時の一瞬の空白は許容する。
+- 明示的な先読み・デコード済みキャッシュは行わない。ブラウザの通常のHTTPキャッシュに任せる。
 
 ## 互換性
 
-`materialId` は任意フィールドなので、既存のShow Profileと既存のライブパッケージはそのまま読み込める。新しいパッケージを旧バージョンのライブアプリで読む互換性は保証しない。
+- パッケージは `schemaVersion: 2` だけを持つ。`materialId` と `segment.material` は使わず、strict schema が拒否する。
+- v1 パッケージは読み込まない。
 
 ## 検証とテスト
 
-- 契約テストで、未指定・`null`・文字列の受理、存在しない素材IDの拒否、Cueの重複参照の拒否を確認する。
-- 書き出しテストで、`scriptCues[].materialId` が `PreparedCue` に生値のまま保持されることを確認する。
-- ランタイムテストで、Segment既定、Cue文字列、Cue `null` の優先順位と、Cue開始時の切り替えを確認する。
-- ステージの素材差し替え、動画の非再スタート、ミュート・ループ、読み込み失敗時の非表示は手動で確認する。
+- 契約テストで、未指定・`null`・カード・素材の受理、存在しないカード状態・素材IDの拒否、Cueの重複参照の拒否を確認する。
+- 書き出しテストで、Cueの `visual` が `PreparedCue` に生値のまま保持されることを確認する。
+- ランタイムテストで、Segment既定、Cueカード、Cue素材、Cue `null` の優先順位と、Cue開始時の切り替えを確認する。
+- ステージのカード差し替え、状態差分、読み込み失敗時の非表示は自動テストと手動で確認する。

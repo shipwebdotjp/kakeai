@@ -107,15 +107,9 @@ function showWithCueMaterials(): LivePackageShow {
     cues: [
       ...base.cues,
       preparedCue("cue-script-2", {
-        origin: "script",
-        sourceLineId: "line-2",
-        materialId: "material-2",
+        visual: { kind: "material", materialId: "material-2" },
       }),
-      preparedCue("cue-script-3", {
-        origin: "script",
-        sourceLineId: "line-3",
-        materialId: null,
-      }),
+      preparedCue("cue-script-3", { visual: null }),
     ],
     materials: [
       ...base.materials,
@@ -216,7 +210,11 @@ describe("LiveController phases", () => {
     controller.handleCommand({ kind: "start" });
     endCurrent(controller);
     expect(controller.getState().phase).toBe("script");
-    expect(controller.getState().material).toEqual({ id: "material-1", focus: true });
+    expect(controller.getState().visual).toMatchObject({
+      kind: "material",
+      materialId: "material-1",
+      focus: true,
+    });
   });
 
   it("resolves the current cue material over the segment default", () => {
@@ -224,13 +222,21 @@ describe("LiveController phases", () => {
     connectProgram(controller);
     controller.handleCommand({ kind: "start" });
     endCurrent(controller);
-    expect(controller.getState().material).toEqual({ id: "material-1", focus: true });
+    expect(controller.getState().visual).toMatchObject({
+      kind: "material",
+      materialId: "material-1",
+      focus: true,
+    });
 
     endCurrent(controller);
-    expect(controller.getState().material).toEqual({ id: "material-2", focus: false });
+    expect(controller.getState().visual).toMatchObject({
+      kind: "material",
+      materialId: "material-2",
+      focus: false,
+    });
 
     endCurrent(controller);
-    expect(controller.getState().material).toBeNull();
+    expect(controller.getState().visual).toBeNull();
   });
 
   it("freezes the show clock at the final value in post_show", () => {

@@ -10,17 +10,19 @@ import type {
   LivePackageShow,
   LiveServerShowMeta,
   LiveStageConnection,
-  MaterialCard,
   StageClock,
   StageCommentState,
   StageCutIn,
   StagePhase,
   StageState,
   StageStatus,
+  StageVisualState,
 } from "@kakeai/contracts";
 
 export interface StageStateInput {
   show: LivePackageShow;
+  /** Run start time; only the Live Run config supplies it. */
+  startAt: string | null;
   characters: LiveCharacterSheet;
   phase: StagePhase;
   segment: { id: string; label: string } | null;
@@ -28,7 +30,7 @@ export interface StageStateInput {
   attempt: number;
   sequence: number | null;
   cueStartedAt: Date | null;
-  material: MaterialCard | null;
+  visual: StageVisualState | null;
   comment: StageCommentState | null;
   status: StageStatus;
   cutIn: StageCutIn | null;
@@ -103,18 +105,18 @@ function characterState(
 export function buildStageState(input: StageStateInput): StageState {
   const { cue } = input;
   if (input.cutIn !== null) {
-    // CutIn is a full-screen layer: characters, captions, material cards and
-    // comments are hidden while it plays, and it is never cue playback.
+    // CutIn is a full-screen layer: characters, captions, the centre visual
+    // and comments are hidden while it plays, and it is never cue playback.
     return {
       phase: input.phase,
       show: {
         title: input.show.show.title,
-        startAt: input.show.show.startAt,
+        startAt: input.startAt,
       },
       segment: input.segment,
       characters: { left: null, right: null },
       caption: null,
-      material: null,
+      visual: null,
       comment: null,
       status: "idle",
       playback: null,
@@ -127,7 +129,7 @@ export function buildStageState(input: StageStateInput): StageState {
     phase: input.phase,
     show: {
       title: input.show.show.title,
-      startAt: input.show.show.startAt,
+      startAt: input.startAt,
     },
     segment: input.segment,
     characters: {
@@ -135,10 +137,7 @@ export function buildStageState(input: StageStateInput): StageState {
       right: characterState(input.characters, "right", cue, isSpeaking),
     },
     caption: cue === null ? null : { speaker: cue.speaker, text: cue.caption },
-    material:
-      input.material === null
-        ? null
-        : { id: input.material.id, focus: input.material.focus },
+    visual: input.visual,
     comment: input.comment,
     status: input.status,
     playback:

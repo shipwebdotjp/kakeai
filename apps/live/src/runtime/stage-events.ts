@@ -8,6 +8,8 @@ export interface StageEventHost {
   readonly leases: StageLeaseManager;
   readonly playout: Playout;
   readonly cutIn?: CutInRuntime;
+  /** Receives deduplicated stage card failures; never stops playback. */
+  readonly cardError?: (event: StageEvent) => void;
   logIgnored(event: StageEvent, reason: string): void;
 }
 
@@ -31,6 +33,14 @@ export function handleProgramStageEvent(
     return;
   }
   host.leases.touch(sessionId);
+  if (event.kind === "card_error") {
+    if (host.cardError === undefined) {
+      host.logIgnored(event, "card_error_unavailable");
+      return;
+    }
+    host.cardError(event);
+    return;
+  }
   if (event.kind === "cut_in_ended" || event.kind === "cut_in_error") {
     if (host.cutIn === undefined) {
       host.logIgnored(event, "cut_in_unavailable");

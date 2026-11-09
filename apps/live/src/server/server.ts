@@ -6,7 +6,12 @@ import {
 } from "node:http";
 import { resolve } from "node:path";
 import type { Duplex } from "node:stream";
-import type { LiveRuntimeConfig } from "@kakeai/contracts";
+import type {
+  CommentSourceKind,
+  LiveRunConfig,
+  LiveRunFailure,
+  LiveRuntimeConfig,
+} from "@kakeai/contracts";
 import type { Express } from "express";
 import { CommentFilter } from "../comments/filter.ts";
 import { createCommentSource } from "../comments/factory.ts";
@@ -30,7 +35,12 @@ import { LiveSocketHub } from "./websocket.ts";
 export interface CreateLiveServerOptions {
   package: LoadedLivePackage;
   config: LiveRuntimeConfig;
-  testMode?: boolean;
+  /** v2 Run config; also supplies the effective comment source and startAt. */
+  runConfig?: LiveRunConfig;
+  /** One-time control token. Omit to disable /control (manual runs). */
+  controlToken?: string;
+  onStopRequested?: () => void;
+  failure?: () => LiveRunFailure | null;
   /** Overrides config.port; 0 asks the OS for a free port (tests). */
   port?: number;
   /** Defaults to apps/live/dist; tests point this at a temp build. */
@@ -53,7 +63,6 @@ export interface LiveServer {
   controller: LiveController;
   app: Express;
   runStore: RunStore;
-  testMode: boolean;
   /** Present when the default generated-response wiring was built. */
   directorRuntime: DirectorRuntime | null;
 }
@@ -98,11 +107,13 @@ async function buildCommentCorner(
     host: () => DirectorResponseHost | null;
   },
 ): Promise<CommentCornerBuild> {
+  const runConfig = options.runConfig;
+  if (runConfig === undefined) {
+    throw new Error("コメントソースを使うには Run 設定が必要です。");
+  }
   const show = options.package.show;
   const source = await createCommentSource({
-    show,
-    packageRoot: options.package.rootDir,
-    ...(options.testMode === undefined ? {} : { testMode: options.testMode }),
+    runConfig,
     config: options.config,
     ...(options.now === undefined ? {} : { now: options.now }),
   });
@@ -195,10 +206,22 @@ export async function createLiveServer(
       throw error;
     }
   }
+  const startAt = options.runConfig?.startAt ?? null;
+  // A v2 Run always has a run config. When a test injects a prepared corner,
+  // derive the source kind from that corner instead of silently assuming
+  // YouTube. Without either there is nothing to start.
+  const commentSourceKind: CommentSourceKind =
+    options.runConfig?.source.kind ??
+    commentCorner?.getSnapshot().source.kind ??
+    (() => {
+      throw new Error("コメントソースを決めるには Run 設定が必要です。");
+    })();
   const controller = new LiveController({
     runId: runStore.runId,
     show: options.package.show,
     characters: options.package.characters,
+    startAt,
+    commentSourceKind,
     runStore,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.leaseTtlMs === undefined ? {} : { leaseTtlMs: options.leaseTtlMs }),
@@ -266,11 +289,32 @@ export async function createLiveServer(
   httpServer.on("upgrade", startingUpgrade);
   const requestedPort = options.port ?? options.config.port;
   const actualPort = await listen(httpServer, requestedPort);
+  const startedAt = new Date().toISOString();
+  let stopping = false;
+  const url = `http://127.0.0.1:${actualPort}`;
   const app = createLiveApp({
     loaded: options.package,
     distDir: options.distDir ?? DEFAULT_DIST_DIR,
     port: actualPort,
     runDir: runStore.dir,
+    ...(options.controlToken === undefined
+      ? {}
+      : {
+          control: {
+            token: options.controlToken,
+            runId: runStore.runId,
+            stageUrl: `${url}/stage`,
+            consoleUrl: `${url}/console`,
+            startedAt,
+            lifecycle: () => controller.getLifecycle(),
+            isStopping: () => stopping,
+            failure: options.failure ?? (() => null),
+            requestStop: () => {
+              stopping = true;
+              options.onStopRequested?.();
+            },
+          },
+        }),
   });
   httpServer.off("request", startingHandler);
   httpServer.off("upgrade", startingUpgrade);
@@ -279,12 +323,11 @@ export async function createLiveServer(
 
   let closed = false;
   return {
-    url: `http://127.0.0.1:${actualPort}`,
+    url,
     port: actualPort,
     controller,
     app,
     runStore,
-    testMode: options.testMode === true,
     directorRuntime,
     async close(): Promise<void> {
       if (closed) {

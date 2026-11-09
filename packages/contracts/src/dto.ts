@@ -37,6 +37,7 @@ export const jobErrorCodeSchema = z.enum([
   "LIVE_EXPORT_INPUT_INVALID",
   "LIVE_EXPORT_TTS_FAILED",
   "LIVE_EXPORT_MATERIAL_FAILED",
+  "LIVE_EXPORT_CUT_IN_FAILED",
   "LIVE_EXPORT_FAILED",
   "LIVE_EXPORT_OUTPUT_UNAVAILABLE",
 ]);
@@ -161,6 +162,9 @@ export const jobSchema = z
     assetId: idSchema.nullable(),
     languageEditionId: idSchema.nullable(),
     scriptVersionId: idSchema.nullable(),
+    /** Set for a Live Program Version export; the Work fields stay null. */
+    programId: idSchema.nullable().optional(),
+    programVersionId: idSchema.nullable().optional(),
     progressPercent: z.number().int().min(0).max(100),
     createdAt: timestampSchema,
     startedAt: timestampSchema.nullable(),
@@ -212,14 +216,36 @@ export const jobSchema = z
         path: ["assetId"],
       });
     } else if (job.kind === "live_export") {
-      for (const field of ["workId", "languageEditionId", "scriptVersionId"] as const) {
-        if (job[field] === null) {
-          ctx.addIssue({
-            code: "custom",
-            message: `live_export Job は ${field} を必須とします`,
-            path: [field],
-          });
-        }
+      const programIdPresent =
+        job.programId !== null && job.programId !== undefined;
+      const programVersionIdPresent =
+        job.programVersionId !== null && job.programVersionId !== undefined;
+      const hasProgram = programIdPresent && programVersionIdPresent;
+      const hasStrayProgram = programIdPresent || programVersionIdPresent;
+      const hasStrayWork =
+        job.workId !== null ||
+        job.languageEditionId !== null ||
+        job.scriptVersionId !== null;
+      if (hasProgram && hasStrayWork) {
+        ctx.addIssue({
+          code: "custom",
+          message: "live_export Job は Work 系のフィールドを持てません",
+          path: ["workId"],
+        });
+      } else if (!hasProgram && hasStrayProgram) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "live_export Job は programId と programVersionId を両方指定してください",
+          path: ["programId"],
+        });
+      } else if (!hasProgram) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "live_export Job は programId と programVersionId を必須とします",
+          path: ["programId"],
+        });
       }
       if (job.assetId !== null) {
         ctx.addIssue({
@@ -227,6 +253,17 @@ export const jobSchema = z
           message: "live_export Job は assetId を持ちません",
           path: ["assetId"],
         });
+      }
+    }
+    if (job.kind !== "live_export") {
+      for (const field of ["programId", "programVersionId"] as const) {
+        if (job[field] !== null && job[field] !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            message: `programId / programVersionId は live_export Job だけが持ちます`,
+            path: [field],
+          });
+        }
       }
     }
     if (job.kind !== "tts" && job.ttsResult !== null) {

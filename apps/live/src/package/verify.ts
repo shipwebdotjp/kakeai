@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  LIVE_CARD_SCHEMA_VERSION,
   liveCharacterSheetSchema,
   liveExtensionForMediaType,
   livePackageManifestSchema,
@@ -10,6 +11,7 @@ import {
   type LivePackageFile,
   type LivePackageManifest,
   type LivePackageShow,
+  type LiveVisualRef,
 } from "@kakeai/contracts";
 import { packageError } from "./errors.ts";
 import {
@@ -231,6 +233,81 @@ function requireMedia(
   }
 }
 
+/**
+ * The manifest and show are parsed independently, so both versions are checked
+ * explicitly. Only the Live Program package v2 contract is supported.
+ */
+export function verifyPackageSchemaVersions(
+  manifest: LivePackageManifest,
+  show: LivePackageShow,
+): void {
+  if (manifest.packageSchemaVersion !== show.schemaVersion) {
+    throw packageError(
+      "invalid_package",
+      `manifest.json の packageSchemaVersion (${manifest.packageSchemaVersion}) と show.json の schemaVersion (${show.schemaVersion}) が一致しません。`,
+      "manifest.json",
+    );
+  }
+  if (manifest.cardSchemaVersion !== LIVE_CARD_SCHEMA_VERSION) {
+    throw packageError(
+      "invalid_package",
+      `v2 パッケージの cardSchemaVersion は ${LIVE_CARD_SCHEMA_VERSION} にしてください: ${manifest.cardSchemaVersion}`,
+      "manifest.json",
+    );
+  }
+}
+
+function verifyVisualReferences(show: LivePackageShow): void {
+  const cards = new Map(show.cards.map((card) => [card.id, card]));
+  const materialIds = new Set(show.materials.map((material) => material.id));
+  const cardAssetIds = new Set(show.cardAssets.map((asset) => asset.id));
+  const checkVisual = (visual: LiveVisualRef, path: string): void => {
+    if (visual.kind === "material") {
+      if (!materialIds.has(visual.materialId)) {
+        throw packageError(
+          "reference_missing",
+          `${path} の素材が見つかりません: ${visual.materialId}`,
+          path,
+        );
+      }
+      return;
+    }
+    const card = cards.get(visual.cardId);
+    if (card === undefined || !card.states.some((state) => state.id === visual.stateId)) {
+      throw packageError(
+        "reference_missing",
+        `${path} のカード状態が見つかりません: ${visual.cardId}/${visual.stateId}`,
+        path,
+      );
+    }
+  };
+
+  for (const [index, cue] of show.cues.entries()) {
+    if (cue.visual !== undefined && cue.visual !== null) {
+      checkVisual(cue.visual, `cues.${index}.visual`);
+    }
+  }
+  for (const [index, segment] of show.segments.entries()) {
+    if (segment.kind !== "cut_in" && segment.visual !== undefined) {
+      checkVisual(segment.visual, `segments.${index}.visual`);
+    }
+  }
+  for (const card of show.cards) {
+    if (card.type !== "image") {
+      continue;
+    }
+    for (const state of card.states) {
+      if (!cardAssetIds.has(state.assetId)) {
+        throw packageError(
+          "reference_missing",
+          `カード画像 Asset が見つかりません: ${state.assetId}`,
+          `cards.${card.id}.states.${state.id}`,
+        );
+      }
+    }
+  }
+}
+
 function verifyMaterialCards(show: LivePackageShow, files: Map<string, LivePackageFile>): void {
   for (const card of show.materials) {
     const entry = requireEntry(files, card.file, `素材 ${card.id}`);
@@ -396,12 +473,6 @@ function verifyReferences(show: LivePackageShow, characters: LiveCharacterSheet,
       }
     }
   }
-
-  if (show.test !== undefined) {
-    const entry = requireEntry(files, show.test.fixture, "fixture");
-    requireKind(entry, ["fixture"], "fixture");
-    requireMedia(entry, new Set<LiveMediaType>(["application/json"]), "fixture");
-  }
 }
 
 export function verifyManifestVoices(
@@ -439,6 +510,8 @@ export function verifyPackageContent(
   characters: LiveCharacterSheet,
   digests: Map<string, FileDigest>,
 ): string[] {
+  verifyPackageSchemaVersions(manifest, show);
+  verifyVisualReferences(show);
   const files = manifestFileMap(manifest);
   verifyCardAssets(show, files);
   verifyMaterialCards(show, files);

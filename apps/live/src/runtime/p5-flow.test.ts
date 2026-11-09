@@ -437,7 +437,7 @@ describe("P5 30-minute fixture flow", () => {
         return;
       }
 
-      if (cueId === "cue-opening-fallback-1") {
+      if (cueId === "cue-fallback-fallback-1") {
         flags.fallbackPlayed = true;
         const snapshot = controller.getSnapshot();
         expect(snapshot.generation).toMatchObject({ phase: "failed", commentId: "fail-tts" });

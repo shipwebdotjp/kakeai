@@ -7,10 +7,12 @@ import type {
 } from "@kakeai/contracts";
 import { openLiveSocket, type LiveSocket, type LiveSocketStatus } from "../shared/socket";
 import { StageAudio } from "./audio";
+import { StageCards } from "./cards";
 import { StageCharacters } from "./characters";
 import { StageCutIn } from "./cut-in";
 import { element } from "./elements";
 import { StageMaterials } from "./materials";
+import { shouldAnimateStageVisual } from "./visual-decision";
 import {
   loadStagePackageData,
   preloadCharacterImages,
@@ -30,6 +32,7 @@ const segmentLabel = element<HTMLSpanElement>("segment-label");
 const safeModeBadge = element<HTMLSpanElement>("safe-mode-badge");
 const thinkingIndicator = element<HTMLDivElement>("thinking-indicator");
 const materialSlot = element<HTMLElement>("material-slot");
+const cardSlot = element<HTMLElement>("card-slot");
 const commentCard = element<HTMLDivElement>("comment-card");
 const commentAuthor = element<HTMLParagraphElement>("comment-author");
 const commentText = element<HTMLParagraphElement>("comment-text");
@@ -46,6 +49,22 @@ const connectionBadge = element<HTMLDivElement>("connection-badge");
 
 const speakerNames = new Map<LiveSide, string>();
 const materials = new StageMaterials(materialSlot);
+const cards = new StageCards(cardSlot, {
+  onError: (failure) => {
+    if (failure.cardId === null || failure.stateId === null) {
+      return;
+    }
+    sendEvent({
+      kind: "card_error",
+      cueId: state?.playback?.cueId ?? null,
+      attempt: state?.playback?.attempt ?? 0,
+      sequence: failure.sequence ?? 0,
+      cardId: failure.cardId,
+      stateId: failure.stateId,
+      error: failure.message,
+    });
+  },
+});
 const characters = new StageCharacters({
   left: element<HTMLElement>("character-left"),
   right: element<HTMLElement>("character-right"),
@@ -59,6 +78,7 @@ let liveRunId: string | null = null;
 let liveSessionId: string | null = null;
 let assetsReady = false;
 let readySentForSession: string | null = null;
+let visualsSettled = false;
 let currentCaptionKey: string | null = null;
 let countdownTimer: number | null = null;
 
@@ -109,12 +129,15 @@ function sendEvent(event: {
     | "audio_error"
     | "cut_in_ended"
     | "cut_in_error"
+    | "card_error"
     | "stage_heartbeat";
   cueId: string | null;
   attempt: number;
   sequence: number;
   cutInId?: string;
   segmentId?: string;
+  cardId?: string;
+  stateId?: string;
   positionMs?: number;
   error?: string;
 }): void {
@@ -130,6 +153,8 @@ function sendEvent(event: {
       cueId: event.cueId,
       ...(event.cutInId === undefined ? {} : { cutInId: event.cutInId }),
       ...(event.segmentId === undefined ? {} : { segmentId: event.segmentId }),
+      ...(event.cardId === undefined ? {} : { cardId: event.cardId }),
+      ...(event.stateId === undefined ? {} : { stateId: event.stateId }),
       attempt: event.attempt,
       sequence: event.sequence,
       ...(event.positionMs === undefined ? {} : { positionMs: event.positionMs }),
@@ -234,10 +259,20 @@ function renderComment(next: StageState): void {
   commentState.textContent = comment.state === "reading" ? "読み上げ中" : "回答中";
 }
 
-function renderLive(next: StageState): void {
+function renderLive(next: StageState, animateVisual: boolean): void {
   segmentLabel.textContent = next.segment?.label ?? "";
   characters.render(next.characters);
-  materials.render(next.material);
+  const animate = shouldAnimateStageVisual({
+    snapshot: !animateVisual,
+    preview: previewRequested,
+    program: role === "program",
+  });
+  const action = cards.apply(next.visual, animate);
+  if (action.type === "material") {
+    materials.render(action.materialId, action.focus);
+  } else if (action.type === "card" || action.type === "hide") {
+    materials.hide();
+  }
   renderCaption(next);
   renderComment(next);
   safeModeBadge.hidden = next.phase !== "safe_mode";
@@ -248,7 +283,7 @@ function renderLive(next: StageState): void {
     next.phase === "safe_mode";
 }
 
-function render(next: StageState): void {
+function render(next: StageState, animateVisual = false): void {
   state = next;
   const showOverlay = next.phase === "pre_show" || next.phase === "post_show";
   overlay.hidden = !showOverlay;
@@ -270,7 +305,7 @@ function render(next: StageState): void {
   }
 
   if (!showOverlay) {
-    renderLive(next);
+    renderLive(next, animateVisual);
   }
   cutIn.render(next);
   audio.update(next.phase, next.playback);
@@ -282,11 +317,19 @@ function handleMessage(message: LiveServerMessage): void {
       liveRunId = message.runId;
       liveSessionId = message.sessionId;
       role = message.role === "stage" ? (message.lease?.role ?? "preview") : null;
-      render(message.state);
+      // Initial connect and reconnect snapshots render fully formed; only
+      // later live updates animate. The snapshot is authoritative, so it may
+      // restart the visual sequence at 0.
+      visualsSettled = false;
+      cards.reset();
+      cards.setConnected(false);
+      render(message.state, false);
+      cards.markSettled();
+      visualsSettled = true;
       sendReadyIfPossible();
       return;
     case "state":
-      render(message.state);
+      render(message.state, visualsSettled);
       return;
     case "lease":
       if (message.lease.sessionId !== liveSessionId) {
@@ -306,6 +349,11 @@ function handleMessage(message: LiveServerMessage): void {
 
 function setConnectionStatus(status: LiveSocketStatus): void {
   document.body.dataset.connection = status;
+  if (status !== "open") {
+    // The next hello is a reconnect snapshot and must not animate.
+    visualsSettled = false;
+    cards.setConnected(false);
+  }
   if (!previewRequested) {
     connectionBadge.hidden = true;
     return;
@@ -324,6 +372,7 @@ function applyShow(show: LivePackageShow | null): void {
     return;
   }
   materials.setShow(show);
+  cards.setShow(show);
   audio.setCueDurations(show.cues);
   speakerNames.clear();
   for (const speaker of show.speakers) {

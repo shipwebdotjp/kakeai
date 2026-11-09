@@ -1,10 +1,11 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   defaultLiveRuntimeConfig,
   loadLiveRuntimeConfigFile,
+  readControlTokenFile,
   resolveLiveRuntimeConfig,
 } from "./config.ts";
 
@@ -152,5 +153,21 @@ describe("live runtime config", () => {
     expect(resolved.port).toBe(3099);
     expect(resolved.dataDir).toBe(dataDir);
     expect(resolved.comments).toEqual(defaults.comments);
+  });
+
+  it("accepts only 0600/0400 regular control token files", async () => {
+    const dir = await tempDir();
+    const path = join(dir, "control-token");
+    await writeFile(path, "token-value\n", "utf8");
+    await chmod(path, 0o600);
+    await expect(readControlTokenFile(path)).resolves.toBe("token-value");
+    await chmod(path, 0o400);
+    await expect(readControlTokenFile(path)).resolves.toBe("token-value");
+    await chmod(path, 0o644);
+    await expect(readControlTokenFile(path)).rejects.toThrow(/0600/);
+
+    const subdir = join(dir, "token-dir");
+    await mkdir(subdir, { recursive: true });
+    await expect(readControlTokenFile(subdir)).rejects.toThrow(/通常ファイル/);
   });
 });

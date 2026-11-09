@@ -1,5 +1,7 @@
 # ライブのCutInはCueでも素材カードでもなく、専用のSpineセグメントとして扱う
 
+> amended by [ADR-0134](./0134-live-program-v2-only.md): CutIn の入力は Live Program 文書に移り、Show Profile と v1 パッケージは削除された。
+
 Status: accepted
 
 ライブのコーナー間などに挿入する短い動画（CutIn）は、通常のLive CueにもMaterial Cardにも混ぜず、Spine専用の `cut_in` セグメントと専用のパッケージ種別として扱う。CutInは全画面で再生し、埋め込み音声とprobe由来の尺を自身の契約として持つ。素材カードは従来どおり無音に固定し、CutInだけが `hasAudio: true` を許可される。

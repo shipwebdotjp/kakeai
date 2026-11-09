@@ -1,15 +1,15 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  livePackageShowSchema,
+  liveRunConfigSchema,
   liveRuntimeConfigSchema,
-  type LivePackageShow,
+  type LiveRunConfig,
   type LiveRuntimeConfig,
 } from "@kakeai/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { YouTubeTokenMissingError, type YouTubeAccessTokenProvider } from "../auth/youtube-token.ts";
-import { testShow } from "../testing/package-fixture.ts";
 import { createCommentSource } from "./factory.ts";
 
 const tempDirs: string[] = [];
@@ -53,20 +53,54 @@ function config(overrides: {
   });
 }
 
-function showWithFixture(): LivePackageShow {
-  return livePackageShowSchema.parse({
-    ...testShow(),
-    test: { fixture: "fixtures/comments.json" },
-  });
-}
-
-async function writeFixture(root: string): Promise<void> {
+async function writeFixture(root: string): Promise<string> {
   await mkdir(join(root, "fixtures"), { recursive: true });
+  const path = join(root, "fixtures", "comments.json");
   await writeFile(
-    join(root, "fixtures", "comments.json"),
+    path,
     JSON.stringify([{ atMs: 1_000, author: "みかん", text: "こんにちは" }]),
     "utf8",
   );
+  return path;
+}
+
+async function runConfig(
+  root: string,
+  source:
+    | { kind: "fixture" }
+    | {
+        kind: "youtube";
+        videoUrl?: string | null;
+        liveChatId?: string | null;
+      },
+): Promise<LiveRunConfig> {
+  const fixturePath = source.kind === "fixture" ? await writeFixture(root) : undefined;
+  return liveRunConfigSchema.parse({
+    schemaVersion: 1,
+    runId: "run-1",
+    programVersionId: "program-version-1",
+    package: {
+      packageId: "livepkg-test",
+      manifestSha256: "a".repeat(64),
+      packagePath: root,
+    },
+    source:
+      source.kind === "fixture"
+        ? {
+            kind: "fixture",
+            fixturePath,
+            fixtureSha256: createHash("sha256")
+              .update(await readFile(fixturePath!, "utf8"))
+              .digest("hex"),
+          }
+        : {
+            kind: "youtube",
+            videoUrl: source.videoUrl ?? "https://youtu.be/abcdefghijk",
+            liveChatId: source.liveChatId ?? null,
+          },
+    startAt: null,
+    requestedPort: 3010,
+  });
 }
 
 function tokenProvider(): YouTubeAccessTokenProvider {
@@ -77,116 +111,159 @@ function tokenProvider(): YouTubeAccessTokenProvider {
 }
 
 describe("createCommentSource", () => {
-  it("uses the fixture in test mode and allows an external LLM", async () => {
-    const packageRoot = await tempDir();
+  it("uses the Run fixture without caring about the LLM mode", async () => {
+    const root = await tempDir();
     const dataDir = await tempDir();
-    await writeFixture(packageRoot);
-
     const source = await createCommentSource({
-      show: showWithFixture(),
-      packageRoot,
-      testMode: true,
+      runConfig: await runConfig(root, { kind: "fixture" }),
       config: config({ dataDir, mode: "external" }),
     });
     expect(source.getStatus()).toMatchObject({ kind: "fixture", state: "idle" });
   });
 
-  it("uses an empty fixture when test mode has no fixture", async () => {
-    const packageRoot = await tempDir();
+  it("rejects a fixture whose SHA-256 does not match the Run", async () => {
+    const root = await tempDir();
     const dataDir = await tempDir();
+    const run = await runConfig(root, { kind: "fixture" });
+    await writeFile(join(root, "fixtures", "comments.json"), "[]", "utf8");
+    await expect(
+      createCommentSource({ runConfig: run, config: config({ dataDir }) }),
+    ).rejects.toThrow(/SHA-256/);
+  });
+
+  it("hashes and parses the fixture from a single read", async () => {
+    const root = await tempDir();
+    const dataDir = await tempDir();
+    const fixtureJson = JSON.stringify([{ atMs: 1_000, author: "みかん", text: "こんにちは" }]);
+    const run = liveRunConfigSchema.parse({
+      schemaVersion: 1,
+      runId: "run-1",
+      programVersionId: "program-version-1",
+      package: {
+        packageId: "livepkg-test",
+        manifestSha256: "a".repeat(64),
+        packagePath: root,
+      },
+      source: {
+        kind: "fixture",
+        fixturePath: join(root, "fixtures", "comments.json"),
+        fixtureSha256: createHash("sha256").update(fixtureJson).digest("hex"),
+      },
+      startAt: null,
+      requestedPort: 3010,
+    });
+    let reads = 0;
     const source = await createCommentSource({
-      show: testShow(),
-      packageRoot,
-      testMode: true,
+      runConfig: run,
       config: config({ dataDir }),
+      readFixtureBytes: async () => {
+        reads += 1;
+        // A second read returns different bytes; hashing one read and parsing
+        // another would be a TOCTOU bug.
+        return Buffer.from(reads === 1 ? fixtureJson : "[]", "utf8");
+      },
     });
-    expect(source.getStatus().kind).toBe("fixture");
+
+    expect(reads).toBe(1);
+    expect(source.getStatus()).toMatchObject({ kind: "fixture", state: "idle" });
   });
 
-  it("uses the fixture source when the show selects fixture", async () => {
-    const packageRoot = await tempDir();
+  it("does not fill a Run's null liveChatId from local youtube config", async () => {
+    const root = await tempDir();
     const dataDir = await tempDir();
-    await writeFixture(packageRoot);
-    const show = livePackageShowSchema.parse({
-      ...showWithFixture(),
-      commentSource: { kind: "fixture" },
-    });
     const source = await createCommentSource({
-      show,
-      packageRoot,
-      config: config({ dataDir, mode: "external" }),
+      runConfig: await runConfig(root, {
+        kind: "youtube",
+        videoUrl: "https://youtu.be/run-source",
+        liveChatId: null,
+      }),
+      config: config({
+        dataDir,
+        youtube: {
+          apiKey: "api-key-1",
+          videoUrl: "https://youtu.be/local-source",
+          liveChatId: "chat-local",
+        },
+      }),
     });
-    expect(source.getStatus().kind).toBe("fixture");
+    expect(source.getStatus().liveChatId).toBeNull();
   });
 
-  it("rejects a real YouTube source with an external LLM", async () => {
-    const packageRoot = await tempDir();
+  it("rejects a fixture above the 10 MiB limit before parsing", async () => {
+    const root = await tempDir();
     const dataDir = await tempDir();
     await expect(
       createCommentSource({
-        show: testShow(),
-        packageRoot,
+        runConfig: await runConfig(root, { kind: "fixture" }),
+        config: config({ dataDir }),
+        readFixtureBytes: async () => new Uint8Array(10 * 1024 * 1024 + 1),
+      }),
+    ).rejects.toThrow(/大きすぎます/);
+  });
+
+  it("rejects a real YouTube source with an external LLM", async () => {
+    const root = await tempDir();
+    const dataDir = await tempDir();
+    await expect(
+      createCommentSource({
+        runConfig: await runConfig(root, { kind: "youtube", liveChatId: "chat-1" }),
         config: config({
           dataDir,
           mode: "external",
-          youtube: { clientId: "c", clientSecret: "s", liveChatId: "chat-1" },
+          youtube: { clientId: "c", clientSecret: "s" },
         }),
       }),
     ).rejects.toThrow(/ローカル LLM/);
   });
 
   it("rejects mode: local when the base URL is not loopback", async () => {
-    const packageRoot = await tempDir();
+    const root = await tempDir();
     const dataDir = await tempDir();
     await expect(
       createCommentSource({
-        show: testShow(),
-        packageRoot,
+        runConfig: await runConfig(root, { kind: "youtube", liveChatId: "chat-1" }),
         config: config({
           dataDir,
           baseUrl: "https://llm.example.com/v1",
-          youtube: { clientId: "c", clientSecret: "s", liveChatId: "chat-1" },
+          youtube: { clientId: "c", clientSecret: "s" },
         }),
       }),
     ).rejects.toThrow(/ローカル LLM/);
   });
 
   it("requires YouTube config for a real source", async () => {
-    const packageRoot = await tempDir();
+    const root = await tempDir();
     const dataDir = await tempDir();
     await expect(
       createCommentSource({
-        show: testShow(),
-        packageRoot,
+        runConfig: await runConfig(root, { kind: "youtube" }),
         config: config({ dataDir }),
       }),
-    ).rejects.toThrow(/youtube/);
+    ).rejects.toThrow(/認証設定/);
   });
 
   it("requires a saved token for an OAuth-only source", async () => {
-    const packageRoot = await tempDir();
+    const root = await tempDir();
     const dataDir = await tempDir();
     await expect(
       createCommentSource({
-        show: testShow(),
-        packageRoot,
+        runConfig: await runConfig(root, { kind: "youtube", liveChatId: "chat-1" }),
         config: config({
           dataDir,
-          youtube: { clientId: "c", clientSecret: "s", liveChatId: "chat-1" },
+          youtube: { clientId: "c", clientSecret: "s" },
         }),
       }),
     ).rejects.toBeInstanceOf(YouTubeTokenMissingError);
   });
 
   it("creates a real YouTube source with only an API key", async () => {
-    const packageRoot = await tempDir();
+    const root = await tempDir();
     const dataDir = await tempDir();
     const source = await createCommentSource({
-      show: testShow(),
-      packageRoot,
+      runConfig: await runConfig(root, { kind: "youtube" }),
       config: config({
         dataDir,
-        youtube: { apiKey: "api-key-1", videoUrl: "https://youtu.be/abcdefghijk" },
+        youtube: { apiKey: "api-key-1" },
       }),
     });
     expect(source.getStatus()).toMatchObject({
@@ -198,18 +275,16 @@ describe("createCommentSource", () => {
   });
 
   it("exposes the OAuth fallback without requiring a token up front", async () => {
-    const packageRoot = await tempDir();
+    const root = await tempDir();
     const dataDir = await tempDir();
     const source = await createCommentSource({
-      show: testShow(),
-      packageRoot,
+      runConfig: await runConfig(root, { kind: "youtube" }),
       config: config({
         dataDir,
         youtube: {
           apiKey: "api-key-1",
           clientId: "c",
           clientSecret: "s",
-          videoUrl: "https://youtu.be/abcdefghijk",
         },
       }),
     });
@@ -223,15 +298,14 @@ describe("createCommentSource", () => {
   });
 
   it("creates a YouTube source without calling the API at construction", async () => {
-    const packageRoot = await tempDir();
+    const root = await tempDir();
     const dataDir = await tempDir();
     let fetchCalls = 0;
     const source = await createCommentSource({
-      show: testShow(),
-      packageRoot,
+      runConfig: await runConfig(root, { kind: "youtube" }),
       config: config({
         dataDir,
-        youtube: { clientId: "c", clientSecret: "s", videoUrl: "https://youtu.be/abcdefghijk" },
+        youtube: { clientId: "c", clientSecret: "s" },
       }),
       tokenProvider: tokenProvider(),
       fetch: async () => {

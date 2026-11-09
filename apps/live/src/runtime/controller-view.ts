@@ -1,4 +1,5 @@
 import type {
+  CommentSourceKind,
   ConsoleCutIn,
   ConsoleSnapshot,
   LiveCharacterSheet,
@@ -6,12 +7,12 @@ import type {
   LiveGenerationStatus,
   LivePackageShow,
   LiveSegment,
-  MaterialCard,
   StageClock,
   StageCutIn,
   StagePhase,
   StageState,
   StageStatus,
+  StageVisualState,
 } from "@kakeai/contracts";
 import type { CommentRuntime } from "./comment-runtime.ts";
 import type { CutInOccurrence } from "./cut-in-runtime.ts";
@@ -28,6 +29,8 @@ import {
 export interface ControllerViewHost {
   readonly runId: string;
   readonly show: LivePackageShow;
+  readonly startAt: string | null;
+  readonly commentSourceKind: CommentSourceKind;
   readonly characters: LiveCharacterSheet;
   readonly playout: Playout;
   readonly queues: CueQueueStore;
@@ -36,7 +39,7 @@ export interface ControllerViewHost {
   phase(): StagePhase;
   segment(): LiveSegment | null;
   segmentLabel(segment: LiveSegment | null): { id: string; label: string } | null;
-  materialForCue(segment: LiveSegment, cue: LiveCue | null): MaterialCard | null;
+  resolveVisual(segment: LiveSegment | null, cue: LiveCue | null): StageVisualState | null;
   cutIn(): CutInOccurrence | null;
   clock(): StageClock;
   /** Wired by the director integration (P5b); null until then. */
@@ -78,6 +81,7 @@ export class ControllerView {
     const cue = host.playout.current;
     return buildStageState({
       show: host.show,
+      startAt: host.startAt,
       characters: host.characters,
       phase: host.phase(),
       segment: host.segmentLabel(segment),
@@ -85,7 +89,7 @@ export class ControllerView {
       attempt: host.playout.currentAttempt,
       sequence: host.playout.currentSequenceValue,
       cueStartedAt: host.playout.currentStartedAt,
-      material: segment === null ? null : host.materialForCue(segment, cue),
+      visual: host.resolveVisual(segment, cue),
       comment: host.comments.getStageComment(),
       status: this.getStatus(),
       cutIn: stageCutIn(host.cutIn()),
@@ -118,7 +122,7 @@ export class ControllerView {
       comments: commentSnapshot?.comments ?? [],
       commentCorner: commentSnapshot?.corner ?? emptyCommentCorner(),
       commentSource:
-        commentSnapshot?.source ?? idleCommentSource(host.show.commentSource.kind),
+        commentSnapshot?.source ?? idleCommentSource(host.commentSourceKind),
       generation: host.generation?.() ?? null,
       cutIn: consoleCutIn(host.cutIn()),
     });

@@ -2,6 +2,8 @@
 
 [spec.md](./spec.md) を正とする。この文書は P1 の作業順、契約、テスト、未決事項を実装可能な粒度に落としたもの。仕様と衝突する場合は spec を優先し、判断を変える場合は spec とこのプランを同じ変更で直す。
 
+> **Status: historical.** Show Profile、`--work` / `--script-version` / `--profile`、v1 パッケージは P7 で削除した。現在の契約は [../live-program/spec.md](../live-program/spec.md) を正とする。この文書のコード例とCLIは当時の記録である。
+>
 > 実装状況（2026-11-07）: Q1〜Q9は推奨案で確定し、P1を実装した。`live_export` Job、CLI、contracts、素材カード、manifest検証、統合テストまで完了している。P0.5bの実環境スパイク（実TTS参照音声、Chrome/Producerでのカード書き出し）はP6の受け入れ前に確認する。
 
 ## 0. 位置づけ
@@ -135,7 +137,7 @@ package.json                       npm run live:export
 docs/live/p1-plan.md               この文書
 docs/live/spec.md                  契約の確定分を反映
 docs/live/todo.md                  P1 の項目をこのプランへリンク
-docs/live/examples/                10分版・30分版の Show Profile と fixture
+docs/live/examples/                10分版・30分版の fixture
 docs/mvp/spec.md                   live_export Job の追加
 docs/mvp/api-contract.md           POST /live-exports と Job DTO
 AGENTS.md                          npm run live:export
@@ -728,8 +730,8 @@ POST では TTS を呼ばない。TTS のテスト合成と準備音声の生成
 
 ### P1.6 サンプルとドキュメント（S）
 
-- `docs/live/examples/show-10m.json`、`show-30m.json`、`comments-10m.json`、`comments-30m.json` を追加する。
-- `docs/live/examples/README.md` に、デモ Work のキャラクター・シーン・行 ID の作り方を書く。
+- `docs/live/examples/comments-10m.json`、`comments-30m.json` を追加する。
+- `docs/live/examples/README.md` に fixture の使い方を書く。
 - `docs/mvp/spec.md` と `docs/mvp/api-contract.md` を更新する。
 - `AGENTS.md` に `npm run live:export` を追加する。
 - `user-guide/docs/live/export.md` とサイドバーを追加する。
@@ -829,7 +831,7 @@ POST では TTS を呼ばない。TTS のテスト合成と準備音声の生成
 
 ### Q8. サンプル Work の提供方法
 
-**推奨: P1 では `docs/live/examples/` に 10 分版・30 分版の Show Profile と fixture を置き、デモ Work の作り方を README に書く。DB seed は追加しない。**
+**推奨: P1 では `docs/live/examples/` に 10 分版・30 分版の fixture を置く。Live Program のサンプルは Live Program 契約で別途用意する。DB seed は追加しない。**
 
 理由: seed は DB スキーマと UI に依存し、P1 の境界を広げる。自動テストはプログラムで組んだ fixture を使い、手動の受け入れは README の手順で Kakeai 上に Work を作る。P2 で必要なら seed コマンドを追加する。
 

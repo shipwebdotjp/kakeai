@@ -32,6 +32,8 @@ export interface AppConfig {
   allowedOrigins: ReadonlySet<string>;
   voiceBaseUrls: Record<VoiceAdapterId, string>;
   limits: LimitsConfig;
+  /** Optional local Live settings file passed to `apps/live --config`. */
+  liveConfigPath?: string;
 }
 
 const GIB = 1024 ** 3;
@@ -153,5 +155,8 @@ export function loadConfig(
     allowedOrigins: allowedOriginsForPort(port),
     voiceBaseUrls: resolveVoiceBaseUrls(env),
     limits: { ...DEFAULT_LIMITS },
+    ...(env.KAKEAI_LIVE_CONFIG === undefined || env.KAKEAI_LIVE_CONFIG.trim().length === 0
+      ? {}
+      : { liveConfigPath: resolve(env.KAKEAI_LIVE_CONFIG.trim()) }),
   };
 }

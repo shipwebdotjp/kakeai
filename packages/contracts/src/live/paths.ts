@@ -2,8 +2,6 @@ import { z } from "zod";
 import { idSchema, nonNegativeInt, positiveInt, timestampSchema } from "../content/primitives";
 import { visualThemeRefSchema } from "../content/theme";
 
-/** Work-derived Show Profile packages. Kept for the current exporter. */
-export const LIVE_PACKAGE_SCHEMA_VERSION = 1 as const;
 /** Live Program packages with typed cards. */
 export const LIVE_PROGRAM_PACKAGE_SCHEMA_VERSION = 2 as const;
 export const LIVE_CARD_SCHEMA_VERSION = 1 as const;
@@ -178,15 +176,6 @@ export const liveManifestVoiceSchema = z
   });
 export type LiveManifestVoice = z.infer<typeof liveManifestVoiceSchema>;
 
-export const liveLegacyPackageSourceSchema = z.strictObject({
-  workId: idSchema,
-  languageEditionId: idSchema,
-  scriptVersionId: idSchema,
-  theme: visualThemeRefSchema,
-  profileSha256: z.string().regex(/^[0-9a-f]{64}$/),
-});
-export type LiveLegacyPackageSource = z.infer<typeof liveLegacyPackageSourceSchema>;
-
 export const liveProgramPackageSourceSchema = z.strictObject({
   programId: idSchema,
   programVersionId: idSchema,
@@ -197,48 +186,19 @@ export const liveProgramPackageSourceSchema = z.strictObject({
 });
 export type LiveProgramPackageSource = z.infer<typeof liveProgramPackageSourceSchema>;
 
-export const livePackageSourceSchema = z.union([
-  liveLegacyPackageSourceSchema,
-  liveProgramPackageSourceSchema,
-]);
-export type LivePackageSource = z.infer<typeof livePackageSourceSchema>;
-
 export const livePackageManifestSchema = z
   .strictObject({
-    packageSchemaVersion: z.union([
-      z.literal(LIVE_PACKAGE_SCHEMA_VERSION),
-      z.literal(LIVE_PROGRAM_PACKAGE_SCHEMA_VERSION),
-    ]),
+    packageSchemaVersion: z.literal(LIVE_PROGRAM_PACKAGE_SCHEMA_VERSION),
     exporterVersion: z.string().min(1),
     packageId: z.string().min(1),
     createdAt: timestampSchema,
-    source: livePackageSourceSchema,
+    source: liveProgramPackageSourceSchema,
     cardSchemaVersion: z.literal(LIVE_CARD_SCHEMA_VERSION).default(LIVE_CARD_SCHEMA_VERSION),
     files: z.array(livePackageFileSchema),
     fonts: z.array(liveManifestFontSchema),
     voices: z.array(liveManifestVoiceSchema),
   })
   .superRefine((manifest, ctx) => {
-    const legacySource = "workId" in manifest.source;
-    const programSource = "programId" in manifest.source;
-    if (manifest.packageSchemaVersion === LIVE_PACKAGE_SCHEMA_VERSION && !legacySource) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["source"],
-        message: "packageSchemaVersion 1 は Work 由来の source を使ってください。",
-      });
-    }
-    if (
-      manifest.packageSchemaVersion === LIVE_PROGRAM_PACKAGE_SCHEMA_VERSION &&
-      !programSource
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["source"],
-        message: "packageSchemaVersion 2 は Live Program 由来の source を使ってください。",
-      });
-    }
-
     const files = new Set<string>();
     for (const file of manifest.files) {
       if (files.has(file.path)) {

@@ -1,7 +1,6 @@
 # ライブ配信仕様（AI進行のYouTubeライブ）
 
-> **Status: legacy input.**
-> Show Profile 入力と Work / Script Version 由来の準備済みキューは [ADR-0131](../adr/0131-live-program-owns-live-script.md) で置き換えられた。ライブ台本とライブカードの新しい契約は [../live-program/spec.md](../live-program/spec.md) を正とする。ステージ、プレイアウト、コメント、CutIn、TTS の実行契約は、パッケージv2への移行が完了するまで引き続き有効とする。
+Status: accepted. ライブの正本は Live Program と Live Program Version、実行境界はパッケージv2である。旧 Show Profile と v1 パッケージの経路は削除済み（[ADR-0134](../adr/0134-live-program-v2-only.md)）。ライブ台本とライブカードの契約は [../live-program/spec.md](../live-program/spec.md) を正とする。
 
 ## 目的と境界
 
@@ -10,16 +9,16 @@
 - ライブの出力は、OBSでキャプチャするブラウザの**ステージ**である。MP4のレンダーではない。
 - ライブの正本は、Live Program と、Kakeaiの既存データ（Theme、Character、Asset、VoiceProfile）である（ADR-0131）。ライブ実行時は、書き出した**ライブパッケージ**だけを読む。
 - 既存のコンポジション（Scene・VisualCue・タイムライン）をライブの進行に使わない。ライブは**状態駆動の別ランタイム**である。理由は [ADR-0120](../adr/0120-live-runtime-separate-from-composition.md) を正とする。
-- 準備済みキューは Live Program が所有し、`lineId` でScriptVersionを参照しない（ADR-0131）。旧Show Profileの`scriptCues` / `liveCues`は移行用のlegacy契約である。
+- 準備済みキューは Live Program が所有し、`lineId` でScriptVersionを参照しない（ADR-0131）。パッケージは `schemaVersion: 2` だけを持つ。
 - 再生はprogramステージ1つがリースを持ち、コンソールのpreviewはミュート・イベント非送信とする。理由は [ADR-0125](../adr/0125-live-program-playback-lease.md) を正とする。
 - 素材カードは静止PNG/HTMLまたは短い無音MP4に限定し、コンポジションのタイムラインをライブで再生しない。理由は [ADR-0126](../adr/0126-live-material-cards-static-or-mp4.md) を正とする。
 - コーナーの区切りなどに挿入する短い動画（CutIn）は、素材カードの拡張でもCueでもなく、Spine専用の `cut_in` セグメントとして扱う。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) と [ADR-0130](../adr/0130-live-cut-in-separate-from-cues-and-materials.md) を正とする。
 - TTSの接続設定はライブアプリに置き、パッケージは声のスナップショットと参照音声だけを持つ。理由は [ADR-0127](../adr/0127-live-tts-voice-snapshot-boundary.md) を正とする。
-- v1のコメント取得は`liveChatMessages.list`のポーリングを正規経路とし、`streamList`はP0.5のスパイク後に判断する。理由は [ADR-0128](../adr/0128-live-comment-polling-primary.md) を正とする。
+- コメント取得は`liveChatMessages.list`のポーリングを正規経路とし、`streamList`はP0.5のスパイク後に判断する。理由は [ADR-0128](../adr/0128-live-comment-polling-primary.md) を正とする。
 - YouTube連携は**読み取り専用**とする。配信の開始・終了、タイトル・サムネイル設定、チャット投稿、モデレーションは人間が行う。理由は [ADR-0121](../adr/0121-youtube-read-only-comment-source.md) を正とする。
-- ライブのコメントは**コメントコーナー**で拾う。人間が選んだコメント（人間ピン）を優先し、残りをAI候補が埋める。即時割り込みはv1では行わない。理由は [ADR-0122](../adr/0122-live-comment-corner-human-pin.md) を正とする。
-- v1の実YouTubeでは、コメントの分析と応答生成に**ローカルLLMだけ**を使う。生コメントも要約も外部LLMへ送らない。fixtureテストでは外部LLMを使ってよい。理由は [ADR-0123](../adr/0123-live-youtube-local-llm-only.md) を正とする。
-- 対象はローカルの単一利用者、`ja-JP`、30分を目安とするライブである。クラウド配信、複数ユーザー、配信作成、チャット投稿、VOD編集はv1の対象外とする。
+- ライブのコメントは**コメントコーナー**で拾う。人間が選んだコメント（人間ピン）を優先し、残りをAI候補が埋める。即時割り込みは行わない。理由は [ADR-0122](../adr/0122-live-comment-corner-human-pin.md) を正とする。
+- 実YouTubeでは、コメントの分析と応答生成に**ローカルLLMだけ**を使う。生コメントも要約も外部LLMへ送らない。fixtureテストでは外部LLMを使ってよい。理由は [ADR-0123](../adr/0123-live-youtube-local-llm-only.md) を正とする。
+- 対象はローカルの単一利用者、`ja-JP`、30分を目安とするライブである。クラウド配信、複数ユーザー、配信作成、チャット投稿、VOD編集は対象外とする。
 
 既存の台本契約は [../mvp/content-schema.md](../mvp/content-schema.md)、テーマは [../visual-themes/spec.md](../visual-themes/spec.md) と [../theme-customization/spec.md](../theme-customization/spec.md)、キャラクターと表情は [../face-expression/spec.md](../face-expression/spec.md) と [../standing-states/spec.md](../standing-states/spec.md)、TTSは [../tts/spec.md](../tts/spec.md) と [../multilingual-voice/spec.md](../multilingual-voice/spec.md) を正とする。この文書は、それらをライブ用にどう組み合わせるかを定める。
 
@@ -29,21 +28,20 @@
 
 | 用語 | 意味 |
 | --- | --- |
-| ライブショー | 1回のライブ配信の単位。ショープロファイル、スパイン、素材、キャラクター、声を持つ。 |
-| ライブパッケージ | ライブショーを実行するための不変の書き出し。テーマCSS、キャラクター素材、素材カード、事前音声、ショープロファイルを含む。 |
+| Live Program | 1回のライブ配信の台本。スパイン、Cue、カード、素材、CutIn、コメント・安全・プレイアウトのポリシーを持つ。 |
+| Live Program Version | Live Program の不変の版。書き出しと配信開始はこの版を指定する。 |
 | ステージ | OBSでキャプチャする1920x1080のブラウザ画面。キャラクター、字幕、素材、コメントカード、フェーズを描画する。 |
 | プレイアウト | ライブキューを音声再生に合わせて進める状態機械。タイムラインではない。 |
-| ライブキュー | ライブの最小出力単位。話者、字幕、読み上げ、表情、素材、コメント、音声を持つ。 |
-| PreparedCue | 書き出し時にScriptVersionまたはライブ専用キューから解決された準備済みキュー。`origin`は`script`または`live`。 |
+| ライブCue | ライブの最小出力単位。話者、字幕、読み上げ、表情、中央ビジュアル、コメント、音声を持つ。 |
+| PreparedCue | Live Program Version から解決された準備済みCue。`origin`は常に`live`。 |
 | programステージ | 再生リースを持ち、音声を再生する唯一のステージ。OBSに出す。 |
 | previewステージ | コンソールで状態を確認するための、ミュート・イベント非送信のステージ。 |
-| コメントコーナー | 視聴者コメントをまとめて拾う、スパイン上の区間。常時コメントを拾うモードはv1では使わない。 |
+| コメントコーナー | 視聴者コメントをまとめて拾う、スパイン上の区間。常時コメントを拾うモードは使わない。 |
 | スパイン | ライブの予定されたセグメント順。コンポジションのタイムラインではない。 |
 | CutIn | コーナーの区切りなどに挿入する全画面の短い動画。専用のSpineセグメントとして扱い、素材カードやCueとは分ける。 |
-| 素材集 | 時間が余ったときや調整に使う追加の話題・ネタ・退避素材。v1では必須ではない。 |
+| 素材集 | 時間が余ったときや調整に使う追加の話題・ネタ・退避素材。現行では必須ではない。 |
 | 人間ピン | オペレーターが次のコメントコーナーで拾うと明示したコメント。AI候補より優先される。 |
 | AI候補 | コメント分析役が提示する候補。人間ピンの残り枠を埋める。 |
-| ショープロファイル | ライブ固有の構成、コメントポリシー、安全設定、ステージ、目標尺を持つ設定。ScriptVersionではない。 |
 | コメントソース | コメントを供給する境界。YouTubeライブチャットまたはfixture。 |
 | テストモード | fixtureのコメントで、実際のディレクター、TTS、ステージ、コンソールを通す実行。 |
 | オペレーターコンソール | 人間がピン、スキップ、停止、編集、ログ確認を行うローカル画面。OBSには出さない。 |
@@ -76,13 +74,14 @@ YouTube ライブチャット
 - **YouTube** は、コメントの読み取り元である。アプリは書き込まない。
 - Kakeaiとapps/liveはDBを共有しない。境界はライブパッケージと、共有するTTSアダプタだけである。
 
-### 実装構成（v1）
+### 実装構成
 
 - `apps/live` はNode + TypeScriptのローカルサーバー。HTTPはExpress、WebSocketは`ws`を使う。パッケージ配信、実行ディレクトリの管理を持つ。
 - ステージとコンソールはViteでビルドした静的ページとして配信する。ステージはフレームワーク非依存の軽量ページ、コンソールはReact + Viteとする。
 - コメント取得、分析、ディレクター、プレイアウト、ログはサーバー側で動かす。ステージは状態描画と音声再生、コンソールは操作と表示を担当する。
 - LLMの接続設定はライブアプリのローカル設定に置く。実YouTubeは`mode: "local"`を強制し、fixtureテストだけ外部LLMを許可する。
-- 起動は `npm run live -- --package <dir> [--test] [--port <port>] [--config <file>]` を想定する。ライブの実行にKakeaiの起動は不要とする。
+- 手動起動は `npm run live -- --package <dir> --run-config <run-config.json> [--port <port>] [--config <file>]` を想定する。ライブの実行にKakeaiの起動は不要とする。
+- Kakeaiからの起動は `--run-id`、`--run-dir`、`--control-token-file`、`--run-config` を追加で受け取る。LLM/TTS/YouTube認証情報は従来どおり `--config` のローカル設定だけに置く。
 
 ## ライブパッケージ
 
@@ -96,15 +95,13 @@ live-package/
   characters.json
   materials/
     material-news-1.png
-    material-news-2.mp4
-    material-news-3.html
+  cards/
+    card-image-1.png
   media/
     characters/
       left-base.png
       left-eye-normal.png
       left-mouth-speaking.png
-    materials/
-      news-1.png
     assets/
       <sha256>.mp4
     voice/
@@ -117,13 +114,13 @@ live-package/
     comments.json
 ```
 
-- `manifest.json` は、パッケージのスキーマ版、書き出し元のWork・LanguageEdition・ScriptVersion・Theme Revision、作成日時を持つ。
-- `show.json` は、ショープロファイルとスパイン、素材、キュー、コメントポリシー、安全設定を持つ。
+- `manifest.json` は、`packageSchemaVersion: 2`、Live Program Version の `source`（`programId`、`programVersionId`、文書ハッシュ、解決スナップショットハッシュ、Theme Revision）、作成日時を持つ。
+- `show.json` は、`schemaVersion: 2`、スパイン、Cue、カード、素材、CutIn、スピーカー、コメントポリシー、安全設定、プレイアウトを持つ。`commentSource`、`test.fixture`、`show.startAt` は持たず、Live Run の run config で固定する。
 - `theme.css` は、解決済みのテーマCSS変数とフォントスタックを持つ。テーマの色・書体・余白・影・角丸を、ステージと素材カードで共有する。
 - `characters.json` は、左右のキャラクターの外観画像、顔レイヤー、表情プリセット、立ち位置、声の設定を持つ。
-- `materials/*.png` / `*.html` / `*.mp4` は、素材カードの静止画・静的HTML・短い無音動画である。Kakeaiの単一Sceneから書き出す。
+- `materials/*.png` は、取り込んだ Live Material を静止PNGの素材カードとして書き出したものである。
 - `media/assets/*.mp4` は、CutInの検証済みMP4である。素材カードの無音MP4とは別の `kind: "cut-in"` を持ち、埋め込み音声を持てる。
-- `media/` は、キャラクター画像、顔レイヤー、素材カードの画像・動画、CutInのMP4、TTSの参照音声を持つ。`show.json` と素材カードからは相対URLで参照する。
+- `cards/` は、ネイティブカードの画像Assetを持つ。`show.json` と素材カードからは相対URLで参照する。
 - `media/voice/` は、参照音声を使うTTSの音声ファイルを持つ。パッケージには接続設定を入れず、参照音声だけを固定する。
 - `audio/prepared/` は、準備済みキューの音声を持つ。既存のAudio Takeがあればそれを使い、なければ書き出し時にTTSで生成する。
 - `fixtures/comments.json` は、テストモード用のコメント列を持つ。任意。
@@ -136,16 +133,19 @@ live-package/
 
 ```jsonc
 {
-  "packageSchemaVersion": 1,
+  "packageSchemaVersion": 2,
   "exporterVersion": "0.1.0",
   "packageId": "livepkg-...",
   "createdAt": "2026-11-07T12:00:00.000Z",
   "source": {
-    "workId": "...",
-    "languageEditionId": "...",
-    "scriptVersionId": "...",
+    "programId": "...",
+    "programVersionId": "...",
+    "programVersionNumber": 3,
+    "programDocumentSha256": "...",
+    "resolutionSnapshotSha256": "...",
     "theme": { "id": "...", "version": 3 }
   },
+  "cardSchemaVersion": 1,
   "files": [
     {
       "path": "materials/material-news-1.png",
@@ -175,11 +175,13 @@ live-package/
   ],
   "voices": [
     {
+      "speakerId": "spk-left",
       "characterId": "char-left",
       "adapterId": "voicevox",
       "voiceId": "...",
       "refAudio": "media/voice/ref-a.wav",
-      "refAudioSha256": "..."
+      "refAudioSha256": "...",
+      "testSynthesis": "ok"
     }
   ]
 }
@@ -198,16 +200,47 @@ live-package/
 
 ### 素材カード
 
-素材カードは、ライブの中央スロットに表示する視覚素材である。v1では、Kakeaiの単一Sceneから**静止PNG/HTMLまたは短い無音MP4**を書き出し、ステージの中央に`img`・`video`・スクリプトなしのsandbox iframeで表示する。コンポジションのGSAPタイムラインやHyperFrames Playerはライブで動かさない。理由は [ADR-0126](../adr/0126-live-material-cards-static-or-mp4.md) を正とする。
+素材カードは、ライブの中央スロットに表示する視覚素材である。Live Material のスナップショットを**静止PNG**として書き出し、ステージの中央に`img`で表示する。コンポジションのGSAPタイムラインやHyperFrames Playerはライブで動かさない。理由は [ADR-0126](../adr/0126-live-material-cards-static-or-mp4.md) を正とする。
 
 - 素材カードは1920x1080で作り、中央スロットに縮小する。文字やカードの見た目はKakeaiのプレビューと一致する。
-- セグメントは既定素材を持ち、`scriptCues[].materialId`でCue単位に上書きできる。未指定はSegment既定、`null`は非表示、文字列はその素材を表示する。詳細は [../live-cue-materials/spec.md](../live-cue-materials/spec.md) を正とする。
-- 静止カードはPNGまたは静的なHTMLとする。短い動きが必要なカードだけ、3〜5秒の無音MP4にする。
-- 静的HTMLは、スクリプトを実行しないsandbox iframeで表示する。GSAPタイムラインやプレイヤーは動かさない。
+- Segment は既定の `visual` を持ち、Cue の `visual` で上書きできる。未指定はSegment既定、`null`は非表示、`card` / `material` はその参照を表示する。カードと素材を同時に指定しない。詳細は [../live-program/spec.md](../live-program/spec.md) を正とする。
 - カードは音声を持たない。音声はプレイアウトのキューが担当する。manifestの`hasAudio: false`で検証する。CutInはこの制約の対象外で、専用の`cut-in`種別として埋め込み音声を持てる。
 - カードのAsset URLは、HTML文字列の置換ではなく、書き出し時のAsset Resolverでパッケージ相対URLとして生成する。
-- カードのHTML/MP4は、Kakeaiが生成した信頼済みのものだけを使う。視聴者コメントや外部HTMLをカードとして実行しない。
-- iframe内のGSAPランナーやフルPlayerはv1では使わない。静的HTMLはスクリプトなしのsandbox iframeで表示する。必要になった時点で別の契約を追加する。
+- カードはKakeaiが生成した信頼済みのものだけを使う。視聴者コメントや外部HTMLをカードとして実行しない。
+
+## Live Run の起動と control
+
+KakeaiはLive Program Versionから書き出したv2パッケージをLive Runとして起動する。Runは `<Kakeai data root>/live-runs/<runId>/` を持ち、次のファイルを置く。
+
+- `run-config.json`: `schemaVersion`、`runId`、`programVersionId`、`package`、`source`（YouTubeまたはfixtureのパスとSHA-256）、`startAt`、`requestedPort`。認証情報やLLM/TTS接続先は含めない。
+- `control-token`: launch時に一度だけ生成する制御token。`0600`で書き、DBにはパスだけを残す。
+- `fixtures/comments.json`: fixture Runだけが持つ、作成時にコピーしたコメント列。
+- `live.log`、`run.json`、`events.jsonl` などの実行ログ。停止後も削除しない。
+
+Run作成時は、パッケージが同じ`programVersionId`の成功した`live_export` Jobの結果（`packageId`、`manifestSha256`、`packagePath`）と一致することを検証する。fixtureは通常ファイルかつ10 MiB以下に限る。`requestedPort`は`1024`〜`65535`で、終了していない別Runが使うポートは拒否する（既定`3010`）。
+
+起動はdetachedで行い、`--run-id`、`--package`、`--port`、`--control-token-file`、`--run-config`、`--run-dir` を渡す。起動は番組開始ではない。番組開始はコンソールで行う。
+
+### control endpoint
+
+| メソッド | パス | 内容 |
+| --- | --- | --- |
+| `GET` | `/control/status` | `{ ok, runId, ready, stageUrl, consoleUrl, status, phase, showStarted, showEnded, startedAt, failure }` を返す。 |
+| `POST` | `/control/stop` | アプリの終了を要求する。`{ ok: true, status: "stopped" }`。 |
+
+- どちらもloopbackのHostだけを受け付ける。`Authorization: Bearer <control-token>` が無い・違う場合は401、非loopbackは403。
+- tokenファイルも環境変数も無い手動起動では `/control/*` を404にし、ステージとコンソールは通常どおり動かす。
+- `status` は `starting`、`ready`、`running`、`ended`、`stopped`、`failed`。`ready` はアプリ稼働中で番組未開始、`running` は番組開始済みを表す。
+- 状態は `showStarted` / `showEnded` と `phase` でも確認できる。token値はログにもDTOにも出さない。
+
+### 再接続と失敗
+
+Kakeaiを再起動しても、既存RunのLive appはそのまま動かす。一覧・詳細の取得時にtokenファイルを使って `/control/status` を読み、`running` / `ended` / `stopped` を反映する。
+
+- プロセスが生きているがcontrolへ接続できない: `failed`（`control_unreachable`）。
+- プロセスが終了している: `failed`（`process_exited`）。
+- 自動再起動、自動再生、自動的な番組開始は行わない。必要なら新しいRunを作る。
+- 停止はcontrolの `/control/stop` を先に呼び、応答しない場合はPIDへSIGTERM、必要ならSIGKILLを送る。ログは残す。
 
 ## CutIn
 
@@ -225,94 +258,12 @@ CutInは、コーナーの区切りなどに挿入する短い動画である。
 - pause後は先頭から再開する。再接続・program引継ぎ時は `startedAt` から位置を求めてシークし、尺を過ぎていれば終了を通知する。
 - 安全モード中はCutInをスキップする。
 
-## ショープロファイル
+## パッケージv2のポリシー
 
-ショープロファイルは、ライブの構成とポリシーを定めるJSONである。v1では手書き、エージェント、または`--auto-profile`の自動生成で作り、将来UIを追加する。契約は `packages/contracts` のライブ用スキーマを正とする。
-
-書き出し前の**LiveShowProfile**は、台本の行を`lineId`で参照し、ライブ専用のキューだけを明示する。書き出し後の**LivePackageShow**（`show.json`）は、ScriptVersionから解決した`PreparedCue`を持つ。通常の準備済みキューを`caption`/`speech`で二重に書かない。理由は [ADR-0124](../adr/0124-live-cues-derived-from-script.md) を正とする。
-
-### 入力 LiveShowProfile
+Live Program Version が、コメント、安全、プレイアウト、キャスト、スピーカーを所有する。`show.json` はその解決結果を持ち、外部のプロファイル入力は存在しない。
 
 ```jsonc
 {
-  "schemaVersion": 1,
-  "show": {
-    "title": "今週のニュース",
-    "locale": "ja-JP",
-    "targetDurationMs": 1800000,
-    "stageTemplate": "news-desk",
-    "theme": "theme.css",
-    "characters": { "left": "char-left", "right": "char-right" },
-    "startAt": null
-  },
-  "commentSource": { "kind": "youtube" },
-  "segments": [
-    {
-      "id": "seg-opening",
-      "kind": "opening",
-      "label": "オープニング",
-      "targetDurationMs": 120000,
-      "cues": ["cue-opening-1"]
-    },
-    {
-      "id": "seg-news-1",
-      "kind": "script",
-      "label": "ニュース1",
-      "targetDurationMs": 480000,
-      "material": "material-news-1",
-      "cues": ["cue-news-1-1", "cue-news-1-2"]
-    },
-    {
-      "id": "cut-to-comments",
-      "kind": "cut_in",
-      "label": "コメントコーナーへ",
-      "cutInId": "jingle-comments"
-    },
-    {
-      "id": "seg-comments-1",
-      "kind": "comment",
-      "label": "コメント",
-      "targetDurationMs": 300000,
-      "commentPolicy": { "maxCommentsPerCorner": 4, "maxHumanPinsPerCorner": 4 }
-    },
-    {
-      "id": "seg-closing",
-      "kind": "closing",
-      "label": "クロージング",
-      "targetDurationMs": 120000,
-      "cues": ["cue-closing-1"]
-    }
-  ],
-  "scriptCues": [
-    {
-      "id": "cue-news-1-1",
-      "lineId": "line-news-1-1",
-      "expressionId": "smile",
-      "materialId": "material-news-1"
-    }
-  ],
-  "liveCues": [
-    {
-      "id": "cue-opening-1",
-      "speaker": "left",
-      "caption": "今週も始まりました。",
-      "speech": "こんしゅうも はじまりました。",
-      "expression": "smile"
-    }
-  ],
-  "materials": [
-    {
-      "id": "material-news-1",
-      "sceneId": "scene-news-1",
-      "focus": true
-    }
-  ],
-  "cutIns": [
-    {
-      "id": "jingle-comments",
-      "assetId": "asset-video-jingle"
-    }
-  ],
   "commentPolicy": {
     "mode": "corner",
     "freshnessMin": 10,
@@ -323,110 +274,32 @@ CutInは、コーナーの区切りなどに挿入する短い動画である。
     "skipWhenEmpty": true
   },
   "safety": {
-    "blockedTopics": ["政治", "宗教", "医療", "法律", "金融"],
-    "persona": "親しみやすいニュース解説キャラクター。断定しすぎず、不明なことは保留する。",
+    "blockedTopics": [],
+    "persona": "親しみやすい解説役",
     "maxResponseChars": 180,
     "maxResponseCues": 2,
-    "fallbackCueId": "cue-fallback-1"
+    "fallbackCueId": "cue-fallback"
   },
   "playout": {
     "minBufferMs": 10000,
     "maxThinkingMs": 2000,
     "closingReserveMs": 120000,
     "noApprovalDelay": true
-  },
-  "test": {
-    "fixture": "fixtures/comments.json"
   }
 }
 ```
 
-例では`scriptCues`・`liveCues`・`materials`・`cutIns`を一部省略している。実際は`segments`が参照するIDをすべて含む。
+- `commentPolicy.mode` は `corner` だけを実装する。`continuous` と `hybrid` は将来の拡張とする。
+- `commentPolicy.allowImmediateInterrupt` は常に `false` とする。台本の途中でコメントを割り込ませない。
+- `freshnessMin` は、コメントを拾う鮮度の目安である。`maxCommentsPerCorner`、`maxHumanPinsPerCorner`、`maxExtraSlots` はコーナーの枠を決める。
+- `safety.blockedTopics`、`persona`、`maxResponseChars`、`maxResponseCues` は生成レスに適用する。`fallbackCueId` は通常のスパインに属さない専用Cueを指す。
+- `playout.minBufferMs` は、常時確保する準備済み音声の長さ（ミリ秒）である。`maxThinkingMs`は、無音の「考え中」を許す上限である。`closingReserveMs`は、クロージングに入るために残す時間である。`noApprovalDelay`は、人間の承認待ちを入れないことを表し、常に`true`とする。
+- コメントソース、fixture、`startAt` は Live Run の run config が所有する。`show.json` はこれらを持たない。
+- スピーカーは `show.speakers[]` に、話者ID、表示名、左右、キャラクターID、`voice`（`adapterId`、`voiceId`、`speedScale`、`settings`、任意の`refAudio`）を持つ。
+- `PreparedCue` は `id`、`origin: "live"`、`speaker`、`caption`、`speech`、`expression`、任意の`visual`、`audio`、`durationMs` を持つ。`sourceLineId`と`materialId`は持たない。
+- `show.json` は strict schema で検証し、`commentSource`、`test`、`show.startAt`、`materialId`、`segment.material` が含まれていれば拒否する。
 
-- `targetDurationMs` は目安であり、厳密な終了時刻ではない。超過・不足を許容する。
-- `commentSource.kind` は `youtube` または `fixture`。通常は`youtube`とし、テストモードでは`fixture`に切り替えて`test.fixture`を読む。
-- `segments` はスパインである。先頭は`opening`、末尾は`closing`とし、間の`script`・`comment`・`cut_in`を並べる。`cut_in`は区切りの位置に置く。
-- `script` セグメントは、`scriptCues`または`liveCues`のIDと、任意の素材カードを持つ。セグメントの素材は、Cueが明示しない場合の既定素材である。
-- `comment` セグメントは、コメントコーナーである。`commentPolicy`で枠数を上書きできる。
-- `cut_in` セグメントは、`cutInId`で`cutIns[]`を参照する。`targetDurationMs`・`cues`・`material`を持たない。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とする。
-- `scriptCues` は、`lineId`で`NarrationSegment`を参照する。`caption`・`speech`・`speaker`・`audio`は書き出し時に解決する。`expressionId`は任意の上書きとする。`materialId`は任意で、未指定ならセグメント既定を継承し、`null`なら中央素材を隠し、文字列ならそのCueだけ指定の素材を表示する。詳細は [../live-cue-materials/spec.md](../live-cue-materials/spec.md) を正とする。
-- 1つのCueは1回の再生occurrenceとし、同じCue IDを複数のSegmentから参照しない。同じSegment内でのCue IDの重複も拒否する。
-- `liveCues` は、オープニング・訂正・退避・臨時の一言など、ScriptVersionに存在しないキューのみ。`caption`・`speech`・`speaker`・`expression`・任意の`audio`を持つ。
-- `materials` は、`sceneId`でKakeaiのSceneを参照する。書き出し後に`png`/`html`/`mp4`のカードへ解決される。
-- `cutIns` は、readyなvideo Assetを`assetId`で参照する。書き出し後にパッケージ内の検証済みMP4へ解決される。尺は入力せず、probe結果を正本にする。同じCutInを複数の`cut_in`セグメントから再利用できる。
-- `commentPolicy.maxCommentsPerCorner` は、1回のコメントコーナーで拾う最大件数である。`maxHumanPinsPerCorner`は人間ピンの上限、`maxExtraSlots`はピンが枠を超えたときの延長上限である。
-- `commentPolicy.mode` はv1では`corner`だけを実装する。`continuous`と`hybrid`は将来の拡張とする。
-- `commentPolicy.allowImmediateInterrupt` はv1では常に`false`とする。台本の途中でコメントを割り込ませない。
-- `safety.blockedTopics` は、コメント選別と生成レスの両方で使う。`persona`はディレクターのプロンプトに渡す。`fallbackCueId`は、停止・安全モード・障害時の退避キューである。
-- `playout.minBufferMs` は、常時確保する準備済み音声の長さ（ミリ秒）である。`maxThinkingMs`は、無音の「考え中」を許す上限である。`closingReserveMs`は、クロージングに入るために残す時間である。`noApprovalDelay`は、人間の承認待ちを入れないことを表し、v1では常に`true`とする。
-- `test.fixture` は、テストモードで使うコメント列である。本番では無視する。
-
-### Show Profile の自動生成
-
-最初の1本を手書きせずに始めるため、APIとCLIはWorkとScriptVersionからShow Profileの下書きを生成できる。
-
-- API: `POST /api/v1/live-profiles/auto` は`workId`・`scriptVersionId`・任意の`title`・`includeCommentCorners`を受け取り、`LiveShowProfile`・表示用summary・warningsを返す。Jobは作成しない。
-- CLI: `npm run live:export`の`--auto-profile`がこのAPIを呼び、`--save-profile`で下書きを保存してから書き出す。`--dry-run`はJobを作らず、summary表示（`--save-profile`指定時は保存）だけを行う。
-- `intro` Sceneは`opening`、`point` Sceneは`script`、`outro` Sceneは`closing`にする。セリフのない`insert`または`point` Sceneは素材候補にする。
-- `scriptCues`は各Sceneの行から作る。話者・キャラクター・声プロファイルがない行、字幕または読み上げが空の行は除外し、warningに残す。
-- 左右のキャラクターは、台本で最初に話すキャラクターから2人までを使う。3人以上はwarningを返す。
-- opening / closingに行がなければ、placeholderの`liveCue`を作る。
-- 素材候補は素材カードの制約を満たすものだけを使い、直前の`script`セグメントに紐づける。満たさないSceneは除外してwarningに残す。
-- コメントコーナーは各`script`の後に置き、最後の`script`だけは省く。`script`が1つだけなら1つ置く。`includeCommentCorners: false`で無効にできる。
-- 生成する`commentSource`は`youtube`、`safety`・`playout`・`commentPolicy`は既定値とする。`show.title`はWorkタイトル、`--title`で上書きできる。
-- auto-profileはCutInを自動挿入しない。CutInは編集意図であり、動画Assetの選択を台本から推測しない。必要な場合は生成後に手で`cutIns`と`cut_in`セグメントを追加する。
-- 生成結果は通常の`LiveShowProfile`であり、保存後に手で編集できる。APIはScriptVersionのVisual Cueを自動変換しない。
-
-### 出力 LivePackageShow
-
-書き出し後の`show.json`は、次の`PreparedCue`を持つ。
-
-```jsonc
-{
-  "cues": [
-    {
-      "id": "cue-news-1-1",
-      "origin": "script",
-      "sourceLineId": "line-news-1-1",
-      "materialId": "material-news-1",
-      "speaker": "left",
-      "caption": "今週のニュースです。",
-      "speech": "こんしゅうの にゅーすです。",
-      "expression": "smile",
-      "audio": "audio/prepared/cue-news-1-1.wav",
-      "durationMs": 4200
-    }
-  ],
-  "materials": [
-    {
-      "id": "material-news-1",
-      "kind": "image",
-      "file": "materials/material-news-1.png",
-      "hasAudio": false,
-      "focus": true
-    }
-  ],
-  "cutIns": [
-    {
-      "id": "jingle-comments",
-      "file": "media/assets/<sha256>.mp4",
-      "durationMs": 4200,
-      "hasAudio": true,
-      "width": 1920,
-      "height": 1080
-    }
-  ]
-}
-```
-
-- `origin`は`script`または`live`。`script`の`PreparedCue`は`sourceLineId`を必須とする。
-- `materialId`は入力の生値を保持する。未指定・`null`・文字列の意味は入力と同じで、実効素材は実行時にSegment既定と合わせて解決する。
-- `caption`・`speech`・`speaker`・`audio`・`durationMs`は、`scriptCues`なら`NarrationSegment`とVoice Profileから解決し、`liveCues`なら入力値とTTSから解決する。
-- `materials`は、`kind`（`image`/`video`/`html`）、`file`、`hasAudio`を持つ。カードは無音でなければならない。
-- `cutIns`は、CutInの`id`・`file`・`durationMs`・`hasAudio`・`width`・`height`を持つ。CutInがない場合は`cutIns`を書かない。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) を正とする。
-- 出力`show.json`はライブアプリが読む。入力`LiveShowProfile`は書き出し時だけ使う。
-
-### スパインと素材集
+## スパインと素材集
 
 v1の主線はスパイン（`segments`）である。素材集（追加の話題・ネタ・退避素材）は、時間が余ったときのフィラーとして使えるようにするが、v1では必須ではない。スパインが尽きたらクロージングへ進む。素材集の自動選択はロードマップで扱う。CutInは素材集ではなく、`cut_in`セグメントとしてスパインに明示する。
 
@@ -441,8 +314,8 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 │ セグメントラベル                             │
 │                                              │
 │ [左キャラ]   ┌──────────────────┐   [右キャラ] │
-│              │   中央の素材カード  │              │
-│              │  (素材カードHTML)   │              │
+│              │   中央のビジュアル  │              │
+│              │ (カード / 素材)     │              │
 │              └──────────────────┘              │
 │  ┌─ コメント ──────────────┐                  │
 │  │ 投稿者 / コメント / 回答中 │                  │
@@ -452,7 +325,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 ```
 
 - 左・右のキャラクターは、`characters.json`の外観画像と顔レイヤーで描画する。話している側は口パクと軽いバウンド、聞いている側は待機・瞬き・表情を持つ。
-- 中央の素材カードは、静止PNGを`img`、短い無音MP4を`video`、静的HTMLをスクリプトなしのsandbox iframeで表示し、1920x1080のカードをスロットに縮小する。動画はミュート・ループとする。素材がないセグメントでは非表示にする。
+- 中央スロットには、ネイティブのLive Cardか素材カードのどちらか一方だけを表示する。素材カードは静止PNGを`img`、短い無音MP4を`video`、静的HTMLをスクリプトなしのsandbox iframeで表示し、1920x1080のカードをスロットに縮小する。動画はミュート・ループとする。`visual: null`のセグメント・Cueでは非表示にする。
 - 字幕は下部の帯に表示する。テーマの`caption`トークン、話者名タブ、折返しを使う。
 - コメントカードは、コメントコーナーで回答中のコメントを表示する。投稿者名、短縮したコメント、回答中バッジを持つ。コメントカードはv1では後から追加できるが、状態機械には最初から含める。
 - セグメントラベルは、現在のセグメント名を小さく表示する。
@@ -477,7 +350,7 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 | `safe_mode` | 生成レスを止め、準備済みの安全なキューだけを流す。 |
 | `error` | 復旧できないエラーの表示。オペレーターに通知する。 |
 
-`pre_show`と`post_show`は別ページにしない。同じステージの状態として扱い、OBSのソースを切り替えない。開始と終了はオペレーターが押す。`startAt`がある場合はカウントダウンを表示するが、自動開始はv1では行わない。
+`pre_show`と`post_show`は別ページにしない。同じステージの状態として扱い、OBSのソースを切り替えない。開始と終了はオペレーターが押す。`startAt`がある場合はカウントダウンを表示するが、自動開始は行わない。`startAt` はLive Runのrun configから渡し、`show.json` は開始時刻を持たない。
 
 ### 状態契約
 
@@ -492,7 +365,12 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
     "right": { "expression": "normal", "speaking": false }
   },
   "caption": { "speaker": "left", "text": "今週のニュースです。" },
-  "material": { "id": "material-news-1", "focus": true },
+  "visual": {
+    "kind": "card",
+    "cardId": "card-news",
+    "stateId": "state-point-1",
+    "sequence": 3
+  },
   "comment": null,
   "status": "speaking",
   "cutIn": null,
@@ -510,7 +388,8 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 - `phase`は前節のフェーズ。
 - `characters`は左右の表情と発話状態。表情IDは`characters.json`のプリセットを参照する。
 - `caption`は現在の字幕。`null`なら字幕を消す。
-- `material`は中央に表示する素材カード。現在のCueの`materialId`が未指定ならSegment既定、`null`なら非表示、文字列ならその素材を表示する。
+- `visual`は中央スロットに表示する単一のビジュアル。`kind: "card"`は`cardId`・`stateId`、`kind: "material"`は`materialId`・`focus`を持つ。`null`ならカードも素材も表示しない。実効ビジュアルはサーバーがCueとSegmentの既定から解決する。`materialId`と`segment.material`は持たない。
+- `visual.sequence`は実効ビジュアルが変わるたびに増える。ステージは直前に適用した値より小さい非nullのsequenceを無視し、遅れて届いた状態で古いカードへ戻らない。同じビジュアルの再送では増えない。
 - `comment`はコメントカード。`state`は`reading`または`responding`。
 - `status`は`idle`・`thinking`・`speaking`。キャラクターの待機・考え中・発話の表現に使う。
 - `playback`は現在の再生試行。programステージだけがこれを使って音声を再生し、`audio_ended`を返す。
@@ -524,9 +403,10 @@ v1の主線はスパイン（`segments`）である。素材集（追加の話�
 - `audio_error`: 音声の読み込み・再生失敗。
 - `cut_in_ended`: 現在のCutInの映像再生完了。
 - `cut_in_error`: CutInの読み込み・再生失敗。
+- `card_error`: ネイティブカードの読み込み・描画失敗。`cardId`・`stateId`・`error`を持ち、`sequence`はVisual sequenceとする。
 - `stage_heartbeat`: 接続維持と状態同期。
 
-各イベントは`runId`・`sessionId`・`cueId`・`attempt`・`sequence`を持ち、programステージだけが送る。サーバは現在の`cueId`・`attempt`・`sequence`に一致しないイベントを無視する。CutInのイベントは`cueId: null`と`cutInId`・`segmentId`を持ち、現在のoccurrenceと一致しないイベントを無視する。previewはイベントを送らない。
+各イベントは`runId`・`sessionId`・`cueId`・`attempt`・`sequence`を持ち、programステージだけが送る。サーバは現在の`cueId`・`attempt`・`sequence`に一致しないオーディオイベントを無視する。CutInのイベントは`cueId: null`と`cutInId`・`segmentId`を持ち、現在のoccurrenceと一致しないイベントを無視する。`card_error`はカード/状態/理由ごとに重複を抑えてRun logとコンソール通知に残し、進行を止めない。previewはイベントを送らない。
 
 サーバはステージの接続時に最新の`StageState`を送る。ステージが再接続した場合は、現在のキューと再生位置を送り、可能ならシークして再開する。CutIn中は`cutIn.startedAt`から位置を求め、尺を過ぎていれば終了を通知する。再開できない場合は現在のキューまたはCutInを先頭から再生し、二重再生を避ける。
 
@@ -708,7 +588,7 @@ interface CommentSource {
 - AIのピックを飛ばしたいときは、コンソールの「スキップ」で否定できる。ディレクターは次の候補で埋める。
 - 人間ピンが古い場合は、コンソールに投稿時刻と現在の話題との距離を表示する。人間はピンを外せる。ホストは「さっきのコメントで」と橋を架ける。
 - 安全の下限は人間でも超えられない。個人情報、攻撃、禁止話題は、ピンされても拾わない。それ以外は人間の判断を優先する。
-- コーナー中のピンは、現在の回答が終わった次の境界で入れる。音声を途中で切らない。即時割り込みはv1では行わない。
+- コーナー中のピンは、現在の回答が終わった次の境界で入れる。音声を途中で切らない。即時割り込みは行わない。
 
 ### コメント分析役
 
@@ -850,7 +730,7 @@ interface CommentSource {
 
 ## 当日の流れ
 
-1. Kakeaiでライブパッケージを書き出す。
+1. KakeaiでLive Program Versionを確定し、ライブパッケージv2を書き出す。
 2. ライブアプリを起動し、パッケージを読み、ステージとコンソールを開く。
 3. OBSのブラウザソースにステージURLを設定し、音声経路を確認する。
 4. YouTubeで配信を開始する（人間）。タイトル・サムネイル・公開範囲も人間が設定する。
@@ -861,10 +741,10 @@ interface CommentSource {
 
 ## テストモード
 
-- `commentSource`を`fixture`に切り替え、`fixtures/comments.json`を流す。起動時の`--test`はショープロファイルの`commentSource`を`fixture`に上書きし、`test.fixture`を読む。
+- Run のコメントソースを `fixture` にし、Run作成時にコピーした `fixtures/comments.json` を流す。fixture を使うかどうかは run config の `source.kind` だけで決まる。
 - テストでも、フィルター、アナリスト、ディレクター、TTS、ステージ、コンソールは本番と同じものを使う。モックするのはコメントの供給元だけ。
 - テストでは外部LLMを使ってよいが、渡すのはfixtureコメントだけにする。実YouTubeのコメントを外部LLMへ送る経路を作らない。実YouTubeの受け入れテストはローカルLLMで行う。
-- 10分版のショープロファイルを用意し、開幕→本編→コメント→クロージング→終了画面を短時間で確認する。
+- 10分版の Live Program と fixture を用意し、開幕→本編→コメント→クロージング→終了画面を短時間で確認する。
 - fixtureには、通常、質問、冗談、URL、スパム、個人情報、長文、絵文字、0件、途中停止、急増を含める。
 - 自動テストでは、コメントソース、LLM、TTSをフェイクに差し替える。手動テストでは、fixture＋実LLM＋実TTSで通す。
 - テストの合格条件は、音声が途切れない、コメント0件でスキップ、人間ピンが優先、開幕・終了画面、コンソール操作、ステージ再接続が動くこと。
@@ -889,79 +769,55 @@ interface CommentSource {
 | 状況 | 挙動 |
 | --- | --- |
 | YouTubeの接続断・クォータ・認証エラー | スパインは続行する。コメントコーナーはスキップまたは終了する。コンソールに通知し、バックオフで再接続する。 |
-| `streamList`のスパイクが失敗する | v1は`liveChatMessages.list`のポーリングを正規経路として続行する。 |
+| `streamList`のスパイクが失敗する | `liveChatMessages.list`のポーリングを正規経路として続行する。 |
 | TTSエンジン停止・タイムアウト | その生成キューを`failed`にし、次へ進む。準備済みキューは止めない。 |
 | LLMのタイムアウト・不正出力 | そのコメントをスキップし、スパインへ戻る。1回だけ再試行する。 |
 | ローカルLLMの停止・未設定 | そのコメント応答をスキップし、準備済みの台本を続ける。実YouTubeでは外部LLMへ切り替えない。 |
 | 音声の読み込み・再生失敗 | そのキューをスキップし、次へ進む。連続失敗時は一時停止して通知する。 |
 | CutInの読み込み・再生失敗、終了イベント未着 | 警告を記録し、次のセグメントへ進む。連続失敗でも一時停止しない。 |
 | ステージの切断・リロード | programのリースを失効させ、オペレーターが明示的に引き継ぐ。previewは再読み込みだけで、再生に影響しない。 |
-| サーバのクラッシュ | OBSには最後のフレームが残る。人間がアプリを再起動する。v1では自動復帰しない。 |
-| 素材カードの読み込み失敗 | 中央を非表示にし、スパインを続行する。コンソール通知は行わない。 |
+| サーバのクラッシュ | OBSには最後のフレームが残る。人間がアプリを再起動する。自動復帰しない。 |
+| ネイティブカード・素材カードの読み込み/描画失敗 | 中央スロットを非表示にし、スパインを続行する。カード/状態/理由ごとに重複を抑えてRun logとコンソールへ警告を残す。 |
 | OBS・音声経路の失敗 | 配信全体の問題として人間が対処する。アプリは検知できる範囲で通知する。 |
 
 原則は「台本を止めない」。生成レスやコメント機能の失敗で、準備済みのライブ全体を止めない。
 
 ## Kakeai側の書き出し
 
-### P1で確定した入出力
-
-P1の実装で、次の契約を確定した。P1の詳細な作業順は [p1-plan.md](./p1-plan.md) を参照する。
-
-- Show ProfileはCLIが読み、JSON本文として`POST /api/v1/live-exports`へ送る。APIはサーバ上のプロファイルパスを読まない。`test.fixture`はプロファイルファイルからの相対パスとしてCLIが解決し、fixture配列として送る。
-- `LiveShowProfile.show`に任意の`speakerSides`（`speakerId` → `left`/`right`）を追加する。未指定なら`speaker.characterId`と`show.characters`で解決する。v1は左右1話者ずつとする。
-- `liveCues[].audio`は入力では`audioAssetId`（KakeaiのAudio Asset）とし、出力の`PreparedCue.audio`はパッケージ相対パスにする。
-- `materials[]`に`format`（`png`/`html`/`mp4`、既定`png`）と`durationMs`（既定4000、MP4は3000〜5000）を追加する。
-- `cutIns[]`に`id`と`assetId`を追加し、`segments[]`に`kind: "cut_in"`と`cutInId`を追加する。尺は入力せず、書き出し時のprobe結果を正本にする。
-- `PreparedCue`に`durationMs`を追加する。音声尺を書き出し時に確定し、P3の先読み・ウォッチドッグ・再接続に使う。
-- `manifest.json`の`files`は`manifest.json`自身を含めない。
-- `live_export` Jobの結果は`liveExportResult`として、パッケージ絶対パス、`packageId`、manifestのSHA-256、ファイル数、準備済みキュー数、警告、失敗したキュー・Voice Profile・素材を持つ。APIが絶対ローカルパスを返すのはこの結果だけとし、ループバック限定のCLI利用に限る。
-- 実行中の`live_export`は協調キャンセルできる。Workerはキュー境界とTTS完了後に状態を確認し、現在の1件が終わってから停止する。
-- v1のOpenAI互換TTSは、`settings.refAudioAssetId`ではなく解決済みの`refAudioPath`の有無で参照音声モードを判定する。ライブパッケージの`characters.json`は内部Asset IDを含めず、`refAudio`の相対パスを持つ。
-
-### コマンド
-
-v1はKakeai APIの`live_export` Jobとして書き出す。`npm run live:export` はAPIを叩き、Jobの完了を待つ。書き出し時だけKakeaiの起動が必要で、ライブ実行時は不要とする。APIとUIは将来拡張する。
+書き出しはKakeai APIの`live_export` Jobとして行う。入力は `programVersionId`、任意の fixture 配列、`outDir` だけである。Work / Script Version / 外部プロファイルは受け付けない。
 
 ```sh
 npm run live:export -- \
-  --work <workId> \
-  --script-version <scriptVersionId> \
-  --profile <show-profile.json> \
-  --out <output-dir>
+  --program-version <programVersionId> \
+  --out <output-dir> \
+  [--fixture <comments.json>]
 ```
 
 - `--out`は存在しないディレクトリを要求する。既存のパッケージを上書きしない。
-- `--no-tts`は用意しない。準備済み音声は書き出し時に生成する。TTSが必要なキューの生成に失敗した場合は、書き出しを失敗させる。
+- `--no-tts`は用意しない。準備済み音声は書き出し時に生成する。TTSが必要なCueの生成に失敗した場合は、書き出しを失敗させる。
 - 書き出しはKakeaiのDBを変更しない。
-
-### 書き出しJob
-
-- `POST /api/v1/live-exports` は`live_export` Jobを作成し、`jobId`を返す。CLIは`GET /api/v1/jobs/:jobId`をポーリングする。
-- Jobの入力は、`workId`・`scriptVersionId`・Show Profileのパスまたは内容・出力先ディレクトリである。Jobのスナップショットに入力と出力先を固定する。
-- Jobの結果は、パッケージの絶対パス、manifestの検証結果、失敗したキューまたはVoice Profileを返す。
-- 書き出しは、Kakeaiの既存サービス（Prisma・Asset・Theme・TTS・コンパイラ）を使う。CLIにDBリーダーやTTS実装を増やさない。
-- 書き出し時だけKakeaiの起動が必要である。ライブ実行時はKakeai不要とする。
+- Jobの入力は `liveExportProgramJobSnapshotSchema` に固定し、`programId`、`programVersionId`、版番号、文書ハッシュ、解決スナップショット、キャラクター、Face Set、fixture、出力先、Theme、Asset、Voice Profile、フォントを持つ。
+- Jobの結果は`liveExportResult`として、パッケージ絶対パス、`packageId`、manifestのSHA-256、ファイル数、準備済みCue数、警告、失敗したCue・Voice Profile・素材を持つ。APIが絶対ローカルパスを返すのはこの結果だけとし、ループバック限定のCLI利用に限る。
+- 実行中の`live_export`は協調キャンセルできる。Workerはキュー境界とTTS完了後に状態を確認し、現在の1件が終わってから停止する。
 - 出力先は存在しないディレクトリを要求し、書き出し途中の失敗で既存パッケージを上書きしない。一時ディレクトリに書いてからrenameで確定する。
-- `live_export` Jobの追加に伴い、KakeaiのJob種別とAPI契約を更新する。
 
 ### 解決とコピー
 
-- `ScriptVersion`の`contentJson`を読み、Show Profileの`sceneId`・`characterId`・`appearanceId`・`voiceProfileId`を検証する。
+- 版の `resolutionSnapshot` から Theme、キャラクター外観、Face Set、Voice Profile、音声Asset、CutIn、Live Material を解決する。現在のDB行がスナップショットと一致しない場合は書き出しを失敗させる。
 - Theme Revisionを解決し、`theme.css`を生成する。Font Faceはローカルフォントのスタックを使い、同じMacで実行する前提とする。
 - キャラクターの外観画像、顔レイヤー、表情プリセットを`media/characters/`へコピーする。`characters.json`を生成する。
-- 素材カードを単一Sceneから静止PNG、静的HTML、または短い無音MP4として書き出し、`materials/`へ出力する。参照Assetを`media/materials/`へコピーし、Asset Resolverで相対URLを生成する。
+- Live Material のスナップショットを静止PNGの素材カードとして`materials/`へ出力する。ネイティブカードの画像Assetは`cards/`へコピーする。
 - CutInのvideo Assetを収集し、必要ならH.264/AACのMP4へ正規化して`media/assets/`へコピーする。最終MP4をprobeし、尺・寸法・音声有無を`show.cutIns`とmanifestへ記録する。
-- 準備済みキューの音声を`audio/prepared/`へ出力する。既存のAudio Takeを優先し、なければTTSする。参照音声を使うVoice Profileは、参照音声Assetを`media/voice/`へコピーする。
-- `show.json`を生成し、キュー、素材、CutIn、キャラクター、コメントポリシー、安全設定、テストfixtureを解決する。
-- `manifest.json`に、全ファイルのSHA-256・byteSize・mediaType・種別・尺・寸法・無音フラグ、フォント診断、エクスポーター版を記録する。
+- 準備済みCueの音声を`audio/prepared/`へ出力する。`audioAssetId`があるCueはそのAssetを必ず使い、利用できなければ失敗する。それ以外はTTSする。参照音声を使うVoice Profileは、参照音声Assetを`media/voice/`へコピーする。
+- `show.json`を生成し、Cue、カード、カード画像、素材、CutIn、スピーカー、コメントポリシー、安全設定、プレイアウトを解決する。
+- `manifest.json`に、`packageSchemaVersion: 2`、Live Program Version の `source`、`cardSchemaVersion: 1`、全ファイルのSHA-256・byteSize・mediaType・種別・尺・寸法・無音フラグ、フォント診断、エクスポーター版を記録する。
 - パッケージ内に絶対パスを残さない。シンボリックリンクを使わない。
 
 ### TTSアダプタの共有
 
 生成レス用のTTSは、KakeaiのJob APIを経由せず、TTSアダプタを直接呼ぶ。Jobは永続化と監査に向くが、ライブの即時生成には重い。
 
-- `apps/api/src/tts`のアダプタ実装を`packages/tts`へ切り出し、`apps/api`と`apps/live`の両方から使う。
+- `packages/tts`のアダプタ実装を`apps/api`と`apps/live`の両方から使う。
 - アダプタの契約は [../../packages/contracts/src/tts.ts](../../packages/contracts/src/tts.ts) の`TtsAdapter`を正とする。
 - `characters.json`に、話者ごとの`adapterId`、`voiceId`、`speedScale`、`settings`、`refAudio`（パッケージ内の相対パス）を保存する。`baseUrl`・APIキーはライブアプリの設定に置く。詳細は [ADR-0127](../adr/0127-live-tts-voice-snapshot-boundary.md) を正とする。
 - ライブアプリの設定に`tts.adapters`（`baseUrl`・任意のAPIキー）を持つ。ローカルTTSは、Kakeaiと同じくループバックのみを許可する。
@@ -983,7 +839,7 @@ npm run live:export -- \
 
 ## 受け入れ条件
 
-1. Kakeaiで作成したWork、ScriptVersion、Show Profileから、ライブパッケージを書き出せる。通常キューは`lineId`から解決され、ライブ専用キューは別に持つ。パッケージ内のファイル参照は相対URLで完結し、テーマ、キャラクター、静止/MP4素材カード、CutIn、準備済み音声、参照音声を含む。フォントは同じMacのローカルフォントを使う。
+1. Kakeaiで作成したLive Program Versionから、パッケージv2を書き出せる。Cueは字幕・読み上げ・話者・表情・中央ビジュアルを直接持ち、`lineId`を参照しない。パッケージ内のファイル参照は相対URLで完結し、テーマ、キャラクター、カード、素材カード、CutIn、準備済み音声、参照音声を含む。フォントは同じMacのローカルフォントを使う。
 2. `apps/live`を起動し、パッケージを読み、`pre_show`を表示できる。programとpreviewが分かれ、programだけが音声を再生する。オペレーターが開始すると、オープニングの準備済みキューが音声付きで流れる。
 3. ステージに左右のキャラクター、字幕、中央の素材カード、セグメントラベルが表示され、音声が途切れない。話者に応じて口パク・表情・待機が切り替わる。
 4. コメントコーナーで、人間ピンがAI候補より優先される。人間ピンがなければAIが枠を埋める。コメントが0件ならコーナーをスキップする。

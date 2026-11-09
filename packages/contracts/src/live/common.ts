@@ -27,5 +27,6 @@ export const liveCueSourceSchema = z.enum([
 ]);
 export type LiveCueSource = z.infer<typeof liveCueSourceSchema>;
 
-export const liveCueOriginSchema = z.enum(["script", "live"]);
+/** v2 packages only contain cues authored in the Live Program. */
+export const liveCueOriginSchema = z.literal("live");
 export type LiveCueOrigin = z.infer<typeof liveCueOriginSchema>;

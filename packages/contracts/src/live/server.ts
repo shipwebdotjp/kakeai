@@ -6,7 +6,7 @@ import {
   liveCommentEntrySchema,
 } from "./comment";
 import { liveAudioUrlSchema } from "./paths";
-import { liveSegmentKindSchema } from "./profile";
+import { liveSegmentKindSchema } from "./package-policy";
 import { runLogEventSchema } from "./run-log";
 import { liveCueSchema } from "./show";
 import {

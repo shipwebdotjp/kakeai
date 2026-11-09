@@ -61,7 +61,7 @@ describe("live package loader", () => {
       "comment",
       "closing",
     ]);
-    expect(loaded.show.cues.filter((cue) => cue.origin === "script")).toHaveLength(2);
+    expect(loaded.show.cues.filter((cue) => cue.origin === "live")).toHaveLength(5);
     expect(loaded.filesByPath.has("audio/prepared/cue-script-2.wav")).toBe(true);
     expect(loaded.filesByPath.has("fixtures/comments.json")).toBe(true);
   });
@@ -105,28 +105,15 @@ describe("live package loader", () => {
     await expect(loadLivePackage(hashed.rootDir)).rejects.toMatchObject({ code: "hash_mismatch" });
   });
 
-  it("verifies card assets in a v2 package", async () => {
+  it("verifies card assets in the v2 package", async () => {
     const pkg = await fixture();
     const card = liveCardSchema.parse({
       id: "card-headline",
       type: "headline",
       states: [{ id: "state-1", title: "今日のニュース" }],
     });
-    const fallbackCue = {
-      id: "cue-fallback",
-      origin: "live" as const,
-      speaker: "left" as const,
-      caption: "少し補足します。",
-      speech: "すこし ほそくします。",
-      expression: "normal",
-      audio: "audio/prepared/cue-fallback.wav",
-      durationMs: 1000,
-    };
     const show = livePackageShowSchema.parse({
       ...pkg.show,
-      schemaVersion: 2,
-      cues: [...pkg.show.cues, fallbackCue],
-      safety: { ...pkg.show.safety, fallbackCueId: fallbackCue.id },
       cards: [card],
       cardAssets: [
         {
@@ -149,29 +136,9 @@ describe("live package loader", () => {
       height: 1,
       hasAudio: false,
     };
-    const fallbackAudioFile = {
-      path: "audio/prepared/cue-fallback.wav",
-      sha256: "a".repeat(64),
-      byteSize: 10,
-      mediaType: "audio/wav" as const,
-      kind: "prepared-audio" as const,
-      durationMs: 1000,
-      width: null,
-      height: null,
-      hasAudio: true,
-    };
     const manifest = livePackageManifestSchema.parse({
       ...pkg.manifest,
-      packageSchemaVersion: 2,
-      source: {
-        programId: "program-1",
-        programVersionId: "program-version-1",
-        programVersionNumber: 1,
-        programDocumentSha256: "a".repeat(64),
-        resolutionSnapshotSha256: "a".repeat(64),
-        theme: { id: "neutral", version: 1 },
-      },
-      files: [...pkg.manifest.files, cardAssetFile, fallbackAudioFile],
+      files: [...pkg.manifest.files, cardAssetFile],
     });
 
     expect(() =>
@@ -197,6 +164,81 @@ describe("live package loader", () => {
     expect(() =>
       verifyPackageContent(missingFile, show, pkg.characters, new Map()),
     ).toThrow(/カード画像/);
+  });
+
+  it("rejects v1 manifests and shows", async () => {
+    const pkg = await fixture();
+    const manifest = await readTestManifest(pkg.rootDir);
+    await writeFile(
+      join(pkg.rootDir, "manifest.json"),
+      `${JSON.stringify(
+        {
+          ...manifest,
+          packageSchemaVersion: 1,
+          source: {
+            workId: "work-1",
+            languageEditionId: "edition-1",
+            scriptVersionId: "script-1",
+            theme: { id: "neutral", version: 1 },
+            profileSha256: "a".repeat(64),
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    await expect(loadLivePackage(pkg.rootDir)).rejects.toMatchObject({
+      code: "invalid_manifest",
+    });
+
+    const showOnly = await fixture();
+    const showPath = join(showOnly.rootDir, "show.json");
+    const show = JSON.parse(await readFile(showPath, "utf8")) as Record<string, unknown>;
+    const text = `${JSON.stringify(
+      {
+        ...show,
+        schemaVersion: 1,
+        commentSource: { kind: "youtube" },
+        show: { ...(show.show as Record<string, unknown>), startAt: null },
+      },
+      null,
+      2,
+    )}\n`;
+    await writeFile(showPath, text, "utf8");
+    const showManifest = await readTestManifest(showOnly.rootDir);
+    const digest = createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+    await writeTestManifest(showOnly.rootDir, {
+      ...showManifest,
+      files: showManifest.files.map((file) =>
+        file.path === "show.json"
+          ? { ...file, sha256: digest, byteSize: Buffer.byteLength(text) }
+          : file,
+      ),
+    });
+    await expect(loadLivePackage(showOnly.rootDir)).rejects.toMatchObject({
+      code: "invalid_package",
+    });
+  });
+
+  it("rejects a cardSchemaVersion other than 1", async () => {
+    const pkg = await fixture();
+    const manifest = await readTestManifest(pkg.rootDir);
+    await writeFile(
+      join(pkg.rootDir, "manifest.json"),
+      `${JSON.stringify(
+        {
+          ...manifest,
+          cardSchemaVersion: 2,
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    await expect(loadLivePackage(pkg.rootDir)).rejects.toMatchObject({
+      code: "invalid_manifest",
+    });
   });
 
   it("rejects mediaType inconsistencies and audio on material cards", async () => {

@@ -1,11 +1,13 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 title: ライブ設定と YouTube の接続
 ---
 
 # ライブ設定と YouTube の接続
 
 ライブアプリは、不変のライブパッケージとは別に、LLM・TTS・YouTube の接続設定をローカルの JSON ファイルから読みます。このページでは、設定ファイルの作り方と、YouTube のコメントを読むための API キー設定、任意の OAuth フォールバック設定を説明します。
+
+Kakeai の GUI から Run を起動する場合、Kakeai API の環境変数 `KAKEAI_LIVE_CONFIG` にこの設定ファイルのパスを指定してください。Run の `run-config.json` には LLM/TTS/YouTube の認証情報を入れません。YouTube の `videoUrl` / `liveChatId` は Run 側だけが持ち、設定ファイルは API キーや OAuth クライアントなどの認証情報だけを供給します。Run で両方を null にした場合、設定ファイルから補われることはありません。
 
 ## 設定ファイルの例
 
@@ -29,9 +31,7 @@ title: ライブ設定と YouTube の接続
     "maxConcurrentTts": 2
   },
   "youtube": {
-    "apiKey": "AIza...",
-    "videoUrl": "https://www.youtube.com/watch?v=xxxxxxxxxxx",
-    "pollingIntervalMs": 5000
+    "apiKey": "AIza..."
   },
   "comments": {
     "ngWords": [],
@@ -52,8 +52,7 @@ OAuth をフォールバックに使う場合は、`youtube` に `clientId` と 
   "youtube": {
     "apiKey": "AIza...",
     "clientId": "xxxxx.apps.googleusercontent.com",
-    "clientSecret": "xxxxx",
-    "videoUrl": "https://www.youtube.com/watch?v=xxxxxxxxxxx"
+    "clientSecret": "xxxxx"
   }
 }
 ```
@@ -104,11 +103,10 @@ TTS の声・話速・参照音声はパッケージの `characters.json` / `sho
 | `apiKey` | YouTube Data API v3 の API キー。公開ライブチャットの読み取りに使う第一候補 |
 | `clientId` | Google Cloud の OAuth クライアント ID。OAuth フォールバックまたは OAuth のみの設定で使う |
 | `clientSecret` | OAuth クライアントシークレット。`clientId` と両方必要 |
-| `videoUrl` | ライブの YouTube URL。`liveChatId` を自動解決する |
-| `liveChatId` | ライブチャット ID を直接指定する場合 |
-| `pollingIntervalMs` | ポーリング間隔の下限。API が返す間隔の方が長ければ API の値を使う |
 
-`videoUrl` と `liveChatId` はどちらか一方が必要です。`videoUrl` には `watch?v=`、`youtu.be/`、`live/`、`shorts/` の形式を指定できます。自動解決できない場合は、YouTube Studio などで確認した `liveChatId` を設定するか、コンソールの「liveChatId」欄から手動で設定してください。
+ポーリング間隔は API が返す `pollingIntervalMillis` を使います。
+
+YouTube の `videoUrl` / `liveChatId` は Run 側で指定します。Run のどちらか一方が非 null である必要があり、`videoUrl` には `watch?v=`、`youtu.be/`、`live/`、`shorts/` の形式を指定できます。自動解決できない場合は、YouTube Studio などで確認した `liveChatId` を Run に指定するか、コンソールの「liveChatId」欄から手動で設定してください。
 
 認証設定は次のルールです。
 
@@ -147,8 +145,7 @@ URL・個人情報・スパム・攻撃的な表現は、設定に関係なく�
 ```json
 {
   "youtube": {
-    "apiKey": "AIza...",
-    "videoUrl": "https://www.youtube.com/watch?v=xxxxxxxxxxx"
+    "apiKey": "AIza..."
   }
 }
 ```
@@ -236,14 +233,14 @@ OAuth を取り消す場合は、Google アカウントの「サードパーテ�
 ## 起動前の確認
 
 ```sh
-npm run live -- --package /tmp/live-package-10m --config /path/to/live-config.json
+npm run live -- --package /tmp/live-package-v2 --run-config /tmp/live-run/run-config.json --config /path/to/live-config.json
 ```
 
 実 YouTube で起動するときは、次の条件を満たさないと起動が拒否されます。
 
 - `llm.mode` が `local` で、`baseUrl` がループバック
 - `youtube` に `apiKey`、または `clientId` と `clientSecret` がある
-- `youtube` に `videoUrl` または `liveChatId` がある
+- Run の `source` に `videoUrl` または `liveChatId` がある
 - OAuth のみの設定の場合は、`live auth` でトークンが保存されている
 
 起動後、コンソールの「コメントソース」に接続状態・認証方式（APIキー / OAuth）・OAuth フォールバックの有無・ポーリング間隔・クォータ概算・認証期限が表示されます。エラーがある場合は [トラブルシューティング](./troubleshooting.md) を確認してください。

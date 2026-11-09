@@ -16,7 +16,7 @@ import { probeMedia } from "../media/probe.ts";
 import { getTtsAdapter } from "../tts/index.ts";
 import { LiveExportError } from "./errors";
 import type { PackageWriter } from "./package-writer";
-import type { ResolvedAssetFile, ResolvedLiveProfile, ResolvedSpeaker } from "./profile-resolution";
+import type { ResolvedAssetFile, ResolvedLiveProgram, ResolvedSpeaker } from "./resolved-assets";
 
 export interface PreparedVoices {
   /** Voice used by characters.json and generated responses. */
@@ -135,7 +135,7 @@ async function copyReferenceAudio(
  * synthesis, and returns the voice snapshots used by the package.
  */
 export async function prepareVoices(
-  resolved: ResolvedLiveProfile,
+  resolved: ResolvedLiveProgram,
   voiceProfiles: Map<string, LiveVoiceProfileSnapshot>,
   assetById: Map<string, ResolvedAssetFile>,
   writer: PackageWriter,

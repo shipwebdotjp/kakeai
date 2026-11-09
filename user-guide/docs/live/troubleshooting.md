@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 8
 title: トラブルシューティング
 ---
 
@@ -9,13 +9,13 @@ title: トラブルシューティング
 
 ## 起動できない
 
-### `--package は必須です`
+### `--package は必須です` / `--run-config は必須です`
 
 ```sh
-npm run live -- --package /tmp/live-package-10m --config /path/to/live-config.json
+npm run live -- --package /tmp/live-package-v2 --run-config /tmp/live-run/run-config.json --config /path/to/live-config.json
 ```
 
-`--package` にライブパッケージのディレクトリを指定してください。`--help` で使い方を確認できます。
+`--package` にライブパッケージのディレクトリ、`--run-config` に Live Run が書いた Run 設定 JSON を指定してください。通常は Kakeai の Run 画面から起動します。`--help` で使い方を確認できます。
 
 ```sh
 npm run live -- --help
@@ -46,7 +46,7 @@ EADDRINUSE
 別のアプリがポートを使っています。`--port` で変更してください。
 
 ```sh
-npm run live -- --package /tmp/live-package-10m --port 3011
+npm run live -- --package /tmp/live-package-v2 --run-config /tmp/live-run/run-config.json --port 3011
 ```
 
 OBS の URL とコンソールの URL も新しいポートに合わせてください。
@@ -107,10 +107,10 @@ API キーだけで動いている間は OAuth トークンは使われません
 
 ### `liveChatId` を解決できない
 
-- `youtube.videoUrl` が実際のライブの URL か確認する
+- Run の `videoUrl` が実際のライブの URL か確認する（ローカル設定の `youtube` からは補われません）
 - 配信が開始され、ライブチャットが有効になっているか確認する
 - API キーを使う場合、YouTube Data API v3 が有効で、キーの制限に含まれているか確認する
-- 自動解決できない場合は、`youtube.liveChatId` を直接設定する
+- 自動解決できない場合は、Run の `liveChatId` を直接設定する
 - コンソールの「liveChatId」欄から手動設定することもできる
 
 ### コメントが表示されない
@@ -121,17 +121,17 @@ API キーだけで動いている間は OAuth トークンは使われません
 - `freshnessMin` より古いコメントは AI 候補から外れる。ピンは残る
 - コメント一時停止になっていないか
 - URL・個人情報・攻撃的な表現はブロックされる
-- テストモードで fixture が空になっていないか。`test.fixture` を指定して書き出したか確認する
+- fixture の Run で fixture が空になっていないか。Run 作成時に指定した fixture の内容を確認する
 
 ### クォータが心配
 
-コンソールにリクエスト数と units の概算が表示されます。v1 は `liveChatMessages.list` のポーリングを使い、`streamList` は使いません。ポーリング間隔は API の `pollingIntervalMillis` を既定とし、設定した `pollingIntervalMs` がそれより長い場合は設定値を使います。API キーから OAuth への再試行も 1 リクエストとして数えます。30 分の配信で既定のクォータに収まるか、コンソールの概算を確認してください。
+コンソールにリクエスト数と units の概算が表示されます。コメント取得は `liveChatMessages.list` のポーリングを使い、`streamList` は使いません。ポーリング間隔は API の `pollingIntervalMillis` に従います。API キーから OAuth への再試行も 1 リクエストとして数えます。30 分の配信で既定のクォータに収まるか、コンソールの概算を確認してください。
 
 ## LLM
 
 ### 実 YouTube で外部 LLM が拒否される
 
-実 YouTube の実行では、`llm.mode` が `local` で、`baseUrl` がループバックである必要があります。外部 LLM は `--test` の fixture だけで使えます。設定を確認してください。
+実 YouTube の実行では、`llm.mode` が `local` で、`baseUrl` がループバックである必要があります。外部 LLM は fixture の Run だけで使えます。設定を確認してください。
 
 ### ローカル LLM に接続できない
 
@@ -145,7 +145,7 @@ LLM が失敗しても、準備済みの台本は止まりません。そのコ�
 ### 生成レスが毎回スキップされる
 
 - `llm.timeoutMs` と TTS の応答速度を確認する
-- Show Profile の `playout.maxThinkingMs` が短すぎないか確認する。短いと、生成が間に合う前に退避キューへ切り替わります
+- Live Program のプレイアウト設定 `maxThinkingMs` が短すぎないか確認する。短いと、生成が間に合う前に退避キューへ切り替わります
 - 退避キューが使われた場合は、コンソールの通知と `events.jsonl` に理由が残る
 
 ## TTS
@@ -206,13 +206,13 @@ program ステージは 1 つだけです。OBS のステージより先に別�
 
 ### ステージが止まった・再接続した
 
-v1 ではサーバやステージの自動復帰は行いません。OBS のブラウザソースを再読み込みした場合は、コンソールで program を引き継ぎ、「再開」を押してください。サーバ自体が落ちた場合は、ライブアプリを再起動し、新しい実行としてやり直します。
+ライブアプリはサーバやステージの自動復帰を行いません。OBS のブラウザソースを再読み込みした場合は、コンソールで program を引き継ぎ、「再開」を押してください。サーバ自体が落ちた場合は、ライブアプリを再起動し、新しい実行としてやり直します。
 
 ## 配信の操作
 
 ### 安全モードから戻れない
 
-v1 の安全モードはラッチ（解除不可）です。生成レスを止め、準備済みの安全なキューだけを流します。通常の進行に戻すには、配信を終了してライブアプリを再起動してください。
+安全モードはラッチ（解除不可）です。生成レスを止め、準備済みの安全なキューだけを流します。通常の進行に戻すには、配信を終了してライブアプリを再起動してください。
 
 ### 終了を押したのにすぐ終わらない
 
@@ -234,7 +234,7 @@ v1 の安全モードはラッチ（解除不可）です。生成レスを止�
 - 実行ディレクトリを削除すると、その実行のログと生成音声を削除できます
 - OAuth を取り消す場合は、Google アカウントの許可を取り消し、`youtube.json` を削除してください。API キーを失効させる場合は、Google Cloud の認証情報からキーを削除してください
 
-v1 には `live purge` コマンドはありません。不要な実行ディレクトリは利用者が削除してください。
+`live purge` コマンドはありません。不要な実行ディレクトリは利用者が削除してください。
 
 ### ログにエラーが残っている
 
@@ -245,7 +245,7 @@ v1 には `live purge` コマンドはありません。不要な実行ディレ
 - YouTube の配信作成・開始・終了、チャット投稿、モデレーションは行いません
 - YouTube の読み取りは API キーまたは OAuth の `youtube.readonly` だけで、書き込みは行いません
 - 実 YouTube はローカル LLM のみです
-- v1 のコメント取得は `liveChatMessages.list` のポーリングです。`streamList` は使いません
+- コメント取得は `liveChatMessages.list` のポーリングです。`streamList` は使いません
 - 台本の途中への即時コメント割り込みは行いません
 - 複数利用者、クラウド配信、リモートステージ、縦型配信には対応していません
 - サーバクラッシュからの自動復帰はありません
