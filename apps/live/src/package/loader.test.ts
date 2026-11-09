@@ -112,9 +112,21 @@ describe("live package loader", () => {
       type: "headline",
       states: [{ id: "state-1", title: "今日のニュース" }],
     });
+    const fallbackCue = {
+      id: "cue-fallback",
+      origin: "live" as const,
+      speaker: "left" as const,
+      caption: "少し補足します。",
+      speech: "すこし ほそくします。",
+      expression: "normal",
+      audio: "audio/prepared/cue-fallback.wav",
+      durationMs: 1000,
+    };
     const show = livePackageShowSchema.parse({
       ...pkg.show,
       schemaVersion: 2,
+      cues: [...pkg.show.cues, fallbackCue],
+      safety: { ...pkg.show.safety, fallbackCueId: fallbackCue.id },
       cards: [card],
       cardAssets: [
         {
@@ -137,6 +149,17 @@ describe("live package loader", () => {
       height: 1,
       hasAudio: false,
     };
+    const fallbackAudioFile = {
+      path: "audio/prepared/cue-fallback.wav",
+      sha256: "a".repeat(64),
+      byteSize: 10,
+      mediaType: "audio/wav" as const,
+      kind: "prepared-audio" as const,
+      durationMs: 1000,
+      width: null,
+      height: null,
+      hasAudio: true,
+    };
     const manifest = livePackageManifestSchema.parse({
       ...pkg.manifest,
       packageSchemaVersion: 2,
@@ -145,9 +168,10 @@ describe("live package loader", () => {
         programVersionId: "program-version-1",
         programVersionNumber: 1,
         programDocumentSha256: "a".repeat(64),
+        resolutionSnapshotSha256: "a".repeat(64),
         theme: { id: "neutral", version: 1 },
       },
-      files: [...pkg.manifest.files, cardAssetFile],
+      files: [...pkg.manifest.files, cardAssetFile, fallbackAudioFile],
     });
 
     expect(() =>

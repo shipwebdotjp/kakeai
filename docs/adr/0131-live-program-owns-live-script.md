@@ -1,5 +1,7 @@
 # ライブ台本はWorkから独立したLive Programを正本とする
 
+> amended by [ADR-0133](./0133-live-version-resolution-snapshot.md): 版は解決スナップショットと不変のpackage buildを持つ。
+
 Status: accepted
 
 ライブ配信の台本は、動画用の Work / Script Version から行を参照する Show Profile ではなく、ライブ専用の **Live Program** を正本とする。Live Program はCue、カード、素材、CutIn、コメント・安全・プレイアウトのポリシーを所有し、Work の `lineId` を参照しない。ライブの実行は引き続き、Live Program Version から書き出した不変の **Live Package** を境界とする。

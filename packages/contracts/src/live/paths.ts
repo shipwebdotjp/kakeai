@@ -192,6 +192,7 @@ export const liveProgramPackageSourceSchema = z.strictObject({
   programVersionId: idSchema,
   programVersionNumber: positiveInt,
   programDocumentSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  resolutionSnapshotSha256: z.string().regex(/^[0-9a-f]{64}$/),
   theme: visualThemeRefSchema,
 });
 export type LiveProgramPackageSource = z.infer<typeof liveProgramPackageSourceSchema>;

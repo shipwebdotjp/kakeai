@@ -27,14 +27,38 @@ function packageShow() {
     commentSource: { kind: "youtube" },
     segments: [
       {
+        id: "seg-opening",
+        kind: "opening",
+        label: "オープニング",
+        targetDurationMs: 60_000,
+        cues: ["cue-opening"],
+      },
+      {
         id: "seg-script",
         kind: "script",
         label: "本編",
         targetDurationMs: 300_000,
         cues: ["cue-script"],
       },
+      {
+        id: "seg-closing",
+        kind: "closing",
+        label: "クロージング",
+        targetDurationMs: 60_000,
+        cues: ["cue-closing"],
+      },
     ],
     cues: [
+      {
+        id: "cue-opening",
+        origin: "live",
+        speaker: "left",
+        caption: "始まります。",
+        speech: "はじまります。",
+        expression: "normal",
+        audio: "audio/prepared/cue-opening.wav",
+        durationMs: 1000,
+      },
       {
         id: "cue-script",
         origin: "live",
@@ -42,8 +66,28 @@ function packageShow() {
         caption: "本編です。",
         speech: "ほんぺんです。",
         expression: "normal",
-        cardRef: { cardId: "card-headline", stateId: "state-1" },
-        audio: "audio/prepared/cue-0001.wav",
+        visual: { kind: "card", cardId: "card-headline", stateId: "state-1" },
+        audio: "audio/prepared/cue-script.wav",
+        durationMs: 1000,
+      },
+      {
+        id: "cue-closing",
+        origin: "live",
+        speaker: "left",
+        caption: "終わります。",
+        speech: "おわります。",
+        expression: "normal",
+        audio: "audio/prepared/cue-closing.wav",
+        durationMs: 1000,
+      },
+      {
+        id: "cue-fallback",
+        origin: "live",
+        speaker: "left",
+        caption: "少し補足します。",
+        speech: "すこし ほそくします。",
+        expression: "normal",
+        audio: "audio/prepared/cue-fallback.wav",
         durationMs: 1000,
       },
     ],
@@ -79,7 +123,7 @@ function packageShow() {
       persona: "親しみやすい解説役",
       maxResponseChars: 180,
       maxResponseCues: 2,
-      fallbackCueId: "cue-script",
+      fallbackCueId: "cue-fallback",
     },
     playout: {
       minBufferMs: 10_000,
@@ -256,9 +300,15 @@ describe("live card contracts", () => {
     ).toBe(false);
   });
 
-  it("requires package schema version 2 when cards are present", () => {
+  it("requires package schema version 2 when cards or visual are present", () => {
     const show = packageShow();
     expect(livePackageShowSchema.safeParse({ ...show, schemaVersion: 1 }).success).toBe(false);
+
+    const legacyMaterial = {
+      ...show,
+      cues: show.cues.map((cue) => ({ ...cue, materialId: "material-1" })),
+    };
+    expect(livePackageShowSchema.safeParse(legacyMaterial).success).toBe(false);
   });
 
   it("rejects unknown card and state references in a package show", () => {
@@ -267,43 +317,83 @@ describe("live card contracts", () => {
 
     const unknownCard = {
       ...show,
-      cues: show.cues.map((cue) => ({
-        ...cue,
-        cardRef: { cardId: "missing", stateId: "state-1" },
-      })),
+      cues: show.cues.map((cue) =>
+        cue.id === "cue-script"
+          ? { ...cue, visual: { kind: "card", cardId: "missing", stateId: "state-1" } }
+          : cue,
+      ),
     };
     expect(livePackageShowSchema.safeParse(unknownCard).success).toBe(false);
 
     const unknownState = {
       ...show,
-      cues: show.cues.map((cue) => ({
-        ...cue,
-        cardRef: { cardId: "card-headline", stateId: "missing" },
-      })),
+      cues: show.cues.map((cue) =>
+        cue.id === "cue-script"
+          ? { ...cue, visual: { kind: "card", cardId: "card-headline", stateId: "missing" } }
+          : cue,
+      ),
     };
     expect(livePackageShowSchema.safeParse(unknownState).success).toBe(false);
   });
 
-  it("accepts segment default card refs and null cue overrides", () => {
+  it("accepts segment default visuals and null cue overrides", () => {
     const show = packageShow();
-    const withSegmentCard = {
+    const withSegmentVisual = {
       ...show,
-      segments: show.segments.map((segment) => ({
-        ...segment,
-        cardRef: { cardId: "card-headline", stateId: "state-1" },
-      })),
-      cues: show.cues.map((cue) => ({ ...cue, cardRef: null })),
+      segments: show.segments.map((segment) =>
+        segment.kind === "script"
+          ? {
+              ...segment,
+              visual: { kind: "card", cardId: "card-headline", stateId: "state-1" },
+            }
+          : segment,
+      ),
+      cues: show.cues.map((cue) => ({ ...cue, visual: null })),
     };
-    expect(livePackageShowSchema.safeParse(withSegmentCard).success).toBe(true);
+    expect(livePackageShowSchema.safeParse(withSegmentVisual).success).toBe(true);
 
     const missingSegmentState = {
-      ...withSegmentCard,
-      segments: withSegmentCard.segments.map((segment) => ({
-        ...segment,
-        cardRef: { cardId: "card-headline", stateId: "missing" },
-      })),
+      ...withSegmentVisual,
+      segments: withSegmentVisual.segments.map((segment) =>
+        segment.kind === "script"
+          ? {
+              ...segment,
+              visual: { kind: "card", cardId: "card-headline", stateId: "missing" },
+            }
+          : segment,
+      ),
     };
     expect(livePackageShowSchema.safeParse(missingSegmentState).success).toBe(false);
+  });
+
+  it("validates the v2 spine and dedicated fallback cue", () => {
+    const show = packageShow();
+    expect(livePackageShowSchema.safeParse(show).success).toBe(true);
+
+    const withoutOpening = {
+      ...show,
+      segments: show.segments.filter((segment) => segment.kind !== "opening"),
+      cues: show.cues.filter((cue) => cue.id !== "cue-opening"),
+    };
+    expect(livePackageShowSchema.safeParse(withoutOpening).success).toBe(false);
+
+    const reusedFallback = {
+      ...show,
+      safety: { ...show.safety, fallbackCueId: "cue-opening" },
+    };
+    expect(livePackageShowSchema.safeParse(reusedFallback).success).toBe(false);
+
+    const wrongStage = {
+      ...show,
+      show: { ...show.show, stageTemplate: "studio" },
+    };
+    expect(livePackageShowSchema.safeParse(wrongStage).success).toBe(false);
+
+    const reserveTooLarge = {
+      ...show,
+      playout: { ...show.playout, closingReserveMs: show.show.targetDurationMs },
+    };
+    expect(livePackageShowSchema.safeParse(reserveTooLarge).success).toBe(false);
   });
 
   it("rejects animation durations beyond the card contract", () => {

@@ -1,19 +1,26 @@
 import type { RefinementCtx } from "zod";
-import type { LiveSegment } from "./profile";
+
+export interface SegmentCueReferenceShape {
+  kind: string;
+  cues?: readonly string[];
+}
 
 /**
  * Validates that every cue reference exists and that a cue is used by one
  * segment only. A cue is one playout occurrence; reusing it would share attempt
  * numbers and make console cue operations ambiguous.
+ *
+ * The shape is structural so the Live Program document and the package show
+ * can share the same rules.
  */
 export function validateSegmentCueReferences(
-  segments: readonly LiveSegment[],
+  segments: readonly SegmentCueReferenceShape[],
   cueIds: ReadonlySet<string>,
   ctx: RefinementCtx,
 ): void {
   const cueSegmentIndex = new Map<string, number>();
   for (const [index, segment] of segments.entries()) {
-    if (!("cues" in segment)) {
+    if (segment.cues === undefined) {
       continue;
     }
     const seenInSegment = new Set<string>();

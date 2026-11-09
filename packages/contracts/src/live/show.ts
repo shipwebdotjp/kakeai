@@ -22,13 +22,19 @@ import {
 import {
   liveCardAssetSchema,
   liveCardImageAssetIds,
-  liveCardRefSchema,
   liveCardSchema,
+  liveVisualRefSchema,
   resolveLiveCardState,
-  type LiveCardRef,
+  type LiveVisualRef,
 } from "./card";
 import { liveAudioUrlSchema, livePackageRelativePathSchema } from "./paths";
 import { validateSegmentCueReferences } from "./segment-references";
+import {
+  validateClosingReserve,
+  validateFallbackAndOrphans,
+  validateRightCast,
+  validateSpineStructure,
+} from "./spine-validation";
 
 export const liveVoiceSettingsSchema = z.record(
   z
@@ -40,16 +46,16 @@ export const liveVoiceSettingsSchema = z.record(
 export type LiveVoiceSettings = z.infer<typeof liveVoiceSettingsSchema>;
 
 const livePackageCueSegmentSchema = liveCueSegmentSchema.extend({
-  cardRef: liveCardRefSchema.optional(),
+  visual: liveVisualRefSchema.optional(),
 });
 
 const livePackageCommentSegmentSchema = liveCommentSegmentSchema.extend({
-  cardRef: liveCardRefSchema.optional(),
+  visual: liveVisualRefSchema.optional(),
 });
 
 /**
- * A package segment may carry a default card reference. CutIn segments never
- * do: they replace the whole stage and do not compose with cards.
+ * A package segment may carry a default centre visual. CutIn segments never
+ * do: they replace the whole stage and do not compose with the centre slot.
  */
 export const livePackageSegmentSchema = z.discriminatedUnion("kind", [
   livePackageCueSegmentSchema,
@@ -85,10 +91,10 @@ export const preparedCueSchema = z
     caption: z.string().trim().min(1),
     speech: z.string().trim().min(1),
     expression: idSchema,
-    /** Raw per-cue material reference; runtime resolves the segment default. */
+    /** Legacy v1 material reference; v2 uses visual. */
     materialId: idSchema.nullable().optional(),
-    /** Raw per-cue card reference; null hides the card, omitted inherits. */
-    cardRef: liveCardRefSchema.nullable().optional(),
+    /** v2 centre visual; null hides it, omitted inherits the segment default. */
+    visual: liveVisualRefSchema.nullable().optional(),
     audio: livePackageRelativePathSchema,
     durationMs: positiveInt,
   })
@@ -119,10 +125,10 @@ export const liveCueSchema = z
     caption: z.string().trim().min(1),
     speech: z.string().trim().min(1),
     expression: idSchema,
-    /** Raw per-cue material reference; runtime resolves the segment default. */
+    /** Legacy v1 material reference; v2 uses visual. */
     materialId: idSchema.nullable().optional(),
-    /** Raw per-cue card reference; null hides the card, omitted inherits. */
-    cardRef: liveCardRefSchema.nullable().optional(),
+    /** v2 centre visual; null hides it, omitted inherits the segment default. */
+    visual: liveVisualRefSchema.nullable().optional(),
     /** Package-relative for prepared cues, `run:generated/...` for generated speech. */
     audio: liveAudioUrlSchema.nullable(),
     durationMs: nonNegativeInt.nullable(),
@@ -195,18 +201,29 @@ export const livePackageShowSchema = z
     test: liveTestConfigSchema.optional(),
   })
   .superRefine((show, ctx) => {
-    const usesCards =
-      show.cards.length > 0 ||
-      show.cardAssets.length > 0 ||
-      show.cues.some((cue) => cue.cardRef !== undefined) ||
+    const usesVisual =
+      show.cues.some((cue) => cue.visual !== undefined) ||
       show.segments.some(
-        (segment) => segment.kind !== "cut_in" && segment.cardRef !== undefined,
+        (segment) => segment.kind !== "cut_in" && segment.visual !== undefined,
       );
-    if (show.schemaVersion === 1 && usesCards) {
+    const usesLegacyMaterial =
+      show.cues.some((cue) => cue.materialId !== undefined) ||
+      show.segments.some(
+        (segment) => segment.kind !== "cut_in" && segment.material !== undefined,
+      );
+    if (show.schemaVersion === 1) {
+      if (usesVisual || show.cards.length > 0 || show.cardAssets.length > 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["schemaVersion"],
+          message: "カードまたは visual を使うパッケージは schemaVersion: 2 にしてください。",
+        });
+      }
+    } else if (usesLegacyMaterial) {
       ctx.addIssue({
         code: "custom",
         path: ["schemaVersion"],
-        message: "カードを使うパッケージは schemaVersion: 2 にしてください。",
+        message: "schemaVersion: 2 では materialId / segment.material ではなく visual を使ってください。",
       });
     }
 
@@ -287,23 +304,33 @@ export const livePackageShowSchema = z
         }
       }
     }
-    const validateCardRef = (ref: LiveCardRef, path: (string | number)[]): void => {
-      if (resolveLiveCardState(show.cards, ref) === null) {
+    const validateVisual = (visual: LiveVisualRef, path: (string | number)[]): void => {
+      if (visual.kind === "card") {
+        if (resolveLiveCardState(show.cards, visual) === null) {
+          ctx.addIssue({
+            code: "custom",
+            path,
+            message: `カードまたは状態が見つかりません: ${visual.cardId}/${visual.stateId}`,
+          });
+        }
+        return;
+      }
+      if (!materialIds.has(visual.materialId)) {
         ctx.addIssue({
           code: "custom",
           path,
-          message: `カードまたは状態が見つかりません: ${ref.cardId}/${ref.stateId}`,
+          message: `素材が見つかりません: ${visual.materialId}`,
         });
       }
     };
     for (const [index, cue] of show.cues.entries()) {
-      if (cue.cardRef !== undefined && cue.cardRef !== null) {
-        validateCardRef(cue.cardRef, ["cues", index, "cardRef"]);
+      if (cue.visual !== undefined && cue.visual !== null) {
+        validateVisual(cue.visual, ["cues", index, "visual"]);
       }
     }
     for (const [index, segment] of show.segments.entries()) {
-      if (segment.kind !== "cut_in" && segment.cardRef !== undefined) {
-        validateCardRef(segment.cardRef, ["segments", index, "cardRef"]);
+      if (segment.kind !== "cut_in" && segment.visual !== undefined) {
+        validateVisual(segment.visual, ["segments", index, "visual"]);
       }
     }
 
@@ -339,6 +366,28 @@ export const livePackageShowSchema = z
         path: ["safety", "fallbackCueId"],
         message: `退避キューが見つかりません: ${show.safety.fallbackCueId}`,
       });
+    }
+    if (show.schemaVersion === 2) {
+      if (show.show.stageTemplate !== "news-desk") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["show", "stageTemplate"],
+          message: "v2 のライブステージは news-desk だけに対応しています。",
+        });
+      }
+      validateSpineStructure(show.segments, ctx, { requireCues: true });
+      validateFallbackAndOrphans(show.segments, show.cues, show.safety.fallbackCueId, ctx);
+      validateClosingReserve(
+        show.show.targetDurationMs,
+        show.playout.closingReserveMs,
+        ctx,
+      );
+      validateRightCast(
+        show.show.characters.right !== null,
+        show.cues,
+        show.speakers,
+        ctx,
+      );
     }
     const sides = new Set<string>();
     const speakerIds = new Set<string>();

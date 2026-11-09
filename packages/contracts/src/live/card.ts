@@ -312,6 +312,16 @@ export const liveCardRefSchema = z.strictObject({
 });
 export type LiveCardRef = z.infer<typeof liveCardRefSchema>;
 
+/**
+ * The single reference for the stage's centre visual. A cue or segment never
+ * chooses a card and an imported material at the same time.
+ */
+export const liveVisualRefSchema = z.discriminatedUnion("kind", [
+  liveCardRefSchema.extend({ kind: z.literal("card") }),
+  z.strictObject({ kind: z.literal("material"), materialId: idSchema }),
+]);
+export type LiveVisualRef = z.infer<typeof liveVisualRefSchema>;
+
 export const liveCardAssetMediaTypeSchema = z.enum([
   "image/png",
   "image/jpeg",

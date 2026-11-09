@@ -253,6 +253,7 @@ describe("live contracts", () => {
         programVersionId: "program-version-1",
         programVersionNumber: 1,
         programDocumentSha256: HASH,
+        resolutionSnapshotSha256: HASH,
         theme: { id: "neutral", version: 1 },
       },
     };

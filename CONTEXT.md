@@ -436,8 +436,12 @@ A scheduled, state-driven performance defined by a Live Program Version, separat
 _Avoid_: live render, composition playback
 
 **Live Package**:
-An immutable export of a Live Show containing its Live Program Version, theme CSS, character assets, card definitions and card assets, imported material cards, CutIn videos, prepared audio, and fixtures. The live app reads it; it does not share Kakeai's database.
+An immutable build from a Live Program Version containing its theme CSS, character assets, card definitions and card assets, imported material cards, CutIn videos, and prepared audio. The live app reads it; it does not share Kakeai's database.
 _Avoid_: project, asset bundle, script
+
+**Live Run**:
+One execution of a live show, fixing the Live Program Version, the exact package build, the comment source or fixture, the start time, the port, the control endpoint, and the run log. It never stores credentials or model connection settings.
+_Avoid_: package, job, session
 
 **Show Profile**:
 Legacy live configuration used before Live Program. It references Script Version lines and is not the current source of truth. See [ADR-0131](docs/adr/0131-live-program-owns-live-script.md).
@@ -460,7 +464,7 @@ The state-driven audio, cue queue, and CutIn playback that advance the Stage. It
 _Avoid_: timeline, render queue
 
 **Live Cue**:
-The smallest unit of live output owned by a Live Program: speaker, caption, speech, expression, an optional card reference, an optional imported-material override, and audio. An omitted card or material reference inherits the containing segment's default.
+The smallest unit of live output owned by a Live Program: speaker, caption, speech, expression, an optional Visual Ref, and audio. An omitted Visual Ref inherits the containing segment's default; `null` hides the centre slot.
 _Avoid_: narration segment, clip
 
 **Live Card**:
@@ -472,8 +476,16 @@ A complete snapshot of a Live Card's visible content at one cue. States are not 
 _Avoid_: patch, keyframe, frame
 
 **Card Ref**:
-A live cue or segment reference to a card and one of its states: `{ cardId, stateId }`. An omitted cue ref inherits the segment default; `null` hides the card.
+A reference to a card and one of its states: `{ cardId, stateId }`. It is one branch of a Visual Ref.
 _Avoid_: material id, visual cue
+
+**Visual Ref**:
+The single reference for the stage's centre slot: a card state, an imported material, or `null` to hide it. An omitted cue visual inherits the segment default. Cards and materials are never selected together.
+_Avoid_: card ref, material id, both
+
+**Live Material**:
+A program-owned snapshot of a Work scene imported for the live stage, including its dependent image assets. The Work/Scene ids remain provenance only; live export never resolves them again.
+_Avoid_: work scene, material card reference
 
 **Live Renderer**:
 The shared DOM/SVG renderer for Live Cards. It uses Shadow DOM, keyed diff updates, and CSS/WAAPI animations. The editor preview and the live stage use the same renderer; it does not depend on the video compiler.
