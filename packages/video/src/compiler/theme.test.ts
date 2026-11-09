@@ -367,10 +367,10 @@ describe("visual theme", () => {
         const eyeBlink = cueScope("vc-face").id("face-0-eye");
         const mouthSpeaking = cueScope("vc-face").id("face-0-mouth");
         expect(compiled.html).toContain(
-          `<img id="${eyeBlink}" class="kakeai-face" src="/preview/asset-eye-closed" style="opacity:0;" alt="">`,
+          `<img data-start="4" data-duration="6" id="${eyeBlink}" class="kakeai-face" src="/preview/asset-eye-closed" style="opacity:0;" alt="">`,
         );
         expect(compiled.html).toContain(
-          `<img id="${mouthSpeaking}" class="kakeai-face" src="/preview/asset-mouth-open" style="opacity:0;" alt="">`,
+          `<img data-start="4" data-duration="6" id="${mouthSpeaking}" class="kakeai-face" src="/preview/asset-mouth-open" style="opacity:0;" alt="">`,
         );
         expect(compiled.assetIds).toContain("asset-eye-closed");
         expect(compiled.assetIds).toContain("asset-mouth-open");

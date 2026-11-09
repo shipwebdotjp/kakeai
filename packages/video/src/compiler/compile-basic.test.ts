@@ -438,15 +438,24 @@ describe("compileDocument", () => {
     const document = validContentDocument();
     document.scenes[1]!.visualCues = [
       cue({
-        id: "vc-p1-card",
+        id: "vc-p1-video",
         template: { id: "media.card", version: 1 },
         layer: "card",
         range: { kind: "lines", startLineId: "line-p1-1", endLineId: "line-p1-1" },
         input: { assetId: "asset-video-1", heading: "カード見出し" },
       }),
+      cue({
+        id: "vc-p1-image",
+        template: { id: "media.card", version: 1 },
+        layer: "card",
+        order: 1,
+        range: { kind: "lines", startLineId: "line-p1-1", endLineId: "line-p1-1" },
+        input: { assetId: "asset-image-1", heading: "画像カード" },
+      }),
     ];
     const compiled = compileDocument({ document, assetResolver: resolver });
     expect(compiled.html).toContain('<video data-start="4.5" data-duration="3"');
+    expect(compiled.html).toContain('<img data-start="4.5" data-duration="3"');
   });
 
   it("renders the media card with the selected aspect ratio", () => {

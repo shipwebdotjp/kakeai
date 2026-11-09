@@ -71,11 +71,14 @@ export function applyCueTiming(
 ): string {
   const start = toSecondsText(startMs);
   const duration = toSecondsText(spanMs);
-  const withVideos = html.replace(
-    /<video\b(?![^>]*\bdata-start=)/g,
-    `<video data-start="${start}" data-duration="${duration}"`,
+  // HyperFrames の animated GIF 変換は img 自身の data-start/data-duration だけを見て
+  // 変換後の video の再生区間を決める。外側の .clip の区間しか持たないと、GIF が
+  // 全編にわたって再生されるため、img にも cue の区間を刻む。
+  const withMedia = html.replace(
+    /<(video|img)\b(?![^>]*\bdata-start=)/g,
+    `<$1 data-start="${start}" data-duration="${duration}"`,
   );
-  return withVideos.replace(
+  return withMedia.replace(
     /<div\b([^>]*\bdata-composition-src=[^>]*)>/g,
     `<div data-start="${start}" data-duration="${duration}"$1>`,
   );
