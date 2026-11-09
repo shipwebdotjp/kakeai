@@ -419,20 +419,32 @@ An operation that saves a whole document or draft; not for partial updates.
 
 ## Live
 
+**Live Format**:
+A reusable preset for a live show: segment skeleton, cast, stage, theme, comment/safety/playout defaults, and optional boilerplate cards. It is copied into a Live Program when the program is created; later format edits do not change existing programs.
+_Avoid_: template document, composition
+
+**Live Program**:
+The live-only manuscript for one episode: segments, cues, cards, imported materials, CutIns, comment policy, safety, and playout. It owns its captions, speech, speakers, and expressions. It does not reference a Work or Script Version line.
+_Avoid_: script version, show profile, composition
+
+**Live Program Version**:
+An immutable snapshot of a Live Program. Export and live start use a version, never the editable draft.
+_Avoid_: draft, render
+
 **Live Show**:
-A scheduled, state-driven performance of a Work's characters and material cards, separate from a rendered Composition. It is not a Script Version, Render Job, or Artifact.
+A scheduled, state-driven performance defined by a Live Program Version, separate from a rendered Composition. It is not a Script Version, Render Job, or Artifact.
 _Avoid_: live render, composition playback
 
 **Live Package**:
-An immutable export of a Live Show containing its Show Profile, theme CSS, character assets, pre-compiled material cards, CutIn videos, prepared audio, and fixtures. The live app reads it; it does not share Kakeai's database.
+An immutable export of a Live Show containing its Live Program Version, theme CSS, character assets, card definitions and card assets, imported material cards, CutIn videos, prepared audio, and fixtures. The live app reads it; it does not share Kakeai's database.
 _Avoid_: project, asset bundle, script
 
 **Show Profile**:
-The live-specific configuration of a Live Show: segments, cues, materials, CutIns, comment policy, safety, stage, and target duration. It is not a Script Version.
-_Avoid_: script, template
+Legacy live configuration used before Live Program. It references Script Version lines and is not the current source of truth. See [ADR-0131](docs/adr/0131-live-program-owns-live-script.md).
+_Avoid_: live program, script
 
 **Spine**:
-The ordered segment list of a Live Show that defines its planned progression. It is not a Composition timeline.
+The ordered segment list of a Live Program that defines its planned progression. It is not a Composition timeline.
 _Avoid_: timeline, storyboard
 
 **Material Bank**:
@@ -440,7 +452,7 @@ Optional extra topics, bits, and fallback material a Live Show can use when time
 _Avoid_: script, asset library
 
 **Stage**:
-The browser surface that renders the live state: characters, caption, material, CutIn, comment card, and phase. The Program Stage is captured by OBS; the Preview Stage is not. It is not a Composition player.
+The browser surface that renders the live state: characters, caption, card, imported material, CutIn, comment card, and phase. The Program Stage is captured by OBS; the Preview Stage is not. It is not a Composition player.
 _Avoid_: composition, preview, canvas
 
 **Playout**:
@@ -448,12 +460,28 @@ The state-driven audio, cue queue, and CutIn playback that advance the Stage. It
 _Avoid_: timeline, render queue
 
 **Live Cue**:
-The smallest unit of live output: speaker, caption, speech, expression, an optional cue-level material override or comment, and audio. An omitted material override inherits the containing segment's default material.
+The smallest unit of live output owned by a Live Program: speaker, caption, speech, expression, an optional card reference, an optional imported-material override, and audio. An omitted card or material reference inherits the containing segment's default.
 _Avoid_: narration segment, clip
 
+**Live Card**:
+A typed card owned by a Live Program: headline, image, list, chart, or quote. It carries states and an entry/update animation contract. It is rendered by the live card renderer, not by a video Visual Template or composition.
+_Avoid_: visual template, material card, slide
+
+**Live Card State**:
+A complete snapshot of a Live Card's visible content at one cue. States are not patches; stable element ids let the renderer update only the delta.
+_Avoid_: patch, keyframe, frame
+
+**Card Ref**:
+A live cue or segment reference to a card and one of its states: `{ cardId, stateId }`. An omitted cue ref inherits the segment default; `null` hides the card.
+_Avoid_: material id, visual cue
+
+**Live Renderer**:
+The shared DOM/SVG renderer for Live Cards. It uses Shadow DOM, keyed diff updates, and CSS/WAAPI animations. The editor preview and the live stage use the same renderer; it does not depend on the video compiler.
+_Avoid_: composition player, HyperFrames player
+
 **Material Card**:
-A static PNG/HTML or short silent MP4 shown in the Stage's center slot. It is created by Kakeai at export time; it is not a live Composition or a running GSAP timeline.
-_Avoid_: visual cue, slide, composition
+A static PNG/HTML or short silent MP4 imported from a Work scene and shown in the Stage's center slot. It is distinct from a Live Card and is created by Kakeai at export time.
+_Avoid_: live card, visual cue, slide, composition
 
 **CutIn**:
 A short full-screen video inserted at a spine boundary to mark a corner break, with an optional embedded audio track and a probe-derived duration. It is a dedicated segment and package kind, not a Material Card or a Live Cue.
@@ -476,8 +504,8 @@ The full-screen playback of a CutIn, separate from Live Cue playback. Only the P
 _Avoid_: cue playback, material card playback
 
 **Prepared Cue**:
-A Live Cue resolved at export from a Script Version or authored as a live-only cue, before playout.
-_Avoid_: live cue, narration segment
+A Live Cue resolved at export from a Live Program Version, before playout. Its caption, speech, speaker, expression, audio, and card/material references are fixed in the Live Package.
+_Avoid_: live cue, narration segment, script cue
 
 **Script Cue**:
 A Live Cue whose caption, speech, speaker, and audio come from a Narration Segment via a line id.

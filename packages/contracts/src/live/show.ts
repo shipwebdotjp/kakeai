@@ -10,13 +10,23 @@ import {
 } from "./common";
 import {
   liveCommentPolicySchema,
+  liveCommentSegmentSchema,
   liveCommentSourceSchema,
+  liveCutInSegmentSchema,
+  liveCueSegmentSchema,
   livePlayoutSchema,
   liveSafetySchema,
-  liveSegmentSchema,
   liveShowMetaSchema,
   liveTestConfigSchema,
 } from "./profile";
+import {
+  liveCardAssetSchema,
+  liveCardImageAssetIds,
+  liveCardRefSchema,
+  liveCardSchema,
+  resolveLiveCardState,
+  type LiveCardRef,
+} from "./card";
 import { liveAudioUrlSchema, livePackageRelativePathSchema } from "./paths";
 import { validateSegmentCueReferences } from "./segment-references";
 
@@ -28,6 +38,25 @@ export const liveVoiceSettingsSchema = z.record(
   z.unknown(),
 );
 export type LiveVoiceSettings = z.infer<typeof liveVoiceSettingsSchema>;
+
+const livePackageCueSegmentSchema = liveCueSegmentSchema.extend({
+  cardRef: liveCardRefSchema.optional(),
+});
+
+const livePackageCommentSegmentSchema = liveCommentSegmentSchema.extend({
+  cardRef: liveCardRefSchema.optional(),
+});
+
+/**
+ * A package segment may carry a default card reference. CutIn segments never
+ * do: they replace the whole stage and do not compose with cards.
+ */
+export const livePackageSegmentSchema = z.discriminatedUnion("kind", [
+  livePackageCueSegmentSchema,
+  livePackageCommentSegmentSchema,
+  liveCutInSegmentSchema,
+]);
+export type LivePackageSegment = z.infer<typeof livePackageSegmentSchema>;
 
 export const liveSpeakerVoiceSchema = z.strictObject({
   adapterId: voiceAdapterIdSchema,
@@ -58,6 +87,8 @@ export const preparedCueSchema = z
     expression: idSchema,
     /** Raw per-cue material reference; runtime resolves the segment default. */
     materialId: idSchema.nullable().optional(),
+    /** Raw per-cue card reference; null hides the card, omitted inherits. */
+    cardRef: liveCardRefSchema.nullable().optional(),
     audio: livePackageRelativePathSchema,
     durationMs: positiveInt,
   })
@@ -90,6 +121,8 @@ export const liveCueSchema = z
     expression: idSchema,
     /** Raw per-cue material reference; runtime resolves the segment default. */
     materialId: idSchema.nullable().optional(),
+    /** Raw per-cue card reference; null hides the card, omitted inherits. */
+    cardRef: liveCardRefSchema.nullable().optional(),
     /** Package-relative for prepared cues, `run:generated/...` for generated speech. */
     audio: liveAudioUrlSchema.nullable(),
     durationMs: nonNegativeInt.nullable(),
@@ -146,12 +179,14 @@ export type LivePackageCutIn = z.infer<typeof livePackageCutInSchema>;
 
 export const livePackageShowSchema = z
   .strictObject({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     show: liveShowMetaSchema,
     commentSource: liveCommentSourceSchema,
-    segments: z.array(liveSegmentSchema).min(1),
+    segments: z.array(livePackageSegmentSchema).min(1),
     cues: z.array(preparedCueSchema),
-    materials: z.array(materialCardSchema),
+    materials: z.array(materialCardSchema).default([]),
+    cards: z.array(liveCardSchema).default([]),
+    cardAssets: z.array(liveCardAssetSchema).default([]),
     cutIns: z.array(livePackageCutInSchema).default([]),
     speakers: z.array(liveSpeakerSchema),
     commentPolicy: liveCommentPolicySchema,
@@ -160,6 +195,21 @@ export const livePackageShowSchema = z
     test: liveTestConfigSchema.optional(),
   })
   .superRefine((show, ctx) => {
+    const usesCards =
+      show.cards.length > 0 ||
+      show.cardAssets.length > 0 ||
+      show.cues.some((cue) => cue.cardRef !== undefined) ||
+      show.segments.some(
+        (segment) => segment.kind !== "cut_in" && segment.cardRef !== undefined,
+      );
+    if (show.schemaVersion === 1 && usesCards) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["schemaVersion"],
+        message: "カードを使うパッケージは schemaVersion: 2 にしてください。",
+      });
+    }
+
     const cueIds = new Set<string>();
     for (const cue of show.cues) {
       if (cueIds.has(cue.id)) {
@@ -203,6 +253,60 @@ export const livePackageShowSchema = z
         });
       }
     }
+
+    const cardIds = new Set<string>();
+    for (const card of show.cards) {
+      if (cardIds.has(card.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cards"],
+          message: `カード ID が重複しています: ${card.id}`,
+        });
+      }
+      cardIds.add(card.id);
+    }
+    const cardAssetIds = new Set<string>();
+    for (const asset of show.cardAssets) {
+      if (cardAssetIds.has(asset.id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["cardAssets"],
+          message: `カード画像 Asset ID が重複しています: ${asset.id}`,
+        });
+      }
+      cardAssetIds.add(asset.id);
+    }
+    for (const [cardIndex, card] of show.cards.entries()) {
+      for (const assetId of liveCardImageAssetIds(card)) {
+        if (!cardAssetIds.has(assetId)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["cards", cardIndex, "states"],
+            message: `カード画像 Asset が見つかりません: ${assetId}`,
+          });
+        }
+      }
+    }
+    const validateCardRef = (ref: LiveCardRef, path: (string | number)[]): void => {
+      if (resolveLiveCardState(show.cards, ref) === null) {
+        ctx.addIssue({
+          code: "custom",
+          path,
+          message: `カードまたは状態が見つかりません: ${ref.cardId}/${ref.stateId}`,
+        });
+      }
+    };
+    for (const [index, cue] of show.cues.entries()) {
+      if (cue.cardRef !== undefined && cue.cardRef !== null) {
+        validateCardRef(cue.cardRef, ["cues", index, "cardRef"]);
+      }
+    }
+    for (const [index, segment] of show.segments.entries()) {
+      if (segment.kind !== "cut_in" && segment.cardRef !== undefined) {
+        validateCardRef(segment.cardRef, ["segments", index, "cardRef"]);
+      }
+    }
+
     for (const [index, cue] of show.cues.entries()) {
       if (
         cue.materialId !== undefined &&

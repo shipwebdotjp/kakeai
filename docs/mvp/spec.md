@@ -127,6 +127,8 @@ Prismaモデル名は以下のとおりとする。IDはアプリ生成の文字
 
 Jobの対象はkindで決める。render・tts・live_exportは `workId`、`languageEditionId`、`scriptVersionId` を必須とし、asset_ingestは `assetId` を必須とする。live_exportは入力スナップショットにShow Profile、fixture、出力先、解決済みのTheme・Asset・Face Set・Voice Profileを固定する。TTSや画像生成はLanguageEditionまたはScriptVersionに結び、調査のように作品全体に対するJobは `workId` だけを持てる。`Asset.generatedByJobId` は将来の生成Assetの来歴を示す任意の外部キーである。
 
+> ライブ台本は [../live-program/spec.md](../live-program/spec.md) の Live Program へ移行する。移行が完了するまでは、この Show Profile ベースの `live_export` 契約が現行である。
+
 誤削除を防ぐため、通常の外部キーは `onDelete: Restrict` とする。Workの削除だけは、参照の有無を検査してからEdition、ScriptVersion、Job、Artifactを同一トランザクション／削除計画で明示的に消す。ファイル実体はDBの削除後に隔離し、失敗時は起動時の清掃処理で回収する。`Work.updatedAt` と `LanguageEdition.updatedAt` は、新しいScriptVersionの保存時にも同一トランザクションで更新し、作品一覧の並び順に使う。
 
 ```text

@@ -2,8 +2,14 @@ import { createHash } from "node:crypto";
 import { readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  liveCardSchema,
+  livePackageManifestSchema,
+  livePackageShowSchema,
+} from "@kakeai/contracts";
 import { createTestPackage, readTestManifest, writeTestManifest } from "../testing/package-fixture.ts";
 import { loadLivePackage, resolvePackageFilePath } from "./loader.ts";
+import { verifyPackageContent } from "./verify.ts";
 
 const roots: string[] = [];
 
@@ -97,6 +103,76 @@ describe("live package loader", () => {
     bytes[0] = bytes[0] === 0x3a ? 0x2f : 0x3a;
     await writeFile(path, bytes);
     await expect(loadLivePackage(hashed.rootDir)).rejects.toMatchObject({ code: "hash_mismatch" });
+  });
+
+  it("verifies card assets in a v2 package", async () => {
+    const pkg = await fixture();
+    const card = liveCardSchema.parse({
+      id: "card-headline",
+      type: "headline",
+      states: [{ id: "state-1", title: "今日のニュース" }],
+    });
+    const show = livePackageShowSchema.parse({
+      ...pkg.show,
+      schemaVersion: 2,
+      cards: [card],
+      cardAssets: [
+        {
+          id: "asset-1",
+          file: "cards/asset-1.png",
+          mediaType: "image/png",
+          width: 1,
+          height: 1,
+        },
+      ],
+    });
+    const cardAssetFile = {
+      path: "cards/asset-1.png",
+      sha256: "a".repeat(64),
+      byteSize: 10,
+      mediaType: "image/png" as const,
+      kind: "card-asset" as const,
+      durationMs: null,
+      width: 1,
+      height: 1,
+      hasAudio: false,
+    };
+    const manifest = livePackageManifestSchema.parse({
+      ...pkg.manifest,
+      packageSchemaVersion: 2,
+      source: {
+        programId: "program-1",
+        programVersionId: "program-version-1",
+        programVersionNumber: 1,
+        programDocumentSha256: "a".repeat(64),
+        theme: { id: "neutral", version: 1 },
+      },
+      files: [...pkg.manifest.files, cardAssetFile],
+    });
+
+    expect(() =>
+      verifyPackageContent(manifest, show, pkg.characters, new Map()),
+    ).not.toThrow();
+
+    const wrongMedia = {
+      ...manifest,
+      files: manifest.files.map((file) =>
+        file.path === "cards/asset-1.png"
+          ? { ...file, mediaType: "image/jpeg" as const }
+          : file,
+      ),
+    };
+    expect(() =>
+      verifyPackageContent(wrongMedia, show, pkg.characters, new Map()),
+    ).toThrow(/mediaType/);
+
+    const missingFile = {
+      ...manifest,
+      files: manifest.files.filter((file) => file.path !== "cards/asset-1.png"),
+    };
+    expect(() =>
+      verifyPackageContent(missingFile, show, pkg.characters, new Map()),
+    ).toThrow(/カード画像/);
   });
 
   it("rejects mediaType inconsistencies and audio on material cards", async () => {

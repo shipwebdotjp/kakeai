@@ -161,6 +161,7 @@ function verifyKindMediaType(file: LivePackageFile): void {
       if (file.mediaType !== "application/json") fail("application/json");
       break;
     case "asset":
+    case "card-asset":
       if (!IMAGE_MEDIA_TYPES.has(file.mediaType)) fail("image/*");
       break;
     case "voice-ref":
@@ -262,6 +263,35 @@ function verifyMaterialCards(show: LivePackageShow, files: Map<string, LivePacka
         const exhaustive: never = card.kind;
         throw new Error(`Unsupported material kind: ${String(exhaustive)}`);
       }
+    }
+  }
+}
+
+function verifyCardAssets(show: LivePackageShow, files: Map<string, LivePackageFile>): void {
+  for (const asset of show.cardAssets) {
+    const entry = requireEntry(files, asset.file, `カード画像 ${asset.id}`);
+    requireKind(entry, ["card-asset"], `カード画像 ${asset.id}`);
+    requireMedia(entry, IMAGE_MEDIA_TYPES, `カード画像 ${asset.id}`);
+    if (entry.mediaType !== asset.mediaType) {
+      throw packageError(
+        "media_type_mismatch",
+        `カード画像の mediaType が show.json と一致しません: ${asset.file}`,
+        asset.file,
+      );
+    }
+    if (entry.width !== asset.width || entry.height !== asset.height) {
+      throw packageError(
+        "media_type_mismatch",
+        `カード画像の寸法が show.json と一致しません: ${asset.file}`,
+        asset.file,
+      );
+    }
+    if (entry.hasAudio) {
+      throw packageError(
+        "media_type_mismatch",
+        `カード画像に音声が含まれています: ${asset.file}`,
+        asset.file,
+      );
     }
   }
 }
@@ -410,6 +440,7 @@ export function verifyPackageContent(
   digests: Map<string, FileDigest>,
 ): string[] {
   const files = manifestFileMap(manifest);
+  verifyCardAssets(show, files);
   verifyMaterialCards(show, files);
   verifyCutIns(show, files);
   verifyReferences(show, characters, files);

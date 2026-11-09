@@ -48,8 +48,8 @@
 | --- | --- | --- |
 | 素材集（フィラー） | 時間が余ったときの話題・ネタ・退避素材を自動選択 | スパインとの優先順位 |
 | CutIn（区切り動画） | コーナー間のジングル・スポンサー告知・オープニング映像 | 専用セグメント。素材カードの音声制約は緩めない（[../live-media-playout/spec.md](../live-media-playout/spec.md)） |
-| ショープロファイル編集UI | スパイン、素材のScene参照、CutIn、コメントポリシーをGUIで編集する | v1はJSON/エージェント/自動生成 |
-| 書き出しUI | Kakeaiの画面からライブパッケージを書き出す | v1は`live_export` JobとCLI |
+| ライブ台本編集UI | スパイン、Cue、カード、素材、CutIn、コメントポリシーをGUIで編集する | [../live-program/spec.md](../live-program/spec.md) で仕様化中。Show Profileの編集UIは作らない |
+| 書き出しUI | Kakeaiの画面からLive Program Versionを書き出す | [../live-program/todo.md](../live-program/todo.md) のP4/P6 |
 | セグメントの動的調整 | 残り時間に応じて、コメントコーナーの回数・尺を変える | 目標尺は目安のまま |
 | オープニングの自動化 | カウントダウン、開始時刻、BGM | 自動開始は誤操作のリスク |
 | エンディングの自動化 | お礼、次回予告、クリップ | VODとの連携 |

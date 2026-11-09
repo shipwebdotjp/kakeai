@@ -125,6 +125,34 @@ function checkHtmlReference(
 }
 
 /**
+ * Cross-checks the card image assets declared by show.json against their
+ * manifest entries before file integrity and image dimensions are probed.
+ */
+export function verifyShowCardAssets(
+  show: LivePackageShow,
+  files: ReadonlyMap<string, LivePackageFile>,
+): void {
+  for (const asset of show.cardAssets) {
+    const entry = files.get(asset.file);
+    if (entry === undefined) {
+      fail(`カード画像が参照するファイルが manifest にありません: ${asset.file}`);
+    }
+    if (entry.kind !== "card-asset") {
+      fail(`カード画像の manifest kind が card-asset ではありません: ${asset.file}`);
+    }
+    if (entry.mediaType !== asset.mediaType) {
+      fail(`カード画像の mediaType が show.json と一致しません: ${asset.file}`);
+    }
+    if (entry.width !== asset.width || entry.height !== asset.height) {
+      fail(`カード画像の寸法が show.json と一致しません: ${asset.file}`);
+    }
+    if (entry.hasAudio) {
+      fail(`カード画像に音声が含まれています: ${asset.file}`);
+    }
+  }
+}
+
+/**
  * Cross-checks the CutIns declared by show.json against their manifest
  * entries. The packaged MP4 is probed separately; this catches a show/manifest
  * disagreement before the (more expensive) probe runs.
@@ -209,6 +237,7 @@ export async function verifyPackage(
     const showFilePaths = new Set([
       ...show.cues.map((cue) => cue.audio),
       ...show.materials.map((material) => material.file),
+      ...show.cardAssets.map((asset) => asset.file),
       ...show.cutIns.map((cutIn) => cutIn.file),
       ...show.speakers.flatMap((speaker) =>
         speaker.voice.refAudio === undefined ? [] : [speaker.voice.refAudio],
@@ -229,6 +258,7 @@ export async function verifyPackage(
         fail(`show.json / characters.json が参照するファイルがありません: ${path}`);
       }
     }
+    verifyShowCardAssets(show, expected);
     verifyShowCutIns(show, expected);
   } catch (error) {
     if (error instanceof LiveExportError) {

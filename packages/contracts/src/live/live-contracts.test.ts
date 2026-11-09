@@ -245,8 +245,32 @@ describe("live contracts", () => {
       voices: [],
     };
     expect(livePackageManifestSchema.safeParse(manifest).success).toBe(true);
+    const programManifest = {
+      ...manifest,
+      packageSchemaVersion: 2,
+      source: {
+        programId: "program-1",
+        programVersionId: "program-version-1",
+        programVersionNumber: 1,
+        programDocumentSha256: HASH,
+        theme: { id: "neutral", version: 1 },
+      },
+    };
+    expect(livePackageManifestSchema.safeParse(programManifest).success).toBe(true);
     expect(
-      livePackageManifestSchema.safeParse({ ...manifest, packageSchemaVersion: 2 }).success,
+      livePackageManifestSchema.safeParse({
+        ...manifest,
+        packageSchemaVersion: 2,
+      }).success,
+    ).toBe(false);
+    expect(
+      livePackageManifestSchema.safeParse({
+        ...manifest,
+        source: programManifest.source,
+      }).success,
+    ).toBe(false);
+    expect(
+      livePackageManifestSchema.safeParse({ ...manifest, packageSchemaVersion: 3 }).success,
     ).toBe(false);
     expect(
       livePackageManifestSchema.safeParse({

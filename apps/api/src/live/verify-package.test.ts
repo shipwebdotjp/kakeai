@@ -10,9 +10,10 @@ import {
   livePackageManifestSchema,
   type LiveMediaType,
   type LivePackageFile,
+  type LivePackageShow,
 } from "@kakeai/contracts";
 import { probeMedia } from "../media/probe.ts";
-import { verifyPackage } from "./verify-package.ts";
+import { verifyPackage, verifyShowCardAssets } from "./verify-package.ts";
 
 const execFileAsync = promisify(execFile);
 const NOW = "2026-11-07T12:00:00.000Z";
@@ -384,6 +385,50 @@ afterAll(async () => {
   await Promise.all(
     [...roots, ...generatedRoots].splice(0).map((root) => rm(root, { recursive: true, force: true })),
   );
+});
+
+describe("verifyShowCardAssets", () => {
+  const show = {
+    cardAssets: [
+      {
+        id: "asset-1",
+        file: "cards/asset-1.png",
+        mediaType: "image/png",
+        width: 32,
+        height: 18,
+      },
+    ],
+  } as LivePackageShow;
+  const entry = {
+    path: "cards/asset-1.png",
+    sha256: "a".repeat(64),
+    byteSize: 10,
+    mediaType: "image/png",
+    kind: "card-asset",
+    durationMs: null,
+    width: 32,
+    height: 18,
+    hasAudio: false,
+  } as LivePackageFile;
+
+  it("accepts a matching card asset entry", () => {
+    expect(() => verifyShowCardAssets(show, new Map([[entry.path, entry]]))).not.toThrow();
+  });
+
+  it("rejects kind, mediaType, dimension and audio mismatches", () => {
+    expect(() =>
+      verifyShowCardAssets(show, new Map([[entry.path, { ...entry, kind: "asset" }]])),
+    ).toThrow(/card-asset/);
+    expect(() =>
+      verifyShowCardAssets(show, new Map([[entry.path, { ...entry, mediaType: "image/jpeg" }]])),
+    ).toThrow(/mediaType/);
+    expect(() =>
+      verifyShowCardAssets(show, new Map([[entry.path, { ...entry, width: 64 }]])),
+    ).toThrow(/寸法/);
+    expect(() =>
+      verifyShowCardAssets(show, new Map([[entry.path, { ...entry, hasAudio: true }]])),
+    ).toThrow(/音声/);
+  });
 });
 
 describe("verifyPackage CutIn handling", () => {

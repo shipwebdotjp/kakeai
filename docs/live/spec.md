@@ -1,13 +1,16 @@
 # ライブ配信仕様（AI進行のYouTubeライブ）
 
+> **Status: legacy input.**
+> Show Profile 入力と Work / Script Version 由来の準備済みキューは [ADR-0131](../adr/0131-live-program-owns-live-script.md) で置き換えられた。ライブ台本とライブカードの新しい契約は [../live-program/spec.md](../live-program/spec.md) を正とする。ステージ、プレイアウト、コメント、CutIn、TTS の実行契約は、パッケージv2への移行が完了するまで引き続き有効とする。
+
 ## 目的と境界
 
 この文書は、Kakeaiで制作した台本・キャラクター・素材・テーマ・声を使い、AIキャラクターが進行するYouTubeライブを、ローカルMac上で実行するための仕様を定める。
 
 - ライブの出力は、OBSでキャプチャするブラウザの**ステージ**である。MP4のレンダーではない。
-- ライブの正本は、Kakeaiの既存データ（ScriptVersion、Theme、Character、Asset、VoiceProfile）と、ライブ用の**ショープロファイル**である。ライブ実行時は、書き出した**ライブパッケージ**だけを読む。
+- ライブの正本は、Live Program と、Kakeaiの既存データ（Theme、Character、Asset、VoiceProfile）である（ADR-0131）。ライブ実行時は、書き出した**ライブパッケージ**だけを読む。
 - 既存のコンポジション（Scene・VisualCue・タイムライン）をライブの進行に使わない。ライブは**状態駆動の別ランタイム**である。理由は [ADR-0120](../adr/0120-live-runtime-separate-from-composition.md) を正とする。
-- 準備済みキューは原則としてScriptVersionの`NarrationSegment`から`lineId`で導出し、ライブ専用キュー（開幕・訂正・退避など）だけを別に持つ。理由は [ADR-0124](../adr/0124-live-cues-derived-from-script.md) を正とする。
+- 準備済みキューは Live Program が所有し、`lineId` でScriptVersionを参照しない（ADR-0131）。旧Show Profileの`scriptCues` / `liveCues`は移行用のlegacy契約である。
 - 再生はprogramステージ1つがリースを持ち、コンソールのpreviewはミュート・イベント非送信とする。理由は [ADR-0125](../adr/0125-live-program-playback-lease.md) を正とする。
 - 素材カードは静止PNG/HTMLまたは短い無音MP4に限定し、コンポジションのタイムラインをライブで再生しない。理由は [ADR-0126](../adr/0126-live-material-cards-static-or-mp4.md) を正とする。
 - コーナーの区切りなどに挿入する短い動画（CutIn）は、素材カードの拡張でもCueでもなく、Spine専用の `cut_in` セグメントとして扱う。詳細は [../live-media-playout/spec.md](../live-media-playout/spec.md) と [ADR-0130](../adr/0130-live-cut-in-separate-from-cues-and-materials.md) を正とする。

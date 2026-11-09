@@ -687,6 +687,8 @@ Content-Type: application/json
 
 ### Show Profile の自動生成
 
+> **Status: legacy input.** ライブ台本は [ADR-0131](../adr/0131-live-program-owns-live-script.md) で Work / Script Version から独立した Live Program へ移行する。新しい契約は [../live-program/spec.md](../live-program/spec.md) を正とする。以下の `live-profiles/auto` と profile ベースの `live-exports` は、移行が完了するまで現行APIとして残る。
+
 POST /api/v1/live-profiles/auto は、`workId`・`scriptVersionId`・任意の`title`・`includeCommentCorners`（既定true）を受け取り、`LiveShowProfile`・表示用summary・warningsを200で返す。Jobやファイルは作成しない。`title`を省略するとWorkタイトルを使う。生成規則は [../live/spec.md](../live/spec.md) の「Show Profile の自動生成」を正とする。
 
 生成したプロファイルは通常の`LiveShowProfile`であり、CLIの`--save-profile`で保存し、`POST /api/v1/live-exports`へそのまま渡せる。`--dry-run`はこのエンドポイントだけを呼び、Jobを作らない。

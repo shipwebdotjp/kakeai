@@ -1,6 +1,8 @@
 # ライブの準備済みキューはScriptVersionから導出し、ライブ専用キューだけを別に持つ
 
-Status: accepted
+> superseded by [ADR-0131](./0131-live-program-owns-live-script.md): ライブ台本はWorkから独立したLive Programを正本とする。
+
+Status: superseded
 
 ライブの準備済みキューは、原則としてKakeaiの`NarrationSegment`を`lineId`で参照し、字幕・読み上げ・話者・表情・音声を書き出し時に解決する。オープニング・訂正・退避・臨時の一言など、ScriptVersionに存在しないキューだけを**ライブ専用キュー**として別に持つ。
 
